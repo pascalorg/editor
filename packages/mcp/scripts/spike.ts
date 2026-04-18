@@ -13,8 +13,8 @@ if (typeof (globalThis as any).requestAnimationFrame === 'undefined') {
   }
 }
 
-import useScene from '@pascal-app/core/store'
 import { WallNode } from '@pascal-app/core/schema'
+import useScene from '@pascal-app/core/store'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT FAILED: ${msg}`)
