@@ -62,10 +62,15 @@ export function snapPointTo45Degrees(
   const snappedAngle = Math.round(angle / angleStep) * angleStep
   const distance = Math.sqrt(dx * dx + dz * dz)
 
-  return snapPointToGrid([
-    start[0] + Math.cos(snappedAngle) * distance,
-    start[1] + Math.sin(snappedAngle) * distance,
-  ], step)
+  // Snap do comprimento ao grid step (não das coordenadas absolutas)
+  // Isso preserva o start exato e garante que a parede perpendicular
+  // comece e termine no ponto certo, sem micro-gaps
+  const snappedDistance = Math.round(distance / step) * step
+
+  return [
+    start[0] + Math.cos(snappedAngle) * snappedDistance,
+    start[1] + Math.sin(snappedAngle) * snappedDistance,
+  ]
 }
 
 export function getWallAngleSnapStep(step = getWallGridStep()): number {
