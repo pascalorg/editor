@@ -1,0 +1,173 @@
+{
+  "transport": {
+    "kind": "http",
+    "note": "shared HTTP server"
+  },
+  "steps": [
+    {
+      "n": 1,
+      "name": "discover",
+      "ok": true,
+      "durationMs": 4,
+      "summary": "building=building_bfqg91ai9ijps9ej, level=level_wyuoxj87czq3v0re (of 1 buildings, 1 levels)",
+      "nodeIds": [
+        "building_bfqg91ai9ijps9ej",
+        "level_wyuoxj87czq3v0re"
+      ]
+    },
+    {
+      "n": 2,
+      "name": "perimeter walls",
+      "ok": true,
+      "durationMs": 2,
+      "summary": "created 4 perimeter walls (result.createdIds=[\"wall_y87bsrljd2245n51\",\"wall_sja6jpda73tlhxwb\",\"wall_aegff27krjwgmkmi\",\"wall_dcymglyle9ff09ti\"])",
+      "nodeIds": [
+        "wall_y87bsrljd2245n51",
+        "wall_sja6jpda73tlhxwb",
+        "wall_aegff27krjwgmkmi",
+        "wall_dcymglyle9ff09ti"
+      ]
+    },
+    {
+      "n": 3,
+      "name": "interior partitions",
+      "ok": true,
+      "durationMs": 1,
+      "summary": "created 7 interior walls",
+      "nodeIds": [
+        "wall_rl83cc5tnbf4b34j",
+        "wall_qv53jm9kvl7k6slf",
+        "wall_8y52fwzco2ep7fb1",
+        "wall_hrfixeusz7zb7x63",
+        "wall_1ullk9bm6dw15i9t",
+        "wall_c4fjjswnk0mprctm",
+        "wall_p359pffjf3qs59cy"
+      ]
+    },
+    {
+      "n": 4,
+      "name": "set zones",
+      "ok": true,
+      "durationMs": 3,
+      "summary": "created 4 zones: bedroom-1, bedroom-2, bathroom, living-kitchen",
+      "nodeIds": [
+        "zone_3fyksm10tb0dhn1e",
+        "zone_u95l1bt35jci3gvu",
+        "zone_r9ma8tvsqt9w1zey",
+        "zone_l189q61kf9ra2m8t"
+      ]
+    },
+    {
+      "n": 5,
+      "name": "cut openings",
+      "ok": true,
+      "durationMs": 6,
+      "summary": "3 doors, 3 windows",
+      "nodeIds": [
+        "door_cjzja4lt8owg88wg",
+        "door_bs7bf0azevq9vd76",
+        "door_o8etwqsemfgj5mkj",
+        "window_47x40mtv2l4ca9p4",
+        "window_n09awmg5m3ct4fvn",
+        "window_xlta3f3f0cnmbti3"
+      ]
+    },
+    {
+      "n": 6,
+      "name": "validate scene",
+      "ok": true,
+      "durationMs": 1,
+      "summary": "valid=true, errors=0"
+    },
+    {
+      "n": 7,
+      "name": "measure furthest zones",
+      "ok": true,
+      "durationMs": 3,
+      "summary": "furthest: zone_3fyksm10tb0dhn1e <-> zone_u95l1bt35jci3gvu = 7.000m",
+      "nodeIds": [
+        "zone_3fyksm10tb0dhn1e",
+        "zone_u95l1bt35jci3gvu"
+      ]
+    },
+    {
+      "n": 8,
+      "name": "export json",
+      "ok": true,
+      "durationMs": 1,
+      "summary": "exported 15392 bytes -> apartment.json"
+    },
+    {
+      "n": 9,
+      "name": "undo 3 steps",
+      "ok": true,
+      "durationMs": 2,
+      "summary": "undone=3, nodes 24 -> 21 (delta=3)"
+    },
+    {
+      "n": 10,
+      "name": "redo 3 steps",
+      "ok": true,
+      "durationMs": 2,
+      "summary": "redone=3, nodes 21 -> 24"
+    },
+    {
+      "n": 11,
+      "name": "duplicate level + validate",
+      "ok": true,
+      "durationMs": 2,
+      "summary": "newLevelId=level_cxvltlqvgqcasiep, cloned=22, valid=true, errors=0",
+      "nodeIds": [
+        "level_cxvltlqvgqcasiep"
+      ]
+    },
+    {
+      "n": 12,
+      "name": "delete duplicated level",
+      "ok": true,
+      "durationMs": 3,
+      "summary": "deleted 22 nodes; nodes 46 -> 24",
+      "nodeIds": [
+        "level_cxvltlqvgqcasiep",
+        "wall_xhn7o9bfpmcv2znr",
+        "window_0qb4bgvzp46y412o",
+        "window_cjk6a6zwsn48dj5u",
+        "wall_hgatfahp4i53s139",
+        "wall_fp25ulcwqmsim8p5",
+        "window_jv0g8uos313ljbbe",
+        "wall_mjue0xaodm8d3vzi",
+        "wall_brw2c9vg502md7a0",
+        "wall_1at54a0mfxgq2txb",
+        "door_l8k2adas2djwpcf8",
+        "wall_6m920gigvtn113af",
+        "wall_2hazwrgv922l3t6q",
+        "door_a62eecbdzpdoqnlo",
+        "wall_11h43exay41fub7f",
+        "door_06dpidftldcoaisv",
+        "wall_u7e1gp0xbir5112y",
+        "wall_jbwbwvgt9lzw51mk",
+        "zone_hkp5wsyw7aydi175",
+        "zone_rpqx5ul6bl1tpdmd",
+        "zone_kohgjo47reiluhto",
+        "zone_o65jm5oy5v5ej6aw"
+      ]
+    }
+  ],
+  "final": {
+    "totalNodes": 24,
+    "zones": 4,
+    "doors": 3,
+    "windows": 3,
+    "step5NodeCount": 24,
+    "validationSummary": {
+      "valid": true,
+      "errors": []
+    },
+    "undoObservation": {
+      "undone": 3,
+      "before": 24,
+      "after": 21,
+      "delta": 3
+    }
+  }
+}

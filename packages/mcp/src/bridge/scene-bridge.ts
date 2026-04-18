@@ -283,6 +283,10 @@ export class SceneBridge {
     // earlier-created ids and reflect earlier-deleted ids.
     const simAvailable = new Set<string>(Object.keys(nodes))
     const simDeleted = new Set<string>()
+    // Parsed create nodes keyed by patch index — so the apply phase can use the
+    // Zod-normalised copy (which has a generated id if the caller omitted one)
+    // instead of the unparsed input.
+    const parsedCreateNodes = new Map<number, AnyNode>()
 
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
@@ -297,7 +301,8 @@ export class SceneBridge {
         if (p.parentId !== undefined && !simAvailable.has(p.parentId)) {
           throw new Error(`invalid patch: patches[${i}] create parentId "${p.parentId}" not found`)
         }
-        simAvailable.add(p.node.id)
+        parsedCreateNodes.set(i, res.data)
+        simAvailable.add(res.data.id)
       } else if (p.op === 'update') {
         if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
           throw new Error(`invalid patch: patches[${i}] update id "${p.id}" not found`)
@@ -353,11 +358,13 @@ export class SceneBridge {
       }
     }
 
-    for (const p of patches) {
+    for (let i = 0; i < patches.length; i++) {
+      const p = patches[i]!
       if (p.op === 'create') {
         flush('create')
-        createOps.push({ node: p.node, parentId: p.parentId })
-        createdIds.push(p.node.id as AnyNodeId)
+        const parsedNode = parsedCreateNodes.get(i)!
+        createOps.push({ node: parsedNode, parentId: p.parentId })
+        createdIds.push(parsedNode.id as AnyNodeId)
       } else if (p.op === 'update') {
         flush('update')
         updateOps.push({ id: p.id, data: p.data })

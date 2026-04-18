@@ -1,0 +1,25 @@
+[t5] connected to http://localhost:3917/mcp
+[t5] listResources count = 3
+[t5] listResources names = scene-current, scene-summary, catalog-items
+[t5] discovered levelId = level_9qlc3co208erq5o6
+[t5] listPrompts count = 3
+[t5] listPrompts names = from_brief, iterate_on_feedback, renovation_from_photos
+
+========== T5 SUMMARY ==========
+listResources count: 3
+listPrompts count:   3
+
+--- Resource results ---
+PASS  scene/current  —  application/json, nodes=3, rootNodeIds=1
+PASS  scene/current/summary  —  text/markdown, 375 bytes, preview: "# Scene summary |  | - Sites: 1  Buildings: 1  Levels: 1 | - Root nodes: 1"
+PASS  catalog/items  —  application/json, status=catalog_unavailable, items.length=0
+PASS  constraints/{levelId}  —  levelId=level_9qlc3co208erq5o6, slabs=0, wallPolygons=0
+Resources pass: 4/4
+
+--- Prompt results ---
+PASS  from_brief  —  messages=1, userMsgs=1, brief-included=true, preview: "You are a Pascal 3D scene designer. You have access to the `apply_patch` tool for all scene mutations. Prefer it over in"
+PASS  iterate_on_feedback  —  messages=1, userMsgs=1, feedback-included=true, preview: "You are iterating on an existing Pascal scene based on user feedback. Given the current state (read via the `pascal://sc"
+PASS  renovation_from_photos  —  messages=7, userMsgs=7, urls(a/b/c)=true/true/true, goals-included=true
+Prompts pass: 3/3
+================================
+

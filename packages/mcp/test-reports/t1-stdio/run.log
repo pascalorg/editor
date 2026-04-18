@@ -1,0 +1,32 @@
+[pascal-mcp] stdio server running
+[t1] listTools → 21 tools (expected 21) OK
+[t1] tool names: analyze_floorplan_image, analyze_room_photo, apply_patch, check_collisions, create_level, create_wall, cut_opening, delete_node, describe_node, duplicate_level, export_glb, export_json, find_nodes, get_node, get_scene, measure, place_item, redo, set_zone, undo, validate_scene
+✅ get_scene  (3 nodes, 1 roots)
+[t1] discovered: site=site_71e14qucq8msx6w7 building=building_gyseslm2yvanyqkc level=level_7somiy6h3is3wqw8
+✅ get_node  (node type=site, id=site_71e14qucq8msx6w7)
+✅ describe_node  (type=site, 1 children)
+✅ find_nodes  (1 level node(s))
+[t1] groundLevelId=level_7somiy6h3is3wqw8
+✅ measure  (distance=0.000m)
+✅ apply_patch  (applied=1, created=1)
+✅ create_level  (levelId=level_fkcj2m1n3vq4xfx6)
+✅ create_wall  (wallId=wall_iznvk1lp5u2zb77v)
+✅ place_item  (status: catalog_unavailable)
+✅ cut_opening  (openingId=door_72wicnv8i6c0pqru)
+✅ set_zone  (zoneId=zone_p1ek0k35wz93mdqo)
+✅ duplicate_level  (newLevelId=level_4kpvf7vxyok3l7v2, 6 nodes)
+✅ delete_node  (deleted 6 node(s))
+✅ undo  (undone=1)
+✅ redo  (redone=1)
+✅ export_json  (5678 chars JSON)
+✅ export_glb  (status: not_implemented)
+✅ validate_scene  (valid=true, errors=0)
+✅ check_collisions  (0 collision(s))
+✅ analyze_floorplan_image  (expected status: sampling_unavailable)
+✅ analyze_room_photo  (expected status: sampling_unavailable)
+
+[t1] tools listed: 21/21
+[t1] passed: 21/21
+[t1] failed: 0/21
+[t1] total time: 106ms
+[t1] report written: /Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/test-reports/t1-stdio/REPORT.md
