@@ -126,7 +126,7 @@ bun packages/mcp/test-reports/phase8/p10-full-sweep.ts
 
 | Evidence | Result |
 |---|---|
-| `bun test --cwd packages/mcp` | **294/294 pass** across 40 test files |
+| `bun test --cwd packages/mcp` | **302/302 pass** across 40 test files |
 | Biome check | 0 errors (73 source files checked) |
 | TypeScript build | `tsc` clean, strict mode, no `any` without documented reason |
 | T1 stdio smoke | 21/21 tools PASS, 106 ms |
@@ -137,7 +137,9 @@ bun packages/mcp/test-reports/phase8/p10-full-sweep.ts
 | Phase 8 P3 locking | **12/12 PASS** (version conflict, ETag/If-Match) |
 | Phase 8 P8 concurrency | 4/5 PASS — 1 known fail (see limitations) |
 | Phase 8 P9 edge cases | **13/13 PASS** (path traversal, size cap, bad input) |
-| Phase 8 P4 URL hardening | 59/95 checks PASS; 36 fail at `save_scene`/POST boundary (tracked gap) |
+| Phase 8 P4 URL hardening | 59/95 checks PASS at audit time; 36 fails at `save_scene`/POST boundary **all CLOSED** in later commits (see Security notes) |
+| Phase 10 A2 security audit | 2 HIGH findings (PUT-route bypass + SSRF in vision tools) — **both fixed** before push |
+| SSRF guard tests | 8/8 PASS (`safe-fetch.test.ts`) |
 | **Casa del Sol** | 76-node residential scene built end-to-end; `validate_scene` = valid, 0 errors; `duplicate_level` clones 37 nodes correctly |
 | **Villa Azul** | 56-node scene; **108/108 checks** across 10 verification agents (schema, geometry, dimensions, openings, HTTP API, Next.js page, parentage, round-trip, spatial, visual) |
 | Secrets audit (A1) | SAFE TO PUSH — no tokens, credentials, or PII in diff |
@@ -162,23 +164,26 @@ Committed reports: `packages/mcp/test-reports/` (t1-t5, casa-sol, villa-azul, ph
 **In this PR:**
 - `AssetUrl` Zod validator on all URL fields in core schemas — rejects `javascript:`, `file:`, `ftp:`, `data:text/html`, foreign `http:` (Phase 8 P4: 36/36 schema-layer checks PASS)
 - `apply_patch` re-parses each node with `AnyNode` before mutating the store — URL validation fires here
-- `save_scene` with `includeCurrentScene: true` validates via the bridge before persisting
-- `PASCAL_ALLOWED_ASSET_ORIGINS` env var for per-origin `https:` narrowing
+- `save_scene` (both `includeCurrentScene: true` and `false`) re-parses every node at the save boundary
+- `POST /api/scenes` AND `PUT /api/scenes/[id]` share `apiGraphSchema` that Zod-validates every node before the store is touched
+- `safeFetch` for all user-supplied image URLs in `photo_to_scene`, `analyze_floorplan_image`, `analyze_room_photo`:
+  - Blocks loopback, private IP ranges, link-local (incl. cloud-metadata `169.254.169.254`), `.local`/`.internal`/`.corp` hostnames, v4-mapped IPv6 loopback
+  - Manual redirects (max 3), allowlist revalidated per hop
+  - 20 MB streamed size cap, 10 s timeout
+- `PASCAL_ALLOWED_ASSET_ORIGINS` env var for per-origin `https:` narrowing (applies to both `AssetUrl` and `safeFetch`)
 - `FilesystemSceneStore` sanitizes slugs to prevent path traversal (Phase 8 P9, case 3: PASS)
 - 10 MB size cap per scene enforced at `save_scene` (Phase 8 P9, case 2: PASS)
 - ETag / `If-Match` on all editor API mutating verbs (Phase 8 P3: 12/12 PASS)
 - CI workflow runs with `permissions: contents: read` only
 
 **Tracked as follow-ups (not blocking merge):**
-- `save_scene` with `includeCurrentScene: false` and `POST /api/scenes` do not re-parse per-node `AnyNode` — a crafted graph can bypass `AssetUrl` at those boundaries (Phase 8 P4: 36 FAILs)
-- `item.asset.thumbnail` still bare `z.string()`
-- No auth layer on HTTP transport or editor API routes
+- `item.asset.thumbnail` still bare `z.string()` — `src` is validated; apply `AssetUrl` to `thumbnail` too
+- No auth layer on HTTP transport or editor API routes (env vars declared; implementation pending)
 
 ## Follow-ups (GitHub issues after merge)
 
 - Fix `FilesystemSceneStore` same-id write race with per-id in-process lock queue
 - Fix `.index.json` drift: use lock-protected index write or rebuild index from disk on stale reads
-- Add `AnyNode` re-parse to `save_scene(includeCurrentScene: false)` and `POST /api/scenes`
 - Apply `AssetUrl` to `item.asset.thumbnail`; fix `place_item` empty-thumbnail default
 - Align `SiteNode.children` to `z.string()` IDs + `setScene` migration (breaking change, separate PR)
 - Expose a Node-consumable item catalog from `@pascal-app/core`
@@ -189,7 +194,7 @@ Committed reports: `packages/mcp/test-reports/` (t1-t5, casa-sol, villa-azul, ph
 
 ## Checklist
 
-- [x] 294/294 `bun test --cwd packages/mcp` pass
+- [x] 302/302 `bun test --cwd packages/mcp` pass
 - [x] `bunx biome check packages/mcp` — 0 errors (73 files)
 - [x] `bun run --cwd packages/mcp build` — tsc clean
 - [x] `bunx turbo build --filter=@pascal-app/mcp` — 2/2 tasks successful
@@ -203,23 +208,36 @@ Committed reports: `packages/mcp/test-reports/` (t1-t5, casa-sol, villa-azul, ph
 - [x] Node 18+ compatible; RAF polyfill loads before any core import
 - [x] All mutations go through Zustand store (undo-safe via Zundo)
 - [x] Cross-cutting changes documented in `packages/mcp/CROSS_CUTTING.md`
-- [ ] `save_scene` / `POST /api/scenes` per-node URL validation (tracked follow-up)
-- [ ] Same-id concurrent write race (tracked follow-up)
+- [x] `save_scene` / `POST /api/scenes` / `PUT /api/scenes/[id]` per-node URL validation (Phase 10 A2)
+- [x] SSRF protection on all image-URL fetches (Phase 10 A2)
+- [ ] Same-id concurrent write race in filesystem store (tracked follow-up)
 - [ ] Auth layer on HTTP transport (tracked follow-up)
 
-## Commit series (9 commits on `feat/mcp-server`)
+## Commit series (20 commits on `feat/mcp-server`)
 
-```
-feat(mcp): scaffold package and confirm headless bridge viability
-feat(mcp): finalize scaffolding and factory entry
-feat(mcp): add headless scene bridge with RAF polyfill
-feat(mcp): implement 19 scene query and mutation tools
-feat(mcp): add resources and prompts
-feat(mcp): add multimodal vision tools via MCP sampling
-feat(mcp): add stdio + streamable HTTP transports, CLI, and smoke test
-docs(mcp): add README, examples, and changelog
-chore(mcp): add CI workflow and document cross-cutting changes
-```
+Phase 1 — scaffold and core MCP (9 commits):
+- `feat(mcp): scaffold package and confirm headless bridge viability`
+- `feat(mcp): finalize scaffolding and factory entry`
+- `feat(mcp): add headless scene bridge with RAF polyfill`
+- `feat(mcp): implement 19 scene query and mutation tools`
+- `feat(mcp): add resources and prompts`
+- `feat(mcp): add multimodal vision tools via MCP sampling`
+- `feat(mcp): add stdio + streamable HTTP transports, CLI, and smoke test`
+- `docs(mcp): add README, examples, and changelog`
+- `chore(mcp): add CI workflow and document cross-cutting changes`
+
+Phases 5–10 — scenes, verification, hardening (11 commits):
+- `test(mcp): Casa del Sol — full house built end-to-end via MCP`
+- `feat(editor): expose useScene on window in dev for MCP-editor bridging` (subsequently removed)
+- `fix(mcp): apply_patch preserves schema-defaulted ids in multi-op batches`
+- `docs(mcp): add PR_DESCRIPTION.md`
+- `docs(mcp): add 10-agent research on scene-save workflow`
+- `feat(mcp,editor): Option A+B storage + 10 agent deliverables (Phase 7)`
+- `fix(mcp,editor): close URL-validation bypasses surfaced by Phase 8 P4`
+- `test(mcp): Villa Azul + 10-agent deep verification`
+- `test(mcp): add populate-gallery script for post-ship demo`
+- `fix(mcp,editor): close PUT-route URL bypass + vision-tool SSRF (Phase 10 A2)`
+- `docs(mcp): add Phase 10 pre-push audit reports (5 agents)`
 
 ## Report index
 
