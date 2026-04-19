@@ -79,7 +79,7 @@ Added `./schema`, `./store`, `./material-library`, `./spatial-grid`, `./wall` en
 
 Introduces a shared `AssetUrl` Zod validator replacing bare `z.string()` on every URL field in core's schemas (`scan.url`, `guide.url`, `item.asset.src`, `material.texture.url`, all material map fields). Rejects `javascript:`, `file:`, `ftp:`, `data:text/html`, foreign `http:`, `vbscript:`, and similar. Accepts `asset://`, `blob:`, `data:image/`, `/` (app-relative), `https:`, and `http://localhost` for dev. Optional per-origin narrowing via `PASCAL_ALLOWED_ASSET_ORIGINS`.
 
-This closes the security finding from the Phase 3 audit: a crafted scene with `javascript:alert(1)` for a texture URL would have beaconed or exfiltrated when rendered. Known gaps remain at the `save_scene` / `POST /api/scenes` boundary (see Security notes).
+This closes the security finding from the Phase 3 audit: a crafted scene with `javascript:alert(1)` for a texture URL would have beaconed or exfiltrated when rendered. Phase 10 A2 further extended the validator to the `save_scene(includeCurrentScene: false)`, `POST /api/scenes`, and `PUT /api/scenes/[id]` boundaries via a shared `apiGraphSchema` (see Security notes).
 
 #### `apps/editor` — persistence routes + scene page (CROSS_CUTTING §4)
 
@@ -103,7 +103,7 @@ bun install
 bun run --cwd packages/core build
 bun run --cwd packages/mcp build
 
-# Unit + integration tests (294 tests, 40 files)
+# Unit + integration tests (302 tests, 41 files)
 bun test --cwd packages/mcp
 
 # Biome lint
@@ -126,7 +126,7 @@ bun packages/mcp/test-reports/phase8/p10-full-sweep.ts
 
 | Evidence | Result |
 |---|---|
-| `bun test --cwd packages/mcp` | **302/302 pass** across 40 test files |
+| `bun test --cwd packages/mcp` | **302/302 pass** across 41 test files |
 | Biome check | 0 errors (73 source files checked) |
 | TypeScript build | `tsc` clean, strict mode, no `any` without documented reason |
 | T1 stdio smoke | 21/21 tools PASS, 106 ms |
