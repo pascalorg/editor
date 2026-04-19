@@ -37,7 +37,6 @@ type StepResult = {
 const steps: StepResult[] = []
 
 function log(msg: string): void {
-  // biome-ignore lint/suspicious/noConsole: test script
   console.log(`[t3] ${msg}`)
 }
 
@@ -625,7 +624,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  // biome-ignore lint/suspicious/noConsole: test script
   console.error(err)
   process.exit(1)
 })

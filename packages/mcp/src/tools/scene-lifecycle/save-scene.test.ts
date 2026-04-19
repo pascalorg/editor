@@ -38,9 +38,32 @@ describe('save_scene', () => {
   })
 
   test('saves a provided graph when includeCurrentScene is false', async () => {
+    // The graph is now re-validated against AnyNode at the save boundary
+    // (security fix from Phase 8 P4). Use a schema-compliant site node id
+    // that matches `site_*`.
+    const siteId = 'site_provided01'
     const graph = {
-      nodes: { root: { id: 'root', type: 'site', parentId: null, children: [] } },
-      rootNodeIds: ['root'],
+      nodes: {
+        [siteId]: {
+          object: 'node',
+          id: siteId,
+          type: 'site',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          polygon: {
+            type: 'polygon',
+            points: [
+              [-5, -5],
+              [5, -5],
+              [5, 5],
+              [-5, 5],
+            ],
+          },
+          children: [],
+        },
+      },
+      rootNodeIds: [siteId],
     }
     const result = await client.callTool({
       name: 'save_scene',
@@ -54,6 +77,61 @@ describe('save_scene', () => {
     const parsed = parseToolText(result.content as StoredTextContent[])
     expect(parsed.name).toBe('From Graph')
     expect(parsed.nodeCount).toBe(1)
+  })
+
+  test('rejects a graph with a malicious URL (P4 security fix)', async () => {
+    const siteId = 'site_evil0000001'
+    const itemId = 'item_evil0000001'
+    const graph = {
+      nodes: {
+        [siteId]: {
+          object: 'node',
+          id: siteId,
+          type: 'site',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          polygon: {
+            type: 'polygon',
+            points: [
+              [-5, -5],
+              [5, -5],
+              [5, 5],
+              [-5, 5],
+            ],
+          },
+          children: [],
+        },
+        [itemId]: {
+          object: 'node',
+          id: itemId,
+          type: 'item',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+          asset: {
+            id: 'evil',
+            name: 'evil',
+            category: 'x',
+            src: 'javascript:alert(1)',
+            dimensions: [1, 1, 1],
+            offset: [0, 0, 0],
+            rotation: [0, 0, 0],
+            scale: [1, 1, 1],
+          },
+          children: [],
+        },
+      },
+      rootNodeIds: [siteId],
+    }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Evil', includeCurrentScene: false, graph },
+    })
+    expect(result.isError).toBe(true)
   })
 
   test('errors when includeCurrentScene is false and no graph is provided', async () => {

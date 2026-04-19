@@ -44,7 +44,6 @@ type StepRecord = {
 const steps: StepRecord[] = []
 
 function log(line: string): void {
-  // biome-ignore lint/suspicious/noConsole: build script
   console.log(line)
 }
 
@@ -868,7 +867,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  // biome-ignore lint/suspicious/noConsole: build script
   console.error('[casa] FATAL:', err instanceof Error ? err.stack : String(err))
   process.exit(1)
 })
