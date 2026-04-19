@@ -1,0 +1,160 @@
+connected to http://localhost:3917/
+baseline node count = 3
+discovered: site=site_watn4a0qt2xpgri7 building=building_wqydpgpprigdcq8a level=level_tl2aravmn2u9afft wall=undefined
+node-with-children=site_watn4a0qt2xpgri7 type=site children=1
+[PASS] T4-01 (get_node): nonexistent id
+        -> tool_error msg="MCP error -32602: Node not found: node_doesnotexist_xyz"
+[PASS] T4-02 (describe_node): nonexistent id
+        -> tool_error msg="MCP error -32602: Node not found: node_missing_123"
+[PASS] T4-03 (find_nodes): invalid type enum "hamster"
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool find_nodes: [
+  {
+    "code": "invalid_value",
+    "values": [
+      "site",
+      "building",
+      "level",
+      "wall",
+      "fence",
+      "zone",
+      "slab",
+      "ceiling",
+      "roof",
+      "roof-segment",
+      "stair",
+      "stair-segment",
+      "item",
+      "door",
+      "window",
+      "scan",
+      "guide"
+    ],
+    "path": [
+      "type"
+    ],
+    "message": "Invalid option: expected one of \"site\"|\"building\"|\"level\"|\"wall\"|\"fence\"|\"zone\"|\"slab\"|\"ceiling\"|\"roof\"|\"roof-segment\"|\"stair\"|\"stair-segment\"|\"item\"|\"door\"|\"window\"|\"scan\"|\"guide\""
+  }
+]"
+[PASS] T4-04 (measure): nonexistent fromId
+        -> tool_error msg="MCP error -32602: Node not found: node_nosuch_f"
+[PASS] T4-05 (apply_patch): patches with one invalid node (missing type)
+        -> tool_error msg="MCP error -32602: invalid patch: patches[0] create node failed schema: [
+  {
+    "code": "invalid_union",
+    "errors": [],
+    "note": "No matching discriminator",
+    "discriminator": "type",
+    "path": [
+      "type"
+    ],
+    "message": "Invalid input"
+  }
+]"
+[PASS] T4-06 (apply_patch): delete nonexistent id
+        -> tool_error msg="MCP error -32602: invalid patch: patches[0] delete id "node_nonexistent_delete_xyz" not found"
+[PASS] T4-07 (create_level): buildingId is not a building (passed a wall/level/site id)
+        -> tool_error msg="MCP error -32602: Node level_tl2aravmn2u9afft is a level, expected building"
+[PASS] T4-08 (create_wall): levelId doesn't exist
+        -> tool_error msg="MCP error -32602: Level not found: level_nosuch_999"
+[PASS] T4-09 (create_wall): start not a tuple
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool create_wall: [
+  {
+    "expected": "tuple",
+    "code": "invalid_type",
+    "path": [
+      "start"
+    ],
+    "message": "Invalid input: expected tuple, received string"
+  }
+]"
+[PASS] T4-10 (place_item): targetNodeId doesn't exist
+        -> tool_error msg="MCP error -32602: Target node not found: node_nosuch_target"
+[PASS] T4-11 (cut_opening): wallId is not a wall
+        -> tool_error msg="MCP error -32602: Node site_watn4a0qt2xpgri7 is a site, expected wall"
+[PASS] T4-12 (cut_opening): position out of [0,1]
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool cut_opening: [
+  {
+    "origin": "number",
+    "code": "too_big",
+    "maximum": 1,
+    "inclusive": true,
+    "path": [
+      "position"
+    ],
+    "message": "Too big: expected number to be <=1"
+  }
+]"
+[PASS] T4-13 (set_zone): polygon with < 3 points
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool set_zone: [
+  {
+    "origin": "array",
+    "code": "too_small",
+    "minimum": 3,
+    "inclusive": true,
+    "path": [
+      "polygon"
+    ],
+    "message": "Too small: expected array to have >=3 items"
+  }
+]"
+[PASS] T4-14 (duplicate_level): levelId is not a level
+        -> tool_error msg="MCP error -32602: Node site_watn4a0qt2xpgri7 is a site, expected level"
+[PASS] T4-15 (delete_node): cascade=false with children (target site site_watn4a0qt2xpgri7 children=1)
+        -> tool_error msg="MCP error -32600: node has 2 descendant(s); pass cascade: true to delete recursively"
+[PASS] T4-16a (undo): negative steps
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool undo: [
+  {
+    "origin": "number",
+    "code": "too_small",
+    "minimum": 0,
+    "inclusive": false,
+    "path": [
+      "steps"
+    ],
+    "message": "Too small: expected number to be >0"
+  }
+]"
+[PASS] T4-16b (redo): negative steps
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool redo: [
+  {
+    "origin": "number",
+    "code": "too_small",
+    "minimum": 0,
+    "inclusive": false,
+    "path": [
+      "steps"
+    ],
+    "message": "Too small: expected number to be >0"
+  }
+]"
+[PASS] T4-17 (export_json): pretty='yes' (string not bool)
+        -> tool_error msg="MCP error -32602: Input validation error: Invalid arguments for tool export_json: [
+  {
+    "expected": "boolean",
+    "code": "invalid_type",
+    "path": [
+      "pretty"
+    ],
+    "message": "Invalid input: expected boolean, received string"
+  }
+]"
+[PASS] T4-18 (check_collisions): levelId doesn't exist
+        -> SUCCESS payload={"collisions":[]}
+        note: returned empty collisions (graceful)
+[PASS] T4-19 (validate_scene): baseline: no args
+        -> SUCCESS payload={"valid":true,"errors":[]}
+        note: baseline passed
+[PASS] T4-20a (analyze_floorplan_image): image: '' (empty string)
+        -> tool_error msg="MCP error -32600: sampling_unavailable"
+[PASS] T4-20b (analyze_floorplan_image): image: 'not-a-url-or-base64'
+        -> tool_error msg="MCP error -32600: sampling_unavailable"
+[PASS] T4-21a (analyze_room_photo): image: '' (empty string)
+        -> tool_error msg="MCP error -32600: sampling_unavailable"
+[PASS] T4-21b (analyze_room_photo): image: 'not-a-url-or-base64'
+        -> tool_error msg="MCP error -32600: sampling_unavailable"
+
+final node count = 3 (baseline 3)
+final validation: valid=true errors=0
+
+wrote report: /Users/adrian/Desktop/editor/.worktrees/mcp-server/packages/mcp/test-reports/t4-errors/REPORT.md
+summary: PASS=24 WARN=0 FAIL=0

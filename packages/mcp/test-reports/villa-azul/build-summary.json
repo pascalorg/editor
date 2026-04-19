@@ -1,0 +1,30 @@
+{
+  "sceneId": "a6e7919eacbe",
+  "version": 1,
+  "nodeCount": 56,
+  "sizeBytes": 44299,
+  "url": "http://localhost:3002/scene/a6e7919eacbe",
+  "typeCounts": {
+    "site": 1,
+    "building": 1,
+    "level": 1,
+    "wall": 12,
+    "zone": 13,
+    "door": 10,
+    "window": 12,
+    "slab": 1,
+    "fence": 5
+  },
+  "validation": {
+    "valid": true,
+    "errors": 0
+  },
+  "doorResults": {
+    "ok": 10,
+    "fail": 0
+  },
+  "windowResults": {
+    "ok": 12,
+    "fail": 0
+  }
+}

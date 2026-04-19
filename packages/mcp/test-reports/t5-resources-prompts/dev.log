@@ -1,0 +1,33 @@
+## Probe: http://localhost:3002/
+ROOT_STATUS=200
+ROOT_BYTES=53138
+ROOT_HAS_PASCAL=0
+ROOT_HAS_PASCAL_APP=0
+SCRIPT_COUNT=52
+NEXT_CHUNK_COUNT=52
+EDITOR_VIEWER_CORE_CHUNK_COUNT=31
+ERR_APP_ERROR=0
+ERR_FAILED_TO=0
+ERR_CANNOT=0
+
+## First script src= matches (max 10)
+/_next/static/chunks/10-e_next_dist_compiled_next-devtools_index_0c.hc5b.js
+/_next/static/chunks/10-e_next_dist_compiled_react-dom_0_a2p7j._.js
+/_next/static/chunks/10-e_next_dist_compiled_react-server-dom-turbopack_0~q-o27._.js
+/_next/static/chunks/10-e_next_dist_compiled_0z_hko_._.js
+/_next/static/chunks/10-e_next_dist_client_0.-jx~k._.js
+/_next/static/chunks/10-e_next_dist_04-q5rb._.js
+/_next/static/chunks/0xsp_%40swc_helpers_cjs_05abggq._.js
+/_next/static/chunks/_worktrees_mcp-server_apps_editor_0rqeker._.js
+/_next/static/chunks/turbopack-_worktrees_mcp-server_apps_editor_0mhsrfr._.js
+/_next/static/chunks/02ss__bun_02a3.wx._.js
+
+## Probe: http://localhost:3002/api/health
+HEALTH_STATUS=200
+HEALTH_BYTES=69
+HEALTH_BODY_PREVIEW={"status":"ok","app":"editor","timestamp":"2026-04-18T16:17:41.398Z"}
+
+ROOT_TITLE=
+
+## Summary
+DEV_VERDICT=FAIL

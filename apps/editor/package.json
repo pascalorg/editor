@@ -14,6 +14,7 @@
     "@number-flow/react": "^0.5.14",
     "@pascal-app/core": "*",
     "@pascal-app/editor": "*",
+    "@pascal-app/mcp": "*",
     "@pascal-app/viewer": "*",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
@@ -26,7 +27,8 @@
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
