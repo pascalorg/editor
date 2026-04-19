@@ -75,17 +75,12 @@ type ImageBlock = {
  */
 async function resolveImageBlock(image: string): Promise<ImageBlock> {
   if (/^https?:\/\//i.test(image)) {
-    const res = await fetch(image)
-    if (!res.ok) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `failed to fetch image: ${res.status} ${res.statusText}`,
-        { url: image, status: res.status },
-      )
-    }
-    const buf = Buffer.from(await res.arrayBuffer())
-    const data = buf.toString('base64')
-    const mimeType = res.headers.get('content-type') ?? 'image/jpeg'
+    // SSRF-safe fetch: blocks loopback / private / link-local / metadata IPs,
+    // caps size at 20 MB, times out at 10s, validates each redirect hop.
+    const { safeFetch } = await import('../../lib/safe-fetch')
+    const res = await safeFetch(image, { accept: 'image/*' })
+    const data = res.buffer.toString('base64')
+    const mimeType = res.contentType ?? 'image/jpeg'
     return { type: 'image', data, mimeType }
   }
 

@@ -1,43 +1,15 @@
-import { AnyNode } from '@pascal-app/core/schema'
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { apiGraphSchema } from '@/lib/graph-schema'
 import { getSceneStore } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
-
-/**
- * The `graph` payload must structurally match a SceneGraph AND every node
- * must pass `AnyNode.safeParse` (including the AssetUrl allowlist for
- * scan/guide/item/material URL fields). Without this revalidation, the
- * POST /api/scenes route would bypass the security hardening in A7. See
- * Phase 8 P4 report for the CVE-ish finding.
- */
-const graphSchema = z
-  .object({
-    nodes: z.record(z.string(), z.unknown()),
-    rootNodeIds: z.array(z.string()),
-    collections: z.unknown().optional(),
-  })
-  .superRefine((value, ctx) => {
-    for (const [nodeId, node] of Object.entries(value.nodes)) {
-      const res = AnyNode.safeParse(node)
-      if (!res.success) {
-        for (const issue of res.error.issues) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['nodes', nodeId, ...issue.path],
-            message: issue.message,
-          })
-        }
-      }
-    }
-  })
 
 const createSceneSchema = z.object({
   id: z.string().min(1).max(64).optional(),
   name: z.string().min(1).max(200),
   projectId: z.string().min(1).max(200).nullable().optional(),
-  graph: graphSchema,
+  graph: apiGraphSchema,
   thumbnailUrl: z.string().url().nullable().optional(),
 })
 

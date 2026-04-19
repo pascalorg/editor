@@ -1,18 +1,15 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { apiGraphSchema } from '@/lib/graph-schema'
 import { getSceneStore } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
-const graphSchema = z.unknown().refine((v: unknown) => v !== null && typeof v === 'object', {
-  message: 'graph must be an object',
-})
-
 const putSceneSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  graph: graphSchema,
+  graph: apiGraphSchema,
   thumbnailUrl: z.string().url().nullable().optional(),
   expectedVersion: z.number().int().nonnegative().optional(),
 })
