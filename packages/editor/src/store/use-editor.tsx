@@ -8,6 +8,7 @@ import {
   type FenceNode,
   type ItemNode,
   type LevelNode,
+  type RoofSurfaceMaterialRole,
   type RoofNode,
   type RoofSegmentNode,
   type SlabNode,
@@ -93,6 +94,11 @@ export type SelectedStairMaterialTarget = {
   role: StairMaterialTargetRole
 }
 
+export type SelectedRoofMaterialTarget = {
+  roofId: RoofNode['id']
+  role: RoofSurfaceMaterialRole
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -144,6 +150,8 @@ type EditorState = {
   setSelectedWallMaterialTarget: (target: SelectedWallMaterialTarget | null) => void
   selectedStairMaterialTarget: SelectedStairMaterialTarget | null
   setSelectedStairMaterialTarget: (target: SelectedStairMaterialTarget | null) => void
+  selectedRoofMaterialTarget: SelectedRoofMaterialTarget | null
+  setSelectedRoofMaterialTarget: (target: SelectedRoofMaterialTarget | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
@@ -523,6 +531,8 @@ const useEditor = create<EditorState>()(
       setSelectedWallMaterialTarget: (target) => set({ selectedWallMaterialTarget: target }),
       selectedStairMaterialTarget: null,
       setSelectedStairMaterialTarget: (target) => set({ selectedStairMaterialTarget: target }),
+      selectedRoofMaterialTarget: null,
+      setSelectedRoofMaterialTarget: (target) => set({ selectedRoofMaterialTarget: target }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       spaces: {},

@@ -224,6 +224,63 @@ function migrateStairSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
+function migrateRoofSurfaceMaterials(node: Record<string, any>) {
+  const hasTop = node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string'
+  const hasEdge = node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string'
+  const hasWall = node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string'
+  const legacyFinish = {
+    material: node.material,
+    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
+  }
+
+  if (!hasTop && !hasEdge && !hasWall) {
+    if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
+      return node
+    }
+
+    return {
+      ...node,
+      topMaterial: legacyFinish.material,
+      topMaterialPreset: legacyFinish.materialPreset,
+      edgeMaterial: legacyFinish.material,
+      edgeMaterialPreset: legacyFinish.materialPreset,
+      wallMaterial: legacyFinish.material,
+      wallMaterialPreset: legacyFinish.materialPreset,
+    }
+  }
+
+  const next = { ...node }
+
+  if (!hasTop) {
+    next.topMaterial = legacyFinish.material
+    next.topMaterialPreset = legacyFinish.materialPreset
+  }
+
+  if (!hasEdge) {
+    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
+      next.edgeMaterial = node.wallMaterial
+      next.edgeMaterialPreset =
+        typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined
+    } else {
+      next.edgeMaterial = legacyFinish.material
+      next.edgeMaterialPreset = legacyFinish.materialPreset
+    }
+  }
+
+  if (!hasWall) {
+    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
+      next.wallMaterial = node.edgeMaterial
+      next.wallMaterialPreset =
+        typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined
+    } else {
+      next.wallMaterial = legacyFinish.material
+      next.wallMaterialPreset = legacyFinish.materialPreset
+    }
+  }
+
+  return next
+}
+
 function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
   const patchedNodes = { ...nodes }
   for (const [id, node] of Object.entries(patchedNodes)) {
@@ -280,6 +337,10 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
 
     if (node.type === 'wall') {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
+    }
+
+    if (node.type === 'roof') {
+      patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }
   }
   return patchedNodes as Record<string, AnyNode>
