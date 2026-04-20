@@ -228,7 +228,7 @@ export function WallPanel() {
             min={-Math.max(0.01, maxCurveOffset)}
             onChange={(v) => handleUpdate({ curveOffset: normalizeWallCurveOffset(node, v) })}
             precision={2}
-            step={0.01}
+            step={0.1}
             unit="m"
             value={Math.round(curveOffset * 100) / 100}
           />
