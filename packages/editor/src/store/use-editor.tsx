@@ -1,7 +1,8 @@
 'use client'
 
-import type { AssetInput } from '@pascal-app/core'
 import {
+  type AnyNodeId,
+  type AssetInput,
   type BuildingNode,
   type CeilingNode,
   type DoorNode,
@@ -13,6 +14,7 @@ import {
   type RoofSegmentNode,
   type SlabNode,
   type Space,
+  type StairSurfaceMaterialRole,
   type StairNode,
   type StairSegmentNode,
   useScene,
@@ -82,21 +84,11 @@ export type MovingWallEndpoint = {
   endpoint: 'start' | 'end'
 }
 
-export type SelectedWallMaterialTarget = {
-  wallId: WallNode['id']
-  side: WallSurfaceSide
-}
+export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole
 
-export type StairMaterialTargetRole = 'railing' | 'tread' | 'side'
-
-export type SelectedStairMaterialTarget = {
-  stairId: StairNode['id']
-  role: StairMaterialTargetRole
-}
-
-export type SelectedRoofMaterialTarget = {
-  roofId: RoofNode['id']
-  role: RoofSurfaceMaterialRole
+export type SelectedMaterialTarget = {
+  nodeId: AnyNodeId
+  role: MaterialTargetRole
 }
 
 type EditorState = {
@@ -146,12 +138,8 @@ type EditorState = {
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
-  selectedWallMaterialTarget: SelectedWallMaterialTarget | null
-  setSelectedWallMaterialTarget: (target: SelectedWallMaterialTarget | null) => void
-  selectedStairMaterialTarget: SelectedStairMaterialTarget | null
-  setSelectedStairMaterialTarget: (target: SelectedStairMaterialTarget | null) => void
-  selectedRoofMaterialTarget: SelectedRoofMaterialTarget | null
-  setSelectedRoofMaterialTarget: (target: SelectedRoofMaterialTarget | null) => void
+  selectedMaterialTarget: SelectedMaterialTarget | null
+  setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
@@ -527,12 +515,8 @@ const useEditor = create<EditorState>()(
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
-      selectedWallMaterialTarget: null,
-      setSelectedWallMaterialTarget: (target) => set({ selectedWallMaterialTarget: target }),
-      selectedStairMaterialTarget: null,
-      setSelectedStairMaterialTarget: (target) => set({ selectedStairMaterialTarget: target }),
-      selectedRoofMaterialTarget: null,
-      setSelectedRoofMaterialTarget: (target) => set({ selectedRoofMaterialTarget: target }),
+      selectedMaterialTarget: null,
+      setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       spaces: {},

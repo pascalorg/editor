@@ -33,7 +33,6 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import type { ThreeEvent } from '@react-three/fiber'
-import type { BufferGeometry, Mesh } from 'three'
 import useViewer from '../store/use-viewer'
 
 type NodeConfig = {
@@ -56,23 +55,6 @@ type NodeConfig = {
 
 type NodeType = keyof NodeConfig
 
-function getIntersectionMaterialIndex(
-  object: ThreeEvent<PointerEvent>['object'],
-  faceIndex: number | undefined,
-): number | undefined {
-  if (faceIndex === undefined) return undefined
-
-  const geometry = (object as Mesh).geometry as BufferGeometry | undefined
-  if (!geometry || geometry.groups.length === 0) return undefined
-
-  const triangleStart = faceIndex * 3
-  const group = geometry.groups.find(
-    (entry) => triangleStart >= entry.start && triangleStart < entry.start + entry.count,
-  )
-
-  return group?.materialIndex
-}
-
 export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], type: T) {
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
     const eventKey = `${type}:${suffix}` as `${T}:${EventSuffix}`
@@ -83,7 +65,7 @@ export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], t
       localPosition: [localPoint.x, localPoint.y, localPoint.z],
       normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] : undefined,
       faceIndex: e.faceIndex ?? undefined,
-      materialIndex: getIntersectionMaterialIndex(e.object, e.faceIndex ?? undefined),
+      object: e.object,
       stopPropagation: () => e.stopPropagation(),
       nativeEvent: e,
     } as NodeConfig[T]['event']

@@ -90,7 +90,7 @@ export function StairPanel() {
   const createNode = useScene((s) => s.createNode)
   const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const selectedStairMaterialTarget = useEditor((s) => s.selectedStairMaterialTarget)
+  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -122,8 +122,12 @@ export function StairPanel() {
   )
 
   const materialTargetRole =
-    selectedStairMaterialTarget && selectedStairMaterialTarget.stairId === node?.id
-      ? selectedStairMaterialTarget.role
+    selectedMaterialTarget &&
+    selectedMaterialTarget.nodeId === node?.id &&
+    (selectedMaterialTarget.role === 'railing' ||
+      selectedMaterialTarget.role === 'tread' ||
+      selectedMaterialTarget.role === 'side')
+      ? selectedMaterialTarget.role
       : null
   const materialPickerValue =
     node && materialTargetRole ? getEffectiveStairSurfaceMaterial(node, materialTargetRole) : {}
@@ -612,16 +616,15 @@ export function StairPanel() {
             Click the stair surface you want to edit. Materials apply to one target at a time.
           </div>
         ) : null}
-        {materialTargetRole ? (
-          <MaterialPicker
-            hideSideControl
-            nodeType="stair"
-            onChange={handleTargetedMaterialChange}
-            onSelectMaterialPreset={handleTargetedMaterialPresetChange}
-            selectedMaterialPreset={materialPickerValue.materialPreset}
-            value={materialPickerValue.material}
-          />
-        ) : null}
+        <MaterialPicker
+          disabled={!materialTargetRole}
+          hideSideControl
+          nodeType="stair"
+          onChange={handleTargetedMaterialChange}
+          onSelectMaterialPreset={handleTargetedMaterialPresetChange}
+          selectedMaterialPreset={materialPickerValue.materialPreset}
+          value={materialPickerValue.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

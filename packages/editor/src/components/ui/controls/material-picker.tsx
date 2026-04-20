@@ -15,6 +15,7 @@ type MaterialPickerProps = {
   onChange?: (material: MaterialSchema) => void
   onSelectMaterialPreset?: (materialPreset: string) => void
   hideSideControl?: boolean
+  disabled?: boolean
 }
 
 export function MaterialPicker({
@@ -24,6 +25,7 @@ export function MaterialPicker({
   onChange,
   onSelectMaterialPreset,
   hideSideControl = false,
+  disabled = false,
 }: MaterialPickerProps) {
   const [showCustom, setShowCustom] = useState<boolean>(!!value?.properties)
   const catalogItems = nodeType ? getMaterialsForTarget(nodeType) : []
@@ -44,11 +46,13 @@ export function MaterialPicker({
     selectedMaterialPreset ?? (value?.id ? toLibraryMaterialRef(value.id) : undefined)
 
   const handleCatalogSelect = (materialId: string) => {
+    if (disabled) return
     setShowCustom(false)
     onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
   }
 
   const handleCustomOpen = () => {
+    if (disabled) return
     setShowCustom(true)
     onChange?.({
       preset: 'custom',
@@ -67,6 +71,7 @@ export function MaterialPicker({
     prop: keyof typeof currentProps,
     val: (typeof currentProps)[keyof typeof currentProps],
   ) => {
+    if (disabled) return
     onChange?.({
       preset: 'custom',
       properties: {
@@ -77,7 +82,7 @@ export function MaterialPicker({
   }
 
   return (
-    <div className="space-y-3">
+    <div className={`space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {(catalogItems.length > 0 || onChange) && (
         <div className="space-y-2">
           {catalogItems.length > 0 ? (

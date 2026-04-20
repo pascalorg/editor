@@ -57,7 +57,7 @@ export function WallPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
-  const selectedWallMaterialTarget = useEditor((s) => s.selectedWallMaterialTarget)
+  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined,
@@ -103,8 +103,10 @@ export function WallPanel() {
     [effectiveExteriorMaterial, effectiveInteriorMaterial],
   )
   const materialTargetSide =
-    selectedWallMaterialTarget && selectedWallMaterialTarget.wallId === node?.id
-      ? selectedWallMaterialTarget.side
+    selectedMaterialTarget &&
+    selectedMaterialTarget.nodeId === node?.id &&
+    (selectedMaterialTarget.role === 'interior' || selectedMaterialTarget.role === 'exterior')
+      ? selectedMaterialTarget.role
       : null
   const materialPickerValue =
     materialTargetSide === 'interior'
@@ -241,16 +243,15 @@ export function WallPanel() {
             Click the wall face you want to edit. Materials now apply to one side at a time.
           </div>
         ) : null}
-        {materialTargetSide ? (
-          <MaterialPicker
-            hideSideControl
-            nodeType="wall"
-            onChange={handleCustomMaterialChange}
-            onSelectMaterialPreset={handleMaterialPresetChange}
-            selectedMaterialPreset={materialPickerValue.materialPreset}
-            value={materialPickerValue.material}
-          />
-        ) : null}
+        <MaterialPicker
+          disabled={!materialTargetSide}
+          hideSideControl
+          nodeType="wall"
+          onChange={handleCustomMaterialChange}
+          onSelectMaterialPreset={handleMaterialPresetChange}
+          selectedMaterialPreset={materialPickerValue.materialPreset}
+          value={materialPickerValue.material}
+        />
       </PanelSection>
 
       <PanelSection title="Actions">

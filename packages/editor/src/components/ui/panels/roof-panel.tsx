@@ -56,7 +56,7 @@ export function RoofPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const selectedRoofMaterialTarget = useEditor((s) => s.selectedRoofMaterialTarget)
+  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined,
@@ -80,8 +80,12 @@ export function RoofPanel() {
   )
 
   const materialTargetRole =
-    selectedRoofMaterialTarget && selectedRoofMaterialTarget.roofId === node?.id
-      ? selectedRoofMaterialTarget.role
+    selectedMaterialTarget &&
+    selectedMaterialTarget.nodeId === node?.id &&
+    (selectedMaterialTarget.role === 'top' ||
+      selectedMaterialTarget.role === 'edge' ||
+      selectedMaterialTarget.role === 'wall')
+      ? selectedMaterialTarget.role
       : null
   const materialPickerValue =
     node && materialTargetRole ? getEffectiveRoofSurfaceMaterial(node, materialTargetRole) : {}
@@ -312,16 +316,15 @@ export function RoofPanel() {
             Click the roof surface you want to edit. Materials apply to one target at a time.
           </div>
         ) : null}
-        {materialTargetRole ? (
-          <MaterialPicker
-            hideSideControl
-            nodeType="roof"
-            onChange={handleTargetedMaterialChange}
-            onSelectMaterialPreset={handleTargetedMaterialPresetChange}
-            selectedMaterialPreset={materialPickerValue.materialPreset}
-            value={materialPickerValue.material}
-          />
-        ) : null}
+        <MaterialPicker
+          disabled={!materialTargetRole}
+          hideSideControl
+          nodeType="roof"
+          onChange={handleTargetedMaterialChange}
+          onSelectMaterialPreset={handleTargetedMaterialPresetChange}
+          selectedMaterialPreset={materialPickerValue.materialPreset}
+          value={materialPickerValue.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )
