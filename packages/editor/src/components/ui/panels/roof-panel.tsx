@@ -208,11 +208,13 @@ export function RoofPanel() {
             </button>
           ))}
         </div>
-        <ActionButton
-          icon={<Plus className="h-3.5 w-3.5" />}
-          label="Add Segment"
-          onClick={handleAddSegment}
-        />
+        <ActionGroup>
+          <ActionButton
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="Add Segment"
+            onClick={handleAddSegment}
+          />
+        </ActionGroup>
       </PanelSection>
 
       <PanelSection title="Position">
