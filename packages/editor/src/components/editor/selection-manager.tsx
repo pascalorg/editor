@@ -108,6 +108,10 @@ function resolveStairMaterialTarget(
     return 'railing'
   }
 
+  if (hitObjectName.startsWith('stair-side')) {
+    return 'side'
+  }
+
   if (event.materialIndex === 0) {
     return 'tread'
   }
