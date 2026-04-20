@@ -3,8 +3,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveRoofSurfaceMaterial,
   type MaterialSchema,
   type RoofNode,
+  type RoofSurfaceMaterialRole,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
@@ -22,12 +24,39 @@ import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
+function buildRoofSurfaceMaterialPatch(
+  node: RoofNode,
+  targetRole: RoofSurfaceMaterialRole,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<RoofNode> {
+  const nextSurfaceMaterial = { material, materialPreset }
+  const nextTop =
+    targetRole === 'top' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'top')
+  const nextEdge =
+    targetRole === 'edge' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'edge')
+  const nextWall =
+    targetRole === 'wall' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'wall')
+
+  return {
+    topMaterial: nextTop.material,
+    topMaterialPreset: nextTop.materialPreset,
+    edgeMaterial: nextEdge.material,
+    edgeMaterialPreset: nextEdge.materialPreset,
+    wallMaterial: nextWall.material,
+    wallMaterialPreset: nextWall.materialPreset,
+    material: undefined,
+    materialPreset: undefined,
+  }
+}
+
 export function RoofPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined,
@@ -50,18 +79,31 @@ export function RoofPanel() {
     [selectedId, updateNode],
   )
 
-  const handleMaterialChange = useCallback(
+  const materialTargetRole =
+    selectedMaterialTarget &&
+    selectedMaterialTarget.nodeId === node?.id &&
+    (selectedMaterialTarget.role === 'top' ||
+      selectedMaterialTarget.role === 'edge' ||
+      selectedMaterialTarget.role === 'wall')
+      ? selectedMaterialTarget.role
+      : null
+  const materialPickerValue =
+    node && materialTargetRole ? getEffectiveRoofSurfaceMaterial(node, materialTargetRole) : {}
+
+  const handleTargetedMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
+      if (!node || !materialTargetRole) return
+      handleUpdate(buildRoofSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
     },
-    [handleUpdate],
+    [handleUpdate, materialTargetRole, node],
   )
 
-  const handleMaterialPresetChange = useCallback(
+  const handleTargetedMaterialPresetChange = useCallback(
     (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
+      if (!node || !materialTargetRole) return
+      handleUpdate(buildRoofSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset))
     },
-    [handleUpdate],
+    [handleUpdate, materialTargetRole, node],
   )
 
   const handleClose = useCallback(() => {
@@ -170,11 +212,13 @@ export function RoofPanel() {
             </button>
           ))}
         </div>
-        <ActionButton
-          icon={<Plus className="h-3.5 w-3.5" />}
-          label="Add Segment"
-          onClick={handleAddSegment}
-        />
+        <ActionGroup>
+          <ActionButton
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="Add Segment"
+            onClick={handleAddSegment}
+          />
+        </ActionGroup>
       </PanelSection>
 
       <PanelSection title="Position">
@@ -267,12 +311,19 @@ export function RoofPanel() {
         </ActionGroup>
       </PanelSection>
       <PanelSection title="Material">
+        {!materialTargetRole ? (
+          <div className="mb-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-[11px] text-muted-foreground">
+            Click the roof surface you want to edit. Materials apply to one target at a time.
+          </div>
+        ) : null}
         <MaterialPicker
+          disabled={!materialTargetRole}
+          hideSideControl
           nodeType="roof"
-          onChange={handleMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
+          onChange={handleTargetedMaterialChange}
+          onSelectMaterialPreset={handleTargetedMaterialPresetChange}
+          selectedMaterialPreset={materialPickerValue.materialPreset}
+          value={materialPickerValue.material}
         />
       </PanelSection>
     </PanelWrapper>

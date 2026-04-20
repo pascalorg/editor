@@ -51,7 +51,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     id: 'wall-wood1',
     label: 'Wood',
     description: 'Warm wood finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
+    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS, ...ROOF_TARGETS],
     previewThumbnailUrl: '/material/wood1/wood1_thumbnail.webp',
     preset: {
       maps: {
@@ -86,7 +86,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     id: 'wall-wood2',
     label: 'Wood',
     description: 'Textured wood finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
+    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS, ...ROOF_TARGETS],
     previewThumbnailUrl: '/material/wood2/wood2_thumbnail.webp',
     preset: {
       maps: {
@@ -122,7 +122,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     id: 'wall-wood3',
     label: 'Wood',
     description: 'Knotted timber finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
+    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS, ...ROOF_TARGETS],
     previewThumbnailUrl: '/material/wood3/wood3_thumbnail.webp',
     preset: {
       maps: {

@@ -1,8 +1,8 @@
 import { type AnyNodeId, type StairNode, type StairSegmentNode, useRegistry, useScene } from '@pascal-app/core'
-import { useLayoutEffect, useMemo, useRef } from 'react'
-import type * as THREE from 'three'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { createMaterial, createMaterialFromPresetRef, DEFAULT_STAIR_MATERIAL } from '../../../lib/materials'
+import { getStraightStairSegmentBodyMaterials } from '../../../systems/stair/stair-materials'
 
 export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   const ref = useRef<THREE.Mesh>(null!)
@@ -19,14 +19,7 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
     node.parentId ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined) : undefined
 
   const material = useMemo(() => {
-    const effectiveMaterialPreset = node.materialPreset ?? parentNode?.materialPreset
-    const effectiveMaterial = node.material ?? parentNode?.material
-
-    const presetMaterial = createMaterialFromPresetRef(effectiveMaterialPreset)
-    if (presetMaterial) return presetMaterial
-    const mat = effectiveMaterial
-    if (!mat) return DEFAULT_STAIR_MATERIAL
-    return createMaterial(mat)
+    return getStraightStairSegmentBodyMaterials(node, parentNode)
   }, [
     node.materialPreset,
     node.material,
@@ -38,19 +31,37 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
     parentNode?.material?.preset,
     parentNode?.material?.properties,
     parentNode?.material?.texture,
+    parentNode?.railingMaterialPreset,
+    parentNode?.railingMaterial,
+    parentNode?.sideMaterialPreset,
+    parentNode?.sideMaterial,
+    parentNode?.treadMaterialPreset,
+    parentNode?.treadMaterial,
   ])
+
+  const placeholderGeometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    geometry.addGroup(0, 0, 0)
+    geometry.addGroup(0, 0, 1)
+    return geometry
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      placeholderGeometry.dispose()
+    }
+  }, [placeholderGeometry])
 
   return (
     <mesh
+      geometry={placeholderGeometry}
       material={material}
       position={node.position}
       ref={ref}
       rotation-y={node.rotation}
       visible={node.visible}
       {...handlers}
-    >
-      {/* StairSystem will replace this geometry in the next frame */}
-      <boxGeometry args={[0, 0, 0]} />
-    </mesh>
+    />
   )
 }

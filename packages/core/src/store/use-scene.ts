@@ -100,6 +100,187 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
   return parsed.success ? parsed.data : null
 }
 
+function migrateWallSurfaceMaterials(node: Record<string, any>) {
+  const hasInterior =
+    node.interiorMaterial !== undefined || typeof node.interiorMaterialPreset === 'string'
+  const hasExterior =
+    node.exteriorMaterial !== undefined || typeof node.exteriorMaterialPreset === 'string'
+  const legacyFinish = {
+    material: node.material,
+    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
+  }
+
+  if (!hasInterior && !hasExterior) {
+    if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
+      return node
+    }
+
+    return {
+      ...node,
+      interiorMaterial: legacyFinish.material,
+      interiorMaterialPreset: legacyFinish.materialPreset,
+      exteriorMaterial: legacyFinish.material,
+      exteriorMaterialPreset: legacyFinish.materialPreset,
+    }
+  }
+
+  if (!hasInterior) {
+    return {
+      ...node,
+      interiorMaterial: node.exteriorMaterial,
+      interiorMaterialPreset: node.exteriorMaterialPreset,
+    }
+  }
+
+  if (!hasExterior) {
+    return {
+      ...node,
+      exteriorMaterial: node.interiorMaterial,
+      exteriorMaterialPreset: node.interiorMaterialPreset,
+    }
+  }
+
+  return node
+}
+
+function migrateStairSurfaceMaterials(node: Record<string, any>) {
+  const hasRailing =
+    node.railingMaterial !== undefined || typeof node.railingMaterialPreset === 'string'
+  const hasTread = node.treadMaterial !== undefined || typeof node.treadMaterialPreset === 'string'
+  const hasSide = node.sideMaterial !== undefined || typeof node.sideMaterialPreset === 'string'
+  const legacyFinish = {
+    material: node.material,
+    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
+  }
+
+  const resolveBodyFallback = () => {
+    if (node.treadMaterial !== undefined || typeof node.treadMaterialPreset === 'string') {
+      return {
+        material: node.treadMaterial,
+        materialPreset: typeof node.treadMaterialPreset === 'string' ? node.treadMaterialPreset : undefined,
+      }
+    }
+
+    if (node.sideMaterial !== undefined || typeof node.sideMaterialPreset === 'string') {
+      return {
+        material: node.sideMaterial,
+        materialPreset: typeof node.sideMaterialPreset === 'string' ? node.sideMaterialPreset : undefined,
+      }
+    }
+
+    return legacyFinish
+  }
+
+  if (!hasRailing && !hasTread && !hasSide) {
+    if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
+      return node
+    }
+
+    return {
+      ...node,
+      railingMaterial: legacyFinish.material,
+      railingMaterialPreset: legacyFinish.materialPreset,
+      treadMaterial: legacyFinish.material,
+      treadMaterialPreset: legacyFinish.materialPreset,
+      sideMaterial: legacyFinish.material,
+      sideMaterialPreset: legacyFinish.materialPreset,
+    }
+  }
+
+  const next = { ...node }
+
+  if (!hasTread) {
+    const fallback =
+      node.sideMaterial !== undefined || typeof node.sideMaterialPreset === 'string'
+        ? {
+            material: node.sideMaterial,
+            materialPreset:
+              typeof node.sideMaterialPreset === 'string' ? node.sideMaterialPreset : undefined,
+          }
+        : resolveBodyFallback()
+    next.treadMaterial = fallback.material
+    next.treadMaterialPreset = fallback.materialPreset
+  }
+
+  if (!hasSide) {
+    const fallback =
+      node.treadMaterial !== undefined || typeof node.treadMaterialPreset === 'string'
+        ? {
+            material: node.treadMaterial,
+            materialPreset:
+              typeof node.treadMaterialPreset === 'string' ? node.treadMaterialPreset : undefined,
+          }
+        : resolveBodyFallback()
+    next.sideMaterial = fallback.material
+    next.sideMaterialPreset = fallback.materialPreset
+  }
+
+  if (!hasRailing) {
+    const fallback = resolveBodyFallback()
+    next.railingMaterial = fallback.material
+    next.railingMaterialPreset = fallback.materialPreset
+  }
+
+  return next
+}
+
+function migrateRoofSurfaceMaterials(node: Record<string, any>) {
+  const hasTop = node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string'
+  const hasEdge = node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string'
+  const hasWall = node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string'
+  const legacyFinish = {
+    material: node.material,
+    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
+  }
+
+  if (!hasTop && !hasEdge && !hasWall) {
+    if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
+      return node
+    }
+
+    return {
+      ...node,
+      topMaterial: legacyFinish.material,
+      topMaterialPreset: legacyFinish.materialPreset,
+      edgeMaterial: legacyFinish.material,
+      edgeMaterialPreset: legacyFinish.materialPreset,
+      wallMaterial: legacyFinish.material,
+      wallMaterialPreset: legacyFinish.materialPreset,
+    }
+  }
+
+  const next = { ...node }
+
+  if (!hasTop) {
+    next.topMaterial = legacyFinish.material
+    next.topMaterialPreset = legacyFinish.materialPreset
+  }
+
+  if (!hasEdge) {
+    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
+      next.edgeMaterial = node.wallMaterial
+      next.edgeMaterialPreset =
+        typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined
+    } else {
+      next.edgeMaterial = legacyFinish.material
+      next.edgeMaterialPreset = legacyFinish.materialPreset
+    }
+  }
+
+  if (!hasWall) {
+    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
+      next.wallMaterial = node.edgeMaterial
+      next.wallMaterialPreset =
+        typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined
+    } else {
+      next.wallMaterial = legacyFinish.material
+      next.wallMaterialPreset = legacyFinish.materialPreset
+    }
+  }
+
+  return next
+}
+
 function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
   const patchedNodes = { ...nodes }
   for (const [id, node] of Object.entries(patchedNodes)) {
@@ -141,7 +322,7 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
     }
 
     if (node.type === 'stair') {
-      const normalized = normalizeStairNode(node)
+      const normalized = normalizeStairNode(migrateStairSurfaceMaterials(node))
       if (normalized) {
         patchedNodes[id] = normalized
       }
@@ -152,6 +333,14 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'wall') {
+      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
+    }
+
+    if (node.type === 'roof') {
+      patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }
   }
   return patchedNodes as Record<string, AnyNode>

@@ -38,7 +38,15 @@ export const GroundOccluder = () => {
     const polygons: [number, number][][] = []
 
     Object.values(nodes).forEach((node) => {
-      if (!(node.type === 'slab' && node.visible && node.polygon.length >= 3)) {
+      if (
+        !(
+          node.type === 'slab' &&
+          node.visible &&
+          node.polygon.length >= 3 &&
+          // Only recessed slabs should punch through the ground plane.
+          (node.elevation ?? 0.05) < 0
+        )
+      ) {
         return
       }
 

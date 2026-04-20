@@ -7,20 +7,30 @@ import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manage
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
-import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
+import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import {
   calculateLevelMiters,
   getAdjacentWallIds,
   getWallMiterBoundaryPoints,
   type Point2D,
-  type WallMiterData,
   pointToKey,
+  type WallMiterData,
 } from './wall-mitering'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
 const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
+const WALL_FACE_NORMAL_Y_EPSILON = 0.6
+const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
+
+type WallBoundaryEdgeTag = 'front' | 'back' | 'base'
+
+type TaggedWallBoundaryEdge = {
+  start: THREE.Vector2
+  end: THREE.Vector2
+  tag: WallBoundaryEdgeTag
+}
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
   const uv = geometry.getAttribute('uv')
@@ -76,6 +86,207 @@ function insetCurvedWallBoundaryPointsFor3D(
   }
 
   return next
+}
+
+function addTaggedWallBoundaryEdge(
+  edges: TaggedWallBoundaryEdge[],
+  points: { x: number; z: number }[],
+  startIndex: number,
+  endIndex: number,
+  tag: WallBoundaryEdgeTag,
+) {
+  const start = points[startIndex]
+  const end = points[endIndex]
+  if (!(start && end)) return
+  if (Math.hypot(end.x - start.x, end.z - start.z) < 1e-6) return
+
+  edges.push({
+    start: new THREE.Vector2(start.x, start.z),
+    end: new THREE.Vector2(end.x, end.z),
+    tag,
+  })
+}
+
+function buildTaggedWallBoundaryEdges(
+  wall: WallNode,
+  localPoints: { x: number; z: number }[],
+  miterData: WallMiterData,
+): TaggedWallBoundaryEdge[] {
+  if (localPoints.length < 2) return []
+
+  const edges: TaggedWallBoundaryEdge[] = []
+
+  if (isCurvedWall(wall)) {
+    const sidePointCount = Math.floor(localPoints.length / 2)
+    if (sidePointCount < 2) return edges
+
+    for (let index = 0; index < sidePointCount - 1; index += 1) {
+      addTaggedWallBoundaryEdge(edges, localPoints, index, index + 1, 'back')
+    }
+
+    addTaggedWallBoundaryEdge(edges, localPoints, sidePointCount - 1, sidePointCount, 'base')
+
+    for (let index = sidePointCount; index < localPoints.length - 1; index += 1) {
+      addTaggedWallBoundaryEdge(edges, localPoints, index, index + 1, 'front')
+    }
+
+    addTaggedWallBoundaryEdge(edges, localPoints, localPoints.length - 1, 0, 'base')
+    return edges
+  }
+
+  const startKey = pointToKey({ x: wall.start[0], y: wall.start[1] })
+  const startJunction = miterData.junctionData.get(startKey)?.get(wall.id)
+  const startLeftIndex = startJunction ? localPoints.length - 2 : localPoints.length - 1
+  const endLeftIndex = startJunction ? localPoints.length - 3 : localPoints.length - 2
+
+  addTaggedWallBoundaryEdge(edges, localPoints, 0, 1, 'back')
+
+  for (let index = 1; index < endLeftIndex; index += 1) {
+    addTaggedWallBoundaryEdge(edges, localPoints, index, index + 1, 'base')
+  }
+
+  addTaggedWallBoundaryEdge(edges, localPoints, endLeftIndex, startLeftIndex, 'front')
+
+  for (let index = startLeftIndex; index < localPoints.length - 1; index += 1) {
+    addTaggedWallBoundaryEdge(edges, localPoints, index, index + 1, 'base')
+  }
+
+  addTaggedWallBoundaryEdge(edges, localPoints, localPoints.length - 1, 0, 'base')
+
+  return edges
+}
+
+function distanceToWallBoundaryEdge(point: THREE.Vector2, edge: TaggedWallBoundaryEdge): number {
+  const edgeDx = edge.end.x - edge.start.x
+  const edgeDz = edge.end.y - edge.start.y
+  const pointDx = point.x - edge.start.x
+  const pointDz = point.y - edge.start.y
+  const edgeLengthSq = edgeDx * edgeDx + edgeDz * edgeDz
+
+  if (edgeLengthSq < 1e-12) {
+    return point.distanceTo(edge.start)
+  }
+
+  const t = THREE.MathUtils.clamp((pointDx * edgeDx + pointDz * edgeDz) / edgeLengthSq, 0, 1)
+  const closestX = edge.start.x + edgeDx * t
+  const closestZ = edge.start.y + edgeDz * t
+
+  return Math.hypot(point.x - closestX, point.y - closestZ)
+}
+
+function getWallFaceMaterialIndex(
+  wall: Pick<WallNode, 'frontSide' | 'backSide'>,
+  face: 'front' | 'back',
+): 0 | 1 | 2 {
+  const semantic = face === 'front' ? wall.frontSide : wall.backSide
+  const fallback = face === 'front' ? 1 : 2
+
+  if (semantic === 'interior') return 1
+  if (semantic === 'exterior') return 2
+  return fallback
+}
+
+function assignWallMaterialGroups(
+  geometry: THREE.BufferGeometry,
+  wall: WallNode,
+  boundaryEdges: TaggedWallBoundaryEdge[],
+) {
+  const position = geometry.getAttribute('position')
+  if (!position) return
+
+  const index = geometry.getIndex()
+  const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(position.count / 3)
+  if (triangleCount === 0) {
+    geometry.clearGroups()
+    return
+  }
+
+  const triangleMaterials = new Array<number>(triangleCount).fill(0)
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const ab = new THREE.Vector3()
+  const ac = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+  const centroid = new THREE.Vector3()
+  const projectedCentroid = new THREE.Vector2()
+  const maxBoundaryDistance = Math.max(
+    getWallThickness(wall) * 0.02,
+    WALL_FACE_EDGE_DISTANCE_EPSILON,
+  )
+
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 1) {
+    const baseIndex = triangleIndex * 3
+    const ia = index ? index.getX(baseIndex) : baseIndex
+    const ib = index ? index.getX(baseIndex + 1) : baseIndex + 1
+    const ic = index ? index.getX(baseIndex + 2) : baseIndex + 2
+
+    a.fromBufferAttribute(position, ia)
+    b.fromBufferAttribute(position, ib)
+    c.fromBufferAttribute(position, ic)
+
+    ab.subVectors(b, a)
+    ac.subVectors(c, a)
+    normal.crossVectors(ab, ac)
+
+    if (normal.lengthSq() < 1e-12) {
+      triangleMaterials[triangleIndex] = 0
+      continue
+    }
+
+    normal.normalize()
+
+    if (Math.abs(normal.y) >= WALL_FACE_NORMAL_Y_EPSILON) {
+      triangleMaterials[triangleIndex] = 0
+      continue
+    }
+
+    centroid
+      .copy(a)
+      .add(b)
+      .add(c)
+      .multiplyScalar(1 / 3)
+    projectedCentroid.set(centroid.x, centroid.z)
+
+    let nearestTag: WallBoundaryEdgeTag | null = null
+    let nearestDistance = Number.POSITIVE_INFINITY
+
+    for (const edge of boundaryEdges) {
+      const distance = distanceToWallBoundaryEdge(projectedCentroid, edge)
+      if (distance < nearestDistance) {
+        nearestDistance = distance
+        nearestTag = edge.tag
+      }
+    }
+
+    if (!nearestTag || nearestDistance > maxBoundaryDistance) {
+      triangleMaterials[triangleIndex] = 0
+      continue
+    }
+
+    if (nearestTag === 'base') {
+      triangleMaterials[triangleIndex] = 0
+      continue
+    }
+
+    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(wall, nearestTag)
+  }
+
+  geometry.clearGroups()
+
+  let currentMaterial = triangleMaterials[0] ?? 0
+  let groupStart = 0
+
+  for (let triangleIndex = 1; triangleIndex < triangleCount; triangleIndex += 1) {
+    const materialIndex = triangleMaterials[triangleIndex] ?? 0
+    if (materialIndex === currentMaterial) continue
+
+    geometry.addGroup(groupStart * 3, (triangleIndex - groupStart) * 3, currentMaterial)
+    groupStart = triangleIndex
+    currentMaterial = materialIndex
+  }
+
+  geometry.addGroup(groupStart * 3, (triangleCount - groupStart) * 3, currentMaterial)
 }
 
 // ============================================================================
@@ -252,6 +463,7 @@ export function generateExtrudedWall(
 
   // Convert polygon to local coordinates
   const localPoints = polyPoints.map(worldToLocal)
+  const boundaryEdges = buildTaggedWallBoundaryEdges(wallNode, localPoints, miterData)
 
   // Build THREE.js shape
   // Shape uses (x, y) where we map: shape.x = local.x, shape.y = -local.z
@@ -272,6 +484,7 @@ export function generateExtrudedWall(
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
+  assignWallMaterialGroups(geometry, wallNode, boundaryEdges)
   ensureUv2Attribute(geometry)
 
   // Apply CSG subtraction for cutouts (doors/windows)
@@ -307,6 +520,7 @@ export function generateExtrudedWall(
 
   const resultGeometry = resultBrush.geometry
   resultGeometry.computeVertexNormals()
+  assignWallMaterialGroups(resultGeometry, wallNode, boundaryEdges)
   ensureUv2Attribute(resultGeometry)
 
   return resultGeometry

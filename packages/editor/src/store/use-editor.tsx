@@ -1,21 +1,25 @@
 'use client'
 
-import type { AssetInput } from '@pascal-app/core'
 import {
+  type AnyNodeId,
+  type AssetInput,
   type BuildingNode,
   type CeilingNode,
   type DoorNode,
   type FenceNode,
   type ItemNode,
   type LevelNode,
+  type RoofSurfaceMaterialRole,
   type RoofNode,
   type RoofSegmentNode,
   type SlabNode,
   type Space,
+  type StairSurfaceMaterialRole,
   type StairNode,
   type StairSegmentNode,
   useScene,
   type WallNode,
+  type WallSurfaceSide,
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -80,6 +84,13 @@ export type MovingWallEndpoint = {
   endpoint: 'start' | 'end'
 }
 
+export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole
+
+export type SelectedMaterialTarget = {
+  nodeId: AnyNodeId
+  role: MaterialTargetRole
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -127,6 +138,8 @@ type EditorState = {
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
+  selectedMaterialTarget: SelectedMaterialTarget | null
+  setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
@@ -502,6 +515,8 @@ const useEditor = create<EditorState>()(
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
+      selectedMaterialTarget: null,
+      setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       spaces: {},

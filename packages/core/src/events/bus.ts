@@ -1,4 +1,5 @@
 import type { ThreeEvent } from '@react-three/fiber'
+import type { Object3D } from 'three'
 import mitt from 'mitt'
 import type {
   BuildingNode,
@@ -38,6 +39,8 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   position: [number, number, number]
   localPosition: [number, number, number]
   normal?: [number, number, number]
+  faceIndex?: number
+  object: Object3D
   stopPropagation: () => void
   nativeEvent: ThreeEvent<PointerEvent>
 }

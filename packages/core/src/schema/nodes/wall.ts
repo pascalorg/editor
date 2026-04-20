@@ -12,8 +12,14 @@ export const WallNode = BaseNode.extend({
   children: z
     .array(z.union([ItemNode.shape.id, DoorNode.shape.id, WindowNode.shape.id]))
     .default([]),
+  // Legacy single-material wall finish. Read for backward compatibility only.
   material: MaterialSchema.optional(),
+  // Legacy single-material wall finish preset. Read for backward compatibility only.
   materialPreset: z.string().optional(),
+  interiorMaterial: MaterialSchema.optional(),
+  interiorMaterialPreset: z.string().optional(),
+  exteriorMaterial: MaterialSchema.optional(),
+  exteriorMaterialPreset: z.string().optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
@@ -37,3 +43,62 @@ export const WallNode = BaseNode.extend({
   `,
 )
 export type WallNode = z.infer<typeof WallNode>
+
+export type WallSurfaceSide = 'interior' | 'exterior'
+
+export type WallSurfaceMaterialSpec = {
+  material?: z.infer<typeof MaterialSchema>
+  materialPreset?: string
+}
+
+type WallSurfaceMaterialSource = {
+  material?: z.infer<typeof MaterialSchema>
+  materialPreset?: string
+  interiorMaterial?: z.infer<typeof MaterialSchema>
+  interiorMaterialPreset?: string
+  exteriorMaterial?: z.infer<typeof MaterialSchema>
+  exteriorMaterialPreset?: string
+}
+
+function getConfiguredWallSurfaceMaterial(
+  wall: WallSurfaceMaterialSource,
+  side: WallSurfaceSide,
+): WallSurfaceMaterialSpec {
+  if (side === 'interior') {
+    return {
+      material: wall.interiorMaterial,
+      materialPreset: wall.interiorMaterialPreset,
+    }
+  }
+
+  return {
+    material: wall.exteriorMaterial,
+    materialPreset: wall.exteriorMaterialPreset,
+  }
+}
+
+function hasSurfaceMaterial(spec: WallSurfaceMaterialSpec): boolean {
+  return spec.material !== undefined || typeof spec.materialPreset === 'string'
+}
+
+export function getEffectiveWallSurfaceMaterial(
+  wall: WallSurfaceMaterialSource,
+  side: WallSurfaceSide,
+): WallSurfaceMaterialSpec {
+  const configured = getConfiguredWallSurfaceMaterial(wall, side)
+  if (hasSurfaceMaterial(configured)) {
+    return configured
+  }
+
+  return {
+    material: wall.material,
+    materialPreset: wall.materialPreset,
+  }
+}
+
+export function getWallSurfaceMaterialSignature(spec: WallSurfaceMaterialSpec): string {
+  return JSON.stringify({
+    material: spec.material ?? null,
+    materialPreset: spec.materialPreset ?? null,
+  })
+}
