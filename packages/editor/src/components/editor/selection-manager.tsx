@@ -8,6 +8,8 @@ import {
   resolveLevelId,
   sceneRegistry,
   useScene,
+  type WallEvent,
+  type WallSurfaceSide,
 } from '@pascal-app/core'
 
 import { useViewer } from '@pascal-app/viewer'
@@ -66,6 +68,32 @@ export const resolveBuildingId = (
     return level.parentId
   }
   return null
+}
+
+function resolveWallMaterialTarget(event: WallEvent): WallSurfaceSide | null {
+  if (event.materialIndex === 1) return 'interior'
+  if (event.materialIndex === 2) return 'exterior'
+
+  const normalZ = event.normal?.[2]
+  const localZ = event.localPosition[2]
+  const thickness = event.node.thickness ?? 0.1
+
+  if (
+    normalZ === undefined ||
+    Math.abs(normalZ) < 0.65 ||
+    Math.abs(localZ) < Math.max(thickness * 0.2, 0.01)
+  ) {
+    return null
+  }
+
+  const hitFace = localZ >= 0 ? 'front' : 'back'
+  const semantic = hitFace === 'front' ? event.node.frontSide : event.node.backSide
+
+  if (semantic === 'interior' || semantic === 'exterior') {
+    return semantic
+  }
+
+  return hitFace === 'front' ? 'interior' : 'exterior'
 }
 
 const HIGHLIGHT_PROFILES = {
@@ -439,6 +467,23 @@ export const SelectionManager = () => {
 
         activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
 
+        if (node.type === 'wall' && nodeToSelect.type === 'wall') {
+          const nextWallMaterialTarget = resolveWallMaterialTarget(event as WallEvent)
+          if (nextWallMaterialTarget) {
+            useEditor.getState().setSelectedWallMaterialTarget({
+              wallId: nodeToSelect.id,
+              side: nextWallMaterialTarget,
+            })
+          } else {
+            const currentWallMaterialTarget = useEditor.getState().selectedWallMaterialTarget
+            if (currentWallMaterialTarget?.wallId !== nodeToSelect.id) {
+              useEditor.getState().setSelectedWallMaterialTarget(null)
+            }
+          }
+        } else if (useEditor.getState().selectedWallMaterialTarget) {
+          useEditor.getState().setSelectedWallMaterialTarget(null)
+        }
+
         // Reset the handled flag after a short delay to allow grid:click to be ignored
         setTimeout(() => {
           clickHandledRef.current = false
@@ -471,6 +516,7 @@ export const SelectionManager = () => {
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
+      useEditor.getState().setSelectedWallMaterialTarget(null)
 
       // When deselecting from zone mode, return to structure select
       if (phase === 'structure' && structureLayer === 'zones') {
@@ -704,6 +750,12 @@ export const SelectionManager = () => {
 }
 
 const SelectionStateSync = () => {
+  const selectedWallMaterialTarget = useEditor((s) => s.selectedWallMaterialTarget)
+  const setSelectedWallMaterialTarget = useEditor((s) => s.setSelectedWallMaterialTarget)
+  const singleSelectedId = useViewer((s) =>
+    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : null,
+  )
+
   useEffect(() => {
     return useScene.subscribe((state) => {
       const { buildingId, levelId, zoneId, selectedIds } = useViewer.getState().selection
@@ -731,6 +783,25 @@ const SelectionStateSync = () => {
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (!selectedWallMaterialTarget) return
+
+    if (!singleSelectedId) {
+      setSelectedWallMaterialTarget(null)
+      return
+    }
+
+    const selectedNode = useScene.getState().nodes[singleSelectedId as AnyNodeId]
+    if (!(selectedNode?.type === 'wall')) {
+      setSelectedWallMaterialTarget(null)
+      return
+    }
+
+    if (selectedWallMaterialTarget.wallId !== selectedNode.id) {
+      setSelectedWallMaterialTarget(null)
+    }
+  }, [selectedWallMaterialTarget, setSelectedWallMaterialTarget, singleSelectedId])
 
   return null
 }

@@ -1,210 +1,14 @@
-import {
-  type AnyNodeId,
-  baseMaterial,
-  emitter,
-  getMaterialPresetByRef,
-  sceneRegistry,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
-import { Color } from 'three'
-import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
-import { type Mesh, MeshStandardNodeMaterial, Vector3 } from 'three/webgpu'
+import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
-import { createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
+import { getMaterialsForWall } from './wall-materials'
 
 const tmpVec = new Vector3()
 const u = new Vector3()
 const v = new Vector3()
-const DEFAULT_WALL_COLOR = '#f2f0ed'
-const WALL_HIGHLIGHT_PROFILES = {
-  delete: {
-    color: new Color('#dc2626'),
-    blend: 0.76,
-    emissiveBlend: 0.92,
-    emissiveIntensity: 0.46,
-  },
-  selection: {
-    color: new Color('#818cf8'),
-    blend: 0.32,
-    emissiveBlend: 0.7,
-    emissiveIntensity: 0.42,
-  },
-} as const
-
-type WallHighlightKind = keyof typeof WALL_HIGHLIGHT_PROFILES
-
-const dotPattern = Fn(() => {
-  const scale = float(0.1)
-  const dotSize = float(0.3)
-
-  const uv = vec2(positionLocal.x, positionLocal.y).div(scale)
-  const gridUV = fract(uv)
-
-  const dist = length(gridUV.sub(0.5))
-
-  const dots = step(dist, dotSize.mul(0.5))
-
-  const fadeHeight = float(2.5)
-  const yFade = float(1).sub(smoothstep(float(0), fadeHeight, positionLocal.y))
-
-  return dots.mul(yFade)
-})
-
-interface WallMaterials {
-  visible: Material
-  invisible: MeshStandardNodeMaterial
-  deleteVisible: Material
-  deleteInvisible: MeshStandardNodeMaterial
-  highlightedVisible: Material
-  highlightedInvisible: MeshStandardNodeMaterial
-  materialHash: string
-}
-
-const wallMaterialCache = new Map<string, WallMaterials>()
-
-const presetColors = {
-  white: '#ffffff',
-  brick: '#8b4513',
-  concrete: '#808080',
-  wood: '#deb887',
-  glass: '#87ceeb',
-  metal: '#c0c0c0',
-  plaster: '#f5f5dc',
-  tile: '#dcdcdc',
-  marble: '#f5f5f5',
-} as const
-
-function getMaterialHash(wallNode: WallNode): string {
-  if (wallNode.materialPreset) return `preset-ref-${wallNode.materialPreset}`
-  if (!wallNode.material) return 'none'
-  const mat = wallNode.material
-  if (mat.preset && mat.preset !== 'custom') {
-    return `preset-${mat.preset}`
-  }
-  if (mat.properties) {
-    return `props-${mat.properties.color}-${mat.properties.roughness}-${mat.properties.metalness}`
-  }
-  return 'default'
-}
-
-function getPresetColor(preset: string): string {
-  return presetColors[preset as keyof typeof presetColors] ?? '#ffffff'
-}
-
-function getHighlightedColor(color: Color, kind: WallHighlightKind): Color {
-  const profile = WALL_HIGHLIGHT_PROFILES[kind]
-  return color.clone().lerp(profile.color, profile.blend)
-}
-
-function createHighlightedWallMaterial(
-  material: Material,
-  kind: WallHighlightKind,
-): Material {
-  const highlightedMaterial = material.clone() as Material & {
-    color?: Color
-    emissive?: Color
-    emissiveIntensity?: number
-    needsUpdate?: boolean
-  }
-  const profile = WALL_HIGHLIGHT_PROFILES[kind]
-
-  if ('color' in highlightedMaterial && highlightedMaterial.color) {
-    highlightedMaterial.color = getHighlightedColor(highlightedMaterial.color, kind)
-  }
-  if ('emissive' in highlightedMaterial && highlightedMaterial.emissive) {
-    highlightedMaterial.emissive = highlightedMaterial.emissive
-      .clone()
-      .lerp(profile.color, profile.emissiveBlend)
-  }
-  if ('emissiveIntensity' in highlightedMaterial) {
-    highlightedMaterial.emissiveIntensity = Math.max(
-      highlightedMaterial.emissiveIntensity ?? 0,
-      profile.emissiveIntensity,
-    )
-  }
-  highlightedMaterial.needsUpdate = true
-
-  return highlightedMaterial
-}
-
-function createBaseVisibleWallMaterial(wallNode: WallNode): Material {
-  if (wallNode.materialPreset) {
-    return createMaterialFromPresetRef(wallNode.materialPreset) ?? baseMaterial
-  }
-
-  if (wallNode.material) {
-    return createMaterial(wallNode.material)
-  }
-
-  return baseMaterial
-}
-
-function getMaterialsForWall(wallNode: WallNode): WallMaterials {
-  const cacheKey = wallNode.id
-  const materialHash = getMaterialHash(wallNode)
-
-  const existing = wallMaterialCache.get(cacheKey)
-  if (existing && existing.materialHash === materialHash) {
-    return existing
-  }
-
-  if (existing) {
-    existing.visible.dispose()
-    existing.invisible.dispose()
-    existing.deleteVisible.dispose()
-    existing.deleteInvisible.dispose()
-    existing.highlightedVisible.dispose()
-    existing.highlightedInvisible.dispose()
-  }
-
-  let userColor = DEFAULT_WALL_COLOR
-  const preset = getMaterialPresetByRef(wallNode.materialPreset)
-  if (preset?.mapProperties?.color) {
-    userColor = preset.mapProperties.color
-  } else if (wallNode.material?.properties?.color) {
-    userColor = wallNode.material.properties.color
-  } else if (wallNode.material?.preset && wallNode.material.preset !== 'custom') {
-    userColor = getPresetColor(wallNode.material.preset)
-  }
-
-  const visibleMat = createBaseVisibleWallMaterial(wallNode)
-
-  const invisibleMat = new MeshStandardNodeMaterial({
-    transparent: true,
-    opacityNode: mix(float(0.0), float(0.24), dotPattern()),
-    color: userColor,
-    depthWrite: false,
-    emissive: userColor,
-  })
-
-  const highlightedVisible = createHighlightedWallMaterial(visibleMat, 'selection')
-  const highlightedInvisible = createHighlightedWallMaterial(
-    invisibleMat,
-    'selection',
-  ) as MeshStandardNodeMaterial
-  const deleteVisible = createHighlightedWallMaterial(visibleMat, 'delete')
-  const deleteInvisible = createHighlightedWallMaterial(invisibleMat, 'delete') as MeshStandardNodeMaterial
-
-  const result: WallMaterials = {
-    visible: visibleMat,
-    invisible: invisibleMat,
-    deleteVisible,
-    deleteInvisible,
-    highlightedVisible,
-    highlightedInvisible,
-    materialHash,
-  }
-  wallMaterialCache.set(cacheKey, result)
-  return result
-}
-
-function getVisibleWallMaterial(wallNode: WallNode): Material {
-  return createBaseVisibleWallMaterial(wallNode)
-}
 
 function getWallHideState(
   wallNode: WallNode,
@@ -301,7 +105,7 @@ export const WallCutout = () => {
             ? materials.deleteVisible
             : isSelectionHighlighted
               ? materials.highlightedVisible
-              : getVisibleWallMaterial(wallNode)
+              : materials.visible
         }
       })
       lastWallMode.current = wallMode
@@ -311,7 +115,7 @@ export const WallCutout = () => {
   })
 
   useEffect(() => {
-    const snapshot = new Map<Mesh, Material>()
+    const snapshot = new Map<Mesh, Material | Material[]>()
 
     const restoreForCapture = () => {
       sceneRegistry.byType.wall.forEach((wallId) => {
@@ -320,10 +124,10 @@ export const WallCutout = () => {
         const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined
         if (!wallNode || wallNode.type !== 'wall') return
         const mats = getMaterialsForWall(wallNode)
-        const current = wallMesh.material as Material
+        const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)
         if (current === mats.highlightedVisible || current === mats.deleteVisible) {
-          wallMesh.material = getVisibleWallMaterial(wallNode)
+          wallMesh.material = mats.visible
         } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
           wallMesh.material = mats.invisible
         }

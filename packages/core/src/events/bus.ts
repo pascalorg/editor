@@ -38,6 +38,8 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   position: [number, number, number]
   localPosition: [number, number, number]
   normal?: [number, number, number]
+  faceIndex?: number
+  materialIndex?: number
   stopPropagation: () => void
   nativeEvent: ThreeEvent<PointerEvent>
 }

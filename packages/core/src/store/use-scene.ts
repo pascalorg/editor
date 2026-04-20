@@ -100,6 +100,49 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
   return parsed.success ? parsed.data : null
 }
 
+function migrateWallSurfaceMaterials(node: Record<string, any>) {
+  const hasInterior =
+    node.interiorMaterial !== undefined || typeof node.interiorMaterialPreset === 'string'
+  const hasExterior =
+    node.exteriorMaterial !== undefined || typeof node.exteriorMaterialPreset === 'string'
+  const legacyFinish = {
+    material: node.material,
+    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
+  }
+
+  if (!hasInterior && !hasExterior) {
+    if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
+      return node
+    }
+
+    return {
+      ...node,
+      interiorMaterial: legacyFinish.material,
+      interiorMaterialPreset: legacyFinish.materialPreset,
+      exteriorMaterial: legacyFinish.material,
+      exteriorMaterialPreset: legacyFinish.materialPreset,
+    }
+  }
+
+  if (!hasInterior) {
+    return {
+      ...node,
+      interiorMaterial: node.exteriorMaterial,
+      interiorMaterialPreset: node.exteriorMaterialPreset,
+    }
+  }
+
+  if (!hasExterior) {
+    return {
+      ...node,
+      exteriorMaterial: node.interiorMaterial,
+      exteriorMaterialPreset: node.interiorMaterialPreset,
+    }
+  }
+
+  return node
+}
+
 function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
   const patchedNodes = { ...nodes }
   for (const [id, node] of Object.entries(patchedNodes)) {
@@ -152,6 +195,10 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'wall') {
+      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
     }
   }
   return patchedNodes as Record<string, AnyNode>

@@ -3,17 +3,20 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveWallSurfaceMaterial,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
+  getWallSurfaceMaterialSignature,
   normalizeWallCurveOffset,
   type MaterialSchema,
   useScene,
+  type WallSurfaceSide,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Spline } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -22,12 +25,39 @@ import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
+function buildWallSurfaceMaterialPatch(
+  node: WallNode,
+  targetSide: WallSurfaceSide | null,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<WallNode> {
+  const nextSurfaceMaterial = { material, materialPreset }
+  const nextInterior =
+    targetSide === null || targetSide === 'interior'
+      ? nextSurfaceMaterial
+      : getEffectiveWallSurfaceMaterial(node, 'interior')
+  const nextExterior =
+    targetSide === null || targetSide === 'exterior'
+      ? nextSurfaceMaterial
+      : getEffectiveWallSurfaceMaterial(node, 'exterior')
+
+  return {
+    interiorMaterial: nextInterior.material,
+    interiorMaterialPreset: nextInterior.materialPreset,
+    exteriorMaterial: nextExterior.material,
+    exteriorMaterialPreset: nextExterior.materialPreset,
+    material: undefined,
+    materialPreset: undefined,
+  }
+}
+
 export function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
+  const selectedWallMaterialTarget = useEditor((s) => s.selectedWallMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined,
@@ -58,6 +88,33 @@ export function WallPanel() {
     [selectedId, updateNode],
   )
 
+  const effectiveInteriorMaterial = useMemo(
+    () => (node ? getEffectiveWallSurfaceMaterial(node, 'interior') : {}),
+    [node],
+  )
+  const effectiveExteriorMaterial = useMemo(
+    () => (node ? getEffectiveWallSurfaceMaterial(node, 'exterior') : {}),
+    [node],
+  )
+  const surfaceMaterialsMatch = useMemo(
+    () =>
+      getWallSurfaceMaterialSignature(effectiveInteriorMaterial) ===
+      getWallSurfaceMaterialSignature(effectiveExteriorMaterial),
+    [effectiveExteriorMaterial, effectiveInteriorMaterial],
+  )
+  const materialTargetSide =
+    selectedWallMaterialTarget && selectedWallMaterialTarget.wallId === node?.id
+      ? selectedWallMaterialTarget.side
+      : null
+  const materialPickerValue =
+    materialTargetSide === 'interior'
+      ? effectiveInteriorMaterial
+      : materialTargetSide === 'exterior'
+        ? effectiveExteriorMaterial
+        : surfaceMaterialsMatch
+          ? effectiveInteriorMaterial
+          : {}
+
   const handleUpdateLength = useCallback(
     (newLength: number) => {
       if (!node || newLength <= 0) return
@@ -83,16 +140,18 @@ export function WallPanel() {
 
   const handleMaterialPresetChange = useCallback(
     (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
+      if (!node || !materialTargetSide) return
+      handleUpdate(buildWallSurfaceMaterialPatch(node, materialTargetSide, undefined, materialPreset))
     },
-    [handleUpdate],
+    [handleUpdate, materialTargetSide, node],
   )
 
   const handleCustomMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
+      if (!node || !materialTargetSide) return
+      handleUpdate(buildWallSurfaceMaterialPatch(node, materialTargetSide, material, undefined))
     },
-    [handleUpdate],
+    [handleUpdate, materialTargetSide, node],
   )
 
   const handleClose = useCallback(() => {
@@ -177,25 +236,35 @@ export function WallPanel() {
       </PanelSection>
 
       <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="wall"
-          onChange={handleCustomMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
+        {!materialTargetSide ? (
+          <div className="mb-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-[11px] text-muted-foreground">
+            Click the wall face you want to edit. Materials now apply to one side at a time.
+          </div>
+        ) : null}
+        {materialTargetSide ? (
+          <MaterialPicker
+            hideSideControl
+            nodeType="wall"
+            onChange={handleCustomMaterialChange}
+            onSelectMaterialPreset={handleMaterialPresetChange}
+            selectedMaterialPreset={materialPickerValue.materialPreset}
+            value={materialPickerValue.material}
+          />
+        ) : null}
       </PanelSection>
 
-      <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-        {!hasWallChildrenBlockingCurve && (
-          <ActionButton
-            icon={<Spline className="h-3.5 w-3.5" />}
-            label="Curve"
-            onClick={handleCurve}
-          />
-        )}
-      </ActionGroup>
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          {!hasWallChildrenBlockingCurve && (
+            <ActionButton
+              icon={<Spline className="h-3.5 w-3.5" />}
+              label="Curve"
+              onClick={handleCurve}
+            />
+          )}
+        </ActionGroup>
+      </PanelSection>
     </PanelWrapper>
   )
 }
