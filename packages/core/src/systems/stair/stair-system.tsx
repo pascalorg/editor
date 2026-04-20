@@ -12,6 +12,10 @@ import { syncAutoStairOpenings } from './stair-opening-sync'
 const pendingStairUpdates = new Set<AnyNodeId>()
 const MAX_STAIRS_PER_FRAME = 2
 const MAX_SEGMENTS_PER_FRAME = 4
+const STAIR_TREAD_MATERIAL_INDEX = 0
+const STAIR_SIDE_MATERIAL_INDEX = 1
+const _uvPosition = new THREE.Vector3()
+const _uvNormal = new THREE.Vector3()
 
 // ============================================================================
 // STAIR SYSTEM
@@ -198,7 +202,7 @@ function generateStairSegmentGeometry(
 
   shape.lineTo(0, 0)
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
+  const extrudedGeometry = new THREE.ExtrudeGeometry(shape, {
     steps: 1,
     depth: width,
     bevelEnabled: false,
@@ -209,7 +213,16 @@ function generateStairSegmentGeometry(
   const matrix = new THREE.Matrix4()
   matrix.makeRotationY(-Math.PI / 2)
   matrix.setPosition(width / 2, 0, 0)
-  geometry.applyMatrix4(matrix)
+  extrudedGeometry.applyMatrix4(matrix)
+  extrudedGeometry.computeVertexNormals()
+
+  const geometry = extrudedGeometry.toNonIndexed() ?? extrudedGeometry
+  if (geometry !== extrudedGeometry) {
+    extrudedGeometry.dispose()
+  }
+
+  applyStairSegmentUvs(geometry)
+  ensureUv2Attribute(geometry)
 
   return geometry
 }
@@ -219,6 +232,7 @@ function updateStairSegmentGeometry(node: StairSegmentNode, mesh: THREE.Mesh) {
   const absoluteHeight = computeAbsoluteHeight(node)
 
   const newGeometry = generateStairSegmentGeometry(node, absoluteHeight)
+  applyStraightStairMaterialGroups(newGeometry)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeometry
@@ -363,12 +377,115 @@ function updateMergedStairGeometry(
   }
 
   const merged = mergeGeometries(geometries, false) ?? createEmptyGeometry()
+  applyStraightStairMaterialGroups(merged)
   replaceMeshGeometry(mergedMesh, merged)
 
   // Dispose individual geometries
   for (const geo of geometries) {
     geo.dispose()
   }
+}
+
+function applyStraightStairMaterialGroups(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position')
+  if (!position || position.count < 3) {
+    geometry.clearGroups()
+    return
+  }
+
+  const index = geometry.getIndex()
+  const triangleCount = index ? index.count / 3 : position.count / 3
+
+  if (!Number.isFinite(triangleCount) || triangleCount <= 0) {
+    geometry.clearGroups()
+    return
+  }
+
+  const triangleMaterials: number[] = new Array(triangleCount)
+  const v0 = new THREE.Vector3()
+  const v1 = new THREE.Vector3()
+  const v2 = new THREE.Vector3()
+  const edge1 = new THREE.Vector3()
+  const edge2 = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++) {
+    const vertexOffset = triangleIndex * 3
+    const a = index ? index.getX(vertexOffset) : vertexOffset
+    const b = index ? index.getX(vertexOffset + 1) : vertexOffset + 1
+    const c = index ? index.getX(vertexOffset + 2) : vertexOffset + 2
+
+    v0.fromBufferAttribute(position, a)
+    v1.fromBufferAttribute(position, b)
+    v2.fromBufferAttribute(position, c)
+
+    edge1.subVectors(v1, v0)
+    edge2.subVectors(v2, v0)
+    normal.crossVectors(edge1, edge2)
+
+    triangleMaterials[triangleIndex] =
+      normal.lengthSq() > 0 && normal.normalize().y > 0.75
+        ? STAIR_TREAD_MATERIAL_INDEX
+        : STAIR_SIDE_MATERIAL_INDEX
+  }
+
+  geometry.clearGroups()
+
+  let currentMaterial = triangleMaterials[0]
+  let groupStart = 0
+
+  for (let triangleIndex = 1; triangleIndex < triangleMaterials.length; triangleIndex++) {
+    const materialIndex = triangleMaterials[triangleIndex]
+    if (materialIndex === currentMaterial) continue
+
+    geometry.addGroup(groupStart * 3, (triangleIndex - groupStart) * 3, currentMaterial)
+    groupStart = triangleIndex
+    currentMaterial = materialIndex
+  }
+
+  geometry.addGroup(
+    groupStart * 3,
+    (triangleMaterials.length - groupStart) * 3,
+    currentMaterial ?? STAIR_SIDE_MATERIAL_INDEX,
+  )
+}
+
+function applyStairSegmentUvs(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+
+  if (!position || !normal || position.count === 0) {
+    geometry.deleteAttribute('uv')
+    return
+  }
+
+  const uv: number[] = []
+
+  for (let index = 0; index < position.count; index++) {
+    _uvPosition.fromBufferAttribute(position, index)
+    _uvNormal.fromBufferAttribute(normal, index).normalize()
+
+    const absX = Math.abs(_uvNormal.x)
+    const absY = Math.abs(_uvNormal.y)
+    const absZ = Math.abs(_uvNormal.z)
+
+    if (absY >= absX && absY >= absZ) {
+      uv.push(_uvPosition.x, _uvPosition.z)
+    } else if (absX >= absZ) {
+      uv.push(_uvPosition.z, _uvPosition.y)
+    } else {
+      uv.push(_uvPosition.x, _uvPosition.y)
+    }
+  }
+
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+}
+
+function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
+  const uv = geometry.getAttribute('uv')
+  if (!uv) return
+
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
 
 // ============================================================================
@@ -441,6 +558,8 @@ function rotateXZ(x: number, z: number, angle: number): [number, number] {
 function createEmptyGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  geometry.addGroup(0, 0, STAIR_TREAD_MATERIAL_INDEX)
+  geometry.addGroup(0, 0, STAIR_SIDE_MATERIAL_INDEX)
   return geometry
 }
 

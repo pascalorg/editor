@@ -7,6 +7,9 @@ import {
   type NodeEvent,
   resolveLevelId,
   sceneRegistry,
+  type StairEvent,
+  type StairNode,
+  type StairSegmentEvent,
   useScene,
   type WallEvent,
   type WallSurfaceSide,
@@ -16,7 +19,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
 import { Color, type Material, type Mesh, type Object3D } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor, { type Phase, type StructureLayer } from './../../store/use-editor'
+import useEditor, { type Phase, type StairMaterialTargetRole, type StructureLayer } from './../../store/use-editor'
 import { boxSelectHandled } from '../tools/select/box-select-tool'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -94,6 +97,35 @@ function resolveWallMaterialTarget(event: WallEvent): WallSurfaceSide | null {
   }
 
   return hitFace === 'front' ? 'interior' : 'exterior'
+}
+
+function resolveStairMaterialTarget(
+  event: StairEvent | StairSegmentEvent,
+): StairMaterialTargetRole | null {
+  const hitObjectName = event.nativeEvent.object?.name ?? ''
+
+  if (hitObjectName.startsWith('stair-railing')) {
+    return 'railing'
+  }
+
+  if (event.materialIndex === 0) {
+    return 'tread'
+  }
+
+  if (event.materialIndex === 1) {
+    return 'side'
+  }
+
+  const normalY = event.normal?.[1]
+  if (normalY !== undefined && normalY > 0.75) {
+    return 'tread'
+  }
+
+  if (normalY !== undefined && Math.abs(normalY) <= 0.75) {
+    return 'side'
+  }
+
+  return null
 }
 
 const HIGHLIGHT_PROFILES = {
@@ -484,6 +516,28 @@ export const SelectionManager = () => {
           useEditor.getState().setSelectedWallMaterialTarget(null)
         }
 
+        if (
+          (node.type === 'stair' || node.type === 'stair-segment') &&
+          nodeToSelect.type === 'stair'
+        ) {
+          const nextStairMaterialTarget = resolveStairMaterialTarget(
+            event as StairEvent | StairSegmentEvent,
+          )
+          if (nextStairMaterialTarget) {
+            useEditor.getState().setSelectedStairMaterialTarget({
+              stairId: nodeToSelect.id,
+              role: nextStairMaterialTarget,
+            })
+          } else {
+            const currentStairMaterialTarget = useEditor.getState().selectedStairMaterialTarget
+            if (currentStairMaterialTarget?.stairId !== nodeToSelect.id) {
+              useEditor.getState().setSelectedStairMaterialTarget(null)
+            }
+          }
+        } else if (useEditor.getState().selectedStairMaterialTarget) {
+          useEditor.getState().setSelectedStairMaterialTarget(null)
+        }
+
         // Reset the handled flag after a short delay to allow grid:click to be ignored
         setTimeout(() => {
           clickHandledRef.current = false
@@ -517,6 +571,7 @@ export const SelectionManager = () => {
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
       useEditor.getState().setSelectedWallMaterialTarget(null)
+      useEditor.getState().setSelectedStairMaterialTarget(null)
 
       // When deselecting from zone mode, return to structure select
       if (phase === 'structure' && structureLayer === 'zones') {
@@ -752,6 +807,8 @@ export const SelectionManager = () => {
 const SelectionStateSync = () => {
   const selectedWallMaterialTarget = useEditor((s) => s.selectedWallMaterialTarget)
   const setSelectedWallMaterialTarget = useEditor((s) => s.setSelectedWallMaterialTarget)
+  const selectedStairMaterialTarget = useEditor((s) => s.selectedStairMaterialTarget)
+  const setSelectedStairMaterialTarget = useEditor((s) => s.setSelectedStairMaterialTarget)
   const singleSelectedId = useViewer((s) =>
     s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : null,
   )
@@ -802,6 +859,25 @@ const SelectionStateSync = () => {
       setSelectedWallMaterialTarget(null)
     }
   }, [selectedWallMaterialTarget, setSelectedWallMaterialTarget, singleSelectedId])
+
+  useEffect(() => {
+    if (!selectedStairMaterialTarget) return
+
+    if (!singleSelectedId) {
+      setSelectedStairMaterialTarget(null)
+      return
+    }
+
+    const selectedNode = useScene.getState().nodes[singleSelectedId as AnyNodeId]
+    if (!(selectedNode?.type === 'stair')) {
+      setSelectedStairMaterialTarget(null)
+      return
+    }
+
+    if (selectedStairMaterialTarget.stairId !== selectedNode.id) {
+      setSelectedStairMaterialTarget(null)
+    }
+  }, [selectedStairMaterialTarget, setSelectedStairMaterialTarget, singleSelectedId])
 
   return null
 }

@@ -50,12 +50,14 @@ export { ScanNode } from './nodes/scan'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
 export {
+  getEffectiveStairSurfaceMaterial,
   StairNode,
   StairRailingMode,
   StairSlabOpeningMode,
   StairTopLandingMode,
   StairType,
 } from './nodes/stair'
+export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'

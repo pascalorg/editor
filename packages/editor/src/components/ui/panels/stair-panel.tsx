@@ -3,10 +3,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveStairSurfaceMaterial,
   type LevelNode,
   type MaterialSchema,
   type StairNode,
   type StairRailingMode,
+  type StairSurfaceMaterialRole,
   type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
@@ -30,6 +32,32 @@ import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
+
+function buildStairSurfaceMaterialPatch(
+  node: StairNode,
+  targetRole: StairSurfaceMaterialRole,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<StairNode> {
+  const nextSurfaceMaterial = { material, materialPreset }
+  const nextRailing =
+    targetRole === 'railing' ? nextSurfaceMaterial : getEffectiveStairSurfaceMaterial(node, 'railing')
+  const nextTread =
+    targetRole === 'tread' ? nextSurfaceMaterial : getEffectiveStairSurfaceMaterial(node, 'tread')
+  const nextSide =
+    targetRole === 'side' ? nextSurfaceMaterial : getEffectiveStairSurfaceMaterial(node, 'side')
+
+  return {
+    railingMaterial: nextRailing.material,
+    railingMaterialPreset: nextRailing.materialPreset,
+    treadMaterial: nextTread.material,
+    treadMaterialPreset: nextTread.materialPreset,
+    sideMaterial: nextSide.material,
+    sideMaterialPreset: nextSide.materialPreset,
+    material: undefined,
+    materialPreset: undefined,
+  }
+}
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'None', value: 'none' },
@@ -62,6 +90,7 @@ export function StairPanel() {
   const createNode = useScene((s) => s.createNode)
   const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const selectedStairMaterialTarget = useEditor((s) => s.selectedStairMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -92,18 +121,27 @@ export function StairPanel() {
     [selectedId, updateNode],
   )
 
-  const handleMaterialChange = useCallback(
+  const materialTargetRole =
+    selectedStairMaterialTarget && selectedStairMaterialTarget.stairId === node?.id
+      ? selectedStairMaterialTarget.role
+      : null
+  const materialPickerValue =
+    node && materialTargetRole ? getEffectiveStairSurfaceMaterial(node, materialTargetRole) : {}
+
+  const handleTargetedMaterialChange = useCallback(
     (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
+      if (!node || !materialTargetRole) return
+      handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
     },
-    [handleUpdate],
+    [handleUpdate, materialTargetRole, node],
   )
 
-  const handleMaterialPresetChange = useCallback(
+  const handleTargetedMaterialPresetChange = useCallback(
     (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
+      if (!node || !materialTargetRole) return
+      handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset))
     },
-    [handleUpdate],
+    [handleUpdate, materialTargetRole, node],
   )
 
   const handleClose = useCallback(() => {
@@ -569,13 +607,21 @@ export function StairPanel() {
         </ActionGroup>
       </PanelSection>
       <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="stair"
-          onChange={handleMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
+        {!materialTargetRole ? (
+          <div className="mb-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-[11px] text-muted-foreground">
+            Click the stair surface you want to edit. Materials apply to one target at a time.
+          </div>
+        ) : null}
+        {materialTargetRole ? (
+          <MaterialPicker
+            hideSideControl
+            nodeType="stair"
+            onChange={handleTargetedMaterialChange}
+            onSelectMaterialPreset={handleTargetedMaterialPresetChange}
+            selectedMaterialPreset={materialPickerValue.materialPreset}
+            value={materialPickerValue.material}
+          />
+        ) : null}
       </PanelSection>
     </PanelWrapper>
   )

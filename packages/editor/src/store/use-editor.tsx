@@ -86,6 +86,13 @@ export type SelectedWallMaterialTarget = {
   side: WallSurfaceSide
 }
 
+export type StairMaterialTargetRole = 'railing' | 'tread' | 'side'
+
+export type SelectedStairMaterialTarget = {
+  stairId: StairNode['id']
+  role: StairMaterialTargetRole
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -135,6 +142,8 @@ type EditorState = {
   setCurvingWall: (wall: WallNode | null) => void
   selectedWallMaterialTarget: SelectedWallMaterialTarget | null
   setSelectedWallMaterialTarget: (target: SelectedWallMaterialTarget | null) => void
+  selectedStairMaterialTarget: SelectedStairMaterialTarget | null
+  setSelectedStairMaterialTarget: (target: SelectedStairMaterialTarget | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   // Space detection for cutaway mode
@@ -512,6 +521,8 @@ const useEditor = create<EditorState>()(
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       selectedWallMaterialTarget: null,
       setSelectedWallMaterialTarget: (target) => set({ selectedWallMaterialTarget: target }),
+      selectedStairMaterialTarget: null,
+      setSelectedStairMaterialTarget: (target) => set({ selectedStairMaterialTarget: target }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       spaces: {},
