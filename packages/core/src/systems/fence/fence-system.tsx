@@ -20,25 +20,12 @@ function applyFenceUVs(geometry: THREE.BufferGeometry) {
   let minX = Number.POSITIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
   let minZ = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
 
   for (let index = 0; index < position.count; index += 1) {
-    const px = position.getX(index)
-    const py = position.getY(index)
-    const pz = position.getZ(index)
-    minX = Math.min(minX, px)
-    minY = Math.min(minY, py)
-    minZ = Math.min(minZ, pz)
-    maxX = Math.max(maxX, px)
-    maxY = Math.max(maxY, py)
-    maxZ = Math.max(maxZ, pz)
+    minX = Math.min(minX, position.getX(index))
+    minY = Math.min(minY, position.getY(index))
+    minZ = Math.min(minZ, position.getZ(index))
   }
-
-  const width = Math.max(maxX - minX, 0.001)
-  const height = Math.max(maxY - minY, 0.001)
-  const depth = Math.max(maxZ - minZ, 0.001)
 
   for (let index = 0; index < position.count; index += 1) {
     const px = position.getX(index)
@@ -52,14 +39,14 @@ function applyFenceUVs(geometry: THREE.BufferGeometry) {
     let v = 0
 
     if (ny >= nx && ny >= nz) {
-      u = (px - minX) / width
-      v = (pz - minZ) / depth
+      u = px - minX
+      v = pz - minZ
     } else if (nx >= nz) {
-      u = (pz - minZ) / depth
-      v = (py - minY) / height
+      u = pz - minZ
+      v = py - minY
     } else {
-      u = (px - minX) / width
-      v = (py - minY) / height
+      u = px - minX
+      v = py - minY
     }
 
     uvs[index * 2] = u
@@ -157,13 +144,17 @@ function generateFenceGeometry(fence: FenceNode) {
   const geometries = parts.map((part) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1)
     geometry.scale(part.scale[0], part.scale[1], part.scale[2])
+    applyFenceUVs(geometry)
     geometry.translate(part.position[0], part.position[1], part.position[2])
     return geometry
   })
 
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
   geometries.forEach((geometry) => geometry.dispose())
-  applyFenceUVs(merged)
+  const mergedUv = merged.getAttribute('uv')
+  if (mergedUv) {
+    merged.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(mergedUv.array), 2))
+  }
   merged.computeVertexNormals()
   return merged
 }
