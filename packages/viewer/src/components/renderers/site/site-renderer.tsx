@@ -55,7 +55,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     })
 
     const next = nodeList
-      .filter((n): n is SlabNode => n.type === 'slab' && n.visible && n.polygon.length >= 3)
+      .filter(
+        (n): n is SlabNode =>
+          n.type === 'slab' &&
+          n.visible &&
+          n.polygon.length >= 3 &&
+          // Only recessed slabs should punch through the site ground.
+          // Positive slabs are real floor geometry and should not create a
+          // ghost footprint in the background ground fill.
+          (n.elevation ?? 0.05) < 0,
+      )
       .filter((n) => {
         if (!Number.isFinite(lowestLevelIndex)) return true
         const parentLevel = n.parentId ? levelIndexById.get(n.parentId as string) : undefined
