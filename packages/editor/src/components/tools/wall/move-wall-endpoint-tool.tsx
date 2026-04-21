@@ -1,6 +1,14 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  type GridEvent,
+  pauseSceneHistory,
+  resumeSceneHistory,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -127,7 +135,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
     )
 
-    useScene.temporal.getState().pause()
+    pauseSceneHistory(useScene)
     let wasCommitted = false
 
     const applyNodePreview = (
@@ -209,7 +217,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           ...linkedOriginalsRef.current,
         ])
 
-        useScene.temporal.getState().resume()
+        resumeSceneHistory(useScene)
         applyNodePreview([
           { id: nodeId, start: preview.start, end: preview.end },
           ...(altPressedRef.current
@@ -222,7 +230,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
                 preview.end,
               )),
         ])
-        useScene.temporal.getState().pause()
+        pauseSceneHistory(useScene)
         sfxEmitter.emit('sfx:item-place')
       }
 
@@ -234,7 +242,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const onCancel = () => {
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      useScene.temporal.getState().resume()
+      resumeSceneHistory(useScene)
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -279,7 +287,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (!wasCommitted) {
         restoreOriginal()
       }
-      useScene.temporal.getState().resume()
+      resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)

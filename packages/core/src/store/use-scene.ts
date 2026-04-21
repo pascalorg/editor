@@ -11,6 +11,7 @@ import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { resetSceneHistoryPauseDepth } from './history-control'
 import * as nodeActions from './actions/node-actions'
 
 function getFiniteNumber(value: unknown, fallback: number) {
@@ -628,6 +629,7 @@ let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
 export function clearSceneHistory() {
   useScene.temporal.getState().clear()
+  resetSceneHistoryPauseDepth()
   prevPastLength = 0
   prevFutureLength = 0
   prevNodesSnapshot = null
@@ -647,8 +649,9 @@ useScene.temporal.subscribe((state) => {
     // Capture the previous snapshot before RAF fires
     const snapshotBefore = prevNodesSnapshot
 
-    // Use RAF to ensure all middleware and store updates are complete
-    requestAnimationFrame(() => {
+    // Defer to a microtask so the scene store has settled before we diff,
+    // but still mark walls/items dirty before the next paint.
+    queueMicrotask(() => {
       const currentNodes = useScene.getState().nodes
       const { markDirty } = useScene.getState()
 

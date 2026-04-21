@@ -159,6 +159,12 @@ type FloorplanViewport = {
   width: number
 }
 
+function floorplanViewportEquals(a: FloorplanViewport | null, b: FloorplanViewport | null) {
+  if (a === b) return true
+  if (!(a && b)) return false
+  return a.centerX === b.centerX && a.centerY === b.centerY && a.width === b.width
+}
+
 type SvgPoint = {
   x: number
   y: number
@@ -6155,12 +6161,12 @@ export function FloorplanPanel() {
     if (levelChanged) {
       previousLevelIdRef.current = levelId ?? null
       hasUserAdjustedViewportRef.current = false
-      setViewport(fittedViewport)
+      setViewport((current) => (floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport))
       return
     }
 
     if (!hasUserAdjustedViewportRef.current) {
-      setViewport(fittedViewport)
+      setViewport((current) => (floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport))
     }
   }, [fittedViewport, levelId])
 

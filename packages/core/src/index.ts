@@ -54,6 +54,12 @@ export {
   type ItemInteractiveState,
   useInteractive,
 } from './store/use-interactive'
+export {
+  getSceneHistoryPauseDepth,
+  pauseSceneHistory,
+  resetSceneHistoryPauseDepth,
+  resumeSceneHistory,
+} from './store/history-control'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { FenceSystem } from './systems/fence/fence-system'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
