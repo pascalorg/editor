@@ -2,13 +2,16 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CeilingNode,
   emitter,
+  type FenceNode,
   type ItemNode,
   type NodeEvent,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
   resolveLevelId,
+  type SlabNode,
   type StairEvent,
   type StairNode,
   type StairSegmentEvent,
@@ -25,6 +28,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
   buildRoofSurfaceMaterialPatch,
+  buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
   buildWallSurfaceMaterialPatch,
   hasActivePaintMaterial,
@@ -609,7 +613,30 @@ export const SelectionManager = () => {
         }
       }
 
-      const disabledNodeTypes = ['fence', 'item', 'slab', 'ceiling', 'window', 'door', 'zone']
+      if (node.type === 'fence' || node.type === 'slab' || node.type === 'ceiling') {
+        const target = node.type
+        const compatible =
+          isActivePaintMaterialCompatible(activePaintMaterial, target) &&
+          hasActivePaintMaterial(activePaintMaterial)
+
+        return {
+          apply: compatible
+            ? () => {
+                useScene
+                  .getState()
+                  .updateNode(
+                    node.id as AnyNodeId,
+                    buildSingleSurfaceMaterialPatch<FenceNode | SlabNode | CeilingNode>(
+                      activePaintMaterial.material,
+                      activePaintMaterial.materialPreset,
+                    ),
+                  )
+              }
+            : null,
+        }
+      }
+
+      const disabledNodeTypes = ['item', 'window', 'door', 'zone']
       if (disabledNodeTypes.includes(node.type)) {
         return {
           apply: null,
@@ -773,6 +800,14 @@ export const SelectionManager = () => {
             nodeToSelect,
             resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent),
           )
+          nextMaterialTargetHandled = true
+        }
+
+        if (
+          (node.type === 'fence' || node.type === 'slab' || node.type === 'ceiling') &&
+          nodeToSelect.type === node.type
+        ) {
+          setSelectedMaterialTargetForNode(nodeToSelect, 'surface')
           nextMaterialTargetHandled = true
         }
 
@@ -1092,6 +1127,9 @@ const SelectionStateSync = () => {
     if (
       !selectedNode ||
       (selectedNode.type !== 'wall' &&
+        selectedNode.type !== 'fence' &&
+        selectedNode.type !== 'slab' &&
+        selectedNode.type !== 'ceiling' &&
         selectedNode.type !== 'stair' &&
         selectedNode.type !== 'roof')
     ) {

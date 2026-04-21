@@ -31,6 +31,7 @@ import {
   type PaintableMaterialTarget,
   resolveActivePaintMaterialFromSelection,
   resolvePaintTargetFromSelection,
+  type SingleSurfaceMaterialRole,
 } from '../lib/material-paint'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'site'
@@ -94,6 +95,7 @@ export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
   | RoofSurfaceMaterialRole
+  | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
   nodeId: AnyNodeId

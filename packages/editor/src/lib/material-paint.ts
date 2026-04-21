@@ -1,6 +1,8 @@
 'use client'
 
 import {
+  type CeilingNode,
+  type FenceNode,
   getCatalogMaterialById,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveStairSurfaceMaterial,
@@ -10,13 +12,19 @@ import {
   type MaterialTarget,
   type RoofNode,
   type RoofSurfaceMaterialRole,
+  type SlabNode,
   type StairNode,
   type StairSurfaceMaterialRole,
   type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
 
-export type PaintableMaterialTarget = Extract<MaterialTarget, 'wall' | 'roof' | 'stair'>
+export type PaintableMaterialTarget = Extract<
+  MaterialTarget,
+  'wall' | 'roof' | 'stair' | 'fence' | 'slab' | 'ceiling'
+>
+
+export type SingleSurfaceMaterialRole = 'surface'
 
 export type ActivePaintMaterial = {
   material?: MaterialSchema
@@ -135,12 +143,26 @@ export function buildStairSurfaceMaterialPatch(
   }
 }
 
+export function buildSingleSurfaceMaterialPatch<TNode extends FenceNode | SlabNode | CeilingNode>(
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<TNode> {
+  return {
+    material,
+    materialPreset,
+  } as Partial<TNode>
+}
+
 export function resolveActivePaintMaterialFromSelection(params: {
   nodes: Record<string, any>
   selectedId: string | null
   selectedMaterialTarget: {
     nodeId: string
-    role: WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole
+    role:
+      | WallSurfaceSide
+      | StairSurfaceMaterialRole
+      | RoofSurfaceMaterialRole
+      | SingleSurfaceMaterialRole
   } | null
 }): ActivePaintMaterial | null {
   const { nodes, selectedId, selectedMaterialTarget } = params
@@ -208,6 +230,26 @@ export function resolveActivePaintMaterialFromSelection(params: {
       : null
   }
 
+  if (
+    (selectedNode.type === 'fence' ||
+      selectedNode.type === 'slab' ||
+      selectedNode.type === 'ceiling') &&
+    selectedMaterialTarget.role === 'surface'
+  ) {
+    const target = selectedNode.type
+    return hasActivePaintMaterial({
+      material: selectedNode.material,
+      materialPreset: selectedNode.materialPreset,
+      sourceTarget: target,
+    })
+      ? {
+          material: selectedNode.material,
+          materialPreset: selectedNode.materialPreset,
+          sourceTarget: target,
+        }
+      : null
+  }
+
   return null
 }
 
@@ -231,6 +273,18 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'stair' || selectedNode.type === 'stair-segment') {
     return 'stair'
+  }
+
+  if (selectedNode.type === 'fence') {
+    return 'fence'
+  }
+
+  if (selectedNode.type === 'slab') {
+    return 'slab'
+  }
+
+  if (selectedNode.type === 'ceiling') {
+    return 'ceiling'
   }
 
   return null
