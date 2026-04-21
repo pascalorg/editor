@@ -11,6 +11,7 @@ import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
 import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { DoorTool } from './door/door-tool'
+import { CurveFenceTool } from './fence/curve-fence-tool'
 import { FenceTool } from './fence/fence-tool'
 import { MoveFenceEndpointTool } from './fence/move-fence-endpoint-tool'
 import { ItemTool } from './item/item-tool'
@@ -57,6 +58,7 @@ export const ToolManager: React.FC = () => {
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
+  const curvingFence = useEditor((state) => state.curvingFence)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const buildingId = useViewer((state) => state.selection.buildingId)
@@ -149,6 +151,7 @@ export const ToolManager: React.FC = () => {
         {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
         {movingFenceEndpoint && <MoveFenceEndpointTool target={movingFenceEndpoint} />}
         {curvingWall && <CurveWallTool node={curvingWall} />}
+        {curvingFence && <CurveFenceTool node={curvingFence} />}
         {movingNode && movingNode.type !== 'building' && <MoveTool />}
         {!movingNode && BuildToolComponent && <BuildToolComponent />}
       </group>

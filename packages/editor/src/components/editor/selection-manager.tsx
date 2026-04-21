@@ -472,6 +472,7 @@ export const SelectionManager = () => {
 
   const movingNode = useEditor((s) => s.movingNode)
   const curvingWall = useEditor((s) => s.curvingWall)
+  const curvingFence = useEditor((s) => s.curvingFence)
 
   useEffect(() => {
     setHoverHighlightMode(mode === 'delete' ? 'delete' : 'default')
@@ -510,7 +511,7 @@ export const SelectionManager = () => {
 
   useEffect(() => {
     if (mode !== 'select') return
-    if (movingNode || curvingWall) return
+    if (movingNode || curvingWall || curvingFence) return
 
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
@@ -648,12 +649,12 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [curvingWall, mode, movingNode])
+  }, [curvingFence, curvingWall, mode, movingNode])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
     if (mode !== 'select') return
-    if (movingNode || curvingWall) return
+    if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
       const node = event.node
@@ -782,7 +783,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
       })
     }
-  }, [curvingWall, mode, movingNode])
+  }, [curvingFence, curvingWall, mode, movingNode])
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {

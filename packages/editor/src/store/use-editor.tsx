@@ -145,6 +145,8 @@ type EditorState = {
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
+  curvingFence: FenceNode | null
+  setCurvingFence: (fence: FenceNode | null) => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   selectedReferenceId: string | null
@@ -524,6 +526,8 @@ const useEditor = create<EditorState>()(
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
+      curvingFence: null,
+      setCurvingFence: (fence) => set({ curvingFence: fence }),
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       selectedReferenceId: null,

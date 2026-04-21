@@ -4778,8 +4778,9 @@ const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
   const curvingWall = useEditor((state) => state.curvingWall)
+  const curvingFence = useEditor((state) => state.curvingFence)
 
-  if (!isFloorplanHovered || movingNode || curvingWall) {
+  if (!isFloorplanHovered || movingNode || curvingWall || curvingFence) {
     return null
   }
 
@@ -4982,6 +4983,7 @@ export function FloorplanPanel() {
   const setMode = useEditor((state) => state.setMode)
   const movingNode = useEditor((state) => state.movingNode)
   const curvingWall = useEditor((state) => state.curvingWall)
+  const curvingFence = useEditor((state) => state.curvingFence)
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const setPhase = useEditor((state) => state.setPhase)
@@ -5656,6 +5658,7 @@ export function FloorplanPanel() {
   const isCeilingMoveActive = movingNode?.type === 'ceiling'
   const isWallMoveActive = movingNode?.type === 'wall'
   const isWallCurveActive = curvingWall?.type === 'wall'
+  const isFenceCurveActive = curvingFence?.type === 'fence'
   const isItemPlacementPreviewActive =
     (mode === 'build' && tool === 'item') || movingNode?.type === 'item'
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
@@ -5667,6 +5670,7 @@ export function FloorplanPanel() {
     isCeilingMoveActive ||
     isWallMoveActive ||
     isWallCurveActive ||
+    isFenceCurveActive ||
     isFloorItemBuildActive ||
     isFloorItemMoveActive
   const floorplanPreviewStairSegment = useMemo(
