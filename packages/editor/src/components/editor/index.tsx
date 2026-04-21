@@ -686,6 +686,7 @@ function PaintCursorLayer({
   const activePaintTarget = useEditor((s) => s.activePaintTarget)
   const paintDisabledFeedbackTick = useEditor((s) => s.paintDisabledFeedbackTick)
   const badgeRef = useRef<HTMLDivElement>(null)
+  const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null)
   const [showDisabledFeedback, setShowDisabledFeedback] = useState(false)
   const active = mode === 'material-paint' && !isVersionPreviewMode
 
@@ -714,6 +715,7 @@ function PaintCursorLayer({
       const rect = el.getBoundingClientRect()
       nextX = e.clientX - rect.left
       nextY = e.clientY - rect.top
+      lastPointerPositionRef.current = { x: nextX, y: nextY }
 
       if (frame === 0) {
         frame = window.requestAnimationFrame(flushPosition)
@@ -755,9 +757,15 @@ function PaintCursorLayer({
     if (!paintDisabledFeedbackTick) return
 
     const el = containerRef.current
+    const badge = badgeRef.current
+    const lastPointerPosition = lastPointerPositionRef.current
     setShowDisabledFeedback(true)
     if (el) {
       el.style.cursor = 'not-allowed'
+    }
+    if (badge && lastPointerPosition) {
+      badge.style.display = 'block'
+      badge.style.transform = `translate(${lastPointerPosition.x + PAINT_CURSOR_BADGE_OFFSET_X}px, ${lastPointerPosition.y + PAINT_CURSOR_BADGE_OFFSET_Y}px)`
     }
     const timeoutId = window.setTimeout(() => {
       setShowDisabledFeedback(false)
