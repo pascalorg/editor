@@ -12,6 +12,7 @@ import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { DoorTool } from './door/door-tool'
 import { FenceTool } from './fence/fence-tool'
+import { MoveFenceEndpointTool } from './fence/move-fence-endpoint-tool'
 import { ItemTool } from './item/item-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -54,6 +55,7 @@ export const ToolManager: React.FC = () => {
   const tool = useEditor((state) => state.tool)
   const movingNode = useEditor((state) => state.movingNode)
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
+  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -145,6 +147,7 @@ export const ToolManager: React.FC = () => {
           <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
         )}
         {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
+        {movingFenceEndpoint && <MoveFenceEndpointTool target={movingFenceEndpoint} />}
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {movingNode && movingNode.type !== 'building' && <MoveTool />}
         {!movingNode && BuildToolComponent && <BuildToolComponent />}
