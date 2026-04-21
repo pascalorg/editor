@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Line, type Object3D } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { snapToHalf } from '../item/placement-math'
 
 const Y_OFFSET = 0.02
 
@@ -187,8 +188,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   // Listen to grid:move events to track cursor position
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const gridX = snapToHalf(event.localPosition[0])
+      const gridZ = snapToHalf(event.localPosition[2])
       const newPosition: [number, number] = [gridX, gridZ]
 
       // Play snap sound when cursor moves to a new grid cell during drag
