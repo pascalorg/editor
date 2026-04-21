@@ -167,6 +167,14 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
 
       wasCommitted = true
+
+      // Restore original baseline while paused so the next resume+update
+      // registers as a single tracked change (undo reverts to original).
+      applyNodePreview([
+        { id: nodeId, start: originalStart, end: originalEnd },
+        ...linkedOriginalsRef.current,
+      ])
+
       useScene.temporal.getState().resume()
       applyNodePreview([
         { id: nodeId, start: preview.start, end: preview.end },

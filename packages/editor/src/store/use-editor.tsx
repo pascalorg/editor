@@ -84,6 +84,11 @@ export type MovingWallEndpoint = {
   endpoint: 'start' | 'end'
 }
 
+export type MovingFenceEndpoint = {
+  fence: FenceNode
+  endpoint: 'start' | 'end'
+}
+
 export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
@@ -136,8 +141,12 @@ type EditorState = {
   ) => void
   movingWallEndpoint: MovingWallEndpoint | null
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
+  movingFenceEndpoint: MovingFenceEndpoint | null
+  setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
+  curvingFence: FenceNode | null
+  setCurvingFence: (fence: FenceNode | null) => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   selectedReferenceId: string | null
@@ -513,8 +522,12 @@ const useEditor = create<EditorState>()(
       setMovingNode: (node) => set({ movingNode: node }),
       movingWallEndpoint: null,
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
+      movingFenceEndpoint: null,
+      setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
+      curvingFence: null,
+      setCurvingFence: (fence) => set({ curvingFence: fence }),
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       selectedReferenceId: null,

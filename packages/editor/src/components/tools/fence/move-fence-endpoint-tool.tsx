@@ -2,52 +2,50 @@
 
 import {
   type AnyNodeId,
+  type FenceNode,
+  type WallNode,
   emitter,
   type GridEvent,
   pauseSceneHistory,
   resumeSceneHistory,
   useScene,
-  type WallNode,
 } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor, { type MovingWallEndpoint } from '../../../store/use-editor'
+import useEditor, { type MovingFenceEndpoint } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-import {
-  isWallLongEnough,
-  snapWallDraftPoint,
-  type WallPlanPoint,
-} from './wall-drafting'
+import { snapFenceDraftPoint, type FencePlanPoint } from './fence-drafting'
+import { isWallLongEnough } from '../wall/wall-drafting'
 
-function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
+function samePoint(a: FencePlanPoint, b: FencePlanPoint) {
   return a[0] === b[0] && a[1] === b[1]
 }
 
-type LinkedWallSnapshot = {
-  id: WallNode['id']
-  start: WallPlanPoint
-  end: WallPlanPoint
+type LinkedFenceSnapshot = {
+  id: FenceNode['id']
+  start: FencePlanPoint
+  end: FencePlanPoint
 }
 
-function getLinkedWallSnapshots(args: {
-  wallId: WallNode['id']
-  wallParentId: string | null
-  originalStart: WallPlanPoint
-  originalEnd: WallPlanPoint
+function getLinkedFenceSnapshots(args: {
+  fenceId: FenceNode['id']
+  fenceParentId: string | null
+  originalStart: FencePlanPoint
+  originalEnd: FencePlanPoint
 }) {
-  const { wallId, wallParentId, originalStart, originalEnd } = args
+  const { fenceId, fenceParentId, originalStart, originalEnd } = args
   const { nodes } = useScene.getState()
-  const snapshots: LinkedWallSnapshot[] = []
+  const snapshots: LinkedFenceSnapshot[] = []
 
   for (const node of Object.values(nodes)) {
-    if (!(node?.type === 'wall' && node.id !== wallId)) {
+    if (!(node?.type === 'fence' && node.id !== fenceId)) {
       continue
     }
 
-    if ((node.parentId ?? null) !== wallParentId) {
+    if ((node.parentId ?? null) !== fenceParentId) {
       continue
     }
 
@@ -62,67 +60,67 @@ function getLinkedWallSnapshots(args: {
 
     snapshots.push({
       id: node.id,
-      start: [...node.start] as WallPlanPoint,
-      end: [...node.end] as WallPlanPoint,
+      start: [...node.start] as FencePlanPoint,
+      end: [...node.end] as FencePlanPoint,
     })
   }
 
   return snapshots
 }
 
-function getLinkedWallUpdates(
-  linkedWalls: LinkedWallSnapshot[],
-  originalStart: WallPlanPoint,
-  originalEnd: WallPlanPoint,
-  nextStart: WallPlanPoint,
-  nextEnd: WallPlanPoint,
+function getLinkedFenceUpdates(
+  linkedFences: LinkedFenceSnapshot[],
+  originalStart: FencePlanPoint,
+  originalEnd: FencePlanPoint,
+  nextStart: FencePlanPoint,
+  nextEnd: FencePlanPoint,
 ) {
-  return linkedWalls.map((wall) => ({
-    id: wall.id,
-    start: samePoint(wall.start, originalStart)
+  return linkedFences.map((fence) => ({
+    id: fence.id,
+    start: samePoint(fence.start, originalStart)
       ? nextStart
-      : samePoint(wall.start, originalEnd)
+      : samePoint(fence.start, originalEnd)
         ? nextEnd
-        : wall.start,
-    end: samePoint(wall.end, originalStart)
+        : fence.start,
+    end: samePoint(fence.end, originalStart)
       ? nextStart
-      : samePoint(wall.end, originalEnd)
+      : samePoint(fence.end, originalEnd)
         ? nextEnd
-        : wall.end,
+        : fence.end,
   }))
 }
 
-export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
+export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = ({ target }) => {
   const activatedAtRef = useRef<number>(Date.now())
-  const previousGridPosRef = useRef<WallPlanPoint | null>(null)
+  const previousGridPosRef = useRef<FencePlanPoint | null>(null)
   const shiftPressedRef = useRef(false)
   const altPressedRef = useRef(false)
-  const nodeIdRef = useRef(target.wall.id)
-  const originalStartRef = useRef<WallPlanPoint>([...target.wall.start] as WallPlanPoint)
-  const originalEndRef = useRef<WallPlanPoint>([...target.wall.end] as WallPlanPoint)
-  const fixedPointRef = useRef<WallPlanPoint>(
+  const nodeIdRef = useRef(target.fence.id)
+  const originalStartRef = useRef<FencePlanPoint>([...target.fence.start] as FencePlanPoint)
+  const originalEndRef = useRef<FencePlanPoint>([...target.fence.end] as FencePlanPoint)
+  const fixedPointRef = useRef<FencePlanPoint>(
     target.endpoint === 'start'
-      ? ([...target.wall.end] as WallPlanPoint)
-      : ([...target.wall.start] as WallPlanPoint),
+      ? ([...target.fence.end] as FencePlanPoint)
+      : ([...target.fence.start] as FencePlanPoint),
   )
   const linkedOriginalsRef = useRef(
-    getLinkedWallSnapshots({
-      wallId: target.wall.id,
-      wallParentId: target.wall.parentId ?? null,
-      originalStart: target.wall.start,
-      originalEnd: target.wall.end,
+    getLinkedFenceSnapshots({
+      fenceId: target.fence.id,
+      fenceParentId: target.fence.parentId ?? null,
+      originalStart: target.fence.start,
+      originalEnd: target.fence.end,
     }),
   )
-  const previewRef = useRef<{ start: WallPlanPoint; end: WallPlanPoint } | null>(null)
+  const previewRef = useRef<{ start: FencePlanPoint; end: FencePlanPoint } | null>(null)
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
-    const point = target.endpoint === 'start' ? target.wall.start : target.wall.end
+    const point = target.endpoint === 'start' ? target.fence.start : target.fence.end
     return [point[0], 0, point[1]]
   })
   const [altPressed, setAltPressed] = useState(false)
 
   const exitMoveMode = useCallback(() => {
-    useEditor.getState().setMovingWallEndpoint(null)
+    useEditor.getState().setMovingFenceEndpoint(null)
   }, [])
 
   useEffect(() => {
@@ -130,16 +128,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
     const fixedPoint = fixedPointRef.current
-    const levelWalls = Object.values(useScene.getState().nodes).filter(
+    const siblings = Object.values(useScene.getState().nodes)
+    const levelWalls = siblings.filter(
       (node): node is WallNode =>
-        node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
+        node?.type === 'wall' && (node.parentId ?? null) === (target.fence.parentId ?? null),
+    )
+    const levelFences = siblings.filter(
+      (node): node is FenceNode =>
+        node?.type === 'fence' && (node.parentId ?? null) === (target.fence.parentId ?? null),
     )
 
     pauseSceneHistory(useScene)
     let wasCommitted = false
 
     const applyNodePreview = (
-      updates: Array<{ id: WallNode['id']; start: WallPlanPoint; end: WallPlanPoint }>,
+      updates: Array<{ id: FenceNode['id']; start: FencePlanPoint; end: FencePlanPoint }>,
     ) => {
       useScene.getState().updateNodes(
         updates.map((entry) => ({
@@ -152,16 +155,16 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       }
     }
 
-    const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
+    const applyPreview = (movingPoint: FencePlanPoint, detachLinkedFences = false) => {
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
       applyNodePreview([
         { id: nodeId, start: nextStart, end: nextEnd },
-        ...(detachLinkedWalls
+        ...(detachLinkedFences
           ? []
-          : getLinkedWallUpdates(
+          : getLinkedFenceUpdates(
               linkedOriginalsRef.current,
               originalStart,
               originalEnd,
@@ -172,17 +175,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const restoreOriginal = () => {
-      applyNodePreview([{ id: nodeId, start: originalStart, end: originalEnd }, ...linkedOriginalsRef.current])
+      applyNodePreview([
+        { id: nodeId, start: originalStart, end: originalEnd },
+        ...linkedOriginalsRef.current,
+      ])
     }
 
     const onGridMove = (event: GridEvent) => {
-      const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const snappedPoint = snapWallDraftPoint({
+      const planPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
+      const snappedPoint = snapFenceDraftPoint({
         point: planPoint,
         walls: levelWalls,
+        fences: levelFences,
         start: fixedPoint,
         angleSnap: !shiftPressedRef.current,
-        ignoreWallIds: [nodeId],
+        ignoreFenceIds: [nodeId],
       })
 
       if (
@@ -210,8 +217,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (hasChanged && isWallLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
-        // Restore original baseline while paused so the next resume+update
-        // registers as a single tracked change (undo reverts to original).
         applyNodePreview([
           { id: nodeId, start: originalStart, end: originalEnd },
           ...linkedOriginalsRef.current,
@@ -222,7 +227,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           { id: nodeId, start: preview.start, end: preview.end },
           ...(altPressedRef.current
             ? []
-            : getLinkedWallUpdates(
+            : getLinkedFenceUpdates(
                 linkedOriginalsRef.current,
                 originalStart,
                 originalEnd,
@@ -309,11 +314,11 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           <div
             className={`whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium shadow-lg backdrop-blur-md transition-colors ${
               altPressed
-                ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
-                : 'border-border bg-background/95 text-muted-foreground'
+                ? 'border-amber-500/70 bg-amber-500/15 text-amber-100'
+                : 'border-border/70 bg-background/90 text-foreground/80'
             }`}
           >
-            {altPressed ? 'Detaching corner' : 'Alt to detach'}
+            {altPressed ? 'Detach endpoint' : 'Drag endpoint'}
           </div>
         </div>
       </Html>
