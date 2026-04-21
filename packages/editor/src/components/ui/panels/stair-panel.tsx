@@ -8,7 +8,6 @@ import {
   type MaterialSchema,
   type StairNode,
   type StairRailingMode,
-  type StairSurfaceMaterialRole,
   type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
@@ -21,6 +20,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { buildStairSurfaceMaterialPatch } from '../../../lib/material-paint'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
@@ -32,32 +32,6 @@ import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
-
-function buildStairSurfaceMaterialPatch(
-  node: StairNode,
-  targetRole: StairSurfaceMaterialRole,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<StairNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextRailing =
-    targetRole === 'railing' ? nextSurfaceMaterial : getEffectiveStairSurfaceMaterial(node, 'railing')
-  const nextTread =
-    targetRole === 'tread' ? nextSurfaceMaterial : getEffectiveStairSurfaceMaterial(node, 'tread')
-  const nextSide =
-    targetRole === 'side' ? nextSurfaceMaterial : getEffectiveStairSurfaceMaterial(node, 'side')
-
-  return {
-    railingMaterial: nextRailing.material,
-    railingMaterialPreset: nextRailing.materialPreset,
-    treadMaterial: nextTread.material,
-    treadMaterialPreset: nextTread.materialPreset,
-    sideMaterial: nextSide.material,
-    sideMaterialPreset: nextSide.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
-}
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'None', value: 'none' },
@@ -91,6 +65,8 @@ export function StairPanel() {
   const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
+  const setActivePaintMaterial = useEditor((s) => s.setActivePaintMaterial)
+  const setActivePaintTarget = useEditor((s) => s.setActivePaintTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -135,17 +111,21 @@ export function StairPanel() {
   const handleTargetedMaterialChange = useCallback(
     (material: MaterialSchema) => {
       if (!node || !materialTargetRole) return
+      setActivePaintTarget('stair')
+      setActivePaintMaterial({ material, sourceTarget: 'stair' })
       handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
     },
-    [handleUpdate, materialTargetRole, node],
+    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleTargetedMaterialPresetChange = useCallback(
     (materialPreset: string) => {
       if (!node || !materialTargetRole) return
+      setActivePaintTarget('stair')
+      setActivePaintMaterial({ materialPreset, sourceTarget: 'stair' })
       handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset))
     },
-    [handleUpdate, materialTargetRole, node],
+    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleClose = useCallback(() => {

@@ -6,7 +6,6 @@ import {
   getEffectiveRoofSurfaceMaterial,
   type MaterialSchema,
   type RoofNode,
-  type RoofSurfaceMaterialRole,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
@@ -16,6 +15,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { buildRoofSurfaceMaterialPatch } from '../../../lib/material-paint'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -24,32 +24,6 @@ import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
 
-function buildRoofSurfaceMaterialPatch(
-  node: RoofNode,
-  targetRole: RoofSurfaceMaterialRole,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<RoofNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextTop =
-    targetRole === 'top' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'top')
-  const nextEdge =
-    targetRole === 'edge' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'edge')
-  const nextWall =
-    targetRole === 'wall' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'wall')
-
-  return {
-    topMaterial: nextTop.material,
-    topMaterialPreset: nextTop.materialPreset,
-    edgeMaterial: nextEdge.material,
-    edgeMaterialPreset: nextEdge.materialPreset,
-    wallMaterial: nextWall.material,
-    wallMaterialPreset: nextWall.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
-}
-
 export function RoofPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -57,6 +31,8 @@ export function RoofPanel() {
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
+  const setActivePaintMaterial = useEditor((s) => s.setActivePaintMaterial)
+  const setActivePaintTarget = useEditor((s) => s.setActivePaintTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined,
@@ -93,17 +69,21 @@ export function RoofPanel() {
   const handleTargetedMaterialChange = useCallback(
     (material: MaterialSchema) => {
       if (!node || !materialTargetRole) return
+      setActivePaintTarget('roof')
+      setActivePaintMaterial({ material, sourceTarget: 'roof' })
       handleUpdate(buildRoofSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
     },
-    [handleUpdate, materialTargetRole, node],
+    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleTargetedMaterialPresetChange = useCallback(
     (materialPreset: string) => {
       if (!node || !materialTargetRole) return
+      setActivePaintTarget('roof')
+      setActivePaintMaterial({ materialPreset, sourceTarget: 'roof' })
       handleUpdate(buildRoofSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset))
     },
-    [handleUpdate, materialTargetRole, node],
+    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleClose = useCallback(() => {

@@ -6,23 +6,37 @@ import {
   type ItemNode,
   type NodeEvent,
   type RoofEvent,
+  type RoofNode,
   type RoofSegmentEvent,
   resolveLevelId,
-  sceneRegistry,
   type StairEvent,
   type StairNode,
-  type StairSurfaceMaterialRole,
   type StairSegmentEvent,
+  type StairSurfaceMaterialRole,
+  sceneRegistry,
   useScene,
   type WallEvent,
+  type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
 
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
-import { Color, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three'
+import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
+import {
+  buildRoofSurfaceMaterialPatch,
+  buildStairSurfaceMaterialPatch,
+  buildWallSurfaceMaterialPatch,
+  hasActivePaintMaterial,
+  isActivePaintMaterialCompatible,
+  resolveActivePaintMaterialFromSelection,
+} from '../../lib/material-paint'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor, { type MaterialTargetRole, type Phase, type StructureLayer } from './../../store/use-editor'
+import useEditor, {
+  type MaterialTargetRole,
+  type Phase,
+  type StructureLayer,
+} from './../../store/use-editor'
 import { boxSelectHandled } from '../tools/select/box-select-tool'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -175,10 +189,7 @@ function getIntersectionMaterialIndex(
   return group?.materialIndex
 }
 
-function setSelectedMaterialTargetForNode(
-  node: AnyNode,
-  role: MaterialTargetRole | null,
-) {
+function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRole | null) {
   if (!role) {
     const currentTarget = useEditor.getState().selectedMaterialTarget
     if (currentTarget?.nodeId !== node.id) {
@@ -209,6 +220,7 @@ const HIGHLIGHT_PROFILES = {
 } as const
 
 type HighlightKind = keyof typeof HIGHLIGHT_PROFILES
+type HoverHighlightMode = 'default' | 'delete' | 'paint-ready' | 'paint-disabled'
 
 type HighlightableMaterial = Material & {
   color?: Color
@@ -474,12 +486,180 @@ export const SelectionManager = () => {
   const curvingWall = useEditor((s) => s.curvingWall)
 
   useEffect(() => {
-    setHoverHighlightMode(mode === 'delete' ? 'delete' : 'default')
+    const nextHoverMode: HoverHighlightMode = mode === 'delete' ? 'delete' : 'default'
+    setHoverHighlightMode(nextHoverMode)
 
     return () => {
       setHoverHighlightMode('default')
     }
   }, [mode, setHoverHighlightMode])
+
+  useEffect(() => {
+    if (mode !== 'material-paint') return
+    if (movingNode || curvingWall) return
+
+    const triggerPaintDisabledFeedback = useEditor.getState().triggerPaintDisabledFeedback
+
+    const resolveActivePaintMaterial = () =>
+      useEditor.getState().activePaintMaterial ??
+      resolveActivePaintMaterialFromSelection({
+        nodes: useScene.getState().nodes,
+        selectedId:
+          useViewer.getState().selection.selectedIds.length === 1
+            ? (useViewer.getState().selection.selectedIds[0] ?? null)
+            : null,
+        selectedMaterialTarget: useEditor.getState().selectedMaterialTarget,
+      })
+
+    const getPaintInteraction = (
+      event: NodeEvent,
+    ): {
+      apply: (() => void) | null
+    } | null => {
+      const activePaintMaterial = resolveActivePaintMaterial()
+      const node = event.node
+
+      if (!isNodeInCurrentLevel(node)) return null
+
+      if (node.type === 'wall') {
+        const role = resolveWallMaterialTarget(event as WallEvent)
+        const compatible =
+          role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'wall')
+        return {
+          apply:
+            compatible && hasActivePaintMaterial(activePaintMaterial)
+              ? () => {
+                  useScene
+                    .getState()
+                    .updateNode(
+                      node.id as AnyNodeId,
+                      buildWallSurfaceMaterialPatch(
+                        node as WallNode,
+                        role!,
+                        activePaintMaterial.material,
+                        activePaintMaterial.materialPreset,
+                      ),
+                    )
+                }
+              : null,
+        }
+      }
+
+      if (node.type === 'roof' || node.type === 'roof-segment') {
+        const roofNode =
+          node.type === 'roof'
+            ? node
+            : node.parentId
+              ? useScene.getState().nodes[node.parentId as AnyNodeId]
+              : null
+        if (!roofNode || roofNode.type !== 'roof') return null
+
+        const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
+        const compatible =
+          role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'roof')
+        return {
+          apply:
+            compatible && hasActivePaintMaterial(activePaintMaterial)
+              ? () => {
+                  useScene
+                    .getState()
+                    .updateNode(
+                      roofNode.id as AnyNodeId,
+                      buildRoofSurfaceMaterialPatch(
+                        roofNode as RoofNode,
+                        role!,
+                        activePaintMaterial.material,
+                        activePaintMaterial.materialPreset,
+                      ),
+                    )
+                }
+              : null,
+        }
+      }
+
+      if (node.type === 'stair' || node.type === 'stair-segment') {
+        const stairNode =
+          node.type === 'stair'
+            ? node
+            : node.parentId
+              ? useScene.getState().nodes[node.parentId as AnyNodeId]
+              : null
+        if (!stairNode || stairNode.type !== 'stair') return null
+
+        const role = resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent)
+        const compatible =
+          role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'stair')
+        return {
+          apply:
+            compatible && hasActivePaintMaterial(activePaintMaterial)
+              ? () => {
+                  useScene
+                    .getState()
+                    .updateNode(
+                      stairNode.id as AnyNodeId,
+                      buildStairSurfaceMaterialPatch(
+                        stairNode as StairNode,
+                        role!,
+                        activePaintMaterial.material,
+                        activePaintMaterial.materialPreset,
+                      ),
+                    )
+                }
+              : null,
+        }
+      }
+
+      const disabledNodeTypes = ['fence', 'item', 'slab', 'ceiling', 'window', 'door', 'zone']
+      if (disabledNodeTypes.includes(node.type)) {
+        return {
+          apply: null,
+        }
+      }
+
+      return null
+    }
+
+    const onClick = (event: NodeEvent) => {
+      if (boxSelectHandled) return
+
+      const interaction = getPaintInteraction(event)
+      if (!interaction) return
+
+      event.stopPropagation()
+
+      if (!interaction.apply) {
+        triggerPaintDisabledFeedback()
+        return
+      }
+
+      interaction.apply()
+    }
+
+    const allTypes = [
+      'wall',
+      'fence',
+      'item',
+      'slab',
+      'ceiling',
+      'roof',
+      'roof-segment',
+      'stair',
+      'stair-segment',
+      'window',
+      'door',
+      'zone',
+    ] as const
+
+    for (const type of allTypes) {
+      emitter.on(`${type}:click` as any, onClick as any)
+    }
+
+    return () => {
+      for (const type of allTypes) {
+        emitter.off(`${type}:click` as any, onClick as any)
+      }
+    }
+  }, [curvingWall, mode, movingNode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -911,7 +1091,9 @@ const SelectionStateSync = () => {
     const selectedNode = useScene.getState().nodes[singleSelectedId as AnyNodeId]
     if (
       !selectedNode ||
-      (selectedNode.type !== 'wall' && selectedNode.type !== 'stair' && selectedNode.type !== 'roof')
+      (selectedNode.type !== 'wall' &&
+        selectedNode.type !== 'stair' &&
+        selectedNode.type !== 'roof')
     ) {
       setSelectedMaterialTarget(null)
       return

@@ -88,6 +88,13 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
         if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setMode('delete')
+      } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        useEditor.getState().primeMaterialPaintFromSelection()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setMode('material-paint')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()

@@ -249,15 +249,33 @@ const PostProcessingPasses = () => {
 
       // Hovered: blue visible, yellow hidden, pulsing
       const hoverVisibleColor = uniform(
-        new Color(hoverHighlightMode === 'delete' ? 0xef_44_44 : 0x00_aa_ff),
+        new Color(
+          hoverHighlightMode === 'delete'
+            ? 0xef_44_44
+            : hoverHighlightMode === 'paint-ready'
+              ? 0xf59e_0b
+              : hoverHighlightMode === 'paint-disabled'
+                ? 0x94_a3_b8
+                : 0x00_aa_ff,
+        ),
       )
       const hoverHiddenColor = uniform(
-        new Color(hoverHighlightMode === 'delete' ? 0x99_1b_1b : 0xf3_ff_47),
+        new Color(
+          hoverHighlightMode === 'delete'
+            ? 0x99_1b_1b
+            : hoverHighlightMode === 'paint-ready'
+              ? 0xfde0_68
+              : hoverHighlightMode === 'paint-disabled'
+                ? 0x47_55_69
+                : 0xf3_ff_47,
+        ),
       )
-      const hoverStrength = uniform(hoverHighlightMode === 'delete' ? 6 : 5)
+      const hoverStrength = uniform(
+        hoverHighlightMode === 'delete' ? 6 : hoverHighlightMode === 'paint-disabled' ? 4 : 5,
+      )
       const pulsePeriod = uniform(3)
       const osc =
-        hoverHighlightMode === 'delete'
+        hoverHighlightMode === 'delete' || hoverHighlightMode === 'paint-disabled'
           ? float(1)
           : oscSine(time.div(pulsePeriod).mul(2)).mul(0.5).add(0.5) // [ 0.5, 1.0 ]
       const hoverOutline = outlineNode.secondaryVisibleEdge

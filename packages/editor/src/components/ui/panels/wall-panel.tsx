@@ -11,45 +11,19 @@ import {
   normalizeWallCurveOffset,
   type MaterialSchema,
   useScene,
-  type WallSurfaceSide,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Spline } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { buildWallSurfaceMaterialPatch } from '../../../lib/material-paint'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
-
-function buildWallSurfaceMaterialPatch(
-  node: WallNode,
-  targetSide: WallSurfaceSide | null,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<WallNode> {
-  const nextSurfaceMaterial = { material, materialPreset }
-  const nextInterior =
-    targetSide === null || targetSide === 'interior'
-      ? nextSurfaceMaterial
-      : getEffectiveWallSurfaceMaterial(node, 'interior')
-  const nextExterior =
-    targetSide === null || targetSide === 'exterior'
-      ? nextSurfaceMaterial
-      : getEffectiveWallSurfaceMaterial(node, 'exterior')
-
-  return {
-    interiorMaterial: nextInterior.material,
-    interiorMaterialPreset: nextInterior.materialPreset,
-    exteriorMaterial: nextExterior.material,
-    exteriorMaterialPreset: nextExterior.materialPreset,
-    material: undefined,
-    materialPreset: undefined,
-  }
-}
 
 export function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -58,6 +32,8 @@ export function WallPanel() {
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
+  const setActivePaintMaterial = useEditor((s) => s.setActivePaintMaterial)
+  const setActivePaintTarget = useEditor((s) => s.setActivePaintTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined,
@@ -143,17 +119,21 @@ export function WallPanel() {
   const handleMaterialPresetChange = useCallback(
     (materialPreset: string) => {
       if (!node || !materialTargetSide) return
+      setActivePaintTarget('wall')
+      setActivePaintMaterial({ materialPreset, sourceTarget: 'wall' })
       handleUpdate(buildWallSurfaceMaterialPatch(node, materialTargetSide, undefined, materialPreset))
     },
-    [handleUpdate, materialTargetSide, node],
+    [handleUpdate, materialTargetSide, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleCustomMaterialChange = useCallback(
     (material: MaterialSchema) => {
       if (!node || !materialTargetSide) return
+      setActivePaintTarget('wall')
+      setActivePaintMaterial({ material, sourceTarget: 'wall' })
       handleUpdate(buildWallSurfaceMaterialPatch(node, materialTargetSide, material, undefined))
     },
-    [handleUpdate, materialTargetSide, node],
+    [handleUpdate, materialTargetSide, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleClose = useCallback(() => {
