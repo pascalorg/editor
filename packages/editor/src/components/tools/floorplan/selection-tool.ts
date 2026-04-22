@@ -1,4 +1,13 @@
-import type { DoorNode, ItemNode, SlabNode, StairNode, WallNode, WindowNode } from '@pascal-app/core'
+import type {
+  DoorNode,
+  ItemNode,
+  RoofNode,
+  RoofSegmentNode,
+  SlabNode,
+  StairNode,
+  WallNode,
+  WindowNode,
+} from '@pascal-app/core'
 import {
   doesPolygonIntersectSelectionBounds,
   getDistanceToWallSegment,
@@ -21,6 +30,7 @@ type ItemEntry = {
 }
 
 type StairEntry = {
+  hitPolygons: Point2D[][]
   stair: StairNode
   segments: Array<{ polygon: Point2D[] }>
 }
@@ -36,6 +46,14 @@ type SlabEntry = {
   holes: Point2D[][]
 }
 
+type RoofEntry = {
+  roof: RoofNode
+  segments: Array<{
+    polygon: Point2D[]
+    segment: RoofSegmentNode
+  }>
+}
+
 type FloorplanSelectionToolContext = {
   point: Point2D
   phase: 'site' | 'structure' | 'furnish'
@@ -45,6 +63,7 @@ type FloorplanSelectionToolContext = {
   stairs: StairEntry[]
   walls: WallEntry[]
   slabs: SlabEntry[]
+  roofs: RoofEntry[]
   openingHitTolerance: number
   wallHitTolerance: number
   getOpeningCenterLine: (polygon: Point2D[]) => { start: Point2D; end: Point2D } | null
@@ -57,6 +76,12 @@ function getItemHitId(context: FloorplanSelectionToolContext) {
 
   const itemHit = context.items.find(({ polygon }) => isPointInsidePolygon(context.point, polygon))
   return itemHit?.item.id ?? null
+}
+
+function getStairHitPolygons(stair: StairEntry) {
+  return stair.hitPolygons.length > 0
+    ? stair.hitPolygons
+    : stair.segments.map(({ polygon }) => polygon)
 }
 
 export function getFloorplanHitNodeId(context: FloorplanSelectionToolContext) {
@@ -83,8 +108,8 @@ export function getFloorplanHitNodeId(context: FloorplanSelectionToolContext) {
       return openingHit.opening.id
     }
 
-    const stairHit = context.stairs.find(({ segments }) =>
-      segments.some(({ polygon }) => isPointInsidePolygon(context.point, polygon)),
+    const stairHit = context.stairs.find((stair) =>
+      getStairHitPolygons(stair).some((polygon) => isPointInsidePolygon(context.point, polygon)),
     )
     if (stairHit) {
       return stairHit.stair.id
@@ -97,6 +122,13 @@ export function getFloorplanHitNodeId(context: FloorplanSelectionToolContext) {
     )
     if (wallHit) {
       return wallHit.wall.id
+    }
+
+    const roofHit = context.roofs.find(({ segments }) =>
+      segments.some(({ polygon }) => isPointInsidePolygon(context.point, polygon)),
+    )
+    if (roofHit) {
+      return roofHit.roof.id
     }
 
     const slabHit = context.slabs.find(({ polygon, holes }) =>
@@ -119,6 +151,7 @@ type FloorplanSelectionBoundsContext = {
   openings: OpeningPolygonEntry[]
   slabs: SlabEntry[]
   stairs: StairEntry[]
+  roofs: RoofEntry[]
 }
 
 export function getFloorplanSelectionIdsInBounds({
@@ -130,6 +163,7 @@ export function getFloorplanSelectionIdsInBounds({
   openings,
   slabs,
   stairs,
+  roofs,
 }: FloorplanSelectionBoundsContext) {
   const itemIds = isItemContextActive
     ? items
@@ -151,10 +185,19 @@ export function getFloorplanSelectionIdsInBounds({
     .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
     .map(({ slab }) => slab.id)
   const stairIds = stairs
+    .filter((stair) =>
+      getStairHitPolygons(stair).some((polygon) =>
+        doesPolygonIntersectSelectionBounds(polygon, bounds),
+      ),
+    )
+    .map(({ stair }) => stair.id)
+  const roofIds = roofs
     .filter(({ segments }) =>
       segments.some(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds)),
     )
-    .map(({ stair }) => stair.id)
+    .map(({ roof }) => roof.id)
 
-  return Array.from(new Set([...itemIds, ...wallIds, ...openingIds, ...slabIds, ...stairIds]))
+  return Array.from(
+    new Set([...itemIds, ...wallIds, ...openingIds, ...slabIds, ...stairIds, ...roofIds]),
+  )
 }

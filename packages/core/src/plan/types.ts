@@ -32,6 +32,7 @@ export type FloorplanStairArrowEntry = {
 
 export type FloorplanStairEntry = {
   arrow: FloorplanStairArrowEntry | null
+  hitPolygons: Point2D[][]
   stair: StairNode
   segments: FloorplanStairSegmentEntry[]
 }

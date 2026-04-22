@@ -5,6 +5,7 @@ import {
   isCurvedWall,
   sceneRegistry,
   spatialGridManager,
+  useLiveTransforms,
   useScene,
   type WallEvent,
 } from '@pascal-app/core'
@@ -127,6 +128,10 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
         parentId: event.node.id,
         wallId: event.node.id,
       })
+      useLiveTransforms.getState().set(movingDoorNode.id, {
+        position: [clampedX, clampedY, 0],
+        rotation: itemRotation,
+      })
 
       if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
       markWallDirty(event.node.id)
@@ -195,6 +200,10 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
           doorMesh.updateMatrixWorld(true)
         }
       }
+      useLiveTransforms.getState().set(movingDoorNode.id, {
+        position: [clampedX, clampedY, 0],
+        rotation: itemRotation,
+      })
       markWallDirty(event.node.id)
 
       const valid = !hasWallChildOverlap(
@@ -291,6 +300,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       }
 
       markWallDirty(event.node.id)
+      useLiveTransforms.getState().clear(movingDoorNode.id)
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
@@ -302,6 +312,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
 
     const onWallLeave = () => {
       hideCursor()
+      useLiveTransforms.getState().clear(movingDoorNode.id)
       if (isNew) return
       if (currentWallId && currentWallId !== original.parentId) {
         markWallDirty(currentWallId)
@@ -318,6 +329,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
     }
 
     const onCancel = () => {
+      useLiveTransforms.getState().clear(movingDoorNode.id)
       if (isNew) {
         useScene.getState().deleteNode(movingDoorNode.id)
         if (currentWallId) markWallDirty(currentWallId)
@@ -364,6 +376,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
           if (original.parentId) markWallDirty(original.parentId)
         }
       }
+      useLiveTransforms.getState().clear(movingDoorNode.id)
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

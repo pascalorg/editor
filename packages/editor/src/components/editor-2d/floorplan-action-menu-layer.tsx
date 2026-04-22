@@ -21,32 +21,46 @@ export type FloorplanActionMenuEntry = {
 type FloorplanActionMenuLayerProps = {
   item: FloorplanActionMenuEntry
   wall: FloorplanActionMenuEntry
+  fence: FloorplanActionMenuEntry
   slab: FloorplanActionMenuEntry
   ceiling: FloorplanActionMenuEntry
   opening: FloorplanActionMenuEntry
   stair: FloorplanActionMenuEntry
+  roof: FloorplanActionMenuEntry
   offsetY?: number
 }
 
 export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
   item,
   wall,
+  fence,
   slab,
   ceiling,
   opening,
   stair,
+  roof,
   offsetY = 10,
 }: FloorplanActionMenuLayerProps) {
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
+  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
 
-  if (!isFloorplanHovered || movingNode || curvingWall || curvingFence) {
+  if (!isFloorplanHovered || movingNode || movingFenceEndpoint || curvingWall || curvingFence) {
     return null
   }
 
-  const entries: FloorplanActionMenuEntry[] = [item, wall, slab, ceiling, opening, stair]
+  const entries: FloorplanActionMenuEntry[] = [
+    item,
+    wall,
+    fence,
+    slab,
+    ceiling,
+    opening,
+    stair,
+    roof,
+  ]
 
   return (
     <>

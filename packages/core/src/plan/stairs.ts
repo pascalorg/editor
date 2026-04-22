@@ -192,6 +192,58 @@ function appendUniquePlanPoint(points: Point2D[], point: Point2D | null) {
   points.push(point)
 }
 
+function getFloorplanArcPoint(center: Point2D, radius: number, angle: number): Point2D {
+  return {
+    x: center.x + Math.cos(angle) * radius,
+    y: center.y + Math.sin(angle) * radius,
+  }
+}
+
+function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
+  const stairType = stair.stairType ?? 'straight'
+  const baseSweepAngle =
+    stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
+
+  if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
+    return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)
+  }
+
+  return baseSweepAngle
+}
+
+function getFloorplanCurvedStairHitPolygon(stair: StairNode): Point2D[] {
+  const stairType = stair.stairType ?? 'straight'
+  const sweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
+  const startAngle = stair.rotation - sweepAngle / 2
+  const endAngle = startAngle + sweepAngle
+  const center = {
+    x: stair.position[0],
+    y: stair.position[2],
+  }
+  const innerRadius = Math.max(
+    stairType === 'spiral' ? 0.05 : 0.2,
+    stair.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
+  )
+  const outerRadius = innerRadius + stair.width
+  const outerArcLength = Math.abs(sweepAngle) * outerRadius
+  const segmentCount = Math.max(
+    24,
+    Math.ceil(Math.abs(sweepAngle) / (Math.PI / 24)),
+    Math.ceil(outerArcLength / 0.14),
+  )
+  const outerPoints: Point2D[] = []
+  const innerPoints: Point2D[] = []
+
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const t = index / segmentCount
+    const angle = startAngle + (endAngle - startAngle) * t
+    outerPoints.push(getFloorplanArcPoint(center, outerRadius, angle))
+    innerPoints.push(getFloorplanArcPoint(center, innerRadius, angle))
+  }
+
+  return [...outerPoints, ...innerPoints.reverse()]
+}
+
 function buildFloorplanStairArrow(
   segments: FloorplanStairSegmentEntry[],
 ): FloorplanStairArrowEntry | null {
@@ -374,7 +426,9 @@ export function buildFloorplanStairEntry(
   stair: StairNode,
   segments: StairSegmentNode[],
 ): FloorplanStairEntry | null {
-  if (segments.length === 0) {
+  const stairType = stair.stairType ?? 'straight'
+
+  if (segments.length === 0 && stairType === 'straight') {
     return null
   }
 
@@ -394,9 +448,14 @@ export function buildFloorplanStairEntry(
       treadThickness,
     }
   })
+  const hitPolygons =
+    stairType === 'straight'
+      ? segmentEntries.map(({ polygon }) => polygon)
+      : [getFloorplanCurvedStairHitPolygon(stair)]
 
   return {
     arrow: buildFloorplanStairArrow(segmentEntries),
+    hitPolygons,
     stair,
     segments: segmentEntries,
   }
