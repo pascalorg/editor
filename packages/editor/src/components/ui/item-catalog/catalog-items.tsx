@@ -1,4 +1,6 @@
 import type { AssetInput } from '@pascal-app/core'
+import { PASCAL_TRUCK_ASSET } from '../../../lib/pascal-truck'
+
 export const CATALOG_ITEMS: AssetInput[] = [
   {
     id: 'tesla',
@@ -12,6 +14,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     dimensions: [2, 1.7, 5],
   },
+  PASCAL_TRUCK_ASSET,
   {
     id: 'ev-wall-charger',
     category: 'appliance',
