@@ -1,0 +1,42 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "biome.configPath": "./biome.jsonc",
+
+  // Make Biome the default formatter everywhere
+  "editor.defaultFormatter": "biomejs.biome",
+
+  // Formatting strategy
+  "editor.formatOnSave": false,
+  "editor.formatOnPaste": true,
+
+  // Auto fix + organize imports on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "always",
+    "source.organizeImports.biome": "always"
+  },
+
+  // Avoid conflict with VSCode import organizer
+  "source.organizeImports": "never",
+
+  // Languages Biome should format
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnPaste": false
+  },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[graphql]": { "editor.defaultFormatter": "biomejs.biome" },
+
+  // Ignore Tailwind warnings
+  "css.lint.unknownAtRules": "ignore",
+
+  // Better TOML formatting
+  "evenBetterToml.formatter.allowedBlankLines": 4,
+
+  // Disable Emmet popup noise
+  "emmet.showExpandedAbbreviation": "never"
+}
