@@ -5,7 +5,7 @@ import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
-import { generateCollectionId } from '../schema/collections'
+import { generateCollectionId, normalizeCollection } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -368,7 +368,11 @@ export type SceneState = {
   loadScene: () => void
   clearScene: () => void
   unloadScene: () => void
-  setScene: (nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]) => void
+  setScene: (
+    nodes: Record<AnyNodeId, AnyNode>,
+    rootNodeIds: AnyNodeId[],
+    collections?: Record<CollectionId, Collection>,
+  ) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -394,6 +398,50 @@ export type SceneState = {
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
+}
+
+function normalizeCollectionsRecord(
+  collections: Record<CollectionId, Collection> | undefined,
+  nodes: Record<AnyNodeId, AnyNode>,
+) {
+  const normalizedCollections = Object.fromEntries(
+    Object.entries(collections ?? {}).flatMap(([id, collection]) => {
+      const normalizedNodeIds = Array.from(
+        new Set(collection.nodeIds.filter((nodeId) => Boolean(nodes[nodeId]))),
+      ) as AnyNodeId[]
+
+      if (normalizedNodeIds.length === 0) {
+        return []
+      }
+
+      return [[id as CollectionId, normalizeCollection({ ...collection, nodeIds: normalizedNodeIds })]]
+    }),
+  ) as Record<CollectionId, Collection>
+
+  if (Object.keys(normalizedCollections).length === 0) {
+    return normalizedCollections
+  }
+
+  for (const [collectionId, collection] of Object.entries(normalizedCollections)) {
+    for (const nodeId of collection.nodeIds) {
+      const node = nodes[nodeId]
+      if (!(node && node.type === 'item')) {
+        continue
+      }
+
+      const existingIds = Array.isArray(node.collectionIds) ? node.collectionIds : []
+      if (existingIds.includes(collectionId as CollectionId)) {
+        continue
+      }
+
+      nodes[nodeId] = {
+        ...node,
+        collectionIds: [...existingIds, collectionId as CollectionId],
+      } as AnyNode
+    }
+  }
+
+  return normalizedCollections
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -429,7 +477,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         get().loadScene() // Default scene
       },
 
-      setScene: (nodes, rootNodeIds) => {
+      setScene: (nodes, rootNodeIds, collections) => {
         // Apply backward compatibility migrations
         const patchedNodes = migrateNodes(nodes)
 
@@ -448,11 +496,13 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
+        const normalizedCollections = normalizeCollectionsRecord(collections, cleanedNodes)
+
         set({
           nodes: cleanedNodes,
           rootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
-          collections: {},
+          collections: normalizedCollections,
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(cleanedNodes).forEach((node) => {
@@ -521,7 +571,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       createCollection: (name, nodeIds = []) => {
         if (get().readOnly) return '' as CollectionId
         const id = generateCollectionId()
-        const collection: Collection = { id, name, nodeIds }
+        const collection = normalizeCollection({ id, name, nodeIds })
         set((state) => {
           const nextCollections = { ...state.collections, [id]: collection }
           // Denormalize: stamp collectionId onto each node
@@ -563,7 +613,12 @@ const useScene: UseSceneStore = create<SceneState>()(
         set((state) => {
           const col = state.collections[id]
           if (!col) return state
-          return { collections: { ...state.collections, [id]: { ...col, ...data } } }
+          return {
+            collections: {
+              ...state.collections,
+              [id]: normalizeCollection({ ...col, ...data }),
+            },
+          }
         })
       },
 
@@ -574,7 +629,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           if (!col || col.nodeIds.includes(nodeId)) return state
           const nextCollections = {
             ...state.collections,
-            [id]: { ...col, nodeIds: [...col.nodeIds, nodeId] },
+            [id]: normalizeCollection({ ...col, nodeIds: [...col.nodeIds, nodeId] }),
           }
           const node = state.nodes[nodeId]
           if (!node) return { collections: nextCollections }
@@ -595,7 +650,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           if (!col) return state
           const nextCollections = {
             ...state.collections,
-            [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
+            [id]: normalizeCollection({ ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) }),
           }
           const node = state.nodes[nodeId]
           if (!(node && 'collectionIds' in node)) return { collections: nextCollections }

@@ -516,6 +516,7 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
+      if (useViewer.getState().roomControlOverlayActive) return
 
       const node = event.node
       let currentPhase = useEditor.getState().phase
@@ -628,6 +629,7 @@ export const SelectionManager = () => {
     })
 
     const onGridClick = () => {
+      if (useViewer.getState().roomControlOverlayActive) return
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
       const { phase, structureLayer } = useEditor.getState()
@@ -657,6 +659,7 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
+      if (useViewer.getState().roomControlOverlayActive) return
       const node = event.node
       const currentPhase = useEditor.getState().phase
 
@@ -691,6 +694,7 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
+      if (useViewer.getState().roomControlOverlayActive) return
       const node = event.node
       const currentPhase = useEditor.getState().phase
 
@@ -930,6 +934,7 @@ const SelectionMaterialSync = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const hoveredIds = useViewer((s) => s.hoveredIds)
   const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
   const activeHighlightKindsRef = useRef(new Map<string, HighlightKind>())
   const highlightedMaterialsRef = useRef(
@@ -1013,13 +1018,15 @@ const SelectionMaterialSync = () => {
       nextHighlightKinds.set(id, 'selection')
     }
 
-    if (hoverHighlightMode === 'delete' && hoveredId) {
-      nextHighlightKinds.set(hoveredId, 'delete')
+    if (hoverHighlightMode === 'delete') {
+      for (const id of new Set([hoveredId, ...hoveredIds].filter(Boolean))) {
+        nextHighlightKinds.set(id as string, 'delete')
+      }
     }
 
     activeHighlightKindsRef.current = nextHighlightKinds
     syncSelectionMaterials()
-  }, [hoverHighlightMode, hoveredId, previewSelectedIds, selectedIds, syncSelectionMaterials])
+  }, [hoverHighlightMode, hoveredId, hoveredIds, previewSelectedIds, selectedIds, syncSelectionMaterials])
 
   useEffect(() => {
     return useScene.subscribe(() => {
@@ -1073,6 +1080,7 @@ const EditorOutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const hoveredIds = useViewer((s) => s.hoveredIds)
   const outliner = useViewer((s) => s.outliner)
 
   useEffect(() => {
@@ -1115,11 +1123,11 @@ const EditorOutlinerSync = () => {
     }
 
     outliner.hoveredObjects.length = 0
-    if (hoveredId) {
-      const obj = sceneRegistry.nodes.get(hoveredId)
+    for (const id of new Set([hoveredId, ...hoveredIds].filter(Boolean))) {
+      const obj = sceneRegistry.nodes.get(id as string)
       if (obj?.parent) outliner.hoveredObjects.push(obj)
     }
-  }, [phase, previewSelectedIds, selection, hoveredId, outliner])
+  }, [phase, previewSelectedIds, selection, hoveredId, hoveredIds, outliner])
 
   return null
 }

@@ -26,7 +26,6 @@ import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
-import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
@@ -35,6 +34,7 @@ import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-pa
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
 import { HelperManager } from '../ui/helpers/helper-manager'
+import { HomeAssistantPanel } from '../ui/panels/home-assistant-panel'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -536,7 +536,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
-      {isFirstPersonMode && <InteractiveSystem />}
+      <InteractiveSystem />
     </>
   )
 })
@@ -701,7 +701,6 @@ const ViewerCanvas = memo(function ViewerCanvas({
           </Viewer>
         </div>
       </div>
-      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
@@ -898,6 +897,11 @@ export default function Editor({
                       <PanelManager />
                     </div>
                   )}
+                  {!isVersionPreviewMode && (
+                    <div className="pointer-events-auto">
+                      <HomeAssistantPanel />
+                    </div>
+                  )}
                   <div className="pointer-events-auto">
                     <HelperManager />
                   </div>
@@ -969,6 +973,9 @@ export default function Editor({
               </div>
               <div className="pointer-events-auto">
                 <PanelManager />
+              </div>
+              <div className="pointer-events-auto">
+                <HomeAssistantPanel />
               </div>
               <div className="pointer-events-auto">
                 <HelperManager />

@@ -23,8 +23,10 @@ import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { getHomeAssistantLink } from '../../lib/home-assistant'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -56,6 +58,8 @@ export function FloatingActionMenu() {
   const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
+  const homeAssistantControlItemId = useEditor((s) => s.homeAssistantControlItemId)
+  const setHomeAssistantControlItemId = useEditor((s) => s.setHomeAssistantControlItemId)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
@@ -424,6 +428,29 @@ export function FloatingActionMenu() {
     },
     [node?.type, selectedId, setSelection],
   )
+  const handleExtraAction = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (node?.type !== 'item') {
+        return
+      }
+
+      const link = getHomeAssistantLink(node.metadata)
+      if (!link?.haEntityId) {
+        return
+      }
+
+      setHomeAssistantControlItemId(
+        homeAssistantControlItemId === node.id ? null : String(node.id),
+      )
+    },
+    [homeAssistantControlItemId, node, setHomeAssistantControlItemId],
+  )
+  const linkedHomeAssistantItem =
+    node?.type === 'item' ? { item: node, link: getHomeAssistantLink(node.metadata) } : null
+  const isHomeAssistantControlOpen =
+    Boolean(linkedHomeAssistantItem?.link?.haEntityId) &&
+    homeAssistantControlItemId === linkedHomeAssistantItem?.item.id
 
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
@@ -444,23 +471,34 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[100, 0]}
         >
-          <NodeActionMenu
-            onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-            onCurve={
-              node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
-                ? handleCurve
-                : undefined
-            }
-            onDelete={handleDelete}
-            onDuplicate={
-              node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
-                ? handleDuplicate
-                : undefined
-            }
-            onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-          />
+          {isHomeAssistantControlOpen && linkedHomeAssistantItem?.link ? (
+            <HomeAssistantConnectivityPanel
+              item={linkedHomeAssistantItem.item}
+              link={linkedHomeAssistantItem.link}
+              onClose={() => setHomeAssistantControlItemId(null)}
+            />
+          ) : (
+            <NodeActionMenu
+              extraActionIcon={linkedHomeAssistantItem?.link?.haEntityId ? 'connectivity' : undefined}
+              extraActionLabel={linkedHomeAssistantItem?.link?.haEntityId ? 'Home Assistant' : undefined}
+              onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+              onCurve={
+                node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
+                  ? handleCurve
+                  : undefined
+              }
+              onDelete={handleDelete}
+              onDuplicate={
+                node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
+                  ? handleDuplicate
+                  : undefined
+              }
+              onExtraAction={linkedHomeAssistantItem?.link?.haEntityId ? handleExtraAction : undefined}
+              onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+            />
+          )}
         </Html>
       </group>
       {(node?.type === 'wall' || node?.type === 'fence') && (

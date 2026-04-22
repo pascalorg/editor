@@ -56,6 +56,16 @@ type NodeConfig = {
 type NodeType = keyof NodeConfig
 
 export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], type: T) {
+  const areNodeEventsSuppressed = () => {
+    const viewerState = useViewer.getState()
+    if (viewerState.nodeEventsSuppressed) {
+      return true
+    }
+
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    return viewerState.nodeEventsSuppressedUntil > now
+  }
+
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
     const eventKey = `${type}:${suffix}` as `${T}:${EventSuffix}`
     const localPoint = e.object.worldToLocal(e.point.clone())
@@ -75,11 +85,13 @@ export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], t
 
   return {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
       emit('pointerup', e)
@@ -88,26 +100,32 @@ export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], t
       emit('click', e)
     },
     onClick: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       // Disable default R3F click since we synthesize it on pointerup
       // This prevents double-clicks from firing twice.
     },
     onPointerEnter: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       emit('enter', e)
     },
     onPointerLeave: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       emit('leave', e)
     },
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       emit('move', e)
     },
     onDoubleClick: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       emit('double-click', e)
     },
     onContextMenu: (e: ThreeEvent<PointerEvent>) => {
+      if (areNodeEventsSuppressed()) return
       if (useViewer.getState().cameraDragging) return
       emit('context-menu', e)
     },

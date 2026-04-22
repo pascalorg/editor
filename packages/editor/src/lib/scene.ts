@@ -1,5 +1,6 @@
 'use client'
 
+import type { Collection, CollectionId } from '@pascal-app/core'
 import { resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
@@ -9,6 +10,7 @@ import useEditor, {
 } from '../store/use-editor'
 
 export type SceneGraph = {
+  collections?: Record<CollectionId, Collection>
   nodes: Record<string, unknown>
   rootNodeIds: string[]
 }
@@ -365,8 +367,8 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   if (hasUsableSceneGraph(sceneGraph)) {
-    const { nodes, rootNodeIds } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any)
+    const { collections, nodes, rootNodeIds } = sceneGraph
+    useScene.getState().setScene(nodes as any, rootNodeIds as any, collections as any)
   } else {
     useScene.getState().clearScene()
   }

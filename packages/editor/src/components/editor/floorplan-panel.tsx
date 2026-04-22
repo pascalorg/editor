@@ -42,6 +42,7 @@ import {
   memo,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -50,6 +51,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { getHomeAssistantLink } from '../../lib/home-assistant'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
@@ -76,6 +78,7 @@ import { tools as structureTools } from '../ui/action-menu/structure-tools'
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/primitives/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
+import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { NodeActionMenu } from './node-action-menu'
 
 const FALLBACK_VIEW_SIZE = 12
@@ -4756,6 +4759,10 @@ type FloorplanActionMenuEntry = {
   onDelete: FloorplanActionMenuHandler
   onMove: FloorplanActionMenuHandler
   onDuplicate?: FloorplanActionMenuHandler
+  onExtraAction?: FloorplanActionMenuHandler
+  extraActionIcon?: 'connectivity'
+  extraActionLabel?: string
+  customContent?: ReactNode
 }
 
 type FloorplanActionMenuLayerProps = {
@@ -4799,13 +4806,18 @@ const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
               transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y}px))`,
             }}
           >
-            <NodeActionMenu
-              onDelete={entry.onDelete}
-              onDuplicate={entry.onDuplicate}
-              onMove={entry.onMove}
-              onPointerDown={(event) => event.stopPropagation()}
-              onPointerUp={(event) => event.stopPropagation()}
-            />
+            {entry.customContent ?? (
+              <NodeActionMenu
+                extraActionIcon={entry.extraActionIcon}
+                extraActionLabel={entry.extraActionLabel}
+                onDelete={entry.onDelete}
+                onDuplicate={entry.onDuplicate}
+                onExtraAction={entry.onExtraAction}
+                onMove={entry.onMove}
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => event.stopPropagation()}
+              />
+            )}
           </div>
         ) : null,
       )}
@@ -5604,6 +5616,8 @@ export function FloorplanPanel() {
 
     return floorplanItemEntries.find(({ item }) => item.id === selectedIds[0]) ?? null
   }, [floorplanItemEntries, selectedIds])
+  const homeAssistantControlItemId = useEditor((state) => state.homeAssistantControlItemId)
+  const setHomeAssistantControlItemId = useEditor((state) => state.setHomeAssistantControlItemId)
   const selectedWallEntry = useMemo(() => {
     if (selectedIds.length !== 1) {
       return null
@@ -6214,6 +6228,12 @@ export function FloorplanPanel() {
         : null,
     [selectedItemEntry, surfaceSize, viewBox],
   )
+  const selectedItemLink = selectedItemEntry
+    ? getHomeAssistantLink(selectedItemEntry.item.metadata)
+    : null
+  const isSelectedItemHomeAssistantControlOpen =
+    Boolean(selectedItemEntry?.item && selectedItemLink?.haEntityId) &&
+    homeAssistantControlItemId === selectedItemEntry?.item.id
   const selectedSlabActionMenuPosition = useMemo(
     () =>
       selectedSlabEntry
@@ -8696,6 +8716,24 @@ export function FloorplanPanel() {
     },
     [deleteNode, selectedItemEntry, setSelection],
   )
+  const handleSelectedItemConnect = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const item = selectedItemEntry?.item
+      if (!item) {
+        return
+      }
+
+      const link = getHomeAssistantLink(item.metadata)
+      if (!link?.haEntityId) {
+        return
+      }
+
+      setHomeAssistantControlItemId(homeAssistantControlItemId === item.id ? null : String(item.id))
+    },
+    [homeAssistantControlItemId, selectedItemEntry, setHomeAssistantControlItemId],
+  )
   const handleSelectedWallMove = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
@@ -9861,7 +9899,18 @@ export function FloorplanPanel() {
             position: selectedItemActionMenuPosition,
             onDelete: handleSelectedItemDelete,
             onDuplicate: handleSelectedItemDuplicate,
+            onExtraAction: selectedItemLink?.haEntityId ? handleSelectedItemConnect : undefined,
             onMove: handleSelectedItemMove,
+            extraActionIcon: selectedItemLink?.haEntityId ? 'connectivity' : undefined,
+            extraActionLabel: selectedItemLink?.haEntityId ? 'Home Assistant' : undefined,
+            customContent:
+              isSelectedItemHomeAssistantControlOpen && selectedItemEntry && selectedItemLink ? (
+                <HomeAssistantConnectivityPanel
+                  item={selectedItemEntry.item}
+                  link={selectedItemLink}
+                  onClose={() => setHomeAssistantControlItemId(null)}
+                />
+              ) : undefined,
           }}
           opening={{
             position: selectedOpeningActionMenuPosition,

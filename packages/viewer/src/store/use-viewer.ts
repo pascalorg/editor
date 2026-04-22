@@ -22,10 +22,17 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  nodeEventsSuppressed: boolean
+  nodeEventsSuppressedUntil: number
+  suppressNodeEvents: (durationMs?: number) => void
+  roomControlOverlayActive: boolean
+  setRoomControlOverlayActive: (active: boolean) => void
   hoverHighlightMode: 'default' | 'delete'
   setHoverHighlightMode: (mode: 'default' | 'delete') => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
+  hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
+  setHoveredIds: (ids: Array<AnyNode['id'] | ZoneNode['id']>) => void
 
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
@@ -84,10 +91,22 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      nodeEventsSuppressed: false,
+      nodeEventsSuppressedUntil: 0,
+      suppressNodeEvents: (durationMs = 250) =>
+        set({
+          nodeEventsSuppressedUntil:
+            (typeof performance !== 'undefined' ? performance.now() : Date.now()) + durationMs,
+        }),
+      roomControlOverlayActive: false,
+      setRoomControlOverlayActive: (roomControlOverlayActive) =>
+        set({ roomControlOverlayActive }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) => set({ hoverHighlightMode: mode }),
       hoveredId: null,
+      hoveredIds: [],
       setHoveredId: (id) => set({ hoveredId: id }),
+      setHoveredIds: (ids) => set({ hoveredIds: ids }),
 
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),

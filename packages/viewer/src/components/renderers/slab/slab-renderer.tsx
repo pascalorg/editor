@@ -11,6 +11,7 @@ import {
 
 export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const ref = useRef<Mesh>(null!)
+  const visible = node.visible && !node.autoFromWalls
 
   useRegistry(node.id, 'slab', ref)
 
@@ -62,7 +63,7 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
       ref={ref}
       {...handlers}
       material={material}
-      visible={node.visible}
+      visible={visible}
     >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>

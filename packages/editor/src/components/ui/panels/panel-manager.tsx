@@ -18,6 +18,7 @@ import { WindowPanel } from './window-panel'
 
 export function PanelManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const roomControlOverlayActive = useViewer((s) => s.roomControlOverlayActive)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   // Only subscribe to the *type* of the single-selected node — string primitive
   // so we don't re-render on unrelated scene mutations.
@@ -30,6 +31,10 @@ export function PanelManager() {
   // Show reference panel if a reference is selected
   if (selectedReferenceId) {
     return <ReferencePanel />
+  }
+
+  if (roomControlOverlayActive) {
+    return null
   }
 
   // Show appropriate panel based on selected node type

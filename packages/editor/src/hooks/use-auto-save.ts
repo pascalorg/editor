@@ -59,7 +59,10 @@ export function useAutoSave({
 
   // Stable subscription to scene changes
   useEffect(() => {
-    let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
+    let lastSceneSnapshot = JSON.stringify({
+      collections: useScene.getState().collections,
+      nodes: useScene.getState().nodes,
+    })
 
     async function executeSave() {
       if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
@@ -68,8 +71,8 @@ export function useAutoSave({
         return
       }
 
-      const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const { collections, nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { collections, nodes, rootNodeIds } as SceneGraph
 
       isSavingRef.current = true
       pendingSaveRef.current = false
@@ -103,20 +106,29 @@ export function useAutoSave({
 
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastSceneSnapshot = JSON.stringify({
+          collections: state.collections,
+          nodes: state.nodes,
+        })
         return
       }
 
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastSceneSnapshot = JSON.stringify({
+          collections: state.collections,
+          nodes: state.nodes,
+        })
         return
       }
 
-      const currentNodesSnapshot = JSON.stringify(state.nodes)
-      if (currentNodesSnapshot === lastNodesSnapshot) return
+      const currentSceneSnapshot = JSON.stringify({
+        collections: state.collections,
+        nodes: state.nodes,
+      })
+      if (currentSceneSnapshot === lastSceneSnapshot) return
 
-      lastNodesSnapshot = currentNodesSnapshot
+      lastSceneSnapshot = currentSceneSnapshot
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
       setSaveStatus('pending')
@@ -136,8 +148,8 @@ export function useAutoSave({
 
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
-      const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const { collections, nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { collections, nodes, rootNodeIds } as SceneGraph
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph).catch(() => {})
       } else {

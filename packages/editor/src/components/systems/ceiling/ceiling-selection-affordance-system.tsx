@@ -34,13 +34,17 @@ export const CeilingSelectionAffordanceSystem = () => {
   const structureLayer = useEditor((state) => state.structureLayer)
   const movingNode = useEditor((state) => state.movingNode)
   const curvingWall = useEditor((state) => state.curvingWall)
-  const currentLevelId = useViewer((state) => state.selection.levelId)
+  const [currentLevelId, selectedIds, hoveredId] = useViewer(
+    useShallow((state) => [state.selection.levelId, state.selection.selectedIds, state.hoveredId]),
+  )
 
   const ceilings = useScene(
     useShallow((state) =>
       Object.values(state.nodes).filter((node): node is CeilingNode => {
+        const active = selectedIds.includes(node.id) || hoveredId === node.id
         return (
           node.type === 'ceiling' &&
+          active &&
           node.visible !== false &&
           currentLevelId !== null &&
           resolveLevelId(node, state.nodes) === currentLevelId

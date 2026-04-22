@@ -151,6 +151,8 @@ type EditorState = {
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  homeAssistantControlItemId: string | null
+  setHomeAssistantControlItemId: (id: string | null) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -532,6 +534,8 @@ const useEditor = create<EditorState>()(
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      homeAssistantControlItemId: null,
+      setHomeAssistantControlItemId: (id) => set({ homeAssistantControlItemId: id }),
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,

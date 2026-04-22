@@ -14,10 +14,17 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  nodeEventsSuppressed: boolean
+  nodeEventsSuppressedUntil: number
+  suppressNodeEvents: (durationMs?: number) => void
+  roomControlOverlayActive: boolean
+  setRoomControlOverlayActive: (active: boolean) => void
   hoverHighlightMode: 'default' | 'delete'
   setHoverHighlightMode: (mode: 'default' | 'delete') => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
+  hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
+  setHoveredIds: (ids: Array<AnyNode['id'] | ZoneNode['id']>) => void
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
