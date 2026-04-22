@@ -1,6 +1,11 @@
 'use client'
 
-import { Editor, type SidebarTab, ViewerToolbarLeft, ViewerToolbarRight } from '@pascal-app/editor'
+import {
+  Editor,
+  type SidebarTab,
+  ViewerToolbarLeft,
+  ViewerToolbarRight,
+} from '@pascal-app/editor'
 
 const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   {
