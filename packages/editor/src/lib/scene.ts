@@ -1,23 +1,34 @@
 'use client'
 
-import { resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
+import type { BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import {
+  getItemMoveVisualState,
+  resolveLevelId,
+  sceneRegistry,
+  setItemMoveVisualState,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
   hasCustomPersistedEditorUiState,
   normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
+import useNavigation from '../store/use-navigation'
+import navigationVisualsStore from '../store/use-navigation-visuals'
 
 export type SceneGraph = {
   nodes: Record<string, unknown>
   rootNodeIds: string[]
 }
 
+type ApplySceneGraphMode = 'full' | 'task-loop'
+
 type PersistedSelectionPath = {
-  buildingId: string | null
-  levelId: string | null
-  zoneId: string | null
-  selectedIds: string[]
+  buildingId: BuildingNode['id'] | null
+  levelId: LevelNode['id'] | null
+  zoneId: ZoneNode['id'] | null
+  selectedIds: BaseNode['id'][]
 }
 
 const EMPTY_PERSISTED_SELECTION: PersistedSelectionPath = {
@@ -28,6 +39,20 @@ const EMPTY_PERSISTED_SELECTION: PersistedSelectionPath = {
 }
 
 const SELECTION_STORAGE_KEY = 'pascal-editor-selection'
+
+function toBuildingNodeId(value: string | null | undefined): BuildingNode['id'] | null {
+  return typeof value === 'string' && value.startsWith('building_')
+    ? (value as BuildingNode['id'])
+    : null
+}
+
+function toLevelNodeId(value: string | null | undefined): LevelNode['id'] | null {
+  return typeof value === 'string' && value.startsWith('level_') ? (value as LevelNode['id']) : null
+}
+
+function toZoneNodeId(value: string | null | undefined): ZoneNode['id'] | null {
+  return typeof value === 'string' && value.startsWith('zone_') ? (value as ZoneNode['id']) : null
+}
 
 function getSelectionStorageKey(): string {
   const projectId = useViewer.getState().projectId
@@ -41,8 +66,8 @@ function getSelectionStorageReadKeys(): string[] {
 
 function getDefaultLevelIdForBuilding(
   sceneNodes: Record<string, any>,
-  buildingId: string | null,
-): string | null {
+  buildingId: BuildingNode['id'] | null,
+): LevelNode['id'] | null {
   if (!buildingId) {
     return null
   }
@@ -52,7 +77,7 @@ function getDefaultLevelIdForBuilding(
     return null
   }
 
-  let firstLevelId: string | null = null
+  let firstLevelId: LevelNode['id'] | null = null
 
   for (const childId of buildingNode.children) {
     const levelNode = sceneNodes[childId]
@@ -71,15 +96,23 @@ function getDefaultLevelIdForBuilding(
 }
 
 function normalizePersistedSelectionPath(
-  selection: Partial<PersistedSelectionPath> | null | undefined,
+  selection:
+    | Partial<{
+        buildingId: string | null
+        levelId: string | null
+        zoneId: string | null
+        selectedIds: string[]
+      }>
+    | null
+    | undefined,
 ): PersistedSelectionPath {
   return {
-    buildingId: typeof selection?.buildingId === 'string' ? selection.buildingId : null,
-    levelId: typeof selection?.levelId === 'string' ? selection.levelId : null,
-    zoneId: typeof selection?.zoneId === 'string' ? selection.zoneId : null,
-    selectedIds: Array.isArray(selection?.selectedIds)
-      ? selection.selectedIds.filter((id): id is string => typeof id === 'string')
-      : [],
+    buildingId: toBuildingNodeId(selection?.buildingId),
+    levelId: toLevelNodeId(selection?.levelId),
+    zoneId: toZoneNodeId(selection?.zoneId),
+    // Branch-only selection persistence should restore scene context, not reopen
+    // node panels from the last session.
+    selectedIds: [],
   }
 }
 
@@ -248,16 +281,18 @@ function getRestoredSelectionForScene(
   return getValidatedSelectionForScene(sceneNodes, persistedSelection)
 }
 
-export function syncEditorSelectionFromCurrentScene() {
+export function syncEditorSelectionFromCurrentScene(options?: { restorePersistedUiState?: boolean }) {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
   const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
   const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
   const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
+  const restorePersistedUiState = options?.restorePersistedUiState ?? true
   const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
-  const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
-  const restoredSelection = getRestoredSelectionForScene(sceneNodes)
+  const shouldRestoreEditorUiState =
+    restorePersistedUiState && hasCustomPersistedEditorUiState(restoredEditorUiState)
+  const restoredSelection = restorePersistedUiState ? getRestoredSelectionForScene(sceneNodes) : null
   const selectionDrivenEditorUiState = restoredSelection
     ? getEditorUiStateForRestoredSelection(sceneNodes, restoredSelection, restoredEditorUiState)
     : null
@@ -331,28 +366,84 @@ export function syncEditorSelectionFromCurrentScene() {
   }
 }
 
-function resetEditorInteractionState() {
+function resetEditorInteractionState(mode: ApplySceneGraphMode) {
   useViewer.getState().setHoveredId(null)
   useViewer.getState().resetSelection()
+  useViewer.setState({
+    hoverHighlightMode: 'default',
+    nodeEventsSuppressed: false,
+    previewSelectedIds: [],
+  })
+  navigationVisualsStore.setState({
+    itemDeleteActivations: {},
+    itemMovePreview: null,
+    itemMoveVisualStates: {},
+    navigationPostWarmupCompletedToken: 0,
+    navigationPostWarmupRequestToken: 0,
+    navigationPostWarmupScope: null,
+    nodeVisibilityOverrides: {},
+    repairShieldActivations: {},
+    showActionShields: false,
+    toolConeIsolatedOverlay: null,
+    toolConeOverlayCamera: null,
+    toolConeOverlayEnabled: false,
+    toolConeOverlayWarmupReady: false,
+  })
   // Clear outliner arrays synchronously so stale Object3D refs from the old
   // scene don't leak into the post-processing pipeline's outline passes.
   const outliner = useViewer.getState().outliner
   outliner.selectedObjects.length = 0
   outliner.hoveredObjects.length = 0
-  sceneRegistry.clear()
-  useEditor.setState({
-    phase: 'site',
-    mode: 'select',
-    tool: null,
-    structureLayer: 'elements',
-    catalogCategory: null,
-    selectedItem: null,
-    movingNode: null,
-    selectedReferenceId: null,
-    spaces: {},
-    editingHole: null,
-    isPreviewMode: false,
-  })
+  useNavigation.setState((state) =>
+    mode === 'task-loop'
+      ? {
+          actorAvailable: false,
+          actorWorldPosition: null,
+          itemMoveControllers: {},
+          itemMoveLocked: false,
+          navigationClickSuppressedUntil: 0,
+          walkableOverlayVisible: false,
+        }
+      : {
+          actorAvailable: false,
+          actorWorldPosition: null,
+          itemDeleteRequest: null,
+          itemMoveControllers: {},
+          itemMoveLocked: false,
+          itemMoveRequest: null,
+          itemRepairRequest: null,
+          navigationClickSuppressedUntil: 0,
+          taskQueue: [],
+          walkableOverlayVisible: false,
+        },
+  )
+  useEditor.setState((state) =>
+    mode === 'task-loop'
+      ? {
+          ...state,
+          tool: null,
+          selectedItem: null,
+          movingNode: null,
+          selectedReferenceId: null,
+          spaces: {},
+          editingHole: null,
+          isPreviewMode: false,
+        }
+      : {
+          ...state,
+          phase: 'site',
+          mode: 'select',
+          tool: null,
+          structureLayer: 'elements',
+          catalogCategory: null,
+          selectedItem: null,
+          movingNode: null,
+          selectedReferenceId: null,
+          spaces: {},
+          editingHole: null,
+          isPreviewMode: false,
+        },
+  )
 }
 
 function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is SceneGraph {
@@ -363,22 +454,66 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
-export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
-  if (hasUsableSceneGraph(sceneGraph)) {
-    const { nodes, rootNodeIds } = sceneGraph
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stripTransientTaskVisuals(sceneGraph?: SceneGraph | null): SceneGraph | null | undefined {
+  if (!sceneGraph) {
+    return sceneGraph
+  }
+
+  let changed = false
+  const sanitizedNodes: Record<string, unknown> = {}
+
+  for (const [id, node] of Object.entries(sceneGraph.nodes ?? {})) {
+    if (!isRecord(node) || getItemMoveVisualState(node.metadata) === null) {
+      sanitizedNodes[id] = node
+      continue
+    }
+
+    sanitizedNodes[id] = {
+      ...node,
+      metadata: setItemMoveVisualState(node.metadata, null),
+    }
+    changed = true
+  }
+
+  if (!changed) {
+    return sceneGraph
+  }
+
+  return {
+    ...sceneGraph,
+    nodes: sanitizedNodes,
+  }
+}
+
+export function applySceneGraphToEditor(
+  sceneGraph?: SceneGraph | null,
+  options?: { mode?: ApplySceneGraphMode },
+) {
+  const mode = options?.mode ?? 'full'
+  resetEditorInteractionState(mode)
+  const sanitizedSceneGraph = stripTransientTaskVisuals(sceneGraph)
+
+  if (hasUsableSceneGraph(sanitizedSceneGraph)) {
+    const { nodes, rootNodeIds } = sanitizedSceneGraph
     useScene.getState().setScene(nodes as any, rootNodeIds as any)
   } else {
     useScene.getState().clearScene()
   }
 
-  syncEditorSelectionFromCurrentScene()
+  syncEditorSelectionFromCurrentScene({
+    restorePersistedUiState: mode !== 'task-loop',
+  })
 }
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
 
 export function saveSceneToLocalStorage(scene: SceneGraph): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scene))
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stripTransientTaskVisuals(scene)))
   } catch {
     // Swallow storage quota errors
   }
@@ -387,7 +522,9 @@ export function saveSceneToLocalStorage(scene: SceneGraph): void {
 export function loadSceneFromLocalStorage(): SceneGraph | null {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as SceneGraph) : null
+    return raw
+      ? ((stripTransientTaskVisuals(JSON.parse(raw) as SceneGraph) as SceneGraph | null) ?? null)
+      : null
   } catch {
     return null
   }

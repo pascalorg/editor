@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
+  getItemMoveVisualState,
   type ItemNode,
   type NodeEvent,
   type RoofEvent,
@@ -23,6 +24,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Color, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, { type MaterialTargetRole, type Phase, type StructureLayer } from './../../store/use-editor'
+import useNavigation from '../../store/use-navigation'
+import navigationVisualsStore from '../../store/use-navigation-visuals'
 import { boxSelectHandled } from '../tools/select/box-select-tool'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -277,6 +280,40 @@ function disposeHighlightedMaterials(material: Material | Material[]) {
   material.dispose()
 }
 
+function getSelectionMoveVisualState(nodeId: string) {
+  const viewerVisualState = navigationVisualsStore.getState().itemMoveVisualStates[nodeId]
+  if (viewerVisualState) {
+    return viewerVisualState
+  }
+
+  const node = useScene.getState().nodes[nodeId as AnyNodeId]
+  if (node?.type !== 'item') {
+    return null
+  }
+
+  return getItemMoveVisualState((node as ItemNode).metadata)
+}
+
+function shouldSkipSelectionMaterial(nodeId: string) {
+  const visualState = getSelectionMoveVisualState(nodeId)
+  return (
+    visualState === 'carried' ||
+    visualState === 'copy-source-pending' ||
+    visualState === 'destination-ghost' ||
+    visualState === 'destination-preview' ||
+    visualState === 'source-pending'
+  )
+}
+
+function shouldSkipSelectionOutline(nodeId: string) {
+  const visualState = getSelectionMoveVisualState(nodeId)
+  return (
+    visualState === 'carried' ||
+    visualState === 'copy-source-pending' ||
+    visualState === 'source-pending'
+  )
+}
+
 const computeNextIds = (
   node: AnyNode,
   selectedIds: string[],
@@ -463,16 +500,110 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
+  const navigationEnabled = useNavigation((s) => s.enabled)
+  const robotMode = useNavigation((s) => s.robotMode)
+  const suppressNavigationClick = useNavigation((s) => s.suppressNavigationClick)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
   const modifierKeysRef = useRef<ModifierKeys>({
     meta: false,
     ctrl: false,
   })
   const clickHandledRef = useRef(false)
+  const navigationSelectionSuppressed = navigationEnabled && robotMode === 'normal'
 
   const movingNode = useEditor((s) => s.movingNode)
   const curvingWall = useEditor((s) => s.curvingWall)
   const curvingFence = useEditor((s) => s.curvingFence)
+
+  const selectNodeFromEvent = useCallback((event: NodeEvent) => {
+    const node = event.node
+    let currentPhase = useEditor.getState().phase
+    let currentStructureLayer = useEditor.getState().structureLayer
+
+    if (currentPhase === 'structure' || currentPhase === 'furnish' || currentPhase === 'site') {
+      if (isNodeInCurrentLevel(node)) {
+        const target = getSelectionTarget(node)
+        if (target) {
+          if (target.phase !== currentPhase) {
+            useEditor.getState().setPhase(target.phase)
+            currentPhase = target.phase
+          }
+
+          if (
+            target.phase === 'structure' &&
+            target.structureLayer &&
+            target.structureLayer !== currentStructureLayer
+          ) {
+            useEditor.getState().setStructureLayer(target.structureLayer)
+            currentStructureLayer = target.structureLayer
+          }
+        }
+      }
+    }
+
+    const activeStrategy = SELECTION_STRATEGIES[currentPhase]
+    if (!activeStrategy?.isValid(node)) {
+      return false
+    }
+
+    event.stopPropagation()
+    clickHandledRef.current = true
+
+    let nodeToSelect = node
+    if (node.type === 'roof-segment' && node.parentId) {
+      const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+      if (parentNode && parentNode.type === 'roof') {
+        nodeToSelect = parentNode
+      }
+    }
+    if (node.type === 'stair-segment' && node.parentId) {
+      const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+      if (parentNode && parentNode.type === 'stair') {
+        nodeToSelect = parentNode
+      }
+    }
+
+    activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
+
+    let nextMaterialTargetHandled = false
+
+    if (node.type === 'wall' && nodeToSelect.type === 'wall') {
+      setSelectedMaterialTargetForNode(nodeToSelect, resolveWallMaterialTarget(event as WallEvent))
+      nextMaterialTargetHandled = true
+    }
+
+    if (
+      (node.type === 'stair' || node.type === 'stair-segment') &&
+      nodeToSelect.type === 'stair'
+    ) {
+      setSelectedMaterialTargetForNode(
+        nodeToSelect,
+        resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent),
+      )
+      nextMaterialTargetHandled = true
+    }
+
+    if (
+      (node.type === 'roof' || node.type === 'roof-segment') &&
+      nodeToSelect.type === 'roof'
+    ) {
+      setSelectedMaterialTargetForNode(
+        nodeToSelect,
+        resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent),
+      )
+      nextMaterialTargetHandled = true
+    }
+
+    if (!nextMaterialTargetHandled && useEditor.getState().selectedMaterialTarget) {
+      useEditor.getState().setSelectedMaterialTarget(null)
+    }
+
+    setTimeout(() => {
+      clickHandledRef.current = false
+    }, 50)
+
+    return true
+  }, [])
 
   useEffect(() => {
     setHoverHighlightMode(mode === 'delete' ? 'delete' : 'default')
@@ -510,102 +641,83 @@ export const SelectionManager = () => {
   }, [])
 
   useEffect(() => {
+    if (navigationSelectionSuppressed) {
+      const viewerState = useViewer.getState()
+      viewerState.setHoveredId(null)
+      viewerState.setPreviewSelectedIds([])
+      viewerState.setSelection({
+        buildingId: viewerState.selection.buildingId,
+        levelId: viewerState.selection.levelId,
+        selectedIds: [],
+        zoneId: null,
+      })
+      viewerState.outliner.selectedObjects.length = 0
+      viewerState.outliner.hoveredObjects.length = 0
+      useEditor.getState().setSelectedMaterialTarget(null)
+      useEditor.getState().setSelectedReferenceId(null)
+      clickHandledRef.current = false
+    }
+  }, [navigationSelectionSuppressed])
+
+  useEffect(() => {
+    if (!navigationEnabled) {
+      return
+    }
+
+    const onNavigationItemPointerDown = (event: NodeEvent) => {
+      if (mode !== 'select' || movingNode) {
+        return
+      }
+
+      if (event.node.type !== 'item') {
+        return
+      }
+
+      suppressNavigationClick(500)
+    }
+
+    const onNavigationItemClick = (event: NodeEvent) => {
+      if (!navigationSelectionSuppressed) {
+        return
+      }
+
+      if (mode !== 'select' || movingNode) {
+        return
+      }
+
+      if (event.node.type !== 'item') {
+        return
+      }
+
+      suppressNavigationClick()
+      selectNodeFromEvent(event)
+    }
+
+    emitter.on('item:pointerdown', onNavigationItemPointerDown as any)
+    emitter.on('item:click', onNavigationItemClick as any)
+
+    return () => {
+      emitter.off('item:pointerdown', onNavigationItemPointerDown as any)
+      emitter.off('item:click', onNavigationItemClick as any)
+    }
+  }, [
+    mode,
+    movingNode,
+    navigationEnabled,
+    navigationSelectionSuppressed,
+    selectNodeFromEvent,
+    suppressNavigationClick,
+  ])
+
+  useEffect(() => {
+    if (navigationSelectionSuppressed) return
     if (mode !== 'select') return
     if (movingNode || curvingWall || curvingFence) return
 
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
-
-      const node = event.node
-      let currentPhase = useEditor.getState().phase
-      let currentStructureLayer = useEditor.getState().structureLayer
-
-      // Auto-switch between zones, structure, and furnish when clicking elements on the same level.
-      // Also auto-switch from site phase when clicking structural/furnish elements (e.g. 2D floorplan).
-      if (currentPhase === 'structure' || currentPhase === 'furnish' || currentPhase === 'site') {
-        if (isNodeInCurrentLevel(node)) {
-          const target = getSelectionTarget(node)
-          if (target) {
-            if (target.phase !== currentPhase) {
-              useEditor.getState().setPhase(target.phase)
-              currentPhase = target.phase
-            }
-
-            if (
-              target.phase === 'structure' &&
-              target.structureLayer &&
-              target.structureLayer !== currentStructureLayer
-            ) {
-              useEditor.getState().setStructureLayer(target.structureLayer)
-              currentStructureLayer = target.structureLayer
-            }
-          }
-        }
-      }
-
-      const activeStrategy = SELECTION_STRATEGIES[currentPhase]
-      if (activeStrategy?.isValid(node)) {
-        event.stopPropagation()
-        clickHandledRef.current = true
-
-        let nodeToSelect = node
-        if (node.type === 'roof-segment' && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-          if (parentNode && parentNode.type === 'roof') {
-            nodeToSelect = parentNode
-          }
-        }
-        if (node.type === 'stair-segment' && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-          if (parentNode && parentNode.type === 'stair') {
-            nodeToSelect = parentNode
-          }
-        }
-
-        activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
-
-        let nextMaterialTargetHandled = false
-
-        if (node.type === 'wall' && nodeToSelect.type === 'wall') {
-          setSelectedMaterialTargetForNode(
-            nodeToSelect,
-            resolveWallMaterialTarget(event as WallEvent),
-          )
-          nextMaterialTargetHandled = true
-        }
-
-        if (
-          (node.type === 'stair' || node.type === 'stair-segment') &&
-          nodeToSelect.type === 'stair'
-        ) {
-          setSelectedMaterialTargetForNode(
-            nodeToSelect,
-            resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent),
-          )
-          nextMaterialTargetHandled = true
-        }
-
-        if (
-          (node.type === 'roof' || node.type === 'roof-segment') &&
-          nodeToSelect.type === 'roof'
-        ) {
-          setSelectedMaterialTargetForNode(
-            nodeToSelect,
-            resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent),
-          )
-          nextMaterialTargetHandled = true
-        }
-
-        if (!nextMaterialTargetHandled && useEditor.getState().selectedMaterialTarget) {
-          useEditor.getState().setSelectedMaterialTarget(null)
-        }
-
-        // Reset the handled flag after a short delay to allow grid:click to be ignored
-        setTimeout(() => {
-          clickHandledRef.current = false
-        }, 50)
-      }
+      selectNodeFromEvent(event)
     }
 
     const allTypes = [
@@ -649,10 +761,11 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [curvingFence, curvingWall, mode, movingNode, navigationSelectionSuppressed, selectNodeFromEvent])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
+    if (navigationSelectionSuppressed) return
     if (mode !== 'select') return
     if (movingNode || curvingWall || curvingFence) return
 
@@ -783,10 +896,11 @@ export const SelectionManager = () => {
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
       })
     }
-  }, [curvingFence, curvingWall, mode, movingNode])
+  }, [curvingFence, curvingWall, mode, movingNode, navigationSelectionSuppressed])
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {
+    if (navigationSelectionSuppressed) return
     if (mode !== 'delete') return
 
     const onClick = (event: NodeEvent) => {
@@ -855,7 +969,7 @@ export const SelectionManager = () => {
       }
       useViewer.setState({ hoveredId: null })
     }
-  }, [mode])
+  }, [mode, navigationSelectionSuppressed])
 
   return (
     <>
@@ -1010,6 +1124,10 @@ const SelectionMaterialSync = () => {
     const nextHighlightKinds = new Map<string, HighlightKind>()
 
     for (const id of new Set([...selectedIds, ...previewSelectedIds])) {
+      if (shouldSkipSelectionMaterial(id)) {
+        continue
+      }
+
       nextHighlightKinds.set(id, 'selection')
     }
 
@@ -1110,6 +1228,10 @@ const EditorOutlinerSync = () => {
     // 2. Sync with the imperative outliner arrays (mutate in place to keep references)
     outliner.selectedObjects.length = 0
     for (const id of idsToHighlight) {
+      if (shouldSkipSelectionOutline(id)) {
+        continue
+      }
+
       const obj = sceneRegistry.nodes.get(id)
       if (obj?.parent) outliner.selectedObjects.push(obj)
     }

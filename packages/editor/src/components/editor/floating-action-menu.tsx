@@ -25,6 +25,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import {
+  requestNavigationItemDelete,
+  requestNavigationItemRepair,
+} from '../../store/use-navigation'
+import navigationVisualsStore, { useNavigationVisuals } from '../../store/use-navigation-visuals'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -57,6 +62,9 @@ export function FloatingActionMenu() {
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
+  const setHoveredId = useViewer((s) => s.setHoveredId)
+  const activateRepairShield = useNavigationVisuals((s) => s.activateRepairShield)
+  const clearRepairShield = useNavigationVisuals((s) => s.clearRepairShield)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
@@ -239,6 +247,12 @@ export function FloatingActionMenu() {
       let duplicateInfo = structuredClone(node) as any
       delete duplicateInfo.id
       duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+      if (node.type === 'item') {
+        duplicateInfo.metadata = {
+          ...duplicateInfo.metadata,
+          robotCopySourceId: node.id,
+        }
+      }
 
       let duplicate: AnyNode | null = null
       try {
@@ -413,6 +427,9 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (node?.type === 'item' && requestNavigationItemDelete(node)) {
+        return
+      }
       if (!selectedId) return
       if (node?.type === 'item') {
         sfxEmitter.emit('sfx:item-delete')
@@ -423,6 +440,31 @@ export function FloatingActionMenu() {
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
     [node?.type, selectedId, setSelection],
+  )
+
+  const handleRepair = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!node || node.type !== 'item') {
+        return
+      }
+
+      if (requestNavigationItemRepair(node)) {
+        return
+      }
+
+      const repairShieldActive = Boolean(
+        navigationVisualsStore.getState().repairShieldActivations[node.id],
+      )
+      if (repairShieldActive) {
+        clearRepairShield(node.id)
+      } else {
+        activateRepairShield(node.id)
+      }
+      setHoveredId(null)
+      setSelection({ selectedIds: [] })
+    },
+    [activateRepairShield, clearRepairShield, node, setHoveredId, setSelection],
   )
 
   if (
@@ -458,6 +500,7 @@ export function FloatingActionMenu() {
                 : undefined
             }
             onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+            onRepair={node?.type === 'item' ? handleRepair : undefined}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
           />

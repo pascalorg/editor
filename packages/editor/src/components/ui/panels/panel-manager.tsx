@@ -3,6 +3,7 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
+import useNavigation from '../../../store/use-navigation'
 import { CeilingPanel } from './ceiling-panel'
 import { DoorPanel } from './door-panel'
 import { FencePanel } from './fence-panel'
@@ -19,23 +20,28 @@ import { WindowPanel } from './window-panel'
 export function PanelManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
-  // Only subscribe to the *type* of the single-selected node — string primitive
-  // so we don't re-render on unrelated scene mutations.
+  const navigationEnabled = useNavigation((s) => s.enabled)
+  const moveItemsEnabled = useNavigation((s) => s.moveItemsEnabled)
+  const robotMode = useNavigation((s) => s.robotMode)
+  const suppressItemPanel = navigationEnabled && moveItemsEnabled && robotMode !== null
+  // Only subscribe to the *type* of the single-selected node so we don't
+  // re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
     if (selectedIds.length !== 1) return null
     const id = selectedIds[0]
     return id ? (s.nodes[id as AnyNodeId]?.type ?? null) : null
   })
 
-  // Show reference panel if a reference is selected
   if (selectedReferenceId) {
     return <ReferencePanel />
   }
 
-  // Show appropriate panel based on selected node type
   if (selectedNodeType) {
     switch (selectedNodeType) {
       case 'item':
+        if (suppressItemPanel) {
+          return null
+        }
         return <ItemPanel />
       case 'roof':
         return <RoofPanel />

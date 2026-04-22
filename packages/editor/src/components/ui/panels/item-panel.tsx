@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { requestNavigationItemDelete } from '../../../store/use-navigation'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
@@ -62,18 +63,25 @@ export function ItemPanel() {
       asset: node.asset,
       parentId: node.parentId,
       side: node.side,
-      metadata: { isNew: true },
+      metadata: {
+        ...(typeof node.metadata === 'object' && node.metadata !== null ? node.metadata : {}),
+        isNew: true,
+        robotCopySourceId: node.id,
+      },
     })
     setMovingNode(proto)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
-    if (!selectedId) return
+    if (!selectedId || !node) return
+    if (requestNavigationItemDelete(node)) {
+      return
+    }
     sfxEmitter.emit('sfx:item-delete')
     deleteNode(selectedId as AnyNode['id'])
     setSelection({ selectedIds: [] })
-  }, [selectedId, deleteNode, setSelection])
+  }, [deleteNode, node, selectedId, setSelection])
 
   if (!(node && node.type === 'item' && selectedId)) return null
 

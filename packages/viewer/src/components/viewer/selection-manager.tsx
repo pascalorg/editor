@@ -17,6 +17,7 @@ import {
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
+import { useViewerRuntimeState } from '../../contexts/viewer-runtime-state'
 import useViewer from '../../store/use-viewer'
 
 const tempWorldPos = new Vector3()
@@ -391,13 +392,19 @@ const PointerMissedHandler = ({
 const OutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const repairShieldActivations = useViewerRuntimeState((s) => s.repairShieldActivations)
   const outliner = useViewer((s) => s.outliner)
   const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
+    const repairShieldItemIds = new Set(Object.keys(repairShieldActivations))
+
     // Sync selected objects
     outliner.selectedObjects.length = 0
     for (const id of selection.selectedIds) {
+      if (repairShieldItemIds.has(id)) {
+        continue
+      }
       const node = nodes[id as AnyNodeId]
       if (node?.type === 'slab') continue
       const obj = sceneRegistry.nodes.get(id)
@@ -407,12 +414,13 @@ const OutlinerSync = () => {
     // Sync hovered objects
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
+      if (repairShieldItemIds.has(hoveredId)) return
       const hoveredNode = nodes[hoveredId as AnyNodeId]
       if (hoveredNode?.type === 'slab') return
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [selection, hoveredId, outliner, nodes])
+  }, [selection, hoveredId, outliner, nodes, repairShieldActivations])
 
   return null
 }

@@ -7,29 +7,28 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { type MutableRefObject, useEffect, useRef } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 
 /**
  * Custom grid events hook that uses manual raycasting instead of mesh events.
  * This ensures grid events work even when other meshes block pointer events with stopPropagation.
  */
-export function useGridEvents(gridY: number) {
+export function useGridEvents(gridYRef: MutableRefObject<number>) {
   const { camera, gl } = useThree()
   const raycaster = useRef(new Raycaster())
   const pointer = useRef(new Vector2())
   const groundPlane = useRef(new Plane(new Vector3(0, 1, 0), 0))
   const intersectionPoint = useRef(new Vector3())
-
-  // Update ground plane when grid Y changes
-  useEffect(() => {
-    groundPlane.current.constant = -gridY
-  }, [gridY])
+  const pendingMoveEventRef = useRef<PointerEvent | null>(null)
+  const moveFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     const canvas = gl.domElement
 
     const getIntersection = (nativeEvent: MouseEvent | PointerEvent): Vector3 | null => {
+      groundPlane.current.constant = -gridYRef.current
+
       // Convert mouse position to normalized device coordinates (-1 to +1)
       const rect = canvas.getBoundingClientRect()
       pointer.current.x = ((nativeEvent.clientX - rect.left) / rect.width) * 2 - 1
@@ -65,6 +64,14 @@ export function useGridEvents(gridY: number) {
       emitter.emit(eventKey, payload)
     }
 
+    const flushPendingMove = () => {
+      moveFrameRef.current = null
+      const pendingMoveEvent = pendingMoveEventRef.current
+      pendingMoveEventRef.current = null
+      if (!pendingMoveEvent) return
+      emit('move', pendingMoveEvent)
+    }
+
     const handlePointerDown = (e: PointerEvent) => {
       if (useViewer.getState().cameraDragging) return
       if (e.button !== 0) return
@@ -85,7 +92,9 @@ export function useGridEvents(gridY: number) {
 
     const handlePointerMove = (e: PointerEvent) => {
       // Emit move even if camera is dragging, so tools like PolygonEditor still work
-      emit('move', e)
+      pendingMoveEventRef.current = e
+      if (moveFrameRef.current !== null) return
+      moveFrameRef.current = window.requestAnimationFrame(flushPendingMove)
     }
 
     const handleDoubleClick = (e: MouseEvent) => {
@@ -107,6 +116,11 @@ export function useGridEvents(gridY: number) {
     canvas.addEventListener('contextmenu', handleContextMenu)
 
     return () => {
+      if (moveFrameRef.current !== null) {
+        window.cancelAnimationFrame(moveFrameRef.current)
+        moveFrameRef.current = null
+      }
+      pendingMoveEventRef.current = null
       canvas.removeEventListener('pointerdown', handlePointerDown)
       canvas.removeEventListener('pointerup', handlePointerUp)
       canvas.removeEventListener('click', handleClick)
@@ -114,5 +128,5 @@ export function useGridEvents(gridY: number) {
       canvas.removeEventListener('dblclick', handleDoubleClick)
       canvas.removeEventListener('contextmenu', handleContextMenu)
     }
-  }, [camera, gl])
+  }, [camera, gl, gridYRef])
 }

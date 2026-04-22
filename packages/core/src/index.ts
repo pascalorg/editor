@@ -32,6 +32,12 @@ export {
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
+  getItemMoveVisualState,
+  ITEM_MOVE_VISUAL_METADATA_KEY,
+  type ItemMoveVisualState,
+  setItemMoveVisualState,
+} from './lib/item-move-visuals'
+export {
   detectSpacesForLevel,
   initSpaceDetectionSync,
   type Space,

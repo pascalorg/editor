@@ -50,9 +50,24 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { measureNavigationPerf, mergeNavigationPerfMeta } from '../../lib/navigation-performance'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
+import {
+  buildOverlayPathFromCells,
+  buildWalkableSurfaceOverlay,
+  filterWallOverlayCells,
+  getDoorPortalPolygon,
+  getItemPlanTransform,
+  getWallAttachedItemDoorOpening,
+  isFloorBlockingItem,
+  type WalkableSurfaceOverlay,
+  WALKABLE_CELL_SIZE,
+  WALKABLE_CLEARANCE,
+  WALKABLE_FILL_OPACITY,
+} from '../../lib/walkable-surface'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
+import useNavigation, { requestNavigationItemDelete } from '../../store/use-navigation'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
@@ -406,12 +421,22 @@ type FloorplanStairEntry = {
   segments: FloorplanStairSegmentEntry[]
 }
 
+const EMPTY_WALKABLE_POLYGONS: Point2D[][] = []
+const EMPTY_WALKABLE_WALLS: WallNode[] = []
+
+const EMPTY_WALKABLE_WALL_POLYGONS: Array<{
+  polygon: Point2D[]
+  wall: WallNode
+}> = []
+
 type FloorplanPalette = {
   surface: string
   minorGrid: string
   majorGrid: string
   minorGridOpacity: number
   majorGridOpacity: number
+  walkableFill: string
+  wallBlockedFill: string
   slabFill: string
   slabStroke: string
   selectedSlabFill: string
@@ -2738,6 +2763,73 @@ const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
   )
 })
 
+const FloorplanWalkableLayer = memo(function FloorplanWalkableLayer({
+  overlay,
+  palette,
+}: {
+  overlay: WalkableSurfaceOverlay | null
+  palette: FloorplanPalette
+}) {
+  if (!overlay) {
+    return null
+  }
+
+  return (
+    <g pointerEvents="none">
+      <title>
+        Walkable area preview ({overlay.cellCount.toLocaleString()} cells, {WALKABLE_CELL_SIZE}m
+        cells, {WALKABLE_CLEARANCE}m clearance)
+      </title>
+      <path
+        d={overlay.path}
+        fill={palette.walkableFill}
+        fillOpacity={WALKABLE_FILL_OPACITY}
+        shapeRendering="crispEdges"
+      />
+    </g>
+  )
+})
+
+const FloorplanWallBlockedLayer = memo(function FloorplanWallBlockedLayer({
+  overlay,
+  palette,
+}: {
+  overlay: WalkableSurfaceOverlay | null
+  palette: FloorplanPalette
+}) {
+  const wallOverlayFilters = useNavigation((state) => state.wallOverlayFilters)
+  const filteredWallCells = useMemo(() => {
+    if (!overlay) {
+      return []
+    }
+
+    return filterWallOverlayCells(overlay.wallDebugCells, wallOverlayFilters)
+  }, [overlay, wallOverlayFilters])
+  const filteredWallOverlay = useMemo(
+    () => buildOverlayPathFromCells(filteredWallCells, WALKABLE_CELL_SIZE),
+    [filteredWallCells],
+  )
+
+  if (!(overlay && filteredWallOverlay.path.length > 0)) {
+    return null
+  }
+
+  return (
+    <g pointerEvents="none">
+      <title>
+        Wall-blocked area preview ({filteredWallCells.length.toLocaleString()} cells,{' '}
+        {WALKABLE_CELL_SIZE}m cells, {WALKABLE_CLEARANCE}m wall margin)
+      </title>
+      <path
+        d={filteredWallOverlay.path}
+        fill={palette.wallBlockedFill}
+        fillOpacity={0.26}
+        shapeRendering="crispEdges"
+      />
+    </g>
+  )
+})
+
 function FloorplanGuideSelectionOverlay({
   guide,
   isDarkMode,
@@ -4984,6 +5076,9 @@ export function FloorplanPanel() {
   const movingNode = useEditor((state) => state.movingNode)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
+  const navigationEnabled = useNavigation((state) => state.enabled)
+  const moveItemsEnabled = useNavigation((state) => state.moveItemsEnabled)
+  const walkableOverlayVisible = useNavigation((state) => state.walkableOverlayVisible)
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const setPhase = useEditor((state) => state.setPhase)
@@ -5303,6 +5398,7 @@ export function FloorplanPanel() {
     : null
   const floorplanWalls = useMemo(() => walls.map(getFloorplanWall), [walls])
   const wallMiterData = useMemo(() => calculateLevelMiters(floorplanWalls), [floorplanWalls])
+  const shouldRenderWalkableOverlay = navigationEnabled || walkableOverlayVisible
   const wallById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall] as const)), [walls])
   const floorplanWallById = useMemo(
     () => new Map(floorplanWalls.map((wall) => [wall.id, wall] as const)),
@@ -5353,6 +5449,18 @@ export function FloorplanPanel() {
     nextFloorplanWallById.set(previewWall.id, getFloorplanWall(previewWall))
     return nextFloorplanWallById
   }, [displayWallById, floorplanWallById, wallCurveDraft, wallEndpointDraft])
+  const displayWalls = useMemo(
+    () =>
+      shouldRenderWalkableOverlay
+        ? walls.map((wall) => displayWallById.get(wall.id) ?? wall)
+        : EMPTY_WALKABLE_WALLS,
+    [displayWallById, shouldRenderWalkableOverlay, walls],
+  )
+  const displayWallMiterData = useMemo(
+    () =>
+      shouldRenderWalkableOverlay ? calculateLevelMiters(displayWalls) : EMPTY_WALL_MITER_DATA,
+    [displayWalls, shouldRenderWalkableOverlay],
+  )
   const wallPolygons = useMemo(
     () =>
       walls.map((wall) => {
@@ -5396,6 +5504,16 @@ export function FloorplanPanel() {
         : entry,
     )
   }, [displayWallById, wallCurveDraft, wallEndpointDraft, wallPolygons])
+  const walkableWallPolygons = useMemo(() => {
+    if (!shouldRenderWalkableOverlay) {
+      return EMPTY_WALKABLE_WALL_POLYGONS
+    }
+
+    return displayWalls.map((wall) => ({
+      polygon: getWallPlanFootprint(wall, displayWallMiterData),
+      wall,
+    }))
+  }, [displayWallMiterData, displayWalls, shouldRenderWalkableOverlay])
 
   const openingsPolygons = useMemo(
     () =>
@@ -5555,6 +5673,76 @@ export function FloorplanPanel() {
       ]
     })
   }, [cursorPoint, floorplanItems, levelDescendantNodeById, movingFloorplanNodeRevision])
+  const walkableObstaclePolygons = useMemo(() => {
+    if (!shouldRenderWalkableOverlay) {
+      return EMPTY_WALKABLE_POLYGONS
+    }
+
+    const transformCache = new Map<string, FloorplanNodeTransform | null>()
+
+    return floorplanItems.flatMap((item) => {
+      const itemMetadata =
+        typeof item.metadata === 'object' && item.metadata !== null && !Array.isArray(item.metadata)
+          ? (item.metadata as Record<string, unknown>)
+          : null
+      if (itemMetadata?.isTransient === true) {
+        return []
+      }
+
+      if (!isFloorBlockingItem(item, levelDescendantNodeById)) {
+        return []
+      }
+
+      const transform = getItemFloorplanTransform(item, levelDescendantNodeById, transformCache)
+      if (!transform) {
+        return []
+      }
+
+      const [width, , depth] = getScaledDimensions(item)
+      return [getRotatedRectanglePolygon(transform.position, width, depth, transform.rotation)]
+    })
+  }, [floorplanItems, levelDescendantNodeById, shouldRenderWalkableOverlay])
+  const walkableDoorPortalPolygons = useMemo(() => {
+    if (!shouldRenderWalkableOverlay) {
+      return EMPTY_WALKABLE_POLYGONS
+    }
+
+    const itemTransformCache = new Map<string, ReturnType<typeof getItemPlanTransform>>()
+
+    return levelDescendantNodes.flatMap((node) => {
+      if (node.visible === false || !node.parentId) {
+        return []
+      }
+
+      const wall = displayFloorplanWallById.get(node.parentId as WallNode['id'])
+      if (!wall) {
+        return []
+      }
+
+      const opening =
+        node.type === 'door'
+          ? node
+          : node.type === 'item'
+            ? getWallAttachedItemDoorOpening(
+                node as ItemNode,
+                wall,
+                levelDescendantNodeById,
+                itemTransformCache,
+              )
+            : null
+      if (!opening) {
+        return []
+      }
+
+      const polygon = getDoorPortalPolygon(wall, opening, WALKABLE_CLEARANCE)
+      return polygon.length >= 3 ? [polygon] : []
+    })
+  }, [
+    displayFloorplanWallById,
+    levelDescendantNodeById,
+    levelDescendantNodes,
+    shouldRenderWalkableOverlay,
+  ])
   const floorplanStairEntries = useMemo(
     () =>
       floorplanStairs.flatMap((stair) => {
@@ -5718,6 +5906,33 @@ export function FloorplanPanel() {
         : floorplanStairEntries,
     [floorplanPreviewStairEntry, floorplanStairEntries],
   )
+  const walkableAreaOverlay = useMemo(() => {
+    if (!shouldRenderWalkableOverlay) {
+      return null
+    }
+
+    return measureNavigationPerf('walkableOverlay2d.buildMs', () =>
+      buildWalkableSurfaceOverlay(
+        displaySlabPolygons,
+        walkableWallPolygons.map(({ polygon }) => polygon),
+        walkableObstaclePolygons,
+        WALKABLE_CELL_SIZE,
+        WALKABLE_CLEARANCE,
+        walkableDoorPortalPolygons,
+      ),
+    )
+  }, [
+    displaySlabPolygons,
+    shouldRenderWalkableOverlay,
+    walkableDoorPortalPolygons,
+    walkableObstaclePolygons,
+    walkableWallPolygons,
+  ])
+  useEffect(() => {
+    mergeNavigationPerfMeta({
+      walkableOverlay2dCellCount: walkableAreaOverlay?.cellCount ?? 0,
+    })
+  }, [walkableAreaOverlay])
   const floorplanOpeningLocalY = useMemo(() => {
     if (movingNode?.type === 'door' || movingNode?.type === 'window') {
       return snapToHalf(movingNode.position[1])
@@ -6371,6 +6586,8 @@ export function FloorplanPanel() {
             majorGrid: '#94a3b8',
             minorGridOpacity: 0.7,
             majorGridOpacity: 0.9,
+            walkableFill: '#34d399',
+            wallBlockedFill: '#f87171',
             slabFill: '#5f6483',
             slabStroke: '#71717a',
             selectedSlabFill: '#b7b5f7',
@@ -6403,6 +6620,8 @@ export function FloorplanPanel() {
             majorGrid: '#475569',
             minorGridOpacity: 0.7,
             majorGridOpacity: 0.9,
+            walkableFill: '#16a34a',
+            wallBlockedFill: '#dc2626',
             slabFill: '#c4c4cc',
             slabStroke: '#52525b',
             selectedSlabFill: '#b7b5f7',
@@ -6838,7 +7057,10 @@ export function FloorplanPanel() {
   }, [isStairBuildActive])
 
   useEffect(() => {
-    if (!isItemPlacementPreviewActive) {
+    const isRobotCarryItemPreviewActive =
+      navigationEnabled && moveItemsEnabled && movingNode?.type === 'item'
+
+    if (!isItemPlacementPreviewActive || isRobotCarryItemPreviewActive) {
       return
     }
 
@@ -6869,7 +7091,7 @@ export function FloorplanPanel() {
       emitter.off('item:move', refreshFloorplanItemPreview as any)
       emitter.off('item:leave', refreshFloorplanItemPreview as any)
     }
-  }, [isItemPlacementPreviewActive])
+  }, [isItemPlacementPreviewActive, moveItemsEnabled, movingNode?.type, navigationEnabled])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -8663,6 +8885,7 @@ export function FloorplanPanel() {
     cloned.metadata = {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
       isNew: true,
+      robotCopySourceId: item.id,
     }
     cloned.children = []
 
@@ -8687,6 +8910,10 @@ export function FloorplanPanel() {
 
       const item = selectedItemEntry?.item
       if (!item) {
+        return
+      }
+
+      if (requestNavigationItemDelete(item)) {
         return
       }
 
@@ -9960,6 +10187,13 @@ export function FloorplanPanel() {
                 unit={unit}
                 wallPolygons={displayWallPolygons}
               />
+
+              {shouldRenderWalkableOverlay ? (
+                <>
+                  <FloorplanWallBlockedLayer overlay={walkableAreaOverlay} palette={palette} />
+                  <FloorplanWalkableLayer overlay={walkableAreaOverlay} palette={palette} />
+                </>
+              ) : null}
 
               <FloorplanZoneLayer
                 canSelectZones={canInteractFloorplanZones}
