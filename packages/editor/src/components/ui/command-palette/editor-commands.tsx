@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
+import { runRedo, runUndo } from '../../../lib/history'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
@@ -330,7 +331,7 @@ export function EditorCommands() {
         group: 'History',
         icon: <Undo2 className="h-4 w-4" />,
         keywords: ['undo', 'revert', 'back'],
-        execute: () => run(() => useScene.temporal.getState().undo()),
+        execute: () => run(() => runUndo()),
       },
       {
         id: 'editor.history.redo',
@@ -338,7 +339,7 @@ export function EditorCommands() {
         group: 'History',
         icon: <Redo2 className="h-4 w-4" />,
         keywords: ['redo', 'forward', 'repeat'],
-        execute: () => run(() => useScene.temporal.getState().redo()),
+        execute: () => run(() => runRedo()),
       },
 
       // ── Export & Share ───────────────────────────────────────────────────

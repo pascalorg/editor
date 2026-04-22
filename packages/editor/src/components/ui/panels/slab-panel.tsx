@@ -266,9 +266,11 @@ export function SlabPanel() {
           value={node.material}
         />
       </PanelSection>
-      <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-      </ActionGroup>
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+        </ActionGroup>
+      </PanelSection>
     </PanelWrapper>
   )
 }

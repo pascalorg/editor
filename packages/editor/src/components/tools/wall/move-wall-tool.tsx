@@ -1,6 +1,14 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  type GridEvent,
+  pauseSceneHistory,
+  resumeSceneHistory,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
@@ -24,9 +32,9 @@ function stripWallIsNewMetadata(meta: WallNode['metadata']): WallNode['metadata'
     return meta
   }
 
-  const nextMeta = { ...(meta as Record<string, unknown>) }
+  const nextMeta = { ...(meta as Record<string, unknown>) } as Record<string, unknown>
   delete nextMeta.isNew
-  return nextMeta
+  return nextMeta as WallNode['metadata']
 }
 
 type LinkedWallSnapshot = {
@@ -146,7 +154,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const originalCenter = originalCenterRef.current
     const originalHalfVector = originalHalfVectorRef.current
 
-    useScene.temporal.getState().pause()
+    pauseSceneHistory(useScene)
     let wasCommitted = false
 
     const applyNodePreview = (
@@ -237,7 +245,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         ...linkedOriginalsRef.current,
       ])
 
-      useScene.temporal.getState().resume()
+      resumeSceneHistory(useScene)
 
       const commitUpdates = [
         {
@@ -266,7 +274,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         useScene.getState().markDirty(id)
       }
 
-      useScene.temporal.getState().pause()
+      pauseSceneHistory(useScene)
 
       sfxEmitter.emit('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -315,7 +323,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const onCancel = () => {
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      useScene.temporal.getState().resume()
+      resumeSceneHistory(useScene)
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -331,7 +339,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         restoreOriginal()
       }
       shiftPressedRef.current = false
-      useScene.temporal.getState().resume()
+      resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
