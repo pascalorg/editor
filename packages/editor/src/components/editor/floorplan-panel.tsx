@@ -6,16 +6,20 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  buildFloorplanItemEntry,
+  buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   calculateLevelMiters,
+  collectLevelDescendants as collectSharedLevelDescendants,
   DoorNode,
   emitter,
+  getFloorplanWall as getSharedFloorplanWall,
   type GridEvent,
   type GuideNode,
-  getScaledDimensions,
   getWallChordFrame,
   getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
+  type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   type ItemNode,
   ItemNode as ItemNodeSchema,
   isCurvedWall,
@@ -23,6 +27,7 @@ import {
   loadAssetUrl,
   normalizeWallCurveOffset,
   type Point2D,
+  rotatePlanVector as rotateSharedPlanVector,
   type SiteNode,
   SlabNode,
   type StairNode,
@@ -50,9 +55,17 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { FloorplanActionMenuLayer as Editor2dFloorplanActionMenuLayer } from '../editor-2d/floorplan-action-menu-layer'
+import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
+import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
+import {
+  getFloorplanHitNodeId,
+  getFloorplanSelectionIdsInBounds as getSelectionIdsInBoundsFromTool,
+} from '../tools/floorplan/selection-tool'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
@@ -118,15 +131,17 @@ const FLOORPLAN_ENDPOINT_HOVER_RING_STROKE_WIDTH = 7
 const FLOORPLAN_MARQUEE_DRAG_THRESHOLD_PX = 4
 const FLOORPLAN_MEASUREMENT_OFFSET = 0.46
 const FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT = 0.08
-const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.2
-const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_WIDTH = 2.8
-const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.72
-const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_OPACITY = 0.9
+const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.35
+const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_WIDTH = 0
+const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.95
+const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_OPACITY = 0
 const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE = 0.15
-const FLOORPLAN_MEASUREMENT_LABEL_OPACITY = 0.82
-const FLOORPLAN_MEASUREMENT_LABEL_STROKE_WIDTH = 0.05
+const FLOORPLAN_MEASUREMENT_LABEL_OPACITY = 0.98
+const FLOORPLAN_MEASUREMENT_LABEL_STROKE_WIDTH = 0
 const FLOORPLAN_MEASUREMENT_LABEL_GAP = 0.56
 const FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING = 0.14
+const FLOORPLAN_MEASUREMENT_EXTENSION_DASH = '0.08 0.12'
+const FLOORPLAN_MEASUREMENT_END_TICK = 0.18
 const FLOORPLAN_ACTION_MENU_HORIZONTAL_PADDING = 60
 const FLOORPLAN_ACTION_MENU_MIN_ANCHOR_Y = 56
 const FLOORPLAN_ACTION_MENU_OFFSET_Y = 10
@@ -417,6 +432,8 @@ type FloorplanPalette = {
   selectedSlabFill: string
   wallFill: string
   wallStroke: string
+  wallInnerStroke: string
+  wallShadow: string
   wallHoverStroke: string
   deleteFill: string
   deleteStroke: string
@@ -437,6 +454,9 @@ type FloorplanPalette = {
   endpointHandleHoverStroke: string
   endpointHandleActiveFill: string
   endpointHandleActiveStroke: string
+  curveHandleFill: string
+  curveHandleStroke: string
+  curveHandleHoverStroke: string
 }
 
 const resizeCursorByDirection: Record<ResizeDirection, string> = {
@@ -1198,9 +1218,7 @@ function toFloorplanPolygon(points: Array<[number, number]>): Point2D[] {
 }
 
 function rotatePlanVector(x: number, y: number, rotation: number): [number, number] {
-  const cos = Math.cos(rotation)
-  const sin = Math.sin(rotation)
-  return [x * cos + y * sin, -x * sin + y * cos]
+  return rotateSharedPlanVector(x, y, rotation)
 }
 
 function getPolygonBounds(points: Point2D[]) {
@@ -1950,9 +1968,34 @@ function pointMatchesWallPlanPoint(
   return Math.abs(point.x - planPoint[0]) <= epsilon && Math.abs(point.y - planPoint[1]) <= epsilon
 }
 
+function buildSvgPolylinePath(points: Point2D[]): string | null {
+  if (points.length < 2) {
+    return null
+  }
+
+  return points
+    .map((point, index) => {
+      const svgPoint = toSvgPoint(point)
+      return `${index === 0 ? 'M' : 'L'} ${svgPoint.x} ${svgPoint.y}`
+    })
+    .join(' ')
+}
+
 function getWallHoverSidePaths(polygon: Point2D[], wall: WallNode): [string, string] | null {
   if (polygon.length < 4) {
     return null
+  }
+
+  if (isCurvedWall(wall) && polygon.length >= 6 && polygon.length % 2 === 0) {
+    const sidePointCount = polygon.length / 2
+    const rightSidePath = buildSvgPolylinePath(polygon.slice(0, sidePointCount))
+    const leftSidePath = buildSvgPolylinePath(polygon.slice(sidePointCount).reverse())
+
+    if (!(rightSidePath && leftSidePath)) {
+      return null
+    }
+
+    return [rightSidePath, leftSidePath]
   }
 
   const startRight = polygon[0]
@@ -1972,10 +2015,10 @@ function getWallHoverSidePaths(polygon: Point2D[], wall: WallNode): [string, str
   const svgStartLeft = toSvgPoint(startLeft)
   const svgEndLeft = toSvgPoint(endLeft)
 
-  return [
-    `M ${svgStartRight.x} ${svgStartRight.y} L ${svgEndRight.x} ${svgEndRight.y}`,
-    `M ${svgStartLeft.x} ${svgStartLeft.y} L ${svgEndLeft.x} ${svgEndLeft.y}`,
-  ]
+  const rightSidePath = `M ${svgStartRight.x} ${svgStartRight.y} L ${svgEndRight.x} ${svgEndRight.y}`
+  const leftSidePath = `M ${svgStartLeft.x} ${svgStartLeft.y} L ${svgEndLeft.x} ${svgEndLeft.y}`
+
+  return [rightSidePath, leftSidePath]
 }
 
 function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoint): WallNode {
@@ -2149,38 +2192,26 @@ function FloorplanMeasurementLine({
   palette,
   segment,
   isSelected,
+  dashed = false,
 }: {
   palette: FloorplanPalette
   segment: { x1: number; y1: number; x2: number; y2: number }
   isSelected?: boolean
+  dashed?: boolean
 }) {
   const lineOpacity = isSelected
     ? FLOORPLAN_MEASUREMENT_LINE_OPACITY
     : FLOORPLAN_MEASUREMENT_LINE_OPACITY * 0.4
-  const outlineOpacity = isSelected
-    ? FLOORPLAN_MEASUREMENT_LINE_OUTLINE_OPACITY
-    : FLOORPLAN_MEASUREMENT_LINE_OUTLINE_OPACITY * 0.4
 
   return (
     <>
-      <line
-        shapeRendering="geometricPrecision"
-        stroke={palette.surface}
-        strokeLinecap="round"
-        strokeOpacity={outlineOpacity}
-        strokeWidth={FLOORPLAN_MEASUREMENT_LINE_OUTLINE_WIDTH}
-        vectorEffect="non-scaling-stroke"
-        x1={segment.x1}
-        x2={segment.x2}
-        y1={segment.y1}
-        y2={segment.y2}
-      />
       <line
         shapeRendering="geometricPrecision"
         stroke={palette.measurementStroke}
         strokeLinecap="round"
         strokeOpacity={lineOpacity}
         strokeWidth={FLOORPLAN_MEASUREMENT_LINE_WIDTH}
+        strokeDasharray={dashed ? FLOORPLAN_MEASUREMENT_EXTENSION_DASH : undefined}
         vectorEffect="non-scaling-stroke"
         x1={segment.x1}
         x2={segment.x2}
@@ -2188,6 +2219,40 @@ function FloorplanMeasurementLine({
         y2={segment.y2}
       />
     </>
+  )
+}
+
+function FloorplanMeasurementTick({
+  palette,
+  x,
+  y,
+  angleDeg,
+  isSelected,
+}: {
+  palette: FloorplanPalette
+  x: number
+  y: number
+  angleDeg: number
+  isSelected?: boolean
+}) {
+  const radians = (angleDeg * Math.PI) / 180
+  const nx = -Math.sin(radians)
+  const ny = Math.cos(radians)
+  const half = FLOORPLAN_MEASUREMENT_END_TICK / 2
+
+  return (
+    <line
+      shapeRendering="geometricPrecision"
+      stroke={palette.measurementStroke}
+      strokeLinecap="round"
+      strokeOpacity={isSelected ? FLOORPLAN_MEASUREMENT_LINE_OPACITY : FLOORPLAN_MEASUREMENT_LINE_OPACITY * 0.4}
+      strokeWidth={FLOORPLAN_MEASUREMENT_LINE_WIDTH}
+      vectorEffect="non-scaling-stroke"
+      x1={x - nx * half}
+      x2={x + nx * half}
+      y1={y - ny * half}
+      y2={y + ny * half}
+    />
   )
 }
 
@@ -2933,6 +2998,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   selectedIdSet,
   slabPolygons,
   wallPolygons,
+  wallSelectionHatchId,
   unit,
 }: {
   canFocusGeometry: boolean
@@ -2958,6 +3024,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   selectedIdSet: ReadonlySet<string>
   slabPolygons: SlabPolygonEntry[]
   wallPolygons: WallPolygonEntry[]
+  wallSelectionHatchId: string
   unit: 'metric' | 'imperial'
 }) {
   let minX = Number.POSITIVE_INFINITY,
@@ -2977,7 +3044,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
     if (measurement) {
       measurement.isSelected = selectedIdSet.has(wall.id)
     }
-    return measurement ? [measurement] : []
+    return measurement?.isSelected ? [measurement] : []
   })
 
   return (
@@ -3069,13 +3136,14 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
         const isHighlighted = highlightedIdSet.has(wall.id)
         const isHovered = canSelectGeometry && hoveredWallId === wall.id
         const isDeleteHovered = isDeleteMode && isHovered
+        const showSelectedWallChrome = isSelected || isHighlighted
         const hoverStroke = isDeleteHovered
           ? palette.deleteWallHoverStroke
-          : isHighlighted
+          : showSelectedWallChrome
             ? palette.selectedStroke
             : palette.wallHoverStroke
-        const hoverGlowOpacity = isDeleteHovered ? 0.14 : isHighlighted ? 0.22 : 0.16
-        const hoverRingOpacity = isDeleteHovered ? 0.38 : isHighlighted ? 0.6 : 0.48
+        const hoverGlowOpacity = isDeleteHovered ? 0.14 : showSelectedWallChrome ? 0.24 : 0.16
+        const hoverRingOpacity = isDeleteHovered ? 0.38 : showSelectedWallChrome ? 0.62 : 0.48
         const hoverSidePaths = getWallHoverSidePaths(polygon, wall)
 
         return (
@@ -3120,6 +3188,21 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 vectorEffect="non-scaling-stroke"
               />
             ))}
+            {showSelectedWallChrome &&
+              hoverSidePaths?.map((pathData, index) => (
+                <path
+                  d={pathData}
+                  fill="none"
+                  key={`selected-ring-${index}`}
+                  pointerEvents="none"
+                  stroke={palette.selectedStroke}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeOpacity={0.52}
+                  strokeWidth={FLOORPLAN_WALL_HOVER_RING_STROKE_WIDTH}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
             {canSelectGeometry && (
               <line
                 onClick={(event) => {
@@ -3142,13 +3225,23 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 y2={toSvgY(wall.end[1])}
               />
             )}
+            {!isDeleteHovered ? (
+              <polygon
+                fill="none"
+                points={points}
+                pointerEvents="none"
+                stroke={palette.wallShadow}
+                strokeOpacity={showSelectedWallChrome ? 0.14 : 0.22}
+                strokeWidth={showSelectedWallChrome ? '1.2' : '1'}
+                transform="translate(0.01 0.012)"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
             <polygon
               fill={
                 isDeleteHovered
                   ? palette.deleteWallFill
-                  : isHighlighted
-                    ? palette.selectedFill
-                    : palette.wallFill
+                  : palette.wallFill
               }
               onClick={
                 canSelectGeometry
@@ -3168,13 +3261,59 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               }
               points={points}
               stroke={
-                isDeleteHovered ? palette.deleteStroke : isHighlighted ? 'none' : palette.wallStroke
+                isDeleteHovered
+                  ? palette.deleteStroke
+                  : showSelectedWallChrome
+                    ? palette.selectedStroke
+                    : palette.wallStroke
               }
               strokeOpacity={1}
-              strokeWidth="0.06"
+              strokeWidth={showSelectedWallChrome ? '1.05' : '0.9'}
               style={{ cursor: EDITOR_CURSOR }}
               vectorEffect="non-scaling-stroke"
             />
+            {isSelected && !isDeleteHovered ? (
+              <polygon
+                fill={`url(#${wallSelectionHatchId})`}
+                opacity={0.95}
+                points={points}
+                pointerEvents="none"
+              />
+            ) : null}
+            {hoverSidePaths?.map((pathData, index) => (
+              <path
+                d={pathData}
+                fill="none"
+                key={`edge-inner-${index}`}
+                pointerEvents="none"
+                stroke={showSelectedWallChrome ? palette.selectedStroke : palette.wallInnerStroke}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeOpacity={showSelectedWallChrome ? 0.42 : 0.82}
+                strokeWidth={showSelectedWallChrome ? '0.52' : '0.38'}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            {hoverSidePaths?.map((pathData, index) => (
+              <path
+                d={pathData}
+                fill="none"
+                key={`edge-outer-${index}`}
+                pointerEvents="none"
+                stroke={
+                  isDeleteHovered
+                    ? palette.deleteStroke
+                    : showSelectedWallChrome
+                      ? palette.selectedStroke
+                      : palette.wallStroke
+                }
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeOpacity={1}
+                strokeWidth={showSelectedWallChrome ? '1.2' : '1'}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
           </g>
         )
       })}
@@ -3495,6 +3634,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
             isSelected={measurement.isSelected}
             palette={palette}
             segment={measurement.extensionStart}
+            dashed
           />
           <FloorplanMeasurementLine
             isSelected={measurement.isSelected}
@@ -3510,6 +3650,21 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
             isSelected={measurement.isSelected}
             palette={palette}
             segment={measurement.extensionEnd}
+            dashed
+          />
+          <FloorplanMeasurementTick
+            angleDeg={measurement.labelAngleDeg}
+            isSelected={measurement.isSelected}
+            palette={palette}
+            x={measurement.dimensionLineStart.x1}
+            y={measurement.dimensionLineStart.y1}
+          />
+          <FloorplanMeasurementTick
+            angleDeg={measurement.labelAngleDeg}
+            isSelected={measurement.isSelected}
+            palette={palette}
+            x={measurement.dimensionLineEnd.x2}
+            y={measurement.dimensionLineEnd.y2}
           />
           <text
             dominantBaseline="central"
@@ -3522,12 +3677,6 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
             fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
             fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
             fontWeight="600"
-            paintOrder="stroke"
-            stroke={palette.surface}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeOpacity={measurement.isSelected ? 1 : 0.4}
-            strokeWidth={FLOORPLAN_MEASUREMENT_LABEL_STROKE_WIDTH}
             textAnchor="middle"
             transform={`rotate(${measurement.labelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
             x={measurement.labelX}
@@ -4406,10 +4555,8 @@ const FloorplanWallCurveHandleLayer = memo(function FloorplanWallCurveHandleLaye
       {curveHandles.map(({ wall, point, isActive }) => {
         const handleId = `curve:${wall.id}`
         const isHovered = hoveredHandleId === handleId
-        const stroke = isActive ? palette.endpointHandleActiveStroke : palette.endpointHandleStroke
-        const hoverStroke = isActive
-          ? palette.endpointHandleActiveStroke
-          : palette.endpointHandleHoverStroke
+        const stroke = palette.curveHandleStroke
+        const hoverStroke = palette.curveHandleHoverStroke
         const svgPoint = toSvgPlanPoint(point)
         const radius = isActive ? 0.16 : 0.14
 
@@ -4440,7 +4587,7 @@ const FloorplanWallCurveHandleLayer = memo(function FloorplanWallCurveHandleLaye
             <circle
               cx={svgPoint.x}
               cy={svgPoint.y}
-              fill={isActive ? palette.endpointHandleActiveFill : palette.endpointHandleFill}
+              fill={palette.curveHandleFill}
               fillOpacity={0.96}
               pointerEvents="none"
               r={radius}
@@ -4453,7 +4600,7 @@ const FloorplanWallCurveHandleLayer = memo(function FloorplanWallCurveHandleLaye
               cy={svgPoint.y}
               fill={stroke}
               pointerEvents="none"
-              r={0.045}
+              r={0.05}
               vectorEffect="non-scaling-stroke"
             />
             <circle
@@ -5147,7 +5294,7 @@ export function FloorplanPanel() {
         return [] as AnyNode[]
       }
 
-      return collectLevelDescendants(nextLevelNode, state.nodes as Record<string, AnyNode>)
+      return collectSharedLevelDescendants(nextLevelNode, state.nodes as Record<string, AnyNode>)
     }),
   )
 
@@ -5530,27 +5677,19 @@ export function FloorplanPanel() {
     [levelDescendantNodes],
   )
   const floorplanItemEntries = useMemo(() => {
-    const transformCache = new Map<string, FloorplanNodeTransform | null>()
+    const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
 
     return floorplanItems.flatMap((item) => {
-      const transform = getItemFloorplanTransform(item, levelDescendantNodeById, transformCache)
-      if (!transform) {
+      const entry = buildFloorplanItemEntry(item, levelDescendantNodeById, transformCache)
+      if (!entry) {
         return []
       }
 
-      const [width, , depth] = getScaledDimensions(item)
-      const polygon = getRotatedRectanglePolygon(
-        transform.position,
-        width,
-        depth,
-        transform.rotation,
-      )
-
       return [
         {
-          item,
-          points: formatPolygonPoints(polygon),
-          polygon,
+          item: entry.item,
+          points: formatPolygonPoints(entry.polygon),
+          polygon: entry.polygon,
         },
       ]
     })
@@ -5579,8 +5718,25 @@ export function FloorplanPanel() {
             (node): node is StairSegmentNode =>
               node?.type === 'stair-segment' && node.visible !== false,
           )
-        const entry = buildFloorplanStairEntry(displayStair, segments)
-        return entry ? [entry] : []
+        const entry = buildSharedFloorplanStairEntry(displayStair, segments)
+        if (!entry) {
+          return []
+        }
+
+        return [
+          {
+            ...entry,
+            segments: entry.segments.map((segmentEntry) => ({
+              ...segmentEntry,
+              innerPoints: formatPolygonPoints(segmentEntry.innerPolygon),
+              points: formatPolygonPoints(segmentEntry.polygon),
+              treadBars: segmentEntry.treadBars.map((polygon) => ({
+                points: formatPolygonPoints(polygon),
+                polygon,
+              })),
+            })),
+          },
+        ]
       }),
     [
       cursorPoint,
@@ -5704,7 +5860,23 @@ export function FloorplanPanel() {
       metadata: { isTransient: true, isFloorplanPreview: true },
     })
 
-    return buildFloorplanStairEntry(previewStair, [floorplanPreviewStairSegment])
+    const entry = buildSharedFloorplanStairEntry(previewStair, [floorplanPreviewStairSegment])
+    if (!entry) {
+      return null
+    }
+
+    return {
+      ...entry,
+      segments: entry.segments.map((segmentEntry) => ({
+        ...segmentEntry,
+        innerPoints: formatPolygonPoints(segmentEntry.innerPolygon),
+        points: formatPolygonPoints(segmentEntry.polygon),
+        treadBars: segmentEntry.treadBars.map((polygon) => ({
+          points: formatPolygonPoints(polygon),
+          polygon,
+        })),
+      })),
+    }
   }, [
     floorplanPreviewStairSegment,
     isStairBuildActive,
@@ -6003,7 +6175,7 @@ export function FloorplanPanel() {
       return null
     }
 
-    const draftWall = getFloorplanWall(buildDraftWall(levelId, draftStart, draftEnd))
+    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, draftStart, draftEnd))
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
   }, [draftEnd, draftStart, levelId])
@@ -6375,14 +6547,16 @@ export function FloorplanPanel() {
             slabStroke: '#71717a',
             selectedSlabFill: '#b7b5f7',
             wallFill: '#fafafa',
-            wallStroke: '#38bdf8',
-            wallHoverStroke: '#a1a1aa',
+            wallStroke: '#0f172a',
+            wallInnerStroke: 'rgba(51, 65, 85, 0.72)',
+            wallShadow: 'rgba(15, 23, 42, 0.12)',
+            wallHoverStroke: '#60a5fa',
             deleteFill: '#f87171',
             deleteStroke: '#ef4444',
             deleteWallFill: '#ef4444',
             deleteWallHoverStroke: '#fca5a5',
-            selectedFill: '#8381ed',
-            selectedStroke: '#8381ed',
+            selectedFill: '#fafafa',
+            selectedStroke: '#3b82f6',
             draftFill: '#818cf8',
             draftStroke: '#c7d2fe',
             measurementStroke: '#cbd5e1',
@@ -6391,11 +6565,14 @@ export function FloorplanPanel() {
             anchor: '#818cf8',
             openingFill: '#0a0e1b',
             openingStroke: '#fafafa',
-            endpointHandleFill: '#09090b',
-            endpointHandleStroke: '#a1a1aa',
-            endpointHandleHoverStroke: '#d4d4d8',
-            endpointHandleActiveFill: '#8381ed',
-            endpointHandleActiveStroke: '#8381ed',
+            endpointHandleFill: '#fff7ed',
+            endpointHandleStroke: '#c2410c',
+            endpointHandleHoverStroke: '#fb923c',
+            endpointHandleActiveFill: '#fff7ed',
+            endpointHandleActiveStroke: '#f97316',
+            curveHandleFill: '#ccfbf1',
+            curveHandleStroke: '#0f766e',
+            curveHandleHoverStroke: '#14b8a6',
           }
         : {
             surface: '#ffffff',
@@ -6406,15 +6583,17 @@ export function FloorplanPanel() {
             slabFill: '#c4c4cc',
             slabStroke: '#52525b',
             selectedSlabFill: '#b7b5f7',
-            wallFill: '#171717',
-            wallStroke: '#0284c7',
-            wallHoverStroke: '#71717a',
+            wallFill: '#ffffff',
+            wallStroke: '#0f172a',
+            wallInnerStroke: 'rgba(71, 85, 105, 0.58)',
+            wallShadow: 'rgba(15, 23, 42, 0.1)',
+            wallHoverStroke: '#60a5fa',
             deleteFill: '#fca5a5',
             deleteStroke: '#dc2626',
             deleteWallFill: '#ef4444',
             deleteWallHoverStroke: '#f87171',
-            selectedFill: '#8381ed',
-            selectedStroke: '#8381ed',
+            selectedFill: '#ffffff',
+            selectedStroke: '#3b82f6',
             draftFill: '#6366f1',
             draftStroke: '#4338ca',
             measurementStroke: '#334155',
@@ -6423,14 +6602,18 @@ export function FloorplanPanel() {
             anchor: '#4338ca',
             openingFill: '#ffffff',
             openingStroke: '#171717',
-            endpointHandleFill: '#ffffff',
-            endpointHandleStroke: '#71717a',
-            endpointHandleHoverStroke: '#52525b',
-            endpointHandleActiveFill: '#8381ed',
-            endpointHandleActiveStroke: '#8381ed',
+            endpointHandleFill: '#fff7ed',
+            endpointHandleStroke: '#c2410c',
+            endpointHandleHoverStroke: '#fb923c',
+            endpointHandleActiveFill: '#fff7ed',
+            endpointHandleActiveStroke: '#f97316',
+            curveHandleFill: '#ccfbf1',
+            curveHandleStroke: '#0f766e',
+            curveHandleHoverStroke: '#14b8a6',
           },
     [theme],
   )
+  const wallSelectionHatchId = useMemo(() => `floorplan-wall-selection-hatch-${theme}`, [theme])
   const gridSteps = useMemo(
     () => getVisibleGridSteps(viewBox.width, surfaceSize.width),
     [surfaceSize.width, viewBox.width],
@@ -8087,66 +8270,19 @@ export function FloorplanPanel() {
   const getFloorplanHitIdAtPoint = useCallback(
     (planPoint: WallPlanPoint) => {
       const point = toPoint2D(planPoint)
-
-      const getItemHitId = () => {
-        if (!isFloorplanItemContextActive) {
-          return null
-        }
-
-        const itemHit = floorplanItemEntries.find(({ polygon }) =>
-          isPointInsidePolygon(point, polygon),
-        )
-        return itemHit?.item.id ?? null
-      }
-
-      if (phase === 'structure') {
-        const openingHit = openingsPolygons.find(({ polygon }) => {
-          if (isPointInsidePolygon(point, polygon)) {
-            return true
-          }
-
-          const centerLine = getOpeningCenterLine(polygon)
-          if (!centerLine) {
-            return false
-          }
-
-          return (
-            getDistanceToWallSegment(
-              point,
-              [centerLine.start.x, centerLine.start.y],
-              [centerLine.end.x, centerLine.end.y],
-            ) <= floorplanOpeningHitTolerance
-          )
-        })
-        if (openingHit) {
-          return openingHit.opening.id
-        }
-
-        const stairHit = floorplanStairEntries.find(({ segments }) =>
-          segments.some(({ polygon }) => isPointInsidePolygon(point, polygon)),
-        )
-        if (stairHit) {
-          return stairHit.stair.id
-        }
-
-        const wallHit = displayWallPolygons.find(
-          ({ wall, polygon }) =>
-            isPointInsidePolygon(point, polygon) ||
-            getDistanceToWallSegment(point, wall.start, wall.end) <= floorplanWallHitTolerance,
-        )
-        if (wallHit) {
-          return wallHit.wall.id
-        }
-
-        const slabHit = displaySlabPolygons.find(({ polygon, holes }) =>
-          isPointInsidePolygonWithHoles(point, polygon, holes),
-        )
-        if (slabHit) {
-          return slabHit.slab.id
-        }
-      }
-
-      return getItemHitId()
+      return getFloorplanHitNodeId({
+        point,
+        phase,
+        isItemContextActive: isFloorplanItemContextActive,
+        items: floorplanItemEntries,
+        openings: openingsPolygons,
+        stairs: floorplanStairEntries,
+        walls: displayWallPolygons,
+        slabs: displaySlabPolygons,
+        openingHitTolerance: floorplanOpeningHitTolerance,
+        wallHitTolerance: floorplanWallHitTolerance,
+        getOpeningCenterLine,
+      })
     },
     [
       displaySlabPolygons,
@@ -8162,34 +8298,17 @@ export function FloorplanPanel() {
   )
 
   const getFloorplanSelectionIdsInBounds = useCallback(
-    (bounds: FloorplanSelectionBounds) => {
-      const itemIds = isFloorplanItemContextActive
-        ? floorplanItemEntries
-            .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
-            .map(({ item }) => item.id)
-        : []
-
-      if (phase !== 'structure') {
-        return itemIds
-      }
-
-      const wallIds = displayWallPolygons
-        .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
-        .map(({ wall }) => wall.id)
-      const openingIds = openingsPolygons
-        .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
-        .map(({ opening }) => opening.id)
-      const slabIds = displaySlabPolygons
-        .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
-        .map(({ slab }) => slab.id)
-      const stairIds = floorplanStairEntries
-        .filter(({ segments }) =>
-          segments.some(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds)),
-        )
-        .map(({ stair }) => stair.id)
-
-      return Array.from(new Set([...itemIds, ...wallIds, ...openingIds, ...slabIds, ...stairIds]))
-    },
+    (bounds: FloorplanSelectionBounds) =>
+      getSelectionIdsInBoundsFromTool({
+        bounds,
+        phase,
+        isItemContextActive: isFloorplanItemContextActive,
+        items: floorplanItemEntries,
+        walls: displayWallPolygons,
+        openings: openingsPolygons,
+        slabs: displaySlabPolygons,
+        stairs: floorplanStairEntries,
+      }),
     [
       displaySlabPolygons,
       displayWallPolygons,
@@ -9835,11 +9954,14 @@ export function FloorplanPanel() {
         onDuplicateSelected={handleDuplicateFloorplanSelection}
       />
       <div className="relative min-h-0 flex-1" ref={viewportHostRef}>
-        <FloorplanCursorIndicatorOverlay
+        <Editor2dFloorplanCursorIndicatorOverlay
           cursorAnchorPosition={floorplanCursorAnchorPosition}
           cursorColor={floorplanCursorColor}
           cursorPosition={floorplanCursorPosition}
           floorplanSelectionTool={floorplanSelectionTool}
+          indicatorBadgeOffsetX={FLOORPLAN_CURSOR_BADGE_OFFSET_X}
+          indicatorBadgeOffsetY={FLOORPLAN_CURSOR_BADGE_OFFSET_Y}
+          indicatorLineHeight={FLOORPLAN_CURSOR_INDICATOR_LINE_HEIGHT}
           isPanning={isPanning}
           movingOpeningType={movingOpeningType}
         />
@@ -9851,7 +9973,7 @@ export function FloorplanPanel() {
             rotationModifierPressed={rotationModifierPressed}
           />
         )}
-        <FloorplanActionMenuLayer
+        <Editor2dFloorplanActionMenuLayer
           ceiling={{
             position: selectedCeilingActionMenuPosition,
             onDelete: handleSelectedCeilingDelete,
@@ -9885,6 +10007,7 @@ export function FloorplanPanel() {
             onDelete: handleSelectedWallDelete,
             onMove: handleSelectedWallMove,
           }}
+          offsetY={FLOORPLAN_ACTION_MENU_OFFSET_Y}
         />
 
         {!levelNode || levelNode.type !== 'level' ? (
@@ -9906,6 +10029,26 @@ export function FloorplanPanel() {
             style={{ cursor: EDITOR_CURSOR }}
             viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
           >
+            <defs>
+              <pattern
+                height="0.28"
+                id={wallSelectionHatchId}
+                patternTransform="rotate(45)"
+                patternUnits="userSpaceOnUse"
+                width="0.28"
+              >
+                <line
+                  stroke={palette.selectedStroke}
+                  strokeLinecap="round"
+                  strokeOpacity={0.75}
+                  strokeWidth="0.07"
+                  x1="0"
+                  x2="0"
+                  y1="0"
+                  y2="0.28"
+                />
+              </pattern>
+            </defs>
             <rect
               fill={palette.surface}
               height={viewBox.height}
@@ -9959,6 +10102,7 @@ export function FloorplanPanel() {
                 slabPolygons={displaySlabPolygons}
                 unit={unit}
                 wallPolygons={displayWallPolygons}
+                wallSelectionHatchId={wallSelectionHatchId}
               />
 
               <FloorplanZoneLayer
@@ -10047,96 +10191,27 @@ export function FloorplanPanel() {
                 />
               )}
 
-              {visibleSvgMarqueeBounds && (
-                <>
-                  <rect
-                    fill={palette.cursor}
-                    fillOpacity={0.12}
-                    height={visibleSvgMarqueeBounds.height}
-                    pointerEvents="none"
-                    stroke={palette.cursor}
-                    strokeOpacity={0.26}
-                    strokeWidth={FLOORPLAN_MARQUEE_GLOW_WIDTH}
-                    vectorEffect="non-scaling-stroke"
-                    width={visibleSvgMarqueeBounds.width}
-                    x={visibleSvgMarqueeBounds.x}
-                    y={visibleSvgMarqueeBounds.y}
-                  />
-                  <rect
-                    fill="none"
-                    height={visibleSvgMarqueeBounds.height}
-                    pointerEvents="none"
-                    stroke={palette.cursor}
-                    strokeOpacity={0.96}
-                    strokeWidth={FLOORPLAN_MARQUEE_OUTLINE_WIDTH}
-                    vectorEffect="non-scaling-stroke"
-                    width={visibleSvgMarqueeBounds.width}
-                    x={visibleSvgMarqueeBounds.x}
-                    y={visibleSvgMarqueeBounds.y}
-                  />
-                </>
-              )}
+              <FloorplanMarqueeLayer
+                bounds={visibleSvgMarqueeBounds}
+                cursorColor={palette.cursor}
+                glowWidth={FLOORPLAN_MARQUEE_GLOW_WIDTH}
+                outlineWidth={FLOORPLAN_MARQUEE_OUTLINE_WIDTH}
+              />
 
-              {draftPolygon && (
-                <polygon
-                  fill={palette.draftFill}
-                  fillOpacity={0.35}
-                  points={draftPolygonPoints ?? undefined}
-                  stroke={palette.draftStroke}
-                  strokeDasharray="0.24 0.12"
-                  strokeWidth="0.07"
-                  vectorEffect="non-scaling-stroke"
-                />
-              )}
-
-              {polygonDraftPolygonPoints && (
-                <polygon
-                  fill={palette.draftFill}
-                  fillOpacity={0.2}
-                  points={polygonDraftPolygonPoints}
-                  stroke="none"
-                />
-              )}
-
-              {polygonDraftPolylinePoints && (
-                <polyline
-                  fill="none"
-                  points={polygonDraftPolylinePoints}
-                  stroke={palette.draftStroke}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="0.08"
-                  vectorEffect="non-scaling-stroke"
-                />
-              )}
-
-              {polygonDraftClosingSegment && (
-                <line
-                  stroke={palette.draftStroke}
-                  strokeDasharray="0.16 0.1"
-                  strokeLinecap="round"
-                  strokeOpacity={0.75}
-                  strokeWidth="0.05"
-                  vectorEffect="non-scaling-stroke"
-                  x1={polygonDraftClosingSegment.x1}
-                  x2={polygonDraftClosingSegment.x2}
-                  y1={polygonDraftClosingSegment.y1}
-                  y2={polygonDraftClosingSegment.y2}
-                />
-              )}
-
-              {activePolygonDraftPoints.map((point, index) => (
-                <circle
-                  cx={toSvgX(point[0])}
-                  cy={toSvgY(point[1])}
-                  fill={index === 0 ? palette.anchor : palette.draftStroke}
-                  fillOpacity={0.95}
-                  key={`polygon-draft-${index}`}
-                  pointerEvents="none"
-                  r={index === 0 ? 0.12 : 0.1}
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
+              <FloorplanDraftLayer
+                anchorFill={palette.anchor}
+                draftAnchorPoints={activePolygonDraftPoints.map((point, index) => ({
+                  x: toSvgX(point[0]),
+                  y: toSvgY(point[1]),
+                  isPrimary: index === 0,
+                }))}
+                draftFill={palette.draftFill}
+                draftPolygonPoints={draftPolygonPoints}
+                draftStroke={palette.draftStroke}
+                polygonDraftClosingSegment={polygonDraftClosingSegment}
+                polygonDraftPolygonPoints={polygonDraftPolygonPoints}
+                polygonDraftPolylinePoints={polygonDraftPolylinePoints}
+              />
 
               <FloorplanWallEndpointLayer
                 endpointHandles={wallEndpointHandles}
