@@ -880,7 +880,34 @@ export default function Editor({
       isLoadingSceneRef.current = true
       setTaskModeSceneRestorePending(true)
       useLiveTransforms.getState().clearAll()
-      applySceneGraphToEditor(cloneSceneGraph(snapshot), {
+      const nextSceneGraph = cloneSceneGraph(snapshot)
+      if (useNavigation.getState().robotMode === 'task') {
+        const hasTruckNode = Object.values(nextSceneGraph.nodes).some((node) => isPascalTruckNode(node))
+        if (!hasTruckNode) {
+          const { node, parentId } = buildPascalTruckNodeForScene(
+            nextSceneGraph,
+            pascalTruckNodeRef.current,
+          )
+          if (parentId) {
+            nextSceneGraph.nodes[node.id] = node
+            const parentNode = nextSceneGraph.nodes[parentId]
+            if (parentNode && typeof parentNode === 'object' && parentNode !== null) {
+              const parentRecord = parentNode as { children?: unknown }
+              const nextChildren = Array.isArray(parentRecord.children)
+                ? [...parentRecord.children]
+                : []
+              if (!nextChildren.includes(node.id)) {
+                nextChildren.push(node.id)
+              }
+              nextSceneGraph.nodes[parentId] = {
+                ...parentNode,
+                children: nextChildren,
+              }
+            }
+          }
+        }
+      }
+      applySceneGraphToEditor(nextSceneGraph, {
         mode: useNavigation.getState().robotMode === 'task' ? 'task-loop' : 'full',
       })
       requestAnimationFrame(() => {
@@ -970,7 +997,7 @@ export default function Editor({
   }, [isVersionPreviewMode])
 
   useEffect(() => {
-    if (!hasLoadedInitialScene || isVersionPreviewMode) {
+    if (!hasLoadedInitialScene || isVersionPreviewMode || taskModeSceneRestorePending) {
       return
     }
 
@@ -1014,7 +1041,13 @@ export default function Editor({
     }
 
     sceneState.createNode(node as AnyNode, parentId as AnyNodeId)
-  }, [hasLoadedInitialScene, isVersionPreviewMode, robotMode, taskLoopToken])
+  }, [
+    hasLoadedInitialScene,
+    isVersionPreviewMode,
+    robotMode,
+    taskLoopToken,
+    taskModeSceneRestorePending,
+  ])
 
   useEffect(() => {
     document.body.classList.add('dark')
@@ -1047,7 +1080,7 @@ export default function Editor({
       return
     }
 
-    restoreTaskModeSceneSnapshot()
+    restoreTaskModeSceneSnapshot({ settledToken: taskLoopToken })
   }, [restoreTaskModeSceneSnapshot, robotMode, taskLoopToken])
 
   const showLoader = isLoading || isSceneLoading

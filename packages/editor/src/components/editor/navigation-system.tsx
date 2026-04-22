@@ -4549,12 +4549,10 @@ export function NavigationSystem() {
 
   useEffect(() => {
     if (taskLoopToken === taskLoopSettledToken) {
-      pendingTaskLoopGraphSyncTokenRef.current = null
       return
     }
 
     if (!enabled || robotMode !== 'task') {
-      pendingTaskLoopGraphSyncTokenRef.current = null
       useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
@@ -4562,21 +4560,17 @@ export function NavigationSystem() {
     const baselineSnapshotKey =
       taskLoopBaselineSnapshotKeyRef.current ?? navigationSceneSnapshot?.key ?? null
     if (!baselineSnapshotKey) {
-      useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
 
     taskLoopBaselineSnapshotKeyRef.current = baselineSnapshotKey
     if (navigationGraphCurrent && navigationSceneSnapshot?.key === baselineSnapshotKey) {
-      pendingTaskLoopGraphSyncTokenRef.current = null
       if (pendingTaskGraphSyncKey !== null) {
         setPendingTaskGraphSyncKey(null)
       }
-      useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
 
-    pendingTaskLoopGraphSyncTokenRef.current = taskLoopToken
     if (pendingTaskGraphSyncKey !== baselineSnapshotKey) {
       setPendingTaskGraphSyncKey(baselineSnapshotKey)
     }
@@ -4589,16 +4583,6 @@ export function NavigationSystem() {
     taskLoopSettledToken,
     taskLoopToken,
   ])
-
-  useEffect(() => {
-    const pendingTaskLoopGraphSyncToken = pendingTaskLoopGraphSyncTokenRef.current
-    if (pendingTaskLoopGraphSyncToken === null || pendingTaskGraphSyncKey !== null) {
-      return
-    }
-
-    pendingTaskLoopGraphSyncTokenRef.current = null
-    useNavigation.getState().setTaskLoopSettledToken(pendingTaskLoopGraphSyncToken)
-  }, [pendingTaskGraphSyncKey])
 
   useEffect(() => {
     mergeNavigationPerfMeta({
@@ -5196,7 +5180,6 @@ export function NavigationSystem() {
   const previousRobotModeRef = useRef<NavigationRobotMode | null>(robotMode)
   const processedQueueRestartTokenRef = useRef(queueRestartToken)
   const taskLoopBaselineSnapshotKeyRef = useRef<string | null>(null)
-  const pendingTaskLoopGraphSyncTokenRef = useRef<number | null>(null)
   const taskQueueSyncedMoveVisualStatesRef = useRef<Partial<Record<string, ItemMoveVisualState>>>({})
   const taskQueueSyncedDeleteIdsRef = useRef<Set<string>>(new Set())
   const taskQueueSyncedRepairIdsRef = useRef<Set<string>>(new Set())
@@ -7304,11 +7287,54 @@ export function NavigationSystem() {
     [getActorNavigationPlanningState, graph, requestNavigationToCell, selection.levelId],
   )
 
+  const tryStartPascalTruckExitPath = useCallback(
+    (exitState: PascalTruckExitState, options?: { consumePrecomputed?: boolean }) => {
+      if (!graph) {
+        return false
+      }
+
+      const precomputedExitPath = options?.consumePrecomputed ? precomputedPascalTruckExitRef.current : null
+      if (options?.consumePrecomputed) {
+        precomputedPascalTruckExitRef.current = null
+      }
+
+      const exitTargetPoint: [number, number, number] = [
+        exitState.endPosition[0],
+        exitState.endPosition[1] - ACTOR_HOVER_Y,
+        exitState.endPosition[2],
+      ]
+      const exitTargetLevelId =
+        exitState.finalCellIndex !== null
+          ? (toLevelNodeId(graph.cells[exitState.finalCellIndex]?.levelId) ??
+            selection.levelId ??
+            null)
+          : (selection.levelId ?? null)
+
+      return (
+        (precomputedExitPath
+          ? commitPlannedNavigationPath(
+              precomputedExitPath.planningGraph,
+              precomputedExitPath.pathResult,
+              precomputedExitPath.targetWorldPosition,
+              precomputedExitPath.destinationCellIndex,
+            )
+          : false) ||
+        requestNavigationToPoint(exitTargetPoint, exitTargetLevelId) ||
+        (exitState.finalCellIndex !== null ? requestNavigationToCell(exitState.finalCellIndex) : false)
+      )
+    },
+    [
+      commitPlannedNavigationPath,
+      graph,
+      requestNavigationToCell,
+      requestNavigationToPoint,
+      selection.levelId,
+    ],
+  )
+
   const beginPascalTruckExit = useCallback(() => {
     const exitPlan = pascalTruckIntroPlan
     const actorGroup = actorGroupRef.current
-    const precomputedExitPath = precomputedPascalTruckExitRef.current
-    precomputedPascalTruckExitRef.current = null
     if (!(enabled && graph && exitPlan && actorGroup)) {
       pascalTruckExitRef.current = null
       setPascalTruckExitActive(false)
@@ -7341,18 +7367,6 @@ export function NavigationSystem() {
     setPascalTruckIntroCompleted(false)
     motionRef.current.visibilityRevealProgress = 1
 
-    const exitTargetPoint: [number, number, number] = [
-      exitState.endPosition[0],
-      exitState.endPosition[1] - ACTOR_HOVER_Y,
-      exitState.endPosition[2],
-    ]
-    const exitTargetLevelId =
-      exitState.finalCellIndex !== null
-        ? (toLevelNodeId(graph.cells[exitState.finalCellIndex]?.levelId) ??
-          selection.levelId ??
-          null)
-        : (selection.levelId ?? null)
-
     if (exitState.stage === 'fade') {
       actorGroup.position.set(
         exitState.endPosition[0],
@@ -7374,19 +7388,7 @@ export function NavigationSystem() {
       setActorMoving(false)
       return
     }
-    const started =
-      (precomputedExitPath
-        ? commitPlannedNavigationPath(
-            precomputedExitPath.planningGraph,
-            precomputedExitPath.pathResult,
-            precomputedExitPath.targetWorldPosition,
-            precomputedExitPath.destinationCellIndex,
-          )
-        : false) ||
-      requestNavigationToPoint(exitTargetPoint, exitTargetLevelId) ||
-      (exitState.finalCellIndex !== null
-        ? requestNavigationToCell(exitState.finalCellIndex)
-        : false)
+    const started = tryStartPascalTruckExitPath(exitState, { consumePrecomputed: true })
     if (!started) {
       pascalTruckExitRef.current = {
         ...exitState,
@@ -7416,12 +7418,9 @@ export function NavigationSystem() {
     getResolvedActorWorldPosition,
     graph,
     pascalTruckIntroPlan,
-    commitPlannedNavigationPath,
-    requestNavigationToPoint,
-    requestNavigationToCell,
     resetMotion,
-    selection.levelId,
     setMotionState,
+    tryStartPascalTruckExitPath,
   ])
 
   const schedulePascalTruckExit = useCallback(
@@ -7558,6 +7557,7 @@ export function NavigationSystem() {
     }
 
     if (result.wrappedToStart) {
+      precomputedPascalTruckExitRef.current = null
       schedulePascalTruckExit({
         allowQueuedTasks: true,
         requiredTaskLoopToken: useNavigation.getState().taskLoopToken,
@@ -7576,6 +7576,7 @@ export function NavigationSystem() {
     if (
       !enabled ||
       !graph ||
+      !pascalTruckIntroPlan ||
       !actorPositionInitializedRef.current ||
       pascalTruckIntroRef.current !== null ||
       pascalTruckExitRef.current !== null ||
@@ -7597,6 +7598,7 @@ export function NavigationSystem() {
     enabled,
     graph,
     hasPendingQueuedNavigationTask,
+    pascalTruckIntroPlan,
     taskLoopSettledToken,
     taskQueuePlanningReady,
   ])
@@ -7834,6 +7836,7 @@ export function NavigationSystem() {
         headItemMoveController &&
         pascalTruckIntroCompleted &&
         pascalTruckIntroTaskReady &&
+        pendingPascalTruckExitRef.current === null &&
         !pascalTruckIntroRef.current &&
         !pascalTruckExitRef.current
       )
@@ -8007,6 +8010,7 @@ export function NavigationSystem() {
         taskQueuePlanningReady &&
         pascalTruckIntroCompleted &&
         pascalTruckIntroTaskReady &&
+        pendingPascalTruckExitRef.current === null &&
         !pascalTruckIntroRef.current &&
         !pascalTruckExitRef.current
       )
@@ -8107,6 +8111,7 @@ export function NavigationSystem() {
         taskQueuePlanningReady &&
         pascalTruckIntroCompleted &&
         pascalTruckIntroTaskReady &&
+        pendingPascalTruckExitRef.current === null &&
         !pascalTruckIntroRef.current &&
         !pascalTruckExitRef.current
       )
@@ -8226,6 +8231,7 @@ export function NavigationSystem() {
         cameraDragging ||
         itemDeleteSequenceRef.current ||
         itemRepairSequenceRef.current ||
+        pendingPascalTruckExitRef.current !== null ||
         hasQueuedMoveController ||
         useNavigation.getState().itemDeleteRequest ||
         currentItemRepairRequest ||
@@ -8369,6 +8375,7 @@ export function NavigationSystem() {
   useEffect(() => {
     const hasPendingTaskRequest =
       itemMoveRequest !== null || itemDeleteRequest !== null || itemRepairRequest !== null
+    const hasPendingTaskWork = hasPendingTaskRequest || (robotMode === 'task' && taskQueue.length > 0)
     if (
       !(
         enabled &&
@@ -8377,7 +8384,7 @@ export function NavigationSystem() {
         !pascalTruckIntroCompleted &&
         !pascalTruckIntroRef.current &&
         !pascalTruckExitActive &&
-        (robotMode !== 'task' || (hasPendingTaskRequest && taskQueuePlanningReady))
+        (robotMode !== 'task' || (hasPendingTaskWork && taskQueuePlanningReady))
       )
     ) {
       return
@@ -8398,17 +8405,21 @@ export function NavigationSystem() {
     pascalTruckIntroCompleted,
     pascalTruckIntroPlan,
     robotMode,
+    taskQueue.length,
     taskQueuePlanningReady,
   ])
 
   useEffect(() => {
+    const hasPendingTaskWork =
+      itemMoveRequest !== null ||
+      itemDeleteRequest !== null ||
+      itemRepairRequest !== null ||
+      taskQueue.length > 0
     if (
       introAnimationDebugActive ||
       robotMode !== 'task' ||
       !pascalTruckIntroRef.current ||
-      itemMoveRequest !== null ||
-      itemDeleteRequest !== null ||
-      itemRepairRequest !== null ||
+      hasPendingTaskWork ||
       itemMoveSequenceRef.current !== null ||
       itemDeleteSequenceRef.current !== null ||
       itemRepairSequenceRef.current !== null
@@ -8429,6 +8440,7 @@ export function NavigationSystem() {
     itemRepairRequest,
     resetMotion,
     robotMode,
+    taskQueue.length,
   ])
 
   useEffect(() => {
@@ -9127,7 +9139,9 @@ export function NavigationSystem() {
           navigationState.itemMoveRequest !== null ||
           navigationState.itemDeleteRequest !== null ||
           navigationState.itemRepairRequest !== null
-        if (hasPendingTaskRequest && beginPascalTruckIntro()) {
+        const hasPendingTaskWork =
+          hasPendingTaskRequest || (robotMode === 'task' && navigationState.taskQueue.length > 0)
+        if (hasPendingTaskWork && beginPascalTruckIntro()) {
           setActorCellIndex(null)
         } else {
           setPascalTruckIntroCompleted(false)
@@ -9508,6 +9522,49 @@ export function NavigationSystem() {
       activeItemDeleteSequence === null &&
       activeItemRepairSequence === null
     ) {
+      const exitActorWorldPosition = getResolvedActorWorldPosition()
+      const actorToTruckDistance =
+        exitActorWorldPosition === null
+          ? Number.POSITIVE_INFINITY
+          : Math.hypot(
+              exitActorWorldPosition[0] - pascalTruckExit.endPosition[0],
+              exitActorWorldPosition[1] - pascalTruckExit.endPosition[1],
+              exitActorWorldPosition[2] - pascalTruckExit.endPosition[2],
+            )
+
+      if (pathIndices.length > 1 && primaryPathCurve && primaryPathLength > Number.EPSILON) {
+        setMotionState(
+          {
+            ...createActorMotionState(),
+            destinationCellIndex: pascalTruckExit.finalCellIndex,
+            distance: 0,
+            moving: true,
+            speed: Math.max(motionRef.current.speed, ACTOR_WALK_MAX_SPEED * 0.35),
+            visibilityRevealProgress: 1,
+          },
+          'pascalTruckExit:recoverMotion',
+        )
+        motionRef.current.visibilityRevealProgress = 1
+        setActorMoving(true)
+        recordTaskModeTrace('navigation.pascalTruckExitRecoveredMotion', {
+          actorToTruckDistance,
+          pathLength: primaryPathLength,
+          pathNodeCount: pathIndices.length,
+        })
+        recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
+        return
+      }
+
+      if (actorToTruckDistance > 0.2 && tryStartPascalTruckExitPath(pascalTruckExit)) {
+        recordTaskModeTrace('navigation.pascalTruckExitRetriedPath', {
+          actorToTruckDistance,
+          finalCellIndex: pascalTruckExit.finalCellIndex,
+          pathNodeCount: pathIndices.length,
+        })
+        recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
+        return
+      }
+
       actorGroup.position.set(
         pascalTruckExit.endPosition[0],
         pascalTruckExit.endPosition[1],
@@ -11856,10 +11913,10 @@ export function NavigationSystem() {
 
   return (
     <>
-      {graph && (
+      {pathGraph && (
         <NavigationDoorSystem
           enabled={enabled}
-          graph={graph}
+          graph={pathGraph}
           motionRef={motionRef}
           motionCurve={primaryMotionCurve}
           pathIndices={pathIndices}

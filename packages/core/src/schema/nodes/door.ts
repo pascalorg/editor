@@ -7,11 +7,11 @@ export const DoorSegment = z.object({
   type: z.enum(['panel', 'glass', 'empty']),
   heightRatio: z.number(),
 
-  // Each segment controls its own column split
+  // Each segment controls its own column split.
   columnRatios: z.array(z.number()).default([1]),
   dividerThickness: z.number().default(0.03),
 
-  // panel-specific
+  // Panel-specific.
   panelDepth: z.number().default(0.01), // + raised, - recessed
   panelInset: z.number().default(0.04),
 })
@@ -28,21 +28,22 @@ export const DoorNode = BaseNode.extend({
   side: z.enum(['front', 'back']).optional(),
   wallId: z.string().optional(),
 
-  // Overall dimensions
+  // Overall dimensions.
   width: z.number().default(0.9),
   height: z.number().default(2.1),
 
-  // Frame
+  // Frame.
   frameThickness: z.number().default(0.05),
   frameDepth: z.number().default(0.07),
   threshold: z.boolean().default(true),
   thresholdHeight: z.number().default(0.02),
 
-  // Swing
+  // Opening behavior.
+  openingStyle: z.enum(['swing', 'overhead']).optional(),
   hingesSide: z.enum(['left', 'right']).default('left'),
   swingDirection: z.enum(['inward', 'outward']).default('inward'),
 
-  // Leaf segments — stacked top to bottom, each with its own column split
+  // Leaf segments stacked top to bottom, each with its own column split.
   segments: z.array(DoorSegment).default([
     {
       type: 'panel',
@@ -62,15 +63,15 @@ export const DoorNode = BaseNode.extend({
     },
   ]),
 
-  // Handle
+  // Handle.
   handle: z.boolean().default(true),
   handleHeight: z.number().default(1.05),
   handleSide: z.enum(['left', 'right']).default('right'),
 
-  // Leaf inner margin — space between leaf edge and segment content area [x, y]
+  // Space between leaf edge and segment content area [x, y].
   contentPadding: z.tuple([z.number(), z.number()]).default([0.04, 0.04]),
 
-  // Emergency / commercial hardware
+  // Emergency / commercial hardware.
   doorCloser: z.boolean().default(false),
   panicBar: z.boolean().default(false),
   panicBarHeight: z.number().default(1.0),
@@ -78,6 +79,7 @@ export const DoorNode = BaseNode.extend({
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
   - segments: rows stacked top to bottom, each defining its own columnRatios
   - type 'empty' = flush flat fill, 'panel' = raised/recessed panel, 'glass' = glazed
+  - openingStyle: 'swing' for hinged doors, 'overhead' for garage-style sectional doors
   - hingesSide/swingDirection: which way the door opens
   - doorCloser/panicBar: commercial and emergency hardware options
 `)
