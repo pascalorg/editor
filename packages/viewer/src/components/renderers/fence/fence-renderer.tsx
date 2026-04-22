@@ -7,14 +7,22 @@ import {
   createMaterialFromPresetRef,
   DEFAULT_STAIR_MATERIAL,
 } from '../../../lib/materials'
+import useViewer from '../../../store/use-viewer'
 
 export const FenceRenderer = ({ node }: { node: FenceNode }) => {
   const ref = useRef<Mesh>(null!)
   const handlers = useNodeEvents(node, 'fence')
+  const materialPreview = useViewer((state) =>
+    state.materialPreview?.target === 'fence' && state.materialPreview.nodeId === node.id
+      ? state.materialPreview
+      : null,
+  )
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(
+      materialPreview?.materialPreset ?? node.materialPreset,
+    )
     if (presetMaterial) return presetMaterial
-    const mat = node.material
+    const mat = materialPreview?.material ?? node.material
     if (!mat) return DEFAULT_STAIR_MATERIAL
     return createMaterial(mat)
   }, [
@@ -23,6 +31,11 @@ export const FenceRenderer = ({ node }: { node: FenceNode }) => {
     node.material?.preset,
     node.material?.properties,
     node.material?.texture,
+    materialPreview?.materialPreset,
+    materialPreview?.material,
+    materialPreview?.material?.preset,
+    materialPreview?.material?.properties,
+    materialPreview?.material?.texture,
   ])
 
   useRegistry(node.id, 'fence', ref)
@@ -31,7 +44,14 @@ export const FenceRenderer = ({ node }: { node: FenceNode }) => {
   }, [node.id])
 
   return (
-    <mesh castShadow material={material} receiveShadow ref={ref} visible={node.visible} {...handlers}>
+    <mesh
+      castShadow
+      material={material}
+      receiveShadow
+      ref={ref}
+      visible={node.visible}
+      {...handlers}
+    >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
   )

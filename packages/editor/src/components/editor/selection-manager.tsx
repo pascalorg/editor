@@ -70,6 +70,14 @@ type ModifierKeys = {
   ctrl: boolean
 }
 
+type SceneMaterialPreview = ReturnType<typeof useViewer.getState>['materialPreview']
+
+type PaintInteraction = {
+  apply: (() => void) | null
+  preview: SceneMaterialPreview
+  hoveredId: AnyNodeId
+}
+
 interface SelectionStrategy {
   types: SelectableNodeType[]
   handleSelect: (node: AnyNode, nativeEvent?: any, modifierKeys?: ModifierKeys) => void
@@ -503,6 +511,32 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall) return
 
     const triggerPaintDisabledFeedback = useEditor.getState().triggerPaintDisabledFeedback
+    let hoverFrame = 0
+    let pendingHoveredId: AnyNodeId | null = null
+    let pendingHoverMode: HoverHighlightMode = 'default'
+    let pendingPreview: SceneMaterialPreview = null
+
+    const flushHoverState = () => {
+      hoverFrame = 0
+      const viewerState = useViewer.getState()
+
+      if (viewerState.hoveredId !== pendingHoveredId) {
+        useViewer.setState({ hoveredId: pendingHoveredId })
+      }
+
+      setHoverHighlightMode(pendingHoverMode)
+
+      if (pendingPreview) {
+        viewerState.setMaterialPreview(pendingPreview)
+      } else {
+        viewerState.clearMaterialPreview()
+      }
+    }
+
+    const scheduleHoverState = () => {
+      if (hoverFrame !== 0) return
+      hoverFrame = window.requestAnimationFrame(flushHoverState)
+    }
 
     const resolveActivePaintMaterial = () =>
       useEditor.getState().activePaintMaterial ??
@@ -515,11 +549,7 @@ export const SelectionManager = () => {
         selectedMaterialTarget: useEditor.getState().selectedMaterialTarget,
       })
 
-    const getPaintInteraction = (
-      event: NodeEvent,
-    ): {
-      apply: (() => void) | null
-    } | null => {
+    const getPaintInteraction = (event: NodeEvent): PaintInteraction | null => {
       const activePaintMaterial = resolveActivePaintMaterial()
       const node = event.node
 
@@ -530,6 +560,7 @@ export const SelectionManager = () => {
         const compatible =
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'wall')
         return {
+          hoveredId: node.id as AnyNodeId,
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -544,6 +575,16 @@ export const SelectionManager = () => {
                         activePaintMaterial.materialPreset,
                       ),
                     )
+                }
+              : null,
+          preview:
+            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+              ? {
+                  nodeId: node.id as AnyNodeId,
+                  target: 'wall',
+                  role,
+                  material: activePaintMaterial.material,
+                  materialPreset: activePaintMaterial.materialPreset,
                 }
               : null,
         }
@@ -562,6 +603,7 @@ export const SelectionManager = () => {
         const compatible =
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'roof')
         return {
+          hoveredId: roofNode.id as AnyNodeId,
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -576,6 +618,16 @@ export const SelectionManager = () => {
                         activePaintMaterial.materialPreset,
                       ),
                     )
+                }
+              : null,
+          preview:
+            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+              ? {
+                  nodeId: roofNode.id as AnyNodeId,
+                  target: 'roof',
+                  role,
+                  material: activePaintMaterial.material,
+                  materialPreset: activePaintMaterial.materialPreset,
                 }
               : null,
         }
@@ -594,6 +646,7 @@ export const SelectionManager = () => {
         const compatible =
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'stair')
         return {
+          hoveredId: stairNode.id as AnyNodeId,
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -610,6 +663,16 @@ export const SelectionManager = () => {
                     )
                 }
               : null,
+          preview:
+            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+              ? {
+                  nodeId: stairNode.id as AnyNodeId,
+                  target: 'stair',
+                  role,
+                  material: activePaintMaterial.material,
+                  materialPreset: activePaintMaterial.materialPreset,
+                }
+              : null,
         }
       }
 
@@ -620,6 +683,7 @@ export const SelectionManager = () => {
           hasActivePaintMaterial(activePaintMaterial)
 
         return {
+          hoveredId: node.id as AnyNodeId,
           apply: compatible
             ? () => {
                 useScene
@@ -633,17 +697,60 @@ export const SelectionManager = () => {
                   )
               }
             : null,
+          preview: compatible
+            ? {
+                nodeId: node.id as AnyNodeId,
+                target,
+                role: 'surface',
+                material: activePaintMaterial.material,
+                materialPreset: activePaintMaterial.materialPreset,
+              }
+            : null,
         }
       }
 
       const disabledNodeTypes = ['item', 'window', 'door', 'zone']
       if (disabledNodeTypes.includes(node.type)) {
         return {
+          hoveredId: node.id as AnyNodeId,
           apply: null,
+          preview: null,
         }
       }
 
       return null
+    }
+
+    const onEnter = (event: NodeEvent) => {
+      if (boxSelectHandled) return
+
+      const interaction = getPaintInteraction(event)
+      if (!interaction) return
+
+      event.stopPropagation()
+
+      if (!interaction.preview) {
+        pendingHoveredId = interaction.hoveredId
+        pendingHoverMode = 'paint-disabled'
+        pendingPreview = null
+        scheduleHoverState()
+        return
+      }
+
+      pendingHoveredId = interaction.hoveredId
+      pendingHoverMode = 'paint-ready'
+      pendingPreview = interaction.preview
+      scheduleHoverState()
+    }
+
+    const onLeave = (event: NodeEvent) => {
+      const interaction = getPaintInteraction(event)
+      if (!interaction) return
+
+      pendingHoveredId = null
+      pendingHoverMode = 'default'
+      pendingPreview = null
+      scheduleHoverState()
     }
 
     const onClick = (event: NodeEvent) => {
@@ -654,12 +761,19 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
 
+      if (hoverFrame !== 0) {
+        window.cancelAnimationFrame(hoverFrame)
+        flushHoverState()
+      }
+
       if (!interaction.apply) {
+        useViewer.getState().clearMaterialPreview()
         triggerPaintDisabledFeedback()
         return
       }
 
       interaction.apply()
+      useViewer.getState().clearMaterialPreview()
     }
 
     const allTypes = [
@@ -679,14 +793,24 @@ export const SelectionManager = () => {
 
     for (const type of allTypes) {
       emitter.on(`${type}:click` as any, onClick as any)
+      emitter.on(`${type}:enter` as any, onEnter as any)
+      emitter.on(`${type}:leave` as any, onLeave as any)
     }
 
     return () => {
       for (const type of allTypes) {
         emitter.off(`${type}:click` as any, onClick as any)
+        emitter.off(`${type}:enter` as any, onEnter as any)
+        emitter.off(`${type}:leave` as any, onLeave as any)
       }
+      if (hoverFrame !== 0) {
+        window.cancelAnimationFrame(hoverFrame)
+      }
+      useViewer.setState({ hoveredId: null })
+      setHoverHighlightMode('default')
+      useViewer.getState().clearMaterialPreview()
     }
-  }, [curvingWall, mode, movingNode])
+  }, [curvingWall, mode, movingNode, setHoverHighlightMode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1241,7 +1365,8 @@ const SelectionMaterialSync = () => {
   }, [hoverHighlightMode, hoveredId, previewSelectedIds, selectedIds, syncSelectionMaterials])
 
   useEffect(() => {
-    return useScene.subscribe(() => {
+    return useScene.subscribe((state, prevState) => {
+      if (state.nodes === prevState.nodes) return
       syncSelectionMaterials()
     })
   }, [syncSelectionMaterials])

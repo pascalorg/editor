@@ -1,4 +1,10 @@
-import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -14,8 +20,14 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
 
   const handlers = useNodeEvents(node, 'roof-segment')
   const debugColors = useViewer((s) => s.debugColors)
-  const parentNode =
-    node.parentId ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined) : undefined
+  const parentNode = node.parentId
+    ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
+    : undefined
+  const materialPreview = useViewer((state) =>
+    state.materialPreview?.target === 'roof' && state.materialPreview.nodeId === parentNode?.id
+      ? state.materialPreview
+      : null,
+  )
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
@@ -26,30 +38,40 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     return geometry
   }, [])
 
+  const previewParentNode = !parentNode
+    ? undefined
+    : materialPreview?.role === 'top'
+      ? {
+          ...parentNode,
+          topMaterial: materialPreview.material,
+          topMaterialPreset: materialPreview.materialPreset,
+          material: undefined,
+          materialPreset: undefined,
+        }
+      : materialPreview?.role === 'edge'
+        ? {
+            ...parentNode,
+            edgeMaterial: materialPreview.material,
+            edgeMaterialPreset: materialPreview.materialPreset,
+            material: undefined,
+            materialPreset: undefined,
+          }
+        : materialPreview?.role === 'wall'
+          ? {
+              ...parentNode,
+              wallMaterial: materialPreview.material,
+              wallMaterialPreset: materialPreview.materialPreset,
+              material: undefined,
+              materialPreset: undefined,
+            }
+          : parentNode
   const customMaterial = useMemo(() => {
     if (node.material !== undefined || typeof node.materialPreset === 'string') {
       return null
     }
 
-    return parentNode ? getRoofMaterialArray(parentNode) : null
-  }, [
-    node.materialPreset,
-    node.material,
-    node.material?.preset,
-    node.material?.properties,
-    node.material?.texture,
-    parentNode?.materialPreset,
-    parentNode?.material,
-    parentNode?.material?.preset,
-    parentNode?.material?.properties,
-    parentNode?.material?.texture,
-    parentNode?.topMaterial,
-    parentNode?.topMaterialPreset,
-    parentNode?.edgeMaterial,
-    parentNode?.edgeMaterialPreset,
-    parentNode?.wallMaterial,
-    parentNode?.wallMaterialPreset,
-  ])
+    return previewParentNode ? getRoofMaterialArray(previewParentNode) : null
+  }, [node, previewParentNode])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 

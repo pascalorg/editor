@@ -8,10 +8,15 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { createMaterial, createMaterialFromPresetRef, DEFAULT_STAIR_MATERIAL } from '../../../lib/materials'
 import {
-  getStairRailingMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
+  DEFAULT_STAIR_MATERIAL,
+} from '../../../lib/materials'
+import useViewer from '../../../store/use-viewer'
+import {
   getStairBodyMaterials,
+  getStairRailingMaterial,
   type StairBodyMaterials,
 } from '../../../systems/stair/stair-materials'
 import { NodeRenderer } from '../node-renderer'
@@ -57,48 +62,55 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair')
+  const materialPreview = useViewer((state) =>
+    state.materialPreview?.target === 'stair' && state.materialPreview.nodeId === node.id
+      ? state.materialPreview
+      : null,
+  )
+  const previewNode =
+    materialPreview?.role === 'railing'
+      ? {
+          ...node,
+          railingMaterial: materialPreview.material,
+          railingMaterialPreset: materialPreview.materialPreset,
+          material: undefined,
+          materialPreset: undefined,
+        }
+      : materialPreview?.role === 'tread'
+        ? {
+            ...node,
+            treadMaterial: materialPreview.material,
+            treadMaterialPreset: materialPreview.materialPreset,
+            material: undefined,
+            materialPreset: undefined,
+          }
+        : materialPreview?.role === 'side'
+          ? {
+              ...node,
+              sideMaterial: materialPreview.material,
+              sideMaterialPreset: materialPreview.materialPreset,
+              material: undefined,
+              materialPreset: undefined,
+            }
+          : node
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(previewNode.materialPreset)
     if (presetMaterial) return presetMaterial
-    const mat = node.material
+    const mat = previewNode.material
     if (!mat) return DEFAULT_STAIR_MATERIAL
     return createMaterial(mat)
   }, [
-    node.materialPreset,
-    node.material,
-    node.material?.preset,
-    node.material?.properties,
-    node.material?.texture,
+    previewNode.materialPreset,
+    previewNode.material,
+    previewNode.material?.preset,
+    previewNode.material?.properties,
+    previewNode.material?.texture,
   ])
 
-  const straightBodyMaterials = useMemo(
-    () => getStairBodyMaterials(node),
-    [
-      node.material,
-      node.materialPreset,
-      node.railingMaterial,
-      node.railingMaterialPreset,
-      node.sideMaterial,
-      node.sideMaterialPreset,
-      node.treadMaterial,
-      node.treadMaterialPreset,
-    ],
-  )
+  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(previewNode), [previewNode])
 
-  const railingMaterial = useMemo(
-    () => getStairRailingMaterial(node),
-    [
-      node.material,
-      node.materialPreset,
-      node.railingMaterial,
-      node.railingMaterialPreset,
-      node.sideMaterial,
-      node.sideMaterialPreset,
-      node.treadMaterial,
-      node.treadMaterialPreset,
-    ],
-  )
+  const railingMaterial = useMemo(() => getStairRailingMaterial(previewNode), [previewNode])
 
   const straightPlaceholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
@@ -132,7 +144,9 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
           receiveShadow
         />
       ) : null}
-      {!isSegmentBasedStair ? <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} /> : null}
+      {!isSegmentBasedStair ? (
+        <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} />
+      ) : null}
       <StairRailings material={railingMaterial} stair={node} />
       {isSegmentBasedStair ? (
         <group name="segments-wrapper" visible={false}>

@@ -1,7 +1,14 @@
-import { type AnyNodeId, type StairNode, type StairSegmentNode, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type StairNode,
+  type StairSegmentNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import useViewer from '../../../store/use-viewer'
 import { getStraightStairSegmentBodyMaterials } from '../../../systems/stair/stair-materials'
 
 export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
@@ -15,29 +22,45 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair-segment')
-  const parentNode =
-    node.parentId ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined) : undefined
+  const parentNode = node.parentId
+    ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined)
+    : undefined
+  const materialPreview = useViewer((state) =>
+    state.materialPreview?.target === 'stair' && state.materialPreview.nodeId === parentNode?.id
+      ? state.materialPreview
+      : null,
+  )
+  const previewParentNode = !parentNode
+    ? undefined
+    : materialPreview?.role === 'railing'
+      ? {
+          ...parentNode,
+          railingMaterial: materialPreview.material,
+          railingMaterialPreset: materialPreview.materialPreset,
+          material: undefined,
+          materialPreset: undefined,
+        }
+      : materialPreview?.role === 'tread'
+        ? {
+            ...parentNode,
+            treadMaterial: materialPreview.material,
+            treadMaterialPreset: materialPreview.materialPreset,
+            material: undefined,
+            materialPreset: undefined,
+          }
+        : materialPreview?.role === 'side'
+          ? {
+              ...parentNode,
+              sideMaterial: materialPreview.material,
+              sideMaterialPreset: materialPreview.materialPreset,
+              material: undefined,
+              materialPreset: undefined,
+            }
+          : parentNode
 
   const material = useMemo(() => {
-    return getStraightStairSegmentBodyMaterials(node, parentNode)
-  }, [
-    node.materialPreset,
-    node.material,
-    node.material?.preset,
-    node.material?.properties,
-    node.material?.texture,
-    parentNode?.materialPreset,
-    parentNode?.material,
-    parentNode?.material?.preset,
-    parentNode?.material?.properties,
-    parentNode?.material?.texture,
-    parentNode?.railingMaterialPreset,
-    parentNode?.railingMaterial,
-    parentNode?.sideMaterialPreset,
-    parentNode?.sideMaterial,
-    parentNode?.treadMaterialPreset,
-    parentNode?.treadMaterial,
-  ])
+    return getStraightStairSegmentBodyMaterials(node, previewParentNode)
+  }, [node, previewParentNode])
 
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()

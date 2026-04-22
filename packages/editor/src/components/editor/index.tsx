@@ -685,10 +685,12 @@ function PaintCursorLayer({
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
   const activePaintTarget = useEditor((s) => s.activePaintTarget)
   const paintDisabledFeedbackTick = useEditor((s) => s.paintDisabledFeedbackTick)
+  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
   const badgeRef = useRef<HTMLDivElement>(null)
   const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null)
   const [showDisabledFeedback, setShowDisabledFeedback] = useState(false)
   const active = mode === 'material-paint' && !isVersionPreviewMode
+  const showBlockedState = showDisabledFeedback || hoverHighlightMode === 'paint-disabled'
 
   useEffect(() => {
     if (!active) {
@@ -748,10 +750,26 @@ function PaintCursorLayer({
   )
   const label = !hasMaterial
     ? 'Choose material'
-    : showDisabledFeedback
+    : showBlockedState
       ? 'Unsupported'
       : `Paint ${activePaintTarget}`
-  const icon = showDisabledFeedback ? 'mdi:block-helper' : 'mdi:format-color-fill'
+  const icon = showBlockedState ? 'mdi:block-helper' : 'mdi:format-color-fill'
+
+  useEffect(() => {
+    if (!active) return
+
+    const el = containerRef.current
+    if (!el) return
+
+    if (hoverHighlightMode === 'paint-disabled') {
+      el.style.cursor = 'not-allowed'
+      return () => {
+        el.style.cursor = ''
+      }
+    }
+
+    el.style.cursor = ''
+  }, [active, containerRef, hoverHighlightMode])
 
   useEffect(() => {
     if (!paintDisabledFeedbackTick) return
@@ -797,7 +815,7 @@ function PaintCursorLayer({
       style={{ display: 'none', position: 'absolute', left: 0, top: 0 }}
     >
       <PaintCursorBadge
-        disabled={!hasMaterial || showDisabledFeedback}
+        disabled={!hasMaterial || showBlockedState}
         icon={icon}
         label={label}
         position={{ x: 0, y: 0 }}
