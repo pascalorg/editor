@@ -5,12 +5,14 @@ import {
   type CeilingNode,
   emitter,
   type FenceNode,
+  getMaterialPresetByRef,
   type ItemNode,
   type NodeEvent,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
   resolveLevelId,
+  resolveMaterial,
   type SlabNode,
   type StairEvent,
   type StairNode,
@@ -27,6 +29,18 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
+  applyMaterialPresetToMaterials,
+  createMaterial,
+  createMaterialFromPresetRef,
+} from '../../../../viewer/src/lib/materials'
+import { getRoofMaterialArray } from '../../../../viewer/src/systems/roof/roof-materials'
+import {
+  getStairBodyMaterials,
+  getStairRailingMaterial,
+} from '../../../../viewer/src/systems/stair/stair-materials'
+import { getVisibleWallMaterials } from '../../../../viewer/src/systems/wall/wall-materials'
+import {
+  type ActivePaintMaterial,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -70,12 +84,12 @@ type ModifierKeys = {
   ctrl: boolean
 }
 
-type SceneMaterialPreview = ReturnType<typeof useViewer.getState>['materialPreview']
+type PaintPreviewCleanup = () => void
 
 type PaintInteraction = {
+  key: string
   apply: (() => void) | null
-  preview: SceneMaterialPreview
-  hoveredId: AnyNodeId
+  preview: (() => PaintPreviewCleanup | null) | null
 }
 
 interface SelectionStrategy {
@@ -199,6 +213,196 @@ function getIntersectionMaterialIndex(
   )
 
   return group?.materialIndex
+}
+
+function getRegisteredNodeObject(nodeId: string): Object3D | null {
+  return sceneRegistry.nodes.get(nodeId) ?? null
+}
+
+function getRegisteredMesh(nodeId: string): Mesh | null {
+  const object = getRegisteredNodeObject(nodeId)
+  return object && (object as Mesh).isMesh ? (object as Mesh) : null
+}
+
+function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
+  const previousMaterial = mesh.material
+  mesh.material = material
+  return () => {
+    mesh.material = previousMaterial
+  }
+}
+
+function previewCursor(cursor: string): PaintPreviewCleanup {
+  const previousCursor = document.body.style.cursor
+  document.body.style.cursor = cursor
+  return () => {
+    document.body.style.cursor = previousCursor
+  }
+}
+
+function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Material | null {
+  if (material.materialPreset) {
+    return createMaterialFromPresetRef(material.materialPreset)
+  }
+
+  if (material.material) {
+    return createMaterial(material.material)
+  }
+
+  return null
+}
+
+function applyWallPaintPreview(
+  node: WallNode,
+  role: WallSurfaceSide,
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  const mesh = getRegisteredMesh(node.id)
+  if (!mesh) return null
+
+  const previewNode = {
+    ...node,
+    ...buildWallSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
+  }
+
+  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode))
+}
+
+function applyRoofPaintPreview(
+  node: RoofNode,
+  role: 'top' | 'edge' | 'wall',
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  const root = getRegisteredNodeObject(node.id)
+  const mesh = root?.getObjectByName('merged-roof') as Mesh | undefined
+  if (!mesh) return null
+
+  const previewNode = {
+    ...node,
+    ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
+  }
+  const previewMaterial = getRoofMaterialArray(previewNode)
+  if (!previewMaterial) return null
+
+  return previewMeshMaterial(mesh, previewMaterial)
+}
+
+function applyStairPaintPreview(
+  node: StairNode,
+  role: StairSurfaceMaterialRole,
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  const root = getRegisteredNodeObject(node.id)
+  if (!root) return null
+
+  const previewNode = {
+    ...node,
+    ...buildStairSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
+  }
+  const bodyMaterials = getStairBodyMaterials(previewNode)
+  const railingMaterial = getStairRailingMaterial(previewNode)
+  const restores: PaintPreviewCleanup[] = []
+
+  root.traverse((object) => {
+    if (!(object as Mesh).isMesh) return
+    const mesh = object as Mesh
+    if (mesh.name.startsWith('stair-railing')) {
+      restores.push(previewMeshMaterial(mesh, railingMaterial))
+      return
+    }
+    if (Array.isArray(mesh.material) && mesh.material.length === 2) {
+      restores.push(previewMeshMaterial(mesh, bodyMaterials))
+      return
+    }
+    if (mesh.name === 'merged-stair') {
+      restores.push(previewMeshMaterial(mesh, bodyMaterials))
+      return
+    }
+    if (mesh.name.startsWith('stair-side')) {
+      restores.push(previewMeshMaterial(mesh, bodyMaterials[1]))
+    }
+  })
+
+  if (restores.length === 0) return null
+
+  return () => {
+    for (let index = restores.length - 1; index >= 0; index -= 1) {
+      restores[index]?.()
+    }
+  }
+}
+
+function applySingleSurfacePaintPreview(
+  node: FenceNode | SlabNode | CeilingNode,
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  if (node.type === 'ceiling') {
+    const root = getRegisteredMesh(node.id)
+    const overlay = root?.getObjectByName('ceiling-grid') as Mesh | undefined
+    if (!root || !overlay) return null
+
+    const previewColor =
+      getMaterialPresetByRef(material.materialPreset)?.mapProperties.color ??
+      resolveMaterial(material.material).color ??
+      '#999999'
+
+    const previousRootMaterial = root.material
+    const previousOverlayMaterial = overlay.material
+    const rootPreviewMaterial = Array.isArray(previousRootMaterial)
+      ? previousRootMaterial.map((entry) => entry.clone())
+      : previousRootMaterial.clone()
+    const overlayPreviewMaterial = Array.isArray(previousOverlayMaterial)
+      ? previousOverlayMaterial.map((entry) => entry.clone())
+      : previousOverlayMaterial.clone()
+
+    const applyColor = (input: Material | Material[]) => {
+      const materials = Array.isArray(input) ? input : [input]
+      for (const entry of materials) {
+        const materialWithColor = entry as Material & { color?: Color; needsUpdate?: boolean }
+        if (materialWithColor.color instanceof Color) {
+          materialWithColor.color = new Color(previewColor)
+        }
+        materialWithColor.needsUpdate = true
+      }
+    }
+
+    applyColor(rootPreviewMaterial)
+    applyColor(overlayPreviewMaterial)
+    root.material = rootPreviewMaterial
+    overlay.material = overlayPreviewMaterial
+
+    return () => {
+      root.material = previousRootMaterial
+      overlay.material = previousOverlayMaterial
+    }
+  }
+
+  const mesh = getRegisteredMesh(node.id)
+  if (!mesh) return null
+
+  const previewMaterial = getSingleSurfacePreviewMaterial(material)
+  if (!previewMaterial) return null
+
+  if (node.type === 'slab') {
+    const slabMaterial = previewMaterial.clone()
+    applyMaterialPresetToMaterials(slabMaterial, getMaterialPresetByRef(material.materialPreset))
+    const previewMeshMaterialInput = slabMaterial as Material & {
+      alphaMap?: unknown
+      depthWrite?: boolean
+      needsUpdate?: boolean
+      opacity?: number
+      side?: number
+      transparent?: boolean
+    }
+    previewMeshMaterialInput.transparent = false
+    previewMeshMaterialInput.opacity = 1
+    previewMeshMaterialInput.alphaMap = null
+    previewMeshMaterialInput.depthWrite = true
+    previewMeshMaterialInput.needsUpdate = true
+    return previewMeshMaterial(mesh, slabMaterial)
+  }
+
+  return previewMeshMaterial(mesh, previewMaterial)
 }
 
 function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRole | null) {
@@ -510,32 +714,11 @@ export const SelectionManager = () => {
     if (mode !== 'material-paint') return
     if (movingNode || curvingWall) return
 
-    const triggerPaintDisabledFeedback = useEditor.getState().triggerPaintDisabledFeedback
-    let hoverFrame = 0
-    let pendingHoveredId: AnyNodeId | null = null
-    let pendingHoverMode: HoverHighlightMode = 'default'
-    let pendingPreview: SceneMaterialPreview = null
+    let activePreview: { key: string; restore: PaintPreviewCleanup } | null = null
 
-    const flushHoverState = () => {
-      hoverFrame = 0
-      const viewerState = useViewer.getState()
-
-      if (viewerState.hoveredId !== pendingHoveredId) {
-        useViewer.setState({ hoveredId: pendingHoveredId })
-      }
-
-      setHoverHighlightMode(pendingHoverMode)
-
-      if (pendingPreview) {
-        viewerState.setMaterialPreview(pendingPreview)
-      } else {
-        viewerState.clearMaterialPreview()
-      }
-    }
-
-    const scheduleHoverState = () => {
-      if (hoverFrame !== 0) return
-      hoverFrame = window.requestAnimationFrame(flushHoverState)
+    const clearActivePreview = () => {
+      activePreview?.restore()
+      activePreview = null
     }
 
     const resolveActivePaintMaterial = () =>
@@ -560,7 +743,7 @@ export const SelectionManager = () => {
         const compatible =
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'wall')
         return {
-          hoveredId: node.id as AnyNodeId,
+          key: `wall:${node.id}:${role ?? 'unsupported'}`,
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -579,14 +762,8 @@ export const SelectionManager = () => {
               : null,
           preview:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? {
-                  nodeId: node.id as AnyNodeId,
-                  target: 'wall',
-                  role,
-                  material: activePaintMaterial.material,
-                  materialPreset: activePaintMaterial.materialPreset,
-                }
-              : null,
+              ? () => applyWallPaintPreview(node as WallNode, role, activePaintMaterial)
+              : () => previewCursor('not-allowed'),
         }
       }
 
@@ -603,7 +780,7 @@ export const SelectionManager = () => {
         const compatible =
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'roof')
         return {
-          hoveredId: roofNode.id as AnyNodeId,
+          key: `roof:${roofNode.id}:${role ?? 'unsupported'}`,
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -622,14 +799,8 @@ export const SelectionManager = () => {
               : null,
           preview:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? {
-                  nodeId: roofNode.id as AnyNodeId,
-                  target: 'roof',
-                  role,
-                  material: activePaintMaterial.material,
-                  materialPreset: activePaintMaterial.materialPreset,
-                }
-              : null,
+              ? () => applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
+              : () => previewCursor('not-allowed'),
         }
       }
 
@@ -646,7 +817,7 @@ export const SelectionManager = () => {
         const compatible =
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'stair')
         return {
-          hoveredId: stairNode.id as AnyNodeId,
+          key: `stair:${stairNode.id}:${role ?? 'unsupported'}`,
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -665,14 +836,8 @@ export const SelectionManager = () => {
               : null,
           preview:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? {
-                  nodeId: stairNode.id as AnyNodeId,
-                  target: 'stair',
-                  role,
-                  material: activePaintMaterial.material,
-                  materialPreset: activePaintMaterial.materialPreset,
-                }
-              : null,
+              ? () => applyStairPaintPreview(stairNode as StairNode, role, activePaintMaterial)
+              : () => previewCursor('not-allowed'),
         }
       }
 
@@ -683,7 +848,7 @@ export const SelectionManager = () => {
           hasActivePaintMaterial(activePaintMaterial)
 
         return {
-          hoveredId: node.id as AnyNodeId,
+          key: `${target}:${node.id}:surface`,
           apply: compatible
             ? () => {
                 useScene
@@ -698,23 +863,21 @@ export const SelectionManager = () => {
               }
             : null,
           preview: compatible
-            ? {
-                nodeId: node.id as AnyNodeId,
-                target,
-                role: 'surface',
-                material: activePaintMaterial.material,
-                materialPreset: activePaintMaterial.materialPreset,
-              }
-            : null,
+            ? () =>
+                applySingleSurfacePaintPreview(
+                  node as FenceNode | SlabNode | CeilingNode,
+                  activePaintMaterial,
+                )
+            : () => previewCursor('not-allowed'),
         }
       }
 
       const disabledNodeTypes = ['item', 'window', 'door', 'zone']
       if (disabledNodeTypes.includes(node.type)) {
         return {
-          hoveredId: node.id as AnyNodeId,
+          key: `${node.type}:${node.id}:unsupported`,
           apply: null,
-          preview: null,
+          preview: () => previewCursor('not-allowed'),
         }
       }
 
@@ -729,28 +892,27 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
 
-      if (!interaction.preview) {
-        pendingHoveredId = interaction.hoveredId
-        pendingHoverMode = 'paint-disabled'
-        pendingPreview = null
-        scheduleHoverState()
+      if (activePreview?.key === interaction.key) {
         return
       }
 
-      pendingHoveredId = interaction.hoveredId
-      pendingHoverMode = 'paint-ready'
-      pendingPreview = interaction.preview
-      scheduleHoverState()
+      clearActivePreview()
+
+      const restore = interaction.preview?.()
+      if (restore) {
+        activePreview = { key: interaction.key, restore }
+      }
     }
 
     const onLeave = (event: NodeEvent) => {
       const interaction = getPaintInteraction(event)
       if (!interaction) return
 
-      pendingHoveredId = null
-      pendingHoverMode = 'default'
-      pendingPreview = null
-      scheduleHoverState()
+      if (activePreview?.key !== interaction.key) {
+        return
+      }
+
+      clearActivePreview()
     }
 
     const onClick = (event: NodeEvent) => {
@@ -761,19 +923,16 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
 
-      if (hoverFrame !== 0) {
-        window.cancelAnimationFrame(hoverFrame)
-        flushHoverState()
-      }
-
       if (!interaction.apply) {
-        useViewer.getState().clearMaterialPreview()
-        triggerPaintDisabledFeedback()
         return
       }
 
       interaction.apply()
-      useViewer.getState().clearMaterialPreview()
+      if (activePreview?.key === interaction.key) {
+        activePreview = null
+      } else {
+        clearActivePreview()
+      }
     }
 
     const allTypes = [
@@ -792,25 +951,20 @@ export const SelectionManager = () => {
     ] as const
 
     for (const type of allTypes) {
-      emitter.on(`${type}:click` as any, onClick as any)
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
+      emitter.on(`${type}:click` as any, onClick as any)
     }
 
     return () => {
       for (const type of allTypes) {
-        emitter.off(`${type}:click` as any, onClick as any)
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
+        emitter.off(`${type}:click` as any, onClick as any)
       }
-      if (hoverFrame !== 0) {
-        window.cancelAnimationFrame(hoverFrame)
-      }
-      useViewer.setState({ hoveredId: null })
-      setHoverHighlightMode('default')
-      useViewer.getState().clearMaterialPreview()
+      clearActivePreview()
     }
-  }, [curvingWall, mode, movingNode, setHoverHighlightMode])
+  }, [curvingWall, mode, movingNode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

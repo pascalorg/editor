@@ -162,8 +162,6 @@ type EditorState = {
   activePaintTarget: PaintableMaterialTarget
   setActivePaintTarget: (target: PaintableMaterialTarget) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
-  paintDisabledFeedbackTick: number
-  triggerPaintDisabledFeedback: () => void
   hoveredPaintTarget: PaintableMaterialTarget | null
   setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
   selectedReferenceId: string | null
@@ -579,9 +577,6 @@ const useEditor = create<EditorState>()(
           activePaintMaterial: activePaintMaterial ?? get().activePaintMaterial,
         }
       },
-      paintDisabledFeedbackTick: 0,
-      triggerPaintDisabledFeedback: () =>
-        set((state) => ({ paintDisabledFeedbackTick: state.paintDisabledFeedbackTick + 1 })),
       hoveredPaintTarget: null,
       setHoveredPaintTarget: (target) =>
         set((state) =>

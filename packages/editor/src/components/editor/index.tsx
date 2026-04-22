@@ -684,13 +684,8 @@ function PaintCursorLayer({
   const mode = useEditor((s) => s.mode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
   const activePaintTarget = useEditor((s) => s.activePaintTarget)
-  const paintDisabledFeedbackTick = useEditor((s) => s.paintDisabledFeedbackTick)
-  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
   const badgeRef = useRef<HTMLDivElement>(null)
-  const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null)
-  const [showDisabledFeedback, setShowDisabledFeedback] = useState(false)
   const active = mode === 'material-paint' && !isVersionPreviewMode
-  const showBlockedState = showDisabledFeedback || hoverHighlightMode === 'paint-disabled'
 
   useEffect(() => {
     if (!active) {
@@ -717,7 +712,6 @@ function PaintCursorLayer({
       const rect = el.getBoundingClientRect()
       nextX = e.clientX - rect.left
       nextY = e.clientY - rect.top
-      lastPointerPositionRef.current = { x: nextX, y: nextY }
 
       if (frame === 0) {
         frame = window.requestAnimationFrame(flushPosition)
@@ -748,57 +742,8 @@ function PaintCursorLayer({
       (activePaintMaterial.material !== undefined ||
         activePaintMaterial.materialPreset !== undefined),
   )
-  const label = !hasMaterial
-    ? 'Choose material'
-    : showBlockedState
-      ? 'Unsupported'
-      : `Paint ${activePaintTarget}`
-  const icon = showBlockedState ? 'mdi:block-helper' : 'mdi:format-color-fill'
-
-  useEffect(() => {
-    if (!active) return
-
-    const el = containerRef.current
-    if (!el) return
-
-    if (hoverHighlightMode === 'paint-disabled') {
-      el.style.cursor = 'not-allowed'
-      return () => {
-        el.style.cursor = ''
-      }
-    }
-
-    el.style.cursor = ''
-  }, [active, containerRef, hoverHighlightMode])
-
-  useEffect(() => {
-    if (!paintDisabledFeedbackTick) return
-
-    const el = containerRef.current
-    const badge = badgeRef.current
-    const lastPointerPosition = lastPointerPositionRef.current
-    setShowDisabledFeedback(true)
-    if (el) {
-      el.style.cursor = 'not-allowed'
-    }
-    if (badge && lastPointerPosition) {
-      badge.style.display = 'block'
-      badge.style.transform = `translate(${lastPointerPosition.x + PAINT_CURSOR_BADGE_OFFSET_X}px, ${lastPointerPosition.y + PAINT_CURSOR_BADGE_OFFSET_Y}px)`
-    }
-    const timeoutId = window.setTimeout(() => {
-      setShowDisabledFeedback(false)
-      if (containerRef.current) {
-        containerRef.current.style.cursor = ''
-      }
-    }, 320)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-      if (el) {
-        el.style.cursor = ''
-      }
-    }
-  }, [containerRef, paintDisabledFeedbackTick])
+  const label = !hasMaterial ? 'Choose material' : `Paint ${activePaintTarget}`
+  const icon = 'mdi:format-color-fill'
 
   useLayoutEffect(() => {
     if (!active && badgeRef.current) {
@@ -815,7 +760,7 @@ function PaintCursorLayer({
       style={{ display: 'none', position: 'absolute', left: 0, top: 0 }}
     >
       <PaintCursorBadge
-        disabled={!hasMaterial || showBlockedState}
+        disabled={!hasMaterial}
         icon={icon}
         label={label}
         position={{ x: 0, y: 0 }}
