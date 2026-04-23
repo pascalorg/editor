@@ -3,9 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getEffectiveStairSurfaceMaterial,
   type LevelNode,
-  type MaterialSchema,
   type StairNode,
   type StairRailingMode,
   type StairSlabOpeningMode,
@@ -20,12 +18,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildStairSurfaceMaterialPatch } from '../../../lib/material-paint'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -64,9 +60,6 @@ export function StairPanel() {
   const createNode = useScene((s) => s.createNode)
   const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
-  const setActivePaintMaterial = useEditor((s) => s.setActivePaintMaterial)
-  const setActivePaintTarget = useEditor((s) => s.setActivePaintTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -95,37 +88,6 @@ export function StairPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const materialTargetRole =
-    selectedMaterialTarget &&
-    selectedMaterialTarget.nodeId === node?.id &&
-    (selectedMaterialTarget.role === 'railing' ||
-      selectedMaterialTarget.role === 'tread' ||
-      selectedMaterialTarget.role === 'side')
-      ? selectedMaterialTarget.role
-      : null
-  const materialPickerValue =
-    node && materialTargetRole ? getEffectiveStairSurfaceMaterial(node, materialTargetRole) : {}
-
-  const handleTargetedMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      if (!node || !materialTargetRole) return
-      setActivePaintTarget('stair')
-      setActivePaintMaterial({ material, sourceTarget: 'stair' })
-      handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
-    },
-    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
-  )
-
-  const handleTargetedMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      if (!node || !materialTargetRole) return
-      setActivePaintTarget('stair')
-      setActivePaintMaterial({ materialPreset, sourceTarget: 'stair' })
-      handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset))
-    },
-    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleClose = useCallback(() => {
@@ -589,22 +551,6 @@ export function StairPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
-      </PanelSection>
-      <PanelSection title="Material">
-        {!materialTargetRole ? (
-          <div className="mb-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-[11px] text-muted-foreground">
-            Click the stair surface you want to edit. Materials apply to one target at a time.
-          </div>
-        ) : null}
-        <MaterialPicker
-          disabled={!materialTargetRole}
-          hideSideControl
-          nodeType="stair"
-          onChange={handleTargetedMaterialChange}
-          onSelectMaterialPreset={handleTargetedMaterialPresetChange}
-          selectedMaterialPreset={materialPickerValue.materialPreset}
-          value={materialPickerValue.material}
-        />
       </PanelSection>
     </PanelWrapper>
   )

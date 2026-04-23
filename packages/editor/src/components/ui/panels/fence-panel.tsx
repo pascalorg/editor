@@ -1,9 +1,8 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type FenceNode, type MaterialSchema, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -66,20 +65,6 @@ export function FencePanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleCustomMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
-  )
 
   if (!(node && node.type === 'fence' && selectedId && selectedCount === 1)) return null
 
@@ -204,15 +189,6 @@ export function FencePanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="fence"
-          onChange={handleCustomMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
-      </PanelSection>
     </PanelWrapper>
   )
 }

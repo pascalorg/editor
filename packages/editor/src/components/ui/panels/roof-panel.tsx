@@ -3,8 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getEffectiveRoofSurfaceMaterial,
-  type MaterialSchema,
   type RoofNode,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
@@ -15,11 +13,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildRoofSurfaceMaterialPatch } from '../../../lib/material-paint'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -30,9 +26,6 @@ export function RoofPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
-  const setActivePaintMaterial = useEditor((s) => s.setActivePaintMaterial)
-  const setActivePaintTarget = useEditor((s) => s.setActivePaintTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofNode | undefined) : undefined,
@@ -53,37 +46,6 @@ export function RoofPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const materialTargetRole =
-    selectedMaterialTarget &&
-    selectedMaterialTarget.nodeId === node?.id &&
-    (selectedMaterialTarget.role === 'top' ||
-      selectedMaterialTarget.role === 'edge' ||
-      selectedMaterialTarget.role === 'wall')
-      ? selectedMaterialTarget.role
-      : null
-  const materialPickerValue =
-    node && materialTargetRole ? getEffectiveRoofSurfaceMaterial(node, materialTargetRole) : {}
-
-  const handleTargetedMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      if (!node || !materialTargetRole) return
-      setActivePaintTarget('roof')
-      setActivePaintMaterial({ material, sourceTarget: 'roof' })
-      handleUpdate(buildRoofSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
-    },
-    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
-  )
-
-  const handleTargetedMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      if (!node || !materialTargetRole) return
-      setActivePaintTarget('roof')
-      setActivePaintMaterial({ materialPreset, sourceTarget: 'roof' })
-      handleUpdate(buildRoofSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset))
-    },
-    [handleUpdate, materialTargetRole, node, setActivePaintMaterial, setActivePaintTarget],
   )
 
   const handleClose = useCallback(() => {
@@ -289,22 +251,6 @@ export function RoofPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
-      </PanelSection>
-      <PanelSection title="Material">
-        {!materialTargetRole ? (
-          <div className="mb-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-[11px] text-muted-foreground">
-            Click the roof surface you want to edit. Materials apply to one target at a time.
-          </div>
-        ) : null}
-        <MaterialPicker
-          disabled={!materialTargetRole}
-          hideSideControl
-          nodeType="roof"
-          onChange={handleTargetedMaterialChange}
-          onSelectMaterialPreset={handleTargetedMaterialPresetChange}
-          selectedMaterialPreset={materialPickerValue.materialPreset}
-          value={materialPickerValue.material}
-        />
       </PanelSection>
     </PanelWrapper>
   )
