@@ -1,6 +1,6 @@
 archly.cloud {
     # Reverse proxy to the Pascal application running on port 3002
-    reverse_proxy localhost:3002
+    reverse_proxy app:3002
 
     # Enable compression for faster loads
     encode gzip zstd
