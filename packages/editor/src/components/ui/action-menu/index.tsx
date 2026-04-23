@@ -1,16 +1,13 @@
 'use client'
 
-import { getMaterialsForTarget, toLibraryMaterialRef, useScene } from '@pascal-app/core'
+import { useScene } from '@pascal-app/core'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo } from 'react'
 import { useViewer } from '@pascal-app/viewer'
 import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
 import { MaterialPicker } from './../../../components/ui/controls/material-picker'
 import { useReducedMotion } from './../../../hooks/use-reduced-motion'
-import {
-  isActivePaintMaterialCompatible,
-  resolvePaintTargetFromSelection,
-} from './../../../lib/material-paint'
+import { resolvePaintTargetFromSelection } from './../../../lib/material-paint'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ItemCatalog } from '../item-catalog/item-catalog'
@@ -40,45 +37,17 @@ function PaintMaterialTray() {
     }
   }, [nodes, selectedId, setActivePaintTarget])
 
-  const catalogItems = useMemo(() => getMaterialsForTarget(activePaintTarget), [activePaintTarget])
-
-  useEffect(() => {
-    const firstMaterial = catalogItems[0]
-    if (!firstMaterial) return
-
-    const hasCompatibleMaterial = isActivePaintMaterialCompatible(
-      activePaintMaterial,
-      activePaintTarget,
-    )
-    if (hasCompatibleMaterial) return
-
-    setActivePaintMaterial({
-      materialPreset: toLibraryMaterialRef(firstMaterial.id),
-      sourceTarget: activePaintTarget,
-    })
-  }, [activePaintMaterial, activePaintTarget, catalogItems, setActivePaintMaterial])
-
   return (
     <div className="w-[42rem] max-w-[calc(100vw-2rem)]">
       <MaterialPicker
-        hideSideControl
-        nodeType={activePaintTarget}
-        onChange={(material) => {
-          setActivePaintMaterial({ material, sourceTarget: activePaintTarget })
+        onChange={(material, category) => {
+          setActivePaintMaterial({ material, category, sourceTarget: activePaintTarget })
         }}
-        onSelectMaterialPreset={(materialPreset) => {
-          setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
+        onSelectMaterialPreset={(materialPreset, category) => {
+          setActivePaintMaterial({ materialPreset, category, sourceTarget: activePaintTarget })
         }}
-        selectedMaterialPreset={
-          activePaintMaterial?.sourceTarget === activePaintTarget
-            ? activePaintMaterial.materialPreset
-            : undefined
-        }
-        value={
-          activePaintMaterial?.sourceTarget === activePaintTarget
-            ? activePaintMaterial.material
-            : undefined
-        }
+        selectedMaterialPreset={activePaintMaterial?.materialPreset}
+        value={activePaintMaterial?.material}
       />
     </div>
   )

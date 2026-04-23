@@ -1,55 +1,69 @@
 'use client'
 
 import {
-  getMaterialsForTarget,
+  getCatalogMaterialById,
+  getLibraryMaterialIdFromRef,
+  getMaterialsForCategory,
+  MATERIAL_CATEGORIES,
   toLibraryMaterialRef,
+  type MaterialCategory,
   type MaterialSchema,
-  type MaterialTarget,
 } from '@pascal-app/core'
 import { useEffect, useRef, useState } from 'react'
+import useEditor from '../../../store/use-editor'
 
 type MaterialPickerProps = {
-  nodeType?: MaterialTarget
   value?: MaterialSchema
   selectedMaterialPreset?: string
-  onChange?: (material: MaterialSchema) => void
-  onSelectMaterialPreset?: (materialPreset: string) => void
-  hideSideControl?: boolean
+  onChange?: (material: MaterialSchema, category: MaterialCategory) => void
+  onSelectMaterialPreset?: (materialPreset: string, category: MaterialCategory) => void
   disabled?: boolean
 }
 
 export function MaterialPicker({
-  nodeType,
   value,
   selectedMaterialPreset,
   onChange,
   onSelectMaterialPreset,
-  hideSideControl = false,
   disabled = false,
 }: MaterialPickerProps) {
+  const setPaintPanelOpen = useEditor((state) => state.setPaintPanelOpen)
   const [showCustom, setShowCustom] = useState<boolean>(!!value?.properties)
+  const [selectedCategory, setSelectedCategory] = useState<MaterialCategory>(MATERIAL_CATEGORIES[0])
   const catalogScrollRef = useRef<HTMLDivElement>(null)
-  const catalogItems = nodeType ? getMaterialsForTarget(nodeType) : []
+  const catalogItems =
+    selectedCategory === 'other'
+      ? getMaterialsForCategory('other')
+      : getMaterialsForCategory(selectedCategory)
 
   useEffect(() => {
     setShowCustom(!!value?.properties && !selectedMaterialPreset)
   }, [selectedMaterialPreset, value?.properties])
 
-  const currentProps = value?.properties || {
-    color: '#ffffff',
-    roughness: 0.5,
-    metalness: 0,
-    opacity: 1,
-    transparent: false,
-    side: 'front' as const,
-  }
+  useEffect(() => {
+    if (!selectedMaterialPreset && value?.properties) {
+      setSelectedCategory('other')
+      return
+    }
+
+    const catalogId =
+      getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? value?.id ?? undefined
+    const selectedCatalogEntry = getCatalogMaterialById(catalogId)
+    if (selectedCatalogEntry?.category) {
+      setSelectedCategory(selectedCatalogEntry.category)
+    }
+  }, [selectedMaterialPreset, value?.id])
+
   const selectedCatalogId =
     selectedMaterialPreset ?? (value?.id ? toLibraryMaterialRef(value.id) : undefined)
 
   const handleCatalogSelect = (materialId: string) => {
     if (disabled) return
     setShowCustom(false)
-    onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
+    setPaintPanelOpen(false)
+    const category = getCatalogMaterialById(materialId)?.category
+    if (!category) return
+    onSelectMaterialPreset?.(toLibraryMaterialRef(materialId), category)
   }
 
   useEffect(() => {
@@ -76,40 +90,51 @@ export function MaterialPicker({
   const handleCustomOpen = () => {
     if (disabled) return
     setShowCustom(true)
-    onChange?.({
-      preset: 'custom',
-      properties: {
-        color: value?.properties?.color || '#ffffff',
-        roughness: value?.properties?.roughness ?? 0.5,
-        metalness: value?.properties?.metalness ?? 0,
-        opacity: value?.properties?.opacity ?? 1,
-        transparent: value?.properties?.transparent ?? false,
-        side: value?.properties?.side ?? 'front',
+    setPaintPanelOpen(true)
+    onChange?.(
+      {
+        preset: 'custom',
+        properties: {
+          color: value?.properties?.color || '#ffffff',
+          roughness: value?.properties?.roughness ?? 0.5,
+          metalness: value?.properties?.metalness ?? 0,
+          opacity: value?.properties?.opacity ?? 1,
+          transparent: value?.properties?.transparent ?? false,
+          side: value?.properties?.side ?? 'front',
+        },
       },
-    })
-  }
-
-  const handlePropertyChange = (
-    prop: keyof typeof currentProps,
-    val: (typeof currentProps)[keyof typeof currentProps],
-  ) => {
-    if (disabled) return
-    onChange?.({
-      preset: 'custom',
-      properties: {
-        ...currentProps,
-        [prop]: val,
-      },
-    })
+      'other',
+    )
   }
 
   return (
     <div className={`min-w-0 space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {(catalogItems.length > 0 || onChange) && (
         <div className="min-w-0 space-y-2">
-          {catalogItems.length > 0 ? (
-            <div className="text-gray-500 text-xs uppercase tracking-[0.16em]">Library</div>
-          ) : null}
+          <div className="flex flex-wrap gap-1">
+            {MATERIAL_CATEGORIES.map((category) => (
+              <button
+                className={`px-2 font-medium text-[11px] uppercase tracking-[0.12em] transition-all ${
+                  selectedCategory === category
+                    ? 'bg-transparent text-foreground'
+                    : 'bg-transparent text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100'
+                }`}
+                key={category}
+                onClick={() => {
+                  setSelectedCategory(category)
+                  if (showCustom) {
+                    setShowCustom(false)
+                  }
+                  if (category !== 'other') {
+                    setPaintPanelOpen(false)
+                  }
+                }}
+                type="button"
+              >
+                {category.charAt(0).toUpperCase() + category.slice(1)}
+              </button>
+            ))}
+          </div>
           <div
             className="w-full max-w-full overflow-x-auto overflow-y-hidden"
             ref={catalogScrollRef}
@@ -142,12 +167,12 @@ export function MaterialPicker({
                   )}
                 </button>
               ))}
-              {onChange ? (
+              {selectedCategory === 'other' && onChange ? (
                 <button
                   className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border text-[10px] font-medium transition-all ${
                     showCustom
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/30'
-                      : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400'
+                      ? 'border-blue-500 ring-2 ring-blue-500/30'
+                      : 'border-gray-300 hover:border-gray-400'
                   }`}
                   onClick={handleCustomOpen}
                   title="Custom"
@@ -158,97 +183,6 @@ export function MaterialPicker({
               ) : null}
             </div>
           </div>
-        </div>
-      )}
-
-      {showCustom && onChange && (
-        <div className="space-y-2 pt-2">
-          <div className="flex items-center gap-2">
-            <label className="w-16 text-gray-500 text-xs">Color</label>
-            <input
-              className="h-7 w-12 cursor-pointer rounded border border-gray-300"
-              onChange={(e) => handlePropertyChange('color', e.target.value)}
-              type="color"
-              value={currentProps.color}
-            />
-            <input
-              className="h-7 flex-1 rounded border border-gray-300 px-2 text-xs"
-              onChange={(e) => handlePropertyChange('color', e.target.value)}
-              type="text"
-              value={currentProps.color}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="w-16 text-gray-500 text-xs">Roughness</label>
-            <input
-              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200"
-              max={1}
-              min={0}
-              onChange={(e) => handlePropertyChange('roughness', Number.parseFloat(e.target.value))}
-              step={0.01}
-              type="range"
-              value={currentProps.roughness}
-            />
-            <span className="w-8 text-right text-gray-400 text-xs">
-              {currentProps.roughness.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="w-16 text-gray-500 text-xs">Metalness</label>
-            <input
-              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200"
-              max={1}
-              min={0}
-              onChange={(e) => handlePropertyChange('metalness', Number.parseFloat(e.target.value))}
-              step={0.01}
-              type="range"
-              value={currentProps.metalness}
-            />
-            <span className="w-8 text-right text-gray-400 text-xs">
-              {currentProps.metalness.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="w-16 text-gray-500 text-xs">Opacity</label>
-            <input
-              className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200"
-              max={1}
-              min={0}
-              onChange={(e) => {
-                const opacity = Number.parseFloat(e.target.value)
-                handlePropertyChange('opacity', opacity)
-                if (opacity < 1 && !currentProps.transparent) {
-                  handlePropertyChange('transparent', true)
-                }
-              }}
-              step={0.01}
-              type="range"
-              value={currentProps.opacity}
-            />
-            <span className="w-8 text-right text-gray-400 text-xs">
-              {currentProps.opacity.toFixed(2)}
-            </span>
-          </div>
-
-          {!hideSideControl && (
-            <div className="flex items-center gap-2">
-              <label className="w-16 text-gray-500 text-xs">Side</label>
-              <select
-                className="h-7 flex-1 rounded border border-gray-300 px-2 text-xs"
-                onChange={(e) =>
-                  handlePropertyChange('side', e.target.value as 'front' | 'back' | 'double')
-                }
-                value={currentProps.side}
-              >
-                <option value="front">Front</option>
-                <option value="back">Back</option>
-                <option value="double">Double</option>
-              </select>
-            </div>
-          )}
         </div>
       )}
     </div>

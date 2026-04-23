@@ -8,6 +8,8 @@ import {
   getEffectiveStairSurfaceMaterial,
   getEffectiveWallSurfaceMaterial,
   getLibraryMaterialIdFromRef,
+  getMaterialCategoryTargets,
+  type MaterialCategory,
   type MaterialSchema,
   type MaterialTarget,
   type RoofNode,
@@ -29,6 +31,7 @@ export type SingleSurfaceMaterialRole = 'surface'
 export type ActivePaintMaterial = {
   material?: MaterialSchema
   materialPreset?: string
+  category?: MaterialCategory
   sourceTarget: PaintableMaterialTarget
 }
 
@@ -47,6 +50,17 @@ function getCatalogEntryForActivePaintMaterial(material: ActivePaintMaterial | n
   return getCatalogMaterialById(catalogId)
 }
 
+function resolvePaintMaterialCategory(
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): MaterialCategory | undefined {
+  const catalogId = getLibraryMaterialIdFromRef(materialPreset) ?? material?.id ?? undefined
+  const catalogEntry = getCatalogMaterialById(catalogId)
+  if (catalogEntry?.category) return catalogEntry.category
+  if (material || materialPreset === undefined) return 'other'
+  return undefined
+}
+
 export function getActivePaintMaterialLabel(material: ActivePaintMaterial | null | undefined) {
   return getCatalogEntryForActivePaintMaterial(material)?.label ?? 'Custom'
 }
@@ -58,9 +72,10 @@ export function isActivePaintMaterialCompatible(
   if (!hasActivePaintMaterial(material)) return false
 
   const catalogEntry = getCatalogEntryForActivePaintMaterial(material)
-  if (!catalogEntry) return true
+  const category = material?.category ?? catalogEntry?.category
+  if (!category) return false
 
-  return catalogEntry.targets.includes(target)
+  return getMaterialCategoryTargets(category).includes(target)
 }
 
 export function buildWallSurfaceMaterialPatch(
@@ -182,9 +197,10 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'wall',
     })
-      ? {
+        ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
+          category: resolvePaintMaterialCategory(surface.material, surface.materialPreset),
           sourceTarget: 'wall',
         }
       : null
@@ -202,9 +218,10 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'roof',
     })
-      ? {
+        ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
+          category: resolvePaintMaterialCategory(surface.material, surface.materialPreset),
           sourceTarget: 'roof',
         }
       : null
@@ -222,9 +239,10 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'stair',
     })
-      ? {
+        ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
+          category: resolvePaintMaterialCategory(surface.material, surface.materialPreset),
           sourceTarget: 'stair',
         }
       : null
@@ -245,6 +263,10 @@ export function resolveActivePaintMaterialFromSelection(params: {
       ? {
           material: selectedNode.material,
           materialPreset: selectedNode.materialPreset,
+          category: resolvePaintMaterialCategory(
+            selectedNode.material,
+            selectedNode.materialPreset,
+          ),
           sourceTarget: target,
         }
       : null
