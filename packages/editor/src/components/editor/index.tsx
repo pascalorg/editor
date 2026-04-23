@@ -508,6 +508,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  projectId,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
@@ -591,6 +592,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   hasLoadedInitialScene,
   showLoader,
   isFirstPersonMode,
+  projectId,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
@@ -598,6 +600,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   hasLoadedInitialScene: boolean
   showLoader: boolean
   isFirstPersonMode: boolean
+  projectId?: string | null
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   const viewMode = useEditor((s) => s.viewMode)
@@ -847,6 +850,7 @@ export default function Editor({
       isLoading={isLoading}
       isVersionPreviewMode={isVersionPreviewMode}
       onThumbnailCapture={onThumbnailCapture}
+      projectId={projectId}
       showLoader={showLoader}
     />
   )
