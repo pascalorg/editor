@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'Privacy Policy for Pascal Editor and the Pascal platform.',
+  description: 'Privacy Policy for Archly and the archly.cloud platform.',
 }
 
 export default function PrivacyPage() {
@@ -12,19 +12,9 @@ export default function PrivacyPage() {
       <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto px-6 py-4">
           <nav className="flex items-center gap-4 text-sm">
-            <Link
-              className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/"
-            >
-              Home
-            </Link>
+            <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/">Home</Link>
             <span className="text-muted-foreground">/</span>
-            <Link
-              className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/terms"
-            >
-              Terms of Service
-            </Link>
+            <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/terms">Terms of Service</Link>
             <span className="text-muted-foreground">|</span>
             <span className="font-medium text-foreground">Privacy Policy</span>
           </nav>
@@ -39,35 +29,30 @@ export default function PrivacyPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">1. Introduction</h2>
             <p className="text-foreground/90 leading-relaxed">
-              Pascal Group Inc. (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates the
-              Pascal Editor and Platform at pascal.app. This Privacy Policy explains how we collect,
+              Archly Inc. (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates the
+              Archly Editor and Platform at archly.cloud. This Privacy Policy explains how we collect,
               use, and protect your information when you use our services.
             </p>
           </section>
 
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">2. Information We Collect</h2>
-
             <h3 className="mt-4 font-medium text-lg">Account Information</h3>
-            <p className="text-foreground/90 leading-relaxed">
-              When you create an account, we collect:
-            </p>
+            <p className="text-foreground/90 leading-relaxed">When you create an account, we collect:</p>
             <ul className="list-disc space-y-2 pl-6 text-foreground/90">
               <li>Email address</li>
               <li>Name</li>
               <li>Profile picture/avatar</li>
               <li>OAuth provider data (from Google when you sign in with Google)</li>
             </ul>
-
             <h3 className="mt-4 font-medium text-lg">Project Data</h3>
             <p className="text-foreground/90 leading-relaxed">
               When you use the Platform, we store your projects, including 3D building designs,
               floor plans, and associated metadata.
             </p>
-
             <h3 className="mt-4 font-medium text-lg">Usage Analytics</h3>
             <p className="text-foreground/90 leading-relaxed">
-              We use Vercel Analytics and Speed Insights to collect anonymized usage data, including
+              We use PostHog to collect anonymized usage data, including
               page views, performance metrics, and general usage patterns. This helps us improve the
               Platform.
             </p>
@@ -80,10 +65,7 @@ export default function PrivacyPage() {
               <li>Provide and maintain your account</li>
               <li>Store and sync your projects across devices</li>
               <li>Improve our services based on usage patterns</li>
-              <li>
-                Send optional email notifications about new features and updates (you can opt out in
-                settings)
-              </li>
+              <li>Send optional email notifications about new features and updates (you can opt out in settings)</li>
               <li>Respond to support requests</li>
               <li>Ensure platform security and prevent abuse</li>
             </ul>
@@ -92,7 +74,7 @@ export default function PrivacyPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">4. Data Storage</h2>
             <p className="text-foreground/90 leading-relaxed">
-              Your data is stored using Supabase (PostgreSQL database) on secure cloud
+              Your data is stored using PostgreSQL on secure cloud
               infrastructure. We implement appropriate technical and organizational measures to
               protect your data.
             </p>
@@ -100,40 +82,23 @@ export default function PrivacyPage() {
 
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">5. Third-Party Services</h2>
-            <p className="text-foreground/90 leading-relaxed">
-              We use the following third-party services to operate the Platform:
-            </p>
+            <p className="text-foreground/90 leading-relaxed">We use the following third-party services to operate the Platform:</p>
             <ul className="list-disc space-y-2 pl-6 text-foreground/90">
-              <li>
-                <strong>Google</strong> - OAuth authentication for sign-in
-              </li>
-              <li>
-                <strong>Vercel</strong> - Application hosting, analytics, and performance monitoring
-              </li>
-              <li>
-                <strong>Supabase</strong> - Database hosting and authentication infrastructure
-              </li>
+              <li><strong>Google</strong> - OAuth authentication for sign-in</li>
+              <li><strong>Cloudflare</strong> - CDN, R2 object storage for project assets</li>
+              <li><strong>PostHog</strong> - Product analytics and usage insights</li>
             </ul>
             <p className="mt-4 text-foreground/90 leading-relaxed">
-              Each of these services has their own privacy policies governing their handling of your
-              data.
+              Each of these services has their own privacy policies governing their handling of your data.
             </p>
           </section>
 
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">6. Cookies</h2>
-            <p className="text-foreground/90 leading-relaxed">
-              We use minimal cookies necessary for the Platform to function:
-            </p>
+            <p className="text-foreground/90 leading-relaxed">We use minimal cookies necessary for the Platform to function:</p>
             <ul className="list-disc space-y-2 pl-6 text-foreground/90">
-              <li>
-                <strong>Session cookies</strong> - Essential for authentication and keeping you
-                signed in
-              </li>
-              <li>
-                <strong>Analytics cookies</strong> - Used by Vercel Analytics to collect anonymized
-                usage data
-              </li>
+              <li><strong>Session cookies</strong> - Essential for authentication and keeping you signed in</li>
+              <li><strong>Analytics cookies</strong> - Used by PostHog to collect anonymized usage data</li>
             </ul>
           </section>
 
@@ -149,13 +114,7 @@ export default function PrivacyPage() {
             </ul>
             <p className="mt-4 text-foreground/90 leading-relaxed">
               To exercise any of these rights, please contact us at{' '}
-              <a
-                className="text-foreground underline hover:text-foreground/80"
-                href="mailto:support@pascal.app"
-              >
-                support@pascal.app
-              </a>
-              .
+              <a className="text-foreground underline hover:text-foreground/80" href="mailto:support@archly.cloud">support@archly.cloud</a>.
             </p>
           </section>
 
@@ -191,13 +150,7 @@ export default function PrivacyPage() {
             <p className="text-foreground/90 leading-relaxed">
               If you have questions about this Privacy Policy or how we handle your data, please
               contact us at{' '}
-              <a
-                className="text-foreground underline hover:text-foreground/80"
-                href="mailto:support@pascal.app"
-              >
-                support@pascal.app
-              </a>
-              .
+              <a className="text-foreground underline hover:text-foreground/80" href="mailto:support@archly.cloud">support@archly.cloud</a>.
             </p>
           </section>
         </article>

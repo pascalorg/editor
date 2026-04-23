@@ -57,10 +57,10 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside className="w-64 border-r border-white/5 bg-[#0a0a0a] p-6 flex flex-col gap-8">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-black" />
+          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
+            <ShieldCheck className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight">Pascal Admin</span>
+          <span className="font-bold text-xl tracking-tight">Archly Admin</span>
         </div>
 
         <nav className="space-y-2">

@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
-  description: 'Terms of Service for Pascal Editor and the Pascal platform.',
+  description: 'Terms of Service for Archly and the archly.cloud platform.',
 }
 
 export default function TermsPage() {
@@ -12,21 +12,11 @@ export default function TermsPage() {
       <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto px-6 py-4">
           <nav className="flex items-center gap-4 text-sm">
-            <Link
-              className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/"
-            >
-              Home
-            </Link>
+            <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/">Home</Link>
             <span className="text-muted-foreground">/</span>
             <span className="font-medium text-foreground">Terms of Service</span>
             <span className="text-muted-foreground">|</span>
-            <Link
-              className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/privacy"
-            >
-              Privacy Policy
-            </Link>
+            <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/privacy">Privacy Policy</Link>
           </nav>
         </div>
       </header>
@@ -39,8 +29,8 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">1. Introduction</h2>
             <p className="text-foreground/90 leading-relaxed">
-              Welcome to Pascal Editor (&quot;Editor&quot;) and the Pascal platform at pascal.app
-              (&quot;Platform&quot;), operated by Pascal Group Inc. (&quot;we,&quot; &quot;us,&quot;
+              Welcome to Archly (&quot;Editor&quot;) and the Archly platform at archly.cloud
+              (&quot;Platform&quot;), operated by Archly Inc. (&quot;we,&quot; &quot;us,&quot;
               or &quot;our&quot;). By accessing or using our services, you agree to these Terms of
               Service.
             </p>
@@ -49,14 +39,14 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">2. The Editor and Platform</h2>
             <p className="text-foreground/90 leading-relaxed">
-              The Pascal Editor is open-source software released under the MIT License. You may use,
+              The Archly Editor is open-source software released under the MIT License. You may use,
               copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Editor
               software in accordance with the MIT License terms.
             </p>
             <p className="text-foreground/90 leading-relaxed">
-              The Pascal platform (pascal.app) and its associated services, including user accounts,
+              The Archly platform (archly.cloud) and its associated services, including user accounts,
               cloud storage, and project hosting, are proprietary services owned and operated by
-              Pascal Group Inc. These Terms govern your use of the Platform.
+              Archly Inc. These Terms govern your use of the Platform.
             </p>
           </section>
 
@@ -64,7 +54,7 @@ export default function TermsPage() {
             <h2 className="font-semibold text-xl">3. Accounts and Authentication</h2>
             <p className="text-foreground/90 leading-relaxed">
               To use certain features of the Platform, you must create an account. We use Google
-              OAuth and magic link email authentication through Supabase. You are responsible for
+              OAuth and magic link email authentication. You are responsible for
               maintaining the security of your account credentials and for all activities that occur
               under your account.
             </p>
@@ -74,12 +64,8 @@ export default function TermsPage() {
             <h2 className="font-semibold text-xl">4. Acceptable Use</h2>
             <p className="text-foreground/90 leading-relaxed">You agree not to:</p>
             <ul className="list-disc space-y-2 pl-6 text-foreground/90">
-              <li>
-                Use the Platform for any unlawful purpose or in violation of any applicable laws
-              </li>
-              <li>
-                Upload, share, or distribute content that infringes intellectual property rights
-              </li>
+              <li>Use the Platform for any unlawful purpose or in violation of any applicable laws</li>
+              <li>Upload, share, or distribute content that infringes intellectual property rights</li>
               <li>Attempt to gain unauthorized access to the Platform or its systems</li>
               <li>Interfere with or disrupt the Platform&apos;s infrastructure</li>
               <li>Upload malicious code, viruses, or harmful content</li>
@@ -105,8 +91,8 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">6. Platform Ownership</h2>
             <p className="text-foreground/90 leading-relaxed">
-              The Platform, including its design, features, and proprietary code, is owned by Pascal
-              Group Inc. and protected by intellectual property laws. While the Editor source code
+              The Platform, including its design, features, and proprietary code, is owned by Archly
+              Inc. and protected by intellectual property laws. While the Editor source code
               is open-source under the MIT License, the Platform services, branding, and
               infrastructure remain our proprietary property.
             </p>
@@ -118,13 +104,7 @@ export default function TermsPage() {
               We reserve the right to suspend or terminate your account if you violate these Terms
               or engage in conduct that we determine is harmful to the Platform or other users. You
               may also delete your account at any time by contacting us at{' '}
-              <a
-                className="text-foreground underline hover:text-foreground/80"
-                href="mailto:support@pascal.app"
-              >
-                support@pascal.app
-              </a>
-              .
+              <a className="text-foreground underline hover:text-foreground/80" href="mailto:support@archly.cloud">support@archly.cloud</a>.
             </p>
           </section>
 
@@ -145,7 +125,7 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">9. Limitation of Liability</h2>
             <p className="text-foreground/90 leading-relaxed">
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, PASCAL GROUP INC. SHALL NOT BE LIABLE FOR ANY
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, ARCHLY INC. SHALL NOT BE LIABLE FOR ANY
               INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF
               DATA, PROFITS, OR GOODWILL, ARISING FROM YOUR USE OF THE PLATFORM.
             </p>
@@ -164,13 +144,7 @@ export default function TermsPage() {
             <h2 className="font-semibold text-xl">11. Contact Us</h2>
             <p className="text-foreground/90 leading-relaxed">
               If you have questions about these Terms, please contact us at{' '}
-              <a
-                className="text-foreground underline hover:text-foreground/80"
-                href="mailto:support@pascal.app"
-              >
-                support@pascal.app
-              </a>
-              .
+              <a className="text-foreground underline hover:text-foreground/80" href="mailto:support@archly.cloud">support@archly.cloud</a>.
             </p>
           </section>
         </article>
