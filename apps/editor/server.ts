@@ -6,7 +6,7 @@ import { createAdapter } from '@socket.io/redis-adapter'
 import Redis from 'ioredis'
 
 const dev = process.env.NODE_ENV !== 'production'
-const hostname = 'localhost'
+const hostname = '0.0.0.0'
 const port = 3002
 // when using middleware `hostname` and `port` must be provided below
 const app = next({ dev, hostname, port })
