@@ -18,6 +18,14 @@ const INDUSTRIES = [
   'Other',
 ]
 
+const USE_CASES = [
+  'Collaborative 3D Modeling',
+  'Acoustic Simulation',
+  'Client Presentations',
+  'Asset Management',
+  'Other',
+]
+
 export default function ApplyPage() {
   const [step, setStep] = useState(0)
   const [submitted, setSubmitted] = useState(false)
@@ -25,6 +33,7 @@ export default function ApplyPage() {
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
     orgName: '',
+    domain: '',
     teamSize: '1-5 members',
     industry: '',
     contactName: '',
@@ -36,7 +45,7 @@ export default function ApplyPage() {
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }))
 
   const canAdvance = () => {
-    if (step === 0) return form.orgName && form.industry
+    if (step === 0) return form.orgName && form.industry && form.domain
     if (step === 1) return form.contactName && form.contactEmail
     if (step === 2) return form.useCase
     return false
@@ -47,6 +56,7 @@ export default function ApplyPage() {
     setError(null)
     const result = await submitApplication({
       orgName: form.orgName,
+      domain: form.domain,
       contactName: form.contactName,
       contactEmail: form.contactEmail,
       useCase: `[${form.industry}] [${form.role || 'N/A'}] ${form.useCase}`,
@@ -134,6 +144,10 @@ export default function ApplyPage() {
                       <input required value={form.orgName} onChange={e => update('orgName', e.target.value)} type="text" placeholder="Acme Architecture"
                         className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all text-sm" />
                     </Field>
+                    <Field label="Company Domain" icon={<Box className="w-4 h-4" />}>
+                      <input required value={form.domain} onChange={e => update('domain', e.target.value)} type="text" placeholder="acme.com"
+                        className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all text-sm" />
+                    </Field>
                     <Field label="Team Size" icon={<Users className="w-4 h-4" />}>
                       <select value={form.teamSize} onChange={e => update('teamSize', e.target.value)}
                         className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all text-sm">
@@ -174,10 +188,18 @@ export default function ApplyPage() {
                 {step === 2 && (
                   <div className="space-y-6">
                     <div><h2 className="text-xl font-bold mb-1">How will your team use Archly?</h2><p className="text-sm text-zinc-400">Help us tailor your experience.</p></div>
-                    <Field label="Describe your use case" icon={<MessageSquare className="w-4 h-4" />}>
-                      <textarea required value={form.useCase} onChange={e => update('useCase', e.target.value)} rows={5}
-                        placeholder="e.g. We need to collaborate on residential building designs across our 3 offices in real-time..."
-                        className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30 transition-all resize-none text-sm" />
+                    <Field label="Select your primary use case" icon={<MessageSquare className="w-4 h-4" />}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                        {USE_CASES.map(uc => (
+                          <div 
+                            key={uc}
+                            onClick={() => update('useCase', uc)}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all ${form.useCase === uc ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-black/40 border-white/[0.08] text-zinc-400 hover:border-white/20 hover:text-white'}`}
+                          >
+                            <span className="text-sm font-medium">{uc}</span>
+                          </div>
+                        ))}
+                      </div>
                     </Field>
                   </div>
                 )}

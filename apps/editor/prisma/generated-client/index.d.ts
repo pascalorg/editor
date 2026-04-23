@@ -7336,6 +7336,7 @@ export namespace Prisma {
     orgName: string | null
     contactName: string | null
     contactEmail: string | null
+    domain: string | null
     useCase: string | null
     teamSize: number | null
     status: $Enums.OrgStatus | null
@@ -7348,6 +7349,7 @@ export namespace Prisma {
     orgName: string | null
     contactName: string | null
     contactEmail: string | null
+    domain: string | null
     useCase: string | null
     teamSize: number | null
     status: $Enums.OrgStatus | null
@@ -7360,6 +7362,7 @@ export namespace Prisma {
     orgName: number
     contactName: number
     contactEmail: number
+    domain: number
     useCase: number
     teamSize: number
     status: number
@@ -7382,6 +7385,7 @@ export namespace Prisma {
     orgName?: true
     contactName?: true
     contactEmail?: true
+    domain?: true
     useCase?: true
     teamSize?: true
     status?: true
@@ -7394,6 +7398,7 @@ export namespace Prisma {
     orgName?: true
     contactName?: true
     contactEmail?: true
+    domain?: true
     useCase?: true
     teamSize?: true
     status?: true
@@ -7406,6 +7411,7 @@ export namespace Prisma {
     orgName?: true
     contactName?: true
     contactEmail?: true
+    domain?: true
     useCase?: true
     teamSize?: true
     status?: true
@@ -7505,6 +7511,7 @@ export namespace Prisma {
     orgName: string
     contactName: string
     contactEmail: string
+    domain: string | null
     useCase: string
     teamSize: number
     status: $Enums.OrgStatus
@@ -7536,6 +7543,7 @@ export namespace Prisma {
     orgName?: boolean
     contactName?: boolean
     contactEmail?: boolean
+    domain?: boolean
     useCase?: boolean
     teamSize?: boolean
     status?: boolean
@@ -7548,6 +7556,7 @@ export namespace Prisma {
     orgName?: boolean
     contactName?: boolean
     contactEmail?: boolean
+    domain?: boolean
     useCase?: boolean
     teamSize?: boolean
     status?: boolean
@@ -7564,6 +7573,7 @@ export namespace Prisma {
       orgName: string
       contactName: string
       contactEmail: string
+      domain: string | null
       useCase: string
       teamSize: number
       status: $Enums.OrgStatus
@@ -7967,6 +7977,7 @@ export namespace Prisma {
     readonly orgName: FieldRef<"EarlyAccessApplication", 'String'>
     readonly contactName: FieldRef<"EarlyAccessApplication", 'String'>
     readonly contactEmail: FieldRef<"EarlyAccessApplication", 'String'>
+    readonly domain: FieldRef<"EarlyAccessApplication", 'String'>
     readonly useCase: FieldRef<"EarlyAccessApplication", 'String'>
     readonly teamSize: FieldRef<"EarlyAccessApplication", 'Int'>
     readonly status: FieldRef<"EarlyAccessApplication", 'OrgStatus'>
@@ -8355,6 +8366,7 @@ export namespace Prisma {
     orgName: 'orgName',
     contactName: 'contactName',
     contactEmail: 'contactEmail',
+    domain: 'domain',
     useCase: 'useCase',
     teamSize: 'teamSize',
     status: 'status',
@@ -8894,6 +8906,7 @@ export namespace Prisma {
     orgName?: StringFilter<"EarlyAccessApplication"> | string
     contactName?: StringFilter<"EarlyAccessApplication"> | string
     contactEmail?: StringFilter<"EarlyAccessApplication"> | string
+    domain?: StringNullableFilter<"EarlyAccessApplication"> | string | null
     useCase?: StringFilter<"EarlyAccessApplication"> | string
     teamSize?: IntFilter<"EarlyAccessApplication"> | number
     status?: EnumOrgStatusFilter<"EarlyAccessApplication"> | $Enums.OrgStatus
@@ -8906,6 +8919,7 @@ export namespace Prisma {
     orgName?: SortOrder
     contactName?: SortOrder
     contactEmail?: SortOrder
+    domain?: SortOrderInput | SortOrder
     useCase?: SortOrder
     teamSize?: SortOrder
     status?: SortOrder
@@ -8921,6 +8935,7 @@ export namespace Prisma {
     orgName?: StringFilter<"EarlyAccessApplication"> | string
     contactName?: StringFilter<"EarlyAccessApplication"> | string
     contactEmail?: StringFilter<"EarlyAccessApplication"> | string
+    domain?: StringNullableFilter<"EarlyAccessApplication"> | string | null
     useCase?: StringFilter<"EarlyAccessApplication"> | string
     teamSize?: IntFilter<"EarlyAccessApplication"> | number
     status?: EnumOrgStatusFilter<"EarlyAccessApplication"> | $Enums.OrgStatus
@@ -8933,6 +8948,7 @@ export namespace Prisma {
     orgName?: SortOrder
     contactName?: SortOrder
     contactEmail?: SortOrder
+    domain?: SortOrderInput | SortOrder
     useCase?: SortOrder
     teamSize?: SortOrder
     status?: SortOrder
@@ -8953,6 +8969,7 @@ export namespace Prisma {
     orgName?: StringWithAggregatesFilter<"EarlyAccessApplication"> | string
     contactName?: StringWithAggregatesFilter<"EarlyAccessApplication"> | string
     contactEmail?: StringWithAggregatesFilter<"EarlyAccessApplication"> | string
+    domain?: StringNullableWithAggregatesFilter<"EarlyAccessApplication"> | string | null
     useCase?: StringWithAggregatesFilter<"EarlyAccessApplication"> | string
     teamSize?: IntWithAggregatesFilter<"EarlyAccessApplication"> | number
     status?: EnumOrgStatusWithAggregatesFilter<"EarlyAccessApplication"> | $Enums.OrgStatus
@@ -9396,6 +9413,7 @@ export namespace Prisma {
     orgName: string
     contactName: string
     contactEmail: string
+    domain?: string | null
     useCase: string
     teamSize: number
     status?: $Enums.OrgStatus
@@ -9408,6 +9426,7 @@ export namespace Prisma {
     orgName: string
     contactName: string
     contactEmail: string
+    domain?: string | null
     useCase: string
     teamSize: number
     status?: $Enums.OrgStatus
@@ -9420,6 +9439,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     contactName?: StringFieldUpdateOperationsInput | string
     contactEmail?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     useCase?: StringFieldUpdateOperationsInput | string
     teamSize?: IntFieldUpdateOperationsInput | number
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
@@ -9432,6 +9452,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     contactName?: StringFieldUpdateOperationsInput | string
     contactEmail?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     useCase?: StringFieldUpdateOperationsInput | string
     teamSize?: IntFieldUpdateOperationsInput | number
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
@@ -9444,6 +9465,7 @@ export namespace Prisma {
     orgName: string
     contactName: string
     contactEmail: string
+    domain?: string | null
     useCase: string
     teamSize: number
     status?: $Enums.OrgStatus
@@ -9456,6 +9478,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     contactName?: StringFieldUpdateOperationsInput | string
     contactEmail?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     useCase?: StringFieldUpdateOperationsInput | string
     teamSize?: IntFieldUpdateOperationsInput | number
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
@@ -9468,6 +9491,7 @@ export namespace Prisma {
     orgName?: StringFieldUpdateOperationsInput | string
     contactName?: StringFieldUpdateOperationsInput | string
     contactEmail?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     useCase?: StringFieldUpdateOperationsInput | string
     teamSize?: IntFieldUpdateOperationsInput | number
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
@@ -9888,6 +9912,7 @@ export namespace Prisma {
     orgName?: SortOrder
     contactName?: SortOrder
     contactEmail?: SortOrder
+    domain?: SortOrder
     useCase?: SortOrder
     teamSize?: SortOrder
     status?: SortOrder
@@ -9904,6 +9929,7 @@ export namespace Prisma {
     orgName?: SortOrder
     contactName?: SortOrder
     contactEmail?: SortOrder
+    domain?: SortOrder
     useCase?: SortOrder
     teamSize?: SortOrder
     status?: SortOrder
@@ -9916,6 +9942,7 @@ export namespace Prisma {
     orgName?: SortOrder
     contactName?: SortOrder
     contactEmail?: SortOrder
+    domain?: SortOrder
     useCase?: SortOrder
     teamSize?: SortOrder
     status?: SortOrder

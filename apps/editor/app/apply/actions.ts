@@ -5,6 +5,7 @@ import { PostHogServer } from '@/lib/posthog-server'
 
 export async function submitApplication(formData: {
   orgName: string
+  domain: string
   contactName: string
   contactEmail: string
   useCase: string
@@ -21,6 +22,7 @@ export async function submitApplication(formData: {
     const application = await prisma.earlyAccessApplication.create({
       data: {
         orgName: formData.orgName,
+        domain: formData.domain,
         contactName: formData.contactName,
         contactEmail: formData.contactEmail,
         useCase: formData.useCase,

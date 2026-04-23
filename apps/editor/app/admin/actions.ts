@@ -33,9 +33,12 @@ export async function updateApplicationStatus(id: string, status: 'APPROVED' | '
         }
       });
 
-      // 2. Extract domain from contact email
-      const emailParts = application.contactEmail.split('@');
-      const domain = emailParts.length === 2 ? emailParts[1].toLowerCase() : null;
+      // 2. Use the domain provided in the application (fallback to email extraction if legacy application without domain)
+      let domain = application.domain;
+      if (!domain) {
+        const emailParts = application.contactEmail.split('@');
+        domain = emailParts.length === 2 ? emailParts[1].toLowerCase() : null;
+      }
 
       // 3. Generate a unique slug
       let baseSlug = application.orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');

@@ -171,6 +171,7 @@ exports.Prisma.EarlyAccessApplicationScalarFieldEnum = {
   orgName: 'orgName',
   contactName: 'contactName',
   contactEmail: 'contactEmail',
+  domain: 'domain',
   useCase: 'useCase',
   teamSize: 'teamSize',
   status: 'status',
