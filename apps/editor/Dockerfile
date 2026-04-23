@@ -23,7 +23,7 @@ RUN bun run build
 
 # Run the app
 FROM base AS release
-COPY --from=install /usr/src/app/node_modules ./node_modules
+COPY --from=install /usr/src/app /usr/src/app
 COPY --from=build /usr/src/app/apps/editor/.next ./apps/editor/.next
 COPY --from=build /usr/src/app/apps/editor/public ./apps/editor/public
 COPY --from=build /usr/src/app/apps/editor/package.json ./apps/editor/package.json
