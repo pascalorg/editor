@@ -25,6 +25,10 @@ import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import {
+  getNavigationDraftRobotCopySourceId,
+  setNavigationDraftRobotCopySourceId,
+} from '../../../store/use-navigation-drafts'
 import useNavigation from '../../../store/use-navigation'
 import navigationVisualsStore from '../../../store/use-navigation-visuals'
 import { MoveBuildingContent } from '../building/move-building-tool'
@@ -81,7 +85,6 @@ function setDraftVisualState(
     return
   }
 
-  draft.metadata = setItemMoveVisualState(draft.metadata, state) as ItemNode['metadata']
   navigationVisualsStore.getState().setItemMoveVisualState(draft.id, state)
 }
 
@@ -182,10 +185,7 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   })
   const isSceneBackedItem = sceneBackedMovingNode !== null
   const isNew = !isSceneBackedItem && !!meta.isNew
-  const robotCopySourceId =
-    !isSceneBackedItem && typeof meta.robotCopySourceId === 'string'
-      ? (meta.robotCopySourceId as ItemNode['id'])
-      : null
+  const robotCopySourceId = !isSceneBackedItem ? getNavigationDraftRobotCopySourceId(movingNode.id) : null
   const robotCopySourceNode = useScene((state) => {
     const node = robotCopySourceId ? state.nodes[robotCopySourceId as AnyNodeId] : null
     return node?.type === 'item' ? (node as ItemNode) : null
@@ -266,15 +266,6 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
         navigationVisualsStore.getState().setItemMoveVisualState(draftId, null)
         useLiveTransforms.getState().clear(draftId)
       }
-
-      const sourceNode = robotPreviewSourceId
-        ? useScene.getState().nodes[robotPreviewSourceId as AnyNodeId]
-        : null
-      if (sourceNode?.type === 'item' && getItemMoveVisualState(sourceNode.metadata)) {
-        useScene.getState().updateNode(robotPreviewSourceId as AnyNodeId, {
-          metadata: setItemMoveVisualState(sourceNode.metadata, null) as ItemNode['metadata'],
-        })
-      }
     },
     [cancelPendingSourceTransformClear, draftNode, isNew, robotPreviewSourceId],
   )
@@ -282,7 +273,7 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   useEffect(() => {
     if (
       !sceneBackedMovingNode ||
-      (!Object.hasOwn(meta, 'isNew') && !Object.hasOwn(meta, 'robotCopySourceId'))
+      !Object.hasOwn(meta, 'isNew')
     ) {
       return
     }
@@ -344,6 +335,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
         draftNode.destroy()
         registerItemMoveController(robotPreviewSourceId, null)
         setItemMoveLocked(false)
+        if (isNew) {
+          setNavigationDraftRobotCopySourceId(movingNode.id, null)
+        }
         useEditor.getState().setMovingNode(null)
       },
       commit: (finalUpdate, finalCarryTransform) => {
@@ -364,7 +358,7 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
           : null
         const committedId = draftNode.commit({
           ...finalUpdate,
-          metadata: setItemMoveVisualState(sourceMetadata, null) as ItemNode['metadata'],
+          metadata: setItemMoveVisualState(stripTransient(sourceMetadata), null) as ItemNode['metadata'],
           visible: true,
         })
         clearRobotPreviewState({
@@ -428,8 +422,11 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   useEffect(() => {
     return () => {
       cancelPendingSourceTransformClear()
+      if (isNew) {
+        setNavigationDraftRobotCopySourceId(movingNode.id, null)
+      }
     }
-  }, [cancelPendingSourceTransformClear])
+  }, [cancelPendingSourceTransformClear, isNew, movingNode.id])
 
   const cursor = usePlacementCoordinator({
     asset: movingNode.asset,
@@ -537,6 +534,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
           setItemVisualState(requestSourceId, null)
           detachedTaskRef.current = true
           setItemMoveLocked(false)
+          if (isNew) {
+            setNavigationDraftRobotCopySourceId(movingNode.id, null)
+          }
           useEditor.getState().setMovingNode(null)
           return false
         }
@@ -547,6 +547,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       setHandoffCommitted(false)
       requestItemMove(null)
       setItemMoveLocked(false)
+      if (isNew) {
+        setNavigationDraftRobotCopySourceId(movingNode.id, null)
+      }
       useEditor.getState().setMovingNode(null)
       return false
     },
@@ -561,6 +564,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       }
       requestItemMove(null)
       setItemMoveLocked(false)
+      if (isNew) {
+        setNavigationDraftRobotCopySourceId(movingNode.id, null)
+      }
       useEditor.getState().setMovingNode(null)
     },
   })

@@ -25,6 +25,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import {
   requestNavigationItemDelete,
   requestNavigationItemRepair,
@@ -247,12 +248,6 @@ export function FloatingActionMenu() {
       let duplicateInfo = structuredClone(node) as any
       delete duplicateInfo.id
       duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
-      if (node.type === 'item') {
-        duplicateInfo.metadata = {
-          ...duplicateInfo.metadata,
-          robotCopySourceId: node.id,
-        }
-      }
 
       let duplicate: AnyNode | null = null
       try {
@@ -262,6 +257,7 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+          setNavigationDraftRobotCopySourceId(duplicate.id, node.id)
         } else if (node.type === 'wall') {
           duplicate = WallNode.parse(duplicateInfo)
         } else if (node.type === 'fence') {

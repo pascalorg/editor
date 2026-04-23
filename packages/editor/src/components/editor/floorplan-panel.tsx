@@ -67,6 +67,7 @@ import {
   WALKABLE_FILL_OPACITY,
 } from '../../lib/walkable-surface'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
+import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import useNavigation, { requestNavigationItemDelete } from '../../store/use-navigation'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
@@ -8885,12 +8886,12 @@ export function FloorplanPanel() {
     cloned.metadata = {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
       isNew: true,
-      robotCopySourceId: item.id,
     }
     cloned.children = []
 
     try {
       const duplicate = ItemNodeSchema.parse(cloned)
+      setNavigationDraftRobotCopySourceId(duplicate.id, item.id)
       setMovingNode(duplicate)
       setSelection({ selectedIds: [] })
     } catch (error) {

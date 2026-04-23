@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { setNavigationDraftRobotCopySourceId } from '../../../store/use-navigation-drafts'
 import { requestNavigationItemDelete } from '../../../store/use-navigation'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -66,9 +67,9 @@ export function ItemPanel() {
       metadata: {
         ...(typeof node.metadata === 'object' && node.metadata !== null ? node.metadata : {}),
         isNew: true,
-        robotCopySourceId: node.id,
       },
     })
+    setNavigationDraftRobotCopySourceId(proto.id, node.id)
     setMovingNode(proto)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])

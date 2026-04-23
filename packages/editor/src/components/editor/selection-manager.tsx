@@ -3,7 +3,6 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
-  getItemMoveVisualState,
   type ItemNode,
   type NodeEvent,
   type RoofEvent,
@@ -281,17 +280,7 @@ function disposeHighlightedMaterials(material: Material | Material[]) {
 }
 
 function getSelectionMoveVisualState(nodeId: string) {
-  const viewerVisualState = navigationVisualsStore.getState().itemMoveVisualStates[nodeId]
-  if (viewerVisualState) {
-    return viewerVisualState
-  }
-
-  const node = useScene.getState().nodes[nodeId as AnyNodeId]
-  if (node?.type !== 'item') {
-    return null
-  }
-
-  return getItemMoveVisualState((node as ItemNode).metadata)
+  return navigationVisualsStore.getState().itemMoveVisualStates[nodeId] ?? null
 }
 
 function shouldSkipSelectionMaterial(nodeId: string) {

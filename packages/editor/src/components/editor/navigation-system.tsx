@@ -4,7 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   emitter,
-  getItemMoveVisualState,
   getScaledDimensions,
   type ItemMoveVisualState,
   ItemNode,
@@ -93,6 +92,7 @@ import {
 } from '../../lib/pascal-truck'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { getNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import useNavigation, {
   type NavigationItemDeleteRequest,
   type NavigationItemMoveController,
@@ -1408,10 +1408,7 @@ function createNavigationItemMoveFallbackController(
       if (commitTargetNode?.type === 'item') {
         sceneState.updateNode(commitTargetId as AnyNodeId, {
           ...finalUpdate,
-          metadata: setItemMoveVisualMetadata(
-            stripTransient(commitTargetNode.metadata),
-            null,
-          ) as ItemNode['metadata'],
+          metadata: stripTransient(commitTargetNode.metadata) as ItemNode['metadata'],
           visible: true,
         })
       } else if (request.itemId !== commitTargetId) {
@@ -1424,10 +1421,7 @@ function createNavigationItemMoveFallbackController(
 
         sceneState.updateNode(request.itemId as AnyNodeId, {
           ...finalUpdate,
-          metadata: setItemMoveVisualMetadata(
-            stripTransient(sourceNode.metadata),
-            null,
-          ) as ItemNode['metadata'],
+          metadata: stripTransient(sourceNode.metadata) as ItemNode['metadata'],
           visible: true,
         })
       }
@@ -1454,18 +1448,7 @@ function clearPersistentItemMoveVisualState(itemId: string | null | undefined) {
     return
   }
 
-  const node = useScene.getState().nodes[itemId as AnyNode['id']]
-  if (node?.type !== 'item') {
-    return
-  }
-
-  if (getItemMoveVisualState(node.metadata) === null) {
-    return
-  }
-
-  useScene.getState().updateNode(itemId as AnyNode['id'], {
-    metadata: setItemMoveVisualMetadata(node.metadata, null) as ItemNode['metadata'],
-  })
+  navigationVisualsStore.getState().setItemMoveVisualState(itemId, null)
 }
 
 function setPersistentItemMoveVisualState(
@@ -1476,18 +1459,7 @@ function setPersistentItemMoveVisualState(
     return
   }
 
-  const node = useScene.getState().nodes[itemId as AnyNode['id']]
-  if (node?.type !== 'item') {
-    return
-  }
-
-  if (getItemMoveVisualState(node.metadata) === state) {
-    return
-  }
-
-  useScene.getState().updateNode(itemId as AnyNode['id'], {
-    metadata: setItemMoveVisualMetadata(node.metadata, state) as ItemNode['metadata'],
-  })
+  navigationVisualsStore.getState().setItemMoveVisualState(itemId, state)
 }
 
 function removeTransientNavigationPreviewNode(itemId: string | null | undefined) {
@@ -1555,14 +1527,10 @@ function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest)
     ...stripTransient(sourceNode.metadata),
     isTransient: true,
   } as ItemNode['metadata']
-  const nextMetadata = setItemMoveVisualMetadata(
-    previewMetadata,
-    'destination-ghost',
-  ) as ItemNode['metadata']
   const existingPreviewNode = sceneState.nodes[previewId as AnyNode['id']]
   if (existingPreviewNode?.type === 'item') {
     sceneState.updateNode(previewId as AnyNode['id'], {
-      metadata: nextMetadata,
+      metadata: previewMetadata,
       parentId: targetParentId,
       position: [...targetPosition] as [number, number, number],
       rotation: [...targetRotation] as [number, number, number],
@@ -1580,7 +1548,7 @@ function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest)
   const previewNode = ItemNode.parse({
     asset: sourceNode.asset,
     id: previewId,
-    metadata: nextMetadata,
+    metadata: previewMetadata,
     name: sourceNode.name,
     parentId: targetParentId,
     position: [...targetPosition] as [number, number, number],
@@ -4527,7 +4495,6 @@ export function NavigationSystem() {
   useEffect(() => {
     if (!enabled || robotMode !== 'task') {
       taskLoopBaselineSnapshotKeyRef.current = null
-      pendingTaskLoopGraphSyncTokenRef.current = null
       setPendingTaskGraphSyncKey(null)
       return
     }
@@ -5398,9 +5365,7 @@ export function NavigationSystem() {
           sceneVisible:
             node && typeof node === 'object' && 'visible' in node ? ((node as ItemNode).visible ?? null) : null,
           viewerVisibilityOverride: visualState.nodeVisibilityOverrides[id] ?? null,
-          visualState:
-            visualState.itemMoveVisualStates[id] ??
-            (node?.type === 'item' ? getItemMoveVisualState(node.metadata) : null),
+          visualState: visualState.itemMoveVisualStates[id] ?? null,
         }
       })
 
@@ -5569,11 +5534,11 @@ export function NavigationSystem() {
 
     for (const [itemId, previousState] of Object.entries(previousMoveVisualStates)) {
       const nextState = nextMoveVisualStates[itemId] ?? null
-      if (nextState === previousState) {
+      const currentState = navigationVisualsStore.getState().itemMoveVisualStates[itemId] ?? null
+      if (nextState === previousState && currentState === nextState) {
         continue
       }
 
-      const currentState = navigationVisuals.itemMoveVisualStates[itemId] ?? null
       if (currentState === previousState) {
         navigationVisuals.setItemMoveVisualState(itemId, nextState)
       }
@@ -5591,11 +5556,11 @@ export function NavigationSystem() {
       }
 
       const previousState = previousMoveVisualStates[itemId] ?? null
-      if (previousState === nextState) {
+      const currentState = navigationVisualsStore.getState().itemMoveVisualStates[itemId] ?? null
+      if (previousState === nextState && currentState === nextState) {
         continue
       }
 
-      const currentState = navigationVisuals.itemMoveVisualStates[itemId] ?? null
       if (
         currentState === null ||
         currentState === 'copy-source-pending' ||
@@ -5970,16 +5935,7 @@ export function NavigationSystem() {
       return
     }
 
-    const movingNodeMetadata =
-      typeof movingItemNode.metadata === 'object' &&
-      movingItemNode.metadata !== null &&
-      !Array.isArray(movingItemNode.metadata)
-        ? (movingItemNode.metadata as Record<string, unknown>)
-        : null
-    const robotCopySourceId =
-      typeof movingNodeMetadata?.robotCopySourceId === 'string'
-        ? (movingNodeMetadata.robotCopySourceId as ItemNode['id'])
-        : null
+    const robotCopySourceId = getNavigationDraftRobotCopySourceId(movingItemNode.id)
     const requestSourceId = robotCopySourceId ?? movingItemNode.id
     const requestSourceNode = sceneState.nodes[requestSourceId]
     const previewTargetNode = sceneState.nodes[itemMovePreview.id]
@@ -10761,8 +10717,7 @@ export function NavigationSystem() {
             ? editorState.movingNode.position
             : null,
         movingNodeVisualState: movingNodeId
-          ? (navigationVisualsStore.getState().itemMoveVisualStates[movingNodeId] ??
-            (movingNode?.type === 'item' ? getItemMoveVisualState(movingNode.metadata) : null))
+          ? (navigationVisualsStore.getState().itemMoveVisualStates[movingNodeId] ?? null)
           : null,
         toolCone:
           typeof actorRobotDebugState?.toolCone === 'object' &&
@@ -10772,10 +10727,7 @@ export function NavigationSystem() {
         toolConeIsolatedOverlay: navigationVisualsStore.getState().toolConeIsolatedOverlay,
         previewGhostId,
         previewGhostVisualState: previewGhostId
-          ? (navigationVisualsStore.getState().itemMoveVisualStates[previewGhostId] ??
-            (previewGhostNode?.type === 'item'
-              ? getItemMoveVisualState(previewGhostNode.metadata)
-              : null))
+          ? (navigationVisualsStore.getState().itemMoveVisualStates[previewGhostId] ?? null)
           : null,
         previewGhostVisible:
           previewGhostId !== null
@@ -11697,7 +11649,7 @@ export function NavigationSystem() {
           if (sceneNode?.type === 'item') {
             useScene.getState().updateNode(item.id as AnyNodeId, {
               ...finalUpdate,
-              metadata: setItemMoveVisualMetadata(sceneNode.metadata, null) as ItemNode['metadata'],
+              metadata: stripTransient(sceneNode.metadata) as ItemNode['metadata'],
             })
           }
 

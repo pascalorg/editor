@@ -2,10 +2,10 @@ import {
   type AnimationEffect,
   type AnyNodeId,
   baseMaterial,
-  getItemMoveVisualState,
   getScaledDimensions,
   glassMaterial,
   type Interactive,
+  type ItemMoveVisualState,
   type ItemNode,
   type LightEffect,
   useInteractive,
@@ -567,7 +567,7 @@ const PreviewGhostModelRenderer = ({
   visualStateOverride,
 }: {
   node: ItemNode
-  visualStateOverride: ReturnType<typeof getItemMoveVisualState>
+  visualStateOverride: ItemMoveVisualState | null
 }) => {
   const assetSrc = resolveCdnUrl(node.asset.src) || ''
   const { scene, animations } = useGLTF(assetSrc)
@@ -1141,14 +1141,14 @@ const ModelRenderer = ({
   visualStateOverride,
 }: {
   node: ItemNode
-  visualStateOverride: ReturnType<typeof getItemMoveVisualState>
+  visualStateOverride: ItemMoveVisualState | null
 }) => {
   const assetSrc = resolveCdnUrl(node.asset.src) || ''
   const { scene, nodes, animations } = useGLTF(assetSrc)
   const { camera, gl } = useThree()
   const ref = useRef<Group>(null!)
   const preserveImportedTexturedMaterials = shouldPreserveImportedMaterials(node)
-  const moveVisualState = visualStateOverride ?? getItemMoveVisualState(node.metadata)
+  const moveVisualState = visualStateOverride
   const { actions } = useAnimations(animations, ref)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
   const interactiveRef = useRef(node.asset.interactive)
