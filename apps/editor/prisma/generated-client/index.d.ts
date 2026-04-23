@@ -2534,6 +2534,7 @@ export namespace Prisma {
     id: string | null
     name: string | null
     slug: string | null
+    domain: string | null
     logoUrl: string | null
     status: $Enums.OrgStatus | null
     createdAt: Date | null
@@ -2544,6 +2545,7 @@ export namespace Prisma {
     id: string | null
     name: string | null
     slug: string | null
+    domain: string | null
     logoUrl: string | null
     status: $Enums.OrgStatus | null
     createdAt: Date | null
@@ -2554,6 +2556,7 @@ export namespace Prisma {
     id: number
     name: number
     slug: number
+    domain: number
     logoUrl: number
     status: number
     createdAt: number
@@ -2566,6 +2569,7 @@ export namespace Prisma {
     id?: true
     name?: true
     slug?: true
+    domain?: true
     logoUrl?: true
     status?: true
     createdAt?: true
@@ -2576,6 +2580,7 @@ export namespace Prisma {
     id?: true
     name?: true
     slug?: true
+    domain?: true
     logoUrl?: true
     status?: true
     createdAt?: true
@@ -2586,6 +2591,7 @@ export namespace Prisma {
     id?: true
     name?: true
     slug?: true
+    domain?: true
     logoUrl?: true
     status?: true
     createdAt?: true
@@ -2669,6 +2675,7 @@ export namespace Prisma {
     id: string
     name: string
     slug: string
+    domain: string | null
     logoUrl: string | null
     status: $Enums.OrgStatus
     createdAt: Date
@@ -2696,6 +2703,7 @@ export namespace Prisma {
     id?: boolean
     name?: boolean
     slug?: boolean
+    domain?: boolean
     logoUrl?: boolean
     status?: boolean
     createdAt?: boolean
@@ -2709,6 +2717,7 @@ export namespace Prisma {
     id?: boolean
     name?: boolean
     slug?: boolean
+    domain?: boolean
     logoUrl?: boolean
     status?: boolean
     createdAt?: boolean
@@ -2732,6 +2741,7 @@ export namespace Prisma {
       id: string
       name: string
       slug: string
+      domain: string | null
       logoUrl: string | null
       status: $Enums.OrgStatus
       createdAt: Date
@@ -3136,6 +3146,7 @@ export namespace Prisma {
     readonly id: FieldRef<"Organization", 'String'>
     readonly name: FieldRef<"Organization", 'String'>
     readonly slug: FieldRef<"Organization", 'String'>
+    readonly domain: FieldRef<"Organization", 'String'>
     readonly logoUrl: FieldRef<"Organization", 'String'>
     readonly status: FieldRef<"Organization", 'OrgStatus'>
     readonly createdAt: FieldRef<"Organization", 'DateTime'>
@@ -8280,6 +8291,7 @@ export namespace Prisma {
     id: 'id',
     name: 'name',
     slug: 'slug',
+    domain: 'domain',
     logoUrl: 'logoUrl',
     status: 'status',
     createdAt: 'createdAt',
@@ -8549,6 +8561,7 @@ export namespace Prisma {
     id?: StringFilter<"Organization"> | string
     name?: StringFilter<"Organization"> | string
     slug?: StringFilter<"Organization"> | string
+    domain?: StringNullableFilter<"Organization"> | string | null
     logoUrl?: StringNullableFilter<"Organization"> | string | null
     status?: EnumOrgStatusFilter<"Organization"> | $Enums.OrgStatus
     createdAt?: DateTimeFilter<"Organization"> | Date | string
@@ -8561,6 +8574,7 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     slug?: SortOrder
+    domain?: SortOrderInput | SortOrder
     logoUrl?: SortOrderInput | SortOrder
     status?: SortOrder
     createdAt?: SortOrder
@@ -8572,6 +8586,7 @@ export namespace Prisma {
   export type OrganizationWhereUniqueInput = Prisma.AtLeast<{
     id?: string
     slug?: string
+    domain?: string
     AND?: OrganizationWhereInput | OrganizationWhereInput[]
     OR?: OrganizationWhereInput[]
     NOT?: OrganizationWhereInput | OrganizationWhereInput[]
@@ -8582,12 +8597,13 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Organization"> | Date | string
     members?: OrganizationMemberListRelationFilter
     teams?: TeamListRelationFilter
-  }, "id" | "slug">
+  }, "id" | "slug" | "domain">
 
   export type OrganizationOrderByWithAggregationInput = {
     id?: SortOrder
     name?: SortOrder
     slug?: SortOrder
+    domain?: SortOrderInput | SortOrder
     logoUrl?: SortOrderInput | SortOrder
     status?: SortOrder
     createdAt?: SortOrder
@@ -8604,6 +8620,7 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"Organization"> | string
     name?: StringWithAggregatesFilter<"Organization"> | string
     slug?: StringWithAggregatesFilter<"Organization"> | string
+    domain?: StringNullableWithAggregatesFilter<"Organization"> | string | null
     logoUrl?: StringNullableWithAggregatesFilter<"Organization"> | string | null
     status?: EnumOrgStatusWithAggregatesFilter<"Organization"> | $Enums.OrgStatus
     createdAt?: DateTimeWithAggregatesFilter<"Organization"> | Date | string
@@ -9032,6 +9049,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -9044,6 +9062,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -9056,6 +9075,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -9068,6 +9088,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -9080,6 +9101,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -9090,6 +9112,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -9100,6 +9123,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -9646,6 +9670,7 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     slug?: SortOrder
+    domain?: SortOrder
     logoUrl?: SortOrder
     status?: SortOrder
     createdAt?: SortOrder
@@ -9656,6 +9681,7 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     slug?: SortOrder
+    domain?: SortOrder
     logoUrl?: SortOrder
     status?: SortOrder
     createdAt?: SortOrder
@@ -9666,6 +9692,7 @@ export namespace Prisma {
     id?: SortOrder
     name?: SortOrder
     slug?: SortOrder
+    domain?: SortOrder
     logoUrl?: SortOrder
     status?: SortOrder
     createdAt?: SortOrder
@@ -10688,6 +10715,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -10699,6 +10727,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -10755,6 +10784,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -10766,6 +10796,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -10812,6 +10843,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -10823,6 +10855,7 @@ export namespace Prisma {
     id?: string
     name: string
     slug: string
+    domain?: string | null
     logoUrl?: string | null
     status?: $Enums.OrgStatus
     createdAt?: Date | string
@@ -10904,6 +10937,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -10915,6 +10949,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
     logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string

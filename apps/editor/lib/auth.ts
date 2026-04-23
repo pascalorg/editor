@@ -1,4 +1,4 @@
-import { NextAuthOptions } from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 
@@ -14,19 +14,43 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        const email = credentials.email.toLowerCase();
+
+        let user = await prisma.user.findUnique({
+          where: { email },
         });
 
         if (user) {
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-          };
+          return { id: user.id, email: user.email, name: user.name };
         }
 
-        return null;
+        // Auto-provisioning logic for new users
+        const domain = email.split('@')[1];
+        if (!domain) return null;
+
+        const org = await prisma.organization.findUnique({
+          where: { domain },
+        });
+
+        if (org && org.status === 'APPROVED') {
+          // Provision new user and link to organization
+          user = await prisma.user.create({
+            data: {
+              email,
+              name: email.split('@')[0], // Use email prefix as default name
+              organizations: {
+                create: {
+                  organizationId: org.id,
+                  role: 'MEMBER',
+                }
+              }
+            }
+          });
+
+          return { id: user.id, email: user.email, name: user.name };
+        }
+
+        throw new Error("Your organization has not been registered or approved yet.");
       },
     }),
   ],
@@ -45,7 +69,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/admin", // Redirecting to admin for now, or maybe create a /login page
+    signIn: "/login",
   },
   session: {
     strategy: "jwt",

@@ -28,6 +28,7 @@ model Organization {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
+  domain      String?  @unique
   logoUrl     String?
   status      OrgStatus @default(PENDING)
   

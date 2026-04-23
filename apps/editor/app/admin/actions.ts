@@ -33,7 +33,11 @@ export async function updateApplicationStatus(id: string, status: 'APPROVED' | '
         }
       });
 
-      // 2. Generate a unique slug
+      // 2. Extract domain from contact email
+      const emailParts = application.contactEmail.split('@');
+      const domain = emailParts.length === 2 ? emailParts[1].toLowerCase() : null;
+
+      // 3. Generate a unique slug
       let baseSlug = application.orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       if (!baseSlug) baseSlug = 'org';
 
@@ -44,11 +48,12 @@ export async function updateApplicationStatus(id: string, status: 'APPROVED' | '
         counter++;
       }
 
-      // 3. Create the organization and link the user as OWNER
+      // 4. Create the organization and link the user as OWNER
       await prisma.organization.create({
         data: {
           name: application.orgName,
           slug,
+          domain,
           status: 'APPROVED',
           members: {
             create: {
