@@ -23,7 +23,7 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: dev ? '*' : (process.env.NEXTAUTH_URL || 'https://archly.cloud'),
       methods: ['GET', 'POST']
     }
   })

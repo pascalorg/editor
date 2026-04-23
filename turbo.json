@@ -8,15 +8,17 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
         "SKIP_ENV_VALIDATION",
-        "BETTER_AUTH_SECRET",
-        "BETTER_AUTH_URL",
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET",
-        "RESEND_API_KEY",
-        "POSTGRES_URL",
-        "NEXT_PUBLIC_SUPABASE_URL",
-        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-        "SUPABASE_SERVICE_ROLE_KEY"
+        "DATABASE_URL",
+        "REDIS_URL",
+        "NEXTAUTH_URL",
+        "NEXTAUTH_SECRET",
+        "R2_ACCOUNT_ID",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_BUCKET_NAME",
+        "NEXT_PUBLIC_POSTHOG_KEY",
+        "NEXT_PUBLIC_POSTHOG_HOST",
+        "NEXT_PUBLIC_SOCKET_URL"
       ]
     },
     "lint": {

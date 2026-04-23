@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -8,13 +6,25 @@ services:
     ports:
       - "3002:3002"
     environment:
+      - NODE_ENV=production
       - DATABASE_URL=postgresql://pascal:pascal@db:5432/pascal_db
       - REDIS_URL=redis://redis:6379
-      - NEXTAUTH_URL=https://${DOMAIN}
+      - NEXTAUTH_URL=https://archly.cloud
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - NEXT_PUBLIC_POSTHOG_KEY=${NEXT_PUBLIC_POSTHOG_KEY}
+      - NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST}
+      - NEXT_PUBLIC_SOCKET_URL=https://archly.cloud
+      - SKIP_ENV_VALIDATION=1
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   db:
     image: postgres:15-alpine
@@ -24,9 +34,21 @@ services:
       - POSTGRES_DB=pascal_db
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pascal -d pascal_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   caddy:
     image: caddy:latest

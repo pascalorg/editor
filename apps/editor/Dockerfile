@@ -18,20 +18,41 @@ RUN bun install --frozen-lockfile
 # Build the project
 FROM install AS build
 COPY . .
+
+# Skip env.mjs validation during build (references unused Supabase vars)
+ENV SKIP_ENV_VALIDATION=1
+ENV NODE_ENV=production
+
 RUN cd apps/editor && bunx prisma generate
 RUN bun run build
 
 # Run the app
 FROM base AS release
 COPY --from=install /usr/src/app /usr/src/app
+
+# Copy built Next.js app
 COPY --from=build /usr/src/app/apps/editor/.next ./apps/editor/.next
 COPY --from=build /usr/src/app/apps/editor/app ./apps/editor/app
 COPY --from=build /usr/src/app/apps/editor/public ./apps/editor/public
 COPY --from=build /usr/src/app/apps/editor/package.json ./apps/editor/package.json
 COPY --from=build /usr/src/app/apps/editor/server.ts ./apps/editor/server.ts
 COPY --from=build /usr/src/app/apps/editor/next.config.ts ./apps/editor/next.config.ts
+
+# Copy Prisma generated client
 COPY --from=build /usr/src/app/apps/editor/prisma/generated-client ./apps/editor/prisma/generated-client
+
+# Copy built package dist directories (required at runtime)
+COPY --from=build /usr/src/app/packages/core/dist ./packages/core/dist
+COPY --from=build /usr/src/app/packages/core/package.json ./packages/core/package.json
+COPY --from=build /usr/src/app/packages/editor/dist ./packages/editor/dist
+COPY --from=build /usr/src/app/packages/editor/package.json ./packages/editor/package.json
+COPY --from=build /usr/src/app/packages/viewer/dist ./packages/viewer/dist
+COPY --from=build /usr/src/app/packages/viewer/package.json ./packages/viewer/package.json
+
+# Copy root package.json for workspace resolution
 COPY --from=build /usr/src/app/package.json ./package.json
+
+ENV NODE_ENV=production
 
 USER bun
 WORKDIR /usr/src/app/apps/editor

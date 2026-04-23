@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+*/node_modules
+
+# Version control
+.git
+.gitignore
+
+# IDE / Editor
+.vscode
+.cursor
+.claude
+.idea
+
+# Build caches
+.next
+.turbo
+dist
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+coverage
+og-test
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.pem
+.playwright-mcp
