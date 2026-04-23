@@ -28,6 +28,11 @@ RUN bun run build
 
 # Run the app
 FROM base AS release
+
+# Install OpenSSL (required by Prisma at runtime)
+USER root
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=install /usr/src/app /usr/src/app
 
 # Copy built Next.js app
@@ -38,8 +43,8 @@ COPY --from=build /usr/src/app/apps/editor/package.json ./apps/editor/package.js
 COPY --from=build /usr/src/app/apps/editor/server.ts ./apps/editor/server.ts
 COPY --from=build /usr/src/app/apps/editor/next.config.ts ./apps/editor/next.config.ts
 
-# Copy Prisma generated client
-COPY --from=build /usr/src/app/apps/editor/prisma/generated-client ./apps/editor/prisma/generated-client
+# Copy Prisma schema + generated client (schema needed for db push at startup)
+COPY --from=build /usr/src/app/apps/editor/prisma ./apps/editor/prisma
 
 # Copy built package dist directories (required at runtime)
 COPY --from=build /usr/src/app/packages/core/dist ./packages/core/dist
@@ -53,9 +58,13 @@ COPY --from=build /usr/src/app/packages/viewer/package.json ./packages/viewer/pa
 # Copy root package.json for workspace resolution
 COPY --from=build /usr/src/app/package.json ./package.json
 
+# Copy entrypoint script
+COPY apps/editor/entrypoint.sh ./apps/editor/entrypoint.sh
+RUN chmod +x ./apps/editor/entrypoint.sh
+
 ENV NODE_ENV=production
 
-USER bun
 WORKDIR /usr/src/app/apps/editor
 EXPOSE 3002
-ENTRYPOINT [ "bun", "run", "server.ts" ]
+ENTRYPOINT [ "./entrypoint.sh" ]
+
