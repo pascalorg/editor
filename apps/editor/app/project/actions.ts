@@ -11,7 +11,7 @@ export async function saveProject(projectId: string, sceneGraph: any) {
     const body = JSON.stringify(sceneGraph)
 
     // 1. Upload to R2
-    await s3.send(new PutObjectCommand({
+    await (s3 as any).send(new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME,
       Key: key,
       Body: body,
@@ -47,7 +47,7 @@ export async function loadProject(projectId: string) {
     }
 
     const key = `projects/${projectId}/state.json`
-    const response = await s3.send(new GetObjectCommand({
+    const response = await (s3 as any).send(new GetObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME,
       Key: key,
     }))
