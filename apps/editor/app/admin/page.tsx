@@ -22,6 +22,8 @@ import {
   getApplications, 
   updateApplicationStatus 
 } from './actions'
+
+export default function AdminDashboard() {
   const [applications, setApplications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
