@@ -7,7 +7,7 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import { InteractiveSystem, useViewer, type ViewerState, Viewer } from '@pascal-app/viewer'
 import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
@@ -283,7 +283,7 @@ function ViewerOverlays({ left, children }: { left: number; children: ReactNode 
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SelectionPersistenceManager({ enabled }: { enabled: boolean }) {
-  const selection = useViewer((state) => state.selection)
+  const selection = useViewer((state: ViewerState) => state.selection)
 
   useEffect(() => {
     if (!enabled) {

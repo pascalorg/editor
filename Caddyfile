@@ -1,0 +1,22 @@
+archly.cloud {
+    # Reverse proxy to the Pascal application running on port 3002
+    reverse_proxy localhost:3002
+
+    # Enable compression for faster loads
+    encode gzip zstd
+
+    # Optional: Log requests
+    log {
+        output file /var/log/caddy/archly.cloud.log
+    }
+
+    # Security Headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent clickjacking
+        X-Frame-Options DENY
+        # Prevent MIME sniffing
+        X-Content-Type-Options nosniff
+    }
+}

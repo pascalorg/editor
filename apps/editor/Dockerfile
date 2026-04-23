@@ -27,6 +27,9 @@ COPY --from=install /usr/src/app/node_modules ./node_modules
 COPY --from=build /usr/src/app/apps/editor/.next ./apps/editor/.next
 COPY --from=build /usr/src/app/apps/editor/public ./apps/editor/public
 COPY --from=build /usr/src/app/apps/editor/package.json ./apps/editor/package.json
+COPY --from=build /usr/src/app/apps/editor/server.ts ./apps/editor/server.ts
+COPY --from=build /usr/src/app/apps/editor/next.config.ts ./apps/editor/next.config.ts
+COPY --from=build /usr/src/app/apps/editor/prisma/generated-client ./apps/editor/prisma/generated-client
 COPY --from=build /usr/src/app/package.json ./package.json
 
 USER bun

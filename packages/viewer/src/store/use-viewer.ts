@@ -18,7 +18,7 @@ type Outliner = {
   hoveredObjects: Object3D[]
 }
 
-type ViewerState = {
+export type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
