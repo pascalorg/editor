@@ -33,5 +33,6 @@ COPY --from=build /usr/src/app/apps/editor/prisma/generated-client ./apps/editor
 COPY --from=build /usr/src/app/package.json ./package.json
 
 USER bun
+WORKDIR /usr/src/app/apps/editor
 EXPOSE 3002
-ENTRYPOINT [ "bun", "run", "apps/editor/server.ts" ]
+ENTRYPOINT [ "bun", "run", "server.ts" ]
