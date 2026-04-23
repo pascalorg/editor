@@ -1,4 +1,8 @@
 archly.cloud {
+    tls {
+        issuer zerossl
+    }
+
     # Reverse proxy to the Pascal application running on port 3002
     reverse_proxy app:3002
 

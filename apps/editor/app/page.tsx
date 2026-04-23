@@ -182,10 +182,10 @@ export default function LandingPage() {
           <motion.div key={activeUseCase} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
             className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h3 className="text-2xl font-bold mb-4">{useCases[activeUseCase].title} Teams</h3>
-              <p className="text-zinc-400 leading-relaxed mb-8">{useCases[activeUseCase].desc}</p>
+              <h3 className="text-2xl font-bold mb-4">{useCases[activeUseCase]?.title} Teams</h3>
+              <p className="text-zinc-400 leading-relaxed mb-8">{useCases[activeUseCase]?.desc}</p>
               <ul className="space-y-3">
-                {useCases[activeUseCase].features.map((f, i) => (
+                {useCases[activeUseCase]?.features.map((f, i) => (
                   <li key={i} className="flex items-center gap-3 text-zinc-300 text-sm">
                     <div className="w-5 h-5 rounded-full bg-indigo-500/15 flex items-center justify-center flex-shrink-0">
                       <Check className="w-3 h-3 text-indigo-400" />
