@@ -44,7 +44,8 @@ COPY --from=build /usr/src/app/apps/editor/prisma/generated-client ./apps/editor
 # Copy built package dist directories (required at runtime)
 COPY --from=build /usr/src/app/packages/core/dist ./packages/core/dist
 COPY --from=build /usr/src/app/packages/core/package.json ./packages/core/package.json
-COPY --from=build /usr/src/app/packages/editor/dist ./packages/editor/dist
+# @pascal-app/editor has no build step — it exports raw src via transpilePackages
+COPY --from=build /usr/src/app/packages/editor/src ./packages/editor/src
 COPY --from=build /usr/src/app/packages/editor/package.json ./packages/editor/package.json
 COPY --from=build /usr/src/app/packages/viewer/dist ./packages/viewer/dist
 COPY --from=build /usr/src/app/packages/viewer/package.json ./packages/viewer/package.json
