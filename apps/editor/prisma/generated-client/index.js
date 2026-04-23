@@ -215,6 +215,18 @@ const config = {
         "fromEnvVar": null,
         "value": "windows",
         "native": true
+      },
+      {
+        "fromEnvVar": null,
+        "value": "debian-openssl-3.0.x"
+      },
+      {
+        "fromEnvVar": null,
+        "value": "linux-musl"
+      },
+      {
+        "fromEnvVar": null,
+        "value": "linux-musl-openssl-3.0.x"
       }
     ],
     "previewFeatures": [],
@@ -239,8 +251,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "generator client {\n  provider = \"prisma-client-js\"\n  output   = \"./generated-client\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel User {\n  id            String    @id @default(cuid())\n  name          String?\n  email         String?   @unique\n  emailVerified DateTime?\n  image         String?\n  password      String?\n  \n  organizations OrganizationMember[]\n  teamMemberships TeamMember[]\n  \n  createdAt     DateTime  @default(now())\n  updatedAt     DateTime  @updatedAt\n}\n\nmodel Organization {\n  id          String   @id @default(cuid())\n  name        String\n  slug        String   @unique\n  logoUrl     String?\n  status      OrgStatus @default(PENDING)\n  \n  members     OrganizationMember[]\n  teams       Team[]\n  \n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @updatedAt\n}\n\nenum OrgStatus {\n  PENDING\n  APPROVED\n  REJECTED\n}\n\nmodel OrganizationMember {\n  id             String   @id @default(cuid())\n  organizationId String\n  userId         String\n  role           OrgRole  @default(MEMBER)\n  \n  organization   Organization @relation(fields: [organizationId], references: [id])\n  user           User         @relation(fields: [userId], references: [id])\n  \n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @updatedAt\n\n  @@unique([organizationId, userId])\n}\n\nenum OrgRole {\n  OWNER\n  ADMIN\n  MEMBER\n}\n\nmodel Team {\n  id             String   @id @default(cuid())\n  organizationId String\n  name           String\n  description    String?\n  \n  organization   Organization @relation(fields: [organizationId], references: [id])\n  members        TeamMember[]\n  projects       Project[]\n  \n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @updatedAt\n}\n\nmodel TeamMember {\n  id      String @id @default(cuid())\n  teamId  String\n  userId  String\n  \n  team    Team @relation(fields: [teamId], references: [id])\n  user    User @relation(fields: [userId], references: [id])\n  \n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  @@unique([teamId, userId])\n}\n\nmodel Project {\n  id           String   @id @default(cuid())\n  teamId       String\n  name         String\n  description  String?\n  thumbnailUrl String?\n  stateUrl     String?  // URL to R2 storage for the project JSON state\n  \n  team         Team     @relation(fields: [teamId], references: [id])\n  \n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n}\n\nmodel EarlyAccessApplication {\n  id               String   @id @default(cuid())\n  orgName          String\n  contactName      String\n  contactEmail     String\n  useCase          String\n  teamSize         Int\n  status           OrgStatus @default(PENDING)\n  \n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @updatedAt\n}\n",
-  "inlineSchemaHash": "45a56de9e4c3a811230351b8a93e07fc58b49ec0bdf81ae219d1e6bda5deb99b",
+  "inlineSchema": "generator client {\n  provider      = \"prisma-client-js\"\n  output        = \"./generated-client\"\n  binaryTargets = [\"native\", \"debian-openssl-3.0.x\", \"linux-musl\", \"linux-musl-openssl-3.0.x\"]\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel User {\n  id            String    @id @default(cuid())\n  name          String?\n  email         String?   @unique\n  emailVerified DateTime?\n  image         String?\n  password      String?\n  \n  organizations OrganizationMember[]\n  teamMemberships TeamMember[]\n  \n  createdAt     DateTime  @default(now())\n  updatedAt     DateTime  @updatedAt\n}\n\nmodel Organization {\n  id          String   @id @default(cuid())\n  name        String\n  slug        String   @unique\n  logoUrl     String?\n  status      OrgStatus @default(PENDING)\n  \n  members     OrganizationMember[]\n  teams       Team[]\n  \n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @updatedAt\n}\n\nenum OrgStatus {\n  PENDING\n  APPROVED\n  REJECTED\n}\n\nmodel OrganizationMember {\n  id             String   @id @default(cuid())\n  organizationId String\n  userId         String\n  role           OrgRole  @default(MEMBER)\n  \n  organization   Organization @relation(fields: [organizationId], references: [id])\n  user           User         @relation(fields: [userId], references: [id])\n  \n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @updatedAt\n\n  @@unique([organizationId, userId])\n}\n\nenum OrgRole {\n  OWNER\n  ADMIN\n  MEMBER\n}\n\nmodel Team {\n  id             String   @id @default(cuid())\n  organizationId String\n  name           String\n  description    String?\n  \n  organization   Organization @relation(fields: [organizationId], references: [id])\n  members        TeamMember[]\n  projects       Project[]\n  \n  createdAt      DateTime @default(now())\n  updatedAt      DateTime @updatedAt\n}\n\nmodel TeamMember {\n  id      String @id @default(cuid())\n  teamId  String\n  userId  String\n  \n  team    Team @relation(fields: [teamId], references: [id])\n  user    User @relation(fields: [userId], references: [id])\n  \n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  @@unique([teamId, userId])\n}\n\nmodel Project {\n  id           String   @id @default(cuid())\n  teamId       String\n  name         String\n  description  String?\n  thumbnailUrl String?\n  stateUrl     String?  // URL to R2 storage for the project JSON state\n  \n  team         Team     @relation(fields: [teamId], references: [id])\n  \n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n}\n\nmodel EarlyAccessApplication {\n  id               String   @id @default(cuid())\n  orgName          String\n  contactName      String\n  contactEmail     String\n  useCase          String\n  teamSize         Int\n  status           OrgStatus @default(PENDING)\n  \n  createdAt        DateTime @default(now())\n  updatedAt        DateTime @updatedAt\n}\n",
+  "inlineSchemaHash": "02b675b25a98e96f913d2d741cb6b0aa177bc6a517965bff4e92db5d6e75d57e",
   "copyEngine": true
 }
 
@@ -280,6 +292,18 @@ Object.assign(exports, Prisma)
 // file annotations for bundling tools to include these files
 path.join(__dirname, "query_engine-windows.dll.node");
 path.join(process.cwd(), "prisma/generated-client/query_engine-windows.dll.node")
+
+// file annotations for bundling tools to include these files
+path.join(__dirname, "libquery_engine-debian-openssl-3.0.x.so.node");
+path.join(process.cwd(), "prisma/generated-client/libquery_engine-debian-openssl-3.0.x.so.node")
+
+// file annotations for bundling tools to include these files
+path.join(__dirname, "libquery_engine-linux-musl.so.node");
+path.join(process.cwd(), "prisma/generated-client/libquery_engine-linux-musl.so.node")
+
+// file annotations for bundling tools to include these files
+path.join(__dirname, "libquery_engine-linux-musl-openssl-3.0.x.so.node");
+path.join(process.cwd(), "prisma/generated-client/libquery_engine-linux-musl-openssl-3.0.x.so.node")
 // file annotations for bundling tools to include these files
 path.join(__dirname, "schema.prisma");
 path.join(process.cwd(), "prisma/generated-client/schema.prisma")
