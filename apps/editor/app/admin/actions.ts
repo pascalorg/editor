@@ -22,8 +22,44 @@ export async function updateApplicationStatus(id: string, status: 'APPROVED' | '
       data: { status }
     })
 
-    // If approved, we might want to create an organization and invite the user
-    // For now, just track the approval
+    if (status === 'APPROVED') {
+      // 1. Find or create the user
+      const user = await prisma.user.upsert({
+        where: { email: application.contactEmail },
+        update: {},
+        create: {
+          email: application.contactEmail,
+          name: application.contactName,
+        }
+      });
+
+      // 2. Generate a unique slug
+      let baseSlug = application.orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      if (!baseSlug) baseSlug = 'org';
+
+      let slug = baseSlug;
+      let counter = 1;
+      while (await prisma.organization.findUnique({ where: { slug } })) {
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+
+      // 3. Create the organization and link the user as OWNER
+      await prisma.organization.create({
+        data: {
+          name: application.orgName,
+          slug,
+          status: 'APPROVED',
+          members: {
+            create: {
+              userId: user.id,
+              role: 'OWNER',
+            }
+          }
+        }
+      });
+    }
+
     const posthog = PostHogServer()
     posthog.capture({
       distinctId: application.contactEmail,
