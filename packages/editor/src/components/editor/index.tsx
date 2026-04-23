@@ -58,6 +58,7 @@ import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
+import { PresenceSystem } from '../collaboration/PresenceSystem'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
@@ -512,10 +513,12 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  projectId?: string | null
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   return (
     <>
+      {projectId && <PresenceSystem projectId={projectId} />}
       {!isFirstPersonMode && <SelectionManager />}
       {!isVersionPreviewMode && !isFirstPersonMode && <BoxSelectTool />}
       {!isVersionPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}
@@ -696,6 +699,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
               isFirstPersonMode={isFirstPersonMode}
               isLoading={isLoading}
               isVersionPreviewMode={isVersionPreviewMode}
+              projectId={projectId}
               onThumbnailCapture={onThumbnailCapture}
             />
           </Viewer>

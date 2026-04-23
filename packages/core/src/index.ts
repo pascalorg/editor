@@ -62,7 +62,7 @@ export {
 } from './store/history-control'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { FenceSystem } from './systems/fence/fence-system'
-export { clearSceneHistory, default as useScene } from './store/use-scene'
+export { clearSceneHistory, default as useScene, type SceneState } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { DoorSystem } from './systems/door/door-system'
 export { ItemSystem } from './systems/item/item-system'

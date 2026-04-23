@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  
+  organizations OrganizationMember[]
+  teamMemberships TeamMember[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  status      OrgStatus @default(PENDING)
+  
+  members     OrganizationMember[]
+  teams       Team[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum OrgStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole  @default(MEMBER)
+  
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, userId])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  members        TeamMember[]
+  projects       Project[]
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model TeamMember {
+  id      String @id @default(cuid())
+  teamId  String
+  userId  String
+  
+  team    Team @relation(fields: [teamId], references: [id])
+  user    User @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, userId])
+}
+
+model Project {
+  id           String   @id @default(cuid())
+  teamId       String
+  name         String
+  description  String?
+  thumbnailUrl String?
+  stateUrl     String?  // URL to R2 storage for the project JSON state
+  
+  team         Team     @relation(fields: [teamId], references: [id])
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model EarlyAccessApplication {
+  id               String   @id @default(cuid())
+  orgName          String
+  contactName      String
+  contactEmail     String
+  useCase          String
+  teamSize         Int
+  status           OrgStatus @default(PENDING)
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

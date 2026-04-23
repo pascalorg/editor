@@ -32,3 +32,4 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { useUploadStore } from './store/use-upload'
+export { setCollaborationSocket } from './components/collaboration/PresenceSystem'
