@@ -1,8 +1,26 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
+
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type FenceNode,
+  getClampedWallCurveOffset,
+  getMaxWallCurveOffset,
+  getWallCurveLength,
+  type MaterialSchema,
+  normalizeWallCurveOffset,
+  useScene,
+} from '@pascal-app/core'
+
 import { useViewer } from '@pascal-app/viewer'
+import { Move, Spline } from 'lucide-react'
 import { useCallback } from 'react'
+
+import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
+import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -27,6 +45,8 @@ export function FencePanel() {
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setCurvingFence = useEditor((s) => s.setCurvingFence)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as FenceNode | undefined) : undefined,
@@ -66,11 +86,15 @@ export function FencePanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
+
+
+
+
   if (!(node && node.type === 'fence' && selectedId && selectedCount === 1)) return null
 
-  const dx = node.end[0] - node.start[0]
-  const dz = node.end[1] - node.start[1]
-  const length = Math.sqrt(dx * dx + dz * dz)
+  const length = getWallCurveLength(node)
+  const curveOffset = getClampedWallCurveOffset(node)
+  const maxCurveOffset = getMaxWallCurveOffset(node)
 
   return (
     <PanelWrapper
@@ -103,6 +127,16 @@ export function FencePanel() {
           step={0.01}
           unit="m"
           value={length}
+        />
+        <SliderControl
+          label="Curve"
+          max={Math.max(0.01, maxCurveOffset)}
+          min={-Math.max(0.01, maxCurveOffset)}
+          onChange={(value) => handleUpdate({ curveOffset: normalizeWallCurveOffset(node, value) })}
+          precision={2}
+          step={0.1}
+          unit="m"
+          value={Math.round(curveOffset * 100) / 100}
         />
         <SliderControl
           label="Height"
@@ -188,7 +222,6 @@ export function FencePanel() {
           value={node.edgeInset}
         />
       </PanelSection>
-
     </PanelWrapper>
   )
 }

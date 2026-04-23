@@ -1,16 +1,22 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, useScene, type SlabNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  type FenceNode,
+  type GridEvent,
+  type LevelNode,
+  type SlabNode,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { snapFenceDraftPoint } from '../fence/fence-drafting'
 import { CursorSphere } from '../shared/cursor-sphere'
-
-function snap(value: number) {
-  return Math.round(value * 2) / 2
-}
 
 function translatePolygon(
   polygon: Array<[number, number]>,
@@ -56,6 +62,17 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
   useEffect(() => {
     const originalPolygon = originalPolygonRef.current
     const originalHoles = originalHolesRef.current
+    const levelNode =
+      node.parentId && useScene.getState().nodes[node.parentId as AnyNodeId]?.type === 'level'
+        ? (useScene.getState().nodes[node.parentId as AnyNodeId] as LevelNode)
+        : null
+    const levelChildren = levelNode?.children ?? []
+    const levelWalls = levelChildren
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .filter((child): child is WallNode => child?.type === 'wall')
+    const levelFences = levelChildren
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .filter((child): child is FenceNode => child?.type === 'fence')
 
     useScene.temporal.getState().pause()
     let wasCommitted = false
@@ -80,8 +97,11 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const localX = snap(event.localPosition[0])
-      const localZ = snap(event.localPosition[2])
+      const [localX, localZ] = snapFenceDraftPoint({
+        point: [event.localPosition[0], event.localPosition[2]],
+        walls: levelWalls,
+        fences: levelFences,
+      })
 
       if (
         previousGridPosRef.current &&

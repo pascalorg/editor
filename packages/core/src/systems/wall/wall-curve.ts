@@ -1,10 +1,10 @@
 import type { Point2D } from './wall-mitering'
-import type { WallNode } from '../../schema'
+import type { FenceNode, WallNode } from '../../schema'
 
 const CURVE_EPSILON = 1e-6
 const DEFAULT_SAMPLE_SEGMENTS = 24
 
-type WallCurveLike = Pick<WallNode, 'start' | 'end' | 'curveOffset'>
+type WallCurveLike = Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset'>
 
 type CurveFrame = {
   point: Point2D
@@ -198,7 +198,7 @@ export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPL
 }
 
 export function getWallSurfacePolygon(
-  wall: Pick<WallNode, 'start' | 'end' | 'curveOffset' | 'thickness'>,
+  wall: Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset' | 'thickness'>,
   segments = DEFAULT_SAMPLE_SEGMENTS,
   miterOverrides?: WallSurfaceMiterOverrides,
 ) {
