@@ -3,10 +3,9 @@
 import {
   Editor,
   type SidebarTab,
-  setCollaborationSocket,
+  YjsCollaborationProvider,
 } from '@pascal-app/editor'
 import { EditorToolbarLeft, EditorToolbarRight } from '../editor/[id]/EditorToolbar'
-import { CollaborationBridge } from '@/components/collaboration/CollaborationBridge'
 import { getSocket } from '@/lib/socket'
 import { useEffect, useState } from 'react'
 import { LayoutDashboard, Home, Share2 } from 'lucide-react'
@@ -23,11 +22,6 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
 export default function PlaygroundPage() {
   const [projectId] = useState('playground-' + Math.random().toString(36).substring(7))
   const [userId] = useState('guest-' + Math.random().toString(36).substring(7))
-
-  useEffect(() => {
-    const socket = getSocket()
-    setCollaborationSocket(socket)
-  }, [])
 
   const handleLoad = async () => {
     const saved = localStorage.getItem('pascal-playground-state')
@@ -69,16 +63,22 @@ export default function PlaygroundPage() {
          </Link>
       </div>
 
-      <CollaborationBridge projectId={projectId} userId={userId} />
-      <Editor
-        layoutVersion="v2"
-        projectId={projectId}
-        sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<EditorToolbarLeft />}
-        viewerToolbarRight={<EditorToolbarRight />}
-        onLoad={handleLoad}
-        onSave={handleSave}
-      />
+      <YjsCollaborationProvider 
+        projectId={projectId} 
+        userId={userId} 
+        socket={getSocket()}
+      >
+        <Editor
+          layoutVersion="v2"
+          projectId={projectId}
+          sidebarTabs={SIDEBAR_TABS}
+          viewerToolbarLeft={<EditorToolbarLeft />}
+          viewerToolbarRight={<EditorToolbarRight />}
+          onLoad={handleLoad}
+          onSave={handleSave}
+        />
+      </YjsCollaborationProvider>
     </div>
   )
 }
+
