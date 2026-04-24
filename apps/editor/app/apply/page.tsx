@@ -106,7 +106,7 @@ export default function ApplyPage() {
             </div>
             <span className="font-bold text-sm tracking-tight">archly</span>
           </Link>
-          <span className="text-xs text-zinc-500">Already have an account? <Link href="/admin" className="text-indigo-400 hover:text-indigo-300">Sign in</Link></span>
+          <span className="text-xs text-zinc-500">Already have an account? <Link href="/login" className="text-indigo-400 hover:text-indigo-300">Sign in</Link></span>
         </div>
       </nav>
 

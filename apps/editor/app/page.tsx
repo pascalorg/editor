@@ -38,7 +38,7 @@ export default function LandingPage() {
             <Link href="/terms" className="hover:text-white transition-colors">Legal</Link>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/admin" className="hidden sm:block text-[13px] font-medium text-zinc-400 hover:text-white transition-colors px-3 py-1.5">Sign In</Link>
+            <Link href="/login" className="hidden sm:block text-[13px] font-medium text-zinc-400 hover:text-white transition-colors px-3 py-1.5">Sign In</Link>
             <Link href="/apply" className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[13px] font-semibold rounded-lg hover:opacity-90 transition-all shadow-lg shadow-indigo-500/20">
               Get Started Free
             </Link>
