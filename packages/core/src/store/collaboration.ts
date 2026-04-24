@@ -61,7 +61,7 @@ export function bindSceneStoreToYjs(doc: Y.Doc) {
       if (state.nodes !== lastNodes) {
         // Detect additions/updates
         for (const [id, node] of Object.entries(state.nodes)) {
-          if (lastNodes[id] !== node) {
+          if (lastNodes[id as AnyNodeId] !== node) {
             ynodes.set(id, node)
           }
         }
@@ -86,7 +86,7 @@ export function bindSceneStoreToYjs(doc: Y.Doc) {
       if (state.collections !== lastCollections) {
         for (const [id, col] of Object.entries(state.collections)) {
           if (lastCollections[id as CollectionId] !== col) {
-            ycollections.set(id, col)
+            ycollections.set(id as CollectionId, col)
           }
         }
         for (const id in lastCollections) {

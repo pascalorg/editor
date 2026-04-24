@@ -283,7 +283,7 @@ export function syncEditorSelectionFromCurrentScene() {
 
     if (shouldRestoreEditorUiState) {
       if (restoredSelection) {
-        useViewer.getState().setSelection(restoredSelection)
+        useViewer.getState().setSelection(restoredSelection as any)
         useEditor.setState(
           restoredEditorUiState.phase === 'site'
             ? (selectionDrivenEditorUiState ?? restoredEditorUiState)
@@ -305,7 +305,7 @@ export function syncEditorSelectionFromCurrentScene() {
     }
 
     if (restoredSelection) {
-      useViewer.getState().setSelection(restoredSelection)
+      useViewer.getState().setSelection(restoredSelection as any)
       if (selectionDrivenEditorUiState) {
         useEditor.setState(selectionDrivenEditorUiState)
       }
