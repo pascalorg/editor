@@ -3,10 +3,9 @@
 import {
   Editor,
   type SidebarTab,
-  ViewerToolbarLeft,
-  ViewerToolbarRight,
   setCollaborationSocket,
 } from '@pascal-app/editor'
+import { EditorToolbarLeft, EditorToolbarRight } from './EditorToolbar'
 import { CollaborationBridge } from '@/components/collaboration/CollaborationBridge'
 import { getSocket } from '@/lib/socket'
 import { useEffect } from 'react'
@@ -49,8 +48,8 @@ export default function EditorClient({ projectId, userId }: EditorClientProps) {
         layoutVersion="v2"
         projectId={projectId}
         sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<ViewerToolbarLeft />}
-        viewerToolbarRight={<ViewerToolbarRight />}
+        viewerToolbarLeft={<EditorToolbarLeft />}
+        viewerToolbarRight={<EditorToolbarRight />}
         onLoad={handleLoad}
         onSave={handleSave}
       />
