@@ -46,6 +46,8 @@
     "motion": "^12.34.3",
     "nanoid": "^5.1.6",
     "tailwind-merge": "^3.5.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.30",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },

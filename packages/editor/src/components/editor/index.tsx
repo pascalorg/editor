@@ -519,7 +519,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
 }) {
   return (
     <>
-      {projectId && <PresenceSystem projectId={projectId} />}
+      {projectId && <PresenceSystem />}
       {!isFirstPersonMode && <SelectionManager />}
       {!isVersionPreviewMode && !isFirstPersonMode && <BoxSelectTool />}
       {!isVersionPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}

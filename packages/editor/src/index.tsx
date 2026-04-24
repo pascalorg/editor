@@ -32,4 +32,6 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { useUploadStore } from './store/use-upload'
-export { setCollaborationSocket } from './components/collaboration/PresenceSystem'
+export { PresenceSystem } from './components/collaboration/PresenceSystem'
+export { YjsCollaborationProvider, useCollaboration } from './components/collaboration/YjsCollaborationProvider'
+

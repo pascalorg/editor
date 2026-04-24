@@ -39,6 +39,8 @@
     "nanoid": "^5.1.6",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "^0.9.8",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.30",
     "zod": "^4.3.5",
     "zundo": "^2.3.0",
     "zustand": "^5"

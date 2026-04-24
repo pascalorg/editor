@@ -3,11 +3,11 @@
 import {
   Editor,
   type SidebarTab,
-  setCollaborationSocket,
+  YjsCollaborationProvider,
 } from '@pascal-app/editor'
 import { EditorToolbarLeft, EditorToolbarRight } from './EditorToolbar'
-import { CollaborationBridge } from '@/components/collaboration/CollaborationBridge'
 import { getSocket } from '@/lib/socket'
+
 import { useEffect } from 'react'
 import { loadProject, saveProject } from '@/app/project/actions'
 import { LayoutDashboard } from 'lucide-react'
@@ -27,10 +27,6 @@ interface EditorClientProps {
 }
 
 export default function EditorClient({ projectId, userId }: EditorClientProps) {
-  useEffect(() => {
-    const socket = getSocket()
-    setCollaborationSocket(socket)
-  }, [])
 
   const handleLoad = async () => {
     if (!projectId) return null;
@@ -56,16 +52,22 @@ export default function EditorClient({ projectId, userId }: EditorClientProps) {
         </Link>
       </div>
 
-      <CollaborationBridge projectId={projectId || 'local-editor'} userId={userId} />
-      <Editor
-        layoutVersion="v2"
-        projectId={projectId}
-        sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<EditorToolbarLeft />}
-        viewerToolbarRight={<EditorToolbarRight />}
-        onLoad={handleLoad}
-        onSave={handleSave}
-      />
+      <YjsCollaborationProvider 
+        projectId={projectId || 'local-editor'} 
+        userId={userId} 
+        socket={getSocket()}
+      >
+        <Editor
+          layoutVersion="v2"
+          projectId={projectId}
+          sidebarTabs={SIDEBAR_TABS}
+          viewerToolbarLeft={<EditorToolbarLeft />}
+          viewerToolbarRight={<EditorToolbarRight />}
+          onLoad={handleLoad}
+          onSave={handleSave}
+        />
+      </YjsCollaborationProvider>
+
     </div>
   )
 }

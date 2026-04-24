@@ -38,7 +38,9 @@
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.30"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",

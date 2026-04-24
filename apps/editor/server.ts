@@ -4,6 +4,7 @@ import next from 'next'
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import Redis from 'ioredis'
+import * as Y from 'yjs'
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = '0.0.0.0'
@@ -15,6 +16,9 @@ const handle = app.getRequestHandler()
 const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
 const subClient = pubClient.duplicate()
 
+// In-memory store for Yjs documents
+const docs = new Map<string, Y.Doc>()
+
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true)
@@ -25,35 +29,72 @@ app.prepare().then(() => {
     cors: {
       origin: dev ? '*' : (process.env.NEXTAUTH_URL || 'https://archly.cloud'),
       methods: ['GET', 'POST']
-    }
+    },
+    maxHttpBufferSize: 1e8 // 100MB for large scene syncs
   })
 
   io.adapter(createAdapter(pubClient, subClient))
 
   io.on('connection', (socket) => {
+    let currentProjectId: string | null = null
+
     console.log('User connected:', socket.id)
 
     socket.on('join-project', (projectId) => {
+      currentProjectId = projectId
       socket.join(`project:${projectId}`)
       console.log(`User ${socket.id} joined project: ${projectId}`)
+
+      // Initialize Y.Doc if it doesn't exist
+      if (!docs.has(projectId)) {
+        const doc = new Y.Doc()
+        docs.set(projectId, doc)
+        
+        // We don't load from DB here yet, we'll let the first client 
+        // who has the data upload the initial state if the doc is empty.
+        // For a more robust system, we would load from S3/Prisma here.
+      }
+
+      const doc = docs.get(projectId)!
+      
+      // Send initial sync state to the joining user
+      const stateVector = Y.encodeStateVector(doc)
+      socket.emit('yjs-sync-step-1', stateVector)
     })
 
-    socket.on('node-update', (data) => {
-      // data: { projectId, nodeId, updates }
-      socket.to(`project:${data.projectId}`).emit('node-update', data)
+    socket.on('yjs-sync-step-1', (stateVector: Uint8Array) => {
+      if (!currentProjectId) return
+      const doc = docs.get(currentProjectId)
+      if (!doc) return
+
+      const update = Y.encodeStateAsUpdate(doc, stateVector)
+      socket.emit('yjs-sync-step-2', update)
     })
 
-    socket.on('node-create', (data) => {
-      socket.to(`project:${data.projectId}`).emit('node-create', data)
+    socket.on('yjs-sync-step-2', (update: Uint8Array) => {
+      if (!currentProjectId) return
+      const doc = docs.get(currentProjectId)
+      if (!doc) return
+
+      Y.applyUpdate(doc, update, 'remote')
     })
 
-    socket.on('node-delete', (data) => {
-      socket.to(`project:${data.projectId}`).emit('node-delete', data)
+    socket.on('yjs-update', (update: Uint8Array) => {
+      if (!currentProjectId) return
+      const doc = docs.get(currentProjectId)
+      if (!doc) return
+
+      // Apply update locally to the server's doc
+      Y.applyUpdate(doc, update, 'remote')
+      
+      // Broadcast update to others in the same project
+      socket.to(`project:${currentProjectId}`).emit('yjs-update', update)
     })
 
-    socket.on('presence', (data) => {
-      // data: { projectId, userId, cursor: [x,y,z], selection: [] }
-      socket.to(`project:${data.projectId}`).emit('presence', data)
+    socket.on('awareness-update', (update: Uint8Array) => {
+      if (!currentProjectId) return
+      // Awareness is ephemeral, just broadcast it
+      socket.to(`project:${currentProjectId}`).emit('awareness-update', update)
     })
 
     socket.on('disconnect', () => {
@@ -65,3 +106,4 @@ app.prepare().then(() => {
     console.log(`> Ready on http://${hostname}:${port}`)
   })
 })
+
