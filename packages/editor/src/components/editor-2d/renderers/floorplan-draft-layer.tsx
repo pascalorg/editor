@@ -11,6 +11,7 @@ type SvgLine = {
 
 type FloorplanDraftLayerProps = {
   draftPolygonPoints: string | null
+  linearDraftSegment: SvgLine | null
   polygonDraftPolygonPoints: string | null
   polygonDraftPolylinePoints: string | null
   polygonDraftClosingSegment: SvgLine | null
@@ -22,6 +23,7 @@ type FloorplanDraftLayerProps = {
 
 export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
   draftPolygonPoints,
+  linearDraftSegment,
   polygonDraftPolygonPoints,
   polygonDraftPolylinePoints,
   polygonDraftClosingSegment,
@@ -41,6 +43,21 @@ export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
           strokeDasharray="0.24 0.12"
           strokeWidth="0.07"
           vectorEffect="non-scaling-stroke"
+        />
+      )}
+
+      {linearDraftSegment && (
+        <line
+          stroke={draftStroke}
+          strokeDasharray="0.2 0.12"
+          strokeLinecap="round"
+          strokeOpacity={0.95}
+          strokeWidth="0.08"
+          vectorEffect="non-scaling-stroke"
+          x1={linearDraftSegment.x1}
+          x2={linearDraftSegment.x2}
+          y1={linearDraftSegment.y1}
+          y2={linearDraftSegment.y2}
         />
       )}
 

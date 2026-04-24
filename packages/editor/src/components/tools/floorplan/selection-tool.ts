@@ -1,4 +1,5 @@
 import type {
+  CeilingNode,
   DoorNode,
   ItemNode,
   RoofNode,
@@ -46,6 +47,12 @@ type SlabEntry = {
   holes: Point2D[][]
 }
 
+type CeilingEntry = {
+  ceiling: CeilingNode
+  polygon: Point2D[]
+  holes: Point2D[][]
+}
+
 type RoofEntry = {
   roof: RoofNode
   segments: Array<{
@@ -63,6 +70,7 @@ type FloorplanSelectionToolContext = {
   stairs: StairEntry[]
   walls: WallEntry[]
   slabs: SlabEntry[]
+  ceilings: CeilingEntry[]
   roofs: RoofEntry[]
   openingHitTolerance: number
   wallHitTolerance: number
@@ -131,6 +139,13 @@ export function getFloorplanHitNodeId(context: FloorplanSelectionToolContext) {
       return roofHit.roof.id
     }
 
+    const ceilingHit = context.ceilings.find(({ polygon, holes }) =>
+      isPointInsidePolygonWithHoles(context.point, polygon, holes),
+    )
+    if (ceilingHit) {
+      return ceilingHit.ceiling.id
+    }
+
     const slabHit = context.slabs.find(({ polygon, holes }) =>
       isPointInsidePolygonWithHoles(context.point, polygon, holes),
     )
@@ -150,6 +165,7 @@ type FloorplanSelectionBoundsContext = {
   walls: WallEntry[]
   openings: OpeningPolygonEntry[]
   slabs: SlabEntry[]
+  ceilings: CeilingEntry[]
   stairs: StairEntry[]
   roofs: RoofEntry[]
 }
@@ -162,6 +178,7 @@ export function getFloorplanSelectionIdsInBounds({
   walls,
   openings,
   slabs,
+  ceilings,
   stairs,
   roofs,
 }: FloorplanSelectionBoundsContext) {
@@ -184,6 +201,9 @@ export function getFloorplanSelectionIdsInBounds({
   const slabIds = slabs
     .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
     .map(({ slab }) => slab.id)
+  const ceilingIds = ceilings
+    .filter(({ polygon }) => doesPolygonIntersectSelectionBounds(polygon, bounds))
+    .map(({ ceiling }) => ceiling.id)
   const stairIds = stairs
     .filter((stair) =>
       getStairHitPolygons(stair).some((polygon) =>
@@ -198,6 +218,14 @@ export function getFloorplanSelectionIdsInBounds({
     .map(({ roof }) => roof.id)
 
   return Array.from(
-    new Set([...itemIds, ...wallIds, ...openingIds, ...slabIds, ...stairIds, ...roofIds]),
+    new Set([
+      ...itemIds,
+      ...wallIds,
+      ...openingIds,
+      ...slabIds,
+      ...ceilingIds,
+      ...stairIds,
+      ...roofIds,
+    ]),
   )
 }

@@ -32,6 +32,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   rotatePlanVector as rotateSharedPlanVector,
+  sceneRegistry,
   type SiteNode,
   SlabNode,
   type StairNode,
@@ -81,6 +82,7 @@ import {
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
+import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import {
   createWallOnCurrentLevel,
   isWallLongEnough,
@@ -156,6 +158,9 @@ const FLOORPLAN_WALL_OUTER_MEASUREMENT_EXTENSION = 'rgba(96, 165, 250, 0.9)'
 const FLOORPLAN_WALL_INNER_MEASUREMENT_STROKE = 'rgba(96, 165, 250, 0.95)'
 const FLOORPLAN_WALL_INNER_MEASUREMENT_TEXT = 'rgba(59, 130, 246, 0.98)'
 const FLOORPLAN_WALL_INNER_MEASUREMENT_EXTENSION = 'rgba(147, 197, 253, 0.9)'
+const FLOORPLAN_OPENING_MEASUREMENT_STROKE = 'rgba(249, 115, 22, 0.98)'
+const FLOORPLAN_OPENING_MEASUREMENT_TEXT = 'rgba(234, 88, 12, 0.98)'
+const FLOORPLAN_OPENING_MEASUREMENT_EXTENSION = 'rgba(251, 146, 60, 0.9)'
 const FLOORPLAN_ITEM_CLEARANCE_MAX_DISTANCE = 12
 const FLOORPLAN_ITEM_CLEARANCE_MIN_DISTANCE = 0.05
 const FLOORPLAN_ITEM_CLEARANCE_EDGE_PARALLEL_THRESHOLD = 0.65
@@ -410,6 +415,13 @@ type SlabPolygonEntry = {
   path: string
 }
 
+type CeilingPolygonEntry = {
+  ceiling: CeilingNode
+  polygon: Point2D[]
+  holes: Point2D[][]
+  path: string
+}
+
 type SitePolygonEntry = {
   site: SiteNode
   polygon: Point2D[]
@@ -489,6 +501,10 @@ type FloorplanPalette = {
   slabStroke: string
   selectedSlabFill: string
   selectedSlabStroke: string
+  ceilingFill: string
+  ceilingStroke: string
+  selectedCeilingFill: string
+  selectedCeilingStroke: string
   wallFill: string
   wallStroke: string
   wallInnerStroke: string
@@ -2808,6 +2824,13 @@ type WallFaceLine = {
   end: Point2D
 }
 
+type WallMeasurementFaceContext = {
+  outerFace: WallFaceLine
+  innerFace: WallFaceLine
+  outwardNormal: Point2D
+  inwardNormal: Point2D
+}
+
 function getWallFaceLines(polygon: Point2D[], wall: WallNode): { left: WallFaceLine; right: WallFaceLine } | null {
   if (polygon.length < 4 || isCurvedWall(wall)) {
     return null
@@ -2844,11 +2867,10 @@ function getLineMidpoint(line: WallFaceLine): Point2D {
   }
 }
 
-function getSelectedWallMeasurementOverlays(
+function getWallMeasurementFaceContext(
   selectedWallEntry: WallPolygonEntry,
   wallPolygons: WallPolygonEntry[],
-  unit: 'metric' | 'imperial',
-): LinearMeasurementOverlay[] {
+): WallMeasurementFaceContext | null {
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
@@ -2864,16 +2886,10 @@ function getSelectedWallMeasurementOverlays(
   const centerX = minX === Number.POSITIVE_INFINITY ? 0 : (minX + maxX) / 2
   const centerY = minY === Number.POSITIVE_INFINITY ? 0 : (minY + maxY) / 2
   const { wall, polygon } = selectedWallEntry
-
-  if (isCurvedWall(wall)) {
-    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit)
-    return overlay ? [overlay] : []
-  }
-
   const faceLines = getWallFaceLines(polygon, wall)
+
   if (!faceLines) {
-    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit)
-    return overlay ? [overlay] : []
+    return null
   }
 
   const dx = wall.end[0] - wall.start[0]
@@ -2881,7 +2897,7 @@ function getSelectedWallMeasurementOverlays(
   const length = Math.hypot(dx, dy)
 
   if (length < 1e-6) {
-    return []
+    return null
   }
 
   const wallMidpoint = {
@@ -2907,7 +2923,100 @@ function getSelectedWallMeasurementOverlays(
     (leftMidpoint.y - wallMidpoint.y) * outwardNormal.y
   const outerFace = rightScore >= leftScore ? faceLines.right : faceLines.left
   const innerFace = outerFace === faceLines.right ? faceLines.left : faceLines.right
-  const inwardNormal = { x: -outwardNormal.x, y: -outwardNormal.y }
+
+  return {
+    outerFace,
+    innerFace,
+    outwardNormal,
+    inwardNormal: { x: -outwardNormal.x, y: -outwardNormal.y },
+  }
+}
+
+function getAdjacentOpeningBounds(
+  current: {
+    id: OpeningNode['id']
+    wallId: WallNode['id']
+    startDistance: number
+    endDistance: number
+  },
+  openings: OpeningPolygonEntry[],
+) {
+  let leftBoundary: number | null = null
+  let rightBoundary: number | null = null
+
+  for (const { opening } of openings) {
+    if (opening.parentId !== current.wallId || opening.id === current.id) {
+      continue
+    }
+
+    const startDistance = opening.position[0] - opening.width / 2
+    const endDistance = opening.position[0] + opening.width / 2
+
+    if (endDistance <= current.startDistance && (leftBoundary === null || endDistance > leftBoundary)) {
+      leftBoundary = endDistance
+    }
+
+    if (
+      startDistance >= current.endDistance &&
+      (rightBoundary === null || startDistance < rightBoundary)
+    ) {
+      rightBoundary = startDistance
+    }
+  }
+
+  return {
+    leftBoundary,
+    rightBoundary,
+  }
+}
+
+function getSelectedWallMeasurementOverlays(
+  selectedWallEntry: WallPolygonEntry,
+  wallPolygons: WallPolygonEntry[],
+  unit: 'metric' | 'imperial',
+): LinearMeasurementOverlay[] {
+  const { wall } = selectedWallEntry
+
+  if (isCurvedWall(wall)) {
+    let minX = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY
+    let maxY = Number.NEGATIVE_INFINITY
+
+    for (const { wall: candidateWall } of wallPolygons) {
+      minX = Math.min(minX, candidateWall.start[0], candidateWall.end[0])
+      maxX = Math.max(maxX, candidateWall.start[0], candidateWall.end[0])
+      minY = Math.min(minY, candidateWall.start[1], candidateWall.end[1])
+      maxY = Math.max(maxY, candidateWall.start[1], candidateWall.end[1])
+    }
+
+    const centerX = minX === Number.POSITIVE_INFINITY ? 0 : (minX + maxX) / 2
+    const centerY = minY === Number.POSITIVE_INFINITY ? 0 : (minY + maxY) / 2
+    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit)
+    return overlay ? [overlay] : []
+  }
+
+  const faceContext = getWallMeasurementFaceContext(selectedWallEntry, wallPolygons)
+  if (!faceContext) {
+    let minX = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY
+    let maxY = Number.NEGATIVE_INFINITY
+
+    for (const { wall: candidateWall } of wallPolygons) {
+      minX = Math.min(minX, candidateWall.start[0], candidateWall.end[0])
+      maxX = Math.max(maxX, candidateWall.start[0], candidateWall.end[0])
+      minY = Math.min(minY, candidateWall.start[1], candidateWall.end[1])
+      maxY = Math.max(maxY, candidateWall.start[1], candidateWall.end[1])
+    }
+
+    const centerX = minX === Number.POSITIVE_INFINITY ? 0 : (minX + maxX) / 2
+    const centerY = minY === Number.POSITIVE_INFINITY ? 0 : (minY + maxY) / 2
+    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit)
+    return overlay ? [overlay] : []
+  }
+
+  const { outerFace, innerFace, outwardNormal, inwardNormal } = faceContext
   const outerLength = Math.hypot(outerFace.end.x - outerFace.start.x, outerFace.end.y - outerFace.start.y)
   const innerLength = Math.hypot(innerFace.end.x - innerFace.start.x, innerFace.end.y - innerFace.start.y)
   const overlays: LinearMeasurementOverlay[] = []
@@ -3676,11 +3785,17 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   canFocusGeometry,
   canSelectGeometry,
   canSelectSlabs,
+  canSelectCeilings,
+  ceilingPolygons,
   highlightedIdSet,
+  hoveredCeilingId,
   hoveredSlabId,
   hoveredOpeningId,
   hoveredWallId,
   isDeleteMode,
+  onCeilingDoubleClick,
+  onCeilingHoverChange,
+  onCeilingSelect,
   onSlabDoubleClick,
   onSlabHoverChange,
   onSlabSelect,
@@ -3701,11 +3816,17 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
 }: {
   canFocusGeometry: boolean
   canSelectSlabs: boolean
+  canSelectCeilings: boolean
   canSelectGeometry: boolean
+  ceilingPolygons: CeilingPolygonEntry[]
   highlightedIdSet: ReadonlySet<string>
+  hoveredCeilingId: CeilingNode['id'] | null
   hoveredSlabId: SlabNode['id'] | null
   hoveredOpeningId: OpeningNode['id'] | null
   isDeleteMode: boolean
+  onCeilingDoubleClick: (ceiling: CeilingNode) => void
+  onCeilingHoverChange: (ceilingId: CeilingNode['id'] | null) => void
+  onCeilingSelect: (ceilingId: CeilingNode['id'], event: ReactMouseEvent<SVGElement>) => void
   onSlabDoubleClick: (slab: SlabNode) => void
   onSlabHoverChange: (slabId: SlabNode['id'] | null) => void
   onSlabSelect: (slabId: SlabNode['id'], event: ReactMouseEvent<SVGElement>) => void
@@ -3821,6 +3942,70 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               vectorEffect="non-scaling-stroke"
             />
             {slabLabel}
+          </g>
+        )
+      })}
+
+      {ceilingPolygons.map(({ ceiling, path }) => {
+        const isSelected = selectedIdSet.has(ceiling.id)
+        const isHighlighted = highlightedIdSet.has(ceiling.id)
+        const isDeleteHovered = isDeleteMode && hoveredCeilingId === ceiling.id
+        const showSelectedCeilingStyle = isSelected || isHighlighted
+        const ceilingBorderStroke = isDeleteHovered
+          ? palette.deleteStroke
+          : showSelectedCeilingStyle
+            ? palette.selectedCeilingStroke
+            : palette.ceilingStroke
+        const ceilingBorderWidth = showSelectedCeilingStyle ? '0.065' : '0.05'
+
+        return (
+          <g key={ceiling.id}>
+            <path
+              clipRule="evenodd"
+              d={path}
+              fill={
+                isDeleteHovered
+                  ? palette.deleteFill
+                  : showSelectedCeilingStyle
+                    ? palette.selectedCeilingFill
+                    : palette.ceilingFill
+              }
+              fillRule="evenodd"
+              onClick={
+                canSelectCeilings
+                  ? (event) => {
+                      event.stopPropagation()
+                      onCeilingSelect(ceiling.id, event)
+                    }
+                  : undefined
+              }
+              onDoubleClick={
+                canFocusGeometry
+                  ? (event) => {
+                      event.stopPropagation()
+                      onCeilingDoubleClick(ceiling)
+                    }
+                  : undefined
+              }
+              onPointerEnter={canSelectCeilings ? () => onCeilingHoverChange(ceiling.id) : undefined}
+              onPointerLeave={canSelectCeilings ? () => onCeilingHoverChange(null) : undefined}
+              pointerEvents={canSelectCeilings ? undefined : 'none'}
+              style={canSelectCeilings ? { cursor: EDITOR_CURSOR } : undefined}
+              stroke="none"
+            />
+            <path
+              clipRule="evenodd"
+              d={path}
+              fill="none"
+              fillRule="evenodd"
+              pointerEvents="none"
+              stroke={ceilingBorderStroke}
+              strokeDasharray="0.16 0.12"
+              strokeLinejoin="round"
+              strokeOpacity={isDeleteHovered || isHighlighted ? 0.96 : 0.88}
+              strokeWidth={ceilingBorderWidth}
+              vectorEffect="non-scaling-stroke"
+            />
           </g>
         )
       })}
@@ -6426,6 +6611,7 @@ const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndicatorOv
 export function FloorplanPanel() {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const floorplanSceneRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
@@ -6676,6 +6862,11 @@ export function FloorplanPanel() {
 
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [draftEnd, setDraftEnd] = useState<WallPlanPoint | null>(null)
+  const [fenceDraftStart, setFenceDraftStart] = useState<WallPlanPoint | null>(null)
+  const [fenceDraftEnd, setFenceDraftEnd] = useState<WallPlanPoint | null>(null)
+  const [roofDraftStart, setRoofDraftStart] = useState<WallPlanPoint | null>(null)
+  const [roofDraftEnd, setRoofDraftEnd] = useState<WallPlanPoint | null>(null)
+  const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
   const [zoneDraftPoints, setZoneDraftPoints] = useState<WallPlanPoint[]>([])
   const [siteBoundaryDraft, setSiteBoundaryDraft] = useState<SiteBoundaryDraft | null>(null)
@@ -6693,6 +6884,7 @@ export function FloorplanPanel() {
   const [hoveredWallId, setHoveredWallId] = useState<WallNode['id'] | null>(null)
   const [hoveredFenceId, setHoveredFenceId] = useState<FenceNode['id'] | null>(null)
   const [hoveredSlabId, setHoveredSlabId] = useState<SlabNode['id'] | null>(null)
+  const [hoveredCeilingId, setHoveredCeilingId] = useState<CeilingNode['id'] | null>(null)
   const [hoveredItemId, setHoveredItemId] = useState<ItemNode['id'] | null>(null)
   const [hoveredStairId, setHoveredStairId] = useState<StairNode['id'] | null>(null)
   const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
@@ -7437,6 +7629,126 @@ export function FloorplanPanel() {
       return overlay ? [overlay] : []
     })
   }, [displayWallPolygons, selectedItemEntry, unit])
+  const movingOpeningPlacementMeasurements = useMemo(() => {
+    if (!(movingNode?.type === 'door' || movingNode?.type === 'window')) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    const openingEntry = openingsPolygons.find(({ opening }) => opening.id === movingNode.id)
+    if (!openingEntry) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    const wallEntry = displayWallPolygons.find(({ wall }) => wall.id === openingEntry.opening.parentId)
+    if (!wallEntry || isCurvedWall(wallEntry.wall)) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    const faceContext = getWallMeasurementFaceContext(wallEntry, displayWallPolygons)
+    if (!faceContext) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    const wall = wallEntry.wall
+    const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    if (wallLength < 1e-6) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    const tangent = normalizePlanVector({
+      x: wall.end[0] - wall.start[0],
+      y: wall.end[1] - wall.start[1],
+    })
+    if (!tangent) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    const opening = openingEntry.opening
+    const startDistance = opening.position[0] - opening.width / 2
+    const endDistance = opening.position[0] + opening.width / 2
+    const { leftBoundary, rightBoundary } = getAdjacentOpeningBounds(
+      {
+        id: opening.id,
+        wallId: wall.id,
+        startDistance,
+        endDistance,
+      },
+      openingsPolygons,
+    )
+    const faceOffsetDistance = (wall.thickness ?? 0.1) / 2
+    const openingFaceStart = {
+      x: wall.start[0] + tangent.x * startDistance + faceContext.outwardNormal.x * faceOffsetDistance,
+      y: wall.start[1] + tangent.y * startDistance + faceContext.outwardNormal.y * faceOffsetDistance,
+    }
+    const openingFaceEnd = {
+      x: wall.start[0] + tangent.x * endDistance + faceContext.outwardNormal.x * faceOffsetDistance,
+      y: wall.start[1] + tangent.y * endDistance + faceContext.outwardNormal.y * faceOffsetDistance,
+    }
+    const leftBoundaryPoint =
+      leftBoundary === null
+        ? faceContext.outerFace.start
+        : {
+            x: wall.start[0] + tangent.x * leftBoundary + faceContext.outwardNormal.x * faceOffsetDistance,
+            y: wall.start[1] + tangent.y * leftBoundary + faceContext.outwardNormal.y * faceOffsetDistance,
+          }
+    const rightBoundaryPoint =
+      rightBoundary === null
+        ? faceContext.outerFace.end
+        : {
+            x: wall.start[0] + tangent.x * rightBoundary + faceContext.outwardNormal.x * faceOffsetDistance,
+            y: wall.start[1] + tangent.y * rightBoundary + faceContext.outwardNormal.y * faceOffsetDistance,
+          }
+    const overlays: LinearMeasurementOverlay[] = []
+    const leftDistance = getPlanPointDistance(leftBoundaryPoint, openingFaceStart)
+
+    if (leftDistance >= 0.01) {
+      const overlay = getLinearMeasurementOverlay(
+        `${opening.id}:placement-left`,
+        leftBoundaryPoint,
+        openingFaceStart,
+        formatMeasurement(leftDistance, unit),
+        {
+          offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
+          offsetVector: faceContext.outwardNormal,
+        },
+      )
+
+      if (overlay) {
+        overlays.push({
+          ...overlay,
+          extensionStroke: FLOORPLAN_OPENING_MEASUREMENT_EXTENSION,
+          labelFill: FLOORPLAN_OPENING_MEASUREMENT_TEXT,
+          stroke: FLOORPLAN_OPENING_MEASUREMENT_STROKE,
+        })
+      }
+    }
+
+    const rightDistance = getPlanPointDistance(openingFaceEnd, rightBoundaryPoint)
+
+    if (rightDistance >= 0.01) {
+      const overlay = getLinearMeasurementOverlay(
+        `${opening.id}:placement-right`,
+        openingFaceEnd,
+        rightBoundaryPoint,
+        formatMeasurement(rightDistance, unit),
+        {
+          offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
+          offsetVector: faceContext.outwardNormal,
+        },
+      )
+
+      if (overlay) {
+        overlays.push({
+          ...overlay,
+          extensionStroke: FLOORPLAN_OPENING_MEASUREMENT_EXTENSION,
+          labelFill: FLOORPLAN_OPENING_MEASUREMENT_TEXT,
+          stroke: FLOORPLAN_OPENING_MEASUREMENT_STROKE,
+        })
+      }
+    }
+
+    return overlays
+  }, [displayWallPolygons, movingNode, openingsPolygons, unit])
   const selectedWallEntry = useMemo(() => {
     if (selectedIds.length !== 1) {
       return null
@@ -7492,13 +7804,17 @@ export function FloorplanPanel() {
   const isSiteEditActive = phase === 'site'
   const isWallBuildActive = phase === 'structure' && mode === 'build' && tool === 'wall'
   const isSlabBuildActive = phase === 'structure' && mode === 'build' && tool === 'slab'
+  const isCeilingBuildActive = phase === 'structure' && mode === 'build' && tool === 'ceiling'
   const isZoneBuildActive = phase === 'structure' && mode === 'build' && tool === 'zone'
   const isDoorBuildActive = phase === 'structure' && mode === 'build' && tool === 'door'
   const isWindowBuildActive = phase === 'structure' && mode === 'build' && tool === 'window'
   const isPolygonBuildActive = isSlabBuildActive || isZoneBuildActive
+  const isPolygonDraftBuildActive = isPolygonBuildActive || isCeilingBuildActive
   const isOpeningBuildActive = isDoorBuildActive || isWindowBuildActive
   const isOpeningMoveActive = movingOpeningType !== null
   const isOpeningPlacementActive = isOpeningBuildActive || isOpeningMoveActive
+  const isFenceBuildActive = phase === 'structure' && mode === 'build' && tool === 'fence'
+  const isRoofBuildActive = phase === 'structure' && mode === 'build' && tool === 'roof'
   const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
   const isStairMoveActive = movingNode?.type === 'stair'
   const isRoofMoveActive = movingNode?.type === 'roof' || movingNode?.type === 'roof-segment'
@@ -7514,6 +7830,9 @@ export function FloorplanPanel() {
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
   const isFloorItemMoveActive = movingNode?.type === 'item' && !movingNode.asset.attachTo
   const isFloorplanGridInteractionActive =
+    isFenceBuildActive ||
+    isRoofBuildActive ||
+    isCeilingBuildActive ||
     isStairBuildActive ||
     isStairMoveActive ||
     isRoofMoveActive ||
@@ -7920,10 +8239,48 @@ export function FloorplanPanel() {
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
   }, [draftEnd, draftStart, levelId])
   const draftPolygonPoints = useMemo(
-    () => (draftPolygon ? formatPolygonPoints(draftPolygon) : null),
-    [draftPolygon],
+    () => {
+      if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
+        const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
+        const maxX = Math.max(roofDraftStart[0], roofDraftEnd[0])
+        const minY = Math.min(roofDraftStart[1], roofDraftEnd[1])
+        const maxY = Math.max(roofDraftStart[1], roofDraftEnd[1])
+
+        if (Math.abs(maxX - minX) >= 1e-6 || Math.abs(maxY - minY) >= 1e-6) {
+          return formatPolygonPoints([
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY },
+          ])
+        }
+      }
+
+      return draftPolygon ? formatPolygonPoints(draftPolygon) : null
+    },
+    [draftPolygon, isRoofBuildActive, roofDraftEnd, roofDraftStart],
   )
+  const fenceDraftSegment = useMemo(() => {
+    if (!(isFenceBuildActive && fenceDraftStart && fenceDraftEnd)) {
+      return null
+    }
+
+    if (getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(fenceDraftEnd)) < 1e-6) {
+      return null
+    }
+
+    return {
+      x1: toSvgX(fenceDraftStart[0]),
+      y1: toSvgY(fenceDraftStart[1]),
+      x2: toSvgX(fenceDraftEnd[0]),
+      y2: toSvgY(fenceDraftEnd[1]),
+    }
+  }, [fenceDraftEnd, fenceDraftStart, isFenceBuildActive])
   const activePolygonDraftPoints = useMemo(() => {
+    if (isCeilingBuildActive) {
+      return ceilingDraftPoints
+    }
+
     if (isZoneBuildActive) {
       return zoneDraftPoints
     }
@@ -7933,23 +8290,30 @@ export function FloorplanPanel() {
     }
 
     return [] as WallPlanPoint[]
-  }, [isSlabBuildActive, isZoneBuildActive, slabDraftPoints, zoneDraftPoints])
+  }, [
+    ceilingDraftPoints,
+    isCeilingBuildActive,
+    isSlabBuildActive,
+    isZoneBuildActive,
+    slabDraftPoints,
+    zoneDraftPoints,
+  ])
   const polygonDraftPolylinePoints = useMemo(() => {
-    if (!(isPolygonBuildActive && cursorPoint && activePolygonDraftPoints.length > 0)) {
+    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length > 0)) {
       return null
     }
 
     return formatPolygonPoints([...activePolygonDraftPoints.map(toPoint2D), toPoint2D(cursorPoint)])
-  }, [activePolygonDraftPoints, cursorPoint, isPolygonBuildActive])
+  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
   const polygonDraftPolygonPoints = useMemo(() => {
-    if (!(isPolygonBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
+    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
       return null
     }
 
     return formatPolygonPoints([...activePolygonDraftPoints.map(toPoint2D), toPoint2D(cursorPoint)])
-  }, [activePolygonDraftPoints, cursorPoint, isPolygonBuildActive])
+  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
   const polygonDraftClosingSegment = useMemo(() => {
-    if (!(isPolygonBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
+    if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
       return null
     }
 
@@ -7964,13 +8328,14 @@ export function FloorplanPanel() {
       x2: toSvgX(firstPoint[0]),
       y2: toSvgY(firstPoint[1]),
     }
-  }, [activePolygonDraftPoints, cursorPoint, isPolygonBuildActive])
+  }, [activePolygonDraftPoints, cursorPoint, isPolygonDraftBuildActive])
 
   const svgAspectRatio = surfaceSize.width / surfaceSize.height || 1
 
   const fittedViewport = useMemo(() => {
     const allPoints = [
       ...(visibleSitePolygon ? visibleSitePolygon.polygon : []),
+      ...ceilingPolygons.flatMap((entry) => entry.polygon),
       ...displaySlabPolygons.flatMap((entry) => entry.polygon),
       ...floorplanFenceEntries.flatMap((entry) => entry.centerline),
       ...floorplanItemEntries.flatMap((entry) => entry.polygon),
@@ -8017,6 +8382,7 @@ export function FloorplanPanel() {
       width,
     }
   }, [
+    ceilingPolygons,
     displaySlabPolygons,
     floorplanFenceEntries,
     floorplanItemEntries,
@@ -8313,6 +8679,10 @@ export function FloorplanPanel() {
             slabStroke: 'rgba(148, 163, 184, 0.45)',
             selectedSlabFill: 'rgba(167, 139, 250, 0.14)',
             selectedSlabStroke: '#a78bfa',
+            ceilingFill: 'rgba(56, 189, 248, 0.12)',
+            ceilingStroke: '#38bdf8',
+            selectedCeilingFill: 'rgba(59, 130, 246, 0.16)',
+            selectedCeilingStroke: '#2563eb',
             wallFill: '#ffffff',
             wallStroke: 'rgba(31, 41, 55, 0.9)',
             wallInnerStroke: 'rgba(51, 65, 85, 0.72)',
@@ -8351,6 +8721,10 @@ export function FloorplanPanel() {
             slabStroke: 'rgba(100, 116, 139, 0.55)',
             selectedSlabFill: 'rgba(167, 139, 250, 0.14)',
             selectedSlabStroke: '#a78bfa',
+            ceilingFill: 'rgba(14, 165, 233, 0.12)',
+            ceilingStroke: '#0ea5e9',
+            selectedCeilingFill: 'rgba(59, 130, 246, 0.16)',
+            selectedCeilingStroke: '#2563eb',
             wallFill: '#ffffff',
             wallStroke: 'rgba(31, 41, 55, 0.9)',
             wallInnerStroke: 'rgba(71, 85, 105, 0.58)',
@@ -8416,7 +8790,8 @@ export function FloorplanPanel() {
   const getSvgPointFromClientPoint = useCallback(
     (clientX: number, clientY: number): SvgPoint | null => {
       const svg = svgRef.current
-      const ctm = svg?.getScreenCTM()
+      const target = floorplanSceneRef.current ?? svg
+      const ctm = target?.getScreenCTM()
       if (!(svg && ctm)) {
         return null
       }
@@ -8438,8 +8813,8 @@ export function FloorplanPanel() {
         return null
       }
 
-      if (buildingRotationY !== 0) {
-        const [unrotX, unrotY] = rotatePlanVector(svgPoint.x, svgPoint.y, buildingRotationY)
+      if (!floorplanSceneRef.current && buildingRotationY !== 0) {
+        const [unrotX, unrotY] = rotatePlanVector(svgPoint.x, svgPoint.y, -buildingRotationY)
         return toPlanPointFromSvgPoint({ x: unrotX, y: unrotY })
       }
 
@@ -8655,6 +9030,17 @@ export function FloorplanPanel() {
     setDraftStart(null)
     setDraftEnd(null)
   }, [])
+  const clearFencePlacementDraft = useCallback(() => {
+    setFenceDraftStart(null)
+    setFenceDraftEnd(null)
+  }, [])
+  const clearRoofPlacementDraft = useCallback(() => {
+    setRoofDraftStart(null)
+    setRoofDraftEnd(null)
+  }, [])
+  const clearCeilingPlacementDraft = useCallback(() => {
+    setCeilingDraftPoints([])
+  }, [])
   const clearSlabPlacementDraft = useCallback(() => {
     setSlabDraftPoints([])
   }, [])
@@ -8690,6 +9076,9 @@ export function FloorplanPanel() {
 
   const clearDraft = useCallback(() => {
     clearWallPlacementDraft()
+    clearFencePlacementDraft()
+    clearRoofPlacementDraft()
+    clearCeilingPlacementDraft()
     clearSlabPlacementDraft()
     clearZonePlacementDraft()
     clearWallEndpointDrag()
@@ -8699,6 +9088,9 @@ export function FloorplanPanel() {
     clearZoneBoundaryInteraction()
     setCursorPoint(null)
   }, [
+    clearFencePlacementDraft,
+    clearCeilingPlacementDraft,
+    clearRoofPlacementDraft,
     clearWallCurveDrag,
     clearSiteBoundaryInteraction,
     clearSlabBoundaryInteraction,
@@ -8710,12 +9102,23 @@ export function FloorplanPanel() {
   ])
 
   useEffect(() => {
-    if (isWallBuildActive || isPolygonBuildActive) {
+    if (
+      isWallBuildActive ||
+      isFenceBuildActive ||
+      isRoofBuildActive ||
+      isPolygonDraftBuildActive
+    ) {
       return
     }
 
     clearDraft()
-  }, [clearDraft, isPolygonBuildActive, isWallBuildActive])
+  }, [
+    clearDraft,
+    isFenceBuildActive,
+    isPolygonDraftBuildActive,
+    isRoofBuildActive,
+    isWallBuildActive,
+  ])
 
   useEffect(() => {
     const handleCancel = () => {
@@ -8778,7 +9181,9 @@ export function FloorplanPanel() {
     }
 
     const handleGridMove = (event: GridEvent) => {
-      setStairBuildPreviewPoint(getSnappedFloorplanPoint([event.position[0], event.position[2]]))
+      setStairBuildPreviewPoint(
+        getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]),
+      )
     }
 
     emitter.on('grid:move', handleGridMove)
@@ -9654,6 +10059,18 @@ export function FloorplanPanel() {
   }, [])
 
   const hoveredWallIdRef = useRef<string | null>(null)
+  const floorplanGridLocalY = useMemo(() => {
+    if (movingNode?.type === 'item') {
+      return movingNode.position[1]
+    }
+
+    if (levelId) {
+      return sceneRegistry.nodes.get(levelId as AnyNodeId)?.position.y ?? 0
+    }
+
+    return 0
+  }, [levelId, movingNode])
+  const floorplanGridWorldY = buildingPosition[1] + floorplanGridLocalY
   const emitFloorplanWallLeave = useCallback((wallId: string | null) => {
     if (!wallId) {
       return
@@ -9673,23 +10090,25 @@ export function FloorplanPanel() {
   }, [])
   const emitFloorplanGridEvent = useCallback(
     (
-      eventType: 'move' | 'click',
+      eventType: 'move' | 'click' | 'double-click',
       planPoint: WallPlanPoint,
       nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
       const snappedPoint = getSnappedFloorplanPoint(planPoint)
-      const worldY =
-        movingNode?.type === 'stair' || movingNode?.type === 'item' ? movingNode.position[1] : 0
+      const cos = Math.cos(buildingRotationY)
+      const sin = Math.sin(buildingRotationY)
+      const worldX = buildingPosition[0] + snappedPoint[0] * cos - snappedPoint[1] * sin
+      const worldZ = buildingPosition[2] + snappedPoint[0] * sin + snappedPoint[1] * cos
 
       emitter.emit(`grid:${eventType}` as any, {
         nativeEvent: nativeEvent.nativeEvent as any,
-        position: [snappedPoint[0], worldY, snappedPoint[1]],
-        localPosition: [snappedPoint[0], worldY, snappedPoint[1]],
+        position: [worldX, floorplanGridWorldY, worldZ],
+        localPosition: [snappedPoint[0], floorplanGridLocalY, snappedPoint[1]],
       })
 
       return snappedPoint
     },
-    [movingNode],
+    [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )
 
   const handlePointerMove = useCallback(
@@ -9737,6 +10156,59 @@ export function FloorplanPanel() {
 
       const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
       if (!planPoint) {
+        return
+      }
+
+      if (isCeilingBuildActive) {
+        emitFloorplanGridEvent('move', planPoint, event)
+
+        const snappedPoint = snapPolygonDraftPoint({
+          point: planPoint,
+          start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
+          angleSnap: ceilingDraftPoints.length > 0 && !shiftPressed,
+        })
+
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
+        return
+      }
+
+      if (isRoofBuildActive) {
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        emitFloorplanGridEvent('move', snappedPoint, event)
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
+
+        if (roofDraftStart) {
+          setRoofDraftEnd((previousPoint) =>
+            previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+          )
+        }
+        return
+      }
+
+      if (isFenceBuildActive) {
+        emitFloorplanGridEvent('move', planPoint, event)
+
+        const snappedPoint = snapFenceDraftPoint({
+          point: planPoint,
+          walls,
+          fences,
+          start: fenceDraftStart ?? undefined,
+          angleSnap: Boolean(fenceDraftStart) && !shiftPressed,
+        })
+
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
+
+        if (fenceDraftStart) {
+          setFenceDraftEnd((previousEnd) =>
+            previousEnd && pointsEqual(previousEnd, snappedPoint) ? previousEnd : snappedPoint,
+          )
+        }
         return
       }
 
@@ -9841,17 +10313,24 @@ export function FloorplanPanel() {
     },
     [
       draftStart,
+      ceilingDraftPoints,
       emitFloorplanWallLeave,
       emitFloorplanGridEvent,
+      fences,
+      fenceDraftStart,
       floorplanOpeningLocalY,
       fittedViewport,
       getPlanPointFromClientPoint,
       activePolygonDraftPoints,
+      isCeilingBuildActive,
+      isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
       isOpeningPlacementActive,
       isPolygonBuildActive,
+      isRoofBuildActive,
       isWallBuildActive,
+      roofDraftStart,
       siteVertexDragState,
       slabVertexDragState,
       shiftPressed,
@@ -9910,6 +10389,53 @@ export function FloorplanPanel() {
       clearDraft()
     },
     [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
+  )
+  const handleCeilingPlacementPoint = useCallback(
+    (point: WallPlanPoint) => {
+      const lastPoint = ceilingDraftPoints[ceilingDraftPoints.length - 1]
+      if (lastPoint && pointsEqual(lastPoint, point)) {
+        return
+      }
+
+      const firstPoint = ceilingDraftPoints[0]
+      if (
+        firstPoint &&
+        ceilingDraftPoints.length >= 3 &&
+        isPointNearPlanPoint(point, firstPoint)
+      ) {
+        clearCeilingPlacementDraft()
+        return
+      }
+
+      setCeilingDraftPoints((currentPoints) => [...currentPoints, point])
+      setCursorPoint(point)
+    },
+    [ceilingDraftPoints, clearCeilingPlacementDraft],
+  )
+  const handleCeilingPlacementConfirm = useCallback(
+    (point?: WallPlanPoint) => {
+      const firstPoint = ceilingDraftPoints[0]
+      const lastPoint = ceilingDraftPoints[ceilingDraftPoints.length - 1]
+
+      let nextPoints = ceilingDraftPoints
+      if (point) {
+        const isClosingExistingPolygon = Boolean(
+          firstPoint && ceilingDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint),
+        )
+        const isDuplicatePoint = Boolean(lastPoint && pointsEqual(lastPoint, point))
+
+        if (!(isClosingExistingPolygon || isDuplicatePoint)) {
+          nextPoints = [...ceilingDraftPoints, point]
+        }
+      }
+
+      if (nextPoints.length < 3) {
+        return
+      }
+
+      clearCeilingPlacementDraft()
+    },
+    [ceilingDraftPoints, clearCeilingPlacementDraft],
   )
   const handleZonePlacementPoint = useCallback(
     (point: WallPlanPoint) => {
@@ -10008,6 +10534,57 @@ export function FloorplanPanel() {
         return
       }
 
+      if (isCeilingBuildActive) {
+        emitFloorplanGridEvent('click', planPoint, event)
+
+        const snappedPoint = snapPolygonDraftPoint({
+          point: planPoint,
+          start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
+          angleSnap: ceilingDraftPoints.length > 0 && !shiftPressed,
+        })
+
+        handleCeilingPlacementPoint(snappedPoint)
+        return
+      }
+
+      if (isRoofBuildActive) {
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        emitFloorplanGridEvent('click', snappedPoint, event)
+        setCursorPoint(snappedPoint)
+
+        if (!roofDraftStart) {
+          setRoofDraftStart(snappedPoint)
+          setRoofDraftEnd(snappedPoint)
+        } else {
+          clearRoofPlacementDraft()
+        }
+        return
+      }
+
+      if (isFenceBuildActive) {
+        emitFloorplanGridEvent('click', planPoint, event)
+
+        const snappedPoint = snapFenceDraftPoint({
+          point: planPoint,
+          walls,
+          fences,
+          start: fenceDraftStart ?? undefined,
+          angleSnap: Boolean(fenceDraftStart) && !shiftPressed,
+        })
+
+        setCursorPoint(snappedPoint)
+
+        if (!fenceDraftStart) {
+          setFenceDraftStart(snappedPoint)
+          setFenceDraftEnd(snappedPoint)
+        } else if (getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(snappedPoint)) >= 0.01) {
+          clearFencePlacementDraft()
+        } else {
+          setFenceDraftEnd(snappedPoint)
+        }
+        return
+      }
+
       if (isFloorplanGridInteractionActive) {
         const snappedPoint = emitFloorplanGridEvent('click', planPoint, event)
         setCursorPoint(snappedPoint)
@@ -10045,6 +10622,7 @@ export function FloorplanPanel() {
       if (canSelectElementFloorplanGeometry) {
         const hitId = getFloorplanHitNodeId({
           point: toPoint2D(planPoint),
+          ceilings: ceilingPolygons,
           phase,
           isItemContextActive: isFloorplanItemContextActive,
           items: floorplanItemEntries,
@@ -10119,12 +10697,16 @@ export function FloorplanPanel() {
     },
     [
       draftStart,
+      ceilingDraftPoints,
       emitFloorplanGridEvent,
+      fences,
+      fenceDraftStart,
       floorplanOpeningLocalY,
       getPlanPointFromClientPoint,
       activePolygonDraftPoints,
       canSelectElementFloorplanGeometry,
       canSelectFloorplanZones,
+      ceilingPolygons,
       displaySlabPolygons,
       displayWallPolygons,
       floorplanItemEntries,
@@ -10133,13 +10715,19 @@ export function FloorplanPanel() {
       floorplanStairEntries,
       floorplanWallHitTolerance,
       getOpeningCenterLine,
+      handleCeilingPlacementPoint,
       handleSlabPlacementPoint,
       handleZonePlacementPoint,
       handleWallPlacementPoint,
+      clearFencePlacementDraft,
+      clearRoofPlacementDraft,
+      isCeilingBuildActive,
+      isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isFloorplanItemContextActive,
       isOpeningPlacementActive,
       isPolygonBuildActive,
+      isRoofBuildActive,
       isWallBuildActive,
       isWindowBuildActive,
       isZoneBuildActive,
@@ -10148,6 +10736,7 @@ export function FloorplanPanel() {
       movingOpeningType,
       openingsPolygons,
       phase,
+      roofDraftStart,
       setSelectedReferenceId,
       setSelection,
       shiftPressed,
@@ -10158,7 +10747,7 @@ export function FloorplanPanel() {
   )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
-      if (!isPolygonBuildActive) {
+      if (!(isPolygonDraftBuildActive && !isRoofBuildActive)) {
         return
       }
 
@@ -10173,6 +10762,12 @@ export function FloorplanPanel() {
         angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
       })
 
+      if (isCeilingBuildActive) {
+        emitFloorplanGridEvent('double-click', planPoint, event)
+        handleCeilingPlacementConfirm(snappedPoint)
+        return
+      }
+
       if (isZoneBuildActive) {
         handleZonePlacementConfirm(snappedPoint)
       } else {
@@ -10181,10 +10776,14 @@ export function FloorplanPanel() {
     },
     [
       activePolygonDraftPoints,
+      emitFloorplanGridEvent,
+      handleCeilingPlacementConfirm,
       getPlanPointFromClientPoint,
       handleSlabPlacementConfirm,
       handleZonePlacementConfirm,
-      isPolygonBuildActive,
+      isCeilingBuildActive,
+      isPolygonDraftBuildActive,
+      isRoofBuildActive,
       isZoneBuildActive,
       shiftPressed,
     ],
@@ -10262,6 +10861,7 @@ export function FloorplanPanel() {
       const point = toPoint2D(planPoint)
       return getFloorplanHitNodeId({
         point,
+        ceilings: ceilingPolygons,
         phase,
         isItemContextActive: isFloorplanItemContextActive,
         items: floorplanItemEntries,
@@ -10276,6 +10876,7 @@ export function FloorplanPanel() {
       })
     },
     [
+      ceilingPolygons,
       displaySlabPolygons,
       displayWallPolygons,
       floorplanItemEntries,
@@ -10294,6 +10895,7 @@ export function FloorplanPanel() {
     (bounds: FloorplanSelectionBounds) =>
       getSelectionIdsInBoundsFromTool({
         bounds,
+        ceilings: ceilingPolygons,
         phase,
         isItemContextActive: isFloorplanItemContextActive,
         items: floorplanItemEntries,
@@ -10304,6 +10906,7 @@ export function FloorplanPanel() {
         stairs: floorplanStairEntries,
       }),
     [
+      ceilingPolygons,
       displaySlabPolygons,
       displayWallPolygons,
       floorplanItemEntries,
@@ -10369,6 +10972,14 @@ export function FloorplanPanel() {
     [syncDeleteHoveredId],
   )
 
+  const handleCeilingHoverChange = useCallback(
+    (ceilingId: CeilingNode['id'] | null) => {
+      setHoveredCeilingId(ceilingId)
+      syncDeleteHoveredId(ceilingId)
+    },
+    [syncDeleteHoveredId],
+  )
+
   const handleItemHoverChange = useCallback(
     (itemId: ItemNode['id'] | null) => {
       setHoveredItemId(itemId)
@@ -10398,6 +11009,7 @@ export function FloorplanPanel() {
       handleOpeningHoverChange(null)
       handleWallHoverChange(null)
       handleSlabHoverChange(null)
+      handleCeilingHoverChange(null)
       handleStairHoverChange(null)
       handleZoneHoverChange(null)
       handleItemHoverChange(itemId)
@@ -10406,6 +11018,7 @@ export function FloorplanPanel() {
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
+      handleCeilingHoverChange,
       handleSlabHoverChange,
       handleStairHoverChange,
       handleWallHoverChange,
@@ -10418,6 +11031,7 @@ export function FloorplanPanel() {
       handleOpeningHoverChange(null)
       handleWallHoverChange(null)
       handleSlabHoverChange(null)
+      handleCeilingHoverChange(null)
       handleStairHoverChange(null)
       handleZoneHoverChange(null)
       handleFenceHoverChange(fenceId)
@@ -10426,6 +11040,7 @@ export function FloorplanPanel() {
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
+      handleCeilingHoverChange,
       handleSlabHoverChange,
       handleStairHoverChange,
       handleWallHoverChange,
@@ -10438,6 +11053,7 @@ export function FloorplanPanel() {
       handleFenceHoverChange(null)
       handleOpeningHoverChange(null)
       handleSlabHoverChange(null)
+      handleCeilingHoverChange(null)
       handleWallHoverChange(null)
       handleZoneHoverChange(null)
       handleStairHoverChange(stairId)
@@ -10446,6 +11062,7 @@ export function FloorplanPanel() {
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
+      handleCeilingHoverChange,
       handleSlabHoverChange,
       handleStairHoverChange,
       handleWallHoverChange,
@@ -10535,6 +11152,7 @@ export function FloorplanPanel() {
         | ItemNode['id']
         | OpeningNode['id']
         | SlabNode['id']
+        | CeilingNode['id']
         | StairNode['id']
         | ZoneNodeType['id'],
       eventType: 'click' | 'double-click',
@@ -10545,6 +11163,7 @@ export function FloorplanPanel() {
         !(
           node &&
           (node.type === 'slab' ||
+            node.type === 'ceiling' ||
             node.type === 'door' ||
             node.type === 'window' ||
             node.type === 'item' ||
@@ -10734,6 +11353,12 @@ export function FloorplanPanel() {
     },
     [emitFloorplanNodeClick],
   )
+  const handleCeilingSelect = useCallback(
+    (ceilingId: CeilingNode['id'], event: ReactMouseEvent<SVGElement>) => {
+      emitFloorplanNodeClick(ceilingId, 'click', event)
+    },
+    [emitFloorplanNodeClick],
+  )
   const handleZoneSelect = useCallback(
     (zoneId: ZoneNodeType['id'], event: ReactMouseEvent<SVGElement>) => {
       emitFloorplanNodeClick(zoneId, 'click', event)
@@ -10770,6 +11395,9 @@ export function FloorplanPanel() {
   )
   const handleSlabDoubleClick = useCallback((slab: SlabNode) => {
     emitter.emit('camera-controls:focus', { nodeId: slab.id })
+  }, [])
+  const handleCeilingDoubleClick = useCallback((ceiling: CeilingNode) => {
+    emitter.emit('camera-controls:focus', { nodeId: ceiling.id })
   }, [])
   const handleOpeningDoubleClick = useCallback((opening: OpeningNode) => {
     emitter.emit('camera-controls:focus', { nodeId: opening.id })
@@ -11677,6 +12305,7 @@ export function FloorplanPanel() {
     handleItemHoverChange(null)
     handleWallHoverChange(null)
     handleSlabHoverChange(null)
+    handleCeilingHoverChange(null)
     handleStairHoverChange(null)
     handleZoneHoverChange(null)
     setHoveredEndpointId(null)
@@ -11689,6 +12318,7 @@ export function FloorplanPanel() {
     }
   }, [
     emitFloorplanWallLeave,
+    handleCeilingHoverChange,
     handleItemHoverChange,
     handleOpeningHoverChange,
     handleSlabHoverChange,
@@ -12136,7 +12766,8 @@ export function FloorplanPanel() {
     selectedOpeningEntry,
     selectedStairEntry,
   ])
-  const activeDraftAnchorPoint = draftStart ?? activePolygonDraftPoints[0] ?? null
+  const activeDraftAnchorPoint =
+    draftStart ?? fenceDraftStart ?? roofDraftStart ?? activePolygonDraftPoints[0] ?? null
   const floorplanCursorColor =
     mode === 'delete'
       ? palette.deleteStroke
@@ -12272,7 +12903,10 @@ export function FloorplanPanel() {
               y={viewBox.minY}
             />
 
-            <g transform={buildingRotationDeg !== 0 ? `rotate(${buildingRotationDeg})` : undefined}>
+            <g
+              ref={floorplanSceneRef}
+              transform={buildingRotationDeg !== 0 ? `rotate(${buildingRotationDeg})` : undefined}
+            >
               <FloorplanGridLayer
                 majorGridPath={majorGridPath}
                 minorGridPath={minorGridPath}
@@ -12294,13 +12928,19 @@ export function FloorplanPanel() {
 
               <FloorplanGeometryLayer
                 canFocusGeometry={canSelectElementFloorplanGeometry}
+                canSelectCeilings={canInteractFloorplanSlabs}
                 canSelectGeometry={canInteractElementFloorplanGeometry}
                 canSelectSlabs={canInteractFloorplanSlabs}
+                ceilingPolygons={ceilingPolygons}
                 highlightedIdSet={highlightedFloorplanIdSet}
+                hoveredCeilingId={hoveredCeilingId}
                 hoveredOpeningId={hoveredOpeningId}
                 hoveredSlabId={hoveredSlabId}
                 hoveredWallId={hoveredWallId}
                 isDeleteMode={isDeleteMode}
+                onCeilingDoubleClick={handleCeilingDoubleClick}
+                onCeilingHoverChange={handleCeilingHoverChange}
+                onCeilingSelect={handleCeilingSelect}
                 onOpeningDoubleClick={handleOpeningDoubleClick}
                 onOpeningHoverChange={handleOpeningHoverChange}
                 onOpeningPointerDown={handleOpeningPointerDown}
@@ -12378,6 +13018,72 @@ export function FloorplanPanel() {
                 roofEntries={floorplanRoofEntries}
                 selectedIdSet={selectedIdSet}
               />
+
+              {movingOpeningPlacementMeasurements.map((measurement) => (
+                <g
+                  className="opening-placement-dimension"
+                  key={measurement.id}
+                  pointerEvents="none"
+                  style={{ userSelect: 'none' }}
+                >
+                  <FloorplanMeasurementLine
+                    dashed
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    segment={measurement.extensionStart}
+                    stroke={measurement.extensionStroke}
+                  />
+                  <FloorplanMeasurementLine
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    segment={measurement.dimensionLineStart}
+                    stroke={measurement.stroke}
+                  />
+                  <FloorplanMeasurementLine
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    segment={measurement.dimensionLineEnd}
+                    stroke={measurement.stroke}
+                  />
+                  <FloorplanMeasurementLine
+                    dashed
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    segment={measurement.extensionEnd}
+                    stroke={measurement.extensionStroke}
+                  />
+                  <FloorplanMeasurementTick
+                    angleDeg={measurement.labelAngleDeg}
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    stroke={measurement.stroke}
+                    x={measurement.dimensionLineStart.x1}
+                    y={measurement.dimensionLineStart.y1}
+                  />
+                  <FloorplanMeasurementTick
+                    angleDeg={measurement.labelAngleDeg}
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    stroke={measurement.stroke}
+                    x={measurement.dimensionLineEnd.x2}
+                    y={measurement.dimensionLineEnd.y2}
+                  />
+                  <text
+                    dominantBaseline="central"
+                    fill={measurement.labelFill ?? palette.measurementStroke}
+                    fillOpacity={FLOORPLAN_MEASUREMENT_LABEL_OPACITY}
+                    fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                    fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
+                    fontWeight="600"
+                    textAnchor="middle"
+                    transform={`rotate(${measurement.labelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
+                    x={measurement.labelX}
+                    y={measurement.labelY}
+                  >
+                    {measurement.label}
+                  </text>
+                </g>
+              ))}
 
               {selectedItemClearanceMeasurements.map((measurement) => (
                 <g
@@ -12512,6 +13218,7 @@ export function FloorplanPanel() {
                 draftFill={palette.draftFill}
                 draftPolygonPoints={draftPolygonPoints}
                 draftStroke={palette.draftStroke}
+                linearDraftSegment={fenceDraftSegment}
                 polygonDraftClosingSegment={polygonDraftClosingSegment}
                 polygonDraftPolygonPoints={polygonDraftPolygonPoints}
                 polygonDraftPolylinePoints={polygonDraftPolylinePoints}
