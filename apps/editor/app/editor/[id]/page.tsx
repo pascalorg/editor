@@ -11,7 +11,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   }
 
   const userId = (session?.user as any)?.id || 'anonymous';
+  const userName = session?.user?.name || 'User';
   const resolvedParams = await params;
 
-  return <EditorClient projectId={resolvedParams.id} userId={userId} />;
+  return <EditorClient projectId={resolvedParams.id} userId={userId} userName={userName} />;
 }

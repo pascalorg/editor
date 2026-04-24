@@ -24,9 +24,10 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
 interface EditorClientProps {
   projectId: string;
   userId: string;
+  userName: string;
 }
 
-export default function EditorClient({ projectId, userId }: EditorClientProps) {
+export default function EditorClient({ projectId, userId, userName }: EditorClientProps) {
 
   const handleLoad = async () => {
     if (!projectId) return null;
@@ -55,6 +56,7 @@ export default function EditorClient({ projectId, userId }: EditorClientProps) {
       <YjsCollaborationProvider 
         projectId={projectId || 'local-editor'} 
         userId={userId} 
+        userName={userName}
         socket={getSocket()}
       >
         <Editor

@@ -68,16 +68,28 @@ export function PresenceSystem() {
       {remoteUsers.map((user) => (
         <group key={user.clientId} position={user.cursor}>
           <Html distanceFactor={15} pointerEvents="none" zIndexRange={[0, 10]}>
-            <div className="flex flex-col items-center select-none">
+            <div className="flex flex-col items-center select-none animate-in fade-in zoom-in duration-300">
+              {/* Animated Cursor Ring */}
+              <div className="relative flex items-center justify-center">
+                <div 
+                  className="absolute w-5 h-5 rounded-full opacity-40 animate-ping" 
+                  style={{ backgroundColor: user.color }} 
+                />
+                <div 
+                  className="w-3 h-3 rounded-full border-2 border-white shadow-[0_0_15px_rgba(0,0,0,0.5)] z-10" 
+                  style={{ backgroundColor: user.color }} 
+                />
+              </div>
+              
+              {/* Premium Name Badge */}
               <div 
-                className="w-3 h-3 rounded-full border-2 border-white shadow-[0_0_10px_rgba(0,0,0,0.5)]" 
-                style={{ backgroundColor: user.color }} 
-              />
-              <div 
-                className="mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-white whitespace-nowrap shadow-md"
-                style={{ backgroundColor: user.color }}
+                className="mt-2 px-2.5 py-1 rounded-lg text-[11px] font-bold text-white whitespace-nowrap shadow-2xl backdrop-blur-md border border-white/20 transition-all flex items-center gap-1.5"
+                style={{ 
+                  backgroundColor: `${user.color}dd`,
+                }}
               >
-                {user.name}
+                <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                <span>{user.name}</span>
               </div>
             </div>
           </Html>
