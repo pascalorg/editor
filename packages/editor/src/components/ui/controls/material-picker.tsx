@@ -31,6 +31,7 @@ export function MaterialPicker({
   const [showCustom, setShowCustom] = useState<boolean>(!!value?.properties)
   const [selectedCategory, setSelectedCategory] = useState<MaterialCategory>(MATERIAL_CATEGORIES[0])
   const catalogScrollRef = useRef<HTMLDivElement>(null)
+  const categoryScrollRef = useRef<HTMLDivElement>(null)
   const catalogItems =
     selectedCategory === 'other'
       ? getMaterialsForCategory('other')
@@ -87,6 +88,27 @@ export function MaterialPicker({
     }
   }, [catalogItems.length, onChange, showCustom])
 
+  useEffect(() => {
+    const container = categoryScrollRef.current
+    if (!container) return
+
+    const handleWheel = (event: WheelEvent) => {
+      const deltaX = event.deltaX
+      const deltaY = event.deltaY
+      const nextScrollLeft = container.scrollLeft + deltaX + deltaY
+
+      if (nextScrollLeft === container.scrollLeft) return
+
+      event.preventDefault()
+      container.scrollLeft = nextScrollLeft
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
+
   const handleCustomOpen = () => {
     if (disabled) return
     setShowCustom(true)
@@ -110,30 +132,36 @@ export function MaterialPicker({
   return (
     <div className={`min-w-0 space-y-3 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {(catalogItems.length > 0 || onChange) && (
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap gap-1">
-            {MATERIAL_CATEGORIES.map((category) => (
-              <button
-                className={`px-2 font-medium text-[11px] uppercase tracking-[0.12em] transition-all ${
-                  selectedCategory === category
-                    ? 'bg-transparent text-foreground'
-                    : 'bg-transparent text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100'
-                }`}
-                key={category}
-                onClick={() => {
-                  setSelectedCategory(category)
-                  if (showCustom) {
-                    setShowCustom(false)
-                  }
-                  if (category !== 'other') {
-                    setPaintPanelOpen(false)
-                  }
-                }}
-                type="button"
-              >
-                {category.charAt(0).toUpperCase() + category.slice(1)}
-              </button>
-            ))}
+        <div className="min-w-0 space-y-1">
+          <div
+            className="w-full max-w-full overflow-x-auto overflow-y-hidden"
+            ref={categoryScrollRef}
+            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+          >
+            <div className="flex min-w-max gap-1 pb-1">
+              {MATERIAL_CATEGORIES.map((category) => (
+                <button
+                  className={`shrink-0 px-2 font-medium text-[11px] uppercase tracking-[0.12em] transition-all ${
+                    selectedCategory === category
+                      ? 'bg-transparent text-foreground'
+                      : 'bg-transparent text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100'
+                  }`}
+                  key={category}
+                  onClick={() => {
+                    setSelectedCategory(category)
+                    if (showCustom) {
+                      setShowCustom(false)
+                    }
+                    if (category !== 'other') {
+                      setPaintPanelOpen(false)
+                    }
+                  }}
+                  type="button"
+                >
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
           <div
             className="w-full max-w-full overflow-x-auto overflow-y-hidden"
