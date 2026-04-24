@@ -67,24 +67,6 @@ const DEFAULT_HOVER_STYLE: HoverStyle = {
 
 export const DEFAULT_HOVER_STYLES: HoverStyles = {
   default: DEFAULT_HOVER_STYLE,
-  delete: {
-    visibleColor: 0xef_44_44,
-    hiddenColor: 0x99_1b_1b,
-    strength: 6,
-    pulse: false,
-  },
-  'paint-ready': {
-    visibleColor: 0xf5_9e_0b,
-    hiddenColor: 0xfd_e0_68,
-    strength: 5,
-    pulse: true,
-  },
-  'paint-disabled': {
-    visibleColor: 0x94_a3_b8,
-    hiddenColor: 0x47_55_69,
-    strength: 4,
-    pulse: false,
-  },
 }
 
 function sanitizeOutlineObjects(objects: Object3D[]) {
