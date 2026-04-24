@@ -44,7 +44,6 @@ import {
   buildStairSurfaceMaterialPatch,
   buildWallSurfaceMaterialPatch,
   hasActivePaintMaterial,
-  isActivePaintMaterialCompatible,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -741,8 +740,7 @@ export const SelectionManager = () => {
 
       if (node.type === 'wall') {
         const role = resolveWallMaterialTarget(event as WallEvent)
-        const compatible =
-          role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'wall')
+        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
         return {
           key: `wall:${node.id}:${role ?? 'unsupported'}`,
           hoveredId: node.id as AnyNodeId,
@@ -783,8 +781,7 @@ export const SelectionManager = () => {
         if (!roofNode || roofNode.type !== 'roof') return null
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
-        const compatible =
-          role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'roof')
+        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
         return {
           key: `roof:${roofNode.id}:${role ?? 'unsupported'}`,
           hoveredId: roofNode.id as AnyNodeId,
@@ -825,8 +822,7 @@ export const SelectionManager = () => {
         if (!stairNode || stairNode.type !== 'stair') return null
 
         const role = resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent)
-        const compatible =
-          role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'stair')
+        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
         return {
           key: `stair:${stairNode.id}:${role ?? 'unsupported'}`,
           hoveredId: stairNode.id as AnyNodeId,
@@ -858,13 +854,10 @@ export const SelectionManager = () => {
       }
 
       if (node.type === 'fence' || node.type === 'slab' || node.type === 'ceiling') {
-        const target = node.type
-        const compatible =
-          isActivePaintMaterialCompatible(activePaintMaterial, target) &&
-          hasActivePaintMaterial(activePaintMaterial)
+        const compatible = hasActivePaintMaterial(activePaintMaterial)
 
         return {
-          key: `${target}:${node.id}:surface`,
+          key: `${node.type}:${node.id}:surface`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply: compatible

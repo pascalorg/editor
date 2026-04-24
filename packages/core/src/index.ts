@@ -40,7 +40,6 @@ export {
 export { baseMaterial, glassMaterial } from './materials'
 export {
   getCatalogMaterialById,
-  getMaterialCategoryTargets,
   getLibraryMaterialIdFromRef,
   getMaterialPresetByRef,
   getMaterialsForCategory,

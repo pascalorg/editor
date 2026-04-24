@@ -1,7 +1,5 @@
 import {
   type MaterialPresetPayload,
-  type MaterialTarget,
-  MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
 
 export type MaterialCatalogItem = {
@@ -23,40 +21,6 @@ export const MATERIAL_CATEGORIES = [
   'other',
 ] as const
 export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
-
-export const MATERIAL_CATEGORY_TARGETS: Record<MaterialCategory, MaterialTarget[]> = {
-  wood: [
-    MaterialTargetSchema.enum.wall,
-    MaterialTargetSchema.enum.slab,
-    MaterialTargetSchema.enum.stair,
-    MaterialTargetSchema.enum['stair-segment'],
-    MaterialTargetSchema.enum.fence,
-    MaterialTargetSchema.enum.roof,
-    MaterialTargetSchema.enum['roof-segment'],
-  ],
-  wallpaper: [MaterialTargetSchema.enum.wall],
-  parquet: [
-    MaterialTargetSchema.enum.slab,
-    MaterialTargetSchema.enum.stair,
-    MaterialTargetSchema.enum['stair-segment'],
-  ],
-  granite: [MaterialTargetSchema.enum.slab],
-  marble: [
-    MaterialTargetSchema.enum.slab,
-    MaterialTargetSchema.enum.stair,
-    MaterialTargetSchema.enum['stair-segment'],
-  ],
-  other: [
-    MaterialTargetSchema.enum.wall,
-    MaterialTargetSchema.enum.roof,
-    MaterialTargetSchema.enum['roof-segment'],
-    MaterialTargetSchema.enum.stair,
-    MaterialTargetSchema.enum['stair-segment'],
-    MaterialTargetSchema.enum.fence,
-    MaterialTargetSchema.enum.slab,
-    MaterialTargetSchema.enum.ceiling,
-  ],
-}
 
 export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
@@ -607,10 +571,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
 
 export function getMaterialsForCategory(category: MaterialCategory): MaterialCatalogItem[] {
   return MATERIAL_CATALOG.filter((item) => item.category === category)
-}
-
-export function getMaterialCategoryTargets(category: MaterialCategory): MaterialTarget[] {
-  return MATERIAL_CATEGORY_TARGETS[category]
 }
 
 export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undefined {

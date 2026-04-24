@@ -40,11 +40,11 @@ function PaintMaterialTray() {
   return (
     <div className="w-[42rem] max-w-[calc(100vw-2rem)]">
       <MaterialPicker
-        onChange={(material, category) => {
-          setActivePaintMaterial({ material, category, sourceTarget: activePaintTarget })
+        onChange={(material) => {
+          setActivePaintMaterial({ material, sourceTarget: activePaintTarget })
         }}
-        onSelectMaterialPreset={(materialPreset, category) => {
-          setActivePaintMaterial({ materialPreset, category, sourceTarget: activePaintTarget })
+        onSelectMaterialPreset={(materialPreset) => {
+          setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
         }}
         selectedMaterialPreset={activePaintMaterial?.materialPreset}
         value={activePaintMaterial?.material}

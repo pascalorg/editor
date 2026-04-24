@@ -6,7 +6,6 @@ import {
   getMaterialsForCategory,
   MATERIAL_CATEGORIES,
   toLibraryMaterialRef,
-  type MaterialCategory,
   type MaterialSchema,
 } from '@pascal-app/core'
 import { useEffect, useRef, useState } from 'react'
@@ -15,8 +14,8 @@ import useEditor from '../../../store/use-editor'
 type MaterialPickerProps = {
   value?: MaterialSchema
   selectedMaterialPreset?: string
-  onChange?: (material: MaterialSchema, category: MaterialCategory) => void
-  onSelectMaterialPreset?: (materialPreset: string, category: MaterialCategory) => void
+  onChange?: (material: MaterialSchema) => void
+  onSelectMaterialPreset?: (materialPreset: string) => void
   disabled?: boolean
 }
 
@@ -29,7 +28,9 @@ export function MaterialPicker({
 }: MaterialPickerProps) {
   const setPaintPanelOpen = useEditor((state) => state.setPaintPanelOpen)
   const [showCustom, setShowCustom] = useState<boolean>(!!value?.properties)
-  const [selectedCategory, setSelectedCategory] = useState<MaterialCategory>(MATERIAL_CATEGORIES[0])
+  const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
+    MATERIAL_CATEGORIES[0],
+  )
   const catalogScrollRef = useRef<HTMLDivElement>(null)
   const categoryScrollRef = useRef<HTMLDivElement>(null)
   const catalogItems =
@@ -62,9 +63,7 @@ export function MaterialPicker({
     if (disabled) return
     setShowCustom(false)
     setPaintPanelOpen(false)
-    const category = getCatalogMaterialById(materialId)?.category
-    if (!category) return
-    onSelectMaterialPreset?.(toLibraryMaterialRef(materialId), category)
+    onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
   }
 
   useEffect(() => {
@@ -113,20 +112,17 @@ export function MaterialPicker({
     if (disabled) return
     setShowCustom(true)
     setPaintPanelOpen(true)
-    onChange?.(
-      {
-        preset: 'custom',
-        properties: {
-          color: value?.properties?.color || '#ffffff',
-          roughness: value?.properties?.roughness ?? 0.5,
-          metalness: value?.properties?.metalness ?? 0,
-          opacity: value?.properties?.opacity ?? 1,
-          transparent: value?.properties?.transparent ?? false,
-          side: value?.properties?.side ?? 'front',
-        },
+    onChange?.({
+      preset: 'custom',
+      properties: {
+        color: value?.properties?.color || '#ffffff',
+        roughness: value?.properties?.roughness ?? 0.5,
+        metalness: value?.properties?.metalness ?? 0,
+        opacity: value?.properties?.opacity ?? 1,
+        transparent: value?.properties?.transparent ?? false,
+        side: value?.properties?.side ?? 'front',
       },
-      'other',
-    )
+    })
   }
 
   return (

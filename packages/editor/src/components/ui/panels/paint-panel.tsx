@@ -47,7 +47,6 @@ export function PaintPanel() {
           transparent: nextTransparent,
         },
       },
-      category: 'other',
       sourceTarget: activePaintMaterial?.sourceTarget ?? activePaintTarget,
     })
   }
