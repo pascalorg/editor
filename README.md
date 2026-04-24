@@ -82,6 +82,20 @@ Archly.Cloud is designed to run in a containerized environment.
    - **Redis**: For real-time sync scaling.
    - **Caddy**: Reverse proxy with automatic SSL (if configured).
 
+### 🚀 CI/CD Deployment
+The project includes a GitHub Action for automated deployment to a VPS.
+
+1. **GitHub Secrets**: Add the following secrets to your repository:
+   - `VPS_IP`: Your server's public IP.
+   - `VPS_USER`: SSH username (e.g., `root`, `ubuntu`).
+   - `SSH_PRIVATE_KEY`: Your private SSH key.
+   - `DEPLOY_PATH`: Destination path on the VPS (e.g., `/home/ubuntu/ArchlyCloud`).
+
+2. **Automated Flow**: On every push to `main`, the workflow will:
+   - Sync the latest code to the VPS.
+   - Rebuild and restart the Docker containers.
+   - Prune old images to save space.
+
 ---
 
 ## 🌐 Real-Time Presence
