@@ -87,6 +87,8 @@ type PaintPreviewCleanup = () => void
 type PaintInteraction = {
   key: string
   apply: (() => void) | null
+  hoverMode: HoverHighlightMode
+  hoveredId: AnyNodeId
   preview: (() => PaintPreviewCleanup | null) | null
 }
 
@@ -743,6 +745,11 @@ export const SelectionManager = () => {
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'wall')
         return {
           key: `wall:${node.id}:${role ?? 'unsupported'}`,
+          hoveredId: node.id as AnyNodeId,
+          hoverMode:
+            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+              ? 'paint-ready'
+              : 'paint-disabled',
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -780,6 +787,11 @@ export const SelectionManager = () => {
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'roof')
         return {
           key: `roof:${roofNode.id}:${role ?? 'unsupported'}`,
+          hoveredId: roofNode.id as AnyNodeId,
+          hoverMode:
+            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+              ? 'paint-ready'
+              : 'paint-disabled',
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -817,6 +829,11 @@ export const SelectionManager = () => {
           role !== null && isActivePaintMaterialCompatible(activePaintMaterial, 'stair')
         return {
           key: `stair:${stairNode.id}:${role ?? 'unsupported'}`,
+          hoveredId: stairNode.id as AnyNodeId,
+          hoverMode:
+            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+              ? 'paint-ready'
+              : 'paint-disabled',
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -848,6 +865,8 @@ export const SelectionManager = () => {
 
         return {
           key: `${target}:${node.id}:surface`,
+          hoveredId: node.id as AnyNodeId,
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply: compatible
             ? () => {
                 useScene
@@ -875,6 +894,8 @@ export const SelectionManager = () => {
       if (disabledNodeTypes.includes(node.type)) {
         return {
           key: `${node.type}:${node.id}:unsupported`,
+          hoveredId: node.id as AnyNodeId,
+          hoverMode: 'paint-disabled',
           apply: null,
           preview: () => previewCursor('not-allowed'),
         }
@@ -896,6 +917,8 @@ export const SelectionManager = () => {
       }
 
       clearActivePreview()
+      useViewer.setState({ hoveredId: interaction.hoveredId })
+      setHoverHighlightMode(interaction.hoverMode)
 
       const restore = interaction.preview?.()
       if (restore) {
@@ -912,6 +935,10 @@ export const SelectionManager = () => {
       }
 
       clearActivePreview()
+      if (useViewer.getState().hoveredId === interaction.hoveredId) {
+        useViewer.setState({ hoveredId: null })
+      }
+      setHoverHighlightMode('default')
     }
 
     const onClick = (event: NodeEvent) => {
@@ -932,6 +959,7 @@ export const SelectionManager = () => {
       } else {
         clearActivePreview()
       }
+      setHoverHighlightMode(interaction.hoverMode)
     }
 
     const allTypes = [
@@ -962,8 +990,10 @@ export const SelectionManager = () => {
         emitter.off(`${type}:click` as any, onClick as any)
       }
       clearActivePreview()
+      useViewer.setState({ hoveredId: null })
+      setHoverHighlightMode('default')
     }
-  }, [curvingWall, mode, movingNode])
+  }, [curvingWall, mode, movingNode, setHoverHighlightMode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
