@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: apps/editor/Dockerfile
+      args:
+        - NEXT_PUBLIC_SOCKET_URL=https://archly.cloud
+        - NEXT_PUBLIC_POSTHOG_KEY=${NEXT_PUBLIC_POSTHOG_KEY}
+        - NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST}
     ports:
       - "3002:3002"
     environment:
