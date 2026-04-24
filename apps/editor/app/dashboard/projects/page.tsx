@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FolderKanban, Plus, X } from "lucide-react";
+import Link from "next/link";
 import { getDashboardData, createProject } from "../actions";
 
 export default function ProjectsPage() {
@@ -65,7 +66,7 @@ export default function ProjectsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {allProjects.map((project: any) => (
-          <div key={project.id} className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-colors group cursor-pointer">
+          <Link key={project.id} href={`/editor/${project.id}`} className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-colors group cursor-pointer block">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
                 <FolderKanban className="text-purple-400" />
@@ -76,10 +77,10 @@ export default function ProjectsPage() {
               </div>
             </div>
             <p className="text-sm text-gray-400 line-clamp-2 min-h-[40px]">{project.description || "No description provided."}</p>
-            <div className="mt-4 pt-4 border-t border-white/5 text-xs font-medium text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="mt-4 pt-4 border-t border-white/5 text-xs font-medium text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
               Open Project &rarr;
             </div>
-          </div>
+          </Link>
         ))}
         {allProjects.length === 0 && (
           <div className="col-span-full py-10 text-center text-gray-500 bg-white/[0.02] rounded-2xl border border-white/5">
