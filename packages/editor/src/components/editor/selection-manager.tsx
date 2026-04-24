@@ -46,7 +46,6 @@ type SelectableNodeType =
   | 'stair-segment'
   | 'window'
   | 'door'
-  | 'archway'
 
 type ModifierKeys = {
   meta: boolean
@@ -324,7 +323,6 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'stair-segment',
       'window',
       'door',
-      'archway',
     ],
     handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState()
@@ -382,7 +380,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
           (node as ItemNode).asset.category === 'window'
         )
       }
-      if (node.type === 'window' || node.type === 'door' || node.type === 'archway') return true
+      if (node.type === 'window' || node.type === 'door') return true
 
       return false
     },
@@ -437,8 +435,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'stair' ||
     node.type === 'stair-segment' ||
     node.type === 'window' ||
-    node.type === 'door' ||
-    node.type === 'archway'
+    node.type === 'door'
   ) {
     return {
       phase: 'structure',
@@ -625,7 +622,6 @@ export const SelectionManager = () => {
       'stair-segment',
       'window',
       'door',
-      'archway',
     ]
     allTypes.forEach((type) => {
       emitter.on(`${type}:click` as any, onClick as any)
@@ -771,7 +767,6 @@ export const SelectionManager = () => {
       'stair-segment',
       'window',
       'door',
-      'archway',
       'zone',
       'site',
     ]
@@ -843,7 +838,6 @@ export const SelectionManager = () => {
       'stair-segment',
       'window',
       'door',
-      'archway',
       'zone',
     ] as const
 

@@ -7,6 +7,15 @@ import * as THREE from 'three'
 import { useCollaboration } from './YjsCollaborationProvider'
 
 import { memo } from 'react'
+import type { ThreeElements } from '@react-three/fiber'
+
+declare global {
+  namespace React {
+    namespace JSX {
+      interface IntrinsicElements extends ThreeElements {}
+    }
+  }
+}
 
 interface RemoteUser {
   clientId: number

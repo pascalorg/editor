@@ -6,7 +6,6 @@ import {
   useScene,
   type WallNode,
   type WindowNode,
-  type ArchwayNode,
 } from '@pascal-app/core'
 
 /**
@@ -98,12 +97,6 @@ export function hasWallChildOverlap(
       childRight = door.position[0] + door.width / 2
       childBottom = door.position[1] - door.height / 2
       childTop = door.position[1] + door.height / 2
-    } else if (child.type === 'archway') {
-      const arch = child as ArchwayNode
-      childLeft = arch.position[0] - arch.width / 2
-      childRight = arch.position[0] + arch.width / 2
-      childBottom = arch.position[1] - arch.height / 2
-      childTop = arch.position[1] + arch.height / 2
     } else {
       continue
     }

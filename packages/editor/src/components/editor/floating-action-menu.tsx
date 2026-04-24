@@ -1,10 +1,8 @@
 'use client'
-// Trigger re-index after core build
 
 import {
   type AnyNode,
   type AnyNodeId,
-  ArchwayNode,
   type CeilingNode,
   DoorNode,
   FenceNode,
@@ -21,7 +19,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useFrame, type ThreeElements } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -33,7 +31,6 @@ const ALLOWED_TYPES = [
   'item',
   'door',
   'window',
-  'archway',
   'roof',
   'roof-segment',
   'stair',
@@ -182,7 +179,6 @@ export function FloatingActionMenu() {
       if (
         node.type === 'item' ||
         node.type === 'window' ||
-        node.type === 'archway' ||
         node.type === 'door' ||
         node.type === 'wall' ||
         node.type === 'fence' ||
@@ -248,8 +244,6 @@ export function FloatingActionMenu() {
       try {
         if (node.type === 'door') {
           duplicate = DoorNode.parse(duplicateInfo)
-        } else if (node.type === 'archway') {
-          duplicate = ArchwayNode.parse(duplicateInfo)
         } else if (node.type === 'window') {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
@@ -361,7 +355,6 @@ export function FloatingActionMenu() {
           duplicate.type === 'wall' ||
           duplicate.type === 'fence' ||
           duplicate.type === 'window' ||
-          duplicate.type === 'archway' ||
           duplicate.type === 'door' ||
           duplicate.type === 'roof' ||
           duplicate.type === 'roof-segment' ||

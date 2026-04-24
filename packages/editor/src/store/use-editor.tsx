@@ -21,7 +21,6 @@ import {
   type WallNode,
   type WallSurfaceSide,
   type WindowNode,
-  type ArchwayNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
@@ -55,7 +54,6 @@ export type StructureTool =
   | 'zone'
   | 'window'
   | 'door'
-  | 'archway'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -115,7 +113,6 @@ type EditorState = {
     | ItemNode
     | WindowNode
     | DoorNode
-    | ArchwayNode
     | FenceNode
     | CeilingNode
     | SlabNode
@@ -131,7 +128,6 @@ type EditorState = {
       | ItemNode
       | WindowNode
       | DoorNode
-      | ArchwayNode
       | FenceNode
       | CeilingNode
       | SlabNode

@@ -9,7 +9,6 @@ import { useViewer } from '@pascal-app/viewer'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
 import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
-import { ArchwayTool } from './archway/archway-tool'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { DoorTool } from './door/door-tool'
 import { CurveFenceTool } from './fence/curve-fence-tool'
@@ -45,7 +44,6 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     item: ItemTool,
     zone: ZoneTool,
     window: WindowTool,
-    archway: ArchwayTool,
   },
   furnish: {
     item: ItemTool,

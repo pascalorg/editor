@@ -113,14 +113,6 @@ export function EditorCommands() {
         execute: () => activateTool('window'),
       },
       {
-        id: 'editor.tool.archway',
-        label: 'Archway Tool',
-        group: 'Scene',
-        icon: <Box className="h-4 w-4" />, // Using Box as placeholder, Lucide doesn't have a great Arch icon without extra libs
-        keywords: ['opening', 'curved', 'arch'],
-        execute: () => activateTool('archway'),
-      },
-      {
         id: 'editor.tool.item',
         label: 'Item Tool',
         group: 'Scene',

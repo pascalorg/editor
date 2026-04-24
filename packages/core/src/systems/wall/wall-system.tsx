@@ -544,7 +544,7 @@ function collectCutoutBrushes(
   const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
 
   for (const child of childrenNodes) {
-    if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door' && child.type !== 'archway') continue
+    if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
     const childMesh = sceneRegistry.nodes.get(child.id)
     if (!childMesh) continue
@@ -552,51 +552,49 @@ function collectCutoutBrushes(
     const cutoutMesh = childMesh.getObjectByName('cutout') as THREE.Mesh
     if (!cutoutMesh) continue
 
-    let cutoutGeo: THREE.BufferGeometry
+    // Get the cutout's bounding box in world space
+    cutoutMesh.updateMatrixWorld()
+    const positions = cutoutMesh.geometry?.attributes?.position
+    if (!positions) continue
 
-    if (child.type === 'archway') {
-      // For complex shapes like archways, we use the actual geometry
-      cutoutMesh.updateMatrixWorld()
-      cutoutGeo = cutoutMesh.geometry.clone()
-      cutoutGeo.applyMatrix4(cutoutMesh.matrixWorld)
-      cutoutGeo.applyMatrix4(wallMatrixInverse)
-    } else {
-      // For standard doors/windows, we can stick to bounding box or also use geometry
-      // The current implementation uses bounding box for safety/simplicity
-      cutoutMesh.updateMatrixWorld()
-      const positions = cutoutMesh.geometry?.attributes?.position
-      if (!positions) continue
+    // Calculate bounds in wall-local space
+    const v3 = new THREE.Vector3()
+    let minX = Number.POSITIVE_INFINITY,
+      maxX = Number.NEGATIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY,
+      maxY = Number.NEGATIVE_INFINITY
 
-      const v3 = new THREE.Vector3()
-      let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY
-      let minY = Number.POSITIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY
+    for (let i = 0; i < positions.count; i++) {
+      v3.fromBufferAttribute(positions, i)
+      v3.applyMatrix4(cutoutMesh.matrixWorld)
+      v3.applyMatrix4(wallMatrixInverse)
 
-      for (let i = 0; i < positions.count; i++) {
-        v3.fromBufferAttribute(positions, i)
-        v3.applyMatrix4(cutoutMesh.matrixWorld)
-        v3.applyMatrix4(wallMatrixInverse)
-
-        minX = Math.min(minX, v3.x)
-        maxX = Math.max(maxX, v3.x)
-        minY = Math.min(minY, v3.y)
-        maxY = Math.max(maxY, v3.y)
-      }
-
-      if (!Number.isFinite(minX)) continue
-
-      const width = maxX - minX
-      const height = maxY - minY
-      const depth = wallThickness * 2
-
-      cutoutGeo = new THREE.BoxGeometry(width, height, depth)
-      cutoutGeo.translate(minX + width / 2, minY + height / 2, 0)
+      minX = Math.min(minX, v3.x)
+      maxX = Math.max(maxX, v3.x)
+      minY = Math.min(minY, v3.y)
+      maxY = Math.max(maxY, v3.y)
     }
 
-    // Pre-compute BVH
-    cutoutGeo.computeBoundsTree = computeBoundsTree
-    cutoutGeo.computeBoundsTree({ maxLeafSize: 10 })
+    if (!Number.isFinite(minX)) continue
 
-    const brush = new Brush(cutoutGeo)
+    // Create a box geometry that extends through the wall thickness
+    const width = maxX - minX
+    const height = maxY - minY
+    const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
+
+    const boxGeo = new THREE.BoxGeometry(width, height, depth)
+    // Position box at the center of the cutout
+    boxGeo.translate(
+      minX + width / 2,
+      minY + height / 2,
+      0, // Center on Z axis (wall thickness direction)
+    )
+
+    // Pre-compute BVH with new API to avoid deprecation warning
+    boxGeo.computeBoundsTree = computeBoundsTree
+    boxGeo.computeBoundsTree({ maxLeafSize: 10 })
+
+    const brush = new Brush(boxGeo)
     brushes.push(brush)
   }
 
