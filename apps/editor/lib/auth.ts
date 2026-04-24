@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
+import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -8,10 +9,11 @@ export const authOptions: NextAuthOptions = {
       name: "Email",
       credentials: {
         email: { label: "Email", type: "email", placeholder: "you@example.com" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email) {
-          return null;
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Missing email or password");
         }
 
         const email = credentials.email.toLowerCase();
@@ -20,37 +22,17 @@ export const authOptions: NextAuthOptions = {
           where: { email },
         });
 
-        if (user) {
-          return { id: user.id, email: user.email, name: user.name };
+        if (!user || !user.password) {
+          throw new Error("Invalid email or password");
         }
 
-        // Auto-provisioning logic for new users
-        const domain = email.split('@')[1];
-        if (!domain) return null;
+        const isValid = await bcrypt.compare(credentials.password, user.password);
 
-        const org = await prisma.organization.findUnique({
-          where: { domain },
-        });
-
-        if (org && org.status === 'APPROVED') {
-          // Provision new user and link to organization
-          user = await prisma.user.create({
-            data: {
-              email,
-              name: email.split('@')[0], // Use email prefix as default name
-              organizations: {
-                create: {
-                  organizationId: org.id,
-                  role: 'MEMBER',
-                }
-              }
-            }
-          });
-
-          return { id: user.id, email: user.email, name: user.name };
+        if (!isValid) {
+          throw new Error("Invalid email or password");
         }
 
-        throw new Error("Your organization has not been registered or approved yet.");
+        return { id: user.id, email: user.email, name: user.name };
       },
     }),
   ],

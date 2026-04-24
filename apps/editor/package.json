@@ -21,6 +21,7 @@
     "@react-three/fiber": "^9.5.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@tailwindcss/postcss": "^4.2.1",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "framer-motion": "11",
     "geist": "^1.7.0",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
+    "@types/bcryptjs": "^3.0.0",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",

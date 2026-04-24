@@ -37,7 +37,7 @@ export async function updateApplicationStatus(id: string, status: 'APPROVED' | '
       let domain = application.domain;
       if (!domain) {
         const emailParts = application.contactEmail.split('@');
-        domain = emailParts.length === 2 ? emailParts[1].toLowerCase() : null;
+        domain = emailParts.length === 2 ? emailParts[1]!.toLowerCase() : null;
       }
 
       // 3. Generate a unique slug
