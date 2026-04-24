@@ -2,9 +2,9 @@
 
 ## Summary
 
-Introduces a new workspace package `@pascal-app/mcp` (v0.1.0) that exposes the Pascal scene graph (`@pascal-app/core`) as MCP **tools**, **resources**, and **prompts** so any MCP-compatible AI host — Claude Desktop, Claude Code, Cursor, a custom agent — can read and mutate Pascal projects programmatically with full Zod validation, atomic patches, undo-safe mutations, and multimodal image inputs.
+Introduces a new workspace package `@pascal-app/mcp` (v0.1.0) that exposes the Pascal scene graph (`@pascal-app/core`) as MCP **tools**, **resources**, and **prompts** so any MCP-compatible AI host — Claude Desktop, Claude Code, Codex CLI, Cursor, or a custom agent — can read, mutate, save, and reopen Pascal projects programmatically with full Zod validation, atomic patches, undo-safe mutations, multimodal image inputs, and local SQLite persistence.
 
-**83 files changed, ~5,900 LOC across 68 source files + 27 test files; 142/142 tests pass.**
+The branch is now local-first: scenes persist to `~/.pascal/data/pascal.db` through SQLite, using `bun:sqlite` in the MCP CLI and `node:sqlite` when the Next.js editor server imports the storage package. The earlier Supabase adapter, SQL migrations, and committed `test-reports/` artifacts have been removed.
 
 ## Motivation
 
@@ -36,6 +36,10 @@ Issue [#74 "Viewer component API definition"](https://github.com/pascalorg/edito
 | `check_collisions` | Item placement conflicts per level |
 | `analyze_floorplan_image` | (Vision/sampling) Extract structured floor plan |
 | `analyze_room_photo` | (Vision/sampling) Extract room dimensions + fixtures |
+| `save_scene` / `load_scene` / `list_scenes` / `rename_scene` / `delete_scene` | Persist scenes in local SQLite |
+| `list_templates` / `create_from_template` | Seed scenes from bundled templates |
+| `generate_variants` | Fork and mutate scene variants |
+| `photo_to_scene` | Vision sampling to scene graph, optionally saved |
 
 ### Resources
 
@@ -62,23 +66,23 @@ Issue [#74 "Viewer component API definition"](https://github.com/pascalorg/edito
 │         stdio │ HTTP                                      │
 │                          ▼                                │
 │   ┌──────── packages/mcp/src/bin/pascal-mcp.ts ────────┐  │
-│   │ (loads node-shims FIRST, then creates bridge)      │  │
+│   │ (Bun CLI, loads node-shims first)                  │  │
 │   └────────────────────────────────────────────────────┘  │
 │                          │                                │
 │                          ▼                                │
 │   ┌──── createPascalMcpServer({ bridge }) ────┐            │
-│   │  registerTools()  → 19 tools              │            │
-│   │  registerVisionTools() → 2 tools          │            │
-│   │  registerResources() → 4 resources        │            │
-│   │  registerPrompts() → 3 prompts            │            │
+│   │  registerTools()                          │            │
+│   │  registerVisionTools()                    │            │
+│   │  registerResources()                      │            │
+│   │  registerPrompts()                        │            │
 │   └────────────────────────────────────────────┘           │
 │                          │                                 │
 │                          ▼                                 │
-│   ┌──────────── SceneBridge ────────────────┐             │
-│   │  headless Zustand store + Zundo         │             │
-│   │  RAF polyfill at import time            │             │
-│   │  zod validation at every boundary       │             │
-│   └──────────────────────────────────────────┘             │
+│   ┌──────────── SceneBridge + SceneStore ───────────────┐  │
+│   │  headless Zustand store + Zundo                     │  │
+│   │  local SQLite storage at ~/.pascal/data/pascal.db   │  │
+│   │  Zod validation at every boundary                   │  │
+│   └──────────────────────────────────────────────────────┘  │
 │                          │                                 │
 │                          ▼                                 │
 │            @pascal-app/core (unchanged, new subpath exports) │
@@ -93,7 +97,7 @@ bun install
 bun run --cwd packages/core build
 bun run --cwd packages/mcp build
 
-# Unit + integration tests (142 tests across 27 files)
+# Unit + integration tests (248 tests across 40 files)
 bun test --cwd packages/mcp
 
 # End-to-end smoke test (spawns stdio server and exercises 4 tools)
@@ -106,7 +110,7 @@ bunx biome check packages/mcp
 bunx turbo build --filter=@pascal-app/mcp
 ```
 
-### Try it with Claude Desktop
+### Try it with Claude Desktop, Claude Code, or Codex
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -114,14 +118,26 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "pascal": {
-      "command": "node",
-      "args": ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"]
+      "command": "bun",
+      "args": ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"],
+      "env": {
+        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
+      }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Ask it: *"Use the Pascal MCP to create a 3-bedroom apartment at 100m²."*
+For Codex CLI:
+
+```bash
+codex mcp add pascal-dev \
+  --env PASCAL_DATA_DIR="$HOME/.pascal/data" \
+  -- bun "$PWD/packages/mcp/dist/bin/pascal-mcp.js"
+```
+
+Run the editor with the same `PASCAL_DATA_DIR`, then ask the MCP host to create
+and `save_scene`; the scene is openable at `/scene/<id>`.
 
 ## Known limitations
 
@@ -131,6 +147,7 @@ Restart Claude Desktop. Ask it: *"Use the Pascal MCP to create a 3-bedroom apart
 4. **`loadAssetUrl`/`saveAsset` are browser-only.** Items with `asset://<id>` URLs can't be resolved in Node. Supply absolute URLs or `data:` URIs if you need them usable outside the browser.
 5. **`SiteNode.children` inconsistency.** Site's children hold full node objects while every other container holds ID strings (see `CROSS_CUTTING.md` §2). MCP works around this by traversing via the flat `nodes` dict. Upstream alignment proposed as a follow-up.
 6. **Catalog unavailable in headless mode.** `pascal://catalog/items` and `place_item`'s catalog resolution fall back to a placeholder asset payload until the core exposes a Node-consumable catalog.
+7. **Local-only auth boundary.** The HTTP transport and editor scene API are intended for local development in this PR. Do not expose them on a public network without an auth layer.
 
 ## Cross-cutting changes
 
@@ -138,20 +155,24 @@ Documented in [`packages/mcp/CROSS_CUTTING.md`](./CROSS_CUTTING.md):
 
 1. **`packages/core/package.json` — additive subpath exports.** Adds `./schema`, `./store`, `./material-library`, `./spatial-grid`, `./wall`. Needed because the main entry re-exports browser-only systems; subpath entries let Node consumers skip them. Zero impact on existing consumers (`apps/editor`, `@pascal-app/viewer` still use the main entry).
 2. **`.github/workflows/mcp-ci.yml` — new CI.** Runs on PRs touching mcp/core; installs with Bun 1.3.0, builds, tests, biome-checks.
-3. (Observation, not fixed) **`SiteNode.children` inconsistency.** Detailed in CROSS_CUTTING §2.
+3. **`apps/editor` scene routes.** Adds local scene API routes and pages that read from the same SQLite `SceneStore` as MCP.
+4. (Observation, not fixed) **`SiteNode.children` inconsistency.** Detailed in CROSS_CUTTING §2.
 
 ## Checklist
 
-- ✅ `bunx biome check packages/mcp` — clean (73 files, 0 errors)
+- ✅ `bunx biome check packages/mcp` — clean
 - ✅ `bun run --cwd packages/mcp build` — tsc OK
 - ✅ `bunx turbo build --filter=@pascal-app/mcp` — 2/2 tasks successful
-- ✅ `bun test --cwd packages/mcp` — 142/142 tests pass across 27 files (328 expects)
-- ✅ `bun run --cwd packages/mcp smoke` — spawns stdio server, registers 21 tools, exercises `get_scene` / `create_level` / `validate_scene` / `undo` end-to-end
-- ✅ Docs: README with host configs + tool/resource/prompt tables, CHANGELOG, 3 examples
+- ✅ `bun test --cwd packages/mcp` — 248/248 tests pass across 40 files (965 expects)
+- ✅ `bun run --cwd packages/mcp smoke` — spawns stdio server, registers 30 tools, exercises `get_scene` / `create_level` / `validate_scene` / `undo` end-to-end
+- ✅ `bun test apps/editor/lib/scene-store-server.test.ts` — editor store singleton test passes
+- ✅ Editor smoke — `/api/scenes/<id>` and `/scene/<id>` return 200 for a scene saved through MCP using the shared SQLite DB
+- ✅ Local Codex MCP probe with `gpt-5.5` — saved a template scene through `pascal-dev`, then reloaded it and created a wall
+- ✅ Docs: README with Claude Desktop, Claude Code, Codex CLI, Cursor configs + tool/resource/prompt tables, CHANGELOG, 3 examples
 - ✅ Conventional commit series (9 commits on `feat/mcp-server`)
-- ✅ No modifications to `@pascal-app/viewer` or `apps/editor`
-- ✅ `packages/core` changes are purely additive (subpath exports only)
-- ✅ Node 18+ compatible; RAF polyfill loads before any core import
+- ✅ No Supabase dependency, SQL migrations, or committed test-report artifacts
+- ✅ `packages/core` changes are additive subpath exports plus URL-schema hardening
+- ✅ Bun CLI; RAF polyfill loads before any core import
 - ✅ Strict TypeScript (no `any` without reason; no `@ts-expect-error`); Zod at every boundary
 - ✅ Every mutation goes through the Zustand store (undo-safe via Zundo)
 
@@ -167,11 +188,14 @@ feat(mcp): add multimodal vision tools via MCP sampling
 feat(mcp): add stdio + streamable HTTP transports, CLI, and smoke test
 docs(mcp): add README, examples, and changelog
 chore(mcp): add CI workflow and document cross-cutting changes
+feat(mcp,editor): add local SQLite scene persistence and editor scene routes
+fix(mcp): remove Supabase backend and committed test reports
 ```
 
 ## Follow-up (future PRs)
 
 - Align `SiteNode.children` to IDs-only (with `setScene` migration) — CROSS_CUTTING §2.
+- Extract shared operation/service layer so MCP, CLI, and future REST/OpenAPI adapters do not duplicate business validation.
 - Expose a Node-consumable item catalog from `@pascal-app/core` so `place_item` can resolve real catalog IDs.
 - Surface real spatial-grid collision detection (currently a simple AABB pass in `check_collisions`).
 - Post-build `chmod +x dist/bin/pascal-mcp.js` step so fresh installs get an executable bin without a manual chmod.

@@ -41,7 +41,7 @@ export function registerSetZone(server: McpServer, bridge: SceneBridge): void {
 
       const zone = ZoneNode.parse({
         name: label,
-        polygon,
+        polygon: polygon as Array<[number, number]>,
         metadata: properties ?? {},
       })
       const id = bridge.createNode(zone, levelId as AnyNodeId)

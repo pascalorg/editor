@@ -27,3 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - stdio and Streamable HTTP transports.
 - `pascal-mcp` CLI binary with `--stdio`, `--http --port`, and `--scene`
   flags.
+- Local `SqliteSceneStore` backed by built-in SQLite drivers (`bun:sqlite` in
+  the MCP CLI, `node:sqlite` in the Next.js editor server), with WAL mode,
+  transaction-scoped optimistic locking, revision rows, and shared
+  `PASCAL_DATA_DIR` / `PASCAL_DB_PATH` configuration for MCP and the editor.
+
+### Removed
+
+- Supabase storage adapter, SQL migrations, and the `@supabase/supabase-js`
+  runtime dependency.
+- Committed MCP `test-reports/` development artifacts.

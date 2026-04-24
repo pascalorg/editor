@@ -47,7 +47,7 @@ export interface SceneMutateOptions {
 }
 
 export interface SceneStore {
-  readonly backend: 'filesystem' | 'supabase'
+  readonly backend: 'sqlite'
   save(opts: SceneSaveOptions): Promise<SceneMeta>
   load(id: SceneId): Promise<SceneWithGraph | null>
   list(opts?: SceneListOptions): Promise<SceneMeta[]>

@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       graph: parsed.data.graph as never,
       thumbnailUrl:
         parsed.data.thumbnailUrl === undefined ? existing.thumbnailUrl : parsed.data.thumbnailUrl,
-      expectedVersion,
+      expectedVersion: expectedVersion ?? existing.version,
     })
     return NextResponse.json(meta, {
       headers: { ETag: `"${meta.version}"` },

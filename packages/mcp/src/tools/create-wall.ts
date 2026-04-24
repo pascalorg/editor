@@ -41,8 +41,8 @@ export function registerCreateWall(server: McpServer, bridge: SceneBridge): void
       }
 
       const wall = WallNode.parse({
-        start,
-        end,
+        start: start as [number, number],
+        end: end as [number, number],
         ...(thickness !== undefined ? { thickness } : {}),
         ...(height !== undefined ? { height } : {}),
       })

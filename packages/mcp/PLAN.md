@@ -326,7 +326,7 @@ CLI `pascal-mcp` flags:
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --build --watch",
-    "start": "node dist/bin/pascal-mcp.js",
+    "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
     "prepublishOnly": "bun run build && bun test"

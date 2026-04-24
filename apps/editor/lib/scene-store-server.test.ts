@@ -8,7 +8,7 @@ describe('getSceneStore', () => {
         createSceneStore: async (_env?: NodeJS.ProcessEnv) => {
           callCount++
           return {
-            backend: 'filesystem' as const,
+            backend: 'sqlite' as const,
             __instanceNumber: callCount,
             save: async () => ({}) as never,
             load: async () => null,

@@ -21,7 +21,7 @@ export function parseToolText(content: StoredTextContent[]): Record<string, unkn
  * `expectedVersion`.
  */
 export class InMemorySceneStore implements SceneStore {
-  readonly backend = 'filesystem' as const
+  readonly backend = 'sqlite' as const
   private readonly data = new Map<string, SceneWithGraph>()
   private idCounter = 0
 

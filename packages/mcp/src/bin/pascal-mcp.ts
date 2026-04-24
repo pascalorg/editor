@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Load shims FIRST so any subsequent core import sees the RAF polyfill.
 import '../bridge/node-shims'
 

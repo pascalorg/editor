@@ -47,8 +47,8 @@ function createLazySceneStore(): SceneStore {
     return cached
   }
   return {
-    get backend(): 'filesystem' | 'supabase' {
-      return 'filesystem'
+    get backend(): 'sqlite' {
+      return 'sqlite'
     },
     async save(options: SceneSaveOptions): Promise<SceneMeta> {
       const real = await resolve()

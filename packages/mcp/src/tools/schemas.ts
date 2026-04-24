@@ -8,11 +8,15 @@ import { z } from 'zod'
 /** A node identifier — non-empty string. The core uses `${prefix}_${nanoid}`. */
 export const NodeIdSchema = z.string().min(1)
 
-/** 2D point as [x, z] (floor plane). Matches core's tuple convention. */
-export const Vec2Schema = z.tuple([z.number(), z.number()])
+/**
+ * 2D point as [x, z] (floor plane). Use array length constraints instead of
+ * `z.tuple()` so MCP hosts that only accept JSON Schema's common `items` shape
+ * can register the tools.
+ */
+export const Vec2Schema = z.array(z.number()).min(2).max(2)
 
 /** 3D point as [x, y, z]. */
-export const Vec3Schema = z.tuple([z.number(), z.number(), z.number()])
+export const Vec3Schema = z.array(z.number()).min(3).max(3)
 
 /**
  * A single patch operation. Union of create / update / delete.

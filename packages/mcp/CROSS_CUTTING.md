@@ -103,7 +103,9 @@ Added a `./storage` entry to the `"exports"` map of `@pascal-app/mcp`, pointing 
 
 ### Why
 
-The Next.js editor (`apps/editor`) needs access to `createSceneStore()` + the `SceneStore` types/errors in server-only code (API route handlers + `lib/scene-store-server.ts`). The main entry `.` pulls in the full MCP server surface (tools, transports, MCP SDK), which is overkill for a consumer that only needs the storage adapter. The subpath export lets `apps/editor` do `import { createSceneStore, SceneVersionConflictError } from '@pascal-app/mcp/storage'` without dragging the rest of the package.
+The Next.js editor (`apps/editor`) needs access to `createSceneStore()` + the `SceneStore` types/errors in server-only code (API route handlers + `lib/scene-store-server.ts`). The main entry `.` pulls in the full MCP server surface (tools, transports, MCP SDK), which is overkill for a consumer that only needs the storage adapter. The subpath export lets `apps/editor` do `import type { SceneStore } from '@pascal-app/mcp/storage'` and dynamically import `createSceneStore` without re-declaring the storage contract.
+
+The concrete backend is now `SqliteSceneStore`, backed by built-in SQLite drivers (`bun:sqlite` for the MCP CLI and `node:sqlite` for the Next.js editor server). It writes to `~/.pascal/data/pascal.db` by default and also supports `PASCAL_DATA_DIR`, `PASCAL_DB_PATH`, and `PASCAL_MAX_SCENE_BYTES`.
 
 ### Impact
 
@@ -111,12 +113,13 @@ Zero on existing consumers. Purely additive. The `.` entry continues to export `
 
 ### Reversibility
 
-Remove the `./storage` entry from `exports` and update `apps/editor` to inline the types / use a different factory. No data or behavior changes — pure module-graph shaping.
+Remove the `./storage` entry from `exports` and update `apps/editor` to use a different factory. No data or behavior changes — pure module-graph shaping.
 
 ### Related
 
 - `apps/editor/package.json` adds `@pascal-app/mcp` as a workspace dependency so the subpath resolves.
 - `apps/editor/lib/scene-store-server.ts` and `apps/editor/app/api/scenes/**` consume this subpath.
+- `packages/mcp/src/storage/sqlite-scene-store.ts` is the only production storage backend.
 
 ---
 
@@ -143,8 +146,7 @@ and non-URL garbage.
 
 ### Why
 
-Phase 3 security audit (`packages/mcp/test-reports/research/R9-production-readiness.md`
-entry "URL validation in scenes"): an attacker-crafted scene containing
+Security review found that an attacker-crafted scene containing
 `javascript:alert(1)` or `http://169.254.169.254/latest/meta-data/` for a
 texture URL would beacon or exfiltrate when the editor renders it.
 `AnyNode.safeParse`, used by the MCP bridge, now rejects those payloads at the
@@ -198,4 +200,3 @@ Delete `packages/core/src/schema/asset-url.ts` and revert the five imports in
 scene-bridge test update is self-contained.
 
 ---
-

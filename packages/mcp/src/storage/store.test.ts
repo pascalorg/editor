@@ -119,7 +119,6 @@ describe('generateSlug', () => {
   })
 })
 
-// Note: createSceneStore() factory branching is covered transitively by
-// the filesystem and supabase store tests. We avoid mock.module() here
-// because bun's module mocks persist process-wide and pollute sibling
-// test files (notably supabase-scene-store.test.ts).
+// Note: createSceneStore() factory behavior is covered by the SQLite store
+// tests. We avoid mock.module() here because bun's module mocks persist
+// process-wide and pollute sibling test files.

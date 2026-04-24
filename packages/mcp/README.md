@@ -3,24 +3,28 @@
 Model Context Protocol server for the Pascal 3D editor. Drives the
 `@pascal-app/core` scene graph from any MCP-compatible AI host.
 
-The server runs headlessly in Node — no browser, no WebGPU, no React — and
-exposes the same scene mutations used by the editor UI (create walls, place
-items, cut openings, undo, etc.) as MCP tools, resources, and prompts.
+The server runs headlessly in Bun with no browser, WebGPU, React, or external
+database service. It exposes the same scene mutations used by the editor UI
+(create walls, place items, cut openings, undo, etc.) as MCP tools, resources,
+and prompts.
 
 ## Install
 
 ```bash
-bun add @pascal-app/mcp       # or: npm i @pascal-app/mcp
+bun add @pascal-app/mcp
 ```
 
 `@pascal-app/core` is a peer dependency; Bun workspaces resolve it automatically.
+The MCP CLI is intended to run with Bun. When the storage package is consumed by
+the Next.js editor server, it opens the same local database through Node's
+built-in SQLite driver.
 
 ## Quick start
 
 Launch the server over stdio in one line:
 
 ```bash
-bunx pascal-mcp           # or: npx pascal-mcp
+bunx pascal-mcp
 ```
 
 Load an initial scene from disk:
@@ -35,6 +39,29 @@ Expose it as HTTP for remote hosts:
 pascal-mcp --http --port 8787
 ```
 
+## Local scene storage
+
+Scenes saved through MCP are stored in a local SQLite database:
+
+```text
+~/.pascal/data/pascal.db
+```
+
+Set `PASCAL_DATA_DIR` when you want the MCP server and the running editor to
+share a different directory, or `PASCAL_DB_PATH` when you need an exact database
+file path. The store uses WAL mode and transactional version checks so separate
+local processes can save and open the same scene database.
+
+During workspace development, run both sides with the same data directory:
+
+```bash
+# Terminal 1: run the editor
+PASCAL_DATA_DIR="$HOME/.pascal/data" bun run dev
+
+# Terminal 2 or an MCP host: run the server
+PASCAL_DATA_DIR="$HOME/.pascal/data" bun packages/mcp/dist/bin/pascal-mcp.js
+```
+
 ## Claude Desktop config
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -45,14 +72,17 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
   "mcpServers": {
     "pascal": {
       "command": "bunx",
-      "args": ["pascal-mcp"]
+      "args": ["pascal-mcp"],
+      "env": {
+        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
+      }
     }
   }
 }
 ```
 
-If `bunx` isn't on your PATH, substitute `npx` or point `command` at the
-absolute path of the `pascal-mcp` binary inside your project.
+If `bunx` is not on your PATH, point `command` at the absolute path to `bun`
+and pass the built `dist/bin/pascal-mcp.js` file as the first arg.
 
 ## Claude Code config
 
@@ -69,10 +99,58 @@ Or add to `.mcp.json` at the repo root:
   "mcpServers": {
     "pascal": {
       "command": "bunx",
-      "args": ["pascal-mcp"]
+      "args": ["pascal-mcp"],
+      "env": {
+        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
+      }
     }
   }
 }
+```
+
+For local workspace testing before publish, build first and point Claude Code at
+the built binary:
+
+```json
+{
+  "mcpServers": {
+    "pascal": {
+      "command": "bun",
+      "args": ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"],
+      "env": {
+        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
+      }
+    }
+  }
+}
+```
+
+## Codex CLI config
+
+Via the CLI:
+
+```bash
+codex mcp add pascal --env PASCAL_DATA_DIR="$HOME/.pascal/data" -- bunx pascal-mcp
+```
+
+For local workspace testing before publish:
+
+```bash
+bun run --cwd packages/mcp build
+codex mcp add pascal-dev \
+  --env PASCAL_DATA_DIR="$HOME/.pascal/data" \
+  -- bun "$PWD/packages/mcp/dist/bin/pascal-mcp.js"
+```
+
+This writes an entry like this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.pascal-dev]
+command = "bun"
+args = ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"]
+
+[mcp_servers.pascal-dev.env]
+PASCAL_DATA_DIR = "/Users/you/.pascal/data"
 ```
 
 ## Cursor config
@@ -84,7 +162,10 @@ In Cursor settings (`settings.json`):
   "mcp.servers": {
     "pascal": {
       "command": "bunx",
-      "args": ["pascal-mcp"]
+      "args": ["pascal-mcp"],
+      "env": {
+        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
+      }
     }
   }
 }
@@ -92,7 +173,7 @@ In Cursor settings (`settings.json`):
 
 ## Programmatic use
 
-Embed the server in your own Node process using the in-memory transport. The
+Embed the server in your own Bun process using the in-memory transport. The
 example below runs a full client/server pair inside a single script — useful
 for agent frameworks and tests.
 

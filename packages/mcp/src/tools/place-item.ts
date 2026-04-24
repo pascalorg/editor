@@ -84,7 +84,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneBridge): void 
           : {}
 
       const item = ItemNode.parse({
-        position,
+        position: position as [number, number, number],
         rotation: [0, rotation ?? 0, 0],
         asset: baseAsset,
         ...wallExtras,

@@ -2,7 +2,7 @@
  * Programmatic `@pascal-app/mcp` usage.
  *
  * Runs a full MCP client/server pair over the in-memory transport inside a
- * single Node process. Useful for agent frameworks and tests that want to
+ * single Bun process. Useful for agent frameworks and tests that want to
  * drive Pascal without spawning a subprocess.
  *
  * Compile with the package's `tsc --build`, or run directly with Bun:
