@@ -13,8 +13,8 @@ const port = 3002
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 
-const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
-const subClient = pubClient.duplicate()
+const pubClient = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null
+const subClient = pubClient ? pubClient.duplicate() : null
 
 // In-memory store for Yjs documents
 const docs = new Map<string, Y.Doc>()
@@ -33,7 +33,12 @@ app.prepare().then(() => {
     maxHttpBufferSize: 1e8 // 100MB for large scene syncs
   })
 
-  io.adapter(createAdapter(pubClient, subClient))
+  if (pubClient && subClient) {
+    io.adapter(createAdapter(pubClient, subClient))
+    console.log('[Socket.io] Redis adapter enabled')
+  } else {
+    console.log('[Socket.io] Redis adapter disabled (standard in-memory mode)')
+  }
 
   io.on('connection', (socket) => {
     let currentProjectId: string | null = null

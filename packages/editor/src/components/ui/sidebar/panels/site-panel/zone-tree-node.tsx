@@ -27,7 +27,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
-  const handleClick = useCallback(() => setSelection({ zoneId: nodeId }), [nodeId, setSelection])
+  const handleClick = useCallback(() => setSelection({ zoneId: nodeId as any }), [nodeId, setSelection])
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
   const handleMouseEnter = useCallback(() => setHoveredId(nodeId), [nodeId, setHoveredId])
   const handleMouseLeave = useCallback(() => setHoveredId(null), [setHoveredId])

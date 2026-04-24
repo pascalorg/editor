@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e ./.env.local --override -- next dev --port 3002",
+    "dev": "dotenv -e ./.env.local --override -- bun server.ts",
     "build": "dotenv -e ./.env.local --override -- next build",
     "start": "next start",
     "lint": "biome lint",
