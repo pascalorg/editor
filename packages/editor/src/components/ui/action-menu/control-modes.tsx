@@ -64,7 +64,7 @@ const controls: ControlConfig[] = [
   },
   {
     id: 'material-paint',
-    iconifyIcon: 'mdi:format-color-fill',
+    imageSrc: '/icons/paint.png',
     label: 'Material Paint',
     shortcut: 'P',
     color: 'hover:bg-amber-500/20 hover:text-amber-400',
