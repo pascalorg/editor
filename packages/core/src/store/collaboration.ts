@@ -22,22 +22,17 @@ export function bindSceneStoreToYjs(doc: Y.Doc) {
     if (isRemoteUpdate) return
     isRemoteUpdate = true
 
+    console.log('[Yjs -> Zustand] Syncing updates from Yjs to store')
     const nodes = ynodes.toJSON() as Record<AnyNodeId, AnyNode>
     const rootNodeIds = yrootIds.toArray()
-    // Collections might need mapping if we want to be thorough
     const collections = ycollections.toJSON() as Record<CollectionId, Collection>
 
-    // Update Zustand state
-    // We use setScene but we might want to extend SceneState with a more 
-    // fine-grained "applyRemoteUpdate" to avoid clearing dirty sets unnecessarily
     useScene.setState({ 
       nodes, 
       rootNodeIds,
       collections 
     })
 
-    // Mark nodes as dirty for the physics/wall systems
-    // In a production app, we would only mark nodes that actually changed in Yjs
     Object.keys(nodes).forEach(id => useScene.getState().markDirty(id as AnyNodeId))
 
     isRemoteUpdate = false
@@ -59,7 +54,7 @@ export function bindSceneStoreToYjs(doc: Y.Doc) {
     doc.transact(() => {
       // 1. Sync Nodes
       if (state.nodes !== lastNodes) {
-        // Detect additions/updates
+        console.log('[Zustand -> Yjs] Syncing node changes to Yjs')
         for (const [id, node] of Object.entries(state.nodes)) {
           if (lastNodes[id as AnyNodeId] !== node) {
             ynodes.set(id, node)

@@ -49,22 +49,30 @@ export function YjsCollaborationProvider({
     const unbind = bindSceneStoreToYjs(doc)
 
     // 2. Handle Socket.io Transport for Yjs
-    const onSyncStep1 = (stateVector: Uint8Array) => {
-      // Server sent its state vector, client should send missing updates
-      // This implementation is a bit simplified, usually it's a handshake
-      socket.emit('yjs-sync-step-1', stateVector)
+    const onSyncStep1 = (serverStateVector: Uint8Array) => {
+      console.log('[Collaboration] Received sync-step-1 from server')
+      
+      // A. Send client's missing data to the server
+      const clientUpdate = Y.encodeStateAsUpdate(doc, new Uint8Array(serverStateVector))
+      socket.emit('yjs-update', clientUpdate)
+
+      // B. Ask server for missing data by sending client's state vector
+      const clientStateVector = Y.encodeStateVector(doc)
+      socket.emit('yjs-sync-step-1', clientStateVector)
     }
 
     const onSyncStep2 = (update: Uint8Array) => {
-      Y.applyUpdate(doc, update, 'remote')
+      console.log('[Collaboration] Received sync-step-2 (initial state) from server')
+      Y.applyUpdate(doc, new Uint8Array(update), 'remote')
     }
 
     const onUpdate = (update: Uint8Array) => {
-      Y.applyUpdate(doc, update, 'remote')
+      console.log('[Collaboration] Received real-time update from server')
+      Y.applyUpdate(doc, new Uint8Array(update), 'remote')
     }
 
     const onAwarenessUpdate = (update: Uint8Array) => {
-      AwarenessProtocol.applyAwarenessUpdate(awareness, update, 'remote')
+      AwarenessProtocol.applyAwarenessUpdate(awareness, new Uint8Array(update), 'remote')
     }
 
     socket.on('yjs-sync-step-1', onSyncStep1)
@@ -75,6 +83,7 @@ export function YjsCollaborationProvider({
     // Send local updates to server
     doc.on('update', (update, origin) => {
       if (origin !== 'remote') {
+        console.log('[Collaboration] Sending local update to server')
         socket.emit('yjs-update', update)
       }
     })
