@@ -89,7 +89,7 @@ const PostProcessingPasses = ({
 }: {
   hoverStyles?: HoverStyles
 }) => {
-  const { gl: renderer, scene, camera } = useThree()
+  const { gl: renderer, invalidate, scene, camera } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
@@ -155,6 +155,7 @@ const PostProcessingPasses = ({
     hoverHiddenColor.value.setHex(style.hiddenColor)
     hoverStrength.value = style.strength
     hoverPulseMix.value = style.pulse ? 0 : 1
+    invalidate()
   }, [
     hoverHiddenColor,
     hoverHighlightMode,
@@ -162,6 +163,7 @@ const PostProcessingPasses = ({
     hoverStrength,
     hoverStyles,
     hoverVisibleColor,
+    invalidate,
   ])
 
   // Build / rebuild the post-processing pipeline
