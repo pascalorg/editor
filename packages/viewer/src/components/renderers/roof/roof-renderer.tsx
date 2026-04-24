@@ -14,11 +14,6 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
 
   const handlers = useNodeEvents(node, 'roof')
   const debugColors = useViewer((s) => s.debugColors)
-  const materialPreview = useViewer((state) =>
-    state.materialPreview?.target === 'roof' && state.materialPreview.nodeId === node.id
-      ? state.materialPreview
-      : null,
-  )
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
@@ -29,33 +24,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     return geometry
   }, [])
 
-  const previewNode =
-    materialPreview?.role === 'top'
-      ? {
-          ...node,
-          topMaterial: materialPreview.material,
-          topMaterialPreset: materialPreview.materialPreset,
-          material: undefined,
-          materialPreset: undefined,
-        }
-      : materialPreview?.role === 'edge'
-        ? {
-            ...node,
-            edgeMaterial: materialPreview.material,
-            edgeMaterialPreset: materialPreview.materialPreset,
-            material: undefined,
-            materialPreset: undefined,
-          }
-        : materialPreview?.role === 'wall'
-          ? {
-              ...node,
-              wallMaterial: materialPreview.material,
-              wallMaterialPreset: materialPreview.materialPreset,
-              material: undefined,
-              materialPreset: undefined,
-            }
-          : node
-  const customMaterial = useMemo(() => getRoofMaterialArray(previewNode), [previewNode])
+  const customMaterial = useMemo(() => getRoofMaterialArray(node), [node])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 

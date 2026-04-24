@@ -3,10 +3,6 @@ import type {
   BaseNode,
   BuildingNode,
   LevelNode,
-  MaterialSchema,
-  RoofSurfaceMaterialRole,
-  StairSurfaceMaterialRole,
-  WallSurfaceSide,
   ZoneNode,
 } from '@pascal-app/core'
 import type { Object3D } from 'three'
@@ -20,40 +16,12 @@ type Outliner = {
   selectedObjects: Object3D[]
   hoveredObjects: Object3D[]
 }
-type MaterialPreview = {
-  nodeId: string
-  target: 'wall'
-  role: WallSurfaceSide
-  material?: MaterialSchema
-  materialPreset?: string
-} | {
-  nodeId: string
-  target: 'roof'
-  role: RoofSurfaceMaterialRole
-  material?: MaterialSchema
-  materialPreset?: string
-} | {
-  nodeId: string
-  target: 'stair'
-  role: StairSurfaceMaterialRole
-  material?: MaterialSchema
-  materialPreset?: string
-} | {
-  nodeId: string
-  target: 'fence' | 'slab' | 'ceiling'
-  role: 'surface'
-  material?: MaterialSchema
-  materialPreset?: string
-} | null
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
-  materialPreview: MaterialPreview
-  setMaterialPreview: (preview: MaterialPreview) => void
-  clearMaterialPreview: () => void
-  hoverHighlightMode: 'default' | 'delete' | 'paint-ready' | 'paint-disabled'
-  setHoverHighlightMode: (mode: 'default' | 'delete' | 'paint-ready' | 'paint-disabled') => void
+  hoverHighlightMode: string
+  setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   cameraMode: 'perspective' | 'orthographic'

@@ -26,7 +26,7 @@ import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
-import PostProcessing from './post-processing'
+import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
@@ -101,12 +101,14 @@ function GPUDeviceWatcher() {
 
 interface ViewerProps {
   children?: React.ReactNode
+  hoverStyles?: HoverStyles
   selectionManager?: 'default' | 'custom'
   perf?: boolean
 }
 
 const Viewer: React.FC<ViewerProps> = ({
   children,
+  hoverStyles = DEFAULT_HOVER_STYLES,
   selectionManager = 'default',
   perf = false,
 }) => {
@@ -165,7 +167,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <WallSystem />
       <WindowSystem />
       <ZoneSystem />
-      <PostProcessing />
+      <PostProcessing hoverStyles={hoverStyles} />
       {/* <DebugRenderer /> */}
       <GPUDeviceWatcher />
 

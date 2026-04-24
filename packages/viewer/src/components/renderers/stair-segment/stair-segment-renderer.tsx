@@ -8,7 +8,6 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import useViewer from '../../../store/use-viewer'
 import { getStraightStairSegmentBodyMaterials } from '../../../systems/stair/stair-materials'
 
 export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
@@ -25,42 +24,10 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined)
     : undefined
-  const materialPreview = useViewer((state) =>
-    state.materialPreview?.target === 'stair' && state.materialPreview.nodeId === parentNode?.id
-      ? state.materialPreview
-      : null,
+  const material = useMemo(
+    () => getStraightStairSegmentBodyMaterials(node, parentNode),
+    [node, parentNode],
   )
-  const previewParentNode = !parentNode
-    ? undefined
-    : materialPreview?.role === 'railing'
-      ? {
-          ...parentNode,
-          railingMaterial: materialPreview.material,
-          railingMaterialPreset: materialPreview.materialPreset,
-          material: undefined,
-          materialPreset: undefined,
-        }
-      : materialPreview?.role === 'tread'
-        ? {
-            ...parentNode,
-            treadMaterial: materialPreview.material,
-            treadMaterialPreset: materialPreview.materialPreset,
-            material: undefined,
-            materialPreset: undefined,
-          }
-        : materialPreview?.role === 'side'
-          ? {
-              ...parentNode,
-              sideMaterial: materialPreview.material,
-              sideMaterialPreset: materialPreview.materialPreset,
-              material: undefined,
-              materialPreset: undefined,
-            }
-          : parentNode
-
-  const material = useMemo(() => {
-    return getStraightStairSegmentBodyMaterials(node, previewParentNode)
-  }, [node, previewParentNode])
 
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()

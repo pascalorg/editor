@@ -13,7 +13,6 @@ import {
   createMaterialFromPresetRef,
   DEFAULT_STAIR_MATERIAL,
 } from '../../../lib/materials'
-import useViewer from '../../../store/use-viewer'
 import {
   getStairBodyMaterials,
   getStairRailingMaterial,
@@ -62,55 +61,24 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair')
-  const materialPreview = useViewer((state) =>
-    state.materialPreview?.target === 'stair' && state.materialPreview.nodeId === node.id
-      ? state.materialPreview
-      : null,
-  )
-  const previewNode =
-    materialPreview?.role === 'railing'
-      ? {
-          ...node,
-          railingMaterial: materialPreview.material,
-          railingMaterialPreset: materialPreview.materialPreset,
-          material: undefined,
-          materialPreset: undefined,
-        }
-      : materialPreview?.role === 'tread'
-        ? {
-            ...node,
-            treadMaterial: materialPreview.material,
-            treadMaterialPreset: materialPreview.materialPreset,
-            material: undefined,
-            materialPreset: undefined,
-          }
-        : materialPreview?.role === 'side'
-          ? {
-              ...node,
-              sideMaterial: materialPreview.material,
-              sideMaterialPreset: materialPreview.materialPreset,
-              material: undefined,
-              materialPreset: undefined,
-            }
-          : node
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(previewNode.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
     if (presetMaterial) return presetMaterial
-    const mat = previewNode.material
+    const mat = node.material
     if (!mat) return DEFAULT_STAIR_MATERIAL
     return createMaterial(mat)
   }, [
-    previewNode.materialPreset,
-    previewNode.material,
-    previewNode.material?.preset,
-    previewNode.material?.properties,
-    previewNode.material?.texture,
+    node.materialPreset,
+    node.material,
+    node.material?.preset,
+    node.material?.properties,
+    node.material?.texture,
   ])
 
-  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(previewNode), [previewNode])
+  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node), [node])
 
-  const railingMaterial = useMemo(() => getStairRailingMaterial(previewNode), [previewNode])
+  const railingMaterial = useMemo(() => getStairRailingMaterial(node), [node])
 
   const straightPlaceholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()

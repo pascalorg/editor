@@ -7,7 +7,7 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import {
   memo,
   type ReactNode,
@@ -75,6 +75,17 @@ const PAINT_CURSOR_BADGE_COLOR = '#f59e0b'
 const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
+const EDITOR_HOVER_STYLES: HoverStyles = {
+  default: { visibleColor: 0x00_aaff, hiddenColor: 0xf3_ff47, strength: 5, pulse: true },
+  delete: { visibleColor: 0xef_4444, hiddenColor: 0x99_1b1b, strength: 6, pulse: false },
+  'paint-ready': { visibleColor: 0xf5_9e0b, hiddenColor: 0xfd_e068, strength: 5, pulse: true },
+  'paint-disabled': {
+    visibleColor: 0x94_a3b8,
+    hiddenColor: 0x47_5569,
+    strength: 4,
+    pulse: false,
+  },
+}
 
 /**
  * Wire up module-level singletons (spatial grid, space detection, SFX) for
@@ -885,7 +896,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
             />
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-          <Viewer selectionManager={isFirstPersonMode ? 'default' : 'custom'}>
+          <Viewer
+            hoverStyles={EDITOR_HOVER_STYLES}
+            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+          >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={isLoading}
@@ -1017,7 +1031,7 @@ export default function Editor({
   const showLoader = isLoading || isSceneLoading
 
   const previewViewerContent = (
-    <Viewer selectionManager="default">
+    <Viewer hoverStyles={EDITOR_HOVER_STYLES} selectionManager="default">
       <ExportManager />
       <ViewerZoneSystem />
       <CeilingSystem />

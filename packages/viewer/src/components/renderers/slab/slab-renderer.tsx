@@ -8,7 +8,6 @@ import {
   createMaterial,
   DEFAULT_SLAB_MATERIAL,
 } from '../../../lib/materials'
-import useViewer from '../../../store/use-viewer'
 
 const slabMaterialCache = new Map<string, THREE.MeshStandardMaterial>()
 
@@ -52,15 +51,10 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   useRegistry(node.id, 'slab', ref)
 
   const handlers = useNodeEvents(node, 'slab')
-  const materialPreview = useViewer((state) =>
-    state.materialPreview?.target === 'slab' && state.materialPreview.nodeId === node.id
-      ? state.materialPreview
-      : null,
-  )
 
   const material = useMemo(() => {
-    const resolvedMaterial = materialPreview?.material ?? node.material
-    const resolvedMaterialPreset = materialPreview?.materialPreset ?? node.materialPreset
+    const resolvedMaterial = node.material
+    const resolvedMaterialPreset = node.materialPreset
     const cacheKey = JSON.stringify({
       material: resolvedMaterial ?? null,
       materialPreset: resolvedMaterialPreset ?? null,
@@ -76,11 +70,6 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
     node.material?.properties,
     node.material?.texture,
     node.materialPreset,
-    materialPreview?.material,
-    materialPreview?.material?.preset,
-    materialPreview?.material?.properties,
-    materialPreview?.material?.texture,
-    materialPreview?.materialPreset,
   ])
 
   return (

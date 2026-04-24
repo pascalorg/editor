@@ -8,7 +8,6 @@ import { useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
 
 const gridScale = 5
@@ -55,16 +54,10 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
 
   useRegistry(node.id, 'ceiling', ref)
   const handlers = useNodeEvents(node, 'ceiling')
-  const materialPreview = useViewer((state) =>
-    state.materialPreview?.target === 'ceiling' && state.materialPreview.nodeId === node.id
-      ? state.materialPreview
-      : null,
-  )
 
   const materials = useMemo(() => {
-    const preset = getMaterialPresetByRef(materialPreview?.materialPreset ?? node.materialPreset)
-    const props =
-      preset?.mapProperties ?? resolveMaterial(materialPreview?.material ?? node.material)
+    const preset = getMaterialPresetByRef(node.materialPreset)
+    const props = preset?.mapProperties ?? resolveMaterial(node.material)
     const color = props.color || '#999999'
     return getCeilingMaterials(color)
   }, [
@@ -73,11 +66,6 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     node.material?.preset,
     node.material?.properties,
     node.material?.texture,
-    materialPreview?.materialPreset,
-    materialPreview?.material,
-    materialPreview?.material?.preset,
-    materialPreview?.material?.properties,
-    materialPreview?.material?.texture,
   ])
 
   return (

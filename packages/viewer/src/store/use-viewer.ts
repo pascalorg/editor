@@ -1,17 +1,6 @@
 'use client'
 
-import type {
-  AnyNode,
-  AnyNodeId,
-  BaseNode,
-  BuildingNode,
-  LevelNode,
-  MaterialSchema,
-  RoofSurfaceMaterialRole,
-  StairSurfaceMaterialRole,
-  WallSurfaceSide,
-  ZoneNode,
-} from '@pascal-app/core'
+import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
 
 import { create } from 'zustand'
@@ -29,59 +18,12 @@ type Outliner = {
   hoveredObjects: Object3D[]
 }
 
-type MaterialPreview =
-  | {
-      nodeId: AnyNodeId
-      target: 'wall'
-      role: WallSurfaceSide
-      material?: MaterialSchema
-      materialPreset?: string
-    }
-  | {
-      nodeId: AnyNodeId
-      target: 'roof'
-      role: RoofSurfaceMaterialRole
-      material?: MaterialSchema
-      materialPreset?: string
-    }
-  | {
-      nodeId: AnyNodeId
-      target: 'stair'
-      role: StairSurfaceMaterialRole
-      material?: MaterialSchema
-      materialPreset?: string
-    }
-  | {
-      nodeId: AnyNodeId
-      target: 'fence' | 'slab' | 'ceiling'
-      role: 'surface'
-      material?: MaterialSchema
-      materialPreset?: string
-    }
-  | null
-
-function isSameMaterialPreview(left: MaterialPreview, right: MaterialPreview) {
-  if (left === right) return true
-  if (!left || !right) return false
-
-  return (
-    left.nodeId === right.nodeId &&
-    left.target === right.target &&
-    left.role === right.role &&
-    left.material === right.material &&
-    left.materialPreset === right.materialPreset
-  )
-}
-
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
-  materialPreview: MaterialPreview
-  setMaterialPreview: (preview: MaterialPreview) => void
-  clearMaterialPreview: () => void
-  hoverHighlightMode: 'default' | 'delete' | 'paint-ready' | 'paint-disabled'
-  setHoverHighlightMode: (mode: 'default' | 'delete' | 'paint-ready' | 'paint-disabled') => void
+  hoverHighlightMode: string
+  setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
 
@@ -142,15 +84,6 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
-      materialPreview: null,
-      setMaterialPreview: (materialPreview) =>
-        set((state) =>
-          isSameMaterialPreview(state.materialPreview, materialPreview)
-            ? state
-            : { materialPreview },
-        ),
-      clearMaterialPreview: () =>
-        set((state) => (state.materialPreview === null ? state : { materialPreview: null })),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
@@ -255,7 +188,6 @@ const useViewer = create<ViewerState>()(
             selectedIds: [],
           },
           previewSelectedIds: [],
-          materialPreview: null,
         }),
 
       outliner: { selectedObjects: [], hoveredObjects: [] },

@@ -25,20 +25,18 @@ import {
   type WallSurfaceSide,
 } from '@pascal-app/core'
 
-import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useRef } from 'react'
-import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
   applyMaterialPresetToMaterials,
   createMaterial,
   createMaterialFromPresetRef,
-} from '../../../../viewer/src/lib/materials'
-import { getRoofMaterialArray } from '../../../../viewer/src/systems/roof/roof-materials'
-import {
+  getRoofMaterialArray,
   getStairBodyMaterials,
   getStairRailingMaterial,
-} from '../../../../viewer/src/systems/stair/stair-materials'
-import { getVisibleWallMaterials } from '../../../../viewer/src/systems/wall/wall-materials'
+  getVisibleWallMaterials,
+  useViewer,
+} from '@pascal-app/viewer'
+import { useCallback, useEffect, useRef } from 'react'
+import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ActivePaintMaterial,
   buildRoofSurfaceMaterialPatch,
