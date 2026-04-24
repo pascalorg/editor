@@ -5,6 +5,7 @@ import localFont from 'next/font/local'
 import Script from 'next/script'
 import type { Metadata } from 'next'
 import './globals.css'
+import { Providers } from './Providers'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -81,7 +82,9 @@ export default function RootLayout({
         )}
       </head>
       <body className="font-sans">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         {process.env.NODE_ENV === 'development' && <Agentation />}
       </body>
     </html>
