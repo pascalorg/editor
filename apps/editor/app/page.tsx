@@ -69,7 +69,7 @@ export default function LandingPage() {
             <Link href="/apply" className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 text-[15px] shadow-xl shadow-indigo-500/25">
               Start Building Free <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link href="/editor" className="w-full sm:w-auto px-8 py-3.5 bg-white/[0.04] border border-white/10 text-white font-semibold rounded-xl hover:bg-white/[0.08] transition-all flex items-center justify-center gap-2 text-[15px]">
+            <Link href="/playground" className="w-full sm:w-auto px-8 py-3.5 bg-white/[0.04] border border-white/10 text-white font-semibold rounded-xl hover:bg-white/[0.08] transition-all flex items-center justify-center gap-2 text-[15px]">
               <Play className="w-4 h-4" /> Try the Playground
             </Link>
           </motion.div>
@@ -275,7 +275,7 @@ export default function LandingPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-12">
             {[
-              { title: 'Product', links: [{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Use Cases', href: '#use-cases' }, { label: 'Playground', href: '/editor' }] },
+              { title: 'Product', links: [{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Use Cases', href: '#use-cases' }, { label: 'Playground', href: '/playground' }] },
               { title: 'Resources', links: [{ label: 'Documentation', href: '#' }, { label: 'Community', href: '#' }, { label: 'Support', href: 'mailto:support@archly.cloud' }, { label: 'Changelog', href: '#' }] },
               { title: 'Legal', links: [{ label: 'Terms', href: '/terms' }, { label: 'Privacy', href: '/privacy' }, { label: 'Contact', href: 'mailto:support@archly.cloud' }] },
             ].map((col, i) => (

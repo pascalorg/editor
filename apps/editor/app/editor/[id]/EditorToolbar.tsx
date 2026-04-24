@@ -6,23 +6,9 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { LayoutDashboard, Ruler } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
-function BackToDashboardButton() {
-  const router = useRouter()
 
-  return (
-    <button
-      onClick={() => router.push('/dashboard/projects')}
-      title="Back to Dashboard"
-      type="button"
-      className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-background/90 px-2.5 text-xs font-medium text-muted-foreground/80 shadow-2xl backdrop-blur-md transition-colors hover:bg-white/8 hover:text-foreground/90"
-    >
-      <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
-      <span>Dashboard</span>
-    </button>
-  )
-}
 
 function UnitTogglePill() {
   const unit = useViewer((s: any) => s.unit)
@@ -61,18 +47,17 @@ function UnitTogglePill() {
 
 export function EditorToolbarLeft() {
   return (
-    <>
-      <BackToDashboardButton />
+    <div className="flex items-center gap-2 pointer-events-auto">
       <ViewerToolbarLeft />
-    </>
+    </div>
   )
 }
 
 export function EditorToolbarRight() {
   return (
-    <>
+    <div className="flex items-center gap-2 pointer-events-auto">
       <UnitTogglePill />
       <ViewerToolbarRight />
-    </>
+    </div>
   )
 }
