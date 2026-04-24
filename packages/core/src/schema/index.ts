@@ -24,6 +24,7 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export { ArchwayNode } from './nodes/archway'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
 export { DoorNode, DoorSegment } from './nodes/door'

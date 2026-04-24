@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  ArchwaySystem,
   CeilingSystem,
   DoorSystem,
   FenceSystem,
@@ -155,6 +156,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <ScanSystem />
       <WallCutout />
       {/* Core systems */}
+      <ArchwaySystem />
       <CeilingSystem />
       <DoorSystem />
       <FenceSystem />

@@ -27,6 +27,7 @@ export const tools: ToolConfig[] = [
   { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stairs' },
   { id: 'door', iconSrc: '/icons/door.png', label: 'Door' },
+  { id: 'archway', iconSrc: '/icons/door.png', label: 'Archway' },
   { id: 'window', iconSrc: '/icons/window.png', label: 'Window' },
   { id: 'fence', iconSrc: '/icons/fence.png', label: 'Fence' },
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },

@@ -1,4 +1,5 @@
 export type {
+  ArchwayEvent,
   BuildingEvent,
   CameraControlEvent,
   CeilingEvent,
@@ -65,6 +66,7 @@ export { FenceSystem } from './systems/fence/fence-system'
 export { clearSceneHistory, default as useScene, type SceneState } from './store/use-scene'
 export { bindSceneStoreToYjs } from './store/collaboration'
 
+export { ArchwaySystem } from './systems/archway/archway-system'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { DoorSystem } from './systems/door/door-system'
 export { ItemSystem } from './systems/item/item-system'

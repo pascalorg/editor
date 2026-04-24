@@ -1,6 +1,7 @@
 'use client'
 
 import { type AnyNode, useScene } from '@pascal-app/core'
+import { ArchwayRenderer } from './archway/archway-renderer'
 import { BuildingRenderer } from './building/building-renderer'
 import { CeilingRenderer } from './ceiling/ceiling-renderer'
 import { DoorRenderer } from './door/door-renderer'
@@ -36,6 +37,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
       {node.type === 'fence' && <FenceRenderer node={node} />}
       {node.type === 'door' && <DoorRenderer node={node} />}
       {node.type === 'window' && <WindowRenderer node={node} />}
+      {node.type === 'archway' && <ArchwayRenderer node={node} />}
       {node.type === 'zone' && <ZoneRenderer node={node} />}
       {node.type === 'roof' && <RoofRenderer node={node} />}
       {node.type === 'roof-segment' && <RoofSegmentRenderer node={node} />}
