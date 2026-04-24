@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type MaterialSchema,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofType,
@@ -15,7 +14,6 @@ import { useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -50,20 +48,6 @@ export function RoofSegmentPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const handleMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -321,15 +305,6 @@ export function RoofSegmentPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
-      </PanelSection>
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="roof-segment"
-          onChange={handleMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
       </PanelSection>
     </PanelWrapper>
   )

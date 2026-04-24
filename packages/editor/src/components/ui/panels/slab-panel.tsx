@@ -1,13 +1,12 @@
 'use client'
 
-import { type AnyNode, type MaterialSchema, type SlabNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -30,20 +29,6 @@ export function SlabPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleCustomMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -257,20 +242,9 @@ export function SlabPanel() {
           />
         </div>
       </PanelSection>
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="slab"
-          onChange={handleCustomMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
-      </PanelSection>
-      <PanelSection title="Actions">
-        <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-        </ActionGroup>
-      </PanelSection>
+      <ActionGroup>
+        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+      </ActionGroup>
     </PanelWrapper>
   )
 }

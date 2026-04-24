@@ -31,7 +31,14 @@ export const FenceRenderer = ({ node }: { node: FenceNode }) => {
   }, [node.id])
 
   return (
-    <mesh castShadow material={material} receiveShadow ref={ref} visible={node.visible} {...handlers}>
+    <mesh
+      castShadow
+      material={material}
+      receiveShadow
+      ref={ref}
+      visible={node.visible}
+      {...handlers}
+    >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
   )
