@@ -16,27 +16,22 @@ import {
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
-import { useFrame, useLoader, useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   type AnimationAction,
-  Box3,
   type Camera,
   Color,
   CylinderGeometry,
   DoubleSide,
   EdgesGeometry,
-  FileLoader,
   Group,
-  LineBasicMaterial,
   type Material,
   MathUtils,
   Mesh,
-  MeshBasicMaterial,
   Scene,
   Vector3,
 } from 'three'
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
@@ -621,43 +616,10 @@ const multiplyScales = (
   b: [number, number, number],
 ): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
-const REPAIR_ITEM_SHIELD_MESH_URL = '/meshes/scifi-shield/mesh_shield_1.obj'
-const REPAIR_ITEM_SHIELD_FADE_IN_MS = 1000
-const MOVE_ITEM_SHIELD_COLOR = '#52e8ff'
-const COPY_ITEM_SHIELD_COLOR = '#22c55e'
-const DELETE_ITEM_SHIELD_COLOR = '#ef4444'
-const MAINTENANCE_SHIELD_COLOR = '#c2bb00'
 const ITEM_CARRY_OVERLAY_COLOR = '#52e8ff'
 const ITEM_CARRY_OVERLAY_FILL_TRANSPARENCY_PERCENT = 95
 const ITEM_CARRY_OVERLAY_OUTLINE_THICKNESS = 0.002
-const REPAIR_ITEM_SHIELD_EDGE_COLOR_MULTIPLIER = 0.48
-const REPAIR_ITEM_SHIELD_OPACITY = 0.94
-const REPAIR_ITEM_SHIELD_SCALE_MULTIPLIER = 1.1
-const ITEM_ACTION_SHIELD_RADIUS_MULTIPLIER = 1.1
-const REPAIR_ITEM_SHIELD_SECONDARY_SCALE_MULTIPLIER = 1.03
-const REPAIR_ITEM_SHIELD_SPIN_SPEED = 0.336
-const REPAIR_ITEM_SHIELD_VERTICAL_OFFSET_MULTIPLIER = 0.5
-const REPAIR_ITEM_SHIELD_FULL_HEIGHT_RATIO = 0.79
-const REPAIR_ITEM_SHIELD_FADE_HEIGHT_RATIO = 0.93
 const ITEM_DELETE_VISIBILITY_EPSILON = 0.001
-
-const configureRepairShieldTextLoader = (loader: FileLoader<unknown>) => {
-  loader.setResponseType('text')
-}
-
-const stripObjLineRecords = (objSource: string) =>
-  objSource
-    .split(/\r?\n/)
-    .filter((line) => !line.startsWith('l '))
-    .join('\n')
-
-const stripObjFaceRecords = (objSource: string) =>
-  objSource
-    .split(/\r?\n/)
-    .filter((line) => !line.startsWith('f '))
-    .join('\n')
-
-useLoader.preload(FileLoader, REPAIR_ITEM_SHIELD_MESH_URL, configureRepairShieldTextLoader)
 
 function createDeleteFadeMaterial(material: Material): Material {
   const nextMaterial = material.clone() as FadeMaterial
@@ -901,241 +863,6 @@ const ItemCarryOverlay = ({
   return <primitive object={overlayRoot} visible={visible} />
 }
 
-const ItemActionShield = ({
-  activatedAtMs,
-  assetOffset,
-  assetRotation,
-  color,
-  modelScene,
-  node,
-  opacityMultiplier = 1,
-  radiusMultiplier = ITEM_ACTION_SHIELD_RADIUS_MULTIPLIER,
-  renderScale,
-}: {
-  activatedAtMs: number
-  assetOffset: [number, number, number]
-  assetRotation: [number, number, number]
-  color: string
-  modelScene: Group
-  node: ItemNode
-  opacityMultiplier?: number
-  radiusMultiplier?: number
-  renderScale: [number, number, number]
-}) => {
-  const [fallbackWidth, fallbackHeight, fallbackDepth] = getScaledDimensions(node)
-  const shieldText = useLoader(
-    FileLoader,
-    REPAIR_ITEM_SHIELD_MESH_URL,
-    configureRepairShieldTextLoader,
-  ) as string
-  const { shieldEdgeObject, shieldFaceObject } = useMemo(
-    () => ({
-      shieldEdgeObject: new OBJLoader().parse(stripObjFaceRecords(shieldText)) as Group,
-      shieldFaceObject: new OBJLoader().parse(stripObjLineRecords(shieldText)) as Group,
-    }),
-    [shieldText],
-  )
-  const fadeStartedAtMsRef = useRef<number | null>(null)
-  const primaryShieldGroupRef = useRef<Group>(null)
-  const secondaryShieldGroupRef = useRef<Group>(null)
-  const lineMaterial = useMemo(() => {
-    const nextMaterial = new LineBasicMaterial({
-      color: new Color(color).multiplyScalar(REPAIR_ITEM_SHIELD_EDGE_COLOR_MULTIPLIER),
-      depthTest: true,
-      depthWrite: false,
-      opacity: 0,
-      toneMapped: false,
-      transparent: true,
-    })
-    return nextMaterial
-  }, [color])
-  const meshMaterial = useMemo(() => {
-    const nextMaterial = new MeshBasicMaterial({
-      color,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-      opacity: 0,
-      side: DoubleSide,
-      toneMapped: false,
-      transparent: true,
-    })
-    return nextMaterial
-  }, [color])
-  const {
-    baseRadius,
-    primaryShieldModel,
-    secondaryShieldModel,
-    shieldCenter,
-    shieldHeight,
-    targetRadius,
-  } = useMemo(() => {
-    const boundsSource = shieldFaceObject.clone(true) as Group
-    const bounds = new Box3().setFromObject(boundsSource)
-    const center = bounds.getCenter(new Vector3())
-    const size = bounds.getSize(new Vector3())
-
-    const modelBoundsSource = modelScene.clone(true) as Group
-    modelBoundsSource.position.set(assetOffset[0], assetOffset[1], assetOffset[2])
-    modelBoundsSource.rotation.set(assetRotation[0], assetRotation[1], assetRotation[2])
-    modelBoundsSource.scale.set(renderScale[0], renderScale[1], renderScale[2])
-
-    const modelBounds = new Box3().setFromObject(modelBoundsSource)
-    const modelCenter = modelBounds.getCenter(new Vector3())
-    const modelSize = modelBounds.getSize(new Vector3())
-    const modelHasBounds = !modelBounds.isEmpty()
-    const fallbackRadius = Math.max(fallbackWidth, fallbackHeight, fallbackDepth) / 2
-    const fittedRadius = modelHasBounds
-      ? Math.max(modelSize.x, modelSize.y, modelSize.z) / 2
-      : fallbackRadius
-    const fittedCenter = modelHasBounds
-      ? modelCenter
-      : new Vector3(assetOffset[0], assetOffset[1] + fallbackHeight / 2, assetOffset[2])
-
-    const materializeShieldModel = () => {
-      const clone = new Group()
-      const faceClone = shieldFaceObject.clone(true) as Group
-      faceClone.position.sub(center)
-      faceClone.traverse((child) => {
-        if (!(child as Mesh).isMesh) {
-          return
-        }
-
-        const mesh = child as Mesh
-        mesh.castShadow = false
-        mesh.frustumCulled = false
-        mesh.material = meshMaterial
-        mesh.receiveShadow = false
-        mesh.renderOrder = 3
-        mesh.userData.pascalExcludeFromOutline = true
-      })
-      clone.add(faceClone)
-
-      const edgeClone = shieldEdgeObject.clone(true) as Group
-      edgeClone.position.sub(center)
-      edgeClone.traverse((child) => {
-        const lineChild = child as typeof child & {
-          isLine?: boolean
-          isLineLoop?: boolean
-          isLineSegments?: boolean
-          material?: unknown
-        }
-        if (!(lineChild.isLine || lineChild.isLineLoop || lineChild.isLineSegments)) {
-          return
-        }
-
-        child.frustumCulled = false
-        child.renderOrder = 4
-        child.userData.pascalExcludeFromOutline = true
-        lineChild.material = lineMaterial
-      })
-      clone.add(edgeClone)
-
-      return clone
-    }
-
-    return {
-      baseRadius: Math.max(size.x, size.y, size.z) / 2,
-      primaryShieldModel: materializeShieldModel(),
-      secondaryShieldModel: materializeShieldModel(),
-      shieldCenter: [fittedCenter.x, fittedCenter.y, fittedCenter.z] as [number, number, number],
-      shieldHeight: size.y,
-      targetRadius: fittedRadius * REPAIR_ITEM_SHIELD_SCALE_MULTIPLIER,
-    }
-  }, [
-    assetOffset,
-    assetRotation,
-    fallbackDepth,
-    fallbackHeight,
-    fallbackWidth,
-    lineMaterial,
-    meshMaterial,
-    modelScene,
-    renderScale,
-    shieldEdgeObject,
-    shieldFaceObject,
-  ])
-
-  useEffect(() => {
-    fadeStartedAtMsRef.current =
-      activatedAtMs > 0
-        ? activatedAtMs
-        : typeof performance !== 'undefined'
-          ? performance.now()
-          : Date.now()
-  }, [activatedAtMs])
-
-  useFrame((_, delta) => {
-    const fadeStartedAtMs = fadeStartedAtMsRef.current
-    if (fadeStartedAtMs === null) {
-      return
-    }
-
-    const fadeProgress = MathUtils.clamp(
-      ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - fadeStartedAtMs) /
-        REPAIR_ITEM_SHIELD_FADE_IN_MS,
-      0,
-      1,
-    )
-    const nextVisibility = 1 - (1 - fadeProgress) ** 2
-    lineMaterial.opacity = REPAIR_ITEM_SHIELD_OPACITY * opacityMultiplier * nextVisibility
-    meshMaterial.opacity = REPAIR_ITEM_SHIELD_OPACITY * opacityMultiplier * nextVisibility
-
-    if (primaryShieldGroupRef.current) {
-      primaryShieldGroupRef.current.rotation.y += delta * REPAIR_ITEM_SHIELD_SPIN_SPEED
-    }
-
-    if (secondaryShieldGroupRef.current) {
-      secondaryShieldGroupRef.current.rotation.y -= delta * REPAIR_ITEM_SHIELD_SPIN_SPEED
-    }
-  })
-
-  useEffect(() => {
-    return () => {
-      lineMaterial.dispose()
-      meshMaterial.dispose()
-    }
-  }, [lineMaterial, meshMaterial])
-
-  const shieldScale = baseRadius > Number.EPSILON ? targetRadius / baseRadius : 1
-  const primaryShieldScale: [number, number, number] = [
-    shieldScale * radiusMultiplier,
-    shieldScale,
-    shieldScale * radiusMultiplier,
-  ]
-  const secondaryShieldScale: [number, number, number] = [
-    shieldScale * radiusMultiplier * REPAIR_ITEM_SHIELD_SECONDARY_SCALE_MULTIPLIER,
-    shieldScale * REPAIR_ITEM_SHIELD_SECONDARY_SCALE_MULTIPLIER,
-    shieldScale * radiusMultiplier * REPAIR_ITEM_SHIELD_SECONDARY_SCALE_MULTIPLIER,
-  ]
-  const primaryShieldYOffset =
-    shieldHeight * shieldScale * REPAIR_ITEM_SHIELD_VERTICAL_OFFSET_MULTIPLIER
-  const secondaryShieldYOffset =
-    shieldHeight *
-    shieldScale *
-    REPAIR_ITEM_SHIELD_SECONDARY_SCALE_MULTIPLIER *
-    REPAIR_ITEM_SHIELD_VERTICAL_OFFSET_MULTIPLIER
-
-  return (
-    <group userData={{ pascalExcludeFromToolConeTarget: true }}>
-      <group
-        position={[shieldCenter[0], shieldCenter[1] + primaryShieldYOffset, shieldCenter[2]]}
-        ref={primaryShieldGroupRef}
-        scale={primaryShieldScale}
-      >
-        <primitive object={primaryShieldModel} />
-      </group>
-      <group
-        position={[shieldCenter[0], shieldCenter[1] - secondaryShieldYOffset, shieldCenter[2]]}
-        ref={secondaryShieldGroupRef}
-        scale={secondaryShieldScale}
-      >
-        <primitive object={secondaryShieldModel} />
-      </group>
-    </group>
-  )
-}
-
 const ModelRenderer = ({
   node,
   visualStateOverride,
@@ -1155,18 +882,8 @@ const ModelRenderer = ({
   const handlers = useNodeEvents(node, 'item')
   const visualMaterialsRef = useRef(new Map<Mesh, ItemMoveVisualMaterialEntry>())
   const deleteFadeMaterialsRef = useRef(new Map<Mesh, ItemDeleteFadeMaterialEntry>())
-  const repairShieldActivatedAtMs = useViewerRuntimeState(
-    (state) => state.repairShieldActivations[node.id]?.startedAtMs ?? null,
-  )
   const itemDeleteActivation = useViewerRuntimeState(
     (state) => state.itemDeleteActivations[node.id] ?? null,
-  )
-  const queuedActionShieldKind = useViewerRuntimeState(
-    (state) => state.actionShieldKinds[node.id] ?? null,
-  )
-  const showActionShields = useViewerRuntimeState((state) => state.showActionShields)
-  const actionShieldOpacity = useViewerRuntimeState(
-    (state) => state.actionShieldOpacities[node.id] ?? 1,
   )
   const carryOverlayVisible =
     moveVisualState === 'carried' ||
@@ -1174,34 +891,10 @@ const ModelRenderer = ({
     moveVisualState === 'destination-ghost' ||
     moveVisualState === 'destination-preview' ||
     moveVisualState === 'source-pending'
-  const moveVisualMaterialKind: MaterializedItemMoveVisualKind | null = null
-  const fallbackActionShieldKind =
-    itemDeleteActivation !== null
-      ? 'delete'
-      : repairShieldActivatedAtMs !== null
-        ? 'repair'
-        : moveVisualState === 'copy-source-pending'
-          ? 'copy'
-          : moveVisualState === 'source-pending'
-            ? 'move'
-            : null
-  const actionShieldKind = queuedActionShieldKind ?? fallbackActionShieldKind
-  const actionShieldColor =
-    actionShieldKind === 'copy'
-      ? COPY_ITEM_SHIELD_COLOR
-      : actionShieldKind === 'delete'
-        ? DELETE_ITEM_SHIELD_COLOR
-        : actionShieldKind === 'repair'
-          ? MAINTENANCE_SHIELD_COLOR
-          : actionShieldKind === 'move'
-            ? MOVE_ITEM_SHIELD_COLOR
-            : null
-  const actionShieldActivatedAtMs =
-    actionShieldKind === 'delete'
-      ? itemDeleteActivation?.startedAtMs ?? 0
-      : actionShieldKind === 'repair'
-        ? repairShieldActivatedAtMs ?? 0
-        : 0
+  const moveVisualMaterialKind: MaterializedItemMoveVisualKind | null =
+    moveVisualState === 'destination-ghost' || moveVisualState === 'destination-preview'
+      ? moveVisualState
+      : null
   const deleteFadeStartedAtMs = itemDeleteActivation?.fadeStartedAtMs ?? null
 
   if (nodes.cutout) {
@@ -1570,7 +1263,6 @@ const ModelRenderer = ({
     for (const entry of deleteFadeMaterialsRef.current.values()) {
       applyDeleteFadeOpacity(entry.fadeMaterial, fadeAlpha)
     }
-
   })
 
   return (
@@ -1590,18 +1282,6 @@ const ModelRenderer = ({
           modelScene={scene}
           renderScale={renderScale}
           visible={carryOverlayVisible}
-        />
-      )}
-      {showActionShields && actionShieldKind !== null && actionShieldColor !== null && (
-        <ItemActionShield
-          activatedAtMs={actionShieldActivatedAtMs}
-          assetOffset={node.asset.offset}
-          assetRotation={node.asset.rotation}
-          color={actionShieldColor}
-          modelScene={scene}
-          node={node}
-          opacityMultiplier={actionShieldOpacity}
-          renderScale={renderScale}
         />
       )}
       {animations.length > 0 && (

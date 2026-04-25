@@ -136,6 +136,39 @@ function cloneNavigationItemMoveRequest(
   }
 }
 
+function isNavigationItemMoveCopyRequest(request: NavigationItemMoveRequest) {
+  return Boolean(request.visualItemId && request.visualItemId !== request.itemId)
+}
+
+function getNavigationItemMoveQueueKey(request: NavigationItemMoveRequest) {
+  if (!isNavigationItemMoveCopyRequest(request)) {
+    return `move:${request.itemId}`
+  }
+
+  return `copy:${request.itemId}:${request.targetPreviewItemId ?? request.visualItemId}`
+}
+
+function deriveActiveRequestsAfterQueueEdit(
+  taskQueue: NavigationQueuedTask[],
+  activeTaskIndex: number,
+  activeTaskId: string | null,
+  queueRestartToken: number,
+  shouldRestart: boolean,
+) {
+  if (shouldRestart) {
+    return deriveRestartedActiveRequests(taskQueue, queueRestartToken)
+  }
+
+  if (activeTaskId) {
+    const nextActiveTaskIndex = taskQueue.findIndex((task) => task.taskId === activeTaskId)
+    if (nextActiveTaskIndex >= 0) {
+      return deriveActiveRequests(taskQueue, nextActiveTaskIndex)
+    }
+  }
+
+  return deriveActiveRequests(taskQueue, activeTaskIndex)
+}
+
 function cloneNavigationItemRepairRequest(
   request: NavigationItemRepairRequest,
 ): NavigationItemRepairRequest {
@@ -243,6 +276,7 @@ type NavigationState = {
   activeTaskId: string | null
   activeTaskIndex: number
   advanceTaskQueue: () => NavigationTaskAdvanceResult
+  beginTaskLoopReset: () => number
   actorAvailable: boolean
   actorWorldPosition: [number, number, number] | null
   enabled: boolean
@@ -309,13 +343,20 @@ const useNavigation = create<NavigationState>((set) => ({
       const nextState = deriveAdvancedActiveRequests(state.taskQueue, normalizedTaskIndex)
       result.hasQueuedTask = nextState.taskQueue.length > 0
       result.wrappedToStart = wrappedToStart
-      return {
-        ...nextState,
-        taskLoopToken: wrappedToStart ? state.taskLoopToken + 1 : state.taskLoopToken,
-      }
+      return nextState
     })
 
     return result
+  },
+  beginTaskLoopReset: () => {
+    let nextTaskLoopToken = 0
+    set((state) => {
+      nextTaskLoopToken = state.taskLoopToken + 1
+      return {
+        taskLoopToken: nextTaskLoopToken,
+      }
+    })
+    return nextTaskLoopToken
   },
   actorAvailable: false,
   actorWorldPosition: null,
@@ -334,10 +375,7 @@ const useNavigation = create<NavigationState>((set) => ({
         return state
       }
 
-      return deriveRestartedActiveRequests(
-        nextTaskQueue,
-        state.queueRestartToken,
-      )
+      return deriveRestartedActiveRequests(nextTaskQueue, state.queueRestartToken)
     }),
   navigationClickSuppressedUntil: 0,
   queueRestartToken: 0,
@@ -348,9 +386,15 @@ const useNavigation = create<NavigationState>((set) => ({
         return state
       }
 
-      return deriveRestartedActiveRequests(
+      const removedActiveTask =
+        state.taskQueue[getNormalizedTaskIndex(state.taskQueue, state.activeTaskIndex)]?.taskId ===
+        taskId
+      return deriveActiveRequestsAfterQueueEdit(
         nextTaskQueue,
+        state.activeTaskIndex,
+        state.activeTaskId,
         state.queueRestartToken,
+        removedActiveTask,
       )
     }),
   robotMode: null,
@@ -372,6 +416,8 @@ const useNavigation = create<NavigationState>((set) => ({
     }),
   removeQueuedTasksForItem: (kind, itemId) =>
     set((state) => {
+      const activeTask =
+        state.taskQueue[getNormalizedTaskIndex(state.taskQueue, state.activeTaskIndex)] ?? null
       const nextTaskQueue = state.taskQueue.filter(
         (task) => !(task.kind === kind && task.request.itemId === itemId),
       )
@@ -379,9 +425,14 @@ const useNavigation = create<NavigationState>((set) => ({
         return state
       }
 
-      return deriveRestartedActiveRequests(
+      const removedActiveTask =
+        activeTask !== null && activeTask.kind === kind && activeTask.request.itemId === itemId
+      return deriveActiveRequestsAfterQueueEdit(
         nextTaskQueue,
+        state.activeTaskIndex,
+        state.activeTaskId,
         state.queueRestartToken,
+        removedActiveTask,
       )
     }),
   reorderQueuedTask: (taskId, targetTaskId) =>
@@ -396,10 +447,7 @@ const useNavigation = create<NavigationState>((set) => ({
         return state
       }
 
-      return deriveRestartedActiveRequests(
-        nextTaskQueue,
-        state.queueRestartToken,
-      )
+      return deriveRestartedActiveRequests(nextTaskQueue, state.queueRestartToken)
     }),
   requestItemDelete: (itemDeleteRequest) =>
     set((state) => {
@@ -421,22 +469,29 @@ const useNavigation = create<NavigationState>((set) => ({
           ...existingTask,
           request: cloneNavigationItemDeleteRequest(itemDeleteRequest),
         }
-        return deriveRestartedActiveRequests(
+        return deriveActiveRequestsAfterQueueEdit(
           nextTaskQueue,
+          state.activeTaskIndex,
+          state.activeTaskId,
           state.queueRestartToken,
+          existingTaskIndex === getNormalizedTaskIndex(state.taskQueue, state.activeTaskIndex),
         )
       }
 
-      return deriveRestartedActiveRequests(
-        [
-          ...state.taskQueue,
-          {
-            kind: 'delete',
-            request: cloneNavigationItemDeleteRequest(itemDeleteRequest),
-            taskId: createNavigationTaskId('delete'),
-          },
-        ],
+      const nextTaskQueue: NavigationQueuedTask[] = [
+        ...state.taskQueue,
+        {
+          kind: 'delete',
+          request: cloneNavigationItemDeleteRequest(itemDeleteRequest),
+          taskId: createNavigationTaskId('delete'),
+        },
+      ]
+      return deriveActiveRequestsAfterQueueEdit(
+        nextTaskQueue,
+        state.activeTaskIndex,
+        state.activeTaskId,
         state.queueRestartToken,
+        state.taskQueue.length === 0,
       )
     }),
   requestItemMove: (itemMoveRequest) =>
@@ -445,8 +500,11 @@ const useNavigation = create<NavigationState>((set) => ({
         return removeActiveTaskOfKind(state.taskQueue, state.activeTaskIndex, 'move') ?? state
       }
 
+      const nextMoveRequestKey = getNavigationItemMoveQueueKey(itemMoveRequest)
       const existingTaskIndex = state.taskQueue.findIndex(
-        (task) => task.kind === 'move' && task.request.itemId === itemMoveRequest.itemId,
+        (task) =>
+          task.kind === 'move' &&
+          getNavigationItemMoveQueueKey(task.request) === nextMoveRequestKey,
       )
       if (existingTaskIndex >= 0) {
         const nextTaskQueue = [...state.taskQueue]
@@ -459,22 +517,29 @@ const useNavigation = create<NavigationState>((set) => ({
           ...existingTask,
           request: cloneNavigationItemMoveRequest(itemMoveRequest),
         }
-        return deriveRestartedActiveRequests(
+        return deriveActiveRequestsAfterQueueEdit(
           nextTaskQueue,
+          state.activeTaskIndex,
+          state.activeTaskId,
           state.queueRestartToken,
+          existingTaskIndex === getNormalizedTaskIndex(state.taskQueue, state.activeTaskIndex),
         )
       }
 
-      return deriveRestartedActiveRequests(
-        [
-          ...state.taskQueue,
-          {
-            kind: 'move',
-            request: cloneNavigationItemMoveRequest(itemMoveRequest),
-            taskId: createNavigationTaskId('move'),
-          },
-        ],
+      const nextTaskQueue: NavigationQueuedTask[] = [
+        ...state.taskQueue,
+        {
+          kind: 'move',
+          request: cloneNavigationItemMoveRequest(itemMoveRequest),
+          taskId: createNavigationTaskId('move'),
+        },
+      ]
+      return deriveActiveRequestsAfterQueueEdit(
+        nextTaskQueue,
+        state.activeTaskIndex,
+        state.activeTaskId,
         state.queueRestartToken,
+        state.taskQueue.length === 0,
       )
     }),
   requestItemRepair: (itemRepairRequest) =>
@@ -497,22 +562,29 @@ const useNavigation = create<NavigationState>((set) => ({
           ...existingTask,
           request: cloneNavigationItemRepairRequest(itemRepairRequest),
         }
-        return deriveRestartedActiveRequests(
+        return deriveActiveRequestsAfterQueueEdit(
           nextTaskQueue,
+          state.activeTaskIndex,
+          state.activeTaskId,
           state.queueRestartToken,
+          existingTaskIndex === getNormalizedTaskIndex(state.taskQueue, state.activeTaskIndex),
         )
       }
 
-      return deriveRestartedActiveRequests(
-        [
-          ...state.taskQueue,
-          {
-            kind: 'repair',
-            request: cloneNavigationItemRepairRequest(itemRepairRequest),
-            taskId: createNavigationTaskId('repair'),
-          },
-        ],
+      const nextTaskQueue: NavigationQueuedTask[] = [
+        ...state.taskQueue,
+        {
+          kind: 'repair',
+          request: cloneNavigationItemRepairRequest(itemRepairRequest),
+          taskId: createNavigationTaskId('repair'),
+        },
+      ]
+      return deriveActiveRequestsAfterQueueEdit(
+        nextTaskQueue,
+        state.activeTaskIndex,
+        state.activeTaskId,
         state.queueRestartToken,
+        state.taskQueue.length === 0,
       )
     }),
   setActiveTask: (taskId) =>
@@ -529,7 +601,6 @@ const useNavigation = create<NavigationState>((set) => ({
   setEnabled: (enabled) =>
     set((state) => {
       const nextRobotMode = enabled ? (state.robotMode ?? 'task') : null
-      navigationVisualsStore.getState().setShowActionShields(false)
       return {
         enabled,
         followRobotEnabled: enabled ? state.followRobotEnabled : false,
@@ -543,7 +614,6 @@ const useNavigation = create<NavigationState>((set) => ({
         return state
       }
 
-      navigationVisualsStore.getState().setShowActionShields(false)
       return {
         enabled: robotMode !== null,
         followRobotEnabled: robotMode !== null ? state.followRobotEnabled : false,
@@ -592,7 +662,6 @@ export function requestNavigationItemDelete(node: ItemNode) {
   const editorState = useEditor.getState()
   const taskAlreadyAssigned =
     Boolean(navigationVisualsStore.getState().itemDeleteActivations[node.id]) ||
-    Boolean(navigationVisualsStore.getState().repairShieldActivations[node.id]) ||
     navigationState.taskQueue.some((task) => task.request.itemId === node.id)
 
   if (taskAlreadyAssigned) {
@@ -627,7 +696,6 @@ export function requestNavigationItemRepair(node: ItemNode) {
   const viewerState = useViewer.getState()
   const editorState = useEditor.getState()
   const taskAlreadyAssigned =
-    Boolean(navigationVisualsStore.getState().repairShieldActivations[node.id]) ||
     Boolean(navigationVisualsStore.getState().itemDeleteActivations[node.id]) ||
     navigationState.taskQueue.some((task) => task.request.itemId === node.id)
 
@@ -641,7 +709,6 @@ export function requestNavigationItemRepair(node: ItemNode) {
     return true
   }
 
-  navigationVisualsStore.getState().activateRepairShield(node.id)
   viewerState.setHoveredId(null)
   viewerState.setSelection({ selectedIds: [] })
   navigationState.requestItemRepair({

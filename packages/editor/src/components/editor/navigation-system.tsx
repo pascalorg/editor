@@ -22,19 +22,19 @@ import {
   AdditiveBlending,
   Box3,
   BufferGeometry,
-    CanvasTexture,
-    CatmullRomCurve3,
-    Color,
-    type Curve,
-    CurvePath,
-    DoubleSide,
-    FileLoader,
-    Float32BufferAttribute,
-    Group,
-    LineBasicMaterial,
-    LineCurve3,
-    type Material,
-    MathUtils,
+  CanvasTexture,
+  CatmullRomCurve3,
+  Color,
+  type Curve,
+  CurvePath,
+  DoubleSide,
+  FileLoader,
+  Float32BufferAttribute,
+  Group,
+  LineBasicMaterial,
+  LineCurve3,
+  type Material,
+  MathUtils,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -83,7 +83,6 @@ import {
   PASCAL_TRUCK_ENTRY_MAX_STEP_MS,
   PASCAL_TRUCK_ENTRY_REAR_EDGE_INSET,
   PASCAL_TRUCK_ENTRY_REAR_TRAVEL_DISTANCE,
-  PASCAL_TRUCK_ENTRY_RELEASE_BLEND_RESPONSE,
   PASCAL_TRUCK_ENTRY_REVEAL_DURATION_MS,
   PASCAL_TRUCK_ENTRY_REVEAL_TRAVEL_RATIO,
   PASCAL_TRUCK_ENTRY_TRAVEL_END_PROGRESS,
@@ -92,22 +91,42 @@ import {
 } from '../../lib/pascal-truck'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
-import { getNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import useNavigation, {
   type NavigationItemDeleteRequest,
   type NavigationItemMoveController,
   type NavigationItemMoveRequest,
-  type NavigationQueuedTask,
   type NavigationItemRepairRequest,
+  type NavigationQueuedTask,
   type NavigationRobotMode,
   navigationEmitter,
   requestNavigationItemDelete,
 } from '../../store/use-navigation'
+import { getNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import navigationVisualsStore, { useNavigationVisuals } from '../../store/use-navigation-visuals'
 import { stripTransient } from '../tools/item/placement-math'
 import { getActiveNavigationDoorIds, NavigationDoorSystem } from './navigation-door-system'
 
-function appendTaskModeTrace(_type: string, _payload: Record<string, unknown> = {}) {}
+function appendTaskModeTrace(type: string, payload: Record<string, unknown> = {}) {
+  void type
+  void payload
+}
+
+function summarizeDebugSnapshotKey(key: string | null) {
+  if (key === null) {
+    return null
+  }
+
+  let hash = 0
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) | 0
+  }
+
+  return {
+    hash: hash.toString(16),
+    length: key.length,
+  }
+}
+
 import type { NavigationRobotMaterialDebugMode } from './navigation-robot'
 import { NavigationRobot, type NavigationRobotToolInteractionPhase } from './navigation-robot'
 import { WalkableSurfaceOverlay } from './walkable-surface-overlay'
@@ -127,7 +146,10 @@ const ACTOR_RUN_ACCELERATION = 3.6 * ACTOR_SPEED_SCALE
 const ACTOR_WALK_DECELERATION = 3.2 * ACTOR_SPEED_SCALE
 const ACTOR_RUN_DECELERATION = 4.1 * ACTOR_SPEED_SCALE
 const ACTOR_LOCOMOTION_BLEND_SPEED = Math.max(0.24, ACTOR_WALK_MAX_SPEED * 0.22)
+// Cap pathological stalls, but do not slow normal low-FPS movement.
+const ACTOR_MOTION_MAX_FRAME_DELTA_SECONDS = 1 / 8
 const PASCAL_TRUCK_ENTRY_RELEASE_DURATION_MS = getPascalTruckIntroReleaseDurationMs()
+const PASCAL_TRUCK_ENTRY_ROBOT_READY_FALLBACK_MS = 8000
 const NAVIGATION_SYSTEM_ACTOR_DEBUG_ID = 'pascal-navigation-actor'
 const ACTOR_TURN_RESPONSE = 12
 const ACTOR_REPATH_SPEED_RETENTION = 0.82
@@ -254,11 +276,7 @@ function isDebugMovableItem(
     return false
   }
 
-  const metadata =
-    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>)
-      : null
-  if (metadata?.isTransient === true) {
+  if (isNavigationTaskPreviewNodeId(node.id)) {
     return false
   }
 
@@ -543,6 +561,7 @@ type NavigationRobotForcedClipPlayback = {
   clipName: string
   holdLastFrame?: boolean
   loop?: 'once' | 'repeat'
+  playbackToken?: number | string
   revealFromStart?: boolean
   stabilizeRootMotion?: boolean
   timeScale?: number
@@ -574,6 +593,7 @@ type PascalTruckIntroState = {
   revealStarted: boolean
   rotationY: number
   startPosition: [number, number, number]
+  warmupWaitElapsedMs: number
 }
 
 type PascalTruckExitState = {
@@ -1371,6 +1391,26 @@ function shouldDelayPickupCarryUntilCheckoutComplete(request: NavigationItemMove
   return true
 }
 
+function getNavigationItemMovePickupSourceVisualState(
+  request: NavigationItemMoveRequest,
+): ItemMoveVisualState {
+  return isNavigationCopyItemMoveRequest(request) ? 'copy-source-pending' : 'source-pending'
+}
+
+function markNavigationItemMovePickupSourcePending(request: NavigationItemMoveRequest) {
+  navigationVisualsStore
+    .getState()
+    .setItemMoveVisualState(request.itemId, getNavigationItemMovePickupSourceVisualState(request))
+}
+
+function clearNavigationItemMovePickupSourcePending(request: NavigationItemMoveRequest) {
+  const navigationVisuals = navigationVisualsStore.getState()
+  const sourceState = navigationVisuals.itemMoveVisualStates[request.itemId] ?? null
+  if (sourceState === 'copy-source-pending' || sourceState === 'source-pending') {
+    navigationVisuals.setItemMoveVisualState(request.itemId, null)
+  }
+}
+
 function createNavigationItemMoveFallbackController(
   request: NavigationItemMoveRequest,
 ): NavigationItemMoveController {
@@ -1462,6 +1502,35 @@ function setPersistentItemMoveVisualState(
   navigationVisualsStore.getState().setItemMoveVisualState(itemId, state)
 }
 
+function isNavigationTaskPreviewNodeId(itemId: string | null | undefined) {
+  if (!itemId) {
+    return false
+  }
+
+  const taskPreviewNodeIds = navigationVisualsStore.getState().taskPreviewNodeIds
+  return (
+    taskPreviewNodeIds[itemId] === true ||
+    itemId.startsWith('item_debug_move_preview_') ||
+    itemId.startsWith('item_debug_copy_preview_')
+  )
+}
+
+function registerNavigationTaskPreviewNode(itemId: string | null | undefined) {
+  if (!itemId) {
+    return
+  }
+
+  navigationVisualsStore.getState().registerTaskPreviewNode(itemId)
+}
+
+function unregisterNavigationTaskPreviewNode(itemId: string | null | undefined) {
+  if (!itemId) {
+    return
+  }
+
+  navigationVisualsStore.getState().unregisterTaskPreviewNode(itemId)
+}
+
 function removeTransientNavigationPreviewNode(itemId: string | null | undefined) {
   if (!itemId) {
     return
@@ -1472,11 +1541,7 @@ function removeTransientNavigationPreviewNode(itemId: string | null | undefined)
     return
   }
 
-  const metadata =
-    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>)
-      : null
-  if (metadata?.isTransient !== true) {
+  if (!isNavigationTaskPreviewNodeId(itemId)) {
     return
   }
 
@@ -1484,6 +1549,7 @@ function removeTransientNavigationPreviewNode(itemId: string | null | undefined)
     itemId,
   })
   useScene.getState().deleteNode(itemId as AnyNode['id'])
+  unregisterNavigationTaskPreviewNode(itemId)
 }
 
 function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest) {
@@ -1513,7 +1579,7 @@ function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest)
   const targetParentId =
     (typeof request.finalUpdate.parentId === 'string'
       ? request.finalUpdate.parentId
-      : request.levelId ?? sourceNode.parentId) ?? null
+      : (request.levelId ?? sourceNode.parentId)) ?? null
   if (!targetParentId) {
     appendTaskModeTrace('navigation.ensureQueuedGhostSkipped', {
       itemId: request.itemId,
@@ -1523,10 +1589,8 @@ function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest)
     return null
   }
 
-  const previewMetadata = {
-    ...stripTransient(sourceNode.metadata),
-    isTransient: true,
-  } as ItemNode['metadata']
+  const previewMetadata = stripTransient(sourceNode.metadata) as ItemNode['metadata']
+  registerNavigationTaskPreviewNode(previewId)
   const existingPreviewNode = sceneState.nodes[previewId as AnyNode['id']]
   if (existingPreviewNode?.type === 'item') {
     sceneState.updateNode(previewId as AnyNode['id'], {
@@ -1576,8 +1640,12 @@ function TaskQueueSourceMarker({ marker }: { marker: TaskQueueSourceMarkerSpec }
   ) as string
   const { shieldEdgeObject, shieldFaceObject } = useMemo(
     () => ({
-      shieldEdgeObject: new OBJLoader().parse(stripTaskSourceShieldFaceRecords(shieldText)) as Group,
-      shieldFaceObject: new OBJLoader().parse(stripTaskSourceShieldLineRecords(shieldText)) as Group,
+      shieldEdgeObject: new OBJLoader().parse(
+        stripTaskSourceShieldFaceRecords(shieldText),
+      ) as Group,
+      shieldFaceObject: new OBJLoader().parse(
+        stripTaskSourceShieldLineRecords(shieldText),
+      ) as Group,
     }),
     [shieldText],
   )
@@ -1718,7 +1786,11 @@ function TaskQueueSourceMarker({ marker }: { marker: TaskQueueSourceMarkerSpec }
   })
 
   const shieldScale = baseRadius > Number.EPSILON ? targetRadius / baseRadius : 1
-  const primaryShieldScale: [number, number, number] = [shieldScale * 1.1, shieldScale, shieldScale * 1.1]
+  const primaryShieldScale: [number, number, number] = [
+    shieldScale * 1.1,
+    shieldScale,
+    shieldScale * 1.1,
+  ]
   const secondaryShieldScale: [number, number, number] = [
     shieldScale * 1.1 * TASK_SOURCE_SHIELD_SECONDARY_SCALE_MULTIPLIER,
     shieldScale * TASK_SOURCE_SHIELD_SECONDARY_SCALE_MULTIPLIER,
@@ -3143,7 +3215,12 @@ function buildPascalTruckIntroState(
   preferredLevelId: LevelNode['id'] | null,
 ): Omit<
   PascalTruckIntroState,
-  'animationElapsedMs' | 'animationStarted' | 'handoffPending' | 'revealElapsedMs' | 'revealStarted'
+  | 'animationElapsedMs'
+  | 'animationStarted'
+  | 'handoffPending'
+  | 'revealElapsedMs'
+  | 'revealStarted'
+  | 'warmupWaitElapsedMs'
 > | null {
   return measureNavigationPerf('navigation.pascalTruckIntroPlanMs', () => {
     const truckNodeCandidate =
@@ -3676,12 +3753,36 @@ function extractObjectLocalFootprintBounds(
   }
 }
 
+function isPascalTruckRuntimeNode(node: AnyNode | null | undefined) {
+  if (node?.type !== 'item') {
+    return false
+  }
+
+  const asset = node.asset
+  return (
+    node.id === PASCAL_TRUCK_ITEM_NODE_ID ||
+    asset.id === PASCAL_TRUCK_ASSET_ID ||
+    asset.src === PASCAL_TRUCK_ASSET.src ||
+    (typeof asset.src === 'string' && asset.src.endsWith(PASCAL_TRUCK_ASSET.src))
+  )
+}
+
+function hasTransientNavigationMetadata(node: AnyNode | null | undefined) {
+  const metadata = node?.metadata
+  return (
+    typeof metadata === 'object' &&
+    metadata !== null &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).isTransient === true
+  )
+}
+
 function isTransientNavigationNode(node: AnyNode | null | undefined) {
-  const metadata =
-    typeof node?.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>)
-      : null
-  return metadata?.isTransient === true
+  return (
+    hasTransientNavigationMetadata(node) ||
+    isNavigationTaskPreviewNodeId(node?.id) ||
+    isPascalTruckRuntimeNode(node)
+  )
 }
 
 function buildNavigationSceneSnapshot(
@@ -3762,6 +3863,7 @@ export function NavigationSystem() {
   const {
     activeTaskId,
     advanceTaskQueue,
+    beginTaskLoopReset,
     enabled,
     followRobotEnabled,
     itemDeleteRequest,
@@ -3786,6 +3888,7 @@ export function NavigationSystem() {
     useShallow((state) => ({
       activeTaskId: state.activeTaskId,
       advanceTaskQueue: state.advanceTaskQueue,
+      beginTaskLoopReset: state.beginTaskLoopReset,
       enabled: state.enabled,
       followRobotEnabled: state.followRobotEnabled,
       itemDeleteRequest: state.itemDeleteRequest,
@@ -4446,7 +4549,7 @@ export function NavigationSystem() {
         },
         liveGraphCacheKey: prewarmedGraphStateKey,
         liveGraphCurrent: navigationGraphCurrent,
-        navigationSceneSnapshotKey: navigationSceneSnapshot?.key ?? null,
+        navigationSceneSnapshotKey: summarizeDebugSnapshotKey(navigationSceneSnapshot?.key ?? null),
         targetPlanningGraphCellCount: targetPlanningGraph.cells.length,
         targetPlanningSnapshotKey: targetPlanningSnapshot.key,
         usedDerivedTargetGraph,
@@ -4480,21 +4583,19 @@ export function NavigationSystem() {
 
     previousTaskQueuePlanningReadyRef.current = taskQueuePlanningReady
     appendTaskModeTrace('navigation.taskQueuePlanningReadyChanged', {
-      pendingTaskGraphSyncKey,
+      pendingTaskGraphSyncKey: summarizeDebugSnapshotKey(pendingTaskGraphSyncKey),
       taskLoopSceneSettled,
       taskQueueGraphSettled,
       taskQueuePlanningReady,
     })
-  }, [
-    pendingTaskGraphSyncKey,
-    taskLoopSceneSettled,
-    taskQueueGraphSettled,
-    taskQueuePlanningReady,
-  ])
+  }, [pendingTaskGraphSyncKey, taskLoopSceneSettled, taskQueueGraphSettled, taskQueuePlanningReady])
 
   useEffect(() => {
     if (!enabled || robotMode !== 'task') {
       taskLoopBaselineSnapshotKeyRef.current = null
+      pendingTaskLoopResetBeforeIntroRef.current = false
+      pendingTaskLoopIntroAfterResetTokenRef.current = null
+      pendingTaskLoopGraphSyncTokenRef.current = null
       setPendingTaskGraphSyncKey(null)
       return
     }
@@ -4516,10 +4617,12 @@ export function NavigationSystem() {
 
   useEffect(() => {
     if (taskLoopToken === taskLoopSettledToken) {
+      pendingTaskLoopGraphSyncTokenRef.current = null
       return
     }
 
     if (!enabled || robotMode !== 'task') {
+      pendingTaskLoopGraphSyncTokenRef.current = null
       useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
@@ -4527,17 +4630,22 @@ export function NavigationSystem() {
     const baselineSnapshotKey =
       taskLoopBaselineSnapshotKeyRef.current ?? navigationSceneSnapshot?.key ?? null
     if (!baselineSnapshotKey) {
+      pendingTaskLoopGraphSyncTokenRef.current = null
+      useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
 
     taskLoopBaselineSnapshotKeyRef.current = baselineSnapshotKey
     if (navigationGraphCurrent && navigationSceneSnapshot?.key === baselineSnapshotKey) {
+      pendingTaskLoopGraphSyncTokenRef.current = null
       if (pendingTaskGraphSyncKey !== null) {
         setPendingTaskGraphSyncKey(null)
       }
+      useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
 
+    pendingTaskLoopGraphSyncTokenRef.current = taskLoopToken
     if (pendingTaskGraphSyncKey !== baselineSnapshotKey) {
       setPendingTaskGraphSyncKey(baselineSnapshotKey)
     }
@@ -4550,6 +4658,16 @@ export function NavigationSystem() {
     taskLoopSettledToken,
     taskLoopToken,
   ])
+
+  useEffect(() => {
+    const pendingTaskLoopGraphSyncToken = pendingTaskLoopGraphSyncTokenRef.current
+    if (pendingTaskLoopGraphSyncToken === null || pendingTaskGraphSyncKey !== null) {
+      return
+    }
+
+    pendingTaskLoopGraphSyncTokenRef.current = null
+    useNavigation.getState().setTaskLoopSettledToken(pendingTaskLoopGraphSyncToken)
+  }, [pendingTaskGraphSyncKey])
 
   useEffect(() => {
     mergeNavigationPerfMeta({
@@ -5108,6 +5226,7 @@ export function NavigationSystem() {
   const introAnimationTraceCaptureActiveRef = useRef(false)
   const pascalTruckIntroRef = useRef<PascalTruckIntroState | null>(null)
   const pascalTruckExitRef = useRef<PascalTruckExitState | null>(null)
+  const pascalTruckIntroPlaybackTokenRef = useRef(0)
   const pascalTruckIntroPendingSettlePositionRef = useRef<[number, number, number] | null>(null)
   const shadowControllerRef = useRef({
     currentAutoUpdate: null as boolean | null,
@@ -5129,6 +5248,7 @@ export function NavigationSystem() {
   const [pascalTruckIntroCompleted, setPascalTruckIntroCompleted] = useState(false)
   const [pascalTruckIntroTaskReady, setPascalTruckIntroTaskReady] = useState(false)
   const [actorRobotWarmupReady, setActorRobotWarmupReady] = useState(false)
+  const actorRobotWarmupReadyRef = useRef(false)
   const [toolCarryItemId, setToolCarryItemId] = useState<string | null>(null)
   const pascalTruckIntroTaskReadyTimeoutRef = useRef<number | null>(null)
   const pascalTruckIntroPostWarmupTokenRef = useRef<number | null>(null)
@@ -5147,20 +5267,26 @@ export function NavigationSystem() {
   const previousRobotModeRef = useRef<NavigationRobotMode | null>(robotMode)
   const processedQueueRestartTokenRef = useRef(queueRestartToken)
   const taskLoopBaselineSnapshotKeyRef = useRef<string | null>(null)
-  const taskQueueSyncedMoveVisualStatesRef = useRef<Partial<Record<string, ItemMoveVisualState>>>({})
+  const pendingTaskLoopResetBeforeIntroRef = useRef(false)
+  const pendingTaskLoopIntroAfterResetTokenRef = useRef<number | null>(null)
+  const pendingTaskLoopGraphSyncTokenRef = useRef<number | null>(null)
+  const taskQueueSyncedMoveVisualStatesRef = useRef<Partial<Record<string, ItemMoveVisualState>>>(
+    {},
+  )
   const taskQueueSyncedDeleteIdsRef = useRef<Set<string>>(new Set())
-  const taskQueueSyncedRepairIdsRef = useRef<Set<string>>(new Set())
-  const taskQueueSyncedActionShieldKindsRef = useRef<
-    Partial<Record<string, 'copy' | 'delete' | 'move' | 'repair'>>
-  >({})
-  const taskQueueSyncedActionShieldOpacitiesRef = useRef<Partial<Record<string, number>>>({})
   const debugPascalTruckIntroAttemptCountRef = useRef(0)
   const debugPascalTruckIntroStartCountRef = useRef(0)
+  const normalRobotRuntimeActive =
+    robotMode === 'normal' &&
+    pascalTruckIntroCompleted &&
+    actorCellIndex !== null &&
+    Boolean(graph?.cells[actorCellIndex])
   const shouldForceContinuousFrames =
     enabled &&
     robotMode !== null &&
     (pascalTruckIntroActive ||
       pascalTruckExitActive ||
+      normalRobotRuntimeActive ||
       actorMoving ||
       taskQueue.length > 0 ||
       itemMoveRequest !== null ||
@@ -5172,7 +5298,10 @@ export function NavigationSystem() {
   }, [setThreeState, shouldForceContinuousFrames])
 
   const clearNavigationItemMoveVisualResidue = useCallback(
-    (request: NavigationItemMoveRequest | null) => {
+    (
+      request: NavigationItemMoveRequest | null,
+      options?: { preserveDestinationGhost?: boolean },
+    ) => {
       const viewerState = useViewer.getState()
       const navigationVisuals = navigationVisualsStore.getState()
       const preview = navigationVisuals.itemMovePreview
@@ -5180,9 +5309,11 @@ export function NavigationSystem() {
       const visualIdsToClear = new Set<string>()
       const preserveLiveTransformIds = new Set<string>()
       const removedTransientPreviewIds: string[] = []
+      const preservedDestinationGhostId =
+        options?.preserveDestinationGhost === true ? (request?.targetPreviewItemId ?? null) : null
 
       for (const previewId of previewSelectedIds) {
-        if (previewId) {
+        if (previewId && previewId !== preservedDestinationGhostId) {
           visualIdsToClear.add(previewId)
         }
       }
@@ -5190,7 +5321,10 @@ export function NavigationSystem() {
       if (request) {
         visualIdsToClear.add(request.itemId)
         visualIdsToClear.add(getNavigationItemMoveVisualItemId(request))
-        if (request.targetPreviewItemId) {
+        if (
+          request.targetPreviewItemId &&
+          request.targetPreviewItemId !== preservedDestinationGhostId
+        ) {
           visualIdsToClear.add(request.targetPreviewItemId)
         }
         preserveLiveTransformIds.add(request.itemId)
@@ -5204,7 +5338,9 @@ export function NavigationSystem() {
           preview.id === request.targetPreviewItemId ||
           preview.id === getNavigationItemMoveVisualItemId(request))
       ) {
-        visualIdsToClear.add(preview.id)
+        if (preview.id !== preservedDestinationGhostId) {
+          visualIdsToClear.add(preview.id)
+        }
         visualIdsToClear.add(preview.sourceItemId)
         navigationVisuals.setItemMovePreview(null)
       }
@@ -5233,24 +5369,26 @@ export function NavigationSystem() {
       if (request) {
         clearPersistentItemMoveVisualState(request.itemId)
         clearPersistentItemMoveVisualState(request.visualItemId)
-        if (request.targetPreviewItemId) {
-          const previewNode = useScene.getState().nodes[request.targetPreviewItemId as AnyNodeId]
-          const previewMetadata =
-            previewNode &&
-            typeof previewNode.metadata === 'object' &&
-            previewNode.metadata !== null &&
-            !Array.isArray(previewNode.metadata)
-              ? (previewNode.metadata as Record<string, unknown>)
-              : null
-          if (previewMetadata?.isTransient === true) {
+        if (
+          request.targetPreviewItemId &&
+          request.targetPreviewItemId !== preservedDestinationGhostId
+        ) {
+          if (isNavigationTaskPreviewNodeId(request.targetPreviewItemId)) {
             removedTransientPreviewIds.push(request.targetPreviewItemId)
             useScene.getState().deleteNode(request.targetPreviewItemId as AnyNodeId)
+            unregisterNavigationTaskPreviewNode(request.targetPreviewItemId)
           }
         }
       }
 
+      if (preservedDestinationGhostId) {
+        registerNavigationTaskPreviewNode(preservedDestinationGhostId)
+        navigationVisuals.setItemMoveVisualState(preservedDestinationGhostId, 'destination-ghost')
+      }
+
       appendTaskModeTrace('navigation.clearItemMoveVisualResidue', {
         itemId: request?.itemId ?? null,
+        preservedDestinationGhostId,
         removedTransientPreviewIds,
         visualIdsCleared: [...visualIdsToClear],
       })
@@ -5273,7 +5411,10 @@ export function NavigationSystem() {
     viewerState.outliner.hoveredObjects.length = 0
 
     const queuedMoveRequests = navigationState.taskQueue
-      .filter((task): task is Extract<(typeof navigationState.taskQueue)[number], { kind: 'move' }> => task.kind === 'move')
+      .filter(
+        (task): task is Extract<(typeof navigationState.taskQueue)[number], { kind: 'move' }> =>
+          task.kind === 'move',
+      )
       .map((task) => task.request)
     const moveRequestsToClear = navigationState.itemMoveRequest
       ? [...queuedMoveRequests, navigationState.itemMoveRequest]
@@ -5303,9 +5444,6 @@ export function NavigationSystem() {
     navigationVisualsStore.getState().resetTaskQueueVisuals()
     taskQueueSyncedMoveVisualStatesRef.current = {}
     taskQueueSyncedDeleteIdsRef.current = new Set()
-    taskQueueSyncedRepairIdsRef.current = new Set()
-    taskQueueSyncedActionShieldKindsRef.current = {}
-    taskQueueSyncedActionShieldOpacitiesRef.current = {}
     appendTaskModeTrace('navigation.resetTaskQueueVisualsComplete', {
       activeTaskId: navigationState.activeTaskId,
       queueLength: navigationState.taskQueue.length,
@@ -5345,35 +5483,25 @@ export function NavigationSystem() {
 
       const nodeSummaries = Array.from(relevantIds).map((id) => {
         const node = sceneNodes[id]
-        const metadata =
-          node &&
-          typeof node === 'object' &&
-          'metadata' in node &&
-          typeof node.metadata === 'object' &&
-          node.metadata !== null &&
-          !Array.isArray(node.metadata)
-            ? (node.metadata as Record<string, unknown>)
-            : null
-
         return {
-          actionShieldKind: visualState.actionShieldKinds[id] ?? null,
-          actionShieldOpacity: visualState.actionShieldOpacities[id] ?? null,
           id,
-          isTransient: metadata?.isTransient === true,
+          isTaskPreview: isNavigationTaskPreviewNodeId(id),
           liveTransform: useLiveTransforms.getState().get(id) ?? null,
           nodeType: node?.type ?? null,
           sceneVisible:
-            node && typeof node === 'object' && 'visible' in node ? ((node as ItemNode).visible ?? null) : null,
+            node && typeof node === 'object' && 'visible' in node
+              ? ((node as ItemNode).visible ?? null)
+              : null,
           viewerVisibilityOverride: visualState.nodeVisibilityOverrides[id] ?? null,
           visualState: visualState.itemMoveVisualStates[id] ?? null,
         }
       })
-
       return {
         activeTaskId: navigationState.activeTaskId,
         actorAvailable: navigationState.actorAvailable,
         actorCellIndex,
         actorMoving,
+        actorRobotWarmupReady,
         itemMoveSequenceStage: itemMoveSequenceRef.current?.stage ?? null,
         label,
         nodeSummaries,
@@ -5381,6 +5509,8 @@ export function NavigationSystem() {
         pascalTruckIntroActive: Boolean(pascalTruckIntroRef.current),
         pascalTruckIntroCompleted,
         pascalTruckIntroTaskReady,
+        pascalTruckIntroWarmupWaitElapsedMs:
+          pascalTruckIntroRef.current?.warmupWaitElapsedMs ?? null,
         pendingMotion:
           pendingMotionRef.current === null
             ? null
@@ -5389,7 +5519,7 @@ export function NavigationSystem() {
                 moving: pendingMotionRef.current.moving,
                 speed: pendingMotionRef.current.speed,
               },
-        pendingTaskGraphSyncKey,
+        pendingTaskGraphSyncKey: summarizeDebugSnapshotKey(pendingTaskGraphSyncKey),
         queueRestartToken: navigationState.queueRestartToken,
         queueTasks,
         robotMode: navigationState.robotMode,
@@ -5402,16 +5532,24 @@ export function NavigationSystem() {
         taskLoopSettledToken: navigationState.taskLoopSettledToken,
         taskLoopToken: navigationState.taskLoopToken,
         taskQueuePlanningReady,
+        toolCarryItemId: carriedVisualItemIdRef.current ?? toolCarryItemId,
+        toolConeIsolatedOverlayHullPointCount:
+          visualState.toolConeIsolatedOverlay?.hullPoints.length ?? 0,
+        toolConeIsolatedOverlayVisible: visualState.toolConeIsolatedOverlay?.visible ?? false,
+        toolInteractionPhase: toolInteractionPhaseRef.current,
+        toolInteractionTargetItemId: toolInteractionTargetItemIdRef.current,
       }
     },
     [
       actorCellIndex,
       actorMoving,
+      actorRobotWarmupReady,
       pascalTruckExitActive,
       pascalTruckIntroCompleted,
       pascalTruckIntroTaskReady,
       pendingTaskGraphSyncKey,
       taskQueuePlanningReady,
+      toolCarryItemId,
     ],
   )
 
@@ -5421,9 +5559,10 @@ export function NavigationSystem() {
       payload: Record<string, unknown> = {},
       options?: { includeSnapshot?: boolean; label?: string },
     ) => {
+      void getTaskModeSnapshot
+      void options
       appendTaskModeTrace(type, {
         ...payload,
-        ...(options?.includeSnapshot ? { snapshot: getTaskModeSnapshot(options.label ?? type) } : {}),
       })
     },
     [getTaskModeSnapshot],
@@ -5458,15 +5597,8 @@ export function NavigationSystem() {
     const navigationVisuals = navigationVisualsStore.getState()
     const previousMoveVisualStates = taskQueueSyncedMoveVisualStatesRef.current
     const previousDeleteIds = taskQueueSyncedDeleteIdsRef.current
-    const previousRepairIds = taskQueueSyncedRepairIdsRef.current
-    const previousActionShieldKinds = taskQueueSyncedActionShieldKindsRef.current
-    const previousActionShieldOpacities = taskQueueSyncedActionShieldOpacitiesRef.current
     const nextMoveVisualStates: Partial<Record<string, ItemMoveVisualState>> = {}
     const nextDeleteIds = new Set<string>()
-    const nextRepairIds = new Set<string>()
-    const nextActionShieldKinds: Partial<Record<string, 'copy' | 'delete' | 'move' | 'repair'>> =
-      {}
-    const nextActionShieldOpacities: Partial<Record<string, number>> = {}
     const moveTaskVisualRequests = new Map<string, NavigationItemMoveRequest>()
     const moveSourceIds = new Set<string>()
 
@@ -5488,8 +5620,6 @@ export function NavigationSystem() {
           const activeTaskVisualKind = getNavigationQueuedTaskVisualKind(activeTask)
           if (activeTaskVisualKind === 'delete') {
             nextDeleteIds.add(activeTask.request.itemId)
-          } else if (activeTaskVisualKind === 'repair') {
-            nextRepairIds.add(activeTask.request.itemId)
           }
         }
       }
@@ -5514,21 +5644,6 @@ export function NavigationSystem() {
       for (const sourceItemId of moveSourceIds) {
         navigationVisuals.setItemMoveVisualState(sourceItemId, null)
         clearPersistentItemMoveVisualState(sourceItemId)
-      }
-    }
-
-    for (const [itemId, previousKind] of Object.entries(previousActionShieldKinds)) {
-      const nextKind = nextActionShieldKinds[itemId] ?? null
-      if ((nextKind ?? null) !== previousKind) {
-        navigationVisuals.setActionShieldKind(itemId, nextKind)
-      }
-    }
-
-    for (const [itemId, nextKind] of Object.entries(nextActionShieldKinds)) {
-      const previousKind = previousActionShieldKinds[itemId] ?? null
-      const resolvedNextKind = nextKind ?? null
-      if (previousKind !== resolvedNextKind) {
-        navigationVisuals.setActionShieldKind(itemId, resolvedNextKind)
       }
     }
 
@@ -5585,50 +5700,18 @@ export function NavigationSystem() {
       }
     }
 
-    for (const itemId of previousRepairIds) {
-      if (!nextRepairIds.has(itemId)) {
-        navigationVisuals.clearRepairShield(itemId)
-      }
-    }
-
-    for (const itemId of nextRepairIds) {
-      if (!navigationVisuals.repairShieldActivations[itemId]) {
-        navigationVisuals.activateRepairShield(itemId)
-      }
-    }
-
-    for (const [itemId, previousOpacity] of Object.entries(previousActionShieldOpacities)) {
-      const nextOpacity = nextActionShieldOpacities[itemId] ?? null
-      if ((nextOpacity ?? null) !== previousOpacity) {
-        navigationVisuals.setActionShieldOpacity(itemId, nextOpacity)
-      }
-    }
-
-    for (const [itemId, nextOpacity] of Object.entries(nextActionShieldOpacities)) {
-      const previousOpacity = previousActionShieldOpacities[itemId] ?? null
-      const resolvedNextOpacity = nextOpacity ?? null
-      if (previousOpacity !== resolvedNextOpacity) {
-        navigationVisuals.setActionShieldOpacity(itemId, resolvedNextOpacity)
-      }
-    }
-
     taskQueueSyncedMoveVisualStatesRef.current = nextMoveVisualStates
     taskQueueSyncedDeleteIdsRef.current = nextDeleteIds
-    taskQueueSyncedRepairIdsRef.current = nextRepairIds
-    taskQueueSyncedActionShieldKindsRef.current = nextActionShieldKinds
-    taskQueueSyncedActionShieldOpacitiesRef.current = nextActionShieldOpacities
     recordTaskModeTrace(
       'navigation.taskQueueVisualSync',
       {
         activeTaskId,
-        actionShieldCount: Object.keys(nextActionShieldKinds).length,
         deleteCount: nextDeleteIds.size,
         ghostIds: Object.entries(nextMoveVisualStates)
           .filter(([, state]) => state === 'destination-ghost')
           .map(([id]) => id),
         moveVisualCount: Object.keys(nextMoveVisualStates).length,
         queueLength: taskQueue.length,
-        repairCount: nextRepairIds.size,
       },
       { includeSnapshot: true },
     )
@@ -5661,6 +5744,7 @@ export function NavigationSystem() {
             clipName: PASCAL_TRUCK_ENTRY_CLIP_NAME,
             holdLastFrame: true,
             loop: 'once' as const,
+            playbackToken: pascalTruckIntroPlaybackTokenRef.current,
             revealFromStart: true,
             timeScale: 1,
           }
@@ -5876,11 +5960,11 @@ export function NavigationSystem() {
       // cannot reuse a stale cell/component pair from the previous graph.
       const actorWorldPosition = getResolvedActorVisualWorldPosition()
       const actorNavigationPoint = actorWorldPosition
-        ? ([actorWorldPosition[0], actorWorldPosition[1] - ACTOR_HOVER_Y, actorWorldPosition[2]] as [
-            number,
-            number,
-            number,
-          ])
+        ? ([
+            actorWorldPosition[0],
+            actorWorldPosition[1] - ACTOR_HOVER_Y,
+            actorWorldPosition[2],
+          ] as [number, number, number])
         : null
       const actorStartCellIndexWithoutComponentFilter =
         actorNavigationPoint !== null
@@ -6142,6 +6226,7 @@ export function NavigationSystem() {
     }
 
     recordTaskModeTrace('navigation.beginPascalTruckIntroStart', {}, { includeSnapshot: true })
+    pascalTruckIntroPlaybackTokenRef.current += 1
     setMotionState(
       {
         ...createActorMotionState(),
@@ -6155,9 +6240,21 @@ export function NavigationSystem() {
           seekTime: 0,
           timeScale: 1,
         },
+        visibilityRevealProgress: 0,
       },
       'pascalTruckIntro:start',
     )
+    const introStartPosition: [number, number, number] = [
+      pascalTruckIntroPlan.startPosition[0],
+      pascalTruckIntroPlan.startPosition[1],
+      pascalTruckIntroPlan.startPosition[2],
+    ]
+    const actorGroup = actorGroupRef.current
+    if (actorGroup) {
+      actorGroup.position.set(introStartPosition[0], introStartPosition[1], introStartPosition[2])
+      actorGroup.rotation.y = pascalTruckIntroPlan.rotationY
+      actorGroup.updateMatrixWorld(true)
+    }
     doorCollisionStateRef.current = {
       blocked: false,
       doorIds: [],
@@ -6167,10 +6264,15 @@ export function NavigationSystem() {
     setPathIndices([])
     setPathAnchorWorldPosition(null)
     actorPositionInitializedRef.current = false
-    lastPublishedActorPositionRef.current = null
+    lastPublishedActorPositionRef.current = introStartPosition
     lastPublishedActorPositionAtRef.current = performance.now()
     setActorAvailable(false)
-    setActorWorldPosition(null)
+    setActorWorldPosition(introStartPosition)
+    navigationEmitter.emit('navigation:actor-transform', {
+      moving: false,
+      position: introStartPosition,
+      rotationY: pascalTruckIntroPlan.rotationY,
+    })
     setPascalTruckIntroCompleted(false)
     pascalTruckIntroRef.current = {
       ...pascalTruckIntroPlan,
@@ -6179,6 +6281,7 @@ export function NavigationSystem() {
       handoffPending: false,
       revealElapsedMs: 0,
       revealStarted: false,
+      warmupWaitElapsedMs: 0,
     }
     pascalTruckIntroPostWarmupTokenRef.current = null
     pascalTruckIntroPendingSettlePositionRef.current = null
@@ -6353,10 +6456,7 @@ export function NavigationSystem() {
       itemMoveControllerCount > 0
     const hasTaskQueueVisualsToClear =
       navigationVisualState.itemMovePreview !== null ||
-      Object.keys(navigationVisualState.itemDeleteActivations).length > 0 ||
-      Object.keys(navigationVisualState.repairShieldActivations).length > 0 ||
-      Object.keys(navigationVisualState.actionShieldKinds).length > 0 ||
-      Object.keys(navigationVisualState.actionShieldOpacities).length > 0
+      Object.keys(navigationVisualState.itemDeleteActivations).length > 0
     const hasLocalStateToClear =
       pascalTruckIntroRef.current !== null ||
       pascalTruckExitRef.current !== null ||
@@ -7192,12 +7292,7 @@ export function NavigationSystem() {
         planningGraph === graph ? targetCellIndex : null,
       )
     },
-    [
-      commitPlannedNavigationPath,
-      graph,
-      getActorNavigationPlanningState,
-      selection.levelId,
-    ],
+    [commitPlannedNavigationPath, graph, getActorNavigationPlanningState, selection.levelId],
   )
 
   const requestNavigationToPoint = useCallback(
@@ -7249,7 +7344,9 @@ export function NavigationSystem() {
         return false
       }
 
-      const precomputedExitPath = options?.consumePrecomputed ? precomputedPascalTruckExitRef.current : null
+      const precomputedExitPath = options?.consumePrecomputed
+        ? precomputedPascalTruckExitRef.current
+        : null
       if (options?.consumePrecomputed) {
         precomputedPascalTruckExitRef.current = null
       }
@@ -7276,7 +7373,9 @@ export function NavigationSystem() {
             )
           : false) ||
         requestNavigationToPoint(exitTargetPoint, exitTargetLevelId) ||
-        (exitState.finalCellIndex !== null ? requestNavigationToCell(exitState.finalCellIndex) : false)
+        (exitState.finalCellIndex !== null
+          ? requestNavigationToCell(exitState.finalCellIndex)
+          : false)
       )
     },
     [
@@ -7487,41 +7586,49 @@ export function NavigationSystem() {
     return useNavigation.getState().taskQueue.length > 0
   }, [])
 
-  const advanceTaskLoopAfterCompletion = useCallback((completedTaskId: string | null) => {
-    if (!completedTaskId) {
-      recordTaskModeTrace('navigation.advanceTaskLoopNoCompletedTask', {}, { includeSnapshot: true })
-      schedulePascalTruckExit()
-      return {
-        hasQueuedTask: false,
-        wrappedToStart: false,
+  const advanceTaskLoopAfterCompletion = useCallback(
+    (completedTaskId: string | null) => {
+      if (!completedTaskId) {
+        recordTaskModeTrace(
+          'navigation.advanceTaskLoopNoCompletedTask',
+          {},
+          { includeSnapshot: true },
+        )
+        schedulePascalTruckExit()
+        return {
+          hasQueuedTask: false,
+          wrappedToStart: false,
+        }
       }
-    }
 
-    const result = advanceTaskQueue()
-    recordTaskModeTrace(
-      'navigation.advanceTaskLoopAfterCompletion',
-      {
-        completedTaskId,
-        hasQueuedTask: result.hasQueuedTask,
-        wrappedToStart: result.wrappedToStart,
-      },
-      { includeSnapshot: true },
-    )
-    if (!result.hasQueuedTask) {
-      schedulePascalTruckExit()
+      const result = advanceTaskQueue()
+      recordTaskModeTrace(
+        'navigation.advanceTaskLoopAfterCompletion',
+        {
+          completedTaskId,
+          hasQueuedTask: result.hasQueuedTask,
+          wrappedToStart: result.wrappedToStart,
+        },
+        { includeSnapshot: true },
+      )
+      if (!result.hasQueuedTask) {
+        schedulePascalTruckExit()
+        return result
+      }
+
+      if (result.wrappedToStart) {
+        pendingTaskLoopResetBeforeIntroRef.current = true
+        pendingTaskLoopIntroAfterResetTokenRef.current = null
+        precomputedPascalTruckExitRef.current = null
+        schedulePascalTruckExit({
+          allowQueuedTasks: true,
+        })
+      }
+
       return result
-    }
-
-    if (result.wrappedToStart) {
-      precomputedPascalTruckExitRef.current = null
-      schedulePascalTruckExit({
-        allowQueuedTasks: true,
-        requiredTaskLoopToken: useNavigation.getState().taskLoopToken,
-      })
-    }
-
-    return result
-  }, [advanceTaskQueue, recordTaskModeTrace, schedulePascalTruckExit])
+    },
+    [advanceTaskQueue, recordTaskModeTrace, schedulePascalTruckExit],
+  )
 
   useEffect(() => {
     const pendingPascalTruckExit = pendingPascalTruckExitRef.current
@@ -7662,7 +7769,6 @@ export function NavigationSystem() {
       requestItemRepair(null)
     }
     setItemMoveLocked(false)
-    navigationVisualsStore.getState().clearRepairShield(activeSequence?.request.itemId)
     if (actorPositionInitializedRef.current && !hasPendingQueuedNavigationTask()) {
       schedulePascalTruckExit()
     }
@@ -7717,7 +7823,6 @@ export function NavigationSystem() {
     resetMotion()
     clearItemMoveGestureClipState()
     setItemMoveLocked(false)
-    navigationVisualsStore.getState().clearRepairShield(activeSequence.request.itemId)
     const navigationState = useNavigation.getState()
     if (
       actorPositionInitializedRef.current &&
@@ -7753,7 +7858,6 @@ export function NavigationSystem() {
         requestItemRepair(null)
       }
       setItemMoveLocked(false)
-      navigationVisualsStore.getState().clearRepairShield(sequence.request.itemId)
       if (robotMode === 'task') {
         if (sequence.taskId) {
           advanceTaskLoopAfterCompletion(sequence.taskId)
@@ -8286,8 +8390,6 @@ export function NavigationSystem() {
     }
   }, [
     actorCellIndex,
-    actorComponentId,
-    actorSpawnPosition,
     camera,
     cameraDragging,
     enabled,
@@ -8297,6 +8399,7 @@ export function NavigationSystem() {
     pascalTruckIntroTaskReady,
     requestNavigationToPoint,
     robotMode,
+    selection.levelId,
   ])
 
   useEffect(() => {
@@ -8331,7 +8434,11 @@ export function NavigationSystem() {
   useEffect(() => {
     const hasPendingTaskRequest =
       itemMoveRequest !== null || itemDeleteRequest !== null || itemRepairRequest !== null
-    const hasPendingTaskWork = hasPendingTaskRequest || (robotMode === 'task' && taskQueue.length > 0)
+    const hasPendingTaskWork =
+      hasPendingTaskRequest || (robotMode === 'task' && taskQueue.length > 0)
+    const hasPendingTaskLoopReset =
+      pendingTaskLoopResetBeforeIntroRef.current ||
+      pendingTaskLoopIntroAfterResetTokenRef.current !== null
     if (
       !(
         enabled &&
@@ -8340,6 +8447,7 @@ export function NavigationSystem() {
         !pascalTruckIntroCompleted &&
         !pascalTruckIntroRef.current &&
         !pascalTruckExitActive &&
+        !hasPendingTaskLoopReset &&
         (robotMode !== 'task' || (hasPendingTaskWork && taskQueuePlanningReady))
       )
     ) {
@@ -8434,7 +8542,7 @@ export function NavigationSystem() {
 
   const tryStartPascalTruckIntroReveal = useCallback(
     (
-      trigger: 'post-warmup-ready' | 'robot-ready',
+      trigger: 'post-warmup-ready' | 'robot-ready' | 'robot-ready-timeout',
       options?: { ignorePendingWarmup?: boolean },
     ) => {
       const pascalTruckIntro = pascalTruckIntroRef.current
@@ -8458,6 +8566,15 @@ export function NavigationSystem() {
     },
     [navigationPostWarmupCompletedToken],
   )
+
+  const handleActorRobotWarmupReadyChange = useCallback((ready: boolean) => {
+    actorRobotWarmupReadyRef.current = ready
+    setActorRobotWarmupReady(ready)
+  }, [])
+
+  useEffect(() => {
+    actorRobotWarmupReadyRef.current = actorRobotWarmupReady
+  }, [actorRobotWarmupReady])
 
   useEffect(() => {
     if (pascalTruckIntroPostWarmupTokenRef.current === null) {
@@ -8494,16 +8611,81 @@ export function NavigationSystem() {
         token,
         trigger: 'intro',
       })
-      void tryStartPascalTruckIntroReveal('robot-ready', { ignorePendingWarmup: true })
       return
     }
 
-    void tryStartPascalTruckIntroReveal('robot-ready', { ignorePendingWarmup: true })
+    void tryStartPascalTruckIntroReveal('robot-ready')
   }, [
     navigationPostWarmupCompletedToken,
     navigationPostWarmupRequestKey,
     navigationPostWarmupRequestToken,
     tryStartPascalTruckIntroReveal,
+  ])
+
+  useEffect(() => {
+    if (!(pascalTruckIntroActive && actorRobotWarmupReady)) {
+      return
+    }
+
+    handlePascalTruckIntroRobotReady()
+  }, [actorRobotWarmupReady, handlePascalTruckIntroRobotReady, pascalTruckIntroActive])
+
+  useEffect(() => {
+    const pendingTaskLoopIntroToken = pendingTaskLoopIntroAfterResetTokenRef.current
+    if (pendingTaskLoopIntroToken === null) {
+      return
+    }
+
+    const hasPendingTaskRequest =
+      itemMoveRequest !== null || itemDeleteRequest !== null || itemRepairRequest !== null
+    const hasPendingTaskWork =
+      hasPendingTaskRequest || (robotMode === 'task' && taskQueue.length > 0)
+    if (!hasPendingTaskWork) {
+      pendingTaskLoopIntroAfterResetTokenRef.current = null
+      return
+    }
+
+    if (
+      !(
+        enabled &&
+        graph &&
+        pascalTruckIntroPlan &&
+        !introAnimationDebugActive &&
+        !pascalTruckIntroRef.current &&
+        !pascalTruckExitActive &&
+        !pascalTruckExitRef.current &&
+        robotMode === 'task' &&
+        taskLoopSettledToken === pendingTaskLoopIntroToken &&
+        taskQueuePlanningReady
+      )
+    ) {
+      return
+    }
+
+    if (beginPascalTruckIntro()) {
+      pendingTaskLoopIntroAfterResetTokenRef.current = null
+      recordTaskModeTrace(
+        'navigation.taskLoopIntroAfterReset',
+        { taskLoopToken: pendingTaskLoopIntroToken },
+        { includeSnapshot: true },
+      )
+      setActorCellIndex(null)
+    }
+  }, [
+    beginPascalTruckIntro,
+    enabled,
+    graph,
+    introAnimationDebugActive,
+    itemDeleteRequest,
+    itemMoveRequest,
+    itemRepairRequest,
+    pascalTruckExitActive,
+    pascalTruckIntroPlan,
+    recordTaskModeTrace,
+    robotMode,
+    taskLoopSettledToken,
+    taskQueue.length,
+    taskQueuePlanningReady,
   ])
 
   const cancelDeferredItemMoveCommit = useCallback(() => {
@@ -8585,17 +8767,15 @@ export function NavigationSystem() {
       navigationVisualsStore.getState().clearItemDelete(activeDeleteSequence.request.itemId)
     }
 
-    const activeRepairSequence = itemRepairSequenceRef.current
     itemRepairSequenceRef.current = null
-    if (activeRepairSequence) {
-      navigationVisualsStore.getState().clearRepairShield(activeRepairSequence.request.itemId)
-    }
 
     pascalTruckIntroRef.current = null
     pascalTruckIntroPostWarmupTokenRef.current = null
     pascalTruckExitRef.current = null
     pendingPascalTruckExitRef.current = null
     precomputedPascalTruckExitRef.current = null
+    pendingTaskLoopResetBeforeIntroRef.current = false
+    pendingTaskLoopIntroAfterResetTokenRef.current = null
     pascalTruckIntroPendingSettlePositionRef.current = null
     setPendingTaskGraphSyncKey(null)
     setPascalTruckIntroTaskReady(false)
@@ -8765,7 +8945,9 @@ export function NavigationSystem() {
       // The item commit rebuilds the navigation graph. Clear the finished route first so
       // stale cell indices from the previous graph cannot render as a bogus post-drop path.
       setReleasedNavigationItemId(null)
-      clearNavigationItemMoveVisualResidue(sequence.request)
+      clearNavigationItemMoveVisualResidue(sequence.request, {
+        preserveDestinationGhost: robotMode === 'task' && sequence.taskId !== null,
+      })
       if (carriedVisualItemIdRef.current) {
         navigationVisualsStore
           .getState()
@@ -8901,7 +9083,19 @@ export function NavigationSystem() {
     const pascalTruckIntro = pascalTruckIntroRef.current
     if (pascalTruckIntro) {
       const now = performance.now()
-      const introStepMs = Math.min(frameDeltaMs, PASCAL_TRUCK_ENTRY_MAX_STEP_MS)
+      const introStepMs = MathUtils.clamp(frameDeltaMs, 0, PASCAL_TRUCK_ENTRY_MAX_STEP_MS)
+      if (!pascalTruckIntro.revealStarted) {
+        pascalTruckIntro.warmupWaitElapsedMs += introStepMs
+        if (actorRobotWarmupReadyRef.current) {
+          void tryStartPascalTruckIntroReveal('robot-ready')
+        } else if (
+          pascalTruckIntroPostWarmupTokenRef.current === null &&
+          pascalTruckIntro.warmupWaitElapsedMs >= PASCAL_TRUCK_ENTRY_ROBOT_READY_FALLBACK_MS
+        ) {
+          void tryStartPascalTruckIntroReveal('robot-ready-timeout', { ignorePendingWarmup: true })
+        }
+      }
+
       if (pascalTruckIntro.revealStarted && !pascalTruckIntro.animationStarted) {
         pascalTruckIntro.revealElapsedMs = Math.min(
           PASCAL_TRUCK_ENTRY_REVEAL_DURATION_MS,
@@ -8970,6 +9164,7 @@ export function NavigationSystem() {
             timeScale: 1,
           },
           rootMotionOffset: preservedRootMotionOffset,
+          visibilityRevealProgress: revealProgress,
         },
         'pascalTruckIntro:frame',
       )
@@ -9051,7 +9246,7 @@ export function NavigationSystem() {
 
     const pascalTruckExit = pascalTruckExitRef.current
     if (pascalTruckExit?.stage === 'fade') {
-      const exitStepMs = Math.min(frameDeltaMs, PASCAL_TRUCK_ENTRY_MAX_STEP_MS)
+      const exitStepMs = MathUtils.clamp(frameDeltaMs, 0, PASCAL_TRUCK_ENTRY_MAX_STEP_MS)
       pascalTruckExit.fadeElapsedMs = Math.min(
         PASCAL_TRUCK_ENTRY_REVEAL_DURATION_MS,
         pascalTruckExit.fadeElapsedMs + exitStepMs,
@@ -9097,7 +9292,22 @@ export function NavigationSystem() {
           navigationState.itemRepairRequest !== null
         const hasPendingTaskWork =
           hasPendingTaskRequest || (robotMode === 'task' && navigationState.taskQueue.length > 0)
-        if (hasPendingTaskWork && beginPascalTruckIntro()) {
+        if (
+          hasPendingTaskWork &&
+          robotMode === 'task' &&
+          pendingTaskLoopResetBeforeIntroRef.current
+        ) {
+          const nextTaskLoopToken = beginTaskLoopReset()
+          pendingTaskLoopResetBeforeIntroRef.current = false
+          pendingTaskLoopIntroAfterResetTokenRef.current = nextTaskLoopToken
+          recordTaskModeTrace(
+            'navigation.taskLoopResetBeforeNextIntro',
+            { taskLoopToken: nextTaskLoopToken },
+            { includeSnapshot: true },
+          )
+          setActorCellIndex(null)
+          resetMotion(true)
+        } else if (hasPendingTaskWork && beginPascalTruckIntro()) {
           setActorCellIndex(null)
         } else {
           setPascalTruckIntroCompleted(false)
@@ -9229,13 +9439,7 @@ export function NavigationSystem() {
               return false
             }
 
-            const metadata =
-              typeof node.metadata === 'object' &&
-              node.metadata !== null &&
-              !Array.isArray(node.metadata)
-                ? (node.metadata as Record<string, unknown>)
-                : null
-            return metadata?.isTransient === true
+            return isNavigationTaskPreviewNodeId(node.id)
           })?.id ?? null
         const ghostId = previewSelectedIds[0] ?? transientPreviewGhostId
         const sourceNode = traceSourceId ? liveSceneNodes[traceSourceId] : null
@@ -9400,9 +9604,11 @@ export function NavigationSystem() {
       itemMoveStageHistoryRef.current.push({ at: now, stage: 'pickup-transfer' })
       recordNavigationPerfMark('navigation.itemMoveStage', { stage: 'pickup-transfer' })
       syncItemMoveGestureClipState(sequence.pickupGesture, 0)
+      markNavigationItemMovePickupSourcePending(sequence.request)
       if (!shouldDelayPickupCarryUntilCheckoutComplete(sequence.request)) {
         sequence.pickupCarryVisualStartedAt = now
         sequence.pickupTransferStartedAt = now
+        clearNavigationItemMovePickupSourcePending(sequence.request)
         sequence.controller.beginCarry()
         navigationVisualsStore
           .getState()
@@ -9451,7 +9657,6 @@ export function NavigationSystem() {
       sequence.stage = 'repair-transfer'
       sequence.repairStartedAt = now
       syncItemMoveGestureClipState(sequence.gesture, 0)
-      navigationVisualsStore.getState().activateRepairShield(sequence.request.itemId)
     }
     if (trajectoryDebugPauseRef.current) {
       recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
@@ -9512,13 +9717,29 @@ export function NavigationSystem() {
       }
 
       if (actorToTruckDistance > 0.2 && tryStartPascalTruckExitPath(pascalTruckExit)) {
-        recordTaskModeTrace('navigation.pascalTruckExitRetriedPath', {
+        const retriedPendingMotion = pendingMotionRef.current
+        const retryHasMotion =
+          (retriedPendingMotion?.moving === true &&
+            (retriedPendingMotion.destinationCellIndex ?? null) !== actorCellIndex) ||
+          (motionRef.current.moving && pathIndices.length > 1)
+        if (retryHasMotion) {
+          recordTaskModeTrace('navigation.pascalTruckExitRetriedPath', {
+            actorToTruckDistance,
+            finalCellIndex: pascalTruckExit.finalCellIndex,
+            pathNodeCount: pathIndices.length,
+          })
+          recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
+          return
+        }
+
+        recordTaskModeTrace('navigation.pascalTruckExitRetryProducedNoMotion', {
+          actorCellIndex,
           actorToTruckDistance,
           finalCellIndex: pascalTruckExit.finalCellIndex,
           pathNodeCount: pathIndices.length,
+          pendingDestinationCellIndex: retriedPendingMotion?.destinationCellIndex ?? null,
+          pendingMoving: retriedPendingMotion?.moving ?? null,
         })
-        recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
-        return
       }
 
       actorGroup.position.set(
@@ -9571,6 +9792,7 @@ export function NavigationSystem() {
               pickupGestureProgress >= 0.5
             ) {
               activeItemMoveSequence.pickupCarryVisualStartedAt = now
+              clearNavigationItemMovePickupSourcePending(activeItemMoveSequence.request)
               activeItemMoveSequence.controller.beginCarry()
               navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, 'carried')
             }
@@ -9580,6 +9802,7 @@ export function NavigationSystem() {
             ) {
               if (activeItemMoveSequence.pickupCarryVisualStartedAt === null) {
                 activeItemMoveSequence.pickupCarryVisualStartedAt = now
+                clearNavigationItemMovePickupSourcePending(activeItemMoveSequence.request)
                 activeItemMoveSequence.controller.beginCarry()
                 navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, 'carried')
               }
@@ -9786,12 +10009,15 @@ export function NavigationSystem() {
         }
       }
 
-      syncCarryVisualItem(activeItemMoveSequence)
+      syncCarryVisualItem(itemMoveSequenceRef.current)
       recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
       return
     }
 
     const motionPathCurve = primaryPathCurve
+    const motionDelta = Number.isFinite(delta)
+      ? MathUtils.clamp(delta, 0, ACTOR_MOTION_MAX_FRAME_DELTA_SECONDS)
+      : 0
     const currentProgress = motionRef.current.distance / primaryPathLength
     motionPathCurve.getTangentAt(
       Math.min(0.999, currentProgress + 0.0001),
@@ -9828,20 +10054,17 @@ export function NavigationSystem() {
         : 0
 
     if (remainingDistance <= brakingDistance || motionRef.current.speed > speedCap) {
-      motionRef.current.speed = Math.max(
-        0,
-        motionRef.current.speed - deceleration * delta,
-      )
+      motionRef.current.speed = Math.max(0, motionRef.current.speed - deceleration * motionDelta)
     } else {
       motionRef.current.speed = Math.min(
         speedCap,
-        motionRef.current.speed + acceleration * delta,
+        motionRef.current.speed + acceleration * motionDelta,
       )
     }
 
     const candidateDistance = Math.min(
       primaryPathLength,
-      motionRef.current.distance + motionRef.current.speed * delta,
+      motionRef.current.distance + motionRef.current.speed * motionDelta,
     )
     const candidateProgress = candidateDistance / primaryPathLength
     const activeDoorBounds = getActiveDoorLeafCollisionShapes(activeDoorCollisionCandidateIds)
@@ -9885,7 +10108,7 @@ export function NavigationSystem() {
     if (blockedByDoor) {
       motionRef.current.speed = Math.max(
         0,
-        motionRef.current.speed - deceleration * 1.5 * delta,
+        motionRef.current.speed - deceleration * 1.5 * motionDelta,
       )
     } else {
       motionRef.current.distance = candidateDistance
@@ -9956,7 +10179,7 @@ export function NavigationSystem() {
       actorGroup.rotation.y,
       actorGroup.rotation.y + yawDelta,
       ACTOR_TURN_RESPONSE,
-      delta,
+      motionDelta,
     )
 
     if (activeItemMoveSequence?.stage === 'to-target') {
@@ -10005,7 +10228,7 @@ export function NavigationSystem() {
       }
     }
 
-    syncCarryVisualItem(activeItemMoveSequence)
+    syncCarryVisualItem(itemMoveSequenceRef.current)
 
     recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
   })
@@ -10660,13 +10883,7 @@ export function NavigationSystem() {
             return false
           }
 
-          const metadata =
-            typeof node.metadata === 'object' &&
-            node.metadata !== null &&
-            !Array.isArray(node.metadata)
-              ? (node.metadata as Record<string, unknown>)
-              : null
-          return metadata?.isTransient === true
+          return isNavigationTaskPreviewNodeId(node.id)
         })?.id ?? null
       const previewGhostId = previewSelectedIds[0] ?? transientPreviewGhostId
       const previewGhostNode = previewGhostId ? liveSceneNodes[previewGhostId] : null
@@ -11305,6 +11522,7 @@ export function NavigationSystem() {
             : rect.height > 0
               ? rect.width / rect.height
               : null,
+        cameraLayers: camera.layers.mask,
         canvasClientHeight: gl.domElement.clientHeight,
         canvasClientWidth: gl.domElement.clientWidth,
         canvasHeight: gl.domElement.height,
@@ -11910,8 +12128,9 @@ export function NavigationSystem() {
               forcedClipPlayback={actorForcedClipPlayback}
               hoverOffset={ACTOR_HOVER_Y}
               motionRef={motionRef}
+              materialDebugMode={robotMaterialDebugModeOverrideRef.current ?? 'auto'}
               onReady={handlePascalTruckIntroRobotReady}
-              onWarmupReadyChange={setActorRobotWarmupReady}
+              onWarmupReadyChange={handleActorRobotWarmupReadyChange}
               skinnedMeshVisibilityOverride={robotSkinnedMeshVisibleOverrideRef.current}
               staticMeshVisibilityOverride={robotStaticMeshVisibleOverrideRef.current}
               showToolAttachments={actorToolAttachmentsVisible}

@@ -4,10 +4,10 @@ import { Icon } from '@iconify/react'
 import {
   type AnyNode,
   type AnyNodeId,
+  type ItemNode,
   initSpaceDetectionSync,
   initSpatialGridSync,
   spatialGridManager,
-  type ItemNode,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -33,17 +33,17 @@ import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-con
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
-  applySceneGraphToEditor,
-  loadSceneFromLocalStorage,
-  type SceneGraph,
-  writePersistedSelection,
-} from '../../lib/scene'
-import {
   buildPascalTruckNodeForScene,
   isPascalTruckNode,
   PASCAL_TRUCK_ITEM_NODE_ID,
   stripPascalTruckFromSceneGraph,
 } from '../../lib/pascal-truck'
+import {
+  applySceneGraphToEditor,
+  loadSceneFromLocalStorage,
+  type SceneGraph,
+  writePersistedSelection,
+} from '../../lib/scene'
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import useNavigation from '../../store/use-navigation'
@@ -814,6 +814,7 @@ export default function Editor({
   commandPaletteEmptyAction,
 }: EditorProps) {
   useKeyboard({ isVersionPreviewMode })
+
   const robotMode = useNavigation((state) => state.robotMode)
   const taskLoopToken = useNavigation((state) => state.taskLoopToken)
   const [taskModeSceneRestorePending, setTaskModeSceneRestorePending] = useState(false)
@@ -838,14 +839,18 @@ export default function Editor({
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
 
-  const stripPascalTruckFromScene = useCallback((sceneGraph?: SceneGraph | null): SceneGraph | null => {
-    const { sceneGraph: sanitizedSceneGraph, truckNode } = stripPascalTruckFromSceneGraph(sceneGraph)
-    if (truckNode) {
-      pascalTruckNodeRef.current = truckNode
-    }
+  const stripPascalTruckFromScene = useCallback(
+    (sceneGraph?: SceneGraph | null): SceneGraph | null => {
+      const { sceneGraph: sanitizedSceneGraph, truckNode } =
+        stripPascalTruckFromSceneGraph(sceneGraph)
+      if (truckNode) {
+        pascalTruckNodeRef.current = truckNode
+      }
 
-    return (sanitizedSceneGraph as SceneGraph | null | undefined) ?? null
-  }, [])
+      return (sanitizedSceneGraph as SceneGraph | null | undefined) ?? null
+    },
+    [],
+  )
 
   const captureCurrentSceneGraph = useCallback((): SceneGraph => {
     const sceneState = useScene.getState()
@@ -882,7 +887,9 @@ export default function Editor({
       useLiveTransforms.getState().clearAll()
       const nextSceneGraph = cloneSceneGraph(snapshot)
       if (useNavigation.getState().robotMode === 'task') {
-        const hasTruckNode = Object.values(nextSceneGraph.nodes).some((node) => isPascalTruckNode(node))
+        const hasTruckNode = Object.values(nextSceneGraph.nodes).some((node) =>
+          isPascalTruckNode(node),
+        )
         if (!hasTruckNode) {
           const { node, parentId } = buildPascalTruckNodeForScene(
             nextSceneGraph,
@@ -1007,8 +1014,9 @@ export default function Editor({
       rootNodeIds: [...sceneState.rootNodeIds] as SceneGraph['rootNodeIds'],
     })
     const existingTruckNode =
-      (Object.values(currentSceneGraph.nodes).find((node) => isPascalTruckNode(node)) as ItemNode | null) ??
-      null
+      (Object.values(currentSceneGraph.nodes).find((node) =>
+        isPascalTruckNode(node),
+      ) as ItemNode | null) ?? null
 
     if (existingTruckNode) {
       pascalTruckNodeRef.current = cloneSceneGraph({

@@ -4,7 +4,6 @@ import type { BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/co
 import {
   getItemMoveVisualState,
   resolveLevelId,
-  sceneRegistry,
   setItemMoveVisualState,
   useScene,
 } from '@pascal-app/core'
@@ -281,7 +280,9 @@ function getRestoredSelectionForScene(
   return getValidatedSelectionForScene(sceneNodes, persistedSelection)
 }
 
-export function syncEditorSelectionFromCurrentScene(options?: { restorePersistedUiState?: boolean }) {
+export function syncEditorSelectionFromCurrentScene(options?: {
+  restorePersistedUiState?: boolean
+}) {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
   const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
@@ -292,7 +293,9 @@ export function syncEditorSelectionFromCurrentScene(options?: { restorePersisted
   const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
   const shouldRestoreEditorUiState =
     restorePersistedUiState && hasCustomPersistedEditorUiState(restoredEditorUiState)
-  const restoredSelection = restorePersistedUiState ? getRestoredSelectionForScene(sceneNodes) : null
+  const restoredSelection = restorePersistedUiState
+    ? getRestoredSelectionForScene(sceneNodes)
+    : null
   const selectionDrivenEditorUiState = restoredSelection
     ? getEditorUiStateForRestoredSelection(sceneNodes, restoredSelection, restoredEditorUiState)
     : null
@@ -374,21 +377,34 @@ function resetEditorInteractionState(mode: ApplySceneGraphMode) {
     nodeEventsSuppressed: false,
     previewSelectedIds: [],
   })
-  navigationVisualsStore.setState({
-    itemDeleteActivations: {},
-    itemMovePreview: null,
-    itemMoveVisualStates: {},
-    navigationPostWarmupCompletedToken: 0,
-    navigationPostWarmupRequestToken: 0,
-    navigationPostWarmupScope: null,
-    nodeVisibilityOverrides: {},
-    repairShieldActivations: {},
-    showActionShields: false,
-    toolConeIsolatedOverlay: null,
-    toolConeOverlayCamera: null,
-    toolConeOverlayEnabled: false,
-    toolConeOverlayWarmupReady: false,
-  })
+  if (mode === 'task-loop') {
+    navigationVisualsStore.getState().resetTaskQueueVisuals()
+    navigationVisualsStore.setState({
+      navigationPostWarmupCompletedToken: 0,
+      navigationPostWarmupRequestToken: 0,
+      navigationPostWarmupScope: null,
+      nodeVisibilityOverrides: {},
+      taskPreviewNodeIds: {},
+      toolConeIsolatedOverlay: null,
+      toolConeOverlayCamera: null,
+      toolConeOverlayWarmupReady: false,
+    })
+  } else {
+    navigationVisualsStore.setState({
+      itemDeleteActivations: {},
+      itemMovePreview: null,
+      itemMoveVisualStates: {},
+      navigationPostWarmupCompletedToken: 0,
+      navigationPostWarmupRequestToken: 0,
+      navigationPostWarmupScope: null,
+      nodeVisibilityOverrides: {},
+      toolConeIsolatedOverlay: null,
+      toolConeOverlayCamera: null,
+      toolConeOverlayEnabled: false,
+      toolConeOverlayWarmupReady: false,
+      taskPreviewNodeIds: {},
+    })
+  }
   // Clear outliner arrays synchronously so stale Object3D refs from the old
   // scene don't leak into the post-processing pipeline's outline passes.
   const outliner = useViewer.getState().outliner
@@ -458,6 +474,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isTaskPreviewNodeId(nodeId: string) {
+  const taskPreviewNodeIds = navigationVisualsStore.getState().taskPreviewNodeIds
+  return (
+    taskPreviewNodeIds[nodeId] === true ||
+    nodeId.startsWith('item_debug_move_preview_') ||
+    nodeId.startsWith('item_debug_copy_preview_')
+  )
+}
+
+function isRuntimeTaskPreviewNode(nodeId: string, node: unknown) {
+  if (!isRecord(node) || node.type !== 'item') {
+    return false
+  }
+
+  return isTaskPreviewNodeId(nodeId)
+}
+
 function stripTransientTaskVisuals(sceneGraph?: SceneGraph | null): SceneGraph | null | undefined {
   if (!sceneGraph) {
     return sceneGraph
@@ -465,8 +498,15 @@ function stripTransientTaskVisuals(sceneGraph?: SceneGraph | null): SceneGraph |
 
   let changed = false
   const sanitizedNodes: Record<string, unknown> = {}
+  const removedNodeIds = new Set<string>()
 
   for (const [id, node] of Object.entries(sceneGraph.nodes ?? {})) {
+    if (isRuntimeTaskPreviewNode(id, node)) {
+      removedNodeIds.add(id)
+      changed = true
+      continue
+    }
+
     if (!isRecord(node) || getItemMoveVisualState(node.metadata) === null) {
       sanitizedNodes[id] = node
       continue
@@ -483,9 +523,28 @@ function stripTransientTaskVisuals(sceneGraph?: SceneGraph | null): SceneGraph |
     return sceneGraph
   }
 
+  if (removedNodeIds.size > 0) {
+    for (const [id, node] of Object.entries(sanitizedNodes)) {
+      if (!isRecord(node) || !Array.isArray(node.children)) {
+        continue
+      }
+
+      const nextChildren = node.children.filter(
+        (childId) => typeof childId !== 'string' || !removedNodeIds.has(childId),
+      )
+      if (nextChildren.length !== node.children.length) {
+        sanitizedNodes[id] = {
+          ...node,
+          children: nextChildren,
+        }
+      }
+    }
+  }
+
   return {
     ...sceneGraph,
     nodes: sanitizedNodes,
+    rootNodeIds: sceneGraph.rootNodeIds.filter((nodeId) => !removedNodeIds.has(nodeId)),
   }
 }
 
@@ -494,8 +553,8 @@ export function applySceneGraphToEditor(
   options?: { mode?: ApplySceneGraphMode },
 ) {
   const mode = options?.mode ?? 'full'
-  resetEditorInteractionState(mode)
   const sanitizedSceneGraph = stripTransientTaskVisuals(sceneGraph)
+  resetEditorInteractionState(mode)
 
   if (hasUsableSceneGraph(sanitizedSceneGraph)) {
     const { nodes, rootNodeIds } = sanitizedSceneGraph

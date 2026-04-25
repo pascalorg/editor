@@ -1,6 +1,5 @@
 # Blender 4.4.1
 # www.blender.org
-mtllib mesh_shield_1.mtl
 o Icosphere
 v 0.041858 -0.978633 0.128824
 v -0.109585 -0.978633 0.079618

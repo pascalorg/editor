@@ -3,7 +3,6 @@ import type {
   ViewerRuntimeItemDeleteActivation,
   ViewerRuntimeItemMovePreview,
   ViewerRuntimePostWarmupScope,
-  ViewerRuntimeRepairShieldActivation,
   ViewerRuntimeState,
 } from '@pascal-app/viewer'
 import { useStore } from 'zustand'
@@ -31,30 +30,23 @@ export type ToolConeOverlayCamera = {
 
 type NavigationVisualState = ViewerRuntimeState & {
   activateItemDelete: (id: BaseNode['id']) => void
-  activateRepairShield: (id: BaseNode['id']) => void
-  actionShieldKinds: Partial<Record<BaseNode['id'], 'copy' | 'delete' | 'move' | 'repair'>>
-  actionShieldOpacities: Partial<Record<BaseNode['id'], number>>
   beginItemDeleteFade: (id: BaseNode['id'], startedAtMs?: number) => void
   clearItemDelete: (id?: BaseNode['id'] | null) => void
-  clearRepairShield: (id?: BaseNode['id'] | null) => void
+  registerTaskPreviewNode: (id: string) => void
   resetTaskQueueVisuals: () => void
-  setActionShieldKind: (
-    id: BaseNode['id'],
-    kind: 'copy' | 'delete' | 'move' | 'repair' | null,
-  ) => void
-  setActionShieldOpacity: (id: BaseNode['id'], opacity: number | null) => void
   setItemMovePreview: (preview: ViewerRuntimeItemMovePreview | null) => void
   setItemMoveVisualState: (id: BaseNode['id'], state: ItemMoveVisualState | null) => void
   setNodeVisibilityOverride: (id: BaseNode['id'], visible: boolean | null) => void
-  setShowActionShields: (showActionShields: boolean) => void
   setToolConeIsolatedOverlay: (overlay: ToolConeIsolatedOverlay | null) => void
   setToolConeOverlayCamera: (camera: ToolConeOverlayCamera | null) => void
   setToolConeOverlayEnabled: (enabled: boolean) => void
   setToolConeOverlayWarmupReady: (ready: boolean) => void
+  taskPreviewNodeIds: Record<string, true>
   toolConeIsolatedOverlay: ToolConeIsolatedOverlay | null
   toolConeOverlayCamera: ToolConeOverlayCamera | null
   toolConeOverlayEnabled: boolean
   toolConeOverlayWarmupReady: boolean
+  unregisterTaskPreviewNode: (id?: string | null) => void
 }
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
@@ -66,15 +58,6 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
         ...state.itemDeleteActivations,
         [id]: {
           fadeStartedAtMs: null,
-          startedAtMs: now(),
-        },
-      },
-    })),
-  activateRepairShield: (id) =>
-    set((state) => ({
-      repairShieldActivations: {
-        ...state.repairShieldActivations,
-        [id]: {
           startedAtMs: now(),
         },
       },
@@ -112,22 +95,17 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
       delete itemDeleteActivations[id]
       return { itemDeleteActivations }
     }),
-  clearRepairShield: (id) =>
-    set((state) => {
-      if (!id) {
-        return Object.keys(state.repairShieldActivations).length === 0
-          ? state
-          : { repairShieldActivations: {} }
-      }
-
-      if (!state.repairShieldActivations[id]) {
-        return state
-      }
-
-      const repairShieldActivations = { ...state.repairShieldActivations }
-      delete repairShieldActivations[id]
-      return { repairShieldActivations }
-    }),
+  registerTaskPreviewNode: (id) =>
+    set((state) =>
+      state.taskPreviewNodeIds[id]
+        ? state
+        : {
+            taskPreviewNodeIds: {
+              ...state.taskPreviewNodeIds,
+              [id]: true,
+            },
+          },
+    ),
   resetTaskQueueVisuals: () =>
     set((state) => {
       const nextItemMoveVisualStates: Partial<Record<BaseNode['id'], ItemMoveVisualState>> = {}
@@ -145,9 +123,7 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
       const hasTaskQueueVisuals =
         state.itemMovePreview !== null ||
         Object.keys(state.itemDeleteActivations).length > 0 ||
-        Object.keys(state.repairShieldActivations).length > 0 ||
-        Object.keys(state.actionShieldKinds).length > 0 ||
-        Object.keys(state.actionShieldOpacities).length > 0 ||
+        Object.keys(state.taskPreviewNodeIds).length > 0 ||
         removedPendingMoveVisual
 
       if (!hasTaskQueueVisuals) {
@@ -155,16 +131,12 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
       }
 
       return {
-        actionShieldKinds: {},
-        actionShieldOpacities: {},
         itemDeleteActivations: {},
         itemMovePreview: null,
         itemMoveVisualStates: nextItemMoveVisualStates,
-        repairShieldActivations: {},
+        taskPreviewNodeIds: {},
       }
     }),
-  actionShieldKinds: {},
-  actionShieldOpacities: {},
   completeNavigationPostWarmup: (token) =>
     set((state) =>
       token <= state.navigationPostWarmupCompletedToken
@@ -178,9 +150,6 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
   navigationPostWarmupRequestToken: 0,
   navigationPostWarmupScope: null as ViewerRuntimePostWarmupScope,
   nodeVisibilityOverrides: {} as Partial<Record<BaseNode['id'], boolean>>,
-  repairShieldActivations: {} as Partial<
-    Record<BaseNode['id'], ViewerRuntimeRepairShieldActivation>
-  >,
   requestNavigationPostWarmup: () => {
     let nextToken = 0
     set((state) => {
@@ -189,38 +158,6 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
     })
     return nextToken
   },
-  setActionShieldKind: (id, kind) =>
-    set((currentState) => {
-      const currentValue = currentState.actionShieldKinds[id]
-      if ((currentValue ?? null) === kind) {
-        return currentState
-      }
-
-      const actionShieldKinds = { ...currentState.actionShieldKinds }
-      if (kind === null) {
-        delete actionShieldKinds[id]
-      } else {
-        actionShieldKinds[id] = kind
-      }
-
-      return { actionShieldKinds }
-    }),
-  setActionShieldOpacity: (id, opacity) =>
-    set((currentState) => {
-      const currentValue = currentState.actionShieldOpacities[id]
-      if ((currentValue ?? null) === opacity) {
-        return currentState
-      }
-
-      const actionShieldOpacities = { ...currentState.actionShieldOpacities }
-      if (opacity === null) {
-        delete actionShieldOpacities[id]
-      } else {
-        actionShieldOpacities[id] = opacity
-      }
-
-      return { actionShieldOpacities }
-    }),
   setItemMovePreview: (itemMovePreview) => set({ itemMovePreview }),
   setItemMoveVisualState: (id, state) =>
     set((currentState) => {
@@ -255,17 +192,26 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
 
       return { nodeVisibilityOverrides }
     }),
-  setShowActionShields: (showActionShields) => set({ showActionShields }),
   setToolConeIsolatedOverlay: (toolConeIsolatedOverlay) => set({ toolConeIsolatedOverlay }),
   setToolConeOverlayCamera: (toolConeOverlayCamera) => set({ toolConeOverlayCamera }),
   setToolConeOverlayEnabled: (toolConeOverlayEnabled) => set({ toolConeOverlayEnabled }),
   setToolConeOverlayWarmupReady: (toolConeOverlayWarmupReady) =>
     set({ toolConeOverlayWarmupReady }),
-  showActionShields: false,
+  taskPreviewNodeIds: {},
   toolConeIsolatedOverlay: null,
   toolConeOverlayCamera: null,
   toolConeOverlayEnabled: false,
   toolConeOverlayWarmupReady: false,
+  unregisterTaskPreviewNode: (id) =>
+    set((state) => {
+      if (!id || !state.taskPreviewNodeIds[id]) {
+        return state
+      }
+
+      const taskPreviewNodeIds = { ...state.taskPreviewNodeIds }
+      delete taskPreviewNodeIds[id]
+      return { taskPreviewNodeIds }
+    }),
 }))
 
 export function useNavigationVisuals<T>(selector: (state: NavigationVisualState) => T): T {

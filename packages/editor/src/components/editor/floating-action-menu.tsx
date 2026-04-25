@@ -25,12 +25,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
-import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import {
   requestNavigationItemDelete,
   requestNavigationItemRepair,
 } from '../../store/use-navigation'
-import navigationVisualsStore, { useNavigationVisuals } from '../../store/use-navigation-visuals'
+import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -64,8 +63,6 @@ export function FloatingActionMenu() {
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
   const setHoveredId = useViewer((s) => s.setHoveredId)
-  const activateRepairShield = useNavigationVisuals((s) => s.activateRepairShield)
-  const clearRepairShield = useNavigationVisuals((s) => s.clearRepairShield)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
@@ -152,10 +149,7 @@ export function FloatingActionMenu() {
           node.type === 'wall'
             ? obj.localToWorld(
                 new THREE.Vector3(
-                  Math.hypot(
-                    segment.end[0] - segment.start[0],
-                    segment.end[1] - segment.start[1],
-                  ),
+                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
                   0,
                   0,
                 ),
@@ -435,7 +429,7 @@ export function FloatingActionMenu() {
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
-    [node?.type, selectedId, setSelection],
+    [node, selectedId, setSelection],
   )
 
   const handleRepair = useCallback(
@@ -449,18 +443,10 @@ export function FloatingActionMenu() {
         return
       }
 
-      const repairShieldActive = Boolean(
-        navigationVisualsStore.getState().repairShieldActivations[node.id],
-      )
-      if (repairShieldActive) {
-        clearRepairShield(node.id)
-      } else {
-        activateRepairShield(node.id)
-      }
       setHoveredId(null)
       setSelection({ selectedIds: [] })
     },
-    [activateRepairShield, clearRepairShield, node, setHoveredId, setSelection],
+    [node, setHoveredId, setSelection],
   )
 
   if (

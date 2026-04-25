@@ -4,7 +4,7 @@ import {
   type CeilingNode,
   type DoorNode,
   type FenceNode,
-  getItemMoveVisualState,
+  type getItemMoveVisualState,
   getScaledDimensions,
   type ItemNode,
   type RoofNode,
@@ -25,11 +25,11 @@ import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import useNavigation from '../../../store/use-navigation'
 import {
   getNavigationDraftRobotCopySourceId,
   setNavigationDraftRobotCopySourceId,
 } from '../../../store/use-navigation-drafts'
-import useNavigation from '../../../store/use-navigation'
 import navigationVisualsStore from '../../../store/use-navigation-visuals'
 import { MoveBuildingContent } from '../building/move-building-tool'
 import { MoveCeilingTool } from '../ceiling/move-ceiling-tool'
@@ -59,6 +59,14 @@ function haveSameIds(a: string[], b: string[]) {
   }
 
   return a.every((id, index) => id === b[index])
+}
+
+let robotTaskPreviewNodeSequence = 0
+
+function createRobotTaskPreviewNodeId(kind: 'copy' | 'move', sourceId: string): ItemNode['id'] {
+  robotTaskPreviewNodeSequence += 1
+  const timestamp = Math.round(performance.now())
+  return `item_debug_${kind}_preview_${sourceId}_${timestamp}_${robotTaskPreviewNodeSequence}` as ItemNode['id']
 }
 
 function setDraftVisibility(draftNode: DraftNodeHandle, visible: boolean) {
@@ -163,6 +171,7 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
     moveItemsEnabled,
     registerItemMoveController,
     requestItemMove,
+    robotMode,
     setItemMoveLocked,
   } = useNavigation(
     useShallow((state) => ({
@@ -171,6 +180,7 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       moveItemsEnabled: state.moveItemsEnabled,
       registerItemMoveController: state.registerItemMoveController,
       requestItemMove: state.requestItemMove,
+      robotMode: state.robotMode,
       setItemMoveLocked: state.setItemMoveLocked,
     })),
   )
@@ -185,7 +195,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   })
   const isSceneBackedItem = sceneBackedMovingNode !== null
   const isNew = !isSceneBackedItem && !!meta.isNew
-  const robotCopySourceId = !isSceneBackedItem ? getNavigationDraftRobotCopySourceId(movingNode.id) : null
+  const robotCopySourceId = !isSceneBackedItem
+    ? getNavigationDraftRobotCopySourceId(movingNode.id)
+    : null
   const robotCopySourceNode = useScene((state) => {
     const node = robotCopySourceId ? state.nodes[robotCopySourceId as AnyNodeId] : null
     return node?.type === 'item' ? (node as ItemNode) : null
@@ -246,24 +258,33 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       handoffCommittedRef.current = false
       setHandoffCommitted(false)
       setPreviewOutlineIds([])
-      navigationVisualsStore.getState().setItemMovePreview(null)
+
+      const draft = draftNode.current
+      const draftId = previewDraftId ?? draft?.id ?? null
+      const navigationVisuals = navigationVisualsStore.getState()
+      const activePreview = navigationVisuals.itemMovePreview
+      if (
+        activePreview &&
+        (activePreview.sourceItemId === robotPreviewSourceId || activePreview.id === draftId)
+      ) {
+        navigationVisuals.setItemMovePreview(null)
+      }
 
       if (robotPreviewSourceId) {
         setItemVisualState(robotPreviewSourceId, null)
-        navigationVisualsStore.getState().setNodeVisibilityOverride(robotPreviewSourceId, null)
+        navigationVisuals.setNodeVisibilityOverride(robotPreviewSourceId, null)
         if (!preserveSourceLiveTransform && !isNew) {
           useLiveTransforms.getState().clear(robotPreviewSourceId)
         }
       }
 
-      const draft = draftNode.current
-      const draftId = previewDraftId ?? draft?.id ?? null
       if (draft) {
         setDraftVisualState(draftNode, null)
       }
       if (draftId) {
-        navigationVisualsStore.getState().setNodeVisibilityOverride(draftId, null)
-        navigationVisualsStore.getState().setItemMoveVisualState(draftId, null)
+        navigationVisuals.unregisterTaskPreviewNode(draftId)
+        navigationVisuals.setNodeVisibilityOverride(draftId, null)
+        navigationVisuals.setItemMoveVisualState(draftId, null)
         useLiveTransforms.getState().clear(draftId)
       }
     },
@@ -271,10 +292,7 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   )
 
   useEffect(() => {
-    if (
-      !sceneBackedMovingNode ||
-      !Object.hasOwn(meta, 'isNew')
-    ) {
+    if (!sceneBackedMovingNode || !Object.hasOwn(meta, 'isNew')) {
       return
     }
 
@@ -293,6 +311,10 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
 
   useEffect(() => {
     if (useRobotItemPreview) {
+      return
+    }
+
+    if (detachedTaskRef.current) {
       return
     }
 
@@ -358,7 +380,10 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
           : null
         const committedId = draftNode.commit({
           ...finalUpdate,
-          metadata: setItemMoveVisualState(stripTransient(sourceMetadata), null) as ItemNode['metadata'],
+          metadata: setItemMoveVisualState(
+            stripTransient(sourceMetadata),
+            null,
+          ) as ItemNode['metadata'],
           visible: true,
         })
         clearRobotPreviewState({
@@ -403,15 +428,13 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
     }
   }, [
     cancelPendingSourceTransformClear,
-    detachedTaskRef,
     draftNode,
     clearRobotPreviewState,
-    movingNode.id,
-    movingNode.rotation,
+    isNew,
+    movingNode,
     registerItemMoveController,
     robotCopySourceNode,
     robotPreviewSourceId,
-    requestItemMove,
     scheduleSourceTransformClear,
     setItemMoveLocked,
     useRobotCarryPreview,
@@ -422,11 +445,8 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   useEffect(() => {
     return () => {
       cancelPendingSourceTransformClear()
-      if (isNew) {
-        setNavigationDraftRobotCopySourceId(movingNode.id, null)
-      }
     }
-  }, [cancelPendingSourceTransformClear, isNew, movingNode.id])
+  }, [cancelPendingSourceTransformClear])
 
   const cursor = usePlacementCoordinator({
     asset: movingNode.asset,
@@ -446,7 +466,15 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
         // Floor items get a draft immediately; wall/ceiling items are created lazily on surface entry.
         gridPosition.copy(new Vector3(...movingNode.position))
         if (!movingNode.asset.attachTo) {
-          draftNode.create(gridPosition, movingNode.asset, movingNode.rotation, movingNode.scale)
+          draftNode.create(
+            gridPosition,
+            movingNode.asset,
+            movingNode.rotation,
+            movingNode.scale,
+            useRobotCopyPreview && robotCopySourceId
+              ? { id: createRobotTaskPreviewNodeId('copy', robotCopySourceId) }
+              : undefined,
+          )
           if (useRobotCopyPreview && robotCopySourceId) {
             setDraftVisualState(draftNode, 'destination-preview')
             setDraftVisibility(draftNode, true)
@@ -459,7 +487,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       }
 
       if (useRobotCarryPreview) {
-        const draft = draftNode.preview(movingNode)
+        const draft = draftNode.preview(movingNode, {
+          id: createRobotTaskPreviewNodeId('move', movingNode.id),
+        })
         if (draft) {
           useLiveTransforms.getState().set(draft.id, {
             position: [...movingNode.position] as [number, number, number],
@@ -491,11 +521,11 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
           const requestSourceNode = useRobotCopyPreview ? robotCopySourceNode : movingNode
           const requestSourceId = requestSourceNode?.id ?? null
           if (!(requestSourceNode && requestSourceId)) {
-            return true
+            return false
           }
 
           if (surface !== 'floor' || !nodeUpdate.position) {
-            return true
+            return false
           }
 
           const finalRotation =
@@ -503,6 +533,14 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
             draftNode.current?.rotation ??
             ([...requestSourceNode.rotation] as [number, number, number])
           const draft = draftNode.current
+          if (draft) {
+            const previewMetadata = stripTransient(draft.metadata) as ItemNode['metadata']
+            draft.metadata = previewMetadata
+            useScene.getState().updateNode(draft.id as AnyNodeId, {
+              metadata: previewMetadata,
+            })
+            navigationVisualsStore.getState().registerTaskPreviewNode(draft.id)
+          }
 
           setItemVisualState(
             requestSourceId,
@@ -534,9 +572,6 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
           setItemVisualState(requestSourceId, null)
           detachedTaskRef.current = true
           setItemMoveLocked(false)
-          if (isNew) {
-            setNavigationDraftRobotCopySourceId(movingNode.id, null)
-          }
           useEditor.getState().setMovingNode(null)
           return false
         }
@@ -545,7 +580,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       sfxEmitter.emit('sfx:item-place')
       handoffCommittedRef.current = false
       setHandoffCommitted(false)
-      requestItemMove(null)
+      if (robotMode !== 'task') {
+        requestItemMove(null)
+      }
       setItemMoveLocked(false)
       if (isNew) {
         setNavigationDraftRobotCopySourceId(movingNode.id, null)
@@ -562,7 +599,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       if (robotPreviewSourceId) {
         registerItemMoveController(robotPreviewSourceId, null)
       }
-      requestItemMove(null)
+      if (robotMode !== 'task') {
+        requestItemMove(null)
+      }
       setItemMoveLocked(false)
       if (isNew) {
         setNavigationDraftRobotCopySourceId(movingNode.id, null)

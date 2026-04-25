@@ -65,10 +65,6 @@ export const SFX: Record<string, SFXConfig> = {
     volumeRange: [0.9, 1.0],
     panJitter: 0.15,
   },
-  snapshotCapture: {
-    // Shutter should sound consistent, no variation.
-    src: '/audios/sfx/snapshot_capture.mp3',
-  },
 } as const
 
 export type SFXName = keyof typeof SFX

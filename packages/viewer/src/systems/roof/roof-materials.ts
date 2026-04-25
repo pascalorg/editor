@@ -43,4 +43,3 @@ export function getRoofMaterialArray(node: RoofNode): RoofMaterialArray | null {
     topMaterial ?? wallMaterial ?? edgeMaterial ?? new THREE.MeshStandardMaterial(),
   ]
 }
-

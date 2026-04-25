@@ -25,6 +25,10 @@ interface OriginalState {
 
 type DraftMode = 'adopt' | 'clone' | 'create'
 
+type DraftNodeOptions = {
+  id?: ItemNode['id']
+}
+
 function withManualPascalTruckPlacement(
   nodeId: string,
   metadata: ItemNode['metadata'],
@@ -54,11 +58,12 @@ export interface DraftNodeHandle {
     asset: AssetInput,
     rotation?: [number, number, number],
     scale?: [number, number, number],
+    options?: DraftNodeOptions,
   ) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
   /** Create a transient preview clone while keeping the source item in place. */
-  preview: (node: ItemNode) => ItemNode | null
+  preview: (node: ItemNode, options?: DraftNodeOptions) => ItemNode | null
   /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place. */
   commit: (finalUpdate: Partial<ItemNode>) => string | null
   /** Destroy the current draft. Create mode: delete node. Move mode: restore original state. */
@@ -84,11 +89,13 @@ export function useDraftNode(): DraftNodeHandle {
       asset: AssetInput,
       rotation?: [number, number, number],
       scale?: [number, number, number],
+      options?: DraftNodeOptions,
     ): ItemNode | null => {
       const currentLevelId = useViewer.getState().selection.levelId
       if (!currentLevelId) return null
 
       const node = ItemNode.parse({
+        id: options?.id,
         position: [gridPosition.x, gridPosition.y, gridPosition.z],
         rotation: rotation ?? [0, 0, 0],
         scale: scale ?? [1, 1, 1],
@@ -135,7 +142,7 @@ export function useDraftNode(): DraftNodeHandle {
     })
   }, [])
 
-  const preview = useCallback((node: ItemNode): ItemNode | null => {
+  const preview = useCallback((node: ItemNode, options?: DraftNodeOptions): ItemNode | null => {
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
         ? (node.metadata as Record<string, unknown>)
@@ -154,6 +161,7 @@ export function useDraftNode(): DraftNodeHandle {
     }
 
     const previewNode = ItemNode.parse({
+      id: options?.id,
       name: node.name,
       asset: node.asset,
       metadata: { ...meta, isTransient: true },

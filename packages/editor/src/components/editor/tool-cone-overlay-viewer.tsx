@@ -836,9 +836,8 @@ function ToolConeIsolatedOverlayScene() {
 
 function ToolConeIsolatedOverlayCanvas() {
   const enabled = useNavigationVisuals((state) => state.toolConeOverlayEnabled)
-  const overlay = useNavigationVisuals((state) => state.toolConeIsolatedOverlay)
 
-  if (!(enabled && overlay?.visible)) {
+  if (!enabled) {
     return null
   }
 

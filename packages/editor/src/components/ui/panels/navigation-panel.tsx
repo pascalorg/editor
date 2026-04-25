@@ -225,8 +225,6 @@ export function NavigationPanel() {
       itemMoveControllers[task.request.itemId]?.cancel()
     } else if (task.kind === 'delete') {
       navigationVisualsStore.getState().clearItemDelete(task.request.itemId)
-    } else {
-      navigationVisualsStore.getState().clearRepairShield(task.request.itemId)
     }
 
     removeQueuedTask(task.taskId)

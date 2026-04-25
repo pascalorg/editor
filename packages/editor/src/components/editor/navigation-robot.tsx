@@ -50,6 +50,7 @@ const NAVIGATION_ROBOT_CLIP_OVERRIDE_STORAGE_KEY = 'pascalNavigationRobotClipOve
 const NAVIGATION_ROBOT_CLIP_OVERRIDE_EVENT = 'pascal-robot-clip-overrides-change'
 const NAVIGATION_ROBOT_ASSET_VERSION_STORAGE_KEY = 'pascalNavigationRobotAssetVersion'
 const NAVIGATION_ROBOT_ASSET_UPDATED_EVENT = 'pascal-robot-asset-updated'
+const NAVIGATION_ROBOT_MATERIAL_WARMUP_FALLBACK_MS = 5000
 const DEFAULT_NAVIGATION_ROBOT_IDLE_CLIP_NAMES = [
   'Idle_9',
   'Idle_11',
@@ -76,9 +77,7 @@ const EXCLUDED_NAVIGATION_ROBOT_CLIP_NAMES = new Set([
 function isTrueWebGPUBackend(
   renderer: unknown,
 ): renderer is { backend: { isWebGPUBackend: true } } {
-  return (
-    (renderer as { backend?: { isWebGPUBackend?: boolean } }).backend?.isWebGPUBackend === true
-  )
+  return (renderer as { backend?: { isWebGPUBackend?: boolean } }).backend?.isWebGPUBackend === true
 }
 
 function getRendererDrawingBufferSize(
@@ -99,10 +98,7 @@ function getRendererDrawingBufferSize(
     return renderer.getDrawingBufferSize(scratch)
   }
 
-  return scratch.set(
-    Math.max(1, canvasWidth || 1),
-    Math.max(1, canvasHeight || 1),
-  )
+  return scratch.set(Math.max(1, canvasWidth || 1), Math.max(1, canvasHeight || 1))
 }
 
 type NavigationRobotClipCategory = 'idle' | 'run' | 'walk'
@@ -248,6 +244,7 @@ const TOOL_CONE_EXTRA_TRANSPARENCY_PERCENT = 61
 const TOOL_CONE_VISIBLE_START_TIME = 1.8
 const TOOL_CONE_VISIBLE_END_TIME = 3.75
 const TOOL_CONE_FOLLOW_BLEND_DURATION_SECONDS = 0.55
+const TOOL_CONE_FOLLOW_RELEASE_RESPONSE = 7
 const TOOL_CONE_FOLLOW_FOREARM_TARGET_HEIGHT_OFFSET = 0.04
 const TOOL_CONE_FOLLOW_SHOULDER_TARGET_HEIGHT_OFFSET = 0.24
 const TOOL_CONE_OPACITY_SCALE = 1 - TOOL_CONE_EXTRA_TRANSPARENCY_PERCENT / 100
@@ -1549,12 +1546,32 @@ function disposeObjectMaterials(material: Material | Material[]) {
   material.dispose()
 }
 
-function normalizeRobotMaterials(material: Material | Material[]) {
+function normalizeRobotBaseMaterials(material: Material | Material[]) {
   const materials = Array.isArray(material) ? material : [material]
   for (const entry of materials) {
     if (!entry.transparent) {
       entry.side = FrontSide
     }
+    entry.needsUpdate = true
+  }
+}
+
+function normalizeRobotRevealMaterials(material: Material | Material[]) {
+  const materials = Array.isArray(material) ? material : [material]
+  for (const entry of materials) {
+    const robotMaterial = entry as RobotRenderableMaterial
+    if (!entry.transparent) {
+      entry.side = FrontSide
+    }
+    robotMaterial.transparent = true
+    robotMaterial.depthTest = true
+    robotMaterial.depthWrite = false
+    robotMaterial.toneMapped = false
+    if (robotMaterial.emissive) {
+      robotMaterial.emissive.copy(robotMaterial.color ?? new Color(0xffffff))
+      robotMaterial.emissiveIntensity = Math.max(robotMaterial.emissiveIntensity ?? 0, 0.55)
+    }
+    robotMaterial.needsUpdate = true
   }
 }
 
@@ -1906,6 +1923,7 @@ export function NavigationRobot({
   const toolRevealMaterialBindingsRef = useRef<RevealMaterialBinding[]>([])
   const toolRevealMaterialEntriesRef = useRef<RevealMaterialEntry[]>([])
   const toolRevealMaterialsActiveRef = useRef(false)
+  const readySignalKeyRef = useRef<string | null>(null)
   const materialWarmupQueuedRef = useRef(false)
   const [materialWarmupReady, setMaterialWarmupReady] = useState(false)
   const resolveRevealMaterialsShouldBeActive = useMemo(
@@ -2183,6 +2201,12 @@ export function NavigationRobot({
   const toolConeApexLocalPointRef = useRef(new Vector3())
   const toolConeCarryTargetBoundsRef = useRef(new Box3())
   const toolConeCarryTargetCenterRef = useRef(new Vector3())
+  const toolConeFollowReleaseBlendRef = useRef(0)
+  const toolConeFollowReleasePoseReadyRef = useRef(false)
+  const toolConeFollowReleaseShoulderQuaternionRef = useRef(new Quaternion())
+  const toolConeFollowReleaseUpperArmQuaternionRef = useRef(new Quaternion())
+  const toolConeFollowReleaseElbowQuaternionRef = useRef(new Quaternion())
+  const toolConeFollowReleaseLeftHandQuaternionRef = useRef(new Quaternion())
   const toolConeFollowShoulderTargetRef = useRef(new Vector3())
   const toolConeFollowForearmTargetRef = useRef(new Vector3())
   const toolConeFrameIdRef = useRef(0)
@@ -2335,6 +2359,16 @@ export function NavigationRobot({
 
     materialWarmupQueuedRef.current = true
     let cancelled = false
+    const fallbackTimeoutId = window.setTimeout(() => {
+      if (cancelled) {
+        return
+      }
+
+      recordNavigationPerfMark('navigationRobot.materialWarmupFallbackReady', {
+        timeoutMs: NAVIGATION_ROBOT_MATERIAL_WARMUP_FALLBACK_MS,
+      })
+      setMaterialWarmupReady(true)
+    }, NAVIGATION_ROBOT_MATERIAL_WARMUP_FALLBACK_MS)
     const compileWarmup = async () => {
       if (cancelled) {
         return
@@ -2608,6 +2642,7 @@ export function NavigationRobot({
           performance.now() - warmupStart,
         )
         if (!cancelled) {
+          window.clearTimeout(fallbackTimeoutId)
           recordNavigationPerfMark('navigationRobot.materialWarmupReady')
           setMaterialWarmupReady(true)
         }
@@ -2626,6 +2661,8 @@ export function NavigationRobot({
 
     return () => {
       cancelled = true
+      window.clearTimeout(fallbackTimeoutId)
+      materialWarmupQueuedRef.current = false
       // Cleanup in case the effect is interrupted before the render path removes the warmup roots.
       scene.children
         .filter((child) => child.name === '__pascalRobotWarmupRoot__')
@@ -2738,6 +2775,8 @@ export function NavigationRobot({
 
     measureNavigationPerf('navigationRobot.sceneSetupMs', () => {
       clonedScene.traverse((child) => {
+        child.visible = true
+
         const geometryHolder = child as {
           geometry?: {
             getAttribute?: (name: string) => { count: number } | undefined
@@ -2800,8 +2839,8 @@ export function NavigationRobot({
           if (mesh.material) {
             const originalMaterial = cloneObjectMaterials(mesh.material as Material | Material[])
             const revealMaterial = cloneObjectMaterials(originalMaterial)
-            normalizeRobotMaterials(originalMaterial)
-            normalizeRobotMaterials(revealMaterial)
+            normalizeRobotBaseMaterials(originalMaterial)
+            normalizeRobotRevealMaterials(revealMaterial)
             const revealMaterialList = Array.isArray(revealMaterial)
               ? revealMaterial
               : [revealMaterial]
@@ -2825,6 +2864,7 @@ export function NavigationRobot({
         if ('isMesh' in child && child.isMesh) {
           child.castShadow = false
           child.receiveShadow = false
+          child.frustumCulled = false
           child.renderOrder = 36
         }
       })
@@ -2909,8 +2949,8 @@ export function NavigationRobot({
         }
         const originalMaterial = cloneObjectMaterials(mesh.material as Material | Material[])
         const revealMaterial = cloneObjectMaterials(originalMaterial)
-        normalizeRobotMaterials(originalMaterial)
-        normalizeRobotMaterials(revealMaterial)
+        normalizeRobotBaseMaterials(originalMaterial)
+        normalizeRobotRevealMaterials(revealMaterial)
         const revealMaterialList = Array.isArray(revealMaterial) ? revealMaterial : [revealMaterial]
         const bindings: RevealMaterialBinding[] = []
         for (const material of revealMaterialList) {
@@ -2964,18 +3004,23 @@ export function NavigationRobot({
   }, [clonedScene, motionRef, scene])
 
   useEffect(() => {
+    if (!clonedScene) {
+      readySignalKeyRef.current = null
+      return
+    }
     if (!materialWarmupReady) {
       return
     }
 
-    recordNavigationPerfMark('navigationRobot.onReady')
-    if (forcedClipPlaybackKey === null) {
-      onReady?.()
+    const readySignalKey = `${clonedScene.uuid}:${forcedClipPlaybackKey ?? 'base'}`
+    if (readySignalKeyRef.current === readySignalKey) {
       return
     }
 
+    readySignalKeyRef.current = readySignalKey
+    recordNavigationPerfMark('navigationRobot.onReady')
     onReady?.()
-  }, [forcedClipPlaybackKey, materialWarmupReady, onReady])
+  }, [clonedScene, forcedClipPlaybackKey, materialWarmupReady, onReady])
 
   useFrame(() => {
     const leftHandBone = leftHandBoneRef.current
@@ -3144,7 +3189,6 @@ export function NavigationRobot({
     captureDebugPayload: boolean,
   ) => {
     const toolConeGroupAttached = Boolean(leftToolRenderable.parent)
-    setToolConeIsolatedOverlay(null)
 
     for (const toolConeRenderable of leftToolConeRenderables) {
       toolConeRenderable.mainMesh.visible = false
@@ -3189,24 +3233,29 @@ export function NavigationRobot({
     if (!logicExpectedVisible) {
       toolConeFrozenHullTargetItemIdRef.current = null
       toolConeFrozenHullPointsRef.current = []
+      setToolConeIsolatedOverlay(null)
       return toolConeDebugPayload
     }
 
     toolConeLogicExpectedFrameIdRef.current = toolConeFrameIdRef.current
 
+    camera.updateMatrixWorld(true)
     leftToolRenderable.updateWorldMatrix(true, true)
 
     const targetItemId = toolInteractionTargetItemId
     if (!targetItemId) {
+      setToolConeIsolatedOverlay(null)
       return toolConeDebugPayload
     }
 
     const toolInteractionTarget = sceneRegistry.nodes.get(targetItemId)
     if (!toolInteractionTarget) {
+      setToolConeIsolatedOverlay(null)
       return toolConeDebugPayload
     }
 
     applyLiveTransformToSceneObject(targetItemId, toolInteractionTarget)
+    toolInteractionTarget.updateWorldMatrix(true, true)
 
     const shouldFreezeTargetHull = Boolean(toolInteractionPhase && targetItemId)
     const frozenHullPoints = toolConeFrozenHullPointsRef.current
@@ -3316,6 +3365,7 @@ export function NavigationRobot({
             : undefined,
         )
       ) {
+        setToolConeIsolatedOverlay(null)
         return {
           ...toolConeDebugPayload,
           active: true,
@@ -3387,6 +3437,11 @@ export function NavigationRobot({
     }
 
     if (projectedHull.length < 3) {
+      if (frozenHullPoints.length > 0) {
+        toolConeFrozenHullTargetItemIdRef.current = null
+        frozenHullPoints.length = 0
+      }
+      setToolConeIsolatedOverlay(null)
       return toolConeDebugPayload
     }
 
@@ -3561,38 +3616,121 @@ export function NavigationRobot({
       Boolean(toolCarryTargetItemId),
     )
     const applyToolConeCarryFollow = () => {
-      const followBlend = getToolConeFollowBlend(
+      let followBlend = getToolConeFollowBlend(
         toolInteractionClipTime,
         Boolean(toolCarryTargetItemId),
       )
-      if (!(toolInteractionTargetItemId && followBlend > 1e-4)) {
-        return
-      }
-
-      const targetObject = sceneRegistry.nodes.get(toolInteractionTargetItemId) ?? null
-      if (!targetObject) {
-        return
-      }
-
-      applyLiveTransformToSceneObject(toolInteractionTargetItemId, targetObject)
-
-      if (
-        !getObjectWorldCenter(
-          targetObject,
-          toolConeCarryTargetBoundsRef.current,
-          toolConeCarryTargetCenterRef.current,
-        )
-      ) {
-        return
-      }
-
+      const followTargetItemId = toolInteractionTargetItemId ?? toolCarryTargetItemId
+      const hasActiveFollowTarget = Boolean(followTargetItemId && followBlend > 1e-4)
+      let followTargetCenter = toolConeCarryTargetCenterRef.current
       const leftShoulderBone = leftShoulderFollowBoneRef.current
       const leftUpperArmBone = leftUpperArmBoneRef.current
       const leftElbowBone = leftElbowBoneRef.current
 
-      toolConeFollowShoulderTargetRef.current.copy(toolConeCarryTargetCenterRef.current).y +=
+      const applyStoredReleasePose = () => {
+        const releaseBlend = MathUtils.clamp(toolConeFollowReleaseBlendRef.current, 0, 1)
+        if (!toolConeFollowReleasePoseReadyRef.current || releaseBlend <= 1e-4) {
+          toolConeFollowReleaseBlendRef.current = 0
+          toolConeFollowReleasePoseReadyRef.current = false
+          return
+        }
+
+        if (leftShoulderBone) {
+          leftShoulderBone.quaternion.slerp(
+            toolConeFollowReleaseShoulderQuaternionRef.current,
+            releaseBlend,
+          )
+          leftShoulderBone.updateMatrixWorld(true)
+        }
+        if (leftUpperArmBone) {
+          leftUpperArmBone.quaternion.slerp(
+            toolConeFollowReleaseUpperArmQuaternionRef.current,
+            releaseBlend,
+          )
+          leftUpperArmBone.updateMatrixWorld(true)
+        }
+        if (leftElbowBone) {
+          leftElbowBone.quaternion.slerp(
+            toolConeFollowReleaseElbowQuaternionRef.current,
+            releaseBlend,
+          )
+          leftElbowBone.updateMatrixWorld(true)
+        }
+        if (leftHandBone) {
+          leftHandBone.quaternion.slerp(
+            toolConeFollowReleaseLeftHandQuaternionRef.current,
+            releaseBlend,
+          )
+          leftHandBone.updateMatrixWorld(true)
+        }
+
+        const nextReleaseBlend = MathUtils.damp(
+          releaseBlend,
+          0,
+          TOOL_CONE_FOLLOW_RELEASE_RESPONSE,
+          frameDelta,
+        )
+        toolConeFollowReleaseBlendRef.current = nextReleaseBlend
+        if (nextReleaseBlend <= 1e-4) {
+          toolConeFollowReleaseBlendRef.current = 0
+          toolConeFollowReleasePoseReadyRef.current = false
+        }
+      }
+
+      const captureReleasePose = () => {
+        const clampedFollowBlend = MathUtils.clamp(followBlend, 0, 1)
+        if (clampedFollowBlend <= 1e-4) {
+          return
+        }
+
+        toolConeFollowReleaseBlendRef.current = clampedFollowBlend
+        toolConeFollowReleasePoseReadyRef.current = true
+        if (leftShoulderBone) {
+          toolConeFollowReleaseShoulderQuaternionRef.current.copy(leftShoulderBone.quaternion)
+        }
+        if (leftUpperArmBone) {
+          toolConeFollowReleaseUpperArmQuaternionRef.current.copy(leftUpperArmBone.quaternion)
+        }
+        if (leftElbowBone) {
+          toolConeFollowReleaseElbowQuaternionRef.current.copy(leftElbowBone.quaternion)
+        }
+        if (leftHandBone) {
+          toolConeFollowReleaseLeftHandQuaternionRef.current.copy(leftHandBone.quaternion)
+        }
+      }
+
+      if (hasActiveFollowTarget && followTargetItemId) {
+        const targetObject = sceneRegistry.nodes.get(followTargetItemId) ?? null
+        if (!targetObject) {
+          followBlend = 0
+        } else {
+          applyLiveTransformToSceneObject(followTargetItemId, targetObject)
+          targetObject.updateWorldMatrix(true, true)
+          if (
+            getObjectWorldCenter(
+              targetObject,
+              toolConeCarryTargetBoundsRef.current,
+              toolConeCarryTargetCenterRef.current,
+            )
+          ) {
+            followTargetCenter = toolConeCarryTargetCenterRef.current
+          } else {
+            followBlend = 0
+          }
+        }
+      } else {
+        applyStoredReleasePose()
+        return
+      }
+
+      if (followBlend <= 1e-4) {
+        applyStoredReleasePose()
+        return
+      }
+
+      toolConeFollowShoulderTargetRef.current.copy(followTargetCenter).y +=
         TOOL_CONE_FOLLOW_SHOULDER_TARGET_HEIGHT_OFFSET
-      toolConeFollowForearmTargetRef.current.copy(toolConeCarryTargetCenterRef.current).y +=
+      toolConeFollowForearmTargetRef.current.copy(followTargetCenter).y +=
         TOOL_CONE_FOLLOW_FOREARM_TARGET_HEIGHT_OFFSET
 
       aimBoneYAxisTowardWorldTarget(
@@ -3625,6 +3763,7 @@ export function NavigationRobot({
         forearmAimTargetDirectionParentRef.current,
         forearmAimTargetLocalQuaternionRef.current,
       )
+      captureReleasePose()
     }
     let toolConeDebugPayload: Record<string, unknown> | null = {
       active: false,
@@ -4169,10 +4308,11 @@ export function NavigationRobot({
             rootMotionCurrentWorldRef.current,
             rootMotionOffsetRef.current,
           )
+          const previewReleaseOffsetWeight = MathUtils.clamp(previewReleasedWeight, 0, 1)
           visualOffsetGroup.position.set(
-            -rootMotionOffsetRef.current.x,
+            -rootMotionOffsetRef.current.x * previewReleaseOffsetWeight,
             0,
-            -rootMotionOffsetRef.current.z,
+            -rootMotionOffsetRef.current.z * previewReleaseOffsetWeight,
           )
         } else {
           visualOffsetGroup.position.set(0, 0, 0)
@@ -4369,10 +4509,11 @@ export function NavigationRobot({
           rootMotionCurrentWorldRef.current,
           rootMotionOffsetRef.current,
         )
+        const releaseOffsetWeight = MathUtils.clamp(releasedForcedWeight, 0, 1)
         visualOffsetGroup.position.set(
-          -rootMotionOffsetRef.current.x,
+          -rootMotionOffsetRef.current.x * releaseOffsetWeight,
           0,
-          -rootMotionOffsetRef.current.z,
+          -rootMotionOffsetRef.current.z * releaseOffsetWeight,
         )
       } else {
         visualOffsetGroup.position.set(0, 0, 0)

@@ -8,10 +8,6 @@ export type ViewerRuntimeItemMovePreview = {
   sourceItemId: ItemNode['id']
 }
 
-export type ViewerRuntimeRepairShieldActivation = {
-  startedAtMs: number
-}
-
 export type ViewerRuntimeItemDeleteActivation = {
   fadeStartedAtMs: number | null
   startedAtMs: number
@@ -22,8 +18,6 @@ export type ViewerRuntimePostWarmupScope =
   | null
 
 export type ViewerRuntimeState = {
-  actionShieldKinds: Partial<Record<BaseNode['id'], 'copy' | 'delete' | 'move' | 'repair'>>
-  actionShieldOpacities: Partial<Record<BaseNode['id'], number>>
   completeNavigationPostWarmup: (token: number) => void
   itemDeleteActivations: Partial<Record<BaseNode['id'], ViewerRuntimeItemDeleteActivation>>
   itemMovePreview: ViewerRuntimeItemMovePreview | null
@@ -32,15 +26,11 @@ export type ViewerRuntimeState = {
   navigationPostWarmupRequestToken: number
   navigationPostWarmupScope: ViewerRuntimePostWarmupScope
   nodeVisibilityOverrides: Partial<Record<BaseNode['id'], boolean>>
-  repairShieldActivations: Partial<Record<BaseNode['id'], ViewerRuntimeRepairShieldActivation>>
   requestNavigationPostWarmup: () => number
   setNavigationPostWarmupScope: (scope: ViewerRuntimePostWarmupScope) => void
-  showActionShields: boolean
 }
 
 const EMPTY_VIEWER_RUNTIME_STATE: ViewerRuntimeState = {
-  actionShieldKinds: {},
-  actionShieldOpacities: {},
   completeNavigationPostWarmup: () => {},
   itemDeleteActivations: {},
   itemMovePreview: null,
@@ -49,10 +39,8 @@ const EMPTY_VIEWER_RUNTIME_STATE: ViewerRuntimeState = {
   navigationPostWarmupRequestToken: 0,
   navigationPostWarmupScope: null,
   nodeVisibilityOverrides: {},
-  repairShieldActivations: {},
   requestNavigationPostWarmup: () => 0,
   setNavigationPostWarmupScope: () => {},
-  showActionShields: false,
 }
 
 const emptyViewerRuntimeStateStore = createStore<ViewerRuntimeState>(
