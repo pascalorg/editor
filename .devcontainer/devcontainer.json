@@ -1,0 +1,11 @@
+{
+  "name": "Pascal Editor",
+  "image": "oven/bun:1.3.0",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "postCreateCommand": "bun install",
+  "forwardPorts": [3002]
+}
