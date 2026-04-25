@@ -26,8 +26,8 @@ type ViewerState = {
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
   nodeEventsSuppressed: boolean
   setNodeEventsSuppressed: (suppressed: boolean) => void
-  hoverHighlightMode: 'default' | 'delete'
-  setHoverHighlightMode: (mode: 'default' | 'delete') => void
+  hoverHighlightMode: string
+  setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
 
@@ -93,9 +93,10 @@ const useViewer = create<ViewerState>()(
       nodeEventsSuppressed: false,
       setNodeEventsSuppressed: (nodeEventsSuppressed) => set({ nodeEventsSuppressed }),
       hoverHighlightMode: 'default',
-      setHoverHighlightMode: (mode) => set({ hoverHighlightMode: mode }),
+      setHoverHighlightMode: (mode) =>
+        set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
       hoveredId: null,
-      setHoveredId: (id) => set({ hoveredId: id }),
+      setHoveredId: (id) => set((state) => (state.hoveredId === id ? state : { hoveredId: id })),
 
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),

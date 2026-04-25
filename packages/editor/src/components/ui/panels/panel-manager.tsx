@@ -8,6 +8,7 @@ import { CeilingPanel } from './ceiling-panel'
 import { DoorPanel } from './door-panel'
 import { FencePanel } from './fence-panel'
 import { ItemPanel } from './item-panel'
+import { PaintPanel } from './paint-panel'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { RoofSegmentPanel } from './roof-segment-panel'
@@ -24,8 +25,11 @@ export function PanelManager() {
   const moveItemsEnabled = useNavigation((s) => s.moveItemsEnabled)
   const robotMode = useNavigation((s) => s.robotMode)
   const suppressItemPanel = navigationEnabled && moveItemsEnabled && robotMode !== null
-  // Only subscribe to the *type* of the single-selected node so we don't
-  // re-render on unrelated scene mutations.
+  const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
+  const mode = useEditor((s) => s.mode)
+  const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
+  // Only subscribe to the *type* of the single-selected node - string primitive
+  // so we don't re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
     if (selectedIds.length !== 1) return null
     const id = selectedIds[0]
@@ -36,6 +40,16 @@ export function PanelManager() {
     return <ReferencePanel />
   }
 
+  if (
+    isPaintPanelOpen &&
+    mode === 'material-paint' &&
+    activePaintMaterial?.material?.properties &&
+    !activePaintMaterial.materialPreset
+  ) {
+    return <PaintPanel />
+  }
+
+  // Show appropriate panel based on selected node type.
   if (selectedNodeType) {
     switch (selectedNodeType) {
       case 'item':

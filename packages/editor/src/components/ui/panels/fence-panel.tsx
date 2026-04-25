@@ -1,5 +1,6 @@
 'use client'
 
+
 import {
   type AnyNode,
   type AnyNodeId,
@@ -11,9 +12,11 @@ import {
   normalizeWallCurveOffset,
   useScene,
 } from '@pascal-app/core'
+
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Spline } from 'lucide-react'
 import { useCallback } from 'react'
+
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -83,33 +86,9 @@ export function FencePanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-  const handleMove = useCallback(() => {
-    if (!node) return
-    sfxEmitter.emit('sfx:item-pick')
-    setMovingNode(node)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
 
-  const handleCurve = useCallback(() => {
-    if (!node) return
-    sfxEmitter.emit('sfx:item-pick')
-    setCurvingFence(node)
-    setSelection({ selectedIds: [] })
-  }, [node, setCurvingFence, setSelection])
 
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
-  )
 
-  const handleCustomMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
-  )
 
   if (!(node && node.type === 'fence' && selectedId && selectedCount === 1)) return null
 
@@ -242,27 +221,6 @@ export function FencePanel() {
           unit="m"
           value={node.edgeInset}
         />
-      </PanelSection>
-
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="fence"
-          onChange={handleCustomMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
-      </PanelSection>
-
-      <PanelSection title="Actions">
-        <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-          <ActionButton
-            icon={<Spline className="h-3.5 w-3.5" />}
-            label="Curve"
-            onClick={handleCurve}
-          />
-        </ActionGroup>
       </PanelSection>
     </PanelWrapper>
   )

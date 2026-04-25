@@ -1,57 +1,33 @@
 import {
   type MaterialPresetPayload,
-  type MaterialTarget,
-  MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
 
 export type MaterialCatalogItem = {
   id: string
   label: string
+  category: MaterialCategory
   description?: string
-  targets: MaterialTarget[]
   previewThumbnailUrl?: string
   previewColor?: string
   preset: MaterialPresetPayload
 }
 
-const WALL_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.wall,
-]
-
-const SLAB_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.slab,
-]
-
-const WALL_AND_SLAB_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.wall,
-  MaterialTargetSchema.enum.slab,
-]
-
-const STAIR_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.stair,
-  MaterialTargetSchema.enum['stair-segment'],
-]
-
-const STAIR_AND_FENCE_TARGETS: MaterialTarget[] = [
-  ...STAIR_TARGETS,
-  MaterialTargetSchema.enum.fence,
-]
-
-const ROOF_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.roof,
-  MaterialTargetSchema.enum['roof-segment'],
-]
-
-const CEILING_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.ceiling,
-]
+export const MATERIAL_CATEGORIES = [
+  'wood',
+  'wallpaper',
+  'parquet',
+  'granite',
+  'marble',
+  'other',
+] as const
+export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
 
 export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wood1',
     label: 'Wood',
+    category: 'wood',
     description: 'Warm wood finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS, ...ROOF_TARGETS],
     previewThumbnailUrl: '/material/wood1/wood1_thumbnail.webp',
     preset: {
       maps: {
@@ -85,8 +61,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wood2',
     label: 'Wood',
+    category: 'wood',
     description: 'Textured wood finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS, ...ROOF_TARGETS],
     previewThumbnailUrl: '/material/wood2/wood2_thumbnail.webp',
     preset: {
       maps: {
@@ -121,8 +97,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wood3',
     label: 'Wood',
+    category: 'wood',
     description: 'Knotted timber finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS, ...ROOF_TARGETS],
     previewThumbnailUrl: '/material/wood3/wood3_thumbnail.webp',
     preset: {
       maps: {
@@ -155,8 +131,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wood4',
     label: 'Wood',
+    category: 'wood',
     description: 'Oak stretcher finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
     previewThumbnailUrl: '/material/wood4/wood4_thumbnail.webp',
     preset: {
       maps: {
@@ -189,8 +165,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wood5',
     label: 'Wood',
+    category: 'wood',
     description: 'Rich grain wood finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
     previewThumbnailUrl: '/material/wood5/wood5_thumnail.webp',
     preset: {
       maps: {
@@ -225,8 +201,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-granite1',
     label: 'Granite',
+    category: 'granite',
     description: 'Polished granite finish',
-    targets: SLAB_TARGETS,
     previewThumbnailUrl: '/material/granite1/granite_thumbnail.webp',
     preset: {
       maps: {
@@ -259,8 +235,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-marble1',
     label: 'Marble',
+    category: 'marble',
     description: 'Smooth marble finish',
-    targets: [...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
     previewThumbnailUrl: '/material/marble1/marble1_thumbnail.webp',
     preset: {
       maps: {
@@ -293,8 +269,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-marble2',
     label: 'Marble',
+    category: 'marble',
     description: 'Soft marble finish',
-    targets: [...SLAB_TARGETS, ...STAIR_AND_FENCE_TARGETS],
     previewThumbnailUrl: '/material/marble2/marble2_thumbnail.webp',
     preset: {
       maps: {
@@ -327,8 +303,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-parquet1',
     label: 'Parquet',
+    category: 'parquet',
     description: 'Parquet wood finish',
-    targets: SLAB_TARGETS,
     previewThumbnailUrl: '/material/parquet1/parquet_thumnail.webp',
     preset: {
       maps: {
@@ -361,8 +337,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-parquet2',
     label: 'Parquet',
+    category: 'parquet',
     description: 'Soft parquet finish',
-    targets: SLAB_TARGETS,
     previewThumbnailUrl: '/material/parquet2/parquet2_thumbnail.webp',
     preset: {
       maps: {
@@ -395,8 +371,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wallpaper1',
     label: 'Wallpaper',
+    category: 'wallpaper',
     description: 'Soft wallpaper finish',
-    targets: WALL_TARGETS,
     previewThumbnailUrl: '/material/wallpaper1/wallpaper1_thumbnail.webp',
     preset: {
       maps: {
@@ -430,8 +406,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wallpaper2',
     label: 'Wallpaper',
+    category: 'wallpaper',
     description: 'Decorative wallpaper finish',
-    targets: WALL_TARGETS,
     previewThumbnailUrl: '/material/wallpaper2/wallpaper2_thumnail.webp',
     preset: {
       maps: {
@@ -464,8 +440,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wall-wallpaper3',
     label: 'Wallpaper',
+    category: 'wallpaper',
     description: 'Patterned wallpaper finish',
-    targets: WALL_TARGETS,
     previewThumbnailUrl: '/material/wallpaper3/wallpaper3_thumbnail.webp',
     preset: {
       maps: {
@@ -498,14 +474,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'preset-white',
     label: 'White',
+    category: 'other',
     description: 'Clean painted finish',
-    targets: [
-      ...WALL_TARGETS,
-      ...SLAB_TARGETS,
-      ...ROOF_TARGETS,
-      ...STAIR_AND_FENCE_TARGETS,
-      ...CEILING_TARGETS,
-    ],
     previewColor: '#ffffff',
     preset: {
       maps: {},
@@ -536,8 +506,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'preset-metal',
     label: 'Metal',
+    category: 'other',
     description: 'Brushed metal finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS],
     previewColor: '#c0c0c0',
     preset: {
       maps: {},
@@ -568,8 +538,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'preset-glass',
     label: 'Glass',
+    category: 'other',
     description: 'Light glass finish',
-    targets: [...WALL_TARGETS, ...SLAB_TARGETS],
     previewColor: '#87ceeb',
     preset: {
       maps: {},
@@ -599,8 +569,8 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   },
 ]
 
-export function getMaterialsForTarget(target: MaterialTarget): MaterialCatalogItem[] {
-  return MATERIAL_CATALOG.filter((item) => item.targets.includes(target))
+export function getMaterialsForCategory(category: MaterialCategory): MaterialCatalogItem[] {
+  return MATERIAL_CATALOG.filter((item) => item.category === category)
 }
 
 export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undefined {

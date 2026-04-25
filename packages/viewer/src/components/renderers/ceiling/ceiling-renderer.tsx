@@ -1,4 +1,9 @@
-import { type CeilingNode, getMaterialPresetByRef, resolveMaterial, useRegistry } from '@pascal-app/core'
+import {
+  type CeilingNode,
+  getMaterialPresetByRef,
+  resolveMaterial,
+  useRegistry,
+} from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
@@ -32,6 +37,18 @@ function createCeilingMaterials(color = '#999999') {
   return { topMaterial, bottomMaterial }
 }
 
+const ceilingMaterialCache = new Map<string, ReturnType<typeof createCeilingMaterials>>()
+
+function getCeilingMaterials(color = '#999999') {
+  const cacheKey = color
+  const cached = ceilingMaterialCache.get(cacheKey)
+  if (cached) return cached
+
+  const materials = createCeilingMaterials(color)
+  ceilingMaterialCache.set(cacheKey, materials)
+  return materials
+}
+
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
 
@@ -42,8 +59,14 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     const preset = getMaterialPresetByRef(node.materialPreset)
     const props = preset?.mapProperties ?? resolveMaterial(node.material)
     const color = props.color || '#999999'
-    return createCeilingMaterials(color)
-  }, [node.materialPreset, node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+    return getCeilingMaterials(color)
+  }, [
+    node.materialPreset,
+    node.material,
+    node.material?.preset,
+    node.material?.properties,
+    node.material?.texture,
+  ])
 
   return (
     <mesh material={materials.bottomMaterial} ref={ref}>

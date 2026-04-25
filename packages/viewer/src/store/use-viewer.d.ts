@@ -1,4 +1,10 @@
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import type { Object3D } from 'three'
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -14,8 +20,10 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
-  hoverHighlightMode: 'default' | 'delete'
-  setHoverHighlightMode: (mode: 'default' | 'delete') => void
+  nodeEventsSuppressed: boolean
+  setNodeEventsSuppressed: (suppressed: boolean) => void
+  hoverHighlightMode: string
+  setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   cameraMode: 'perspective' | 'orthographic'

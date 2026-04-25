@@ -5,7 +5,6 @@ import {
   type AnyNodeId,
   DoorNode,
   emitter,
-  type MaterialSchema,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -15,7 +14,6 @@ import { usePresetsAdapter } from '../../../contexts/presets-context'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -44,13 +42,6 @@ export function DoorPanel() {
       useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
     },
     [selectedId, updateNode],
-  )
-
-  const handleMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -593,9 +584,6 @@ export function DoorPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
-      </PanelSection>
-      <PanelSection title="Material">
-        <MaterialPicker onChange={handleMaterialChange} value={node.material} />
       </PanelSection>
     </PanelWrapper>
   )
