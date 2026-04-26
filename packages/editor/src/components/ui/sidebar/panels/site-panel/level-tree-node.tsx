@@ -29,7 +29,10 @@ export const LevelTreeNode = memo(function LevelTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
 
-  const handleClick = useCallback(() => setSelection({ levelId: nodeId }), [nodeId, setSelection])
+  const handleClick = useCallback(
+    () => setSelection({ levelId: nodeId as LevelNode['id'] }),
+    [nodeId, setSelection],
+  )
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
   const handleToggle = useCallback(() => setExpanded((prev) => !prev), [])
   const handleStartEditing = useCallback(() => setIsEditing(true), [])

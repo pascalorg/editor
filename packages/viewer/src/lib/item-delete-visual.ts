@@ -1,0 +1,1 @@
+export const ITEM_DELETE_FADE_OUT_MS = 900

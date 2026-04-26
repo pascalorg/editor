@@ -202,6 +202,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
           transparent
         />
       </mesh>
+      {/* @ts-expect-error R3F <line> element conflicts with SVG <line> type */}
       <line geometry={previewOutlineGeometry} position={[0, (node.height ?? 2.5) + 0.02, 0]}>
         <lineBasicMaterial color="#ffffff" depthWrite={false} opacity={0.95} transparent />
       </line>

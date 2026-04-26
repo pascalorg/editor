@@ -1,4 +1,4 @@
-import type { AssetInput } from '@pascal-app/core'
+import type { AssetInput, ItemNode } from '@pascal-app/core'
 import {
   type AnyNodeId,
   type CeilingEvent,
@@ -70,13 +70,25 @@ basePlaneMaterial.opacityNode = radialOpacity
 
 export interface PlacementCoordinatorConfig {
   asset: AssetInput | null
+  disabled?: boolean
+  isDisabled?: () => boolean
   draftNode: DraftNodeHandle
+  /** Item ids to ignore during placement validation, such as the source item in move-preview mode. */
+  ignoreItemIds?: string[]
   initDraft: (gridPosition: Vector3) => void
+  onCommitRequested?: (request: {
+    nodeUpdate: Partial<ItemNode>
+    surface: PlacementState['surface']
+  }) => boolean
   onCommitted: () => boolean
   onCancel?: () => void
   initialState?: PlacementState
   /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
   defaultScale?: [number, number, number]
+  /** Keep the draft/controller alive when the placement tool unmounts after handoff. */
+  preserveDraftOnUnmount?: boolean | (() => boolean)
+  /** Restrict placement interactions to the floor surface only. */
+  surfaceMode?: 'all' | 'floor-only'
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -84,11 +96,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const edgesRef = useRef<LineSegments>(null!)
   const basePlaneRef = useRef<Mesh>(null!)
   const gridPosition = useRef(new Vector3(0, 0, 0))
+  const floorHeightOffsetRef = useRef(0)
   const lastRawPos = useRef(new Vector3(0, 0, 0))
   const placementState = useRef<PlacementState>(
     config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null },
   )
   const shiftFreeRef = useRef(false)
+  const allowNonFloorSurfaces = config.surfaceMode !== 'floor-only'
 
   // Store config callbacks in refs to avoid re-running effect when they change
   const configRef = useRef(config)
@@ -113,13 +127,38 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Helpers ----
 
+    const syncFloorHeightOffset = () => {
+      const draft = draftNode.current
+      const levelId = useViewer.getState().selection.levelId
+      if (!(draft && levelId) || draft.asset.attachTo) {
+        floorHeightOffsetRef.current = 0
+        return
+      }
+
+      // Floor item Y is stored as bottom-height above the slab, not world elevation.
+      floorHeightOffsetRef.current = draft.position[1]
+    }
+
     const getContext = () => ({
       asset,
+      floorHeightOffset: floorHeightOffsetRef.current,
+      ignoredItemIds: Array.from(
+        new Set([
+          ...(configRef.current.ignoreItemIds ?? []),
+          ...(draftNode.current ? [draftNode.current.id] : []),
+        ]),
+      ),
       levelId: useViewer.getState().selection.levelId,
       draftItem: draftNode.current,
       gridPosition: gridPosition.current,
       state: { ...placementState.current },
     })
+    const shouldCommit = (nodeUpdate: Partial<ItemNode>) =>
+      configRef.current.onCommitRequested?.({
+        nodeUpdate,
+        surface: placementState.current.surface,
+      }) ?? true
+    const isDisabled = () => Boolean(configRef.current.disabled || configRef.current.isDisabled?.())
 
     const getActiveValidators = () =>
       shiftFreeRef.current
@@ -175,6 +214,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         [0, result.cursorRotationY, 0],
         configRef.current.defaultScale,
       )
+      syncFloorHeightOffset()
 
       const draft = draftNode.current
       if (draft) {
@@ -190,6 +230,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Init draft ----
     configRef.current.initDraft(gridPosition.current)
+    syncFloorHeightOffset()
 
     // Sync cursor to the draft mesh's world position and rotation
     if (draftNode.current) {
@@ -216,14 +257,27 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     let previousGridPos: [number, number, number] | null = null
 
     const onGridMove = (event: GridEvent) => {
+      if (isDisabled()) return
       // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
-      if (draftNode.current === null && asset.attachTo === undefined) {
+      if (draftNode.current === null && asset && asset.attachTo === undefined) {
         configRef.current.initDraft(gridPosition.current)
       }
 
       lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
       const result = floorStrategy.move(getContext(), event)
       if (!result) return
+
+      const snappedGridPositionUnchanged =
+        gridPosition.current.x === result.gridPosition[0] &&
+        gridPosition.current.y === result.gridPosition[1] &&
+        gridPosition.current.z === result.gridPosition[2]
+      const cursorXZUnchanged =
+        cursorGroupRef.current.position.x === result.cursorPosition[0] &&
+        cursorGroupRef.current.position.z === result.cursorPosition[2]
+
+      if (snappedGridPositionUnchanged && cursorXZUnchanged) {
+        return
+      }
 
       // Play snap sound when grid position changes
       if (
@@ -234,7 +288,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         sfxEmitter.emit('sfx:grid-snap')
       }
 
-      previousGridPos = [...result.gridPosition]
+      previousGridPos = [...result.gridPosition] as [number, number, number]
       gridPosition.current.set(...result.gridPosition)
       // Only update X and Z for cursor - useFrame will handle Y (slab elevation)
       cursorGroupRef.current.position.x = result.cursorPosition[0]
@@ -255,8 +309,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (isDisabled()) return
+
       const result = floorStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
+
+      if (!shouldCommit(result.nodeUpdate)) {
+        return
+      }
 
       // Preserve cursor rotation for the next draft
       const currentRotation: [number, number, number] = [0, cursorGroupRef.current.rotation.y, 0]
@@ -276,6 +336,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Wall Handlers ----
 
     const onWallEnter = (event: WallEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const nodes = useScene.getState().nodes
       const result = wallStrategy.enter(
         getContext(),
@@ -301,6 +364,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallMove = (event: WallEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const ctx = getContext()
 
       if (ctx.state.surface !== 'wall') {
@@ -401,8 +467,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallClick = (event: WallEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const result = wallStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
+
+      if (!shouldCommit(result.nodeUpdate)) {
+        return
+      }
 
       event.stopPropagation()
       // Clear live transform before commit
@@ -432,6 +505,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallLeave = (event: WallEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const result = wallStrategy.leave(getContext())
       if (!result) return
 
@@ -464,6 +540,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Item Surface Handlers ----
 
     const onItemEnter = (event: ItemEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
       if (event.node.id === draftNode.current?.id) return
       const result = itemSurfaceStrategy.enter(getContext(), event)
       if (!result) return
@@ -480,6 +558,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onItemMove = (event: ItemEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
       if (event.node.id === draftNode.current?.id) return
       const ctx = getContext()
 
@@ -532,6 +612,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onItemLeave = (event: ItemEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
       if (event.node.id === draftNode.current?.id) return
       if (placementState.current.surface !== 'item-surface') return
 
@@ -560,9 +642,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onItemClick = (event: ItemEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
       if (event.node.id === draftNode.current?.id) return
       const result = itemSurfaceStrategy.click(getContext(), event)
       if (!result) return
+
+      if (!shouldCommit(result.nodeUpdate)) {
+        return
+      }
 
       event.stopPropagation()
       // Clear live transform before commit
@@ -585,6 +673,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Ceiling Handlers ----
 
     const onCeilingEnter = (event: CeilingEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const nodes = useScene.getState().nodes
       const result = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
       if (!result) return
@@ -604,6 +695,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingMove = (event: CeilingEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       if (!draftNode.current && placementState.current.surface === 'ceiling') {
         const nodes = useScene.getState().nodes
         const setup = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
@@ -651,8 +745,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingClick = (event: CeilingEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const result = ceilingStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
+
+      if (!shouldCommit(result.nodeUpdate)) {
+        return
+      }
 
       event.stopPropagation()
       // Clear live transform before commit
@@ -673,6 +774,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingLeave = (event: CeilingEvent) => {
+      if (isDisabled()) return
+      if (!allowNonFloorSurfaces) return
+
       const result = ceilingStrategy.leave(getContext())
       if (!result) return
 
@@ -716,6 +820,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
+
+      if (isDisabled()) return
 
       const draft = draftNode.current
       if (!draft) return
@@ -796,6 +902,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
+      if (isDisabled()) return
+
       if (event.key === 'Shift') {
         shiftFreeRef.current = false
         revalidate()
@@ -812,15 +920,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
     emitter.on('tool:cancel', onCancel)
-
-    // ---- Right-click cancel ----
-    const onContextMenu = (event: MouseEvent) => {
-      if (configRef.current.onCancel) {
-        event.preventDefault()
-        configRef.current.onCancel()
-      }
-    }
-    window.addEventListener('contextmenu', onContextMenu)
 
     // ---- Bounding box geometry ----
 
@@ -843,12 +942,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (tearingDown) return
       const draft = draftNode.current
       if (draft === null) return
+      if (draftNode.mode === 'clone') return
       if (draft.id in state.nodes) return
 
       queueMicrotask(() => {
         if (tearingDown) return
         const draft = draftNode.current
         if (draft === null) return
+        if (draftNode.mode === 'clone') return
         if (draft.id in useScene.getState().nodes) return
         // Temporal is paused during placement, createNode won't be tracked
         useScene.getState().createNode(draft, draft.parentId as AnyNodeId)
@@ -875,11 +976,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     return () => {
       tearingDown = true
       unsubDraftWatch()
-      // Clear live transform for any remaining draft
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
+      const preserveDraftOnUnmount =
+        typeof configRef.current.preserveDraftOnUnmount === 'function'
+          ? configRef.current.preserveDraftOnUnmount()
+          : configRef.current.preserveDraftOnUnmount === true
+      if (!preserveDraftOnUnmount) {
+        // Clear live transform for any remaining draft
+        if (draftNode.current) {
+          useLiveTransforms.getState().clear(draftNode.current.id)
+        }
+        draftNode.destroy()
       }
-      draftNode.destroy()
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
@@ -898,9 +1005,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('contextmenu', onContextMenu)
     }
-  }, [asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
+  }, [allowNonFloorSurfaces, asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
 
   // Reparent floor draft to the new level when the user switches levels mid-placement.
   // Wall/ceiling items are managed by their own surface entry events (ensureDraft / reparent).
@@ -945,11 +1051,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           getScaledDimensions(draftNode.current),
           draftNode.current.rotation,
         )
-        mesh.position.y = slabElevation
+        mesh.position.y = slabElevation + floorHeightOffsetRef.current
         // Cursor group is at the world root (not inside a level group), so add the
         // level group's current world Y to convert from level-local to world space.
         const levelGroup = sceneRegistry.nodes.get(levelId as AnyNodeId)
-        cursorGroupRef.current.position.y = slabElevation + (levelGroup?.position.y ?? 0)
+        cursorGroupRef.current.position.y =
+          slabElevation + floorHeightOffsetRef.current + (levelGroup?.position.y ?? 0)
       }
     }
   })

@@ -84,10 +84,10 @@ export function isValidWallSideFace(normal: [number, number, number] | undefined
 }
 
 /**
- * Strip the `isTransient` flag from node metadata before committing.
+ * Strip draft-only flags from node metadata before committing.
  */
 export function stripTransient(meta: any): any {
   if (!isObject(meta)) return meta
-  const { isTransient, ...rest } = meta as Record<string, any>
+  const { isTransient, isNew, robotCopySourceId, ...rest } = meta as Record<string, any>
   return rest
 }

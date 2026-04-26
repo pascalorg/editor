@@ -34,7 +34,7 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
   const setSelection = useViewer((state) => state.setSelection)
 
   const handleClick = () => {
-    setSelection({ buildingId: nodeId })
+    setSelection({ buildingId: nodeId as BuildingNode['id'] })
   }
 
   const handleAddLevel = (e: React.MouseEvent) => {

@@ -1,12 +1,17 @@
 import { ShortcutToken } from '../primitives/shortcut-token'
 
 interface ItemHelperProps {
+  dock?: 'default' | 'left-of-navigation'
   showEsc?: boolean
 }
 
-export function ItemHelper({ showEsc }: ItemHelperProps) {
+export function ItemHelper({ dock = 'default', showEsc }: ItemHelperProps) {
+  const positionClass = dock === 'left-of-navigation' ? 'right-[5.5rem]' : 'right-4'
+
   return (
-    <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur-md">
+    <div
+      className={`pointer-events-none fixed top-1/2 ${positionClass} z-40 flex -translate-y-1/2 flex-col gap-2 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur-md`}
+    >
       <div className="flex items-center gap-2 text-sm">
         <ShortcutToken value="Left click" />
         <span className="text-muted-foreground">Place item</span>

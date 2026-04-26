@@ -21,6 +21,17 @@ const useLiveTransforms = create<LiveTransformState>((set, get) => ({
   transforms: new Map(),
   set: (nodeId, transform) =>
     set((state) => {
+      const current = state.transforms.get(nodeId)
+      if (
+        current &&
+        current.rotation === transform.rotation &&
+        current.position[0] === transform.position[0] &&
+        current.position[1] === transform.position[1] &&
+        current.position[2] === transform.position[2]
+      ) {
+        return state
+      }
+
       const next = new Map(state.transforms)
       next.set(nodeId, transform)
       return { transforms: next }
@@ -28,6 +39,10 @@ const useLiveTransforms = create<LiveTransformState>((set, get) => ({
   get: (nodeId) => get().transforms.get(nodeId),
   clear: (nodeId) =>
     set((state) => {
+      if (!state.transforms.has(nodeId)) {
+        return state
+      }
+
       const next = new Map(state.transforms)
       next.delete(nodeId)
       return { transforms: next }

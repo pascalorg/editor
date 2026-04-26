@@ -1,16 +1,56 @@
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { baseMaterial, glassMaterial } from '../../materials'
 import type { AnyNodeId, DoorNode } from '../../schema'
 import useScene from '../../store/use-scene'
+import { getWallThickness } from '../wall/wall-footprint'
 
-// Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
+const GARAGE_DOOR_MIN_WIDTH = 2.4
+const GARAGE_DOOR_MIN_PANEL_SEGMENTS = 4
+const OVERHEAD_TRACK_THICKNESS = 0.014
+const OVERHEAD_TRACK_FACE_OFFSET = 0.016
+
+type RuntimeDoorOpeningStyle = 'overhead' | 'swing'
+
+type NavigationDoorAnimationState = {
+  alternateOpenPosition?: [number, number, number]
+  alternateOpenRotation?: [number, number, number]
+  closedPosition: [number, number, number]
+  closedRotation: [number, number, number]
+  localBounds?: {
+    max: [number, number, number]
+    min: [number, number, number]
+  }
+  openPosition: [number, number, number]
+  openRotation: [number, number, number]
+  style: RuntimeDoorOpeningStyle
+}
+
+type SingleMaterialMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material>
+
+type DoorGroupMergeEntry = {
+  castShadow: boolean
+  geometries: THREE.BufferGeometry[]
+  material: THREE.Material
+  receiveShadow: boolean
+}
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const [id, node] of Object.entries(nodes)) {
+      if (node?.type === 'door') {
+        useScene.getState().dirtyNodes.add(id as AnyNodeId)
+      }
+    }
+  }, [])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -22,12 +62,11 @@ export const DoorSystem = () => {
       if (!node || node.type !== 'door') return
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
-      if (!mesh) return // Keep dirty until mesh mounts
+      if (!mesh) return
 
       updateDoorMesh(node as DoorNode, mesh)
       clearDirty(id as AnyNodeId)
 
-      // Rebuild the parent wall so its cutout reflects the updated door geometry
       if ((node as DoorNode).parentId) {
         useScene.getState().dirtyNodes.add((node as DoorNode).parentId as AnyNodeId)
       }
@@ -40,29 +79,184 @@ export const DoorSystem = () => {
 function addBox(
   parent: THREE.Object3D,
   material: THREE.Material,
-  w: number,
-  h: number,
-  d: number,
+  width: number,
+  height: number,
+  depth: number,
   x: number,
   y: number,
   z: number,
 ) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
-  m.position.set(x, y, z)
-  parent.add(m)
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material)
+  mesh.position.set(x, y, z)
+  parent.add(mesh)
+}
+
+function optimizeDoorGroupMeshes(group: THREE.Group) {
+  const childMeshes = group.children.filter(
+    (child): child is SingleMaterialMesh =>
+      child instanceof THREE.Mesh && !Array.isArray(child.material),
+  )
+  if (childMeshes.length <= 1) {
+    return
+  }
+
+  const mergedEntries = new Map<string, DoorGroupMergeEntry>()
+
+  for (const mesh of childMeshes) {
+    mesh.updateMatrix()
+    const material = mesh.material
+    const key = `${material.uuid}:${mesh.castShadow ? '1' : '0'}:${mesh.receiveShadow ? '1' : '0'}`
+    const entry: DoorGroupMergeEntry = mergedEntries.get(key) ?? {
+      castShadow: mesh.castShadow,
+      geometries: [],
+      material,
+      receiveShadow: mesh.receiveShadow,
+    }
+    const geometry = mesh.geometry.clone()
+    geometry.applyMatrix4(mesh.matrix)
+    entry.geometries.push(geometry)
+    mergedEntries.set(key, entry)
+  }
+
+  for (const mesh of childMeshes) {
+    mesh.geometry.dispose()
+  }
+  group.clear()
+
+  for (const entry of mergedEntries.values()) {
+    const mergedGeometry =
+      entry.geometries.length === 1
+        ? entry.geometries[0]
+        : (mergeGeometries(entry.geometries, false) ?? entry.geometries[0])
+    if (!mergedGeometry) {
+      continue
+    }
+
+    const mergedMesh = new THREE.Mesh(mergedGeometry, entry.material)
+    mergedMesh.castShadow = entry.castShadow
+    mergedMesh.receiveShadow = entry.receiveShadow
+    group.add(mergedMesh)
+  }
+}
+
+function ensureGroup(parent: THREE.Object3D, name: string) {
+  const existingGroup = parent.getObjectByName(name)
+  if (existingGroup instanceof THREE.Group) {
+    return existingGroup
+  }
+
+  const group = new THREE.Group()
+  group.name = name
+  parent.add(group)
+  return group
+}
+
+function getObjectBoundsInParentSpace(object: THREE.Object3D, parent: THREE.Object3D) {
+  object.updateWorldMatrix(true, true)
+  parent.updateWorldMatrix(true, true)
+
+  const inverseParentMatrix = new THREE.Matrix4().copy(parent.matrixWorld).invert()
+  const bounds = new THREE.Box3()
+  let initialized = false
+
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) {
+      return
+    }
+
+    child.geometry.computeBoundingBox()
+    const childBounds = child.geometry.boundingBox?.clone()
+    if (!childBounds) {
+      return
+    }
+
+    const childMatrixInParentSpace = new THREE.Matrix4().multiplyMatrices(
+      inverseParentMatrix,
+      child.matrixWorld,
+    )
+    childBounds.applyMatrix4(childMatrixInParentSpace)
+
+    if (initialized) {
+      bounds.union(childBounds)
+    } else {
+      bounds.copy(childBounds)
+      initialized = true
+    }
+  })
+
+  return initialized ? bounds : null
+}
+
+function getDoorLeafOpenAngle(node: Pick<DoorNode, 'hingesSide' | 'swingDirection'>) {
+  const direction = node.swingDirection === 'inward' ? 1 : -1
+
+  return direction * THREE.MathUtils.degToRad(170)
+}
+
+function getRuntimeDoorOpeningStyle(node: DoorNode): RuntimeDoorOpeningStyle {
+  if (node.openingStyle) {
+    return node.openingStyle
+  }
+
+  const hasOnlyPanelSegments = (node.segments ?? []).every((segment) => segment.type === 'panel')
+  if (
+    node.width >= GARAGE_DOOR_MIN_WIDTH &&
+    (node.segments?.length ?? 0) >= GARAGE_DOOR_MIN_PANEL_SEGMENTS &&
+    hasOnlyPanelSegments
+  ) {
+    return 'overhead'
+  }
+
+  return 'swing'
+}
+
+function buildNavigationDoorAnimationState(
+  node: DoorNode,
+  openingStyle: RuntimeDoorOpeningStyle,
+  hingeX: number,
+  leafDepth: number,
+  leafH: number,
+  leafTopY: number,
+  frameDepth: number,
+  wallDepth: number,
+): NavigationDoorAnimationState {
+  if (openingStyle === 'swing') {
+    const openAngle = getDoorLeafOpenAngle(node)
+    return {
+      alternateOpenPosition: [hingeX, 0, 0],
+      alternateOpenRotation: [0, -openAngle, 0],
+      closedPosition: [hingeX, 0, 0],
+      closedRotation: [0, 0, 0],
+      openPosition: [hingeX, 0, 0],
+      openRotation: [0, openAngle, 0],
+      style: 'swing',
+    }
+  }
+
+  const travelDirection = node.swingDirection === 'inward' ? -1 : 1
+  const wallHalfDepth = wallDepth / 2
+  const closedDepthOffset = travelDirection * Math.max(0, wallHalfDepth - leafDepth / 2 - 0.008)
+  const trackInset =
+    travelDirection * (wallHalfDepth + OVERHEAD_TRACK_THICKNESS / 2 + OVERHEAD_TRACK_FACE_OFFSET)
+  const openDepthOffset = trackInset + travelDirection * leafH
+
+  return {
+    closedPosition: [0, leafTopY, closedDepthOffset],
+    closedRotation: [0, 0, 0],
+    openPosition: [0, leafTopY, openDepthOffset],
+    openRotation: [travelDirection > 0 ? Math.PI / 2 : -Math.PI / 2, 0, 0],
+    style: 'overhead',
+  }
 }
 
 function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
-  // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
   mesh.geometry = new THREE.BoxGeometry(node.width, node.height, node.frameDepth)
   mesh.material = hitboxMaterial
 
-  // Sync transform from node (React may lag behind the system by a frame during drag)
   mesh.position.set(node.position[0], node.position[1], node.position[2])
   mesh.rotation.set(node.rotation[0], node.rotation[1], node.rotation[2])
 
-  // Dispose and remove all old visual children; preserve 'cutout'
   for (const child of [...mesh.children]) {
     if (child.name === 'cutout') continue
     if (child instanceof THREE.Mesh) child.geometry.dispose()
@@ -86,18 +280,45 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     contentPadding,
     hingesSide,
   } = node
+  const parentNode = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : null
+  const wallDepth = parentNode?.type === 'wall' ? getWallThickness(parentNode) : frameDepth
 
-  // Leaf occupies the full opening (no bottom frame bar — door opens to floor)
+  const openingStyle = getRuntimeDoorOpeningStyle(node)
   const leafW = width - 2 * frameThickness
-  const leafH = height - frameThickness // only top frame
+  const leafH = height - frameThickness
   const leafDepth = 0.04
-  // Leaf center is shifted down from door center by half the top frame
   const leafCenterY = -frameThickness / 2
+  const leafBottomY = leafCenterY - leafH / 2
+  const leafTopY = leafCenterY + leafH / 2
+  const hingeX = hingesSide === 'right' ? leafW / 2 - 0.012 : -leafW / 2 + 0.012
+  const frameGroup = ensureGroup(mesh, 'door-frame-group')
+  const leafPivot = ensureGroup(mesh, 'door-leaf-pivot')
+  const leafGroup = ensureGroup(leafPivot, 'door-leaf-group')
+  const navigationDoorAnimation = buildNavigationDoorAnimationState(
+    node,
+    openingStyle,
+    hingeX,
+    leafDepth,
+    leafH,
+    leafTopY,
+    frameDepth,
+    wallDepth,
+  )
 
-  // ── Frame members ──
-  // Left post — full height
+  frameGroup.clear()
+  leafGroup.clear()
+  leafPivot.position.set(...navigationDoorAnimation.closedPosition)
+  leafPivot.rotation.set(...navigationDoorAnimation.closedRotation)
+  leafPivot.userData.navigationDoor = navigationDoorAnimation
+  leafGroup.position.set(
+    ...(openingStyle === 'overhead'
+      ? ([0, -leafH / 2, 0] as [number, number, number])
+      : ([-hingeX, 0, 0] as [number, number, number])),
+  )
+  leafGroup.rotation.set(0, 0, 0)
+
   addBox(
-    mesh,
+    frameGroup,
     baseMaterial,
     frameThickness,
     height,
@@ -106,9 +327,8 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     0,
     0,
   )
-  // Right post — full height
   addBox(
-    mesh,
+    frameGroup,
     baseMaterial,
     frameThickness,
     height,
@@ -117,9 +337,8 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     0,
     0,
   )
-  // Head (top bar) — full width
   addBox(
-    mesh,
+    frameGroup,
     baseMaterial,
     width,
     frameThickness,
@@ -129,10 +348,9 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     0,
   )
 
-  // ── Threshold (inside the frame) ──
   if (threshold) {
     addBox(
-      mesh,
+      frameGroup,
       baseMaterial,
       leafW,
       thresholdHeight,
@@ -143,120 +361,100 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     )
   }
 
-  // ── Leaf — contentPadding border strips (no full backing; glass areas are open) ──
   const cpX = contentPadding[0]
   const cpY = contentPadding[1]
   if (cpY > 0) {
-    // Top strip
-    addBox(mesh, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY + leafH / 2 - cpY / 2, 0)
-    // Bottom strip
-    addBox(mesh, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY - leafH / 2 + cpY / 2, 0)
+    addBox(leafGroup, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY + leafH / 2 - cpY / 2, 0)
+    addBox(leafGroup, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY - leafH / 2 + cpY / 2, 0)
   }
   if (cpX > 0) {
     const innerH = leafH - 2 * cpY
-    // Left strip
-    addBox(mesh, baseMaterial, cpX, innerH, leafDepth, -leafW / 2 + cpX / 2, leafCenterY, 0)
-    // Right strip
-    addBox(mesh, baseMaterial, cpX, innerH, leafDepth, leafW / 2 - cpX / 2, leafCenterY, 0)
+    addBox(leafGroup, baseMaterial, cpX, innerH, leafDepth, -leafW / 2 + cpX / 2, leafCenterY, 0)
+    addBox(leafGroup, baseMaterial, cpX, innerH, leafDepth, leafW / 2 - cpX / 2, leafCenterY, 0)
   }
 
-  // Content area inside padding
   const contentW = leafW - 2 * cpX
   const contentH = leafH - 2 * cpY
-
-  // ── Segments (stacked top to bottom within content area) ──
-  const totalRatio = segments.reduce((sum, s) => sum + s.heightRatio, 0)
+  const totalRatio = segments.reduce((sum, segment) => sum + segment.heightRatio, 0)
   const contentTop = leafCenterY + contentH / 2
 
   let segY = contentTop
-  for (const seg of segments) {
-    const segH = (seg.heightRatio / totalRatio) * contentH
+  for (const segment of segments) {
+    const segH = (segment.heightRatio / totalRatio) * contentH
     const segCenterY = segY - segH / 2
+    const numCols = segment.columnRatios.length
+    const colSum = segment.columnRatios.reduce((sum, ratio) => sum + ratio, 0)
+    const usableW = contentW - (numCols - 1) * segment.dividerThickness
+    const colWidths = segment.columnRatios.map((ratio) => (ratio / colSum) * usableW)
 
-    const numCols = seg.columnRatios.length
-    const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
-    const usableW = contentW - (numCols - 1) * seg.dividerThickness
-    const colWidths = seg.columnRatios.map((r) => (r / colSum) * usableW)
-
-    // Column x-centers (relative to mesh center)
     const colXCenters: number[] = []
-    let cx = -contentW / 2
-    for (let c = 0; c < numCols; c++) {
-      colXCenters.push(cx + colWidths[c]! / 2)
-      cx += colWidths[c]!
-      if (c < numCols - 1) cx += seg.dividerThickness
+    let cursorX = -contentW / 2
+    for (let colIndex = 0; colIndex < numCols; colIndex += 1) {
+      colXCenters.push(cursorX + colWidths[colIndex]! / 2)
+      cursorX += colWidths[colIndex]!
+      if (colIndex < numCols - 1) cursorX += segment.dividerThickness
     }
 
-    // Column dividers within this segment
-    cx = -contentW / 2
-    for (let c = 0; c < numCols - 1; c++) {
-      cx += colWidths[c]!
+    cursorX = -contentW / 2
+    for (let colIndex = 0; colIndex < numCols - 1; colIndex += 1) {
+      cursorX += colWidths[colIndex]!
       addBox(
-        mesh,
+        leafGroup,
         baseMaterial,
-        seg.dividerThickness,
+        segment.dividerThickness,
         segH,
         leafDepth + 0.001,
-        cx + seg.dividerThickness / 2,
+        cursorX + segment.dividerThickness / 2,
         segCenterY,
         0,
       )
-      cx += seg.dividerThickness
+      cursorX += segment.dividerThickness
     }
 
-    // Segment content per column
-    for (let c = 0; c < numCols; c++) {
-      const colW = colWidths[c]!
-      const colX = colXCenters[c]!
+    for (let colIndex = 0; colIndex < numCols; colIndex += 1) {
+      const colW = colWidths[colIndex]!
+      const colX = colXCenters[colIndex]!
 
-      if (seg.type === 'glass') {
-        // Glass only — no opaque backing so it's truly transparent
+      if (segment.type === 'glass') {
         const glassDepth = Math.max(0.004, leafDepth * 0.15)
-        addBox(mesh, glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
-      } else if (seg.type === 'panel') {
-        // Opaque leaf backing for this column
-        addBox(mesh, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
-        // Raised panel detail
-        const panelW = colW - 2 * seg.panelInset
-        const panelH = segH - 2 * seg.panelInset
+        addBox(leafGroup, glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
+      } else if (segment.type === 'panel') {
+        addBox(leafGroup, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        const panelW = colW - 2 * segment.panelInset
+        const panelH = segH - 2 * segment.panelInset
         if (panelW > 0.01 && panelH > 0.01) {
-          const effectiveDepth = Math.abs(seg.panelDepth) < 0.002 ? 0.005 : Math.abs(seg.panelDepth)
+          const effectiveDepth =
+            Math.abs(segment.panelDepth) < 0.002 ? 0.005 : Math.abs(segment.panelDepth)
           const panelZ = leafDepth / 2 + effectiveDepth / 2
-          addBox(mesh, baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
+          addBox(leafGroup, baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
         }
       } else {
-        // 'empty' — opaque backing, no detail
-        addBox(mesh, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        addBox(leafGroup, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
       }
     }
 
     segY -= segH
   }
 
-  // ── Handle ──
   if (handle) {
-    // Convert from floor-based height to mesh-center-based Y
     const handleY = handleHeight - height / 2
-    // Handle grip sits on the front face (+Z) of the leaf
     const faceZ = leafDepth / 2
+    const handleX =
+      openingStyle === 'overhead'
+        ? 0
+        : handleSide === 'right'
+          ? leafW / 2 - 0.045
+          : -leafW / 2 + 0.045
 
-    // X position: handleSide refers to which side the grip is on
-    const handleX = handleSide === 'right' ? leafW / 2 - 0.045 : -leafW / 2 + 0.045
-
-    // Backplate
-    addBox(mesh, baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
-    // Grip lever
-    addBox(mesh, baseMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025)
+    addBox(leafGroup, baseMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
+    addBox(leafGroup, baseMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025)
   }
 
-  // ── Door closer (commercial hardware at top) ──
-  if (doorCloser) {
+  if (openingStyle === 'swing' && doorCloser) {
     const closerY = leafCenterY + leafH / 2 - 0.04
-    // Body
-    addBox(mesh, baseMaterial, 0.28, 0.055, 0.055, 0, closerY, leafDepth / 2 + 0.03)
-    // Arm (simplified as thin bar to frame side)
+    addBox(leafGroup, baseMaterial, 0.28, 0.055, 0.055, 0, closerY, leafDepth / 2 + 0.03)
     addBox(
-      mesh,
+      leafGroup,
       baseMaterial,
       0.14,
       0.015,
@@ -267,28 +465,41 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     )
   }
 
-  // ── Panic bar ──
-  if (panicBar) {
+  if (openingStyle === 'swing' && panicBar) {
     const barY = panicBarHeight - height / 2
-    addBox(mesh, baseMaterial, leafW * 0.72, 0.04, 0.055, 0, barY, leafDepth / 2 + 0.03)
+    addBox(leafGroup, baseMaterial, leafW * 0.72, 0.04, 0.055, 0, barY, leafDepth / 2 + 0.03)
   }
 
-  // ── Hinges (3 knuckle-style hinges on the hinge side) ──
-  {
-    const hingeX = hingesSide === 'right' ? leafW / 2 - 0.012 : -leafW / 2 + 0.012
-    const hingeZ = 0 // centered in leaf depth
+  if (openingStyle === 'swing') {
+    const hingeZ = 0
     const hingeH = 0.1
     const hingeW = 0.024
     const hingeD = leafDepth + 0.016
-    // Bottom hinge ~0.25m from floor, middle hinge, top hinge ~0.25m from top
-    const leafBottom = leafCenterY - leafH / 2
-    const leafTop = leafCenterY + leafH / 2
-    addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeX, leafBottom + 0.25, hingeZ)
-    addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeX, (leafBottom + leafTop) / 2, hingeZ)
-    addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeX, leafTop - 0.25, hingeZ)
+    addBox(frameGroup, baseMaterial, hingeW, hingeH, hingeD, hingeX, leafBottomY + 0.25, hingeZ)
+    addBox(
+      frameGroup,
+      baseMaterial,
+      hingeW,
+      hingeH,
+      hingeD,
+      hingeX,
+      (leafBottomY + leafTopY) / 2,
+      hingeZ,
+    )
+    addBox(frameGroup, baseMaterial, hingeW, hingeH, hingeD, hingeX, leafTopY - 0.25, hingeZ)
   }
 
-  // ── Cutout (for wall CSG) — always full door dimensions, 1m deep ──
+  optimizeDoorGroupMeshes(frameGroup)
+  optimizeDoorGroupMeshes(leafGroup)
+
+  const leafBounds = getObjectBoundsInParentSpace(leafGroup, leafPivot)
+  if (leafBounds) {
+    navigationDoorAnimation.localBounds = {
+      max: [leafBounds.max.x, leafBounds.max.y, leafBounds.max.z],
+      min: [leafBounds.min.x, leafBounds.min.y, leafBounds.min.z],
+    }
+  }
+
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {
     cutout = new THREE.Mesh()

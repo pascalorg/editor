@@ -56,6 +56,12 @@ type NodeConfig = {
 type NodeType = keyof NodeConfig
 
 export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], type: T) {
+  const nodeEventsSuppressed = useViewer((state) => state.nodeEventsSuppressed)
+
+  if (nodeEventsSuppressed) {
+    return {}
+  }
+
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
     const eventKey = `${type}:${suffix}` as `${T}:${EventSuffix}`
     const localPoint = e.object.worldToLocal(e.point.clone())
