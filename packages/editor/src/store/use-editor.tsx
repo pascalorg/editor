@@ -9,14 +9,14 @@ import {
   type FenceNode,
   type ItemNode,
   type LevelNode,
-  type RoofSurfaceMaterialRole,
   type RoofNode,
   type RoofSegmentNode,
+  type RoofSurfaceMaterialRole,
   type SlabNode,
   type Space,
-  type StairSurfaceMaterialRole,
   type StairNode,
   type StairSegmentNode,
+  type StairSurfaceMaterialRole,
   useScene,
   type WallNode,
   type WallSurfaceSide,
@@ -26,6 +26,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { getDefaultCatalogItem } from '../components/ui/item-catalog/catalog-items'
+import {
+  type ActivePaintMaterial,
+  type PaintableMaterialTarget,
+  resolveActivePaintMaterialFromSelection,
+  resolvePaintTargetFromSelection,
+  type SingleSurfaceMaterialRole,
+} from '../lib/material-paint'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'site'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
@@ -37,7 +44,7 @@ export type SplitOrientation = 'horizontal' | 'vertical'
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
-export type Mode = 'select' | 'edit' | 'delete' | 'build'
+export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
 
 // Structure mode tools (building elements)
 export type StructureTool =
@@ -89,11 +96,17 @@ export type MovingFenceEndpoint = {
   endpoint: 'start' | 'end'
 }
 
-export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole
+export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole |  SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
   nodeId: AnyNodeId
   role: MaterialTargetRole
+}
+
+type MaterialPaintSelectionSnapshot = {
+  selectedId: string | null
+  activePaintTarget: PaintableMaterialTarget
+  activePaintMaterial: ActivePaintMaterial | null
 }
 
 type EditorState = {
@@ -149,6 +162,15 @@ type EditorState = {
   setCurvingFence: (fence: FenceNode | null) => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
+  activePaintMaterial: ActivePaintMaterial | null
+  setActivePaintMaterial: (material: ActivePaintMaterial | null) => void
+  activePaintTarget: PaintableMaterialTarget
+  setActivePaintTarget: (target: PaintableMaterialTarget) => void
+  primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
+  hoveredPaintTarget: PaintableMaterialTarget | null
+  setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
+  isPaintPanelOpen: boolean
+  setPaintPanelOpen: (open: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
   homeAssistantControlItemId: string | null
@@ -230,7 +252,7 @@ function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
     return 'select'
   }
 
-  return mode === 'build' || mode === 'delete' ? mode : 'select'
+  return mode === 'build' || mode === 'delete' || mode === 'material-paint' ? mode : 'select'
 }
 
 function normalizeFloorplanPaneRatio(value: unknown): number {
@@ -468,6 +490,8 @@ const useEditor = create<EditorState>()(
             const category = get().catalogCategory ?? 'furniture'
             set({ selectedItem: getDefaultSelectedItemForCategory(category) })
           }
+        } else if (mode === 'material-paint') {
+          get().primeMaterialPaintFromSelection()
         }
         // When leaving build mode, clear tool
         else if (tool) {
@@ -532,6 +556,47 @@ const useEditor = create<EditorState>()(
       setCurvingFence: (fence) => set({ curvingFence: fence }),
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
+      activePaintMaterial: null,
+      setActivePaintMaterial: (material) => set({ activePaintMaterial: material }),
+      activePaintTarget: 'wall',
+      setActivePaintTarget: (target) =>
+        set((state) =>
+          state.activePaintTarget === target ? state : { activePaintTarget: target },
+        ),
+      primeMaterialPaintFromSelection: () => {
+        const selectedId =
+          useViewer.getState().selection.selectedIds.length === 1
+            ? (useViewer.getState().selection.selectedIds[0] ?? null)
+            : null
+        const activePaintTarget =
+          resolvePaintTargetFromSelection({
+            nodes: useScene.getState().nodes,
+            selectedId,
+          }) ?? get().activePaintTarget
+        const activePaintMaterial = resolveActivePaintMaterialFromSelection({
+          nodes: useScene.getState().nodes,
+          selectedId,
+          selectedMaterialTarget: get().selectedMaterialTarget,
+        })
+
+        set({
+          activePaintTarget,
+          ...(activePaintMaterial ? { activePaintMaterial } : {}),
+        })
+
+        return {
+          selectedId,
+          activePaintTarget,
+          activePaintMaterial: activePaintMaterial ?? get().activePaintMaterial,
+        }
+      },
+      hoveredPaintTarget: null,
+      setHoveredPaintTarget: (target) =>
+        set((state) =>
+          state.hoveredPaintTarget === target ? state : { hoveredPaintTarget: target },
+        ),
+      isPaintPanelOpen: false,
+      setPaintPanelOpen: (open) => set({ isPaintPanelOpen: open }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       homeAssistantControlItemId: null,

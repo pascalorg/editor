@@ -1,4 +1,10 @@
-import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -14,8 +20,9 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
 
   const handlers = useNodeEvents(node, 'roof-segment')
   const debugColors = useViewer((s) => s.debugColors)
-  const parentNode =
-    node.parentId ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined) : undefined
+  const parentNode = node.parentId
+    ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
+    : undefined
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
@@ -32,24 +39,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     }
 
     return parentNode ? getRoofMaterialArray(parentNode) : null
-  }, [
-    node.materialPreset,
-    node.material,
-    node.material?.preset,
-    node.material?.properties,
-    node.material?.texture,
-    parentNode?.materialPreset,
-    parentNode?.material,
-    parentNode?.material?.preset,
-    parentNode?.material?.properties,
-    parentNode?.material?.texture,
-    parentNode?.topMaterial,
-    parentNode?.topMaterialPreset,
-    parentNode?.edgeMaterial,
-    parentNode?.edgeMaterialPreset,
-    parentNode?.wallMaterial,
-    parentNode?.wallMaterialPreset,
-  ])
+  }, [node, parentNode])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 

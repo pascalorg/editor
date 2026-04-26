@@ -1,13 +1,12 @@
 'use client'
 
-import { type AnyNode, type CeilingNode, type MaterialSchema, useScene } from '@pascal-app/core'
+import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -30,20 +29,6 @@ export function CeilingPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const handleMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -257,15 +242,6 @@ export function CeilingPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="ceiling"
-          onChange={handleMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
-      </PanelSection>
       <ActionGroup>
         <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
       </ActionGroup>

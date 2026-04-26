@@ -8,10 +8,14 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { createMaterial, createMaterialFromPresetRef, DEFAULT_STAIR_MATERIAL } from '../../../lib/materials'
 import {
-  getStairRailingMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
+  DEFAULT_STAIR_MATERIAL,
+} from '../../../lib/materials'
+import {
   getStairBodyMaterials,
+  getStairRailingMaterial,
   type StairBodyMaterials,
 } from '../../../systems/stair/stair-materials'
 import { NodeRenderer } from '../node-renderer'
@@ -72,33 +76,9 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
     node.material?.texture,
   ])
 
-  const straightBodyMaterials = useMemo(
-    () => getStairBodyMaterials(node),
-    [
-      node.material,
-      node.materialPreset,
-      node.railingMaterial,
-      node.railingMaterialPreset,
-      node.sideMaterial,
-      node.sideMaterialPreset,
-      node.treadMaterial,
-      node.treadMaterialPreset,
-    ],
-  )
+  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node), [node])
 
-  const railingMaterial = useMemo(
-    () => getStairRailingMaterial(node),
-    [
-      node.material,
-      node.materialPreset,
-      node.railingMaterial,
-      node.railingMaterialPreset,
-      node.sideMaterial,
-      node.sideMaterialPreset,
-      node.treadMaterial,
-      node.treadMaterialPreset,
-    ],
-  )
+  const railingMaterial = useMemo(() => getStairRailingMaterial(node), [node])
 
   const straightPlaceholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
@@ -132,7 +112,9 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
           receiveShadow
         />
       ) : null}
-      {!isSegmentBasedStair ? <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} /> : null}
+      {!isSegmentBasedStair ? (
+        <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} />
+      ) : null}
       <StairRailings material={railingMaterial} stair={node} />
       {isSegmentBasedStair ? (
         <group name="segments-wrapper" visible={false}>

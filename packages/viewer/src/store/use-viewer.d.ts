@@ -1,4 +1,10 @@
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import type { Object3D } from 'three'
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -19,8 +25,8 @@ type ViewerState = {
   suppressNodeEvents: (durationMs?: number) => void
   roomControlOverlayActive: boolean
   setRoomControlOverlayActive: (active: boolean) => void
-  hoverHighlightMode: 'default' | 'delete'
-  setHoverHighlightMode: (mode: 'default' | 'delete') => void
+  hoverHighlightMode: string
+  setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void

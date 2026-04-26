@@ -7,6 +7,7 @@ import { CeilingPanel } from './ceiling-panel'
 import { DoorPanel } from './door-panel'
 import { FencePanel } from './fence-panel'
 import { ItemPanel } from './item-panel'
+import { PaintPanel } from './paint-panel'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { RoofSegmentPanel } from './roof-segment-panel'
@@ -20,6 +21,9 @@ export function PanelManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const roomControlOverlayActive = useViewer((s) => s.roomControlOverlayActive)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
+  const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
+  const mode = useEditor((s) => s.mode)
+  const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
   // Only subscribe to the *type* of the single-selected node — string primitive
   // so we don't re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
@@ -35,6 +39,15 @@ export function PanelManager() {
 
   if (roomControlOverlayActive) {
     return null
+  }
+
+  if (
+    isPaintPanelOpen &&
+    mode === 'material-paint' &&
+    activePaintMaterial?.material?.properties &&
+    !activePaintMaterial.materialPreset
+  ) {
+    return <PaintPanel />
   }
 
   // Show appropriate panel based on selected node type

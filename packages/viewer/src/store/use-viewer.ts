@@ -27,8 +27,8 @@ type ViewerState = {
   suppressNodeEvents: (durationMs?: number) => void
   roomControlOverlayActive: boolean
   setRoomControlOverlayActive: (active: boolean) => void
-  hoverHighlightMode: 'default' | 'delete'
-  setHoverHighlightMode: (mode: 'default' | 'delete') => void
+  hoverHighlightMode: string
+  setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
@@ -102,10 +102,11 @@ const useViewer = create<ViewerState>()(
       setRoomControlOverlayActive: (roomControlOverlayActive) =>
         set({ roomControlOverlayActive }),
       hoverHighlightMode: 'default',
-      setHoverHighlightMode: (mode) => set({ hoverHighlightMode: mode }),
+      setHoverHighlightMode: (mode) =>
+        set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
       hoveredId: null,
       hoveredIds: [],
-      setHoveredId: (id) => set({ hoveredId: id }),
+      setHoveredId: (id) => set((state) => (state.hoveredId === id ? state : { hoveredId: id })),
       setHoveredIds: (ids) => set({ hoveredIds: ids }),
 
       cameraMode: 'perspective',
