@@ -1,7 +1,14 @@
-import type { BaseNode, ItemMoveVisualState, ItemNode } from '@pascal-app/core'
+import type { BaseNode, ItemNode } from '@pascal-app/core'
 import { createContext, type ReactNode, useContext } from 'react'
 import { type StoreApi, useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
+
+export type ViewerRuntimeItemMoveVisualState =
+  | 'carried'
+  | 'copy-source-pending'
+  | 'destination-ghost'
+  | 'destination-preview'
+  | 'source-pending'
 
 export type ViewerRuntimeItemMovePreview = {
   id: ItemNode['id']
@@ -21,7 +28,7 @@ export type ViewerRuntimeState = {
   completeNavigationPostWarmup: (token: number) => void
   itemDeleteActivations: Partial<Record<BaseNode['id'], ViewerRuntimeItemDeleteActivation>>
   itemMovePreview: ViewerRuntimeItemMovePreview | null
-  itemMoveVisualStates: Partial<Record<BaseNode['id'], ItemMoveVisualState>>
+  itemMoveVisualStates: Partial<Record<BaseNode['id'], ViewerRuntimeItemMoveVisualState>>
   navigationPostWarmupCompletedToken: number
   navigationPostWarmupRequestToken: number
   navigationPostWarmupScope: ViewerRuntimePostWarmupScope

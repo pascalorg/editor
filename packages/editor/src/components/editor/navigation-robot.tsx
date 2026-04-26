@@ -45,7 +45,13 @@ import {
 } from '../../lib/navigation-performance'
 import navigationVisualsStore from '../../store/use-navigation-visuals'
 
-const NAVIGATION_ROBOT_ASSET_PATH = '/navigation/proto_pascal_robot.glb'
+export const NAVIGATION_ROBOT_ASSETS = {
+  armored: '/navigation/white-black-armored-soldier-animated.glb',
+  pascal: '/navigation/proto_pascal_robot.glb',
+} as const
+export type NavigationRobotAssetPath =
+  (typeof NAVIGATION_ROBOT_ASSETS)[keyof typeof NAVIGATION_ROBOT_ASSETS]
+const DEFAULT_NAVIGATION_ROBOT_ASSET_PATH = NAVIGATION_ROBOT_ASSETS.pascal
 const NAVIGATION_ROBOT_CLIP_OVERRIDE_STORAGE_KEY = 'pascalNavigationRobotClipOverrides'
 const NAVIGATION_ROBOT_CLIP_OVERRIDE_EVENT = 'pascal-robot-clip-overrides-change'
 const NAVIGATION_ROBOT_ASSET_VERSION_STORAGE_KEY = 'pascalNavigationRobotAssetVersion'
@@ -182,7 +188,7 @@ function readNavigationRobotAssetVersion(storage: Storage | null | undefined) {
 
 function getNavigationRobotAssetUrl(
   storage: Storage | null | undefined,
-  assetPath = NAVIGATION_ROBOT_ASSET_PATH,
+  assetPath: NavigationRobotAssetPath = DEFAULT_NAVIGATION_ROBOT_ASSET_PATH,
 ) {
   const version = readNavigationRobotAssetVersion(storage)
   if (!version) {
@@ -194,8 +200,12 @@ function getNavigationRobotAssetUrl(
 
 const ROBOT_TARGET_HEIGHT = 1.82
 const TOOL_CONE_VFX_LAYER = 3
-const ROBOT_ASSET_SCALE_MULTIPLIER =
-  NAVIGATION_ROBOT_ASSET_PATH === '/navigation/proto_pascal_robot.glb' ? 1 / 110.16949152542374 : 1
+const SMALL_WORLD_ROBOT_ASSET_SCALE_MULTIPLIER = 1 / 110.16949152542374
+const getRobotAssetScaleMultiplier = (assetPath: string) =>
+  assetPath === '/navigation/proto_pascal_robot.glb' ||
+  assetPath === '/navigation/white-black-armored-soldier-animated.glb'
+    ? SMALL_WORLD_ROBOT_ASSET_SCALE_MULTIPLIER
+    : 1
 const IDLE_TIME_SCALE = 0.5
 const CLIP_BLEND_RESPONSE = 8
 const CLIP_TIME_SCALE_RESPONSE = 10
@@ -309,6 +319,7 @@ export type NavigationRobotMaterialDebugMode = 'auto' | 'original-only' | 'revea
 type NavigationRobotProps = {
   active?: boolean
   animationPaused?: boolean
+  assetPath?: NavigationRobotAssetPath
   clipNameOverrides?: Partial<NavigationRobotClipOverrideState>
   debugId?: string
   debugStateRef?: MutableRefObject<Record<string, unknown> | null> | undefined
@@ -1345,12 +1356,16 @@ function buildRuntimePlanarRootMotionClip(clip: AnimationClip): RuntimePlanarRoo
   }
 }
 
-function getRobotTransform(scene: Group, hoverOffset: number): RobotTransform {
+function getRobotTransform(
+  scene: Group,
+  hoverOffset: number,
+  assetPath: NavigationRobotAssetPath,
+): RobotTransform {
   const bounds = new Box3().setFromObject(scene)
   const size = bounds.getSize(new Vector3())
   const center = bounds.getCenter(new Vector3())
   const normalizedScale = size.y > Number.EPSILON ? ROBOT_TARGET_HEIGHT / size.y : 1
-  const scale = normalizedScale * ROBOT_ASSET_SCALE_MULTIPLIER
+  const scale = normalizedScale * getRobotAssetScaleMultiplier(assetPath)
 
   return {
     offset: [-center.x * scale, -hoverOffset - bounds.min.y * scale, -center.z * scale],
@@ -1524,7 +1539,7 @@ function cloneRobotMaterial(material: Material): Material {
   clonedMaterial.depthTest = sourceMaterial.depthTest ?? true
   clonedMaterial.depthWrite = sourceMaterial.depthWrite ?? true
   clonedMaterial.toneMapped = sourceMaterial.toneMapped ?? true
-  clonedMaterial.side = clonedMaterial.transparent ? (sourceMaterial.side ?? FrontSide) : FrontSide
+  clonedMaterial.side = sourceMaterial.side ?? FrontSide
   clonedMaterial.needsUpdate = true
   return clonedMaterial
 }
@@ -1549,9 +1564,7 @@ function disposeObjectMaterials(material: Material | Material[]) {
 function normalizeRobotBaseMaterials(material: Material | Material[]) {
   const materials = Array.isArray(material) ? material : [material]
   for (const entry of materials) {
-    if (!entry.transparent) {
-      entry.side = FrontSide
-    }
+    entry.side = entry.side ?? FrontSide
     entry.needsUpdate = true
   }
 }
@@ -1560,9 +1573,7 @@ function normalizeRobotRevealMaterials(material: Material | Material[]) {
   const materials = Array.isArray(material) ? material : [material]
   for (const entry of materials) {
     const robotMaterial = entry as RobotRenderableMaterial
-    if (!entry.transparent) {
-      entry.side = FrontSide
-    }
+    robotMaterial.side = robotMaterial.side ?? FrontSide
     robotMaterial.transparent = true
     robotMaterial.depthTest = true
     robotMaterial.depthWrite = false
@@ -1738,6 +1749,7 @@ if (diffuseColor.a <= 0.001) discard;
 export function NavigationRobot({
   active = true,
   animationPaused = false,
+  assetPath = DEFAULT_NAVIGATION_ROBOT_ASSET_PATH,
   clipNameOverrides,
   debugId,
   debugStateRef,
@@ -1761,7 +1773,10 @@ export function NavigationRobot({
 }: NavigationRobotProps) {
   const { camera: sceneCamera, gl, scene: rootScene } = useThree()
   const [assetUrl, setAssetUrl] = useState(() =>
-    getNavigationRobotAssetUrl(typeof window === 'undefined' ? null : window.localStorage),
+    getNavigationRobotAssetUrl(
+      typeof window === 'undefined' ? null : window.localStorage,
+      assetPath,
+    ),
   )
   const { scene, animations } = useGLTF(assetUrl)
   const { scene: toolScene } = useGLTF(TOOL_ASSET_PATH)
@@ -1805,7 +1820,7 @@ export function NavigationRobot({
       setStoredClipOverrides(readNavigationRobotClipOverrides(window.localStorage))
     }
     const syncAssetUrl = () => {
-      setAssetUrl(getNavigationRobotAssetUrl(window.localStorage))
+      setAssetUrl(getNavigationRobotAssetUrl(window.localStorage, assetPath))
     }
 
     syncStoredClipOverrides()
@@ -1820,7 +1835,7 @@ export function NavigationRobot({
       window.removeEventListener('storage', syncStoredClipOverrides)
       window.removeEventListener('storage', syncAssetUrl)
     }
-  }, [])
+  }, [assetPath])
 
   useLayoutEffect(() => {
     clonedScene.traverse((child) => {
@@ -2265,9 +2280,9 @@ export function NavigationRobot({
   const robotTransform = useMemo(
     () =>
       measureNavigationPerf('navigationRobot.transformMs', () =>
-        getRobotTransform(clonedScene, hoverOffset),
+        getRobotTransform(clonedScene, hoverOffset, assetPath),
       ),
-    [clonedScene, hoverOffset],
+    [assetPath, clonedScene, hoverOffset],
   )
   const idleShoulderTargets = useMemo<ShoulderPoseTargets>(() => {
     const idleClip = idleAction?.getClip() ?? null
@@ -4760,4 +4775,5 @@ export function NavigationRobot({
 
 useGLTF.preload(TOOL_ASSET_PATH)
 
-useGLTF.preload(NAVIGATION_ROBOT_ASSET_PATH)
+useGLTF.preload(NAVIGATION_ROBOT_ASSETS.pascal)
+useGLTF.preload(NAVIGATION_ROBOT_ASSETS.armored)

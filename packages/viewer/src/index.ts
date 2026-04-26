@@ -11,6 +11,7 @@ export {
   useViewerRuntimeState,
   type ViewerRuntimeItemDeleteActivation,
   type ViewerRuntimeItemMovePreview,
+  type ViewerRuntimeItemMoveVisualState,
   type ViewerRuntimePostWarmupScope,
   type ViewerRuntimeState,
   ViewerRuntimeStateProvider,

@@ -58,17 +58,17 @@ import {
   buildWalkableSurfaceOverlay,
   filterWallOverlayCells,
   getDoorPortalPolygon,
-  getItemPlanTransform,
+  type getItemPlanTransform,
   getWallAttachedItemDoorOpening,
   isFloorBlockingItem,
-  type WalkableSurfaceOverlay,
   WALKABLE_CELL_SIZE,
   WALKABLE_CLEARANCE,
   WALKABLE_FILL_OPACITY,
+  type WalkableSurfaceOverlay,
 } from '../../lib/walkable-surface'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
-import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import useNavigation, { requestNavigationItemDelete } from '../../store/use-navigation'
+import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
@@ -90,8 +90,6 @@ import { furnishTools } from '../ui/action-menu/furnish-tools'
 import { tools as structureTools } from '../ui/action-menu/structure-tools'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/primitives/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 import { NodeActionMenu } from './node-action-menu'
 
 const FALLBACK_VIEW_SIZE = 12
@@ -5399,7 +5397,7 @@ export function FloorplanPanel() {
     : null
   const floorplanWalls = useMemo(() => walls.map(getFloorplanWall), [walls])
   const wallMiterData = useMemo(() => calculateLevelMiters(floorplanWalls), [floorplanWalls])
-  const shouldRenderWalkableOverlay = navigationEnabled || walkableOverlayVisible
+  const shouldRenderWalkableOverlay = walkableOverlayVisible
   const wallById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall] as const)), [walls])
   const floorplanWallById = useMemo(
     () => new Map(floorplanWalls.map((wall) => [wall.id, wall] as const)),
@@ -6381,12 +6379,16 @@ export function FloorplanPanel() {
     if (levelChanged) {
       previousLevelIdRef.current = levelId ?? null
       hasUserAdjustedViewportRef.current = false
-      setViewport((current) => (floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport))
+      setViewport((current) =>
+        floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport,
+      )
       return
     }
 
     if (!hasUserAdjustedViewportRef.current) {
-      setViewport((current) => (floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport))
+      setViewport((current) =>
+        floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport,
+      )
     }
   }, [fittedViewport, levelId])
 

@@ -4,7 +4,6 @@ import {
   type CeilingNode,
   type DoorNode,
   type FenceNode,
-  type getItemMoveVisualState,
   getScaledDimensions,
   type ItemNode,
   type RoofNode,
@@ -13,7 +12,6 @@ import {
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
-  setItemMoveVisualState,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -23,6 +21,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { type ItemMoveVisualState, setItemMoveVisualState } from '../../../lib/item-move-visuals'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import useNavigation from '../../../store/use-navigation'
@@ -84,10 +83,7 @@ function setDraftVisibility(draftNode: DraftNodeHandle, visible: boolean) {
   }
 }
 
-function setDraftVisualState(
-  draftNode: DraftNodeHandle,
-  state: ReturnType<typeof getItemMoveVisualState>,
-) {
+function setDraftVisualState(draftNode: DraftNodeHandle, state: ItemMoveVisualState | null) {
   const draft = draftNode.current
   if (!draft) {
     return
@@ -133,10 +129,7 @@ function syncDraftTransform(
   }
 }
 
-function setItemVisualState(
-  itemId: ItemNode['id'],
-  state: ReturnType<typeof getItemMoveVisualState>,
-) {
+function setItemVisualState(itemId: ItemNode['id'], state: ItemMoveVisualState | null) {
   navigationVisualsStore.getState().setItemMoveVisualState(itemId, state)
 }
 

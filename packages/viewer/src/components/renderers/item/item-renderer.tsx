@@ -5,7 +5,6 @@ import {
   getScaledDimensions,
   glassMaterial,
   type Interactive,
-  type ItemMoveVisualState,
   type ItemNode,
   type LightEffect,
   useInteractive,
@@ -35,7 +34,10 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
-import { useViewerRuntimeState } from '../../../contexts/viewer-runtime-state'
+import {
+  useViewerRuntimeState,
+  type ViewerRuntimeItemMoveVisualState,
+} from '../../../contexts/viewer-runtime-state'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
 import { ITEM_DELETE_FADE_OUT_MS } from '../../../lib/item-delete-visual'
@@ -562,7 +564,7 @@ const PreviewGhostModelRenderer = ({
   visualStateOverride,
 }: {
   node: ItemNode
-  visualStateOverride: ItemMoveVisualState | null
+  visualStateOverride: ViewerRuntimeItemMoveVisualState | null
 }) => {
   const assetSrc = resolveCdnUrl(node.asset.src) || ''
   const { scene, animations } = useGLTF(assetSrc)
@@ -868,7 +870,7 @@ const ModelRenderer = ({
   visualStateOverride,
 }: {
   node: ItemNode
-  visualStateOverride: ItemMoveVisualState | null
+  visualStateOverride: ViewerRuntimeItemMoveVisualState | null
 }) => {
   const assetSrc = resolveCdnUrl(node.asset.src) || ''
   const { scene, nodes, animations } = useGLTF(assetSrc)

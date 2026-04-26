@@ -12,17 +12,22 @@ import {
   Eye,
   Footprints,
   Moon,
+  Shield,
   Sun,
 } from 'lucide-react'
 import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
-import useNavigation, { type NavigationRobotMode } from '../../store/use-navigation'
+import useNavigation, {
+  type NavigationRobotModel,
+  type NavigationRobotMode,
+} from '../../store/use-navigation'
 import type { GridSnapStep, ViewMode } from '../../store/use-editor'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './primitives/dropdown-menu'
 import { useSidebarStore } from './primitives/sidebar'
@@ -141,12 +146,19 @@ function WalkthroughButton() {
 }
 
 const ROBOT_MODE_OPTIONS: Array<{ label: string; mode: NavigationRobotMode }> = [
-  { label: 'Normal robot', mode: 'normal' },
+  { label: 'Manual mode', mode: 'normal' },
   { label: 'Task mode', mode: 'task' },
 ]
 
+const ROBOT_MODEL_LABELS: Record<NavigationRobotModel, string> = {
+  armored: 'Armored robot',
+  pascal: 'Pascal robot',
+}
+
 function RobotModeButton() {
+  const robotModel = useNavigation((state) => state.robotModel)
   const robotMode = useNavigation((state) => state.robotMode)
+  const setRobotModel = useNavigation((state) => state.setRobotModel)
   const setRobotMode = useNavigation((state) => state.setRobotMode)
 
   const activateRobotMode = useCallback(
@@ -171,8 +183,17 @@ function RobotModeButton() {
     [setRobotMode],
   )
 
+  const toggleRobotModel = useCallback(() => {
+    setRobotModel(robotModel === 'pascal' ? 'armored' : 'pascal')
+  }, [robotModel, setRobotModel])
+
+  const nextRobotModel = robotModel === 'pascal' ? 'armored' : 'pascal'
   const tooltipLabel =
-    robotMode === 'normal' ? 'Robot: normal mode' : robotMode === 'task' ? 'Robot: task mode' : 'Robot'
+    robotMode === 'normal'
+      ? `Robot: manual mode (${ROBOT_MODEL_LABELS[robotModel]})`
+      : robotMode === 'task'
+        ? `Robot: task mode (${ROBOT_MODEL_LABELS[robotModel]})`
+        : `Robot (${ROBOT_MODEL_LABELS[robotModel]})`
 
   return (
     <DropdownMenu>
@@ -204,6 +225,17 @@ function RobotModeButton() {
             </DropdownMenuItem>
           )
         })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={toggleRobotModel}>
+          <span className="flex min-w-28 items-center justify-between gap-3">
+            <span>{ROBOT_MODEL_LABELS[nextRobotModel]}</span>
+            {nextRobotModel === 'armored' ? (
+              <Shield className="h-3.5 w-3.5" />
+            ) : (
+              <Bot className="h-3.5 w-3.5" />
+            )}
+          </span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

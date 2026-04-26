@@ -398,6 +398,15 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
 
+const SIMPLE_ROBOT_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
+  {
+    action: 'Pan',
+    keys: [{ value: 'Space' }, { value: 'Left click' }],
+  },
+  { action: 'Rotate/Move Robot', keys: [{ value: 'Right click' }] },
+  { action: 'Zoom', keys: [{ value: 'Scroll' }] },
+]
+
 const PREVIEW_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Pan', keys: [{ value: 'Left click' }] },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
@@ -511,13 +520,19 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
 }
 
 function ViewerCanvasControlsHint({
+  isSimpleRobotMode,
   isPreviewMode,
   onDismiss,
 }: {
+  isSimpleRobotMode: boolean
   isPreviewMode: boolean
   onDismiss: () => void
 }) {
-  const hints = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
+  const hints = isPreviewMode
+    ? PREVIEW_CAMERA_CONTROL_HINTS
+    : isSimpleRobotMode
+      ? SIMPLE_ROBOT_CAMERA_CONTROL_HINTS
+      : EDITOR_CAMERA_CONTROL_HINTS
 
   return (
     <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
@@ -961,6 +976,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
+              isSimpleRobotMode={robotMode === 'normal'}
               isPreviewMode={isPreviewMode}
               onDismiss={dismissCameraControlsHint}
             />

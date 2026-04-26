@@ -1,5 +1,6 @@
-import type { BaseNode, ItemMoveVisualState } from '@pascal-app/core'
+import type { BaseNode } from '@pascal-app/core'
 import type {
+  ViewerRuntimeItemMoveVisualState as ItemMoveVisualState,
   ViewerRuntimeItemDeleteActivation,
   ViewerRuntimeItemMovePreview,
   ViewerRuntimePostWarmupScope,

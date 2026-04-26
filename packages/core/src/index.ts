@@ -32,18 +32,11 @@ export {
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
-  getItemMoveVisualState,
-  ITEM_MOVE_VISUAL_METADATA_KEY,
-  type ItemMoveVisualState,
-  setItemMoveVisualState,
-} from './lib/item-move-visuals'
-export {
   detectSpacesForLevel,
   initSpaceDetectionSync,
   type Space,
   wallTouchesOthers,
 } from './lib/space-detection'
-export { baseMaterial, glassMaterial } from './materials'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
@@ -52,37 +45,32 @@ export {
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   MATERIAL_CATEGORIES,
-  type MaterialCategory,
   type MaterialCatalogItem,
+  type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
+export { baseMaterial, glassMaterial } from './materials'
 export * from './schema'
-export {
-  type ControlValue,
-  type ItemInteractiveState,
-  useInteractive,
-} from './store/use-interactive'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
+export {
+  type ControlValue,
+  type ItemInteractiveState,
+  useInteractive,
+} from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
-export { FenceSystem } from './systems/fence/fence-system'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export { DoorSystem } from './systems/door/door-system'
+export { FenceSystem } from './systems/fence/fence-system'
 export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
 export { SlabSystem } from './systems/slab/slab-system'
 export { StairSystem } from './systems/stair/stair-system'
-export {
-  DEFAULT_WALL_HEIGHT,
-  DEFAULT_WALL_THICKNESS,
-  getWallPlanFootprint,
-  getWallThickness,
-} from './systems/wall/wall-footprint'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
@@ -97,11 +85,17 @@ export {
   sampleWallCenterline,
 } from './systems/wall/wall-curve'
 export {
+  DEFAULT_WALL_HEIGHT,
+  DEFAULT_WALL_THICKNESS,
+  getWallPlanFootprint,
+  getWallThickness,
+} from './systems/wall/wall-footprint'
+export {
   calculateLevelMiters,
   getWallMiterBoundaryPoints,
   type Point2D,
-  type WallMiterBoundaryPoints,
   pointToKey,
+  type WallMiterBoundaryPoints,
   type WallMiterData,
 } from './systems/wall/wall-mitering'
 export { WallSystem } from './systems/wall/wall-system'

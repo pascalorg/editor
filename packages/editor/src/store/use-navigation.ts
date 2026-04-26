@@ -74,6 +74,7 @@ export type NavigationItemRepairRequest = {
 }
 
 export type NavigationTaskKind = 'delete' | 'move' | 'repair'
+export type NavigationRobotModel = 'armored' | 'pascal'
 export type NavigationRobotMode = 'normal' | 'task'
 
 export type NavigationQueuedTask =
@@ -291,6 +292,7 @@ type NavigationState = {
   navigationClickSuppressedUntil: number
   queueRestartToken: number
   removeQueuedTask: (taskId: string) => void
+  robotModel: NavigationRobotModel
   robotMode: NavigationRobotMode | null
   registerItemMoveController: (
     itemId: ItemNode['id'],
@@ -305,6 +307,7 @@ type NavigationState = {
   setActorAvailable: (actorAvailable: boolean) => void
   setActorWorldPosition: (actorWorldPosition: [number, number, number] | null) => void
   setEnabled: (enabled: boolean) => void
+  setRobotModel: (model: NavigationRobotModel) => void
   setRobotMode: (mode: NavigationRobotMode | null) => void
   setWallOverlayFilter: <K extends keyof WallOverlayFilters>(
     key: K,
@@ -397,6 +400,7 @@ const useNavigation = create<NavigationState>((set) => ({
         removedActiveTask,
       )
     }),
+  robotModel: 'pascal',
   robotMode: null,
   registerItemMoveController: (itemId, controller) =>
     set((state) => {
@@ -608,6 +612,7 @@ const useNavigation = create<NavigationState>((set) => ({
         robotMode: nextRobotMode,
       }
     }),
+  setRobotModel: (robotModel) => set({ robotModel }),
   setRobotMode: (robotMode) =>
     set((state) => {
       if (state.robotMode === robotMode) {

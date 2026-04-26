@@ -788,10 +788,7 @@ export const SelectionManager = () => {
       nextMaterialTargetHandled = true
     }
 
-    if (
-      (node.type === 'stair' || node.type === 'stair-segment') &&
-      nodeToSelect.type === 'stair'
-    ) {
+    if ((node.type === 'stair' || node.type === 'stair-segment') && nodeToSelect.type === 'stair') {
       setSelectedMaterialTargetForNode(
         nodeToSelect,
         resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent),
@@ -799,10 +796,7 @@ export const SelectionManager = () => {
       nextMaterialTargetHandled = true
     }
 
-    if (
-      (node.type === 'roof' || node.type === 'roof-segment') &&
-      nodeToSelect.type === 'roof'
-    ) {
+    if ((node.type === 'roof' || node.type === 'roof-segment') && nodeToSelect.type === 'roof') {
       setSelectedMaterialTargetForNode(
         nodeToSelect,
         resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent),
@@ -1264,7 +1258,14 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [curvingFence, curvingWall, mode, movingNode, navigationSelectionSuppressed, selectNodeFromEvent])
+  }, [
+    curvingFence,
+    curvingWall,
+    mode,
+    movingNode,
+    navigationSelectionSuppressed,
+    selectNodeFromEvent,
+  ])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {

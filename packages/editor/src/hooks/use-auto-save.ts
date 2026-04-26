@@ -68,11 +68,7 @@ export function useAutoSave({
     let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
 
     async function executeSave() {
-      if (
-        isLoadingSceneRef.current ||
-        isVersionPreviewModeRef.current ||
-        suppressSaveRef.current
-      ) {
+      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current || suppressSaveRef.current) {
         pendingSaveRef.current = true
         setSaveStatus('paused')
         return

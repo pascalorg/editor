@@ -1,12 +1,7 @@
 'use client'
 
 import type { BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
-import {
-  getItemMoveVisualState,
-  resolveLevelId,
-  setItemMoveVisualState,
-  useScene,
-} from '@pascal-app/core'
+import { resolveLevelId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
   hasCustomPersistedEditorUiState,
@@ -15,6 +10,7 @@ import useEditor, {
 } from '../store/use-editor'
 import useNavigation from '../store/use-navigation'
 import navigationVisualsStore from '../store/use-navigation-visuals'
+import { getItemMoveVisualState, setItemMoveVisualState } from './item-move-visuals'
 
 export type SceneGraph = {
   nodes: Record<string, unknown>

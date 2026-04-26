@@ -2493,6 +2493,69 @@ function getDoorOpeningPassagePoints(
   }
 }
 
+function isNavigationPathSegmentInsideDoorOpening(
+  opening: NavigationDoorOpening,
+  fromCell: NavigationCell,
+  toCell: NavigationCell,
+  cellSize: number,
+) {
+  if (fromCell.levelId !== opening.levelId || toCell.levelId !== opening.levelId) {
+    return false
+  }
+
+  const fromPoint = { x: fromCell.center[0], y: fromCell.center[2] }
+  const toPoint = { x: toCell.center[0], y: toCell.center[2] }
+  const portalOptions = {
+    depthEpsilon: Math.max(cellSize * 0.35, NAVIGATION_AGENT_RADIUS * 0.35),
+    widthEpsilon: Math.max(cellSize * 0.55, NAVIGATION_AGENT_RADIUS * 0.5),
+  }
+  const fromInsidePortal = isPointInsideDoorPortal(fromPoint, opening.polygon, portalOptions)
+  const toInsidePortal = isPointInsideDoorPortal(toPoint, opening.polygon, portalOptions)
+
+  const fromOffset = {
+    x: fromPoint.x - opening.center.x,
+    y: fromPoint.y - opening.center.y,
+  }
+  const toOffset = {
+    x: toPoint.x - opening.center.x,
+    y: toPoint.y - opening.center.y,
+  }
+  const fromDepth = dotPlan(fromOffset, opening.depthAxis)
+  const toDepth = dotPlan(toOffset, opening.depthAxis)
+  const depthDelta = toDepth - fromDepth
+  const depthEpsilon = portalOptions.depthEpsilon
+  const fromSide = Math.abs(fromDepth) <= depthEpsilon ? 0 : Math.sign(fromDepth)
+  const toSide = Math.abs(toDepth) <= depthEpsilon ? 0 : Math.sign(toDepth)
+  const hasOppositeSideCrossing =
+    fromSide !== 0 && toSide !== 0 && fromSide !== toSide && Math.abs(depthDelta) > depthEpsilon
+  const hasDoorwayEndpointCrossing =
+    Math.abs(depthDelta) > Number.EPSILON &&
+    ((fromInsidePortal && fromSide === 0 && toSide !== 0 && fromDepth * toDepth <= 0) ||
+      (toInsidePortal && toSide === 0 && fromSide !== 0 && fromDepth * toDepth <= 0) ||
+      (fromInsidePortal &&
+        toInsidePortal &&
+        fromSide === 0 &&
+        toSide === 0 &&
+        fromDepth * toDepth <= 0 &&
+        Math.abs(depthDelta) > cellSize * 0.05))
+  const crossesOpeningPlane = hasOppositeSideCrossing || hasDoorwayEndpointCrossing
+
+  if (!crossesOpeningPlane) {
+    return false
+  }
+
+  const fromWidth = dotPlan(fromOffset, opening.widthAxis)
+  const toWidth = dotPlan(toOffset, opening.widthAxis)
+  const crossingT = Math.min(Math.max(-fromDepth / depthDelta, 0), 1)
+  const crossingWidth = fromWidth + (toWidth - fromWidth) * crossingT
+  const crossingPoint = {
+    x: opening.center.x + opening.widthAxis.x * crossingWidth,
+    y: opening.center.y + opening.widthAxis.y * crossingWidth,
+  }
+
+  return isPointInsideDoorPortal(crossingPoint, opening.polygon, portalOptions)
+}
+
 export function getNavigationDoorTransitions(
   graph: NavigationGraph,
   pathIndices: number[],
@@ -2521,21 +2584,26 @@ export function getNavigationDoorTransitions(
 
   for (const segment of segments) {
     const pairKey = `${Math.min(segment.fromCellIndex, segment.toCellIndex)}:${Math.max(segment.fromCellIndex, segment.toCellIndex)}`
-    const openingId = openingIdByBridgeKey.get(pairKey)
-    if (!openingId) {
-      continue
-    }
-
-    const doorOpening = doorOpeningById.get(openingId)
     const fromCell = graph.cells[segment.fromCellIndex]
     const toCell = graph.cells[segment.toCellIndex]
-    if (!(doorOpening && fromCell && toCell)) {
+    if (!(fromCell && toCell)) {
       continue
     }
 
-    earliestTransitionByOpeningId.set(openingId, {
+    const bridgeOpeningId = openingIdByBridgeKey.get(pairKey)
+    const doorOpening =
+      (bridgeOpeningId ? doorOpeningById.get(bridgeOpeningId) : undefined) ??
+      graph.doorOpenings.find((opening) =>
+        isNavigationPathSegmentInsideDoorOpening(opening, fromCell, toCell, graph.cellSize),
+      )
+
+    if (!doorOpening || earliestTransitionByOpeningId.has(doorOpening.openingId)) {
+      continue
+    }
+
+    earliestTransitionByOpeningId.set(doorOpening.openingId, {
       doorIds: doorOpening.doorIds,
-      openingId,
+      openingId: doorOpening.openingId,
       ...getDoorOpeningPassagePoints(doorOpening, fromCell, toCell, graph.cellSize),
       fromCellIndex: segment.fromCellIndex,
       fromPathIndex: Math.floor(segment.pathPosition),

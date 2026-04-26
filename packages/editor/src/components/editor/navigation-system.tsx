@@ -5,12 +5,10 @@ import {
   type AnyNodeId,
   emitter,
   getScaledDimensions,
-  type ItemMoveVisualState,
   ItemNode,
   type LevelNode,
   resolveLevelId,
   sceneRegistry,
-  setItemMoveVisualState as setItemMoveVisualMetadata,
   spatialGridManager,
   useLiveTransforms,
   useScene,
@@ -53,6 +51,10 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { color, float, mix, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial, RenderTarget } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  type ItemMoveVisualState,
+  setItemMoveVisualState as setItemMoveVisualMetadata,
+} from '../../lib/item-move-visuals'
 import {
   buildNavigationGraph,
   findClosestNavigationCell,
@@ -128,13 +130,16 @@ function summarizeDebugSnapshotKey(key: string | null) {
 }
 
 import type { NavigationRobotMaterialDebugMode } from './navigation-robot'
-import { NavigationRobot, type NavigationRobotToolInteractionPhase } from './navigation-robot'
-import { WalkableSurfaceOverlay } from './walkable-surface-overlay'
+import {
+  NAVIGATION_ROBOT_ASSETS,
+  NavigationRobot,
+  type NavigationRobotToolInteractionPhase,
+} from './navigation-robot'
 
 const PATH_CURVE_OFFSET_Y = 0.92
 const ACTOR_HOVER_Y = 0.16
 const ACTOR_SPEED_SCALE = 0.75
-const ACTOR_RUN_SPEED_RATIO = 2.5
+const ACTOR_RUN_SPEED_RATIO = 3
 const ACTOR_WALK_ANIMATION_SPEED_SCALE = ACTOR_SPEED_SCALE * 1.3
 const ACTOR_RUN_ANIMATION_SPEED_SCALE = 1.05
 const ACTOR_COLLISION_RADIUS = NAVIGATION_AGENT_RADIUS
@@ -1472,7 +1477,7 @@ function createNavigationItemMoveFallbackController(
       navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, null)
       navigationVisualsStore.getState().setNodeVisibilityOverride(visualItemId, null)
       useLiveTransforms.getState().clear(visualItemId)
-      clearPersistentItemMoveVisualState(visualItemId)
+      clearRuntimeItemMoveVisualState(visualItemId)
     },
     updateCarryTransform: (position, rotationY) => {
       useLiveTransforms.getState().set(visualItemId, {
@@ -1483,7 +1488,7 @@ function createNavigationItemMoveFallbackController(
   }
 }
 
-function clearPersistentItemMoveVisualState(itemId: string | null | undefined) {
+function clearRuntimeItemMoveVisualState(itemId: string | null | undefined) {
   if (!itemId) {
     return
   }
@@ -1491,7 +1496,7 @@ function clearPersistentItemMoveVisualState(itemId: string | null | undefined) {
   navigationVisualsStore.getState().setItemMoveVisualState(itemId, null)
 }
 
-function setPersistentItemMoveVisualState(
+function setRuntimeItemMoveVisualState(
   itemId: string | null | undefined,
   state: ItemMoveVisualState | null,
 ) {
@@ -3872,6 +3877,7 @@ export function NavigationSystem() {
     itemMoveRequest,
     itemRepairRequest,
     queueRestartToken,
+    robotModel,
     robotMode,
     removeQueuedTask,
     requestItemDelete,
@@ -3897,6 +3903,7 @@ export function NavigationSystem() {
       itemMoveRequest: state.itemMoveRequest,
       itemRepairRequest: state.itemRepairRequest,
       queueRestartToken: state.queueRestartToken,
+      robotModel: state.robotModel,
       robotMode: state.robotMode,
       removeQueuedTask: state.removeQueuedTask,
       requestItemDelete: state.requestItemDelete,
@@ -5363,12 +5370,12 @@ export function NavigationSystem() {
         if (!preserveLiveTransformIds.has(visualId)) {
           useLiveTransforms.getState().clear(visualId)
         }
-        clearPersistentItemMoveVisualState(visualId)
+        clearRuntimeItemMoveVisualState(visualId)
       }
 
       if (request) {
-        clearPersistentItemMoveVisualState(request.itemId)
-        clearPersistentItemMoveVisualState(request.visualItemId)
+        clearRuntimeItemMoveVisualState(request.itemId)
+        clearRuntimeItemMoveVisualState(request.visualItemId)
         if (
           request.targetPreviewItemId &&
           request.targetPreviewItemId !== preservedDestinationGhostId
@@ -5435,7 +5442,7 @@ export function NavigationSystem() {
         navigationVisualsStore.getState().setItemMoveVisualState(visualId, null)
         navigationVisualsStore.getState().setNodeVisibilityOverride(visualId, null)
         useLiveTransforms.getState().clear(visualId)
-        clearPersistentItemMoveVisualState(visualId)
+        clearRuntimeItemMoveVisualState(visualId)
         removeTransientNavigationPreviewNode(visualId)
       }
     }
@@ -5626,7 +5633,7 @@ export function NavigationSystem() {
 
       for (const request of moveTaskVisualRequests.values()) {
         navigationVisuals.setItemMoveVisualState(request.itemId, null)
-        clearPersistentItemMoveVisualState(request.itemId)
+        clearRuntimeItemMoveVisualState(request.itemId)
         const queuedGhostIds = new Set<string>()
         const ensuredGhostId = ensureQueuedNavigationMoveGhostNode(request)
         if (ensuredGhostId) {
@@ -5643,7 +5650,7 @@ export function NavigationSystem() {
 
       for (const sourceItemId of moveSourceIds) {
         navigationVisuals.setItemMoveVisualState(sourceItemId, null)
-        clearPersistentItemMoveVisualState(sourceItemId)
+        clearRuntimeItemMoveVisualState(sourceItemId)
       }
     }
 
@@ -5658,7 +5665,7 @@ export function NavigationSystem() {
         navigationVisuals.setItemMoveVisualState(itemId, nextState)
       }
       if (nextState === null) {
-        clearPersistentItemMoveVisualState(itemId)
+        clearRuntimeItemMoveVisualState(itemId)
         if (previousState === 'destination-ghost') {
           removeTransientNavigationPreviewNode(itemId)
         }
@@ -5685,7 +5692,7 @@ export function NavigationSystem() {
       ) {
         navigationVisuals.setItemMoveVisualState(itemId, nextState)
       }
-      setPersistentItemMoveVisualState(itemId, nextState)
+      setRuntimeItemMoveVisualState(itemId, nextState)
     }
 
     for (const itemId of previousDeleteIds) {
@@ -11877,7 +11884,7 @@ export function NavigationSystem() {
           navigationVisualsStore.getState().setItemMoveVisualState(item.id, null)
           navigationVisualsStore.getState().setNodeVisibilityOverride(item.id, null)
           useLiveTransforms.getState().clear(item.id)
-          clearPersistentItemMoveVisualState(item.id)
+          clearRuntimeItemMoveVisualState(item.id)
           navigationState.registerItemMoveController(item.id, null)
         },
         updateCarryTransform: (position, rotationY) => {
@@ -12094,8 +12101,6 @@ export function NavigationSystem() {
         />
       )}
 
-      {graph && walkableOverlayVisible && <WalkableSurfaceOverlay graph={graph} />}
-
       {taskQueueSourceMarkerSpecs.map((marker) => (
         <TaskQueueSourceMarker key={`task-source-marker:${marker.taskId}`} marker={marker} />
       ))}
@@ -12125,8 +12130,10 @@ export function NavigationSystem() {
           <Suspense fallback={null}>
             <NavigationRobot
               active={actorVisible}
+              assetPath={NAVIGATION_ROBOT_ASSETS[robotModel]}
               forcedClipPlayback={actorForcedClipPlayback}
               hoverOffset={ACTOR_HOVER_Y}
+              key={`navigation-robot:${robotModel}`}
               motionRef={motionRef}
               materialDebugMode={robotMaterialDebugModeOverrideRef.current ?? 'auto'}
               onReady={handlePascalTruckIntroRobotReady}
