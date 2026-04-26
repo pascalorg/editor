@@ -6,14 +6,10 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
-  buildFloorplanItemEntry,
-  buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   calculateLevelMiters,
-  collectLevelDescendants as collectSharedLevelDescendants,
   DoorNode,
   emitter,
   type FenceNode,
-  getFloorplanWall as getSharedFloorplanWall,
   type GridEvent,
   type GuideNode,
   getWallChordFrame,
@@ -21,7 +17,6 @@ import {
   getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
-  type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   type ItemNode,
   ItemNode as ItemNodeSchema,
   isCurvedWall,
@@ -31,7 +26,6 @@ import {
   type Point2D,
   type RoofNode,
   type RoofSegmentNode,
-  rotatePlanVector as rotateSharedPlanVector,
   sceneRegistry,
   type SiteNode,
   SlabNode,
@@ -64,14 +58,33 @@ import { useShallow } from 'zustand/react/shallow'
 import { FloorplanActionMenuLayer as Editor2dFloorplanActionMenuLayer } from '../editor-2d/floorplan-action-menu-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import {
+  FloorplanMeasurementsLayer,
+  type LinearMeasurementOverlay,
+} from '../editor-2d/renderers/floorplan-measurements-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
+import { FloorplanRoofLayer } from '../editor-2d/renderers/floorplan-roof-layer'
+import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
+import {
+  buildSvgPolylinePath,
+  formatPolygonPath,
+  getArcPlanPoint,
+} from '../editor-2d/svg-paths'
+import {
+  buildFloorplanItemEntry,
+  buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
+  collectLevelDescendants as collectSharedLevelDescendants,
+  getFloorplanWall as getSharedFloorplanWall,
+  type FloorplanNodeTransform as SharedFloorplanNodeTransform,
+  rotatePlanVector as rotateSharedPlanVector,
+} from '../../lib/floorplan'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
 import {
   getFloorplanHitNodeId,
   getFloorplanSelectionIdsInBounds as getSelectionIdsInBoundsFromTool,
-} from '../tools/floorplan/selection-tool'
+} from '../../lib/floorplan/selection-tool'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
@@ -139,17 +152,12 @@ const FLOORPLAN_ENDPOINT_HOVER_RING_STROKE_WIDTH = 7
 const FLOORPLAN_MARQUEE_DRAG_THRESHOLD_PX = 4
 const FLOORPLAN_MEASUREMENT_OFFSET = 0.46
 const FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT = 0.08
-const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.35
 const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_WIDTH = 0
-const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.95
 const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_OPACITY = 0
 const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE = 0.15
-const FLOORPLAN_MEASUREMENT_LABEL_OPACITY = 0.98
 const FLOORPLAN_MEASUREMENT_LABEL_STROKE_WIDTH = 0
 const FLOORPLAN_MEASUREMENT_LABEL_GAP = 0.56
 const FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING = 0.14
-const FLOORPLAN_MEASUREMENT_EXTENSION_DASH = '0.08 0.12'
-const FLOORPLAN_MEASUREMENT_END_TICK = 0.18
 const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.34
 const FLOORPLAN_WALL_INNER_MEASUREMENT_OFFSET = 0.24
 const FLOORPLAN_WALL_OUTER_MEASUREMENT_STROKE = 'rgba(59, 130, 246, 0.95)'
@@ -183,13 +191,6 @@ const FLOORPLAN_GUIDE_ROTATION_FINE_SNAP_DEGREES = 1
 const FLOORPLAN_SITE_COLOR = '#10b981'
 const FLOORPLAN_NODE_FOOTPRINT_STROKE_WIDTH = FLOORPLAN_OPENING_STROKE_WIDTH / 2
 const FLOORPLAN_NODE_FOOTPRINT_CROSS_STROKE_WIDTH = FLOORPLAN_NODE_FOOTPRINT_STROKE_WIDTH * 0.7
-const FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS = FLOORPLAN_OPENING_STROKE_WIDTH
-const FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION = 0.18
-const FLOORPLAN_STAIR_TREAD_BAND_THICKNESS = FLOORPLAN_OPENING_STROKE_WIDTH * 0.82
-const FLOORPLAN_STAIR_TREAD_MIN_THICKNESS = FLOORPLAN_OPENING_DETAIL_STROKE_WIDTH * 1.5
-const FLOORPLAN_STAIR_ARROW_BAND_THICKNESS = FLOORPLAN_STAIR_TREAD_BAND_THICKNESS
-const FLOORPLAN_STAIR_ARROW_HEAD_MIN_SIZE = 0.14
-const FLOORPLAN_STAIR_ARROW_HEAD_MAX_SIZE = 0.24
 type FloorplanViewport = {
   centerX: number
   centerY: number
@@ -432,11 +433,6 @@ type ZonePolygonEntry = {
   zone: ZoneNodeType
   polygon: Point2D[]
   points: string
-}
-
-type FloorplanNodeTransform = {
-  position: Point2D
-  rotation: number
 }
 
 type FloorplanLineSegment = {
@@ -1322,28 +1318,6 @@ function formatPolygonPoints(points: Point2D[]): string {
     .join(' ')
 }
 
-function formatPolygonPath(points: Point2D[], holes: Point2D[][] = []): string {
-  const formatSubpath = (subpathPoints: Point2D[]) => {
-    const [firstPoint, ...restPoints] = subpathPoints
-    if (!firstPoint) {
-      return null
-    }
-
-    const firstSvgPoint = toSvgPoint(firstPoint)
-
-    return [
-      `M ${firstSvgPoint.x} ${firstSvgPoint.y}`,
-      ...restPoints.map((point) => {
-        const svgPoint = toSvgPoint(point)
-        return `L ${svgPoint.x} ${svgPoint.y}`
-      }),
-      'Z',
-    ].join(' ')
-  }
-
-  return [points, ...holes].map(formatSubpath).filter(Boolean).join(' ')
-}
-
 function toFloorplanPolygon(points: Array<[number, number]>): Point2D[] {
   return points.map(([x, y]) => ({ x, y }))
 }
@@ -1473,164 +1447,6 @@ function movePlanPointTowards(start: Point2D, end: Point2D, distance: number): P
   return interpolatePlanPoint(start, end, Math.min(1, distance / totalDistance))
 }
 
-function getFloorplanStairSegmentCenterLine(polygon: Point2D[]): FloorplanLineSegment | null {
-  if (polygon.length < 4) {
-    return null
-  }
-
-  const [backLeft, backRight, frontRight, frontLeft] = polygon
-
-  return {
-    start: interpolatePlanPoint(backLeft!, backRight!, 0.5),
-    end: interpolatePlanPoint(frontLeft!, frontRight!, 0.5),
-  }
-}
-
-function getFloorplanStairInnerPolygon(polygon: Point2D[]): Point2D[] {
-  if (polygon.length < 4) {
-    return polygon
-  }
-
-  const [backLeft, backRight, frontRight, frontLeft] = polygon
-  const outerWidth = getPlanPointDistance(backLeft!, backRight!)
-  const outerLength = getPlanPointDistance(backLeft!, frontLeft!)
-  const widthInset = Math.min(
-    FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS,
-    outerWidth * FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION,
-  )
-  const lengthInset = Math.min(
-    FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS,
-    outerLength * FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION,
-  )
-
-  const insetBackLeft = movePlanPointTowards(backLeft!, frontLeft!, lengthInset)
-  const insetBackRight = movePlanPointTowards(backRight!, frontRight!, lengthInset)
-  const insetFrontLeft = movePlanPointTowards(frontLeft!, backLeft!, lengthInset)
-  const insetFrontRight = movePlanPointTowards(frontRight!, backRight!, lengthInset)
-
-  const innerPolygon = [
-    movePlanPointTowards(insetBackLeft, insetBackRight, widthInset),
-    movePlanPointTowards(insetBackRight, insetBackLeft, widthInset),
-    movePlanPointTowards(insetFrontRight, insetFrontLeft, widthInset),
-    movePlanPointTowards(insetFrontLeft, insetFrontRight, widthInset),
-  ]
-
-  const innerWidth = getPlanPointDistance(innerPolygon[0]!, innerPolygon[1]!)
-  const innerLength = getPlanPointDistance(innerPolygon[0]!, innerPolygon[3]!)
-
-  return innerWidth > 0.06 && innerLength > 0.06 ? innerPolygon : polygon
-}
-
-function getFloorplanStairTreadLines(
-  segment: StairSegmentNode,
-  innerPolygon: Point2D[],
-): FloorplanLineSegment[] {
-  if (segment.segmentType !== 'stair' || segment.stepCount <= 1 || innerPolygon.length < 4) {
-    return []
-  }
-
-  const [backLeft, backRight, frontRight, frontLeft] = innerPolygon
-  const treadLines: FloorplanLineSegment[] = []
-
-  for (let stepIndex = 1; stepIndex < segment.stepCount; stepIndex += 1) {
-    const t = stepIndex / segment.stepCount
-    treadLines.push({
-      start: interpolatePlanPoint(backLeft!, frontLeft!, t),
-      end: interpolatePlanPoint(backRight!, frontRight!, t),
-    })
-  }
-
-  return treadLines
-}
-
-function getThickPlanLinePolygon(line: FloorplanLineSegment, thickness: number): Point2D[] {
-  const dx = line.end.x - line.start.x
-  const dy = line.end.y - line.start.y
-  const length = Math.hypot(dx, dy)
-
-  if (length <= Number.EPSILON || thickness <= 0) {
-    return [line.start, line.end, line.end, line.start]
-  }
-
-  const halfThickness = thickness / 2
-  const normalX = (-dy / length) * halfThickness
-  const normalY = (dx / length) * halfThickness
-
-  return [
-    { x: line.start.x + normalX, y: line.start.y + normalY },
-    { x: line.end.x + normalX, y: line.end.y + normalY },
-    { x: line.end.x - normalX, y: line.end.y - normalY },
-    { x: line.start.x - normalX, y: line.start.y - normalY },
-  ]
-}
-
-function getPolylineBandPolygons(points: Point2D[], thickness: number): FloorplanPolygonEntry[] {
-  if (points.length < 2 || thickness <= 0) {
-    return []
-  }
-
-  const polygons: FloorplanPolygonEntry[] = []
-
-  for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
-    const start = points[pointIndex - 1]!
-    const end = points[pointIndex]!
-
-    if (getPlanPointDistance(start, end) <= Number.EPSILON) {
-      continue
-    }
-
-    const polygon = getThickPlanLinePolygon({ start, end }, thickness)
-    polygons.push({
-      points: formatPolygonPoints(polygon),
-      polygon,
-    })
-  }
-
-  return polygons
-}
-
-function getArcPlanPoint(center: Point2D, radius: number, angle: number): Point2D {
-  return {
-    x: center.x + Math.cos(angle) * radius,
-    y: center.y + Math.sin(angle) * radius,
-  }
-}
-
-function buildSvgArcPath(center: Point2D, radius: number, startAngle: number, endAngle: number) {
-  const start = getArcPlanPoint(center, radius, startAngle)
-  const end = getArcPlanPoint(center, radius, endAngle)
-  const delta = endAngle - startAngle
-  const largeArcFlag = Math.abs(delta) > Math.PI ? 1 : 0
-  const sweepFlag = delta >= 0 ? 1 : 0
-
-  return `M ${toSvgX(start.x)} ${toSvgY(start.y)} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${toSvgX(end.x)} ${toSvgY(end.y)}`
-}
-
-function buildSvgAnnularSectorPath(
-  center: Point2D,
-  innerRadius: number,
-  outerRadius: number,
-  startAngle: number,
-  endAngle: number,
-) {
-  const outerStart = getArcPlanPoint(center, outerRadius, startAngle)
-  const outerEnd = getArcPlanPoint(center, outerRadius, endAngle)
-  const innerEnd = getArcPlanPoint(center, innerRadius, endAngle)
-  const innerStart = getArcPlanPoint(center, innerRadius, startAngle)
-  const delta = endAngle - startAngle
-  const largeArcFlag = Math.abs(delta) > Math.PI ? 1 : 0
-  const sweepFlag = delta >= 0 ? 1 : 0
-  const reverseSweepFlag = sweepFlag ? 0 : 1
-
-  return [
-    `M ${toSvgX(outerStart.x)} ${toSvgY(outerStart.y)}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} ${sweepFlag} ${toSvgX(outerEnd.x)} ${toSvgY(outerEnd.y)}`,
-    `L ${toSvgX(innerEnd.x)} ${toSvgY(innerEnd.y)}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} ${reverseSweepFlag} ${toSvgX(innerStart.x)} ${toSvgY(innerStart.y)}`,
-    'Z',
-  ].join(' ')
-}
-
 function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
   const stairType = stair.stairType ?? 'straight'
   const baseSweepAngle =
@@ -1674,472 +1490,6 @@ function getFloorplanCurvedStairHitPolygon(stair: StairNode): Point2D[] {
   }
 
   return [...outerPoints, ...innerPoints.reverse()]
-}
-
-function buildFloorplanArrowHead(
-  point: Point2D,
-  angle: number,
-  size: number,
-): FloorplanPolygonEntry {
-  const left = {
-    x: point.x - size * Math.cos(angle - Math.PI / 6),
-    y: point.y - size * Math.sin(angle - Math.PI / 6),
-  }
-  const right = {
-    x: point.x - size * Math.cos(angle + Math.PI / 6),
-    y: point.y - size * Math.sin(angle + Math.PI / 6),
-  }
-
-  return {
-    points: formatPolygonPoints([point, left, right]),
-    polygon: [point, left, right],
-  }
-}
-
-function getFloorplanStairTreadThickness(segment: StairSegmentNode, innerPolygon: Point2D[]) {
-  if (segment.segmentType !== 'stair' || segment.stepCount <= 1 || innerPolygon.length < 4) {
-    return 0
-  }
-
-  const innerWidth = getPlanPointDistance(innerPolygon[0]!, innerPolygon[1]!)
-  const innerLength = getPlanPointDistance(innerPolygon[0]!, innerPolygon[3]!)
-  const treadRun = innerLength / Math.max(segment.stepCount, 1)
-  return clamp(
-    Math.min(FLOORPLAN_STAIR_TREAD_BAND_THICKNESS, innerWidth * 0.12, treadRun * 0.44),
-    FLOORPLAN_STAIR_TREAD_MIN_THICKNESS,
-    FLOORPLAN_STAIR_TREAD_BAND_THICKNESS,
-  )
-}
-
-function getFloorplanStairTreadBars(
-  segment: StairSegmentNode,
-  innerPolygon: Point2D[],
-  treadThickness = getFloorplanStairTreadThickness(segment, innerPolygon),
-): FloorplanPolygonEntry[] {
-  const treadLines = getFloorplanStairTreadLines(segment, innerPolygon)
-  if (treadLines.length === 0 || treadThickness <= 0) {
-    return []
-  }
-
-  return treadLines.map((line) => {
-    const polygon = getThickPlanLinePolygon(line, treadThickness)
-    return {
-      points: formatPolygonPoints(polygon),
-      polygon,
-    }
-  })
-}
-
-type FloorplanStairArrowSide = 'back' | 'front' | 'left' | 'right'
-
-function getFloorplanStairSegmentCenterPoint(segment: FloorplanStairSegmentEntry): Point2D | null {
-  if (segment.centerLine) {
-    return interpolatePlanPoint(segment.centerLine.start, segment.centerLine.end, 0.5)
-  }
-
-  if (segment.polygon.length < 4) {
-    return null
-  }
-
-  const [backLeft, backRight, frontRight, frontLeft] = segment.polygon
-
-  return {
-    x: (backLeft!.x + backRight!.x + frontRight!.x + frontLeft!.x) / 4,
-    y: (backLeft!.y + backRight!.y + frontRight!.y + frontLeft!.y) / 4,
-  }
-}
-
-function getFloorplanStairSegmentSidePoint(
-  segment: FloorplanStairSegmentEntry,
-  side: FloorplanStairArrowSide,
-): Point2D | null {
-  if (segment.polygon.length < 4) {
-    return null
-  }
-
-  const [backLeft, backRight, frontRight, frontLeft] = segment.polygon
-
-  switch (side) {
-    case 'back':
-      return interpolatePlanPoint(backLeft!, backRight!, 0.5)
-    case 'front':
-      return interpolatePlanPoint(frontLeft!, frontRight!, 0.5)
-    case 'left':
-      return interpolatePlanPoint(backLeft!, frontLeft!, 0.5)
-    case 'right':
-      return interpolatePlanPoint(backRight!, frontRight!, 0.5)
-  }
-}
-
-function getFloorplanStairExitSide(
-  nextSegment: StairSegmentNode | undefined,
-): FloorplanStairArrowSide {
-  if (!nextSegment) {
-    return 'front'
-  }
-
-  // `attachmentSide` describes the next segment's turn direction. The floorplan transform
-  // attaches `left` turns to the previous segment's positive local X edge and `right` turns
-  // to the negative local X edge, so the arrow needs to mirror that convention here.
-  if (nextSegment.attachmentSide === 'left') {
-    return 'right'
-  }
-  if (nextSegment.attachmentSide === 'right') {
-    return 'left'
-  }
-
-  return 'front'
-}
-
-function appendUniquePlanPoint(points: Point2D[], point: Point2D | null) {
-  if (!point) {
-    return
-  }
-
-  const lastPoint = points[points.length - 1]
-  if (lastPoint && getPlanPointDistance(lastPoint, point) <= 0.001) {
-    return
-  }
-
-  points.push(point)
-}
-
-function buildFloorplanStairArrow(
-  segments: FloorplanStairSegmentEntry[],
-): FloorplanStairArrowEntry | null {
-  const rawPoints: Point2D[] = []
-
-  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
-    const segment = segments[segmentIndex]!
-    const nextSegment = segments[segmentIndex + 1]?.segment
-    const entryPoint = getFloorplanStairSegmentSidePoint(segment, 'back')
-    const exitPoint = getFloorplanStairSegmentSidePoint(
-      segment,
-      getFloorplanStairExitSide(nextSegment),
-    )
-
-    if (!(entryPoint && exitPoint)) {
-      continue
-    }
-
-    appendUniquePlanPoint(rawPoints, entryPoint)
-
-    const isStraightSegment = getPlanPointDistance(entryPoint, exitPoint) <= 0.001
-    if (isStraightSegment) {
-      continue
-    }
-
-    const exitSide = getFloorplanStairExitSide(nextSegment)
-    if (exitSide === 'front') {
-      appendUniquePlanPoint(rawPoints, exitPoint)
-      continue
-    }
-
-    appendUniquePlanPoint(rawPoints, getFloorplanStairSegmentCenterPoint(segment))
-    appendUniquePlanPoint(rawPoints, exitPoint)
-  }
-
-  if (rawPoints.length < 2) {
-    return null
-  }
-
-  const firstPoint = rawPoints[0]!
-  const secondPoint = rawPoints[1]!
-  const beforeLastPoint = rawPoints[rawPoints.length - 2]!
-  const lastPoint = rawPoints[rawPoints.length - 1]!
-  const firstLength = getPlanPointDistance(firstPoint, secondPoint)
-  const lastLength = getPlanPointDistance(beforeLastPoint, lastPoint)
-
-  if (firstLength <= Number.EPSILON || lastLength <= Number.EPSILON) {
-    return null
-  }
-
-  const polyline = [
-    movePlanPointTowards(firstPoint, secondPoint, Math.min(0.24, firstLength * 0.18)),
-    ...rawPoints.slice(1, -1),
-    movePlanPointTowards(lastPoint, beforeLastPoint, Math.min(0.3, lastLength * 0.22)),
-  ]
-  const arrowTailPoint = polyline[polyline.length - 2]
-  const arrowTip = polyline[polyline.length - 1]
-
-  if (!(arrowTailPoint && arrowTip)) {
-    return null
-  }
-
-  const arrowBodyLength = getPlanPointDistance(arrowTailPoint, arrowTip)
-  if (arrowBodyLength <= Number.EPSILON) {
-    return null
-  }
-
-  const arrowHeadLength = clamp(
-    arrowBodyLength * 0.72,
-    FLOORPLAN_STAIR_ARROW_HEAD_MIN_SIZE,
-    FLOORPLAN_STAIR_ARROW_HEAD_MAX_SIZE,
-  )
-  const arrowHeadBase = movePlanPointTowards(arrowTip, arrowTailPoint, arrowHeadLength)
-  const directionX = arrowTip.x - arrowHeadBase.x
-  const directionY = arrowTip.y - arrowHeadBase.y
-  const directionLength = Math.hypot(directionX, directionY)
-
-  if (directionLength <= Number.EPSILON) {
-    return null
-  }
-
-  const normalX = -directionY / directionLength
-  const normalY = directionX / directionLength
-  const arrowHeadHalfWidth = arrowHeadLength * 0.34
-
-  return {
-    head: [
-      arrowTip,
-      {
-        x: arrowHeadBase.x + normalX * arrowHeadHalfWidth,
-        y: arrowHeadBase.y + normalY * arrowHeadHalfWidth,
-      },
-      {
-        x: arrowHeadBase.x - normalX * arrowHeadHalfWidth,
-        y: arrowHeadBase.y - normalY * arrowHeadHalfWidth,
-      },
-    ],
-    polyline,
-  }
-}
-
-function collectLevelDescendants(levelNode: LevelNode, nodes: Record<string, AnyNode>): AnyNode[] {
-  const descendants: AnyNode[] = []
-  const stack = [...levelNode.children].reverse() as AnyNodeId[]
-
-  while (stack.length > 0) {
-    const nodeId = stack.pop()
-    if (!nodeId) {
-      continue
-    }
-
-    const node = nodes[nodeId]
-    if (!node) {
-      continue
-    }
-
-    descendants.push(node)
-
-    if ('children' in node && Array.isArray(node.children) && node.children.length > 0) {
-      for (let index = node.children.length - 1; index >= 0; index -= 1) {
-        stack.push(node.children[index] as AnyNodeId)
-      }
-    }
-  }
-
-  return descendants
-}
-
-function getItemFloorplanTransform(
-  item: ItemNode,
-  nodeById: ReadonlyMap<string, AnyNode>,
-  cache: Map<string, FloorplanNodeTransform | null>,
-): FloorplanNodeTransform | null {
-  const cached = cache.get(item.id)
-  if (cached !== undefined) {
-    return cached
-  }
-
-  const localRotation = item.rotation[1] ?? 0
-  let result: FloorplanNodeTransform | null = null
-  const itemMetadata =
-    typeof item.metadata === 'object' && item.metadata !== null && !Array.isArray(item.metadata)
-      ? (item.metadata as Record<string, unknown>)
-      : null
-
-  if (itemMetadata?.isTransient === true) {
-    const live = useLiveTransforms.getState().get(item.id)
-    if (live) {
-      result = {
-        position: {
-          x: live.position[0],
-          y: live.position[2],
-        },
-        rotation: live.rotation,
-      }
-
-      cache.set(item.id, result)
-      return result
-    }
-  }
-
-  if (item.parentId) {
-    const parentNode = nodeById.get(item.parentId as AnyNodeId)
-
-    if (parentNode?.type === 'wall') {
-      const wallRotation = -Math.atan2(
-        parentNode.end[1] - parentNode.start[1],
-        parentNode.end[0] - parentNode.start[0],
-      )
-      const wallLocalZ =
-        item.asset.attachTo === 'wall-side'
-          ? ((parentNode.thickness ?? 0.1) / 2) * (item.side === 'back' ? -1 : 1)
-          : item.position[2]
-      const [offsetX, offsetY] = rotatePlanVector(item.position[0], wallLocalZ, wallRotation)
-
-      result = {
-        position: {
-          x: parentNode.start[0] + offsetX,
-          y: parentNode.start[1] + offsetY,
-        },
-        rotation: wallRotation + localRotation,
-      }
-    } else if (parentNode?.type === 'item') {
-      const parentTransform = getItemFloorplanTransform(parentNode, nodeById, cache)
-      if (parentTransform) {
-        const [offsetX, offsetY] = rotatePlanVector(
-          item.position[0],
-          item.position[2],
-          parentTransform.rotation,
-        )
-        result = {
-          position: {
-            x: parentTransform.position.x + offsetX,
-            y: parentTransform.position.y + offsetY,
-          },
-          rotation: parentTransform.rotation + localRotation,
-        }
-      }
-    } else {
-      result = {
-        position: { x: item.position[0], y: item.position[2] },
-        rotation: localRotation,
-      }
-    }
-  } else {
-    result = {
-      position: { x: item.position[0], y: item.position[2] },
-      rotation: localRotation,
-    }
-  }
-
-  cache.set(item.id, result)
-  return result
-}
-
-type StairSegmentTransform = {
-  position: [number, number, number]
-  rotation: number
-}
-
-function computeFloorplanStairSegmentTransforms(
-  segments: StairSegmentNode[],
-): StairSegmentTransform[] {
-  const transforms: StairSegmentTransform[] = []
-  let currentX = 0
-  let currentY = 0
-  let currentZ = 0
-  let currentRotation = 0
-
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]!
-
-    if (index === 0) {
-      transforms.push({
-        position: [currentX, currentY, currentZ],
-        rotation: currentRotation,
-      })
-      continue
-    }
-
-    const previousSegment = segments[index - 1]!
-    let attachX = 0
-    let attachY = previousSegment.height
-    let attachZ = previousSegment.length
-    let rotationDelta = 0
-
-    if (segment.attachmentSide === 'left') {
-      attachX = previousSegment.width / 2
-      attachZ = previousSegment.length / 2
-      rotationDelta = Math.PI / 2
-    } else if (segment.attachmentSide === 'right') {
-      attachX = -previousSegment.width / 2
-      attachZ = previousSegment.length / 2
-      rotationDelta = -Math.PI / 2
-    }
-
-    const [rotatedAttachX, rotatedAttachZ] = rotatePlanVector(attachX, attachZ, currentRotation)
-    currentX += rotatedAttachX
-    currentY += attachY
-    currentZ += rotatedAttachZ
-    currentRotation += rotationDelta
-
-    transforms.push({
-      position: [currentX, currentY, currentZ],
-      rotation: currentRotation,
-    })
-  }
-
-  return transforms
-}
-
-function getFloorplanStairSegmentPolygon(
-  stair: StairNode,
-  segment: StairSegmentNode,
-  transform: StairSegmentTransform,
-): Point2D[] {
-  const halfWidth = segment.width / 2
-  const localCorners: Array<[number, number]> = [
-    [-halfWidth, 0],
-    [halfWidth, 0],
-    [halfWidth, segment.length],
-    [-halfWidth, segment.length],
-  ]
-
-  return localCorners.map(([localX, localY]) => {
-    const [segmentX, segmentY] = rotatePlanVector(localX, localY, transform.rotation)
-    const groupX = transform.position[0] + segmentX
-    const groupY = transform.position[2] + segmentY
-    const [worldOffsetX, worldOffsetY] = rotatePlanVector(groupX, groupY, stair.rotation)
-
-    return {
-      x: stair.position[0] + worldOffsetX,
-      y: stair.position[2] + worldOffsetY,
-    }
-  })
-}
-
-function buildFloorplanStairEntry(
-  stair: StairNode,
-  segments: StairSegmentNode[],
-): FloorplanStairEntry | null {
-  const stairType = stair.stairType ?? 'straight'
-
-  if (segments.length === 0 && stairType === 'straight') {
-    return null
-  }
-
-  const transforms = computeFloorplanStairSegmentTransforms(segments)
-  const segmentEntries = segments.map((segment, index) => {
-    const polygon = getFloorplanStairSegmentPolygon(stair, segment, transforms[index]!)
-    const centerLine = getFloorplanStairSegmentCenterLine(polygon)
-    const innerPolygon = getFloorplanStairInnerPolygon(polygon)
-    const treadThickness = getFloorplanStairTreadThickness(segment, innerPolygon)
-
-    return {
-      centerLine,
-      innerPoints: formatPolygonPoints(innerPolygon),
-      innerPolygon,
-      segment,
-      points: formatPolygonPoints(polygon),
-      polygon,
-      treadBars: getFloorplanStairTreadBars(segment, innerPolygon, treadThickness),
-      treadThickness,
-    }
-  })
-  const hitPolygons =
-    stairType === 'straight'
-      ? segmentEntries.map(({ polygon }) => polygon)
-      : [getFloorplanCurvedStairHitPolygon(stair)]
-
-  return {
-    arrow: buildFloorplanStairArrow(segmentEntries),
-    hitPolygons,
-    stair,
-    segments: segmentEntries,
-  }
 }
 
 function isPointInsidePolygonWithHoles(
@@ -2211,19 +1561,6 @@ function pointMatchesWallPlanPoint(
   }
 
   return Math.abs(point.x - planPoint[0]) <= epsilon && Math.abs(point.y - planPoint[1]) <= epsilon
-}
-
-function buildSvgPolylinePath(points: Point2D[]): string | null {
-  if (points.length < 2) {
-    return null
-  }
-
-  return points
-    .map((point, index) => {
-      const svgPoint = toSvgPoint(point)
-      return `${index === 0 ? 'M' : 'L'} ${svgPoint.x} ${svgPoint.y}`
-    })
-    .join(' ')
 }
 
 function getFloorplanFenceLength(fence: FenceNode) {
@@ -2444,22 +1781,6 @@ function getFloorplanWall(wall: WallNode): WallNode {
   }
 }
 
-type LinearMeasurementOverlay = {
-  id: string
-  dimensionLineEnd: { x1: number; y1: number; x2: number; y2: number }
-  dimensionLineStart: { x1: number; y1: number; x2: number; y2: number }
-  extensionStart: { x1: number; y1: number; x2: number; y2: number }
-  extensionEnd: { x1: number; y1: number; x2: number; y2: number }
-  label: string
-  labelX: number
-  labelY: number
-  labelAngleDeg: number
-  extensionStroke?: string
-  isSelected?: boolean
-  labelFill?: string
-  stroke?: string
-}
-
 function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
   if (unit === 'imperial') {
     const feet = value * 3.280_84
@@ -2528,77 +1849,6 @@ function formatArea(areaSqM: number, unit: 'metric' | 'imperial') {
   )
 }
 
-function FloorplanMeasurementLine({
-  palette,
-  segment,
-  isSelected,
-  dashed = false,
-  stroke,
-}: {
-  palette: FloorplanPalette
-  segment: { x1: number; y1: number; x2: number; y2: number }
-  isSelected?: boolean
-  dashed?: boolean
-  stroke?: string
-}) {
-  const lineOpacity = isSelected
-    ? FLOORPLAN_MEASUREMENT_LINE_OPACITY
-    : FLOORPLAN_MEASUREMENT_LINE_OPACITY * 0.4
-
-  return (
-    <>
-      <line
-        shapeRendering="geometricPrecision"
-        stroke={stroke ?? palette.measurementStroke}
-        strokeLinecap="round"
-        strokeOpacity={lineOpacity}
-        strokeWidth={FLOORPLAN_MEASUREMENT_LINE_WIDTH}
-        strokeDasharray={dashed ? FLOORPLAN_MEASUREMENT_EXTENSION_DASH : undefined}
-        vectorEffect="non-scaling-stroke"
-        x1={segment.x1}
-        x2={segment.x2}
-        y1={segment.y1}
-        y2={segment.y2}
-      />
-    </>
-  )
-}
-
-function FloorplanMeasurementTick({
-  palette,
-  x,
-  y,
-  angleDeg,
-  isSelected,
-  stroke,
-}: {
-  palette: FloorplanPalette
-  x: number
-  y: number
-  angleDeg: number
-  isSelected?: boolean
-  stroke?: string
-}) {
-  const radians = (angleDeg * Math.PI) / 180
-  const nx = -Math.sin(radians)
-  const ny = Math.cos(radians)
-  const half = FLOORPLAN_MEASUREMENT_END_TICK / 2
-
-  return (
-    <line
-      shapeRendering="geometricPrecision"
-      stroke={stroke ?? palette.measurementStroke}
-      strokeLinecap="round"
-      strokeOpacity={isSelected ? FLOORPLAN_MEASUREMENT_LINE_OPACITY : FLOORPLAN_MEASUREMENT_LINE_OPACITY * 0.4}
-      strokeWidth={FLOORPLAN_MEASUREMENT_LINE_WIDTH}
-      vectorEffect="non-scaling-stroke"
-      x1={x - nx * half}
-      x2={x + nx * half}
-      y1={y - ny * half}
-      y2={y + ny * half}
-    />
-  )
-}
 
 function getWallMeasurementOverlay(
   wall: WallNode,
@@ -4486,75 +3736,11 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
         return null
       })}
 
-      {wallMeasurements.map((measurement) => (
-        <g
-          className="wall-dimension"
-          key={`measurement-${measurement.id}`}
-          pointerEvents="none"
-          style={{ userSelect: 'none' }}
-        >
-          <FloorplanMeasurementLine
-            stroke={measurement.extensionStroke}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            segment={measurement.extensionStart}
-            dashed
-          />
-          <FloorplanMeasurementLine
-            isSelected={measurement.isSelected}
-            palette={palette}
-            segment={measurement.dimensionLineStart}
-            stroke={measurement.stroke}
-          />
-          <FloorplanMeasurementLine
-            isSelected={measurement.isSelected}
-            palette={palette}
-            segment={measurement.dimensionLineEnd}
-            stroke={measurement.stroke}
-          />
-          <FloorplanMeasurementLine
-            stroke={measurement.extensionStroke}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            segment={measurement.extensionEnd}
-            dashed
-          />
-          <FloorplanMeasurementTick
-            angleDeg={measurement.labelAngleDeg}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            stroke={measurement.stroke}
-            x={measurement.dimensionLineStart.x1}
-            y={measurement.dimensionLineStart.y1}
-          />
-          <FloorplanMeasurementTick
-            angleDeg={measurement.labelAngleDeg}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            stroke={measurement.stroke}
-            x={measurement.dimensionLineEnd.x2}
-            y={measurement.dimensionLineEnd.y2}
-          />
-          <text
-            dominantBaseline="central"
-            fill={measurement.labelFill ?? palette.measurementStroke}
-            fillOpacity={
-              measurement.isSelected
-                ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY
-                : FLOORPLAN_MEASUREMENT_LABEL_OPACITY * 0.4
-            }
-            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-            fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
-            fontWeight="600"
-            textAnchor="middle"
-            transform={`rotate(${measurement.labelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
-            x={measurement.labelX}
-            y={measurement.labelY}
-          >
-            {measurement.label}
-          </text>
-        </g>
-      ))}
+      <FloorplanMeasurementsLayer
+        className="wall-dimension"
+        measurements={wallMeasurements}
+        palette={palette}
+      />
     </>
   )
 })
@@ -4816,81 +4002,6 @@ const FloorplanFenceLayer = memo(function FloorplanFenceLayer({
   )
 })
 
-const FloorplanRoofLayer = memo(function FloorplanRoofLayer({
-  highlightedIdSet,
-  roofEntries,
-  selectedIdSet,
-}: {
-  highlightedIdSet: ReadonlySet<string>
-  roofEntries: FloorplanRoofEntry[]
-  selectedIdSet: ReadonlySet<string>
-}) {
-  if (roofEntries.length === 0) {
-    return null
-  }
-
-  return (
-    <>
-      {roofEntries.map(({ roof, segments }) => {
-        const roofSelected = selectedIdSet.has(roof.id)
-        const roofHighlighted = highlightedIdSet.has(roof.id)
-        const hasSelectedSegment = segments.some(({ segment }) => selectedIdSet.has(segment.id))
-        const hasHighlightedSegment = segments.some(({ segment }) =>
-          highlightedIdSet.has(segment.id),
-        )
-        const isRoofActive =
-          roofSelected || roofHighlighted || hasSelectedSegment || hasHighlightedSegment
-
-        return (
-          <g key={roof.id} pointerEvents="none">
-            {segments.map(({ points, ridgeLine, segment }) => {
-              const isSegmentSelected = selectedIdSet.has(segment.id)
-              const isSegmentHighlighted = highlightedIdSet.has(segment.id)
-              const isSegmentActive = isSegmentSelected || isSegmentHighlighted
-
-              return (
-                <g key={segment.id}>
-                  <polygon
-                    fill={
-                      isSegmentActive
-                        ? 'rgba(14, 165, 233, 0.2)'
-                        : isRoofActive
-                          ? 'rgba(14, 165, 233, 0.14)'
-                          : 'rgba(14, 165, 233, 0.08)'
-                    }
-                    points={points}
-                    stroke={
-                      isSegmentActive
-                        ? '#0369a1'
-                        : isRoofActive
-                          ? '#0ea5e9'
-                          : 'rgba(14, 165, 233, 0.65)'
-                    }
-                    strokeWidth={isSegmentActive ? '2.25' : isRoofActive ? '1.75' : '1.1'}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  {ridgeLine ? (
-                    <line
-                      fill="none"
-                      stroke={isSegmentActive ? '#0f172a' : 'rgba(3, 105, 161, 0.75)'}
-                      strokeWidth={isSegmentActive ? '2' : '1.4'}
-                      vectorEffect="non-scaling-stroke"
-                      x1={toSvgX(ridgeLine.start.x)}
-                      x2={toSvgX(ridgeLine.end.x)}
-                      y1={toSvgY(ridgeLine.start.y)}
-                      y2={toSvgY(ridgeLine.end.y)}
-                    />
-                  ) : null}
-                </g>
-              )
-            })}
-          </g>
-        )
-      })}
-    </>
-  )
-})
-
 const FloorplanNodeLayer = memo(function FloorplanNodeLayer({
   canFocusItems,
   canFocusStairs,
@@ -4943,344 +4054,6 @@ const FloorplanNodeLayer = memo(function FloorplanNodeLayer({
   if (itemEntries.length === 0 && stairEntries.length === 0) {
     return null
   }
-
-  const stairNodes = stairEntries.map(({ arrow, hitPolygons, stair, segments }) => {
-    const stairSelected = selectedIdSet.has(stair.id)
-    const stairHighlighted = highlightedIdSet.has(stair.id)
-    const segmentSelected = segments.some(({ segment }) => selectedIdSet.has(segment.id))
-    const segmentHighlighted = segments.some(({ segment }) => highlightedIdSet.has(segment.id))
-    const isHovered = hoveredStairId === stair.id
-    const isDeleteHovered = isDeleteMode && isHovered
-    const isSelectionActive =
-      stairSelected || stairHighlighted || segmentSelected || segmentHighlighted
-    const stairType = stair.stairType ?? 'straight'
-    const normalizedSweepAngle = (() => {
-      const baseSweepAngle =
-        stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
-      if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
-        return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)
-      }
-      return baseSweepAngle
-    })()
-    const sectorStartAngle = stair.rotation - normalizedSweepAngle / 2
-    const sectorEndAngle = sectorStartAngle + normalizedSweepAngle
-    const stairCenter = {
-      x: stair.position[0],
-      y: stair.position[2],
-    }
-    const innerRadius = Math.max(
-      stairType === 'spiral' ? 0.05 : 0.2,
-      stair.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
-    )
-    const outerRadius = innerRadius + stair.width
-    const centerlineRadius = innerRadius + stair.width / 2
-    const curvedStroke = isDeleteHovered
-      ? palette.deleteStroke
-      : isSelectionActive
-        ? '#2563eb'
-        : 'rgba(31, 41, 55, 0.9)'
-    const curvedAccent = isDeleteHovered
-      ? palette.deleteStroke
-      : isSelectionActive
-        ? '#1d4ed8'
-        : 'rgba(23, 23, 23, 0.96)'
-    const curvedFill = isDeleteHovered
-      ? palette.deleteFill
-      : isSelectionActive
-        ? 'rgba(59, 130, 246, 0.16)'
-        : '#ffffff'
-    const straightAccent = isDeleteHovered
-      ? palette.deleteStroke
-      : isSelectionActive
-        ? '#1d4ed8'
-        : 'rgba(23, 23, 23, 0.96)'
-    const straightStroke = isDeleteHovered
-      ? palette.deleteStroke
-      : isSelectionActive
-        ? '#1d4ed8'
-        : 'rgba(23, 23, 23, 0.88)'
-    const straightTread = isDeleteHovered
-      ? palette.deleteStroke
-      : isSelectionActive
-        ? 'rgba(37, 99, 235, 0.78)'
-        : 'rgba(38, 38, 38, 0.62)'
-    const straightFill = isDeleteHovered
-      ? palette.deleteFill
-      : isSelectionActive
-        ? 'rgba(59, 130, 246, 0.08)'
-        : 'rgba(255, 255, 255, 0.02)'
-    const curvedOuterLineWidth = isSelectionActive ? '2' : '1.4'
-    const curvedInnerLineWidth = isSelectionActive ? '1.7' : '1.2'
-    const stairSymbol =
-      stairType === 'spiral' ? (
-        <>
-          <path
-            d={buildSvgAnnularSectorPath(
-              stairCenter,
-              innerRadius,
-              outerRadius,
-              sectorStartAngle,
-              sectorEndAngle,
-            )}
-            fill={curvedFill}
-            pointerEvents="none"
-          />
-          <path
-            d={buildSvgArcPath(stairCenter, outerRadius, sectorStartAngle, sectorEndAngle)}
-            fill="none"
-            pointerEvents="none"
-            stroke={curvedStroke}
-            strokeWidth={curvedOuterLineWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-          <path
-            d={buildSvgArcPath(stairCenter, innerRadius, sectorStartAngle, sectorEndAngle)}
-            fill="none"
-            pointerEvents="none"
-            stroke={curvedStroke}
-            strokeWidth={curvedInnerLineWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-          {Array.from({ length: Math.max(6, stair.stepCount) }, (_, index) => {
-            const stepCount = Math.max(6, stair.stepCount)
-            const stepSweep = normalizedSweepAngle / stepCount
-            const angle = sectorStartAngle + stepSweep * index
-            const innerPoint = getArcPlanPoint(stairCenter, innerRadius, angle)
-            const outerPoint = getArcPlanPoint(stairCenter, outerRadius, angle)
-            const dashedFromIndex = Math.floor(stepCount * 0.68)
-
-            return (
-              <line
-                key={`${stair.id}:spiral-step:${index}`}
-                pointerEvents="none"
-                stroke={index === stepCount - 1 ? curvedAccent : curvedStroke}
-                strokeDasharray={index >= dashedFromIndex ? '0.1 0.08' : undefined}
-                strokeWidth={index === stepCount - 1 ? '1.8' : '1.15'}
-                vectorEffect="non-scaling-stroke"
-                x1={toSvgX(innerPoint.x)}
-                x2={toSvgX(outerPoint.x)}
-                y1={toSvgY(innerPoint.y)}
-                y2={toSvgY(outerPoint.y)}
-              />
-            )
-          })}
-          <circle
-            cx={toSvgX(stairCenter.x)}
-            cy={toSvgY(stairCenter.y)}
-            fill="#ffffff"
-            pointerEvents="none"
-            r={Math.max(innerRadius * 0.18, 0.06)}
-            stroke={curvedAccent}
-            strokeWidth="1.2"
-            vectorEffect="non-scaling-stroke"
-          />
-          {(() => {
-            const directionAngle = sectorStartAngle + normalizedSweepAngle * 0.86
-            const arrowPoint = getArcPlanPoint(stairCenter, centerlineRadius, directionAngle)
-            const tangentAngle =
-              directionAngle + (normalizedSweepAngle >= 0 ? Math.PI / 2 : -Math.PI / 2)
-            const arrowHead = buildFloorplanArrowHead(
-              arrowPoint,
-              tangentAngle,
-              clamp(stair.width * 0.18, 0.12, 0.18),
-            )
-
-            return (
-              <polygon
-                fill={curvedAccent}
-                key={`${stair.id}:spiral-arrow`}
-                pointerEvents="none"
-                points={arrowHead.points}
-              />
-            )
-          })()}
-        </>
-      ) : stairType === 'curved' ? (
-        <>
-          <path
-            d={buildSvgAnnularSectorPath(
-              stairCenter,
-              innerRadius,
-              outerRadius,
-              sectorStartAngle,
-              sectorEndAngle,
-            )}
-            fill={curvedFill}
-            pointerEvents="none"
-          />
-          <path
-            d={buildSvgArcPath(stairCenter, outerRadius, sectorStartAngle, sectorEndAngle)}
-            fill="none"
-            pointerEvents="none"
-            stroke={curvedStroke}
-            strokeWidth={curvedOuterLineWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-          <path
-            d={buildSvgArcPath(stairCenter, innerRadius, sectorStartAngle, sectorEndAngle)}
-            fill="none"
-            pointerEvents="none"
-            stroke={curvedStroke}
-            strokeWidth={curvedInnerLineWidth}
-            vectorEffect="non-scaling-stroke"
-          />
-          {Array.from({ length: Math.max(4, stair.stepCount) + 1 }, (_, index) => {
-            const stepCount = Math.max(4, stair.stepCount)
-            const stepSweep = normalizedSweepAngle / stepCount
-            const angle = sectorStartAngle + stepSweep * index
-            const innerPoint = getArcPlanPoint(stairCenter, innerRadius, angle)
-            const outerPoint = getArcPlanPoint(stairCenter, outerRadius, angle)
-
-            return (
-              <line
-                key={`${stair.id}:curved-step:${index}`}
-                pointerEvents="none"
-                stroke={curvedStroke}
-                strokeWidth={index === 0 || index === stepCount ? '1.5' : '1.1'}
-                vectorEffect="non-scaling-stroke"
-                x1={toSvgX(innerPoint.x)}
-                x2={toSvgX(outerPoint.x)}
-                y1={toSvgY(innerPoint.y)}
-                y2={toSvgY(outerPoint.y)}
-              />
-            )
-          })}
-          <path
-            d={buildSvgArcPath(
-              stairCenter,
-              centerlineRadius,
-              sectorStartAngle + normalizedSweepAngle / Math.max(4, stair.stepCount) * 0.55,
-              sectorEndAngle - normalizedSweepAngle / Math.max(4, stair.stepCount) * 0.55,
-            )}
-            fill="none"
-            pointerEvents="none"
-            stroke={curvedAccent}
-            strokeDasharray="0.08 0.11"
-            strokeWidth="1.1"
-            vectorEffect="non-scaling-stroke"
-          />
-          {(() => {
-            const stepCount = Math.max(4, stair.stepCount)
-            const stepSweep = normalizedSweepAngle / stepCount
-            const arrowAngle = sectorEndAngle - stepSweep * 0.8
-            const arrowPoint = getArcPlanPoint(stairCenter, centerlineRadius, arrowAngle)
-            const tangentAngle =
-              arrowAngle + (normalizedSweepAngle >= 0 ? Math.PI / 2 : -Math.PI / 2)
-            const arrowHead = buildFloorplanArrowHead(
-              arrowPoint,
-              tangentAngle,
-              clamp(stair.width * 0.16, 0.1, 0.16),
-            )
-
-            return (
-              <polygon
-                fill={curvedAccent}
-                key={`${stair.id}:curved-arrow`}
-                pointerEvents="none"
-                points={arrowHead.points}
-              />
-            )
-          })()}
-        </>
-      ) : (
-        <>
-          {segments.map(({ points, segment, treadBars }) => (
-            <g key={segment.id}>
-              <polygon
-                fill={straightFill}
-                pointerEvents="none"
-                points={points}
-                stroke={straightStroke}
-                strokeWidth={isSelectionActive ? '2' : '1.35'}
-                vectorEffect="non-scaling-stroke"
-              />
-              {treadBars.map((treadBar, treadIndex) => (
-                <polygon
-                  fill={straightTread}
-                  key={`${segment.id}:tread:${treadIndex}`}
-                  pointerEvents="none"
-                  points={segment.segmentType === 'landing' ? '' : treadBar.points}
-                />
-              ))}
-            </g>
-          ))}
-          {arrow?.polyline && arrow.polyline.length >= 2 && (
-            <>
-              <polyline
-                fill="none"
-                points={arrow.polyline.map((point) => `${toSvgX(point.x)},${toSvgY(point.y)}`).join(' ')}
-                pointerEvents="none"
-                stroke={straightAccent}
-                strokeWidth="1.15"
-                vectorEffect="non-scaling-stroke"
-              />
-              <circle
-                cx={toSvgX(arrow.polyline[0]!.x)}
-                cy={toSvgY(arrow.polyline[0]!.y)}
-                fill={straightAccent}
-                pointerEvents="none"
-                r="0.045"
-              />
-              <polygon
-                fill={straightAccent}
-                points={formatPolygonPoints(arrow.head)}
-                pointerEvents="none"
-              />
-            </>
-          )}
-        </>
-      )
-
-    return (
-      <g
-        key={stair.id}
-        onClick={
-          canSelectStairs
-            ? (event) => {
-                event.stopPropagation()
-                onStairSelect(stair.id, event)
-              }
-            : undefined
-        }
-        onDoubleClick={
-          canFocusStairs
-            ? (event) => {
-                event.stopPropagation()
-                onStairDoubleClick(stair, event)
-              }
-            : undefined
-        }
-        onPointerEnter={canSelectStairs ? () => onStairHoverEnter(stair.id) : undefined}
-        onPointerLeave={canSelectStairs ? () => onStairHoverChange(null) : undefined}
-        onPointerDown={
-          canFocusStairs && stairSelected
-            ? (event) => {
-                if (event.button === 0) {
-                  onStairPointerDown(stair.id, event)
-                }
-              }
-            : undefined
-        }
-        pointerEvents={canSelectStairs ? undefined : 'none'}
-        style={canSelectStairs ? { cursor: EDITOR_CURSOR } : undefined}
-      >
-        {hitPolygons.map((polygon, polygonIndex) => (
-          <polygon
-            fill="transparent"
-            key={`${stair.id}:hit:${polygonIndex}`}
-            points={formatPolygonPoints(polygon)}
-            pointerEvents={canSelectStairs ? 'all' : 'none'}
-            stroke="transparent"
-            strokeLinejoin="round"
-            strokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-        <title>{stair.name || 'Staircase'}</title>
-        {stairSymbol}
-      </g>
-    )
-  })
 
   const itemNodes = itemEntries.map(({ item, points, polygon }) => {
     const isSelected = selectedIdSet.has(item.id)
@@ -5430,7 +4203,51 @@ const FloorplanNodeLayer = memo(function FloorplanNodeLayer({
   })
 
   return (
-    <>{isFurnishContextActive ? [...stairNodes, ...itemNodes] : [...itemNodes, ...stairNodes]}</>
+    <>
+      {isFurnishContextActive ? (
+        <>
+          <FloorplanStairLayer
+            canFocusStairs={canFocusStairs}
+            canSelectStairs={canSelectStairs}
+            cursor={EDITOR_CURSOR}
+            highlightedIdSet={highlightedIdSet}
+            hitStrokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
+            hoveredStairId={hoveredStairId}
+            isDeleteMode={isDeleteMode}
+            onStairDoubleClick={onStairDoubleClick}
+            onStairHoverChange={onStairHoverChange}
+            onStairHoverEnter={onStairHoverEnter}
+            onStairPointerDown={onStairPointerDown}
+            onStairSelect={onStairSelect}
+            palette={palette}
+            selectedIdSet={selectedIdSet}
+            stairEntries={stairEntries}
+          />
+          {itemNodes}
+        </>
+      ) : (
+        <>
+          {itemNodes}
+          <FloorplanStairLayer
+            canFocusStairs={canFocusStairs}
+            canSelectStairs={canSelectStairs}
+            cursor={EDITOR_CURSOR}
+            highlightedIdSet={highlightedIdSet}
+            hitStrokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
+            hoveredStairId={hoveredStairId}
+            isDeleteMode={isDeleteMode}
+            onStairDoubleClick={onStairDoubleClick}
+            onStairHoverChange={onStairHoverChange}
+            onStairHoverEnter={onStairHoverEnter}
+            onStairPointerDown={onStairPointerDown}
+            onStairSelect={onStairSelect}
+            palette={palette}
+            selectedIdSet={selectedIdSet}
+            stairEntries={stairEntries}
+          />
+        </>
+      )}
+    </>
   )
 })
 
@@ -9256,6 +8073,26 @@ export function FloorplanPanel() {
       return
     }
 
+    const movingFence = fences.find((fence) => fence.id === movingNode.id)
+    const watchedFenceIds = new Set<FenceNode['id']>([movingNode.id])
+
+    if (movingFence) {
+      for (const fence of fences) {
+        if (fence.id === movingFence.id) {
+          continue
+        }
+
+        if (
+          pointsEqual(fence.start, movingFence.start) ||
+          pointsEqual(fence.start, movingFence.end) ||
+          pointsEqual(fence.end, movingFence.start) ||
+          pointsEqual(fence.end, movingFence.end)
+        ) {
+          watchedFenceIds.add(fence.id)
+        }
+      }
+    }
+
     const refreshFencePreview = () => {
       setMovingFloorplanNodeRevision((current) => current + 1)
     }
@@ -9263,13 +8100,16 @@ export function FloorplanPanel() {
     refreshFencePreview()
 
     const unsubscribe = useLiveTransforms.subscribe((state, previousState) => {
-      if (state.transforms !== previousState.transforms) {
-        refreshFencePreview()
+      for (const fenceId of watchedFenceIds) {
+        if (state.transforms.get(fenceId) !== previousState.transforms.get(fenceId)) {
+          refreshFencePreview()
+          break
+        }
       }
     })
 
     return unsubscribe
-  }, [movingNode])
+  }, [fences, movingNode])
 
   useEffect(() => {
     if (!(movingNode?.type === 'roof' || movingNode?.type === 'roof-segment')) {
@@ -13019,137 +11859,17 @@ export function FloorplanPanel() {
                 selectedIdSet={selectedIdSet}
               />
 
-              {movingOpeningPlacementMeasurements.map((measurement) => (
-                <g
-                  className="opening-placement-dimension"
-                  key={measurement.id}
-                  pointerEvents="none"
-                  style={{ userSelect: 'none' }}
-                >
-                  <FloorplanMeasurementLine
-                    dashed
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.extensionStart}
-                    stroke={measurement.extensionStroke}
-                  />
-                  <FloorplanMeasurementLine
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.dimensionLineStart}
-                    stroke={measurement.stroke}
-                  />
-                  <FloorplanMeasurementLine
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.dimensionLineEnd}
-                    stroke={measurement.stroke}
-                  />
-                  <FloorplanMeasurementLine
-                    dashed
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.extensionEnd}
-                    stroke={measurement.extensionStroke}
-                  />
-                  <FloorplanMeasurementTick
-                    angleDeg={measurement.labelAngleDeg}
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    stroke={measurement.stroke}
-                    x={measurement.dimensionLineStart.x1}
-                    y={measurement.dimensionLineStart.y1}
-                  />
-                  <FloorplanMeasurementTick
-                    angleDeg={measurement.labelAngleDeg}
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    stroke={measurement.stroke}
-                    x={measurement.dimensionLineEnd.x2}
-                    y={measurement.dimensionLineEnd.y2}
-                  />
-                  <text
-                    dominantBaseline="central"
-                    fill={measurement.labelFill ?? palette.measurementStroke}
-                    fillOpacity={FLOORPLAN_MEASUREMENT_LABEL_OPACITY}
-                    fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                    fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
-                    fontWeight="600"
-                    textAnchor="middle"
-                    transform={`rotate(${measurement.labelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
-                    x={measurement.labelX}
-                    y={measurement.labelY}
-                  >
-                    {measurement.label}
-                  </text>
-                </g>
-              ))}
+              <FloorplanMeasurementsLayer
+                className="opening-placement-dimension"
+                measurements={movingOpeningPlacementMeasurements}
+                palette={palette}
+              />
 
-              {selectedItemClearanceMeasurements.map((measurement) => (
-                <g
-                  className="item-clearance-dimension"
-                  key={measurement.id}
-                  pointerEvents="none"
-                  style={{ userSelect: 'none' }}
-                >
-                  <FloorplanMeasurementLine
-                    dashed
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.extensionStart}
-                    stroke={measurement.extensionStroke}
-                  />
-                  <FloorplanMeasurementLine
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.dimensionLineStart}
-                    stroke={measurement.stroke}
-                  />
-                  <FloorplanMeasurementLine
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.dimensionLineEnd}
-                    stroke={measurement.stroke}
-                  />
-                  <FloorplanMeasurementLine
-                    dashed
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    segment={measurement.extensionEnd}
-                    stroke={measurement.extensionStroke}
-                  />
-                  <FloorplanMeasurementTick
-                    angleDeg={measurement.labelAngleDeg}
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    stroke={measurement.stroke}
-                    x={measurement.dimensionLineStart.x1}
-                    y={measurement.dimensionLineStart.y1}
-                  />
-                  <FloorplanMeasurementTick
-                    angleDeg={measurement.labelAngleDeg}
-                    isSelected={measurement.isSelected}
-                    palette={palette}
-                    stroke={measurement.stroke}
-                    x={measurement.dimensionLineEnd.x2}
-                    y={measurement.dimensionLineEnd.y2}
-                  />
-                  <text
-                    dominantBaseline="central"
-                    fill={measurement.labelFill ?? palette.measurementStroke}
-                    fillOpacity={FLOORPLAN_MEASUREMENT_LABEL_OPACITY}
-                    fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                    fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
-                    fontWeight="600"
-                    textAnchor="middle"
-                    transform={`rotate(${measurement.labelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
-                    x={measurement.labelX}
-                    y={measurement.labelY}
-                  >
-                    {measurement.label}
-                  </text>
-                </g>
-              ))}
+              <FloorplanMeasurementsLayer
+                className="item-clearance-dimension"
+                measurements={selectedItemClearanceMeasurements}
+                palette={palette}
+              />
 
               {/* Zone labels: always visible so users can click to select zones from any mode */}
               <FloorplanZoneLabelLayer

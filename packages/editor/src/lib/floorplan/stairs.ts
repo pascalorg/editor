@@ -1,5 +1,4 @@
-import type { StairNode, StairSegmentNode } from '../schema'
-import type { Point2D } from '../systems/wall/wall-mitering'
+import type { Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
 import {
   clampPlanValue,
   getPlanPointDistance,

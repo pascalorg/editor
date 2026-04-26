@@ -1,5 +1,4 @@
-import type { AnyNode, ItemNode, StairNode, StairSegmentNode } from '../schema'
-import type { Point2D } from '../systems/wall/wall-mitering'
+import type { AnyNode, ItemNode, Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
 
 export type FloorplanNodeTransform = {
   position: Point2D

@@ -2,6 +2,7 @@ import type {
   CeilingNode,
   DoorNode,
   ItemNode,
+  Point2D,
   RoofNode,
   RoofSegmentNode,
   SlabNode,
@@ -14,9 +15,8 @@ import {
   getDistanceToWallSegment,
   isPointInsidePolygon,
   isPointInsidePolygonWithHoles,
-  type FloorplanSelectionBounds,
-  type Point2D,
-} from '@pascal-app/core'
+} from './geometry'
+import type { FloorplanSelectionBounds } from './types'
 
 type OpeningNode = WindowNode | DoorNode
 

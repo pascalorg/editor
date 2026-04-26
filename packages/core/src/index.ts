@@ -96,44 +96,6 @@ export {
   pointToKey,
   type WallMiterData,
 } from './systems/wall/wall-mitering'
-export {
-  clampPlanValue,
-  doesPolygonIntersectSelectionBounds,
-  getDistanceToWallSegment,
-  getFloorplanSelectionBounds,
-  getPlanPointDistance,
-  getRotatedRectanglePolygon,
-  getThickPlanLinePolygon,
-  interpolatePlanPoint,
-  isPointInsidePolygon,
-  isPointInsidePolygonWithHoles,
-  isPointInsideSelectionBounds,
-  movePlanPointTowards,
-  pointMatchesWallPlanPoint,
-  rotatePlanVector,
-} from './plan/geometry'
-export {
-  buildFloorplanItemEntry,
-  collectLevelDescendants,
-  getItemFloorplanTransform,
-} from './plan/items'
-export {
-  buildFloorplanStairEntry,
-  computeFloorplanStairSegmentTransforms,
-  getFloorplanStairSegmentPolygon,
-} from './plan/stairs'
-export type {
-  FloorplanItemEntry,
-  FloorplanLineSegment,
-  FloorplanNodeTransform,
-  FloorplanSelectionBounds,
-  FloorplanStairArrowEntry,
-  FloorplanStairEntry,
-  FloorplanStairSegmentEntry,
-  LevelDescendantMap,
-  StairSegmentTransform,
-} from './plan/types'
-export { getFloorplanWall, getFloorplanWallThickness } from './plan/walls'
 export { WallSystem } from './systems/wall/wall-system'
 export { WindowSystem } from './systems/window/window-system'
 export type { SceneGraph } from './utils/clone-scene-graph'

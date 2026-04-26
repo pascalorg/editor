@@ -1,4 +1,4 @@
-import type { Point2D } from '../systems/wall/wall-mitering'
+import type { Point2D } from '@pascal-app/core'
 import type { FloorplanLineSegment, FloorplanSelectionBounds } from './types'
 
 export function clampPlanValue(value: number, min: number, max: number) {
