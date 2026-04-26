@@ -4,7 +4,6 @@ import type { SceneGraph } from './scene'
 
 export const PASCAL_TRUCK_ASSET_ID = 'pascal-truck'
 export const PASCAL_TRUCK_ITEM_NODE_ID = 'item_pascal_truck_seed'
-export const PASCAL_TRUCK_DEFAULT_LEVEL_ID = 'level_9zq0a3e17uf8an2u'
 
 export const PASCAL_TRUCK_ASSET: AssetInput = {
   id: PASCAL_TRUCK_ASSET_ID,
@@ -19,8 +18,8 @@ export const PASCAL_TRUCK_ASSET: AssetInput = {
   dimensions: [4.42, 2.5, 2.28],
 }
 
-export const PASCAL_TRUCK_SCENE_POSITION: [number, number, number] = [7.25, 0, -11.25]
-export const PASCAL_TRUCK_SCENE_ROTATION: [number, number, number] = [0, Math.PI / 2, 0]
+export const PASCAL_TRUCK_SCENE_POSITION: [number, number, number] = [0, 0, 0]
+export const PASCAL_TRUCK_SCENE_ROTATION: [number, number, number] = [0, 0, 0]
 export const PASCAL_TRUCK_SCENE_SCALE: [number, number, number] = [1, 1, 1]
 
 export const PASCAL_TRUCK_ENTRY_CLIP_NAME = 'Jumping_Down'
@@ -82,16 +81,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function shouldPreservePascalTruckPlacement(sourceTruckNode?: ItemNode | null) {
   const metadata = isRecord(sourceTruckNode?.metadata) ? sourceTruckNode.metadata : null
-  if (metadata?.manualPlacement !== true) {
-    return false
-  }
-
-  const seededBy = typeof metadata.seededBy === 'string' ? metadata.seededBy : null
-  if (seededBy === 'apps/editor/app/page.tsx') {
-    return false
-  }
-
-  return true
+  return metadata?.manualPlacement === true
 }
 
 function getScaledItemDimensions(node: Record<string, unknown>): [number, number, number] | null {
@@ -498,11 +488,6 @@ function resolvePascalTruckLevelId(
     return preferredLevelId
   }
 
-  const preferredLevel = sceneGraph.nodes[PASCAL_TRUCK_DEFAULT_LEVEL_ID]
-  if (isRecord(preferredLevel) && preferredLevel.type === 'level') {
-    return PASCAL_TRUCK_DEFAULT_LEVEL_ID
-  }
-
   let fallbackLevelId: string | null = null
   for (const node of Object.values(sceneGraph.nodes)) {
     if (!isRecord(node) || node.type !== 'level' || typeof node.id !== 'string') {
@@ -605,11 +590,10 @@ export function buildPascalTruckNodeForScene(
         id: PASCAL_TRUCK_ITEM_NODE_ID,
         metadata: {
           manualPlacement: false,
-          seededBy: 'packages/editor/src/components/editor/index.tsx',
         },
         name: PASCAL_TRUCK_ASSET.name,
         object: 'node',
-        parentId: parentId ?? PASCAL_TRUCK_DEFAULT_LEVEL_ID,
+        parentId,
         position: seededTransform.position,
         rotation: seededTransform.rotation,
         scale: seededTransform.scale,

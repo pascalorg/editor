@@ -2,23 +2,18 @@
 
 import { emitter } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Bot, Copy, Move, Power, Shield, Trash2, Wrench } from 'lucide-react'
+import { Copy, Move, Power, Trash2, Wrench } from 'lucide-react'
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
-import type { NavigationQueuedTask, NavigationRobotModel } from '../../../store/use-navigation'
+import type { NavigationQueuedTask } from '../../../store/use-navigation'
 import useNavigation from '../../../store/use-navigation'
 import navigationVisualsStore from '../../../store/use-navigation-visuals'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 
 const PANEL_BUTTON_CLASS =
   'flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45'
-
-const ROBOT_MODEL_LABELS: Record<NavigationRobotModel, string> = {
-  armored: 'Armored robot',
-  pascal: 'Pascal robot',
-}
 
 type TaskDragState = {
   clientX: number
@@ -181,10 +176,8 @@ export function NavigationPanel() {
     itemMoveControllers,
     moveQueuedTask,
     removeQueuedTask,
-    robotModel,
     robotMode,
     setActiveTask,
-    setRobotModel,
     setRobotMode,
     taskQueue,
   } = useNavigation(
@@ -193,10 +186,8 @@ export function NavigationPanel() {
       itemMoveControllers: state.itemMoveControllers,
       moveQueuedTask: state.moveQueuedTask,
       removeQueuedTask: state.removeQueuedTask,
-      robotModel: state.robotModel,
       robotMode: state.robotMode,
       setActiveTask: state.setActiveTask,
-      setRobotModel: state.setRobotModel,
       setRobotMode: state.setRobotMode,
       taskQueue: state.taskQueue,
     })),
@@ -384,9 +375,6 @@ export function NavigationPanel() {
 
   const robotTooltip =
     robotMode === 'normal' ? 'Turn robot off (manual mode).' : 'Turn robot off (task mode).'
-  const nextRobotModel = robotModel === 'pascal' ? 'armored' : 'pascal'
-  const RobotModelIcon = robotModel === 'pascal' ? Bot : Shield
-  const modelTooltip = `${ROBOT_MODEL_LABELS[robotModel]}. Switch to ${ROBOT_MODEL_LABELS[nextRobotModel]}.`
 
   return (
     <div data-testid="navigation-panel" ref={rootRef}>
@@ -409,24 +397,6 @@ export function NavigationPanel() {
               </button>
             </TooltipTrigger>
             <TooltipContent side="left">{robotTooltip}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                aria-label={`Switch to ${ROBOT_MODEL_LABELS[nextRobotModel]}`}
-                className={cn(
-                  PANEL_BUTTON_CLASS,
-                  robotModel === 'armored' &&
-                    'border-cyan-300/50 bg-cyan-500/15 text-cyan-100 hover:border-cyan-200 hover:bg-cyan-500/20 hover:text-white',
-                )}
-                data-testid="navigation-robot-model-toggle"
-                onClick={() => setRobotModel(nextRobotModel)}
-                type="button"
-              >
-                <RobotModelIcon className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left">{modelTooltip}</TooltipContent>
           </Tooltip>
         </div>
       </div>
