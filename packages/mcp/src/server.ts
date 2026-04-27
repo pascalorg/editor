@@ -4,6 +4,9 @@ import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import { createSceneStore } from './storage'
 import type {
+  SceneEvent,
+  SceneEventAppendOptions,
+  SceneEventListOptions,
   SceneListOptions,
   SceneMeta,
   SceneMutateOptions,
@@ -69,6 +72,20 @@ function createLazySceneStore(): SceneStore {
     async rename(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta> {
       const real = await resolve()
       return real.rename(id, newName, options)
+    },
+    async appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent> {
+      const real = await resolve()
+      if (!real.appendSceneEvent) {
+        throw new Error('scene_events_unavailable')
+      }
+      return real.appendSceneEvent(options)
+    },
+    async listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]> {
+      const real = await resolve()
+      if (!real.listSceneEvents) {
+        throw new Error('scene_events_unavailable')
+      }
+      return real.listSceneEvents(id, options)
     },
   }
 }

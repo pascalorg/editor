@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  applySceneGraphToEditor,
   Editor,
   type SceneGraph,
   type SidebarTab,
@@ -9,7 +10,7 @@ import {
 } from '@pascal-app/editor'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface SceneMeta {
   id: string
@@ -37,9 +38,32 @@ interface SceneLoaderProps {
   meta: SceneMeta
 }
 
+type SceneGraphWithCollections = SceneGraph & {
+  collections?: Record<string, unknown>
+}
+
+interface LiveSceneEvent {
+  eventId: number
+  sceneId: string
+  version: number
+  kind: string
+  createdAt: string
+  graph: SceneGraphWithCollections
+}
+
+function sceneGraphSignature(graph: SceneGraphWithCollections): string {
+  return JSON.stringify({
+    nodes: graph.nodes,
+    rootNodeIds: graph.rootNodeIds,
+    collections: graph.collections,
+  })
+}
+
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const versionRef = useRef(meta.version)
+  const lastRemoteGraphJsonRef = useRef<string | null>(null)
+  const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -47,6 +71,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   const handleSave = useCallback(
     async (graph: SceneGraph) => {
+      const graphJson = sceneGraphSignature(graph)
+      const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
+      if (lastRemoteGraphJsonRef.current === graphJson) {
+        lastRemoteGraphJsonRef.current = null
+        suppressRemoteSaveUntilRef.current = 0
+        return
+      }
+      if (isRecentRemoteApply) return
+
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
           method: 'PUT',
@@ -76,6 +109,36 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     },
     [meta.id, meta.name],
   )
+
+  useEffect(() => {
+    const source = new EventSource(`/api/scenes/${meta.id}/events`)
+
+    source.addEventListener('scene', (event) => {
+      let payload: LiveSceneEvent
+      try {
+        payload = JSON.parse((event as MessageEvent<string>).data) as LiveSceneEvent
+      } catch {
+        return
+      }
+      if (payload.sceneId !== meta.id) return
+      if (payload.version <= versionRef.current) return
+
+      versionRef.current = payload.version
+      lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
+      suppressRemoteSaveUntilRef.current = Date.now() + 2500
+      applySceneGraphToEditor(payload.graph)
+      setConflict(false)
+      setSaveError(null)
+    })
+
+    source.addEventListener('error', () => {
+      if (source.readyState === EventSource.CLOSED) {
+        setSaveError('Live scene connection closed')
+      }
+    })
+
+    return () => source.close()
+  }, [meta.id])
 
   const handleThumb = useCallback(
     async (_blob: Blob) => {

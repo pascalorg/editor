@@ -3,7 +3,9 @@ import { cloneLevelSubtree } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch as BridgePatch, SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
+import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
 
 export const duplicateLevelInput = {
@@ -15,7 +17,11 @@ export const duplicateLevelOutput = {
   newNodeIds: z.array(z.string()),
 }
 
-export function registerDuplicateLevel(server: McpServer, bridge: SceneBridge): void {
+export function registerDuplicateLevel(
+  server: McpServer,
+  bridge: SceneBridge,
+  store?: SceneStore,
+): void {
   server.registerTool(
     'duplicate_level',
     {
@@ -57,6 +63,7 @@ export function registerDuplicateLevel(server: McpServer, bridge: SceneBridge): 
       })
 
       const result = bridge.applyPatch(patches)
+      await publishLiveSceneSnapshot(bridge, store, 'duplicate_level')
 
       const payload = {
         newLevelId: newLevelId as string,

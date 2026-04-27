@@ -1,13 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import { MCP_CATALOG_ITEMS } from '../tools/asset-catalog'
 
 /**
- * `pascal://catalog/items` — item catalog (if the host supplies one).
+ * `pascal://catalog/items` — small built-in item catalog for standalone MCP.
  *
- * `@pascal-app/core` does NOT expose a runtime item catalog — that is the host
- * app's responsibility. In headless / standalone MCP mode we therefore return
- * a stable, machine-readable "unavailable" payload so agents can detect this
- * and fall back to free-form item creation.
+ * The editor UI owns the full catalog. MCP intentionally keeps a dependency-free
+ * subset so headless agents can still place realistic furniture and fixtures.
  */
 export function registerCatalogItems(server: McpServer, _bridge: SceneBridge): void {
   server.registerResource(
@@ -16,14 +15,14 @@ export function registerCatalogItems(server: McpServer, _bridge: SceneBridge): v
     {
       title: 'Item catalog',
       description:
-        'Catalog of placeable items. Not available in core; the host app is expected to override this resource when it has a catalog.',
+        'Dependency-free catalog subset of placeable items available in standalone MCP mode.',
       mimeType: 'application/json',
     },
     async (uri) => {
       const payload = {
-        status: 'catalog_unavailable' as const,
-        items: [] as never[],
-        note: '@pascal-app/core does not ship a runtime item catalog; the host app is expected to provide one by overriding this resource.',
+        status: 'ok' as const,
+        items: MCP_CATALOG_ITEMS,
+        note: 'Standalone MCP catalog subset; host applications can still expose a larger catalog separately.',
       }
       return {
         contents: [

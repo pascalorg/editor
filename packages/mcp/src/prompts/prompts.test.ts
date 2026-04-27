@@ -62,6 +62,9 @@ describe('from_brief', () => {
       if (m.content.type === 'text') {
         expect(m.content.text).toContain('60 sqm studio')
         expect(m.content.text).toContain('apply_patch')
+        expect(m.content.text).toContain('create_story_shell')
+        expect(m.content.text).toContain('pascal://agent/guide')
+        expect(m.content.text).toContain('dedicated roof level')
       }
     } finally {
       await pair.close()

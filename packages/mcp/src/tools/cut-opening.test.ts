@@ -42,6 +42,7 @@ describe('cut_opening', () => {
     const created = bridge.getNode(parsed.openingId)
     expect((created as { wallId?: string }).wallId).toBe(wall.id)
     expect((created as { width: number }).width).toBe(0.9)
+    expect((created as { position: [number, number, number] }).position[0]).toBeCloseTo(2.5, 3)
   })
 
   test('creates a window opening on a wall', async () => {
@@ -61,6 +62,9 @@ describe('cut_opening', () => {
     })
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.openingId).toMatch(/^window_/)
+    const created = bridge.getNode(parsed.openingId)
+    expect((created as { position: [number, number, number] }).position[0]).toBeCloseTo(1.25, 3)
+    expect((created as { position: [number, number, number] }).position[1]).toBeCloseTo(1.5, 3)
   })
 
   test('rejects unknown wall id', async () => {

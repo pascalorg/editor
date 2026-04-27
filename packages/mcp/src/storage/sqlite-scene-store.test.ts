@@ -226,6 +226,53 @@ describe('SqliteSceneStore', () => {
     }
   })
 
+  test('appends and lists scene events in order', async () => {
+    const graph = makeGraph()
+    const meta = await store.save({ id: 'live', name: 'Live', graph })
+    const first = await store.appendSceneEvent({
+      sceneId: meta.id,
+      version: meta.version,
+      kind: 'save_scene',
+      graph,
+    })
+    const updatedGraph = makeGraph({
+      nodes: {
+        ...graph.nodes,
+        wall_new: {
+          object: 'node',
+          id: 'wall_new',
+          type: 'wall',
+          parentId: 'building_def',
+          visible: true,
+          metadata: {},
+          children: [],
+          start: [0, 0],
+          end: [1, 0],
+          thickness: 0.1,
+          height: 2.5,
+          frontSide: 'unknown',
+          backSide: 'unknown',
+        },
+      } as SceneGraph['nodes'],
+    })
+    const second = await store.appendSceneEvent({
+      sceneId: meta.id,
+      version: meta.version,
+      kind: 'create_wall',
+      graph: updatedGraph,
+    })
+
+    expect(second.eventId).toBeGreaterThan(first.eventId)
+    expect((await store.listSceneEvents('live')).map((event) => event.kind)).toEqual([
+      'save_scene',
+      'create_wall',
+    ])
+    const afterFirst = await store.listSceneEvents('live', { afterEventId: first.eventId })
+    expect(afterFirst).toHaveLength(1)
+    expect(afterFirst[0]!.eventId).toBe(second.eventId)
+    expect(afterFirst[0]!.graph.nodes.wall_new).toBeDefined()
+  })
+
   test('validates name and scene size', async () => {
     await expect(store.save({ name: '', graph: makeGraph() })).rejects.toThrow(SceneInvalidError)
     await expect(store.save({ name: 'x'.repeat(201), graph: makeGraph() })).rejects.toThrow(

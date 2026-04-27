@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
+import { publishLiveSceneSnapshot } from './live-sync'
 
 export const undoInput = {
   steps: z.number().int().positive().optional(),
@@ -10,7 +12,7 @@ export const undoOutput = {
   undone: z.number(),
 }
 
-export function registerUndo(server: McpServer, bridge: SceneBridge): void {
+export function registerUndo(server: McpServer, bridge: SceneBridge, store?: SceneStore): void {
   server.registerTool(
     'undo',
     {
@@ -22,6 +24,7 @@ export function registerUndo(server: McpServer, bridge: SceneBridge): void {
     },
     async ({ steps }) => {
       const undone = bridge.undo(steps ?? 1)
+      if (undone > 0) await publishLiveSceneSnapshot(bridge, store, 'undo')
       const payload = { undone }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

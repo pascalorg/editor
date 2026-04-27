@@ -8,6 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode, ZoneNode } from '@pascal-app/core/schema'
 import useScene from '@pascal-app/core/store'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { registerAgentGuide } from './agent-guide'
 import { registerCatalogItems } from './catalog-items'
 import { registerConstraints } from './constraints'
 import { registerSceneCurrent } from './scene-current'
@@ -183,16 +184,38 @@ describe('pascal://scene/current/summary', () => {
 describe('pascal://catalog/items', () => {
   beforeEach(() => resetScene())
 
-  test('returns catalog_unavailable payload', async () => {
+  test('returns built-in catalog subset', async () => {
     const pair = await spinUp(registerCatalogItems)
     try {
       const res = await pair.client.readResource({ uri: 'pascal://catalog/items' })
       const content = res.contents[0] as { uri: string; mimeType?: string; text?: string }
       expect(content.mimeType).toBe('application/json')
       const parsed = JSON.parse(content.text ?? '{}')
-      expect(parsed.status).toBe('catalog_unavailable')
-      expect(parsed.items).toEqual([])
+      expect(parsed.status).toBe('ok')
+      expect(parsed.items.length).toBeGreaterThan(0)
+      expect(parsed.items.map((item: { id: string }) => item.id)).toContain('sofa')
       expect(typeof parsed.note).toBe('string')
+    } finally {
+      await pair.close()
+    }
+  })
+})
+
+describe('pascal://agent/guide', () => {
+  beforeEach(() => resetScene())
+
+  test('returns MCP-first construction guidance', async () => {
+    const pair = await spinUp(registerAgentGuide)
+    try {
+      const res = await pair.client.readResource({ uri: 'pascal://agent/guide' })
+      const content = res.contents[0] as { uri: string; mimeType?: string; text?: string }
+      expect(content.mimeType).toBe('text/markdown')
+      const text = content.text ?? ''
+      expect(text).toContain('create_story_shell')
+      expect(text).toContain('create_stair_between_levels')
+      expect(text).toContain('dedicated roof level')
+      expect(text).toContain('Do not make first-story walls taller')
+      expect(text).toContain('Run `validate_scene` and `verify_scene`')
     } finally {
       await pair.close()
     }

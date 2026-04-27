@@ -38,6 +38,7 @@ export function registerLoadScene(server: McpServer, bridge: SceneBridge, store:
       }
       try {
         bridge.loadJSON(result.graph)
+        bridge.setActiveScene(result)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         throwMcpError(ErrorCode.InvalidRequest, `load_failed: ${msg}`, { id })

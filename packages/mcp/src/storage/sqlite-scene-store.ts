@@ -6,6 +6,9 @@ import { z } from 'zod'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
+  type SceneEvent,
+  type SceneEventAppendOptions,
+  type SceneEventListOptions,
   SceneInvalidError,
   type SceneListOptions,
   type SceneMeta,
@@ -43,6 +46,15 @@ interface SceneRow {
   updated_at: string
   size_bytes: number
   node_count: number
+  graph_json: string
+}
+
+interface SceneEventRow {
+  event_id: number
+  scene_id: string
+  version: number
+  kind: string
+  created_at: string
   graph_json: string
 }
 
@@ -168,6 +180,17 @@ function parseGraph(raw: string, context: string): SceneGraph {
 function asSceneRow(value: unknown): SceneRow | null {
   if (!value || typeof value !== 'object') return null
   return value as SceneRow
+}
+
+function rowToSceneEvent(row: SceneEventRow): SceneEvent {
+  return {
+    eventId: Number(row.event_id),
+    sceneId: row.scene_id,
+    version: Number(row.version),
+    kind: row.kind,
+    createdAt: row.created_at,
+    graph: parseGraph(row.graph_json, `${row.scene_id}@${row.version}`),
+  }
 }
 
 /**
@@ -397,6 +420,54 @@ export class SqliteSceneStore implements SceneStore {
     })
   }
 
+  async appendSceneEvent(opts: SceneEventAppendOptions): Promise<SceneEvent> {
+    return this.withWriteTransaction((db) => {
+      const safeId = sanitizeSlug(opts.sceneId)
+      const existing = this.getRow(db, safeId)
+      if (!existing) {
+        throw new SceneNotFoundError(`Scene "${safeId}" not found`)
+      }
+
+      const graphJson = serializeGraph(opts.graph)
+      const now = new Date().toISOString()
+      const result = db
+        .query(
+          `INSERT INTO scene_events (
+             scene_id, version, kind, created_at, graph_json
+           ) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(safeId, opts.version, opts.kind, now, graphJson)
+
+      return {
+        eventId: Number(result.lastInsertRowid),
+        sceneId: safeId,
+        version: opts.version,
+        kind: opts.kind,
+        createdAt: now,
+        graph: opts.graph,
+      }
+    })
+  }
+
+  async listSceneEvents(sceneId: string, opts: SceneEventListOptions = {}): Promise<SceneEvent[]> {
+    const afterEventId = Math.max(0, opts.afterEventId ?? 0)
+    const requestedLimit = opts.limit ?? 100
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : 100
+    const db = await this.database()
+    const rows = db
+      .query(
+        `SELECT event_id, scene_id, version, kind, created_at, graph_json
+           FROM scene_events
+          WHERE scene_id = ?
+            AND event_id > ?
+          ORDER BY event_id ASC
+          LIMIT ?`,
+      )
+      .all(sanitizeSlug(sceneId), afterEventId, limit)
+
+    return rows.map((row) => rowToSceneEvent(row as SceneEventRow))
+  }
+
   close(): void {
     this.db?.close()
     this.db = null
@@ -452,6 +523,19 @@ export class SqliteSceneStore implements SceneStore {
         PRIMARY KEY (scene_id, version),
         FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS scene_events (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scene_id TEXT NOT NULL,
+        version INTEGER NOT NULL CHECK (version >= 1),
+        kind TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        graph_json TEXT NOT NULL,
+        FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS scene_events_scene_event_idx
+        ON scene_events(scene_id, event_id);
     `)
   }
 

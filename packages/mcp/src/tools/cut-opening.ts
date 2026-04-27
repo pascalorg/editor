@@ -3,7 +3,10 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { DoorNode, WindowNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
+import { wallLength, wallLocalXFromT } from './geometry'
+import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
 
 export const cutOpeningInput = {
@@ -18,7 +21,11 @@ export const cutOpeningOutput = {
   openingId: z.string(),
 }
 
-export function registerCutOpening(server: McpServer, bridge: SceneBridge): void {
+export function registerCutOpening(
+  server: McpServer,
+  bridge: SceneBridge,
+  store?: SceneStore,
+): void {
   server.registerTool(
     'cut_opening',
     {
@@ -37,19 +44,36 @@ export function registerCutOpening(server: McpServer, bridge: SceneBridge): void
         throwMcpError(ErrorCode.InvalidParams, `Node ${wallId} is a ${wall.type}, expected wall`)
       }
 
-      // wallT is stored on door/window children via position in the schema;
-      // the core systems look up wallId and derive placement from `position[0]`
-      // being on the wall-local axis. We set wallId explicitly so the runtime
-      // can associate the opening with its parent wall.
+      const length = wallLength(wall)
+      if (length < width) {
+        throwMcpError(
+          ErrorCode.InvalidParams,
+          `Wall ${wallId} is ${length.toFixed(2)}m long, too short for a ${width.toFixed(2)}m opening`,
+        )
+      }
+
+      // `position` is public MCP ergonomics: 0..1 along the wall. Door/window
+      // nodes store wall-local meters in position[0], so convert before writing.
       const base = {
         wallId,
         width,
         height,
-        position: [position, height / 2, 0] as [number, number, number],
+        position: [wallLocalXFromT(wall, position, width), height / 2, 0] as [
+          number,
+          number,
+          number,
+        ],
       }
 
-      const opening = type === 'door' ? DoorNode.parse(base) : WindowNode.parse(base)
+      const opening =
+        type === 'door'
+          ? DoorNode.parse(base)
+          : WindowNode.parse({
+              ...base,
+              position: [base.position[0], 0.9 + height / 2, 0],
+            })
       const id = bridge.createNode(opening, wallId as AnyNodeId)
+      await publishLiveSceneSnapshot(bridge, store, 'cut_opening')
 
       const payload = { openingId: id as string }
       return {

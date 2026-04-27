@@ -40,6 +40,11 @@
       "types": "./dist/systems/wall/wall-footprint.d.ts",
       "import": "./dist/systems/wall/wall-footprint.js",
       "default": "./dist/systems/wall/wall-footprint.js"
+    },
+    "./stair-openings": {
+      "types": "./dist/systems/stair/stair-opening-sync.d.ts",
+      "import": "./dist/systems/stair/stair-opening-sync.js",
+      "default": "./dist/systems/stair/stair-opening-sync.js"
     }
   },
   "files": [

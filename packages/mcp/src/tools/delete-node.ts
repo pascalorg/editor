@@ -2,7 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
+import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
 
 export const deleteNodeInput = {
@@ -14,7 +16,11 @@ export const deleteNodeOutput = {
   deletedIds: z.array(z.string()),
 }
 
-export function registerDeleteNode(server: McpServer, bridge: SceneBridge): void {
+export function registerDeleteNode(
+  server: McpServer,
+  bridge: SceneBridge,
+  store?: SceneStore,
+): void {
   server.registerTool(
     'delete_node',
     {
@@ -31,6 +37,7 @@ export function registerDeleteNode(server: McpServer, bridge: SceneBridge): void
       }
       try {
         const removed = bridge.deleteNode(id as AnyNodeId, cascade ?? false)
+        await publishLiveSceneSnapshot(bridge, store, 'delete_node')
         const payload = { deletedIds: removed }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

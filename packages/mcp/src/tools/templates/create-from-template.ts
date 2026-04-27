@@ -7,6 +7,7 @@ import { rehydrateSiteChildren } from '../../lib/rehydrate-site-children'
 import type { SceneStore } from '../../storage/types'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
 import { ErrorCode, throwMcpError } from '../errors'
+import { appendLiveSceneEvent } from '../live-sync'
 
 export const createFromTemplateInput = {
   id: z
@@ -104,6 +105,7 @@ export function registerCreateFromTemplate(
       }
 
       if (!save) {
+        bridge.clearActiveScene()
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(basePayload) }],
           structuredContent: basePayload,
@@ -114,10 +116,11 @@ export function registerCreateFromTemplate(
         // Graceful no-store mode: report that save was skipped rather than
         // erroring — this makes the tool usable in headless bridge-only
         // deployments (tests, smoke scripts) without crashing.
+        bridge.clearActiveScene()
         const payload = { ...basePayload, saveSkipped: true } as const
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
-          structuredContent: basePayload,
+          structuredContent: payload,
         }
       }
 
@@ -126,6 +129,11 @@ export function registerCreateFromTemplate(
           name: name ?? entry.name,
           ...(projectId !== undefined ? { projectId } : {}),
           graph: { nodes, rootNodeIds },
+        })
+        bridge.setActiveScene(meta)
+        await appendLiveSceneEvent(store, meta.id, meta.version, 'create_from_template', {
+          nodes,
+          rootNodeIds,
         })
         const scene = {
           id: meta.id,

@@ -3,6 +3,7 @@ import type { SceneBridge } from '../bridge/scene-bridge'
 import type { SceneStore } from '../storage/types'
 import { registerApplyPatch } from './apply-patch'
 import { registerCheckCollisions } from './check-collisions'
+import { registerConstructionTools } from './construction-tools'
 import { registerCreateLevel } from './create-level'
 import { registerCreateWall } from './create-wall'
 import { registerCutOpening } from './cut-opening'
@@ -18,7 +19,9 @@ import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceItem } from './place-item'
 import { registerRedo } from './redo'
+import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
+import { registerSceneQueryTools } from './scene-query'
 import { registerSetZone } from './set-zone'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
@@ -38,17 +41,20 @@ export function registerTools(server: McpServer, bridge: SceneBridge, store?: Sc
   registerGetNode(server, bridge)
   registerDescribeNode(server, bridge)
   registerFindNodes(server, bridge)
+  registerSceneQueryTools(server, bridge)
   registerMeasure(server, bridge)
-  registerApplyPatch(server, bridge)
-  registerCreateLevel(server, bridge)
-  registerCreateWall(server, bridge)
-  registerPlaceItem(server, bridge)
-  registerCutOpening(server, bridge)
-  registerSetZone(server, bridge)
-  registerDuplicateLevel(server, bridge)
-  registerDeleteNode(server, bridge)
-  registerUndo(server, bridge)
-  registerRedo(server, bridge)
+  registerConstructionTools(server, bridge, store)
+  registerRoomTools(server, bridge, store)
+  registerApplyPatch(server, bridge, store)
+  registerCreateLevel(server, bridge, store)
+  registerCreateWall(server, bridge, store)
+  registerPlaceItem(server, bridge, store)
+  registerCutOpening(server, bridge, store)
+  registerSetZone(server, bridge, store)
+  registerDuplicateLevel(server, bridge, store)
+  registerDeleteNode(server, bridge, store)
+  registerUndo(server, bridge, store)
+  registerRedo(server, bridge, store)
   registerExportJson(server, bridge)
   registerExportGlb(server, bridge)
   registerValidateScene(server, bridge)

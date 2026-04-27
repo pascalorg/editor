@@ -3,7 +3,9 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { WallNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
+import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
 export const createWallInput = {
@@ -18,7 +20,11 @@ export const createWallOutput = {
   wallId: z.string(),
 }
 
-export function registerCreateWall(server: McpServer, bridge: SceneBridge): void {
+export function registerCreateWall(
+  server: McpServer,
+  bridge: SceneBridge,
+  store?: SceneStore,
+): void {
   server.registerTool(
     'create_wall',
     {
@@ -47,6 +53,7 @@ export function registerCreateWall(server: McpServer, bridge: SceneBridge): void
         ...(height !== undefined ? { height } : {}),
       })
       const id = bridge.createNode(wall, levelId as AnyNodeId)
+      await publishLiveSceneSnapshot(bridge, store, 'create_wall')
       const payload = { wallId: id as string }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

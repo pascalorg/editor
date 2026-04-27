@@ -3,7 +3,11 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
+import { findCatalogItem } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
+import { projectWorldPointToWallLocalX, wallLength } from './geometry'
+import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema, Vec3Schema } from './schemas'
 
 export const placeItemInput = {
@@ -18,31 +22,17 @@ export const placeItemOutput = {
   status: z.string().optional(),
 }
 
-/** Compute wallT (0..1) from a 3D position projected onto the wall centreline. */
-function computeWallT(
-  start: [number, number],
-  end: [number, number],
-  position: [number, number, number],
-): number {
-  const [sx, sz] = start
-  const [ex, ez] = end
-  const dx = ex - sx
-  const dz = ez - sz
-  const lenSq = dx * dx + dz * dz
-  if (lenSq === 0) return 0
-  const px = position[0] - sx
-  const pz = position[2] - sz
-  const t = (px * dx + pz * dz) / lenSq
-  return Math.max(0, Math.min(1, t))
-}
-
-export function registerPlaceItem(server: McpServer, bridge: SceneBridge): void {
+export function registerPlaceItem(
+  server: McpServer,
+  bridge: SceneBridge,
+  store?: SceneStore,
+): void {
   server.registerTool(
     'place_item',
     {
       title: 'Place item',
       description:
-        'Place a catalog item into the scene, attaching it to a wall, ceiling, or site. In headless mode the catalog is unavailable, so the asset payload is a placeholder — `status: "catalog_unavailable"` indicates this.',
+        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or the site for outdoor items.',
       inputSchema: placeItemInput,
       outputSchema: placeItemOutput,
     },
@@ -52,14 +42,22 @@ export function registerPlaceItem(server: McpServer, bridge: SceneBridge): void 
         throwMcpError(ErrorCode.InvalidParams, `Target node not found: ${targetNodeId}`)
       }
       const targetType = target.type
-      if (targetType !== 'wall' && targetType !== 'ceiling' && targetType !== 'site') {
+      if (
+        targetType !== 'level' &&
+        targetType !== 'slab' &&
+        targetType !== 'zone' &&
+        targetType !== 'wall' &&
+        targetType !== 'ceiling' &&
+        targetType !== 'site'
+      ) {
         throwMcpError(
           ErrorCode.InvalidRequest,
-          `Cannot place item on ${targetType}; target must be a wall, ceiling, or site`,
+          `Cannot place item on ${targetType}; target must be a level, slab, zone, wall, ceiling, or site`,
         )
       }
 
-      const baseAsset = {
+      const catalogAsset = findCatalogItem(catalogItemId)
+      const baseAsset = catalogAsset ?? {
         id: catalogItemId,
         name: catalogItemId,
         category: 'unknown',
@@ -71,28 +69,43 @@ export function registerPlaceItem(server: McpServer, bridge: SceneBridge): void 
         scale: [1, 1, 1] as [number, number, number],
       }
 
-      const wallExtras: { wallId: string; wallT: number } | Record<string, never> =
-        targetType === 'wall'
-          ? {
-              wallId: targetNodeId,
-              wallT: computeWallT(
-                (target as { start: [number, number] }).start,
-                (target as { end: [number, number] }).end,
-                position as [number, number, number],
-              ),
-            }
-          : {}
+      const requestedPosition = position as [number, number, number]
+      const parentId =
+        targetType === 'slab' || targetType === 'zone'
+          ? bridge.resolveLevelId(targetNodeId as AnyNodeId)
+          : targetNodeId
+
+      if (!parentId) {
+        throwMcpError(
+          ErrorCode.InvalidParams,
+          `Could not resolve a level parent for target ${targetNodeId}`,
+        )
+      }
+
+      const wallExtras: { wallId: string; wallT: number } | Record<string, never> = {}
+      let itemPosition = requestedPosition
+
+      if (targetType === 'wall') {
+        const localX = projectWorldPointToWallLocalX(target, requestedPosition)
+        const length = wallLength(target)
+        itemPosition = [localX, requestedPosition[1], 0]
+        Object.assign(wallExtras, {
+          wallId: targetNodeId,
+          wallT: length === 0 ? 0 : localX / length,
+        })
+      }
 
       const item = ItemNode.parse({
-        position: position as [number, number, number],
+        position: itemPosition,
         rotation: [0, rotation ?? 0, 0],
         asset: baseAsset,
         ...wallExtras,
       })
-      const id = bridge.createNode(item, targetNodeId as AnyNodeId)
+      const id = bridge.createNode(item, parentId as AnyNodeId)
+      await publishLiveSceneSnapshot(bridge, store, 'place_item')
       const payload = {
         itemId: id as string,
-        status: 'catalog_unavailable',
+        status: catalogAsset ? 'ok' : 'catalog_unavailable',
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

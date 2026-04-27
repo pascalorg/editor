@@ -25,6 +25,15 @@ export interface SceneWithGraph extends SceneMeta {
   graph: SceneGraph
 }
 
+export interface SceneEvent {
+  eventId: number
+  sceneId: SceneId
+  version: number
+  kind: string
+  createdAt: string
+  graph: SceneGraph
+}
+
 export interface SceneSaveOptions {
   id?: SceneId
   name: string
@@ -46,6 +55,18 @@ export interface SceneMutateOptions {
   expectedVersion?: number
 }
 
+export interface SceneEventAppendOptions {
+  sceneId: SceneId
+  version: number
+  kind: string
+  graph: SceneGraph
+}
+
+export interface SceneEventListOptions {
+  afterEventId?: number
+  limit?: number
+}
+
 export interface SceneStore {
   readonly backend: 'sqlite'
   save(opts: SceneSaveOptions): Promise<SceneMeta>
@@ -53,6 +74,8 @@ export interface SceneStore {
   list(opts?: SceneListOptions): Promise<SceneMeta[]>
   delete(id: SceneId, opts?: SceneMutateOptions): Promise<boolean>
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
+  appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
+  listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>
 }
 
 export class SceneNotFoundError extends Error {

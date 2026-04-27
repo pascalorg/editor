@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
 
 const PREAMBLE = [
   'You are iterating on an existing Pascal scene based on user feedback.',
@@ -9,7 +10,10 @@ const PREAMBLE = [
   '  - Prefer updates over create+delete pairs when a field change will do.',
   '  - Do not re-create nodes that already exist.',
   '  - Do not touch nodes that are unrelated to the feedback.',
+  '  - Prefer semantic tools such as create_room, add_door, add_window, furnish_room, and place_item when they match the request.',
   '  - Bundle related mutations into a single `apply_patch` call so they share one undo step.',
+  '  - For multi-room changes, call verify_scene after the mutation and fix reported issues.',
+  SCENE_DESIGN_GUIDANCE,
   '  - Respond ONLY with tool calls. No prose.',
 ].join('\n')
 

@@ -13,6 +13,7 @@ import {
 import { z } from 'zod'
 import type { SceneBridge } from '../../bridge/scene-bridge'
 import type { SceneStore } from '../../storage/types'
+import { appendLiveSceneEvent } from '../live-sync'
 
 /**
  * Input shape for the `photo_to_scene` orchestrator. `image` matches the
@@ -378,6 +379,8 @@ export function registerPhotoToScene(
           name,
           graph,
         })
+        bridge.setActiveScene(meta)
+        await appendLiveSceneEvent(store, meta.id, meta.version, 'photo_to_scene', graph)
         const payload: {
           sceneId: string
           url: string
@@ -411,6 +414,7 @@ export function registerPhotoToScene(
         confidence: vision.confidence,
         graph,
       }
+      bridge.clearActiveScene()
       if (notes) payload.notes = notes
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

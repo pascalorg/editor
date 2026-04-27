@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { SceneBridge } from '../../bridge/scene-bridge'
 import { type SceneStore, SceneVersionConflictError } from '../../storage/types'
 import { ErrorCode, throwMcpError } from '../errors'
+import { appendLiveSceneEvent } from '../live-sync'
 
 export const saveSceneInput = {
   id: z.string().min(1).max(64).optional(),
@@ -103,6 +104,10 @@ export function registerSaveScene(server: McpServer, bridge: SceneBridge, store:
           ...(thumbnail !== undefined ? { thumbnailUrl: thumbnail } : {}),
           ...(expectedVersion !== undefined ? { expectedVersion } : {}),
         })
+        await appendLiveSceneEvent(store, meta.id, meta.version, 'save_scene', sceneGraph)
+        if (includeCurrentScene) {
+          bridge.setActiveScene(meta)
+        }
         const payload = {
           id: meta.id,
           name: meta.name,

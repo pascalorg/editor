@@ -6,6 +6,7 @@ import type { AnyNode } from '@pascal-app/core/schema'
 import { type AnyNodeId, AnyNode as AnyNodeSchema, type AnyNodeType } from '@pascal-app/core/schema'
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
+import type { SceneMeta } from '../storage/types'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
 export type ValidationResult = { valid: boolean; errors: ValidationError[] }
@@ -14,6 +15,10 @@ export type CreatePatch = { op: 'create'; node: AnyNode; parentId?: AnyNodeId }
 export type UpdatePatch = { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
 export type DeletePatch = { op: 'delete'; id: AnyNodeId; cascade?: boolean }
 export type Patch = CreatePatch | UpdatePatch | DeletePatch
+export type ActiveSceneMeta = Pick<
+  SceneMeta,
+  'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version'
+>
 
 /**
  * Headless bridge to the `@pascal-app/core` Zustand store.
@@ -23,6 +28,31 @@ export type Patch = CreatePatch | UpdatePatch | DeletePatch
  * `flushDirty()` for observability.
  */
 export class SceneBridge {
+  private activeScene: ActiveSceneMeta | null = null
+
+  /**
+   * Scene identity currently bound to this bridge. MCP tools use this to know
+   * which editor scene should receive live events after mutations.
+   */
+  setActiveScene(meta: ActiveSceneMeta): void {
+    this.activeScene = {
+      id: meta.id,
+      name: meta.name,
+      projectId: meta.projectId,
+      ownerId: meta.ownerId,
+      thumbnailUrl: meta.thumbnailUrl,
+      version: meta.version,
+    }
+  }
+
+  getActiveScene(): ActiveSceneMeta | null {
+    return this.activeScene
+  }
+
+  clearActiveScene(): void {
+    this.activeScene = null
+  }
+
   /** Load initial state; if empty, creates default Site → Building → Level. */
   loadDefault(): void {
     useScene.getState().loadScene()

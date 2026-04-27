@@ -3,7 +3,9 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ZoneNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneStore } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
+import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
 export const setZoneInput = {
@@ -17,7 +19,7 @@ export const setZoneOutput = {
   zoneId: z.string(),
 }
 
-export function registerSetZone(server: McpServer, bridge: SceneBridge): void {
+export function registerSetZone(server: McpServer, bridge: SceneBridge, store?: SceneStore): void {
   server.registerTool(
     'set_zone',
     {
@@ -45,6 +47,7 @@ export function registerSetZone(server: McpServer, bridge: SceneBridge): void {
         metadata: properties ?? {},
       })
       const id = bridge.createNode(zone, levelId as AnyNodeId)
+      await publishLiveSceneSnapshot(bridge, store, 'set_zone')
 
       const payload = { zoneId: id as string }
       return {
