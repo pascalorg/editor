@@ -4137,6 +4137,7 @@ const FloorplanNodeLayer = memo(function FloorplanNodeLayer({
   palette,
   selectedIdSet,
   stairEntries,
+  unit,
 }: {
   canFocusItems: boolean
   canFocusStairs: boolean
@@ -4161,12 +4162,15 @@ const FloorplanNodeLayer = memo(function FloorplanNodeLayer({
   palette: FloorplanPalette
   selectedIdSet: ReadonlySet<string>
   stairEntries: FloorplanStairEntry[]
+  unit: 'metric' | 'imperial'
 }) {
   if (itemEntries.length === 0 && stairEntries.length === 0) {
     return null
   }
 
-  const itemNodes = itemEntries.map(({ item, points, polygon }) => {
+  const itemNodes = itemEntries.map((itemEntry) => {
+    const { item, points, polygon } = itemEntry
+    const itemDimensionMeasurements = getItemDimensionMeasurementOverlays(itemEntry, unit)
     const isSelected = selectedIdSet.has(item.id)
     const isHighlighted = highlightedIdSet.has(item.id)
     const isHovered = hoveredItemId === item.id
@@ -4309,6 +4313,13 @@ const FloorplanNodeLayer = memo(function FloorplanNodeLayer({
             y2={toSvgY(diagonalBEnd.y)}
           />
         )}
+        {itemDimensionMeasurements.length > 0 ? (
+          <FloorplanMeasurementsLayer
+            className="item-dimension-measurement"
+            measurements={itemDimensionMeasurements}
+            palette={palette}
+          />
+        ) : null}
       </g>
     )
   })
@@ -6776,15 +6787,6 @@ export function FloorplanPanel() {
     isFenceEndpointMoveActive ||
     isFloorItemBuildActive ||
     isFloorItemMoveActive
-  const itemPlacementDimensionMeasurements = useMemo(() => {
-    if (!isItemPlacementPreviewActive) {
-      return [] as LinearMeasurementOverlay[]
-    }
-
-    return floorplanItemEntries.flatMap((itemEntry) =>
-      getItemDimensionMeasurementOverlays(itemEntry, unit),
-    )
-  }, [floorplanItemEntries, isItemPlacementPreviewActive, unit])
   const floorplanPreviewStairSegment = useMemo(
     () =>
       StairSegmentNodeSchema.parse({
@@ -11988,18 +11990,13 @@ export function FloorplanPanel() {
                 palette={palette}
                 selectedIdSet={selectedIdSet}
                 stairEntries={renderedFloorplanStairEntries}
+                unit={unit}
               />
 
               <FloorplanRoofLayer
                 highlightedIdSet={highlightedFloorplanIdSet}
                 roofEntries={floorplanRoofEntries}
                 selectedIdSet={selectedIdSet}
-              />
-
-              <FloorplanMeasurementsLayer
-                className="item-dimension-measurement"
-                measurements={itemPlacementDimensionMeasurements}
-                palette={palette}
               />
 
               <FloorplanMeasurementsLayer

@@ -17,8 +17,8 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { createPortal, useFrame } from '@react-three/fiber'
+import { useEffect, useRef, useState } from 'react'
 import {
   BoxGeometry,
   Box3,
@@ -221,6 +221,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const previewBoundsSignatureRef = useRef<string | null>(null)
   const meshPreviewAppliedRef = useRef(false)
   const dimensionBoundsRef = useRef<PreviewBounds | null>(null)
+  const [measurementTargetState, setMeasurementTargetState] = useState<{
+    id: string
+    object: Object3D
+  } | null>(null)
 
   // Store config callbacks in refs to avoid re-running effect when they change
   const configRef = useRef(config)
@@ -1172,6 +1176,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (!draftNode.current) return
     const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
+    if (
+      measurementTargetState?.id !== draftNode.current.id ||
+      measurementTargetState.object !== mesh
+    ) {
+      setMeasurementTargetState({ id: draftNode.current.id, object: mesh })
+    }
 
     if (!meshPreviewAppliedRef.current) {
       const previewBounds = getPreviewBoundsFromObject(mesh)
@@ -1207,10 +1217,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           draftNode.current.rotation,
         )
         mesh.position.y = slabElevation
-        // Cursor group is at the world root (not inside a level group), so add the
-        // level group's current world Y to convert from level-local to world space.
-        const levelGroup = sceneRegistry.nodes.get(levelId as AnyNodeId)
-        cursorGroupRef.current.position.y = slabElevation + (levelGroup?.position.y ?? 0)
       }
     }
   })
@@ -1247,11 +1253,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     initialDimensionBounds.center[2] - initialDimensionBounds.dimensions[2] / 2,
   ]
 
-  return (
-    <group ref={cursorGroupRef}>
-      <lineSegments layers={EDITOR_LAYER} material={edgeMaterial} ref={edgesRef} renderOrder={999}>
-        <edgesGeometry args={[initialBoxGeometry]} />
-      </lineSegments>
+  const measurementTarget =
+    draftNode.current && measurementTargetState?.id === draftNode.current.id
+      ? measurementTargetState.object
+      : null
+  const measurementContent = (
+    <>
       <lineSegments
         layers={EDITOR_LAYER}
         material={measurementMaterial}
@@ -1330,6 +1337,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           {heightLabel}
         </div>
       </Html>
+    </>
+  )
+
+  return (
+    <group ref={cursorGroupRef}>
+      <lineSegments layers={EDITOR_LAYER} material={edgeMaterial} ref={edgesRef} renderOrder={999}>
+        <edgesGeometry args={[initialBoxGeometry]} />
+      </lineSegments>
+      {measurementTarget ? createPortal(measurementContent, measurementTarget) : measurementContent}
       <mesh
         geometry={basePlaneGeometry}
         layers={EDITOR_LAYER}
