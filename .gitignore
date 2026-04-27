@@ -45,3 +45,6 @@ yarn-error.log*
 /.playwright-mcp
 og-test
 .env*.local
+
+# Worktrees
+.worktrees

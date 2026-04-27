@@ -1,5 +1,12 @@
-import type { AnyNode, AnyNodeId, CeilingNode, LevelNode, SlabNode, StairNode, StairSegmentNode } from '../../schema'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CeilingNode,
+  SlabNode,
+  StairNode,
+  StairSegmentNode,
+} from '../../schema'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
 type Point2D = [number, number]
@@ -58,7 +65,8 @@ function metadataEqual(left: SurfaceHoleMetadata[], right: SurfaceHoleMetadata[]
   if (left.length !== right.length) return false
   return left.every(
     (entry, index) =>
-      entry.source === right[index]?.source && (entry.stairId ?? null) === (right[index]?.stairId ?? null),
+      entry.source === right[index]?.source &&
+      (entry.stairId ?? null) === (right[index]?.stairId ?? null),
   )
 }
 
@@ -178,7 +186,10 @@ function getResolvedStairLevelIds(stair: StairNode, nodes: Record<string, AnyNod
 function resolveStraightSegments(stair: StairNode, nodes: Record<string, AnyNode>) {
   return (stair.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
-    .filter((segment): segment is StairSegmentNode => segment?.type === 'stair-segment' && segment.visible !== false)
+    .filter(
+      (segment): segment is StairSegmentNode =>
+        segment?.type === 'stair-segment' && segment.visible !== false,
+    )
 }
 
 function toWorldPlanPoint(stair: StairNode, localX: number, localZ: number): Point2D {
@@ -186,7 +197,10 @@ function toWorldPlanPoint(stair: StairNode, localX: number, localZ: number): Poi
   return [stair.position[0] + worldX, stair.position[2] + worldZ]
 }
 
-function getStraightStairLayouts(stair: StairNode, nodes: Record<string, AnyNode>): StraightStairLayout[] {
+function getStraightStairLayouts(
+  stair: StairNode,
+  nodes: Record<string, AnyNode>,
+): StraightStairLayout[] {
   const segments = resolveStraightSegments(stair, nodes)
   const transforms = computeSegmentTransforms(segments)
 
@@ -204,7 +218,10 @@ function getStraightStairLayouts(stair: StairNode, nodes: Record<string, AnyNode
   })
 }
 
-function getStraightSegmentFootprintPolygon(stair: StairNode, layout: StraightStairLayout): Point2D[] {
+function getStraightSegmentFootprintPolygon(
+  stair: StairNode,
+  layout: StraightStairLayout,
+): Point2D[] {
   return getStraightSegmentSlicePolygon(stair, layout, 0, layout.segment.length)
 }
 
@@ -242,11 +259,16 @@ function getStraightSegmentSlicePolygon(
   startAlong: number,
   endAlong: number,
 ): Point2D[] {
-  return getStraightSegmentLocalSlicePolygon(layout, startAlong, endAlong).map(([x, z]) => toWorldPlanPoint(stair, x, z))
+  return getStraightSegmentLocalSlicePolygon(layout, startAlong, endAlong).map(([x, z]) =>
+    toWorldPlanPoint(stair, x, z),
+  )
 }
 
 function getStraightFlightOpeningDepth(stair: StairNode, segment: StairSegmentNode) {
-  const treadDepth = Math.max(0.2, segment.length / Math.max(segment.stepCount || stair.stepCount || 10, 1))
+  const treadDepth = Math.max(
+    0.2,
+    segment.length / Math.max(segment.stepCount || stair.stepCount || 10, 1),
+  )
   return Math.min(segment.length, Math.max(treadDepth * 6, segment.length * 0.62, 1.8))
 }
 
@@ -259,6 +281,36 @@ function polygonArea(points: Point2D[]) {
     area += current[0] * next[1] - next[0] * current[1]
   }
   return area / 2
+}
+
+function pointOnSegment(point: Point2D, a: Point2D, b: Point2D, tolerance = 1e-6) {
+  const cross = (point[1] - a[1]) * (b[0] - a[0]) - (point[0] - a[0]) * (b[1] - a[1])
+  if (Math.abs(cross) > tolerance) return false
+  const dot = (point[0] - a[0]) * (b[0] - a[0]) + (point[1] - a[1]) * (b[1] - a[1])
+  if (dot < -tolerance) return false
+  const lenSq = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2
+  return dot <= lenSq + tolerance
+}
+
+function pointInPolygon(point: Point2D, polygon: Point2D[]) {
+  if (polygon.length < 3) return false
+  let inside = false
+  const [x, z] = point
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]!
+    const b = polygon[j]!
+    if (pointOnSegment(point, a, b)) return true
+    const intersects =
+      a[1] > z !== b[1] > z && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1]) + a[0]
+    if (intersects) inside = !inside
+  }
+
+  return inside
+}
+
+function polygonContainsPolygon(outer: Point2D[], inner: Point2D[]) {
+  return inner.every((point) => pointInPolygon(point, outer))
 }
 
 function getAxisAlignedRectFromPolygon(polygon: Point2D[]): AxisAlignedRect | null {
@@ -289,12 +341,16 @@ function expandRect(rect: AxisAlignedRect, offset: number): AxisAlignedRect {
 function buildUnionPolygonsFromRects(rects: AxisAlignedRect[]): Point2D[][] {
   if (rects.length === 0) return []
 
-  const xs = Array.from(new Set(rects.flatMap((rect) => [rect.minX, rect.maxX]).map((value) => Number(value.toFixed(6))))).sort(
-    (a, b) => a - b,
-  )
-  const zs = Array.from(new Set(rects.flatMap((rect) => [rect.minZ, rect.maxZ]).map((value) => Number(value.toFixed(6))))).sort(
-    (a, b) => a - b,
-  )
+  const xs = Array.from(
+    new Set(
+      rects.flatMap((rect) => [rect.minX, rect.maxX]).map((value) => Number(value.toFixed(6))),
+    ),
+  ).sort((a, b) => a - b)
+  const zs = Array.from(
+    new Set(
+      rects.flatMap((rect) => [rect.minZ, rect.maxZ]).map((value) => Number(value.toFixed(6))),
+    ),
+  ).sort((a, b) => a - b)
   if (xs.length < 2 || zs.length < 2) return []
 
   const occupied = new Set<string>()
@@ -393,13 +449,17 @@ function getCurvedOpeningPolygon(stair: StairNode): Point2D[] {
   for (let index = 0; index <= segmentCount; index++) {
     const t = index / segmentCount
     const angle = startAngle + (endAngle - startAngle) * t
-    outerPoints.push(toWorldPlanPoint(stair, Math.cos(angle) * outerRadius, Math.sin(angle) * outerRadius))
+    outerPoints.push(
+      toWorldPlanPoint(stair, Math.cos(angle) * outerRadius, Math.sin(angle) * outerRadius),
+    )
   }
 
   for (let index = segmentCount; index >= 0; index--) {
     const t = index / segmentCount
     const angle = startAngle + (endAngle - startAngle) * t
-    innerPoints.push(toWorldPlanPoint(stair, Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius))
+    innerPoints.push(
+      toWorldPlanPoint(stair, Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius),
+    )
   }
 
   return [...outerPoints, ...innerPoints]
@@ -440,7 +500,11 @@ function getStraightOpeningPolygonsForSurface(
       if (Math.abs(targetElevation - segmentTopElevation) <= targetThreshold) {
         const openingDepth = getStraightFlightOpeningDepth(stair, segment)
         const flightRect = getAxisAlignedRectFromPolygon(
-          getStraightSegmentLocalSlicePolygon(layout, Math.max(0, segment.length - openingDepth), segment.length),
+          getStraightSegmentLocalSlicePolygon(
+            layout,
+            Math.max(0, segment.length - openingDepth),
+            segment.length,
+          ),
         )
         if (flightRect) openingRects.push(expandRect(flightRect, openingOffset))
       }
@@ -452,7 +516,9 @@ function getStraightOpeningPolygonsForSurface(
     }
 
     const landingRects: AxisAlignedRect[] = []
-    const landingRect = getAxisAlignedRectFromPolygon(getStraightSegmentLocalSlicePolygon(layout, 0, layout.segment.length))
+    const landingRect = getAxisAlignedRectFromPolygon(
+      getStraightSegmentLocalSlicePolygon(layout, 0, layout.segment.length),
+    )
     if (landingRect) landingRects.push(expandRect(landingRect, openingOffset))
     const previous = layouts[index - 1]
     if (previous?.segment.segmentType === 'stair') {
@@ -556,10 +622,18 @@ function getTargetCeilingElevationForStair(
     return ceiling.height ?? DEFAULT_WALL_HEIGHT
   }
 
-  return (ceilingLevel - fromLevel) * DEFAULT_WALL_HEIGHT + (ceiling.height ?? DEFAULT_WALL_HEIGHT) - (stair.position[1] ?? 0)
+  return (
+    (ceilingLevel - fromLevel) * DEFAULT_WALL_HEIGHT +
+    (ceiling.height ?? DEFAULT_WALL_HEIGHT) -
+    (stair.position[1] ?? 0)
+  )
 }
 
-function shouldApplyStairToSlab(stair: StairNode, slabLevelId: string, nodes: Record<string, AnyNode>) {
+function shouldApplyStairToSlab(
+  stair: StairNode,
+  slabLevelId: string,
+  nodes: Record<string, AnyNode>,
+) {
   const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
   const fromLevel = getLevelNumber(fromLevelId, nodes)
   const toLevel = getLevelNumber(toLevelId, nodes)
@@ -578,7 +652,11 @@ function shouldApplyStairToSlab(stair: StairNode, slabLevelId: string, nodes: Re
   return slabLevel > minLevel && slabLevel <= maxLevel
 }
 
-function shouldApplyStairToCeiling(stair: StairNode, ceilingLevelId: string, nodes: Record<string, AnyNode>) {
+function shouldApplyStairToCeiling(
+  stair: StairNode,
+  ceilingLevelId: string,
+  nodes: Record<string, AnyNode>,
+) {
   const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
   const fromLevel = getLevelNumber(fromLevelId, nodes)
   const toLevel = getLevelNumber(toLevelId, nodes)
@@ -598,16 +676,22 @@ function shouldApplyStairToCeiling(stair: StairNode, ceilingLevelId: string, nod
 }
 
 export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
-  const stairs = Object.values(nodes).filter((node): node is StairNode => node.type === 'stair' && node.visible !== false)
+  const stairs = Object.values(nodes).filter(
+    (node): node is StairNode => node.type === 'stair' && node.visible !== false,
+  )
   const slabs = Object.values(nodes).filter((node): node is SlabNode => node.type === 'slab')
-  const ceilings = Object.values(nodes).filter((node): node is CeilingNode => node.type === 'ceiling')
+  const ceilings = Object.values(nodes).filter(
+    (node): node is CeilingNode => node.type === 'ceiling',
+  )
   const updates: Array<{ id: AnyNodeId; data: Partial<SlabNode | CeilingNode> }> = []
 
   for (const slab of slabs) {
     const slabLevelId = resolveLevelId(slab, nodes)
     const existingHoles = slab.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, slab.holeMetadata)
-    const manualHoles = existingHoles.filter((_hole, index) => existingMetadata[index]?.source !== 'stair')
+    const manualHoles = existingHoles.filter(
+      (_hole, index) => existingMetadata[index]?.source !== 'stair',
+    )
     const manualMetadata = existingMetadata
       .filter((entry) => entry.source !== 'stair')
       .map((entry) => ({ ...entry }))
@@ -633,11 +717,15 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           },
         })),
       )
+      .filter((hole) => polygonContainsPolygon(slab.polygon, hole.polygon))
 
     const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
     const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]
 
-    if (!polygonsEqual(existingHoles, nextHoles) || !metadataEqual(existingMetadata, nextMetadata)) {
+    if (
+      !polygonsEqual(existingHoles, nextHoles) ||
+      !metadataEqual(existingMetadata, nextMetadata)
+    ) {
       updates.push({
         id: slab.id,
         data: {
@@ -652,7 +740,9 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const ceilingLevelId = resolveLevelId(ceiling, nodes)
     const existingHoles = ceiling.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, ceiling.holeMetadata)
-    const manualHoles = existingHoles.filter((_hole, index) => existingMetadata[index]?.source !== 'stair')
+    const manualHoles = existingHoles.filter(
+      (_hole, index) => existingMetadata[index]?.source !== 'stair',
+    )
     const manualMetadata = existingMetadata
       .filter((entry) => entry.source !== 'stair')
       .map((entry) => ({ ...entry }))
@@ -678,11 +768,15 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           },
         })),
       )
+      .filter((hole) => polygonContainsPolygon(ceiling.polygon, hole.polygon))
 
     const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
     const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]
 
-    if (!polygonsEqual(existingHoles, nextHoles) || !metadataEqual(existingMetadata, nextMetadata)) {
+    if (
+      !polygonsEqual(existingHoles, nextHoles) ||
+      !metadataEqual(existingMetadata, nextMetadata)
+    ) {
       updates.push({
         id: ceiling.id,
         data: {
