@@ -360,7 +360,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
               point[1] === nextPolygon[index]?.[1],
           ))) &&
       ((nextBounds === null &&
-        (currentBounds === undefined || currentBounds === null || currentBounds === false)) ||
+        (currentBounds === undefined || currentBounds === null)) ||
         (nextBounds !== null &&
           Array.isArray(currentBounds?.min) &&
           Array.isArray(currentBounds?.max) &&

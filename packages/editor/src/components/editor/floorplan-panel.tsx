@@ -54,9 +54,12 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { useShallow } from 'zustand/react/shallow'
 import { FloorplanActionMenuLayer as Editor2dFloorplanActionMenuLayer } from '../editor-2d/floorplan-action-menu-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
+import {
+  FloorplanDuplicateHotkey,
+  FloorplanSiteKeyHandler,
+} from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import {
   FloorplanMeasurementsLayer,
@@ -73,18 +76,13 @@ import {
 import {
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
-  collectLevelDescendants as collectSharedLevelDescendants,
   getFloorplanWall as getSharedFloorplanWall,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   rotatePlanVector as rotateSharedPlanVector,
 } from '../../lib/floorplan'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
-import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
-import {
-  getFloorplanHitNodeId,
-  getFloorplanSelectionIdsInBounds as getSelectionIdsInBoundsFromTool,
-} from '../../lib/floorplan/selection-tool'
+import useEditor from '../../store/use-editor'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
@@ -103,13 +101,12 @@ import {
   WALL_GRID_STEP,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
-import { furnishTools } from '../ui/action-menu/furnish-tools'
-import { tools as structureTools } from '../ui/action-menu/structure-tools'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/primitives/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
-import { NodeActionMenu } from './node-action-menu'
+import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
+import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
+import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
+import { useFloorplanSceneData } from './use-floorplan-scene-data'
 
 const FALLBACK_VIEW_SIZE = 12
 const FLOORPLAN_PADDING = 2
@@ -129,7 +126,6 @@ const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
 const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_PANEL_LAYOUT_STORAGE_KEY = 'pascal-editor-floorplan-panel-layout'
 const EMPTY_WALL_MITER_DATA = calculateLevelMiters([])
-const DEFAULT_BUILDING_POSITION = [0, 0, 0] as const satisfies [number, number, number]
 const EDITOR_CURSOR = "url('/cursor.svg') 4 2, default"
 const FLOORPLAN_CURSOR_INDICATOR_LINE_HEIGHT = 18
 const FLOORPLAN_CURSOR_BADGE_OFFSET_X = 14
@@ -5249,304 +5245,6 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   )
 })
 
-type FloorplanSiteKeyHandlerProps = {
-  onRestoreGroundLevel: () => void
-}
-
-const FloorplanSiteKeyHandler = memo(function FloorplanSiteKeyHandler({
-  onRestoreGroundLevel,
-}: FloorplanSiteKeyHandlerProps) {
-  const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const phase = useEditor((state) => state.phase)
-  const setFloorplanSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      const isEditableTarget =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        Boolean(target?.isContentEditable)
-
-      if (
-        isEditableTarget ||
-        !isFloorplanHovered ||
-        phase !== 'site' ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.key.toLowerCase() !== 'v'
-      ) {
-        return
-      }
-
-      setFloorplanSelectionTool('click')
-      onRestoreGroundLevel()
-    }
-
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true)
-    }
-  }, [isFloorplanHovered, onRestoreGroundLevel, phase, setFloorplanSelectionTool])
-
-  return null
-})
-
-type FloorplanDuplicateHotkeyProps = {
-  hasDuplicatable: boolean
-  onDuplicateSelected: () => void
-}
-
-const FloorplanDuplicateHotkey = memo(function FloorplanDuplicateHotkey({
-  hasDuplicatable,
-  onDuplicateSelected,
-}: FloorplanDuplicateHotkeyProps) {
-  const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'c') {
-        return
-      }
-
-      if (!(isFloorplanHovered && hasDuplicatable)) {
-        return
-      }
-
-      const target = event.target as HTMLElement | null
-      const isEditableTarget =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        Boolean(target?.isContentEditable)
-
-      if (isEditableTarget) {
-        return
-      }
-
-      event.preventDefault()
-      onDuplicateSelected()
-    }
-
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true)
-    }
-  }, [hasDuplicatable, isFloorplanHovered, onDuplicateSelected])
-
-  return null
-})
-
-type FloorplanActionMenuHandler = (event: ReactMouseEvent<HTMLButtonElement>) => void
-
-type FloorplanActionMenuEntry = {
-  position: SvgPoint | null
-  onDelete: FloorplanActionMenuHandler
-  onMove: FloorplanActionMenuHandler
-  onDuplicate?: FloorplanActionMenuHandler
-}
-
-type FloorplanActionMenuLayerProps = {
-  item: FloorplanActionMenuEntry
-  wall: FloorplanActionMenuEntry
-  fence: FloorplanActionMenuEntry
-  slab: FloorplanActionMenuEntry
-  ceiling: FloorplanActionMenuEntry
-  opening: FloorplanActionMenuEntry
-  stair: FloorplanActionMenuEntry
-  roof: FloorplanActionMenuEntry
-}
-
-const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
-  item,
-  wall,
-  fence,
-  slab,
-  ceiling,
-  opening,
-  stair,
-  roof,
-}: FloorplanActionMenuLayerProps) {
-  const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const movingNode = useEditor((state) => state.movingNode)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
-
-  if (!isFloorplanHovered || movingNode || movingFenceEndpoint || curvingWall || curvingFence) {
-    return null
-  }
-
-  const entries: FloorplanActionMenuEntry[] = [
-    item,
-    wall,
-    fence,
-    slab,
-    ceiling,
-    opening,
-    stair,
-    roof,
-  ]
-
-  return (
-    <>
-      {entries.map((entry, index) =>
-        entry.position ? (
-          <div
-            className="absolute z-30"
-            key={index}
-            style={{
-              left: entry.position.x,
-              top: entry.position.y,
-              transform: `translate(-50%, calc(-100% - ${FLOORPLAN_ACTION_MENU_OFFSET_Y}px))`,
-            }}
-          >
-            <NodeActionMenu
-              onDelete={entry.onDelete}
-              onDuplicate={entry.onDuplicate}
-              onMove={entry.onMove}
-              onPointerDown={(event) => event.stopPropagation()}
-              onPointerUp={(event) => event.stopPropagation()}
-            />
-          </div>
-        ) : null,
-      )}
-    </>
-  )
-})
-
-type FloorplanCursorIndicatorOverlayProps = {
-  cursorPosition: SvgPoint | null
-  cursorAnchorPosition: SvgPoint | null
-  floorplanSelectionTool: FloorplanSelectionTool
-  movingOpeningType: 'door' | 'window' | null
-  isPanning: boolean
-  cursorColor: string
-}
-
-const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndicatorOverlay({
-  cursorPosition,
-  cursorAnchorPosition,
-  floorplanSelectionTool,
-  movingOpeningType,
-  isPanning,
-  cursorColor,
-}: FloorplanCursorIndicatorOverlayProps) {
-  const mode = useEditor((state) => state.mode)
-  const tool = useEditor((state) => state.tool)
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const catalogCategory = useEditor((state) => state.catalogCategory)
-
-  const activeFloorplanToolConfig = useMemo(() => {
-    if (movingOpeningType) {
-      return structureTools.find((entry) => entry.id === movingOpeningType) ?? null
-    }
-
-    if (mode !== 'build' || !tool) {
-      return null
-    }
-
-    if (tool === 'item' && catalogCategory) {
-      return furnishTools.find((entry) => entry.catalogCategory === catalogCategory) ?? null
-    }
-
-    return structureTools.find((entry) => entry.id === tool) ?? null
-  }, [catalogCategory, mode, movingOpeningType, tool])
-
-  const indicator = useMemo<FloorplanCursorIndicator | null>(() => {
-    if (activeFloorplanToolConfig) {
-      return { kind: 'asset', iconSrc: activeFloorplanToolConfig.iconSrc }
-    }
-
-    if (mode === 'select' && floorplanSelectionTool === 'marquee' && structureLayer !== 'zones') {
-      return { kind: 'icon', icon: 'mdi:select-drag' }
-    }
-
-    if (mode === 'delete') {
-      return { kind: 'icon', icon: 'mdi:trash-can-outline' }
-    }
-
-    return null
-  }, [activeFloorplanToolConfig, floorplanSelectionTool, mode, structureLayer])
-
-  const position = mode === 'delete' ? cursorPosition : cursorAnchorPosition
-
-  if (!(indicator && position) || isPanning) {
-    return null
-  }
-
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute z-20"
-      style={{ left: position.x, top: position.y }}
-    >
-      {mode === 'delete' ? (
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-zinc-900/95 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.3),0_4px_8px_-4px_rgba(0,0,0,0.2)]"
-          style={{
-            boxShadow: `0 8px 16px -4px rgba(0,0,0,0.3), 0 4px 8px -4px rgba(0,0,0,0.2), 0 0 18px ${cursorColor}22`,
-            transform: `translate(${FLOORPLAN_CURSOR_BADGE_OFFSET_X}px, ${FLOORPLAN_CURSOR_BADGE_OFFSET_Y}px)`,
-          }}
-        >
-          {indicator.kind === 'asset' ? (
-            <img
-              alt=""
-              aria-hidden="true"
-              className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-              src={indicator.iconSrc}
-            />
-          ) : (
-            <Icon
-              aria-hidden="true"
-              className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-              color={cursorColor}
-              height={18}
-              icon={indicator.icon}
-              width={18}
-            />
-          )}
-        </div>
-      ) : (
-        <>
-          <div
-            className="absolute top-0 left-1/2 w-px -translate-x-1/2 -translate-y-full"
-            style={{
-              backgroundColor: cursorColor,
-              boxShadow: `0 0 12px ${cursorColor}55`,
-              height: FLOORPLAN_CURSOR_INDICATOR_LINE_HEIGHT,
-            }}
-          />
-          <div
-            className="absolute top-0 left-1/2 flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-zinc-900/95 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.3),0_4px_8px_-4px_rgba(0,0,0,0.2)]"
-            style={{
-              transform: `translate(-50%, calc(-100% - ${FLOORPLAN_CURSOR_INDICATOR_LINE_HEIGHT}px))`,
-            }}
-          >
-            {indicator.kind === 'asset' ? (
-              <img
-                alt=""
-                aria-hidden="true"
-                className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-                src={indicator.iconSrc}
-              />
-            ) : (
-              <Icon
-                aria-hidden="true"
-                className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-                color="white"
-                height={18}
-                icon={indicator.icon}
-                width={18}
-              />
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  )
-})
-
 export function FloorplanPanel() {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -5600,204 +5298,24 @@ export function FloorplanPanel() {
   const tool = useEditor((state) => state.tool)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
-  const levelNode = useScene((state) =>
-    levelId ? (state.nodes[levelId] as LevelNode | undefined) : undefined,
-  )
-  const currentBuildingId =
-    levelNode?.type === 'level' && levelNode.parentId
-      ? (levelNode.parentId as BuildingNode['id'])
-      : (buildingId as BuildingNode['id'] | null)
-  const buildingRotationY = useScene((state) => {
-    if (!currentBuildingId) return 0
-    const node = state.nodes[currentBuildingId]
-    return node?.type === 'building' ? (node.rotation[1] ?? 0) : 0
-  })
-  const buildingPosition = useScene((state) => {
-    if (!currentBuildingId) {
-      return DEFAULT_BUILDING_POSITION
-    }
-
-    const node = state.nodes[currentBuildingId]
-    return node?.type === 'building'
-      ? (node.position as [number, number, number])
-      : DEFAULT_BUILDING_POSITION
-  })
+  const {
+    buildingPosition,
+    buildingRotationY,
+    ceilings,
+    currentBuildingId,
+    fences,
+    floorplanLevels,
+    levelDescendantNodes,
+    levelGuides,
+    levelNode,
+    openings,
+    roofs,
+    site,
+    slabs,
+    walls,
+    zones,
+  } = useFloorplanSceneData({ buildingId, levelId })
   const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
-  const site = useScene((state) => {
-    for (const rootNodeId of state.rootNodeIds) {
-      const node = state.nodes[rootNodeId]
-      if (node?.type === 'site') {
-        return node as SiteNode
-      }
-    }
-
-    return null
-  })
-  const floorplanLevels = useScene(
-    useShallow((state) => {
-      if (!currentBuildingId) {
-        return [] as LevelNode[]
-      }
-
-      const buildingNode = state.nodes[currentBuildingId]
-      if (!buildingNode || buildingNode.type !== 'building') {
-        return [] as LevelNode[]
-      }
-
-      return buildingNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is LevelNode => node?.type === 'level')
-        .sort((a, b) => a.level - b.level)
-    }),
-  )
-  const walls = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as WallNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as WallNode[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is WallNode => node?.type === 'wall')
-    }),
-  )
-  const openings = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as OpeningNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as OpeningNode[]
-      }
-
-      const nextWalls = nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is WallNode => node?.type === 'wall')
-
-      return nextWalls.flatMap((wall) =>
-        wall.children
-          .map((childId) => state.nodes[childId])
-          .filter((node): node is OpeningNode => node?.type === 'window' || node?.type === 'door'),
-      )
-    }),
-  )
-  const fences = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as FenceNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as FenceNode[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is FenceNode => node?.type === 'fence')
-    }),
-  )
-  const roofs = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as RoofNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as RoofNode[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is RoofNode => node?.type === 'roof' && node.visible !== false)
-    }),
-  )
-  const slabs = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as SlabNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as SlabNode[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is SlabNode => node?.type === 'slab')
-    }),
-  )
-  const ceilings = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as CeilingNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as CeilingNode[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is CeilingNode => node?.type === 'ceiling')
-    }),
-  )
-  const levelGuides = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as GuideNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as GuideNode[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is GuideNode => node?.type === 'guide')
-    }),
-  )
-  const zones = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as ZoneNodeType[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as ZoneNodeType[]
-      }
-
-      return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
-        .filter((node): node is ZoneNodeType => node?.type === 'zone')
-    }),
-  )
-  const levelDescendantNodes = useScene(
-    useShallow((state) => {
-      if (!levelId) {
-        return [] as AnyNode[]
-      }
-
-      const nextLevelNode = state.nodes[levelId]
-      if (!nextLevelNode || nextLevelNode.type !== 'level') {
-        return [] as AnyNode[]
-      }
-
-      return collectSharedLevelDescendants(nextLevelNode, state.nodes as Record<string, AnyNode>)
-    }),
-  )
 
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [draftEnd, setDraftEnd] = useState<WallPlanPoint | null>(null)
@@ -5862,7 +5380,7 @@ export function FloorplanPanel() {
     if (structureLayer === 'zones' && floorplanSelectionTool === 'marquee') {
       setFloorplanSelectionTool('click')
     }
-  }, [floorplanSelectionTool, structureLayer])
+  }, [floorplanSelectionTool, setFloorplanSelectionTool, structureLayer])
 
   useEffect(() => {
     setIsMacPlatform(navigator.platform.toUpperCase().includes('MAC'))
@@ -9480,6 +8998,56 @@ export function FloorplanPanel() {
     },
     [clearDraft, draftStart],
   )
+  const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
+    ceilingPolygons,
+    displaySlabPolygons,
+    displayWallPolygons,
+    floorplanItemEntries,
+    floorplanOpeningHitTolerance,
+    floorplanRoofEntries,
+    floorplanStairEntries,
+    floorplanWallHitTolerance,
+    getOpeningCenterLine,
+    isFloorplanItemContextActive,
+    openingsPolygons,
+    phase,
+    toPoint2D,
+  })
+  const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({
+    activePolygonDraftPoints,
+    ceilingDraftPoints,
+    clearFencePlacementDraft,
+    clearRoofPlacementDraft,
+    emitFloorplanGridEvent,
+    fenceDraftStart,
+    fences,
+    findClosestWallPoint,
+    floorplanOpeningLocalY,
+    getSnappedFloorplanPoint,
+    handleCeilingPlacementPoint,
+    handleSlabPlacementPoint,
+    handleWallPlacementPoint,
+    handleZonePlacementPoint,
+    isCeilingBuildActive,
+    isFenceBuildActive,
+    isFloorplanGridInteractionActive,
+    isOpeningPlacementActive,
+    isPolygonBuildActive,
+    isRoofBuildActive,
+    isWallBuildActive,
+    isZoneBuildActive,
+    roofDraftStart,
+    setCursorPoint,
+    setFenceDraftEnd,
+    setFenceDraftStart,
+    setRoofDraftEnd,
+    setRoofDraftStart,
+    shiftPressed,
+    snapPolygonDraftPoint,
+    snapWallDraftPoint,
+    toPoint2D,
+    walls,
+  })
 
   const handleBackgroundClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -9492,145 +9060,41 @@ export function FloorplanPanel() {
         return
       }
 
-      if (isOpeningPlacementActive) {
-        const closest = findClosestWallPoint(planPoint, walls, {
-          canUseWall: (wall) => !isCurvedWall(wall),
-        })
-        if (closest) {
-          const dx = closest.wall.end[0] - closest.wall.start[0]
-          const dz = closest.wall.end[1] - closest.wall.start[1]
-          const length = Math.sqrt(dx * dx + dz * dz)
-          const distance = closest.t * length
-
-          emitter.emit('wall:click', {
-            node: closest.wall,
-            point: { x: closest.point[0], y: 0, z: closest.point[1] },
-            localPosition: [distance, floorplanOpeningLocalY, 0],
-            normal: closest.normal,
-            stopPropagation: () => {},
-          } as any)
-        }
+      if (handleBackgroundPlacementClick(planPoint, event, draftStart)) {
         return
-      }
-
-      if (isCeilingBuildActive) {
-        emitFloorplanGridEvent('click', planPoint, event)
-
-        const snappedPoint = snapPolygonDraftPoint({
-          point: planPoint,
-          start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
-          angleSnap: ceilingDraftPoints.length > 0 && !shiftPressed,
-        })
-
-        handleCeilingPlacementPoint(snappedPoint)
-        return
-      }
-
-      if (isRoofBuildActive) {
-        const snappedPoint = getSnappedFloorplanPoint(planPoint)
-        emitFloorplanGridEvent('click', snappedPoint, event)
-        setCursorPoint(snappedPoint)
-
-        if (!roofDraftStart) {
-          setRoofDraftStart(snappedPoint)
-          setRoofDraftEnd(snappedPoint)
-        } else {
-          clearRoofPlacementDraft()
-        }
-        return
-      }
-
-      if (isFenceBuildActive) {
-        emitFloorplanGridEvent('click', planPoint, event)
-
-        const snappedPoint = snapFenceDraftPoint({
-          point: planPoint,
-          walls,
-          fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: Boolean(fenceDraftStart) && !shiftPressed,
-        })
-
-        setCursorPoint(snappedPoint)
-
-        if (!fenceDraftStart) {
-          setFenceDraftStart(snappedPoint)
-          setFenceDraftEnd(snappedPoint)
-        } else if (getPlanPointDistance(toPoint2D(fenceDraftStart), toPoint2D(snappedPoint)) >= 0.01) {
-          clearFencePlacementDraft()
-        } else {
-          setFenceDraftEnd(snappedPoint)
-        }
-        return
-      }
-
-      if (isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('click', planPoint, event)
-        setCursorPoint(snappedPoint)
-        return
-      }
-
-      if (isPolygonBuildActive) {
-        const snappedPoint = snapPolygonDraftPoint({
-          point: planPoint,
-          start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
-          angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
-        })
-
-        if (isZoneBuildActive) {
-          handleZonePlacementPoint(snappedPoint)
-        } else {
-          handleSlabPlacementPoint(snappedPoint)
-        }
-        return
-      }
-
-      if (canSelectFloorplanZones) {
-        const zoneHit = visibleZonePolygons.find(({ polygon }) =>
-          isPointInsidePolygon(toPoint2D(planPoint), polygon),
-        )
-        if (zoneHit) {
-          setSelectedReferenceId(null)
-          setSelection({ zoneId: zoneHit.zone.id })
-          return
-        }
       }
 
       const modifierKeys = getSelectionModifierKeys(event)
 
-      if (canSelectElementFloorplanGeometry) {
-        const hitId = getFloorplanHitNodeId({
-          point: toPoint2D(planPoint),
-          ceilings: ceilingPolygons,
-          phase,
-          isItemContextActive: isFloorplanItemContextActive,
-          items: floorplanItemEntries,
-          openings: openingsPolygons,
-          roofs: floorplanRoofEntries,
-          stairs: floorplanStairEntries,
-          walls: displayWallPolygons,
-          slabs: displaySlabPolygons,
-          openingHitTolerance: floorplanOpeningHitTolerance,
-          wallHitTolerance: floorplanWallHitTolerance,
-          getOpeningCenterLine,
-        })
-        if (hitId) {
-          const currentSelectedIds = useViewer.getState().selection.selectedIds
-          const nextSelectedIds =
-            modifierKeys.meta || modifierKeys.ctrl
-              ? currentSelectedIds.includes(hitId)
-                ? currentSelectedIds.filter((selectedId) => selectedId !== hitId)
-                : [...currentSelectedIds, hitId]
-              : [hitId]
+      const backgroundSelection = resolveFloorplanBackgroundSelection({
+        canSelectElementFloorplanGeometry,
+        canSelectFloorplanZones,
+        currentSelectedIds: useViewer.getState().selection.selectedIds,
+        getFloorplanHitIdAtPoint,
+        isWallBuildActive,
+        modifierKeys,
+        planPoint,
+        structureLayer,
+        toPoint2D,
+        visibleZonePolygons,
+      })
 
+      if (backgroundSelection.handled) {
+        setSelectedReferenceId(null)
+
+        if (backgroundSelection.kind === 'select-zone') {
+          setSelection({ zoneId: backgroundSelection.zoneId })
+          return
+        }
+
+        if (backgroundSelection.kind === 'select-elements') {
           if (!(levelId && levelNode) || levelNode.type !== 'level') {
-            setSelectedReferenceId(null)
-            setSelection({ selectedIds: nextSelectedIds })
+            setSelection({ selectedIds: backgroundSelection.selectedIds })
           } else {
             const { selection } = useViewer.getState()
             const nodes = useScene.getState().nodes
             const updates: Parameters<typeof setSelection>[0] = {
-              selectedIds: nextSelectedIds,
+              selectedIds: backgroundSelection.selectedIds,
             }
 
             if (levelId !== selection.levelId) {
@@ -9642,86 +9106,42 @@ export function FloorplanPanel() {
               updates.buildingId = parentNode.id
             }
 
-            setSelectedReferenceId(null)
             setSelection(updates)
           }
           return
         }
-      }
 
-      if (!isWallBuildActive) {
-        if (structureLayer === 'zones') {
-          setSelectedReferenceId(null)
+        if (backgroundSelection.kind === 'clear-zones') {
           setSelection({ zoneId: null })
           // Return to structure select (same as 3D grid click)
           useEditor.getState().setStructureLayer('elements')
           useEditor.getState().setMode('select')
-        } else {
-          setSelectedReferenceId(null)
-          if (!(modifierKeys.meta || modifierKeys.ctrl)) {
-            setSelection({ selectedIds: [] })
-          }
+          return
+        }
+
+        if (!backgroundSelection.preserveSelection) {
+          setSelection({ selectedIds: [] })
         }
         return
       }
 
-      const snappedPoint = snapWallDraftPoint({
-        point: planPoint,
-        walls,
-        start: draftStart ?? undefined,
-        angleSnap: Boolean(draftStart) && !shiftPressed,
-      })
-
-      handleWallPlacementPoint(snappedPoint)
     },
     [
       draftStart,
-      ceilingDraftPoints,
-      emitFloorplanGridEvent,
-      fences,
-      fenceDraftStart,
-      floorplanOpeningLocalY,
       getPlanPointFromClientPoint,
-      activePolygonDraftPoints,
+      handleBackgroundPlacementClick,
       canSelectElementFloorplanGeometry,
       canSelectFloorplanZones,
-      ceilingPolygons,
-      displaySlabPolygons,
-      displayWallPolygons,
-      floorplanItemEntries,
-      floorplanOpeningHitTolerance,
-      floorplanRoofEntries,
-      floorplanStairEntries,
-      floorplanWallHitTolerance,
-      getOpeningCenterLine,
-      handleCeilingPlacementPoint,
-      handleSlabPlacementPoint,
-      handleZonePlacementPoint,
-      handleWallPlacementPoint,
-      clearFencePlacementDraft,
-      clearRoofPlacementDraft,
-      isCeilingBuildActive,
-      isFenceBuildActive,
-      isFloorplanGridInteractionActive,
-      isFloorplanItemContextActive,
-      isOpeningPlacementActive,
       isPolygonBuildActive,
-      isRoofBuildActive,
       isWallBuildActive,
-      isWindowBuildActive,
-      isZoneBuildActive,
       levelId,
       levelNode,
-      movingOpeningType,
-      openingsPolygons,
-      phase,
-      roofDraftStart,
       setSelectedReferenceId,
       setSelection,
-      shiftPressed,
       structureLayer,
+      getFloorplanHitIdAtPoint,
+      toPoint2D,
       visibleZonePolygons,
-      walls,
     ],
   )
   const handleBackgroundDoubleClick = useCallback(
@@ -9833,68 +9253,6 @@ export function FloorplanPanel() {
       commitFloorplanSelection([nodeId])
     },
     [commitFloorplanSelection],
-  )
-
-  const getFloorplanHitIdAtPoint = useCallback(
-    (planPoint: WallPlanPoint) => {
-      const point = toPoint2D(planPoint)
-      return getFloorplanHitNodeId({
-        point,
-        ceilings: ceilingPolygons,
-        phase,
-        isItemContextActive: isFloorplanItemContextActive,
-        items: floorplanItemEntries,
-        openings: openingsPolygons,
-        roofs: floorplanRoofEntries,
-        stairs: floorplanStairEntries,
-        walls: displayWallPolygons,
-        slabs: displaySlabPolygons,
-        openingHitTolerance: floorplanOpeningHitTolerance,
-        wallHitTolerance: floorplanWallHitTolerance,
-        getOpeningCenterLine,
-      })
-    },
-    [
-      ceilingPolygons,
-      displaySlabPolygons,
-      displayWallPolygons,
-      floorplanItemEntries,
-      floorplanOpeningHitTolerance,
-      floorplanRoofEntries,
-      floorplanStairEntries,
-      floorplanWallHitTolerance,
-      getOpeningCenterLine,
-      openingsPolygons,
-      phase,
-      isFloorplanItemContextActive,
-    ],
-  )
-
-  const getFloorplanSelectionIdsInBounds = useCallback(
-    (bounds: FloorplanSelectionBounds) =>
-      getSelectionIdsInBoundsFromTool({
-        bounds,
-        ceilings: ceilingPolygons,
-        phase,
-        isItemContextActive: isFloorplanItemContextActive,
-        items: floorplanItemEntries,
-        walls: displayWallPolygons,
-        openings: openingsPolygons,
-        roofs: floorplanRoofEntries,
-        slabs: displaySlabPolygons,
-        stairs: floorplanStairEntries,
-      }),
-    [
-      ceilingPolygons,
-      displaySlabPolygons,
-      displayWallPolygons,
-      floorplanItemEntries,
-      floorplanRoofEntries,
-      floorplanStairEntries,
-      isFloorplanItemContextActive,
-      openingsPolygons,
-      phase,
-    ],
   )
 
   const syncPreviewSelectedIds = useCallback(
