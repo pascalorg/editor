@@ -18,6 +18,7 @@ const BRACKET_THICKNESS = 0.04
 const BRACKET_HEIGHT = 0.04
 const BRACKET_Y_OFFSET = 0.035
 const HIT_BOX_SIZE: [number, number, number] = [0.28, 0.08, 0.28]
+const HOVER_OPACITY = 0.92
 
 type CornerBracketData = {
   corner: [number, number]
@@ -75,7 +76,9 @@ const CeilingSelectionAffordance = ({
   ceiling: CeilingNode
   levelId: string
 }) => {
-  const [levelObject, setLevelObject] = useState<Object3D | null>(() => sceneRegistry.nodes.get(levelId) ?? null)
+  const [levelObject, setLevelObject] = useState<Object3D | null>(
+    () => sceneRegistry.nodes.get(levelId) ?? null,
+  )
 
   const corners = useMemo(() => buildCornerBrackets(ceiling.polygon), [ceiling.polygon])
 
@@ -110,11 +113,7 @@ const CeilingSelectionAffordance = ({
   return createPortal(
     <group position={[0, (ceiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0]}>
       {corners.map((corner, index) => (
-        <CornerBracket
-          ceiling={ceiling}
-          corner={corner}
-          key={`${ceiling.id}-corner-${index}`}
-        />
+        <CornerBracket ceiling={ceiling} corner={corner} key={`${ceiling.id}-corner-${index}`} />
       ))}
     </group>,
     levelObject,
@@ -129,15 +128,11 @@ const CornerBracket = ({
   corner: CornerBracketData
 }) => {
   const [isHovered, setIsHovered] = useState(false)
-  const color = '#d4d4d4'
-  const opacity = 0.72
-  const cubeColor = isHovered ? '#818cf8' : '#d4d4d4'
-  const cubeOpacity = isHovered ? 0.92 : 0.72
+  const color = isHovered ? '#818cf8' : '#d4d4d4'
+  const opacity = isHovered ? HOVER_OPACITY : 0
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
-
-    const nodes = useScene.getState().nodes
 
     useEditor.getState().setMovingNode(null)
     useEditor.getState().setMovingWallEndpoint(null)
@@ -155,21 +150,28 @@ const CornerBracket = ({
   }
 
   return (
-    <group position={[corner.corner[0], 0, corner.corner[1]]}>
-      <BracketLeg
-        color={color}
-        direction={corner.incomingDirection}
-        length={corner.incomingLength}
-        onClick={handleClick}
-        opacity={opacity}
-      />
-      <BracketLeg
-        color={color}
-        direction={corner.outgoingDirection}
-        length={corner.outgoingLength}
-        onClick={handleClick}
-        opacity={opacity}
-      />
+    <group
+      position={[corner.corner[0], 0, corner.corner[1]]}
+      userData={{ pascalExcludeFromOutline: true }}
+    >
+      {isHovered ? (
+        <>
+          <BracketLeg
+            color={color}
+            direction={corner.incomingDirection}
+            length={corner.incomingLength}
+            onClick={handleClick}
+            opacity={opacity}
+          />
+          <BracketLeg
+            color={color}
+            direction={corner.outgoingDirection}
+            length={corner.outgoingLength}
+            onClick={handleClick}
+            opacity={opacity}
+          />
+        </>
+      ) : null}
 
       <mesh
         onClick={handleClick}
@@ -181,9 +183,10 @@ const CornerBracket = ({
           e.stopPropagation()
           setIsHovered(false)
         }}
+        userData={{ pascalExcludeFromOutline: true }}
       >
         <boxGeometry args={HIT_BOX_SIZE} />
-        <meshBasicMaterial color={cubeColor} depthWrite={false} opacity={cubeOpacity} transparent />
+        <meshBasicMaterial colorWrite={false} depthTest={false} depthWrite={false} transparent />
       </mesh>
     </group>
   )
@@ -214,6 +217,7 @@ const BracketLeg = ({
       onClick={onClick}
       position={position}
       rotation={[0, angle, 0]}
+      userData={{ pascalExcludeFromOutline: true }}
     >
       <boxGeometry args={[length, BRACKET_HEIGHT, BRACKET_THICKNESS]} />
       <meshBasicMaterial color={color} depthWrite={false} opacity={opacity} transparent />
@@ -234,7 +238,11 @@ function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketDat
 
     const incomingLength = Math.hypot(incomingVector[0], incomingVector[1])
     const outgoingLength = Math.hypot(outgoingVector[0], outgoingVector[1])
-    const cornerStrength = 1 - Math.abs(incomingDirection[0] * outgoingDirection[0] + incomingDirection[1] * outgoingDirection[1])
+    const cornerStrength =
+      1 -
+      Math.abs(
+        incomingDirection[0] * outgoingDirection[0] + incomingDirection[1] * outgoingDirection[1],
+      )
 
     return {
       corner,

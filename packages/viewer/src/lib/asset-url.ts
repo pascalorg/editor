@@ -2,6 +2,34 @@ import { loadAssetUrl } from '@pascal-app/core'
 
 export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https://editor.pascal.app'
 
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    hostname === '::1'
+  )
+}
+
+function getPreferredAssetOrigin(): string {
+  if (typeof window === 'undefined') {
+    return ASSETS_CDN_URL
+  }
+
+  try {
+    const currentOrigin = new URL(window.location.origin)
+    // App-served public assets should stay on the active loopback origin in
+    // local dev, even when production points at a remote CDN host.
+    if (isLoopbackHost(currentOrigin.hostname)) {
+      return currentOrigin.origin
+    }
+  } catch {
+    return ASSETS_CDN_URL
+  }
+
+  return ASSETS_CDN_URL
+}
+
 /**
  * Resolves an asset URL to the appropriate format:
  * - If URL starts with http:// or https://, return as-is (external URL)
@@ -24,7 +52,7 @@ export async function resolveAssetUrl(url: string | undefined | null): Promise<s
 
   // Absolute or relative path - prepend CDN URL
   const normalizedPath = url.startsWith('/') ? url : `/${url}`
-  return `${ASSETS_CDN_URL}${normalizedPath}`
+  return `${getPreferredAssetOrigin()}${normalizedPath}`
 }
 
 /**
@@ -47,5 +75,5 @@ export function resolveCdnUrl(url: string | undefined | null): string | null {
 
   // Absolute or relative path - prepend CDN URL
   const normalizedPath = url.startsWith('/') ? url : `/${url}`
-  return `${ASSETS_CDN_URL}${normalizedPath}`
+  return `${getPreferredAssetOrigin()}${normalizedPath}`
 }

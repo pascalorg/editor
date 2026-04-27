@@ -18,10 +18,14 @@ type Outliner = {
   hoveredObjects: Object3D[]
 }
 
+export type ViewerPostProcessingMode = 'default' | 'disabled' | 'no-ssgi'
+
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  nodeEventsSuppressed: boolean
+  setNodeEventsSuppressed: (suppressed: boolean) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -76,6 +80,8 @@ type ViewerState = {
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
+  runtimePostProcessing: ViewerPostProcessingMode | null
+  setRuntimePostProcessing: (mode: ViewerPostProcessingMode | null) => void
 }
 
 const useViewer = create<ViewerState>()(
@@ -84,6 +90,8 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      nodeEventsSuppressed: false,
+      setNodeEventsSuppressed: (nodeEventsSuppressed) => set({ nodeEventsSuppressed }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
@@ -203,6 +211,8 @@ const useViewer = create<ViewerState>()(
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+      runtimePostProcessing: null,
+      setRuntimePostProcessing: (runtimePostProcessing) => set({ runtimePostProcessing }),
     }),
     {
       name: 'viewer-preferences',

@@ -3,7 +3,7 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { MathUtils, type Mesh, Vector2 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
@@ -114,10 +114,10 @@ export const Grid = ({
   ])
 
   const gridRef = useRef<Mesh>(null!)
-  const [gridY, setGridY] = useState(0)
+  const gridYRef = useRef(0)
 
   // Use custom raycasting for grid events (independent of mesh events)
-  useGridEvents(gridY)
+  useGridEvents(gridYRef)
 
   // Update cursor position from grid:move events
   useEffect(() => {
@@ -142,7 +142,7 @@ export const Grid = ({
     }
     const newY = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
     gridRef.current.position.y = newY
-    setGridY(newY)
+    gridYRef.current = newY
   })
 
   const showGrid = useViewer((state) => state.showGrid)

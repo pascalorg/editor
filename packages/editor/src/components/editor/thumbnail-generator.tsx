@@ -48,6 +48,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const scene = useThree((state) => state.scene)
   const mainCamera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as CameraControls | null
+  const invalidate = useThree((state) => state.invalidate)
   const isGenerating = useRef(false)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingAutoRef = useRef(false)
@@ -56,6 +57,29 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const thumbnailCameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const pipelineRef = useRef<RenderPipeline | null>(null)
   const renderTargetRef = useRef<RenderTarget | null>(null)
+
+  const restoreViewerRendererState = useCallback(() => {
+    const renderer = gl as typeof gl & {
+      getDrawingBufferSize?: (target: THREE.Vector2) => THREE.Vector2
+      setRenderTarget?: (target: RenderTarget | null) => void
+      setScissor?: (x: number, y: number, width: number, height: number) => void
+      setScissorTest?: (enabled: boolean) => void
+      setViewport?: (x: number, y: number, width: number, height: number) => void
+    }
+    const drawingBufferSize =
+      typeof renderer.getDrawingBufferSize === 'function'
+        ? renderer.getDrawingBufferSize(new THREE.Vector2())
+        : new THREE.Vector2(
+            Math.max(1, Math.floor(renderer.domElement?.width ?? 1)),
+            Math.max(1, Math.floor(renderer.domElement?.height ?? 1)),
+          )
+
+    renderer.setRenderTarget?.(null)
+    renderer.setViewport?.(0, 0, drawingBufferSize.x, drawingBufferSize.y)
+    renderer.setScissor?.(0, 0, drawingBufferSize.x, drawingBufferSize.y)
+    renderer.setScissorTest?.(false)
+    invalidate()
+  }, [gl, invalidate])
 
   useEffect(() => {
     onThumbnailCaptureRef.current = onThumbnailCapture
@@ -412,10 +436,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       } catch (error) {
         console.error('❌ Failed to generate thumbnail:', error)
       } finally {
+        restoreViewerRendererState()
         isGenerating.current = false
       }
     },
-    [gl, scene, mainCamera, controls],
+    [controls, gl, invalidate, mainCamera, restoreViewerRendererState, scene],
   )
 
   // Thumbnail request via emitter. Two call shapes:

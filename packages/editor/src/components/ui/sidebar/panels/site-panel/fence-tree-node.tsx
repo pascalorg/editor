@@ -38,7 +38,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
 
   return (
     <TreeNodeWrapper
-      actions={<TreeNodeActions node={node} />}
+      actions={<TreeNodeActions nodeId={nodeId} />}
       depth={depth}
       expanded={false}
       hasChildren={false}
@@ -53,7 +53,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
         <InlineRenameInput
           defaultName="Fence"
           isEditing={isEditing}
-          node={node}
+          nodeId={nodeId}
           onStartEditing={() => setIsEditing(true)}
           onStopEditing={() => setIsEditing(false)}
         />

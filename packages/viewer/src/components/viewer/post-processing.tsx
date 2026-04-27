@@ -21,6 +21,7 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
+import { useViewerRuntimeState } from '../../contexts/viewer-runtime-state'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import useViewer from '../../store/use-viewer'
@@ -78,7 +79,7 @@ function sanitizeOutlineObjects(objects: Object3D[]) {
     }
 
     objects[nextIndex] = object
-    nextIndex++
+    nextIndex += 1
   }
 
   objects.length = nextIndex
@@ -94,31 +95,50 @@ const PostProcessingPasses = ({
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
   const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
 
-  // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
-  // Initialised from the current theme so there's no flash on first render.
+  // Background color uniform - updated every frame via lerp, read by the TSL pipeline.
+  // Initialized from the current theme so there is no flash on first render.
   const initBg = useViewer.getState().theme === 'dark' ? DARK_BG : LIGHT_BG
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
 
   const zoneLayers = useMemo(() => {
-    const l = new Layers()
-    l.enable(ZONE_LAYER)
-    l.disable(SCENE_LAYER)
-    return l
+    const layers = new Layers()
+    layers.enable(ZONE_LAYER)
+    layers.disable(SCENE_LAYER)
+    return layers
   }, [])
-  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const hoverHighlightMode = useViewer((state) => state.hoverHighlightMode)
+  const navigationPostWarmupCompletedToken = useViewerRuntimeState(
+    (state) => state.navigationPostWarmupCompletedToken,
+  )
+  const navigationPostWarmupRequestToken = useViewerRuntimeState(
+    (state) => state.navigationPostWarmupRequestToken,
+  )
+  const completeNavigationPostWarmup = useViewerRuntimeState(
+    (state) => state.completeNavigationPostWarmup,
+  )
+  const runtimePostProcessing = useViewer((state) => state.runtimePostProcessing)
+  const effectivePostProcessingMode = runtimePostProcessing ?? 'default'
   const hoverVisibleColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.visibleColor)), [])
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
   const hoverStrength = useMemo(() => uniform(DEFAULT_HOVER_STYLE.strength), [])
   const hoverPulseMix = useMemo(() => uniform(DEFAULT_HOVER_STYLE.pulse ? 0 : 1), [])
 
-  // Subscribe to projectId so the pipeline rebuilds on project switch
-  const projectId = useViewer((s) => s.projectId)
+  // Subscribe to projectId so the pipeline rebuilds on project switch.
+  const projectId = useViewer((state) => state.projectId)
 
-  // Bump this to force a pipeline rebuild (used by retry logic)
+  // Bump this to force a pipeline rebuild (used by retry logic).
   const [pipelineVersion, setPipelineVersion] = useState(0)
+
+  const disposeRenderPipeline = useCallback(() => {
+    if (renderPipelineRef.current) {
+      renderPipelineRef.current.dispose()
+      renderPipelineRef.current = null
+    }
+  }, [])
 
   const requestPipelineRebuild = useCallback(() => {
     if (rebuildTimeoutRef.current !== null) {
@@ -126,12 +146,46 @@ const PostProcessingPasses = ({
       rebuildTimeoutRef.current = null
     }
 
-    setPipelineVersion((v) => v + 1)
+    setPipelineVersion((version) => version + 1)
   }, [])
 
-  // Reset retry state when project changes
   useEffect(() => {
-    // Intentionally touch projectId so the effect reruns on project switches.
+    let mounted = true
+
+    const initRenderer = async () => {
+      try {
+        const rendererWithInit = renderer as unknown as {
+          init?: () => Promise<void>
+        }
+        if (renderer && typeof rendererWithInit.init === 'function') {
+          await rendererWithInit.init()
+        }
+
+        if (mounted) {
+          setIsInitialized(true)
+        }
+      } catch (error) {
+        console.error('[viewer] Failed to initialize renderer for post-processing.', error)
+        if (mounted) {
+          setIsInitialized(false)
+        }
+      }
+    }
+
+    void initRenderer()
+
+    return () => {
+      mounted = false
+      if (rebuildTimeoutRef.current !== null) {
+        clearTimeout(rebuildTimeoutRef.current)
+        rebuildTimeoutRef.current = null
+      }
+      disposeRenderPipeline()
+    }
+  }, [disposeRenderPipeline, renderer])
+
+  // Reset retry count when project changes.
+  useEffect(() => {
     void projectId
     retryCountRef.current = 0
     if (rebuildTimeoutRef.current !== null) {
@@ -141,13 +195,21 @@ const PostProcessingPasses = ({
   }, [projectId])
 
   useEffect(() => {
-    return () => {
-      if (rebuildTimeoutRef.current !== null) {
-        clearTimeout(rebuildTimeoutRef.current)
-        rebuildTimeoutRef.current = null
-      }
+    if (!isInitialized) {
+      return
     }
-  }, [])
+
+    if (navigationPostWarmupRequestToken <= navigationPostWarmupCompletedToken) {
+      return
+    }
+
+    completeNavigationPostWarmup(navigationPostWarmupRequestToken)
+  }, [
+    completeNavigationPostWarmup,
+    isInitialized,
+    navigationPostWarmupCompletedToken,
+    navigationPostWarmupRequestToken,
+  ])
 
   useEffect(() => {
     const style = hoverStyles[hoverHighlightMode] ?? hoverStyles.default
@@ -166,34 +228,20 @@ const PostProcessingPasses = ({
     invalidate,
   ])
 
-  // Build / rebuild the post-processing pipeline
+  // Build or rebuild the post-processing pipeline.
   useEffect(() => {
-    // Intentionally touch these so React/biome treat project switches and retry bumps
-    // as explicit rebuild triggers instead of accidental extra dependencies.
-    void projectId
     void pipelineVersion
+    void projectId
 
-    if (!(renderer && scene && camera)) {
+    if (!(renderer && scene && camera && isInitialized)) {
       return
     }
 
     hasPipelineErrorRef.current = false
 
-    // WebGPU availability check: SSGI, denoise, and RenderPipeline are all
-    // WebGPU-only APIs. When the browser falls back to WebGL2 (no
-    // `navigator.gpu`, or the device couldn't be created), building the
-    // pipeline either throws silently or produces a broken output where
-    // the scene renders for a few frames and then goes black as the retry
-    // loop fights the direct-render fallback path. Short-circuit here so
-    // `useFrame` uses the direct `renderer.render(scene, camera)` path
-    // exclusively and never attempts the TSL pipeline.
-    const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
-    if (!hasWebGPU) {
-      console.warn(
-        '[viewer] WebGPU unavailable — rendering without post-processing (SSGI, outlines, denoise).',
-      )
-      hasPipelineErrorRef.current = true
-      renderPipelineRef.current = null
+    if (effectivePostProcessingMode === 'disabled') {
+      disposeRenderPipeline()
+      retryCountRef.current = 0
       return
     }
 
@@ -215,13 +263,14 @@ const PostProcessingPasses = ({
       // Background detection via alpha: renderer clears with alpha=0 (setClearAlpha(0) in useFrame),
       // so background pixels have scenePassColor.a=0 while geometry pixels have output.a=1.
       // WebGPU only applies clearColorValue to MRT attachment 0 (output), so scenePassColor.a
-      // is the reliable geometry mask — no normals, no flicker.
+      // is the reliable geometry mask - no normals, no flicker.
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
       let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
 
-      if (SSGI_PARAMS.enabled) {
+      const ssgiEnabled = effectivePostProcessingMode === 'default' && SSGI_PARAMS.enabled
+      if (ssgiEnabled) {
         // MRT only needed for SSGI (diffuse for GI, normal for SSGI sampling)
         scenePass.setMRT(
           mrt({
@@ -259,7 +308,7 @@ const PostProcessingPasses = ({
 
         const giTexture = (giPass as any).getTextureNode()
 
-        // DenoiseNode only denoises RGB — alpha is passed through unchanged.
+        // DenoiseNode only denoises RGB - alpha is passed through unchanged.
         // SSGI packs AO into alpha, so we remap it into RGB before denoising.
         const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
         const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
@@ -277,7 +326,6 @@ const PostProcessingPasses = ({
       }
 
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
-      const outliner = useViewer.getState().outliner
       const outlineNode = mergedOutline(scene, camera, {
         primaryObjects: outliner.selectedObjects,
         secondaryObjects: outliner.hoveredObjects,
@@ -324,24 +372,21 @@ const PostProcessingPasses = ({
         '[viewer] Failed to set up post-processing pipeline. Rendering without post FX.',
         error,
       )
-      if (renderPipelineRef.current) {
-        renderPipelineRef.current.dispose()
-      }
-      renderPipelineRef.current = null
+      disposeRenderPipeline()
     }
 
     return () => {
-      if (renderPipelineRef.current) {
-        renderPipelineRef.current.dispose()
-      }
-      renderPipelineRef.current = null
+      disposeRenderPipeline()
     }
   }, [
     camera,
+    disposeRenderPipeline,
+    effectivePostProcessingMode,
     hoverHiddenColor,
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,
+    isInitialized,
     pipelineVersion,
     projectId,
     renderer,
@@ -359,11 +404,17 @@ const PostProcessingPasses = ({
     sanitizeOutlineObjects(outliner.selectedObjects)
     sanitizeOutlineObjects(outliner.hoveredObjects)
 
-    if (hasPipelineErrorRef.current || !renderPipelineRef.current) {
+    if (
+      effectivePostProcessingMode === 'disabled' ||
+      hasPipelineErrorRef.current ||
+      !renderPipelineRef.current
+    ) {
+      if (!isInitialized) {
+        return
+      }
+
       try {
-        if ((renderer as any).setClearAlpha) {
-          ;(renderer as any).setClearAlpha(1)
-        }
+        ;(renderer as any).setClearAlpha?.(1)
         ;(renderer as any).render(scene, camera)
       } catch (fallbackError) {
         console.error('[viewer] Fallback render failed.', fallbackError)
@@ -374,19 +425,16 @@ const PostProcessingPasses = ({
     try {
       // Clear alpha=0 so background pixels in the output MRT attachment (index 0) get a=0,
       // making scenePassColor.a a reliable geometry mask (geometry pixels write a=1 via output node).
-      ;(renderer as any).setClearAlpha(0)
+      ;(renderer as any).setClearAlpha?.(0)
       renderPipelineRef.current.render()
     } catch (error) {
       hasPipelineErrorRef.current = true
       console.error('[viewer] Post-processing render pass failed.', error)
-      if (renderPipelineRef.current) {
-        renderPipelineRef.current.dispose()
-      }
-      renderPipelineRef.current = null
+      disposeRenderPipeline()
 
       if (retryCountRef.current < MAX_PIPELINE_RETRIES) {
-        // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit
-        retryCountRef.current++
+        // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit.
+        retryCountRef.current += 1
         console.warn(
           `[viewer] Scheduling post-processing rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
         )

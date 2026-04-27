@@ -1,3 +1,5 @@
+import './lib/suppress-three-clock-warning'
+
 export { default as Viewer } from './components/viewer'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
@@ -5,8 +7,18 @@ export {
   SSGI_PARAMS,
 } from './components/viewer/post-processing'
 export { WalkthroughControls } from './components/viewer/walkthrough-controls'
+export {
+  useViewerRuntimeState,
+  type ViewerRuntimeItemDeleteActivation,
+  type ViewerRuntimeItemMovePreview,
+  type ViewerRuntimeItemMoveVisualState,
+  type ViewerRuntimePostWarmupScope,
+  type ViewerRuntimeState,
+  ViewerRuntimeStateProvider,
+} from './contexts/viewer-runtime-state'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
-export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export { ITEM_DELETE_FADE_OUT_MS } from './lib/item-delete-visual'
+export { SCENE_LAYER, VFX_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
   clearMaterialCache,

@@ -25,6 +25,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import {
+  requestNavigationItemDelete,
+  requestNavigationItemRepair,
+} from '../../store/use-navigation'
+import { setNavigationDraftRobotCopySourceId } from '../../store/use-navigation-drafts'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -57,6 +62,7 @@ export function FloatingActionMenu() {
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
+  const setHoveredId = useViewer((s) => s.setHoveredId)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
@@ -143,10 +149,7 @@ export function FloatingActionMenu() {
           node.type === 'wall'
             ? obj.localToWorld(
                 new THREE.Vector3(
-                  Math.hypot(
-                    segment.end[0] - segment.start[0],
-                    segment.end[1] - segment.start[1],
-                  ),
+                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
                   0,
                   0,
                 ),
@@ -248,6 +251,7 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+          setNavigationDraftRobotCopySourceId(duplicate.id, node.id)
         } else if (node.type === 'wall') {
           duplicate = WallNode.parse(duplicateInfo)
         } else if (node.type === 'fence') {
@@ -413,6 +417,9 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (node?.type === 'item' && requestNavigationItemDelete(node)) {
+        return
+      }
       if (!selectedId) return
       if (node?.type === 'item') {
         sfxEmitter.emit('sfx:item-delete')
@@ -422,7 +429,24 @@ export function FloatingActionMenu() {
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
-    [node?.type, selectedId, setSelection],
+    [node, selectedId, setSelection],
+  )
+
+  const handleRepair = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!node || node.type !== 'item') {
+        return
+      }
+
+      if (requestNavigationItemRepair(node)) {
+        return
+      }
+
+      setHoveredId(null)
+      setSelection({ selectedIds: [] })
+    },
+    [node, setHoveredId, setSelection],
   )
 
   if (
@@ -458,6 +482,7 @@ export function FloatingActionMenu() {
                 : undefined
             }
             onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+            onRepair={node?.type === 'item' ? handleRepair : undefined}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
           />

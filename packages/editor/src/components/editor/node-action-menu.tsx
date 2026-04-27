@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { Copy, Move, Spline, Trash2 } from 'lucide-react'
+import { Copy, Move, Spline, Trash2, Wrench } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
@@ -9,6 +9,7 @@ type NodeActionMenuProps = {
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
+  onRepair?: MouseEventHandler<HTMLButtonElement>
   onCurve?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
   onPointerUp?: PointerEventHandler<HTMLDivElement>
@@ -21,6 +22,7 @@ export function NodeActionMenu({
   onDelete,
   onDuplicate,
   onMove,
+  onRepair,
   onCurve,
   onPointerDown,
   onPointerUp,
@@ -77,6 +79,17 @@ export function NodeActionMenu({
           type="button"
         >
           <Icon height={16} icon="carbon:cut-out" width={16} />
+        </button>
+      )}
+      {onRepair && (
+        <button
+          aria-label="Repair"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-amber-500/10 hover:text-amber-500"
+          onClick={onRepair}
+          title="Repair"
+          type="button"
+        >
+          <Wrench className="h-4 w-4" />
         </button>
       )}
       {onDelete && (

@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { runRedo, runUndo } from '../lib/history'
 import { sfxEmitter } from '../lib/sfx-bus'
 import useEditor from '../store/use-editor'
+import useNavigation, { requestNavigationItemDelete } from '../store/use-navigation'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
 // so that the global Escape handler knows not to also switch to select mode.
@@ -14,6 +15,12 @@ export const markToolCancelConsumed = () => {
 
 export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
   useEffect(() => {
+    const isRobotItemMoveRotationActive = () => {
+      const { enabled, moveItemsEnabled } = useNavigation.getState()
+      const movingNode = useEditor.getState().movingNode
+      return enabled && moveItemsEnabled && movingNode?.type === 'item'
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -137,6 +144,10 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
           }
         }
       } else if ((e.key === 'r' || e.key === 'R') && !isVersionPreviewMode) {
+        if (isRobotItemMoveRotationActive()) {
+          return
+        }
+
         // Rotate selected node clockwise if it supports rotation (items, roofs, etc.)
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
@@ -157,6 +168,10 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
           }
         }
       } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode) {
+        if (isRobotItemMoveRotationActive()) {
+          return
+        }
+
         // Rotate selected node counter-clockwise
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
@@ -202,6 +217,13 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
+          if (selectedNodeIds.length === 1) {
+            const node = useScene.getState().nodes[selectedNodeIds[0]!]
+            if (node?.type === 'item' && requestNavigationItemDelete(node)) {
+              return
+            }
+          }
+
           // Play appropriate SFX based on what's being deleted
           if (selectedNodeIds.length === 1) {
             const node = useScene.getState().nodes[selectedNodeIds[0]!]

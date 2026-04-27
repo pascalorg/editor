@@ -27,7 +27,10 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
-  const handleClick = useCallback(() => setSelection({ zoneId: nodeId }), [nodeId, setSelection])
+  const handleClick = useCallback(
+    () => setSelection({ zoneId: nodeId as ZoneNode['id'] }),
+    [nodeId, setSelection],
+  )
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
   const handleMouseEnter = useCallback(() => setHoveredId(nodeId), [nodeId, setHoveredId])
   const handleMouseLeave = useCallback(() => setHoveredId(null), [setHoveredId])
@@ -44,7 +47,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       depth={depth}
       expanded={false}
       hasChildren={false}
-      icon={<ColorDot color={color} onChange={(c) => updateNode(nodeId, { color: c })} />}
+      icon={<ColorDot color={color ?? '#3b82f6'} onChange={(c) => updateNode(nodeId, { color: c })} />}
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
@@ -78,8 +81,11 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
 
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area += polygon[i]?.[0] * polygon[j]?.[1]
-    area -= polygon[j]?.[0] * polygon[i]?.[1]
+    const current = polygon[i]
+    const next = polygon[j]
+    if (!(current && next)) continue
+    area += current[0] * next[1]
+    area -= next[0] * current[1]
   }
 
   return Math.abs(area) / 2

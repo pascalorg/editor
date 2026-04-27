@@ -2,15 +2,27 @@
 
 import { Icon } from '@iconify/react'
 import {
+  type AnyNode,
+  type AnyNodeId,
+  type ItemNode,
   initSpaceDetectionSync,
   initSpatialGridSync,
   spatialGridManager,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
 import {
+  type HoverStyles,
+  InteractiveSystem,
+  useViewer,
+  Viewer,
+  ViewerRuntimeStateProvider,
+} from '@pascal-app/viewer'
+import {
+  lazy,
   memo,
   type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -23,6 +35,12 @@ import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-con
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
+  buildPascalTruckNodeForScene,
+  isPascalTruckNode,
+  PASCAL_TRUCK_ITEM_NODE_ID,
+  stripPascalTruckFromSceneGraph,
+} from '../../lib/pascal-truck'
+import {
   applySceneGraphToEditor,
   loadSceneFromLocalStorage,
   type SceneGraph,
@@ -30,6 +48,8 @@ import {
 } from '../../lib/scene'
 import { initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import useNavigation from '../../store/use-navigation'
+import navigationVisualsStore from '../../store/use-navigation-visuals'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -64,7 +84,8 @@ import { Grid } from './grid'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
-import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
+import { ThumbnailGenerator } from './thumbnail-generator'
+import { ToolConeOverlayViewer } from './tool-cone-overlay-viewer'
 import { WallMeasurementLabel } from './wall-measurement-label'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
@@ -86,6 +107,16 @@ const EDITOR_HOVER_STYLES: HoverStyles = {
     pulse: false,
   },
 }
+
+const NavigationPanel = lazy(async () => {
+  const module = await import('../ui/panels/navigation-panel')
+  return { default: module.NavigationPanel }
+})
+
+const NavigationRuntime = lazy(async () => {
+  const module = await import('./navigation-system')
+  return { default: module.NavigationSystem }
+})
 
 /**
  * Wire up module-level singletons (spatial grid, space detection, SFX) for
@@ -110,6 +141,36 @@ function initializeEditorRuntime(): () => void {
     outliner.hoveredObjects.length = 0
   }
 }
+
+function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(sceneGraph)
+  }
+
+  return JSON.parse(JSON.stringify(sceneGraph)) as SceneGraph
+}
+
+function hasTaskModeSceneContent(
+  sceneGraph: SceneGraph | null | undefined,
+): sceneGraph is SceneGraph {
+  if (
+    !sceneGraph ||
+    !Array.isArray(sceneGraph.rootNodeIds) ||
+    sceneGraph.rootNodeIds.length === 0
+  ) {
+    return false
+  }
+
+  return Object.values(sceneGraph.nodes ?? {}).some((node) => {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) {
+      return false
+    }
+
+    const type = (node as { type?: unknown }).type
+    return typeof type === 'string' && type !== 'site' && type !== 'building' && type !== 'level'
+  })
+}
+
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
@@ -140,7 +201,7 @@ export interface EditorProps {
   isLoading?: boolean
 
   // Thumbnail
-  onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  onThumbnailCapture?: (blob: Blob) => void
 
   // Version preview overlays (rendered by host app)
   sidebarOverlay?: ReactNode
@@ -337,6 +398,15 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
 
+const SIMPLE_ROBOT_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
+  {
+    action: 'Pan',
+    keys: [{ value: 'Space' }, { value: 'Left click' }],
+  },
+  { action: 'Rotate/Move Robot', keys: [{ value: 'Right click' }] },
+  { action: 'Zoom', keys: [{ value: 'Scroll' }] },
+]
+
 const PREVIEW_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Pan', keys: [{ value: 'Left click' }] },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
@@ -450,13 +520,19 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
 }
 
 function ViewerCanvasControlsHint({
+  isSimpleRobotMode,
   isPreviewMode,
   onDismiss,
 }: {
+  isSimpleRobotMode: boolean
   isPreviewMode: boolean
   onDismiss: () => void
 }) {
-  const hints = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
+  const hints = isPreviewMode
+    ? PREVIEW_CAMERA_CONTROL_HINTS
+    : isSimpleRobotMode
+      ? SIMPLE_ROBOT_CAMERA_CONTROL_HINTS
+      : EDITOR_CAMERA_CONTROL_HINTS
 
   return (
     <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
@@ -575,11 +651,13 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isLoading,
   isFirstPersonMode,
   onThumbnailCapture,
+  robotModeActive,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
-  onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  onThumbnailCapture?: (blob: Blob) => void
+  robotModeActive: boolean
 }) {
   return (
     <>
@@ -596,6 +674,11 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <StairEditSystem />
       {!isLoading && !isFirstPersonMode && (
         <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
+      )}
+      {!isLoading && !isFirstPersonMode && robotModeActive && (
+        <Suspense fallback={null}>
+          <NavigationRuntime />
+        </Suspense>
       )}
       {!(isLoading || isVersionPreviewMode) && !isFirstPersonMode && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
@@ -796,12 +879,14 @@ const ViewerCanvas = memo(function ViewerCanvas({
   hasLoadedInitialScene: boolean
   showLoader: boolean
   isFirstPersonMode: boolean
-  onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  onThumbnailCapture?: (blob: Blob) => void
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const robotMode = useNavigation((state) => state.robotMode)
+  const robotModeActive = robotMode !== null
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -891,22 +976,27 @@ const ViewerCanvas = memo(function ViewerCanvas({
           />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
+              isSimpleRobotMode={robotMode === 'normal'}
               isPreviewMode={isPreviewMode}
               onDismiss={dismissCameraControlsHint}
             />
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-          <Viewer
-            hoverStyles={EDITOR_HOVER_STYLES}
-            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
-          >
-            <ViewerSceneContent
-              isFirstPersonMode={isFirstPersonMode}
-              isLoading={isLoading}
-              isVersionPreviewMode={isVersionPreviewMode}
-              onThumbnailCapture={onThumbnailCapture}
-            />
-          </Viewer>
+          <ViewerRuntimeStateProvider store={navigationVisualsStore}>
+            <ToolConeOverlayViewer
+              enabled={robotModeActive}
+              hoverStyles={EDITOR_HOVER_STYLES}
+              selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+            >
+              <ViewerSceneContent
+                isFirstPersonMode={isFirstPersonMode}
+                isLoading={isLoading}
+                isVersionPreviewMode={isVersionPreviewMode}
+                onThumbnailCapture={onThumbnailCapture}
+                robotModeActive={robotModeActive}
+              />
+            </ToolConeOverlayViewer>
+          </ViewerRuntimeStateProvider>
         </div>
       </div>
       {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
@@ -941,20 +1031,117 @@ export default function Editor({
 }: EditorProps) {
   useKeyboard({ isVersionPreviewMode })
 
+  const robotMode = useNavigation((state) => state.robotMode)
+  const taskLoopToken = useNavigation((state) => state.taskLoopToken)
+  const [taskModeSceneRestorePending, setTaskModeSceneRestorePending] = useState(false)
+
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
     onDirty,
     onSaveStatusChange,
     isVersionPreviewMode,
+    suppressSave: robotMode === 'task' || taskModeSceneRestorePending,
   })
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+  const previousRobotModeRef = useRef<typeof robotMode>(robotMode)
+  const previousTaskLoopTokenRef = useRef(taskLoopToken)
+  const pascalTruckNodeRef = useRef<ItemNode | null>(null)
+  const taskModeSceneSnapshotRef = useRef<SceneGraph | null>(null)
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
+
+  const stripPascalTruckFromScene = useCallback(
+    (sceneGraph?: SceneGraph | null): SceneGraph | null => {
+      const { sceneGraph: sanitizedSceneGraph, truckNode } =
+        stripPascalTruckFromSceneGraph(sceneGraph)
+      if (truckNode) {
+        pascalTruckNodeRef.current = truckNode
+      }
+
+      return (sanitizedSceneGraph as SceneGraph | null | undefined) ?? null
+    },
+    [],
+  )
+
+  const captureCurrentSceneGraph = useCallback((): SceneGraph => {
+    const sceneState = useScene.getState()
+    const sceneGraph = cloneSceneGraph({
+      nodes: sceneState.nodes as SceneGraph['nodes'],
+      rootNodeIds: [...sceneState.rootNodeIds] as SceneGraph['rootNodeIds'],
+    })
+    return stripPascalTruckFromScene(sceneGraph) ?? sceneGraph
+  }, [stripPascalTruckFromScene])
+
+  const restoreTaskModeSceneSnapshot = useCallback(
+    (options?: { clearSnapshot?: boolean; settledToken?: number }) => {
+      const finalizeRestore = () => {
+        if (options?.clearSnapshot) {
+          taskModeSceneSnapshotRef.current = null
+        }
+        if (typeof options?.settledToken === 'number') {
+          useNavigation.getState().setTaskLoopSettledToken(options.settledToken)
+        }
+      }
+
+      const snapshot = taskModeSceneSnapshotRef.current
+      if (!hasTaskModeSceneContent(snapshot)) {
+        const currentScene = captureCurrentSceneGraph()
+        taskModeSceneSnapshotRef.current = hasTaskModeSceneContent(currentScene)
+          ? currentScene
+          : null
+        finalizeRestore()
+        return false
+      }
+
+      isLoadingSceneRef.current = true
+      setTaskModeSceneRestorePending(true)
+      useLiveTransforms.getState().clearAll()
+      const nextSceneGraph = cloneSceneGraph(snapshot)
+      if (useNavigation.getState().robotMode === 'task') {
+        const hasTruckNode = Object.values(nextSceneGraph.nodes).some((node) =>
+          isPascalTruckNode(node),
+        )
+        if (!hasTruckNode) {
+          const { node, parentId } = buildPascalTruckNodeForScene(
+            nextSceneGraph,
+            pascalTruckNodeRef.current,
+          )
+          if (parentId) {
+            nextSceneGraph.nodes[node.id] = node
+            const parentNode = nextSceneGraph.nodes[parentId]
+            if (parentNode && typeof parentNode === 'object' && parentNode !== null) {
+              const parentRecord = parentNode as { children?: unknown }
+              const nextChildren = Array.isArray(parentRecord.children)
+                ? [...parentRecord.children]
+                : []
+              if (!nextChildren.includes(node.id)) {
+                nextChildren.push(node.id)
+              }
+              nextSceneGraph.nodes[parentId] = {
+                ...parentNode,
+                children: nextChildren,
+              }
+            }
+          }
+        }
+      }
+      applySceneGraphToEditor(nextSceneGraph, {
+        mode: useNavigation.getState().robotMode === 'task' ? 'task-loop' : 'full',
+      })
+      requestAnimationFrame(() => {
+        isLoadingSceneRef.current = false
+        setTaskModeSceneRestorePending(false)
+        finalizeRestore()
+      })
+      return true
+    },
+    [captureCurrentSceneGraph, isLoadingSceneRef],
+  )
 
   useEffect(() => {
     const teardown = initializeEditorRuntime()
@@ -979,12 +1166,23 @@ export default function Editor({
       setIsSceneLoading(true)
 
       try {
-        const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
+        const loadedSceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
+        const sceneGraph = stripPascalTruckFromScene(loadedSceneGraph)
         if (!cancelled) {
           applySceneGraphToEditor(sceneGraph)
+          if (useNavigation.getState().robotMode === 'task') {
+            taskModeSceneSnapshotRef.current = hasTaskModeSceneContent(sceneGraph)
+              ? cloneSceneGraph(sceneGraph)
+              : null
+          }
         }
       } catch {
-        if (!cancelled) applySceneGraphToEditor(null)
+        if (!cancelled) {
+          applySceneGraphToEditor(null)
+          if (useNavigation.getState().robotMode === 'task') {
+            taskModeSceneSnapshotRef.current = null
+          }
+        }
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
@@ -1001,14 +1199,14 @@ export default function Editor({
     return () => {
       cancelled = true
     }
-  }, [onLoad, isLoadingSceneRef])
+  }, [isLoadingSceneRef, onLoad, stripPascalTruckFromScene])
 
   // Apply preview scene when version preview mode changes
   useEffect(() => {
     if (isVersionPreviewMode && previewScene) {
-      applySceneGraphToEditor(previewScene)
+      applySceneGraphToEditor(stripPascalTruckFromScene(previewScene))
     }
-  }, [isVersionPreviewMode, previewScene])
+  }, [isVersionPreviewMode, previewScene, stripPascalTruckFromScene])
 
   // Lock scene graph and reset to select mode when entering version preview
   useEffect(() => {
@@ -1022,11 +1220,92 @@ export default function Editor({
   }, [isVersionPreviewMode])
 
   useEffect(() => {
+    if (!hasLoadedInitialScene || isVersionPreviewMode || taskModeSceneRestorePending) {
+      return
+    }
+
+    const sceneState = useScene.getState()
+    const currentSceneGraph = cloneSceneGraph({
+      nodes: sceneState.nodes as SceneGraph['nodes'],
+      rootNodeIds: [...sceneState.rootNodeIds] as SceneGraph['rootNodeIds'],
+    })
+    const existingTruckNode =
+      (Object.values(currentSceneGraph.nodes).find((node) =>
+        isPascalTruckNode(node),
+      ) as ItemNode | null) ?? null
+
+    if (existingTruckNode) {
+      pascalTruckNodeRef.current = cloneSceneGraph({
+        nodes: { [existingTruckNode.id]: existingTruckNode },
+        rootNodeIds: [],
+      }).nodes[existingTruckNode.id] as ItemNode
+    }
+
+    if (robotMode === null) {
+      if (existingTruckNode) {
+        sceneState.deleteNode(existingTruckNode.id as AnyNodeId)
+      }
+      return
+    }
+
+    if (existingTruckNode?.id === PASCAL_TRUCK_ITEM_NODE_ID) {
+      return
+    }
+
+    const { node, parentId } = buildPascalTruckNodeForScene(
+      currentSceneGraph,
+      pascalTruckNodeRef.current,
+    )
+    if (!parentId) {
+      return
+    }
+
+    if (existingTruckNode) {
+      sceneState.deleteNode(existingTruckNode.id as AnyNodeId)
+    }
+
+    sceneState.createNode(node as AnyNode, parentId as AnyNodeId)
+  }, [
+    hasLoadedInitialScene,
+    isVersionPreviewMode,
+    robotMode,
+    taskLoopToken,
+    taskModeSceneRestorePending,
+  ])
+
+  useEffect(() => {
     document.body.classList.add('dark')
     return () => {
       document.body.classList.remove('dark')
     }
   }, [])
+
+  useEffect(() => {
+    const previousRobotMode = previousRobotModeRef.current
+    if (previousRobotMode !== 'task' && robotMode === 'task') {
+      const currentScene = captureCurrentSceneGraph()
+      taskModeSceneSnapshotRef.current = hasTaskModeSceneContent(currentScene) ? currentScene : null
+      useNavigation.getState().setTaskLoopSettledToken(useNavigation.getState().taskLoopToken)
+    } else if (previousRobotMode === 'task' && robotMode !== 'task') {
+      restoreTaskModeSceneSnapshot({ clearSnapshot: true })
+    }
+
+    previousRobotModeRef.current = robotMode
+  }, [captureCurrentSceneGraph, restoreTaskModeSceneSnapshot, robotMode])
+
+  useEffect(() => {
+    const previousTaskLoopToken = previousTaskLoopTokenRef.current
+    if (previousTaskLoopToken === taskLoopToken) {
+      return
+    }
+
+    previousTaskLoopTokenRef.current = taskLoopToken
+    if (robotMode !== 'task') {
+      return
+    }
+
+    restoreTaskModeSceneSnapshot({ settledToken: taskLoopToken })
+  }, [restoreTaskModeSceneSnapshot, robotMode, taskLoopToken])
 
   const showLoader = isLoading || isSceneLoading
 
@@ -1104,6 +1383,13 @@ export default function Editor({
                   {!isVersionPreviewMode && (
                     <div className="pointer-events-auto">
                       <PanelManager />
+                    </div>
+                  )}
+                  {!isVersionPreviewMode && !isFirstPersonMode && robotMode && (
+                    <div className="pointer-events-auto">
+                      <Suspense fallback={null}>
+                        <NavigationPanel />
+                      </Suspense>
                     </div>
                   )}
                   <div className="pointer-events-auto">
