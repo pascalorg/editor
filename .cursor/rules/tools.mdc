@@ -60,11 +60,15 @@ export function MyTool() {
 
 ## Rules
 
-- **Tools only mutate `useScene`** — they do not call Three.js APIs directly.
+- **Tools mutate `useScene` for committed changes and `useLiveTransforms` for ephemeral drag state.** A tool's end-of-interaction write (click-to-commit, release-to-commit) goes to `useScene` and is captured in undo history. Per-mouse-move previews go to `useLiveTransforms` so history and subscribers aren't spammed.
+- **Live-drag exception for direct mesh transforms.** During an active drag a tool may apply a transform offset directly to `sceneRegistry.nodes.get(id).position`/`rotation`/`scale` *when and only when* the same offset is mirrored into `useLiveTransforms` for that node. This exception exists because the 3D renderers don't reconcile `useLiveTransforms` onto `mesh.position` yet; once a `LiveTransformSystem` does that, this exception goes away. Conditions:
+  - The mesh offset must mirror the `useLiveTransforms` entry (same delta on both), so anything reading `useLiveTransforms` sees the same preview as the 3D view.
+  - The offset must be cleared on tool unmount, cancel, *and* commit — both `mesh.position.set(0, 0, 0)` and `useLiveTransforms.clear(id)`.
+  - The tool must not generate or mutate geometry in this path — only transform writes. Geometry generation still belongs in a core system.
 - **No business logic in tools** — delegate geometry/constraint rules to core systems.
 - **Preview geometry is local** — transient meshes shown while a tool is active live in the tool component, not in the scene store.
-- **Clean up on unmount** — remove any pending/incomplete nodes when the tool unmounts.
-- **Tools must not import from `@pascal-app/viewer`** — use the scene store and core hooks only.
+- **Clean up on unmount** — remove any pending/incomplete nodes *and* any live transforms/mesh offsets when the tool unmounts.
+- **Tools must not import from `@pascal-app/viewer`** — use the scene store and core hooks only. `sceneRegistry` is exported from `@pascal-app/core` and is the allowed door into the Three.js graph for the narrow purposes above.
 - Each tool should handle a single, well-scoped interaction. Split complex tools (e.g. "draw + move") into separate components selected by `useEditor`.
 
 ## Adding a New Tool
