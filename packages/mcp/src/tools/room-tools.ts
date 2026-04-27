@@ -10,8 +10,7 @@ import {
   ZoneNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { SceneOperations } from '../operations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
 import {
@@ -118,7 +117,7 @@ function textResult<T extends Record<string, unknown>>(payload: T) {
   }
 }
 
-function assertLevel(bridge: SceneBridge, levelId: string): AnyNode {
+function assertLevel(bridge: SceneOperations, levelId: string): AnyNode {
   const level = bridge.getNode(levelId as AnyNodeId)
   if (!level) throwMcpError(ErrorCode.InvalidParams, `Level not found: ${levelId}`)
   if (level.type !== 'level') {
@@ -138,7 +137,7 @@ function assertLevel(bridge: SceneBridge, levelId: string): AnyNode {
   return level
 }
 
-function assertWall(bridge: SceneBridge, wallId: string): AnyNode & { type: 'wall' } {
+function assertWall(bridge: SceneOperations, wallId: string): AnyNode & { type: 'wall' } {
   const wall = bridge.getNode(wallId as AnyNodeId)
   if (!wall) throwMcpError(ErrorCode.InvalidParams, `Wall not found: ${wallId}`)
   if (wall.type !== 'wall') {
@@ -148,7 +147,7 @@ function assertWall(bridge: SceneBridge, wallId: string): AnyNode & { type: 'wal
 }
 
 function inferRoomGeometry(
-  bridge: SceneBridge,
+  bridge: SceneOperations,
   levelId: string | undefined,
   polygon: Vec2[] | undefined,
   zoneId: string | undefined,
@@ -385,11 +384,7 @@ export function registerSearchAssets(server: McpServer): void {
   )
 }
 
-export function registerCreateRoom(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerCreateRoom(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_room',
     {
@@ -431,7 +426,7 @@ export function registerCreateRoom(
           parentId: levelId as AnyNodeId,
         })),
       ])
-      await publishLiveSceneSnapshot(bridge, store, 'create_room')
+      await publishLiveSceneSnapshot(bridge, 'create_room')
 
       return textResult({
         zoneId: zone.id,
@@ -444,7 +439,7 @@ export function registerCreateRoom(
   )
 }
 
-export function registerAddDoor(server: McpServer, bridge: SceneBridge, store?: SceneStore): void {
+export function registerAddDoor(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'add_door',
     {
@@ -475,17 +470,13 @@ export function registerAddDoor(server: McpServer, bridge: SceneBridge, store?: 
         ...(swingDirection ? { swingDirection } : {}),
       })
       const id = bridge.createNode(door, wallId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, store, 'add_door')
+      await publishLiveSceneSnapshot(bridge, 'add_door')
       return textResult({ doorId: id, localX })
     },
   )
 }
 
-export function registerAddWindow(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerAddWindow(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'add_window',
     {
@@ -514,17 +505,13 @@ export function registerAddWindow(
         height,
       })
       const id = bridge.createNode(windowNode, wallId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, store, 'add_window')
+      await publishLiveSceneSnapshot(bridge, 'add_window')
       return textResult({ windowId: id, localX, sillHeight })
     },
   )
 }
 
-export function registerFurnishRoom(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerFurnishRoom(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'furnish_room',
     {
@@ -582,7 +569,7 @@ export function registerFurnishRoom(
             parentId: room.levelId as AnyNodeId,
           })),
         )
-        await publishLiveSceneSnapshot(bridge, store, 'furnish_room')
+        await publishLiveSceneSnapshot(bridge, 'furnish_room')
       }
 
       return textResult({
@@ -594,14 +581,10 @@ export function registerFurnishRoom(
   )
 }
 
-export function registerRoomTools(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerRoomTools(server: McpServer, bridge: SceneOperations): void {
   registerSearchAssets(server)
-  registerCreateRoom(server, bridge, store)
-  registerAddDoor(server, bridge, store)
-  registerAddWindow(server, bridge, store)
-  registerFurnishRoom(server, bridge, store)
+  registerCreateRoom(server, bridge)
+  registerAddDoor(server, bridge)
+  registerAddWindow(server, bridge)
+  registerFurnishRoom(server, bridge)
 }

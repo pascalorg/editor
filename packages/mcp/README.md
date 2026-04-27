@@ -33,10 +33,17 @@ Load an initial scene from disk:
 pascal-mcp --stdio --scene ./my-scene.json
 ```
 
-Expose it as HTTP for remote hosts:
+Expose it over loopback HTTP:
 
 ```bash
 pascal-mcp --http --port 8787
+```
+
+Binding a non-loopback host requires a bearer token:
+
+```bash
+PASCAL_MCP_HTTP_TOKEN="$(openssl rand -hex 32)" \
+  pascal-mcp --http --host 0.0.0.0 --port 8787 --cors-origin https://editor.example
 ```
 
 ## Local scene storage

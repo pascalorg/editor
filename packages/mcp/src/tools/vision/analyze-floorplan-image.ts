@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../../bridge/scene-bridge'
+import type { SceneOperations } from '../../operations'
 
 /**
  * Input shape for `analyze_floorplan_image`.
@@ -118,7 +118,7 @@ function extractText(
   return texts.join('\n').trim()
 }
 
-export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneBridge): void {
+export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneOperations): void {
   server.registerTool(
     'analyze_floorplan_image',
     {

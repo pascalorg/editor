@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { SceneNotFoundError, type SceneStore, SceneVersionConflictError } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
+import { SceneNotFoundError, SceneVersionConflictError } from '../../storage/types'
 import { ErrorCode, throwMcpError } from '../errors'
 
 export const deleteSceneInput = {
@@ -12,7 +13,7 @@ export const deleteSceneOutput = {
   deleted: z.boolean(),
 }
 
-export function registerDeleteScene(server: McpServer, store: SceneStore): void {
+export function registerDeleteScene(server: McpServer, operations: SceneOperations): void {
   server.registerTool(
     'delete_scene',
     {
@@ -24,7 +25,7 @@ export function registerDeleteScene(server: McpServer, store: SceneStore): void 
     },
     async ({ id, expectedVersion }) => {
       try {
-        const deleted = await store.delete(id, {
+        const deleted = await operations.deleteStoredScene(id, {
           ...(expectedVersion !== undefined ? { expectedVersion } : {}),
         })
         const payload = { deleted }

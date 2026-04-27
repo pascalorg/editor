@@ -15,6 +15,11 @@
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js",
       "default": "./dist/storage/index.js"
+    },
+    "./operations": {
+      "types": "./dist/operations/index.d.ts",
+      "import": "./dist/operations/index.js",
+      "default": "./dist/operations/index.js"
     }
   },
   "bin": {

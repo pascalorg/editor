@@ -2,8 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { AnyNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../../bridge/scene-bridge'
-import { type SceneStore, SceneVersionConflictError } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
+import { SceneVersionConflictError } from '../../storage/types'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 
@@ -39,7 +39,7 @@ export const saveSceneOutput = {
   url: z.string(),
 }
 
-export function registerSaveScene(server: McpServer, bridge: SceneBridge, store: SceneStore): void {
+export function registerSaveScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'save_scene',
     {
@@ -56,12 +56,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneBridge, store:
         if (!validation.valid) {
           throwMcpError(ErrorCode.InvalidRequest, 'scene_invalid', { errors: validation.errors })
         }
-        const exported = bridge.exportJSON()
-        sceneGraph = {
-          nodes: exported.nodes,
-          rootNodeIds: exported.rootNodeIds,
-          collections: exported.collections as SceneGraph['collections'],
-        }
+        sceneGraph = bridge.exportSceneGraph()
       } else {
         if (!graph) {
           throwMcpError(
@@ -96,7 +91,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneBridge, store:
       }
 
       try {
-        const meta = await store.save({
+        const meta = await bridge.saveScene({
           ...(id !== undefined ? { id } : {}),
           name,
           ...(projectId !== undefined ? { projectId } : {}),
@@ -104,7 +99,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneBridge, store:
           ...(thumbnail !== undefined ? { thumbnailUrl: thumbnail } : {}),
           ...(expectedVersion !== undefined ? { expectedVersion } : {}),
         })
-        await appendLiveSceneEvent(store, meta.id, meta.version, 'save_scene', sceneGraph)
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'save_scene', sceneGraph)
         if (includeCurrentScene) {
           bridge.setActiveScene(meta)
         }

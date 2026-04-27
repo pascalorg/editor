@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneBridge } from './bridge/scene-bridge'
+import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import { createSceneStore } from './storage'
@@ -19,6 +20,7 @@ import { registerVisionTools } from './tools/vision'
 
 export type CreatePascalMcpServerOptions = {
   bridge: SceneBridge
+  operations?: SceneOperations
   /** Injected `SceneStore`. When omitted, `createSceneStore()` is used lazily. */
   store?: SceneStore
   name?: string
@@ -31,10 +33,11 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     version: opts.version ?? '0.1.0',
   })
   const store = opts.store ?? createLazySceneStore()
-  registerTools(server, opts.bridge, store)
-  registerVisionTools(server, opts.bridge)
-  registerResources(server, opts.bridge)
-  registerPrompts(server, opts.bridge)
+  const operations = opts.operations ?? createSceneOperations({ bridge: opts.bridge, store })
+  registerTools(server, operations)
+  registerVisionTools(server, operations)
+  registerResources(server, operations)
+  registerPrompts(server, operations)
   return server
 }
 

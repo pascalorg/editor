@@ -6,12 +6,20 @@ on:
     paths:
       - 'packages/mcp/**'
       - 'packages/core/**'
+      - 'apps/editor/app/api/scenes/**'
+      - 'apps/editor/lib/scene-*'
+      - 'apps/editor/package.json'
       - 'bun.lock'
+      - '.github/workflows/mcp-ci.yml'
   pull_request:
     paths:
       - 'packages/mcp/**'
       - 'packages/core/**'
+      - 'apps/editor/app/api/scenes/**'
+      - 'apps/editor/lib/scene-*'
+      - 'apps/editor/package.json'
       - 'bun.lock'
+      - '.github/workflows/mcp-ci.yml'
 
 jobs:
   ci:
@@ -37,5 +45,8 @@ jobs:
       - name: Test mcp
         run: bun test --cwd packages/mcp
 
+      - name: Test editor scene API
+        run: bun test apps/editor/lib/scene-store-server.test.ts apps/editor/lib/scene-api-security.test.ts
+
       - name: Biome check
-        run: bunx biome check packages/mcp
+        run: bunx biome check packages/mcp apps/editor/lib/scene-store-server.ts apps/editor/lib/scene-api-security.ts apps/editor/app/api/scenes

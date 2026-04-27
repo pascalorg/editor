@@ -4,7 +4,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { registerDeleteScene } from './delete-scene'
-import { InMemorySceneStore, parseToolText, type StoredTextContent } from './test-utils'
+import {
+  createTestSceneOperations,
+  InMemorySceneStore,
+  parseToolText,
+  type StoredTextContent,
+} from './test-utils'
 
 const emptyGraph: SceneGraph = { nodes: {}, rootNodeIds: [] }
 
@@ -14,8 +19,9 @@ describe('delete_scene', () => {
 
   beforeEach(async () => {
     store = new InMemorySceneStore()
+    const { operations } = createTestSceneOperations({ store })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerDeleteScene(server, store)
+    registerDeleteScene(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])

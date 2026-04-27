@@ -1,7 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../../bridge/scene-bridge'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { ErrorCode, throwMcpError } from '../errors'
 
 export const loadSceneInput = {
@@ -21,7 +20,7 @@ export const loadSceneOutput = {
   nodeCount: z.number(),
 }
 
-export function registerLoadScene(server: McpServer, bridge: SceneBridge, store: SceneStore): void {
+export function registerLoadScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'load_scene',
     {
@@ -32,7 +31,7 @@ export function registerLoadScene(server: McpServer, bridge: SceneBridge, store:
       outputSchema: loadSceneOutput,
     },
     async ({ id }) => {
-      const result = await store.load(id)
+      const result = await bridge.loadStoredScene(id)
       if (!result) {
         throwMcpError(ErrorCode.InvalidParams, 'scene_not_found', { id })
       }

@@ -2,8 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { LevelNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
@@ -19,11 +18,7 @@ export const createLevelOutput = {
   levelId: z.string(),
 }
 
-export function registerCreateLevel(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerCreateLevel(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_level',
     {
@@ -57,7 +52,7 @@ export function registerCreateLevel(
       })
 
       const id = bridge.createNode(levelNode, buildingId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, store, 'create_level')
+      await publishLiveSceneSnapshot(bridge, 'create_level')
       const payload = { levelId: id as string }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

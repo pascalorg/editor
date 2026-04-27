@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 export const exportGlbInput = {}
 
@@ -9,7 +9,7 @@ export const exportGlbOutput = {
   reason: z.string(),
 }
 
-export function registerExportGlb(server: McpServer, _bridge: SceneBridge): void {
+export function registerExportGlb(server: McpServer, _bridge: SceneOperations): void {
   server.registerTool(
     'export_glb',
     {

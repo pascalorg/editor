@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SceneBridge } from '../../bridge/scene-bridge'
+import { createSceneOperations } from '../../operations'
 import {
   InMemorySceneStore,
   parseToolText,
@@ -59,8 +60,9 @@ describe('create_from_template', () => {
     bridge = new SceneBridge()
     bridge.setScene({}, [])
     store = new InMemorySceneStore()
+    const operations = createSceneOperations({ bridge, store })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerCreateFromTemplate(server, bridge, store)
+    registerCreateFromTemplate(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -138,9 +140,10 @@ describe('create_from_template without a store', () => {
   beforeEach(async () => {
     bridge = new SceneBridge()
     bridge.setScene({}, [])
+    const operations = createSceneOperations({ bridge })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    // No store passed → save should be gracefully skipped.
-    registerCreateFromTemplate(server, bridge)
+    // No store in operations → save should be gracefully skipped.
+    registerCreateFromTemplate(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])

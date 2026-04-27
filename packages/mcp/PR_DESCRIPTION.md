@@ -78,9 +78,9 @@ Issue [#74 "Viewer component API definition"](https://github.com/pascalorg/edito
 │   └────────────────────────────────────────────┘           │
 │                          │                                 │
 │                          ▼                                 │
-│   ┌──────────── SceneBridge + SceneStore ───────────────┐  │
-│   │  headless Zustand store + Zundo                     │  │
-│   │  local SQLite storage at ~/.pascal/data/pascal.db   │  │
+│   ┌─────────────── SceneOperations ─────────────────────┐  │
+│   │  shared MCP / REST operation boundary               │  │
+│   │  wraps SceneBridge + local SQLite SceneStore        │  │
 │   │  Zod validation at every boundary                   │  │
 │   └──────────────────────────────────────────────────────┘  │
 │                          │                                 │
@@ -147,15 +147,15 @@ and `save_scene`; the scene is openable at `/scene/<id>`.
 4. **`loadAssetUrl`/`saveAsset` are browser-only.** Items with `asset://<id>` URLs can't be resolved in Node. Supply absolute URLs or `data:` URIs if you need them usable outside the browser.
 5. **`SiteNode.children` inconsistency.** Site's children hold full node objects while every other container holds ID strings (see `CROSS_CUTTING.md` §2). MCP works around this by traversing via the flat `nodes` dict. Upstream alignment proposed as a follow-up.
 6. **Catalog unavailable in headless mode.** `pascal://catalog/items` and `place_item`'s catalog resolution fall back to a placeholder asset payload until the core exposes a Node-consumable catalog.
-7. **Local-only auth boundary.** The HTTP transport and editor scene API are intended for local development in this PR. Do not expose them on a public network without an auth layer.
+7. **HTTP/API exposure is guarded.** MCP HTTP binds to `127.0.0.1` by default and requires `PASCAL_MCP_HTTP_TOKEN`/`--auth-token` before binding non-loopback hosts. The editor scene API allows tokenless loopback development, but non-loopback requests require `PASCAL_SCENE_API_TOKEN`; both paths include CORS handling and in-memory rate limiting.
 
 ## Cross-cutting changes
 
 Documented in [`packages/mcp/CROSS_CUTTING.md`](./CROSS_CUTTING.md):
 
 1. **`packages/core/package.json` — additive subpath exports.** Adds `./schema`, `./store`, `./material-library`, `./spatial-grid`, `./wall`. Needed because the main entry re-exports browser-only systems; subpath entries let Node consumers skip them. Zero impact on existing consumers (`apps/editor`, `@pascal-app/viewer` still use the main entry).
-2. **`.github/workflows/mcp-ci.yml` — new CI.** Runs on PRs touching mcp/core; installs with Bun 1.3.0, builds, tests, biome-checks.
-3. **`apps/editor` scene routes.** Adds local scene API routes and pages that read from the same SQLite `SceneStore` as MCP.
+2. **`.github/workflows/mcp-ci.yml` — new CI.** Kept because the repo otherwise only has manual release CI. It runs on PRs touching MCP/core/editor scene API code; installs with Bun 1.3.0, builds MCP, runs MCP tests, runs focused editor scene API tests, and biome-checks the touched surface.
+3. **`apps/editor` scene routes.** Adds scene API routes and pages that read from the same SQLite-backed `SceneOperations` layer as MCP.
 4. (Observation, not fixed) **`SiteNode.children` inconsistency.** Detailed in CROSS_CUTTING §2.
 
 ## Checklist

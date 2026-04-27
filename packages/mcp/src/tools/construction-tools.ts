@@ -11,8 +11,7 @@ import {
   WallNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { SceneOperations } from '../operations'
 import { publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
 
@@ -107,17 +106,15 @@ function textResult<T extends Record<string, unknown>>(payload: T) {
   }
 }
 
-function assertNode(bridge: SceneBridge, id: string, type: AnyNode['type']): AnyNode {
+function assertNode(bridge: SceneOperations, id: string, type: AnyNode['type']): AnyNode {
   const node = bridge.getNode(id as AnyNodeId)
   if (!node) throw new Error(`${type} not found: ${id}`)
   if (node.type !== type) throw new Error(`Node ${id} is a ${node.type}, expected ${type}`)
   return node
 }
 
-function getBuildingIdForLevel(bridge: SceneBridge, levelId: string): AnyNodeId {
-  const building = bridge
-    .getAncestry(levelId as AnyNodeId)
-    .find((node) => node.type === 'building')
+function getBuildingIdForLevel(bridge: SceneOperations, levelId: string): AnyNodeId {
+  const building = bridge.getAncestry(levelId as AnyNodeId).find((node) => node.type === 'building')
   if (!building) {
     throw new Error(`Building ancestor not found for level: ${levelId}`)
   }
@@ -134,7 +131,11 @@ function isRoofLevel(level: AnyNode): boolean {
   )
 }
 
-function nextLevelIndex(bridge: SceneBridge, buildingId: AnyNodeId, referenceLevel: AnyNode): number {
+function nextLevelIndex(
+  bridge: SceneOperations,
+  buildingId: AnyNodeId,
+  referenceLevel: AnyNode,
+): number {
   const existing = bridge
     .getChildren(buildingId)
     .filter((node): node is AnyNode & { type: 'level' } => node.type === 'level')
@@ -144,14 +145,14 @@ function nextLevelIndex(bridge: SceneBridge, buildingId: AnyNodeId, referenceLev
   return existing.includes(candidate) ? Math.max(candidate, ...existing) + 1 : candidate
 }
 
-function nodesOnLevel(bridge: SceneBridge, levelId: string): AnyNode[] {
+function nodesOnLevel(bridge: SceneOperations, levelId: string): AnyNode[] {
   return Object.values(bridge.getNodes()).filter(
     (node) => node.id !== levelId && bridge.resolveLevelId(node.id as AnyNodeId) === levelId,
   )
 }
 
 function firstNodeOnLevel(
-  bridge: SceneBridge,
+  bridge: SceneOperations,
   levelId: string,
   type: 'slab' | 'ceiling',
 ): AnyNode | null {
@@ -204,11 +205,7 @@ function withHole(
   } as Partial<AnyNode>
 }
 
-export function registerConstructionTools(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerConstructionTools(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_story_shell',
     {
@@ -285,7 +282,7 @@ export function registerConstructionTools(
       }
 
       const result = bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, store, 'create_story_shell')
+      await publishLiveSceneSnapshot(bridge, 'create_story_shell')
       return textResult({
         levelId,
         wallIds,
@@ -379,7 +376,7 @@ export function registerConstructionTools(
         { op: 'create', node: roof, parentId: targetRoofLevelId },
         { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
       ])
-      await publishLiveSceneSnapshot(bridge, store, 'create_roof')
+      await publishLiveSceneSnapshot(bridge, 'create_roof')
       return textResult({
         referenceLevelId: levelId,
         roofLevelId: targetRoofLevelId,
@@ -500,7 +497,7 @@ export function registerConstructionTools(
       }
 
       bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, store, 'create_stair_between_levels')
+      await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
       return textResult({
         stairId: stair.id,
         stairSegmentId: segment.id,

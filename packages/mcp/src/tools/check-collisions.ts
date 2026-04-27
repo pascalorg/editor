@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId, ItemNode } from '@pascal-app/core/schema'
 import { getScaledDimensions } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { NodeIdSchema } from './schemas'
 
 export const checkCollisionsInput = {
@@ -38,7 +38,7 @@ function aabbOverlap(a: AABB, b: AABB): boolean {
   return a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ
 }
 
-export function registerCheckCollisions(server: McpServer, bridge: SceneBridge): void {
+export function registerCheckCollisions(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'check_collisions',
     {

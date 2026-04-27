@@ -4,7 +4,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { registerListScenes } from './list-scenes'
-import { InMemorySceneStore, parseToolText, type StoredTextContent } from './test-utils'
+import {
+  createTestSceneOperations,
+  InMemorySceneStore,
+  parseToolText,
+  type StoredTextContent,
+} from './test-utils'
 
 const emptyGraph: SceneGraph = { nodes: {}, rootNodeIds: [] }
 
@@ -14,8 +19,9 @@ describe('list_scenes', () => {
 
   beforeEach(async () => {
     store = new InMemorySceneStore()
+    const { operations } = createTestSceneOperations({ store })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerListScenes(server, store)
+    registerListScenes(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])

@@ -2,8 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { SceneOperations } from '../operations'
 import { findCatalogItem } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
 import { projectWorldPointToWallLocalX, wallLength } from './geometry'
@@ -22,11 +21,7 @@ export const placeItemOutput = {
   status: z.string().optional(),
 }
 
-export function registerPlaceItem(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerPlaceItem(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'place_item',
     {
@@ -102,7 +97,7 @@ export function registerPlaceItem(
         ...wallExtras,
       })
       const id = bridge.createNode(item, parentId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, store, 'place_item')
+      await publishLiveSceneSnapshot(bridge, 'place_item')
       const payload = {
         itemId: id as string,
         status: catalogAsset ? 'ok' : 'catalog_unavailable',

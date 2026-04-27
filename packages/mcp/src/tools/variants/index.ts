@@ -1,19 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../../bridge/scene-bridge'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { registerGenerateVariants } from './generate-variants'
 
 /**
- * Register the variant-generation MCP tools against the given server. Uses the
- * supplied `SceneStore` both to load a `baseSceneId` (when provided) and to
- * persist variants when `save=true`.
+ * Register the variant-generation MCP tools against shared scene operations.
  */
-export function registerVariantTools(
-  server: McpServer,
-  bridge: SceneBridge,
-  store: SceneStore,
-): void {
-  registerGenerateVariants(server, bridge, store)
+export function registerVariantTools(server: McpServer, bridge: SceneOperations): void {
+  registerGenerateVariants(server, bridge)
 }
 
 export {

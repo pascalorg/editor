@@ -4,7 +4,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerSaveScene } from './save-scene'
-import { InMemorySceneStore, parseToolText, type StoredTextContent } from './test-utils'
+import {
+  createTestSceneOperations,
+  InMemorySceneStore,
+  parseToolText,
+  type StoredTextContent,
+} from './test-utils'
 
 describe('save_scene', () => {
   let client: Client
@@ -16,8 +21,9 @@ describe('save_scene', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     store = new InMemorySceneStore()
+    const { operations } = createTestSceneOperations({ bridge, store })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerSaveScene(server, bridge, store)
+    registerSaveScene(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])

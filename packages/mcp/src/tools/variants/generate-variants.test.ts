@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { type AnyNodeId, AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
+import { createSceneOperations } from '../../operations'
 import {
   InMemorySceneStore,
   parseToolText,
@@ -56,8 +57,9 @@ async function setup(): Promise<{
   bridge.setScene({}, [])
   bridge.loadDefault()
   const store = new InMemorySceneStore()
+  const operations = createSceneOperations({ bridge, store })
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerGenerateVariants(server, bridge, store)
+  registerGenerateVariants(server, operations)
   const [srvT, cliT] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'test-client', version: '0.0.0' })
   await Promise.all([server.connect(srvT), client.connect(cliT)])

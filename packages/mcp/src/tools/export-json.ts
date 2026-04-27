@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 export const exportJsonInput = {
   pretty: z.boolean().optional(),
@@ -10,7 +10,7 @@ export const exportJsonOutput = {
   json: z.string(),
 }
 
-export function registerExportJson(server: McpServer, bridge: SceneBridge): void {
+export function registerExportJson(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'export_json',
     {

@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { CreateMessageRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { SceneBridge } from '../../bridge/scene-bridge'
+import { createSceneOperations } from '../../operations'
 import { InMemorySceneStore } from '../scene-lifecycle/test-utils'
 import { registerPhotoToScene } from './photo-to-scene'
 
@@ -22,8 +23,9 @@ async function makeWiredPair(opts: { withSampling: boolean; samplingHandler?: Ha
   const bridge = new SceneBridge()
   bridge.setScene({}, [])
   const store = new InMemorySceneStore()
+  const operations = createSceneOperations({ bridge, store })
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerPhotoToScene(server, bridge, store)
+  registerPhotoToScene(server, operations)
 
   const [srvT, cliT] = InMemoryTransport.createLinkedPair()
 

@@ -159,7 +159,9 @@ describe('scene query tools', () => {
     )
     expect(listPayload.occupiedStoryCount).toBe(2)
     expect(listPayload.roofLevelIds).toEqual([roofLevel.id])
-    expect(listPayload.levels.find((level: { id: string }) => level.id === roofLevel.id)).toMatchObject({
+    expect(
+      listPayload.levels.find((level: { id: string }) => level.id === roofLevel.id),
+    ).toMatchObject({
       role: 'roof',
       isSupportLevel: true,
       referenceLevelId: upper.id,

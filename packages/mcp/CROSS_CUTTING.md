@@ -6,8 +6,6 @@ Integrator review required. Each entry documents:
 - **Impact** on existing consumers
 - **Reversibility**
 
----
-
 ## 1. `packages/core/package.json` — added subpath exports
 
 ### What
@@ -79,15 +77,15 @@ Align `SiteNode.children` to `z.array(z.string())` + migration in `setScene.migr
 
 ### What
 
-Adds a CI workflow that runs on pushes to `main` and on pull requests touching `packages/mcp/`, `packages/core/`, or `bun.lock`. The job installs deps with Bun, builds `@pascal-app/core` then `@pascal-app/mcp`, runs `bun test` in the mcp package, and runs `bunx biome check packages/mcp`.
+Adds a CI workflow that runs on pushes to `main` and on pull requests touching `packages/mcp/`, `packages/core/`, the editor scene API surface, `.github/workflows/mcp-ci.yml`, or `bun.lock`. The job installs deps with Bun, builds `@pascal-app/core` then `@pascal-app/mcp`, runs `bun test` in the mcp package, runs focused editor scene API tests, and runs Biome over the MCP package plus the editor scene API files.
 
 ### Why
 
-The existing `.github/workflows/release.yml` is `workflow_dispatch`-only (manual releases for `core` / `viewer`). There was no automated pre-merge check for MCP builds/tests. A new workflow is needed so that PRs touching mcp/core are verified before merge.
+The existing `.github/workflows/release.yml` is `workflow_dispatch`-only (manual releases for `core` / `viewer`). There was no automated pre-merge check for MCP builds/tests. A new workflow is still needed so that PRs touching mcp/core are verified before merge, and it now covers the editor scene API because those routes consume the same MCP operations layer. Full `apps/editor` typecheck was evaluated but is not part of this workflow because it currently fails on unrelated `packages/editor` type errors.
 
 ### Impact
 
-None on existing workflows; purely additive. The new workflow only triggers for paths under `packages/mcp/`, `packages/core/`, or `bun.lock`, so unrelated PRs remain unaffected. `release.yml` is untouched.
+None on existing workflows; purely additive. The workflow only triggers for MCP/core/editor scene API paths, the workflow file itself, or `bun.lock`, so unrelated PRs remain unaffected. `release.yml` is untouched.
 
 ### Reversibility
 
@@ -95,15 +93,15 @@ Delete `.github/workflows/mcp-ci.yml`.
 
 ---
 
-## 4. `packages/mcp/package.json` — added `./storage` subpath export
+## 4. `packages/mcp/package.json` — added `./storage` and `./operations` subpath exports
 
 ### What
 
-Added a `./storage` entry to the `"exports"` map of `@pascal-app/mcp`, pointing at the built `dist/storage/index.{js,d.ts}`. The existing `"."` entry is unchanged.
+Added `./storage` and `./operations` entries to the `"exports"` map of `@pascal-app/mcp`, pointing at the built `dist/storage/index.{js,d.ts}` and `dist/operations/index.{js,d.ts}`. The existing `"."` entry is unchanged.
 
 ### Why
 
-The Next.js editor (`apps/editor`) needs access to `createSceneStore()` + the `SceneStore` types/errors in server-only code (API route handlers + `lib/scene-store-server.ts`). The main entry `.` pulls in the full MCP server surface (tools, transports, MCP SDK), which is overkill for a consumer that only needs the storage adapter. The subpath export lets `apps/editor` do `import type { SceneStore } from '@pascal-app/mcp/storage'` and dynamically import `createSceneStore` without re-declaring the storage contract.
+The Next.js editor (`apps/editor`) needs access to `createSceneStore()`, `SceneStore` types/errors, and the shared `SceneOperations` service layer in server-only code (API route handlers + `lib/scene-store-server.ts`). The main entry `.` pulls in the full MCP server surface (tools, transports, MCP SDK), which is overkill for a consumer that only needs storage/operations. The subpath exports let `apps/editor` dynamically import storage and operations without re-declaring either contract.
 
 The concrete backend is now `SqliteSceneStore`, backed by built-in SQLite drivers (`bun:sqlite` for the MCP CLI and `node:sqlite` for the Next.js editor server). It writes to `~/.pascal/data/pascal.db` by default and also supports `PASCAL_DATA_DIR`, `PASCAL_DB_PATH`, and `PASCAL_MAX_SCENE_BYTES`.
 
@@ -113,12 +111,12 @@ Zero on existing consumers. Purely additive. The `.` entry continues to export `
 
 ### Reversibility
 
-Remove the `./storage` entry from `exports` and update `apps/editor` to use a different factory. No data or behavior changes — pure module-graph shaping.
+Remove the `./storage`/`./operations` entries from `exports` and update `apps/editor` to use a different factory. No data or behavior changes — pure module-graph shaping.
 
 ### Related
 
 - `apps/editor/package.json` adds `@pascal-app/mcp` as a workspace dependency so the subpath resolves.
-- `apps/editor/lib/scene-store-server.ts` and `apps/editor/app/api/scenes/**` consume this subpath.
+- `apps/editor/lib/scene-store-server.ts` and `apps/editor/app/api/scenes/**` consume these subpaths.
 - `packages/mcp/src/storage/sqlite-scene-store.ts` is the only production storage backend.
 
 ---
@@ -198,5 +196,37 @@ schema boundary.
 Delete `packages/core/src/schema/asset-url.ts` and revert the five imports in
 `scan.ts`, `guide.ts`, `item.ts`, and `material.ts` to `z.string()`. The
 scene-bridge test update is self-contained.
+
+---
+
+## 6. `apps/editor` / `packages/editor` scene-loading support
+
+### What
+
+The PR still touches the editor app and editor package, but the remaining files
+are tied to the MCP scene workflow:
+
+- `apps/editor/app/api/scenes/**`, `apps/editor/components/save-button.tsx`,
+  and `apps/editor/components/scene-loader.tsx` expose saved MCP scenes in the
+  web editor.
+- `packages/editor/src/hooks/use-auto-frame.ts` plus
+  `packages/editor/src/lib/scene-bounds.ts` frame the camera after a stored scene
+  is loaded, avoiding an apparently empty viewport when MCP loads a scene away
+  from the default camera pose.
+- The large demo fixture `apps/editor/public/dev/casa-sol.json` was removed from
+  this PR to keep the diff focused.
+
+### Why
+
+The MCP package can save scenes without these editor changes, but the PR goal is
+to let contributors open and continue scenes saved by MCP. The API/UI pieces and
+auto-frame hook are the minimum editor-side bridge for that workflow. They do
+not change `@pascal-app/viewer` exports.
+
+### Reversibility
+
+If maintainers want a narrower MCP-only PR, revert the editor app pages/routes
+and the auto-frame helper files, then keep only `@pascal-app/mcp`, the required
+`@pascal-app/core` subpath/schema changes, and `bun.lock`.
 
 ---

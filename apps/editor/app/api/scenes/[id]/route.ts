@@ -1,7 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
-import { getSceneStore } from '@/lib/scene-store-server'
+import {
+  guardSceneApiRequest,
+  sceneApiJson,
+  sceneApiPreflight,
+  withSceneApiHeaders,
+} from '@/lib/scene-api-security'
+import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,30 +25,41 @@ const patchSceneSchema = z.object({
   expectedVersion: z.number().int().nonnegative().optional(),
 })
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export function OPTIONS(request: NextRequest) {
+  return sceneApiPreflight(request)
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
   const { id } = await params
-  const store = await getSceneStore()
+  const operations = await getSceneOperations()
   try {
-    const scene = await store.load(id)
+    const scene = await operations.loadStoredScene(id)
     if (!scene) {
-      return NextResponse.json({ error: 'not_found' }, { status: 404 })
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    return NextResponse.json(scene, {
+    return sceneApiJson(request, scene, {
       headers: { ETag: `"${scene.version}"` },
     })
   } catch (error) {
-    return handleStoreError(error)
+    return handleStoreError(request, error)
   }
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
   const { id } = await params
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: 'body must be valid JSON' },
       { status: 400 },
     )
@@ -50,7 +67,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const parsed = putSceneSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: parsed.error.issues },
       { status: 400 },
     )
@@ -59,13 +77,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const ifMatch = parseIfMatch(request.headers.get('If-Match'))
   const expectedVersion = ifMatch ?? parsed.data.expectedVersion
 
-  const store = await getSceneStore()
+  const operations = await getSceneOperations()
   try {
-    const existing = await store.load(id)
+    const existing = await operations.loadStoredScene(id)
     if (!existing) {
-      return NextResponse.json({ error: 'not_found' }, { status: 404 })
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    const meta = await store.save({
+    const meta = await operations.saveScene({
       id,
       name: parsed.data.name ?? existing.name,
       projectId: existing.projectId,
@@ -75,38 +93,45 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         parsed.data.thumbnailUrl === undefined ? existing.thumbnailUrl : parsed.data.thumbnailUrl,
       expectedVersion: expectedVersion ?? existing.version,
     })
-    return NextResponse.json(meta, {
+    return sceneApiJson(request, meta, {
       headers: { ETag: `"${meta.version}"` },
     })
   } catch (error) {
-    return handleStoreError(error, { includeCurrentVersionFor: id })
+    return handleStoreError(request, error, { includeCurrentVersionFor: id })
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
   const { id } = await params
   const ifMatch = parseIfMatch(request.headers.get('If-Match'))
 
-  const store = await getSceneStore()
+  const operations = await getSceneOperations()
   try {
-    const removed = await store.delete(id, { expectedVersion: ifMatch })
+    const removed = await operations.deleteStoredScene(id, { expectedVersion: ifMatch })
     if (!removed) {
-      return NextResponse.json({ error: 'not_found' }, { status: 404 })
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    return new NextResponse(null, { status: 204 })
+    return withSceneApiHeaders(request, new NextResponse(null, { status: 204 }))
   } catch (error) {
-    return handleStoreError(error, { includeCurrentVersionFor: id })
+    return handleStoreError(request, error, { includeCurrentVersionFor: id })
   }
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
   const { id } = await params
 
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: 'body must be valid JSON' },
       { status: 400 },
     )
@@ -114,7 +139,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const parsed = patchSceneSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: parsed.error.issues },
       { status: 400 },
     )
@@ -123,14 +149,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const ifMatch = parseIfMatch(request.headers.get('If-Match'))
   const expectedVersion = ifMatch ?? parsed.data.expectedVersion
 
-  const store = await getSceneStore()
+  const operations = await getSceneOperations()
   try {
-    const meta = await store.rename(id, parsed.data.name, { expectedVersion })
-    return NextResponse.json(meta, {
+    const meta = await operations.renameStoredScene(id, parsed.data.name, { expectedVersion })
+    return sceneApiJson(request, meta, {
       headers: { ETag: `"${meta.version}"` },
     })
   } catch (error) {
-    return handleStoreError(error, { includeCurrentVersionFor: id })
+    return handleStoreError(request, error, { includeCurrentVersionFor: id })
   }
 }
 
@@ -152,6 +178,7 @@ function parseIfMatch(raw: string | null): number | undefined {
 }
 
 async function handleStoreError(
+  request: NextRequest,
   error: unknown,
   opts: { includeCurrentVersionFor?: string } = {},
 ): Promise<NextResponse> {
@@ -160,14 +187,15 @@ async function handleStoreError(
     let currentVersion: number | undefined
     if (opts.includeCurrentVersionFor) {
       try {
-        const store = await getSceneStore()
-        const current = await store.load(opts.includeCurrentVersionFor)
+        const operations = await getSceneOperations()
+        const current = await operations.loadStoredScene(opts.includeCurrentVersionFor)
         currentVersion = current?.version
       } catch {
         // Best-effort; skip reporting currentVersion on secondary failure.
       }
     }
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       currentVersion === undefined
         ? { error: 'version_conflict' }
         : { error: 'version_conflict', currentVersion },
@@ -175,14 +203,14 @@ async function handleStoreError(
     )
   }
   if (code === 'not_found') {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
   }
   if (code === 'too_large') {
-    return NextResponse.json({ error: 'too_large' }, { status: 413 })
+    return sceneApiJson(request, { error: 'too_large' }, { status: 413 })
   }
   if (code === 'invalid') {
-    return NextResponse.json({ error: 'invalid' }, { status: 400 })
+    return sceneApiJson(request, { error: 'invalid' }, { status: 400 })
   }
   const message = error instanceof Error ? error.message : 'unexpected_error'
-  return NextResponse.json({ error: 'internal_error', message }, { status: 500 })
+  return sceneApiJson(request, { error: 'internal_error', message }, { status: 500 })
 }

@@ -2,9 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { cloneSceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../../bridge/scene-bridge'
 import { rehydrateSiteChildren } from '../../lib/rehydrate-site-children'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
@@ -22,9 +21,10 @@ export const createFromTemplateInput = {
     .optional()
     .describe('Optional display name for the saved scene. Defaults to the template name.'),
   /**
-   * When a `SceneStore` is wired into the MCP server, set this flag to `true`
-   * to immediately save the instantiated template and return its `SceneMeta`.
-   * When `false` (default) the template is applied to the bridge only.
+   * When persistence operations are wired into the MCP server, set this flag to
+   * `true` to immediately save the instantiated template and return its
+   * `SceneMeta`. When `false` (default) the template is applied to the bridge
+   * only.
    */
   save: z.boolean().default(false),
   projectId: z.string().optional(),
@@ -54,17 +54,13 @@ export const createFromTemplateOutput = {
 
 /**
  * `create_from_template` — instantiate a seed template into the bridge, and
- * optionally persist it via the attached `SceneStore`.
+ * optionally persist it via the attached scene operations.
  *
  * The source template is cloned with fresh ids (`cloneSceneGraph`) so the
  * deterministic placeholders (`site_empty`, `wall_n`, …) don't collide
  * across repeated calls or with other scenes.
  */
-export function registerCreateFromTemplate(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerCreateFromTemplate(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_from_template',
     {
@@ -112,7 +108,7 @@ export function registerCreateFromTemplate(
         }
       }
 
-      if (!store) {
+      if (!bridge.hasStore) {
         // Graceful no-store mode: report that save was skipped rather than
         // erroring — this makes the tool usable in headless bridge-only
         // deployments (tests, smoke scripts) without crashing.
@@ -125,13 +121,13 @@ export function registerCreateFromTemplate(
       }
 
       try {
-        const meta = await store.save({
+        const meta = await bridge.saveScene({
           name: name ?? entry.name,
           ...(projectId !== undefined ? { projectId } : {}),
           graph: { nodes, rootNodeIds },
         })
         bridge.setActiveScene(meta)
-        await appendLiveSceneEvent(store, meta.id, meta.version, 'create_from_template', {
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'create_from_template', {
           nodes,
           rootNodeIds,
         })

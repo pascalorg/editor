@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 export const validateSceneInput = {}
 
@@ -15,7 +15,7 @@ export const validateSceneOutput = {
   ),
 }
 
-export function registerValidateScene(server: McpServer, bridge: SceneBridge): void {
+export function registerValidateScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'validate_scene',
     {

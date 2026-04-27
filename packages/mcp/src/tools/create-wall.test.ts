@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import type { SceneMeta, SceneStore } from '../storage/types'
 import { registerCreateWall } from './create-wall'
 
@@ -97,8 +98,9 @@ describe('create_wall', () => {
     }
     const liveServer = new McpServer({ name: 'test-live', version: '0.0.0' })
     const liveClient = new Client({ name: 'test-live-client', version: '0.0.0' })
-    bridge.setActiveScene(savedMeta)
-    registerCreateWall(liveServer, bridge, store)
+    const operations = createSceneOperations({ bridge, store })
+    operations.setActiveScene(savedMeta)
+    registerCreateWall(liveServer, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     await Promise.all([liveServer.connect(srvT), liveClient.connect(cliT)])
 

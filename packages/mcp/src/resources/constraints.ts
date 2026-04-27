@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, SlabNode, WallNode } from '@pascal-app/core/schema'
 import { getWallPlanFootprint } from '@pascal-app/core/wall'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 type WallFootprint = {
   wallId: string
@@ -36,7 +36,10 @@ const EMPTY_MITER_DATA: Parameters<typeof getWallPlanFootprint>[1] = {
   junctions: new Map(),
 }
 
-function buildPayload(bridge: SceneBridge, levelId: string): ConstraintsPayload | ConstraintsError {
+function buildPayload(
+  bridge: SceneOperations,
+  levelId: string,
+): ConstraintsPayload | ConstraintsError {
   const level = bridge.getNode(levelId as never)
   if (!level || level.type !== 'level') {
     return {
@@ -72,7 +75,7 @@ function buildPayload(bridge: SceneBridge, levelId: string): ConstraintsPayload 
  * input hints for agents: slab nodes (with polygons/holes/elevation) + each
  * wall's plan-view footprint polygon.
  */
-export function registerConstraints(server: McpServer, bridge: SceneBridge): void {
+export function registerConstraints(server: McpServer, bridge: SceneOperations): void {
   server.registerResource(
     'constraints',
     new ResourceTemplate('pascal://constraints/{levelId}', { list: undefined }),

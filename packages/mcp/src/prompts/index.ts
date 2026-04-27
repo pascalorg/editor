@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { registerFromBrief } from './from-brief'
 import { registerIterateOnFeedback } from './iterate-on-feedback'
 import { registerRenovationFromPhotos } from './renovation-from-photos'
@@ -10,8 +10,8 @@ import { registerRenovationFromPhotos } from './renovation-from-photos'
  * - `iterate_on_feedback`       — minimal-diff patches from user feedback
  * - `renovation_from_photos`    — photo-driven renovation plan via vision tools
  */
-export function registerPrompts(server: McpServer, bridge: SceneBridge): void {
-  registerFromBrief(server, bridge)
-  registerIterateOnFeedback(server, bridge)
-  registerRenovationFromPhotos(server, bridge)
+export function registerPrompts(server: McpServer, operations: SceneOperations): void {
+  registerFromBrief(server, operations)
+  registerIterateOnFeedback(server, operations)
+  registerRenovationFromPhotos(server, operations)
 }

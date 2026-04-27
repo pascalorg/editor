@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
 
 const PREAMBLE = [
@@ -25,7 +25,7 @@ export function buildIterateOnFeedbackPrompt(args: { feedback: string }): string
   return [PREAMBLE, '', '## User feedback', args.feedback.trim()].join('\n')
 }
 
-export function registerIterateOnFeedback(server: McpServer, _bridge: SceneBridge): void {
+export function registerIterateOnFeedback(server: McpServer, _bridge: SceneOperations): void {
   server.registerPrompt(
     'iterate_on_feedback',
     {

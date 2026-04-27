@@ -1,8 +1,4 @@
-// TODO: auth — every call in this module currently runs unauthenticated.
-// v0.1 is scoped to local-first use on a developer machine. A hosted editor
-// should pass request-scoped user context through this factory before exposing
-// these routes publicly.
-
+import type { SceneOperations } from '@pascal-app/mcp/operations'
 import type { SceneStore } from '@pascal-app/mcp/storage'
 
 /**
@@ -10,18 +6,32 @@ import type { SceneStore } from '@pascal-app/mcp/storage'
  * dynamically imported — we cache the in-flight promise so concurrent calls
  * during a cold start share a single instantiation.
  */
-let cached: Promise<SceneStore> | null = null
+let cachedStore: Promise<SceneStore> | null = null
+let cachedOperations: Promise<SceneOperations> | null = null
 
 export function getSceneStore(): Promise<SceneStore> {
-  if (!cached) {
-    cached = (async () => {
+  if (!cachedStore) {
+    cachedStore = (async () => {
       const mod = (await import('@pascal-app/mcp/storage')) as {
         createSceneStore: (env?: NodeJS.ProcessEnv) => Promise<SceneStore>
       }
       return mod.createSceneStore(process.env)
     })()
   }
-  return cached
+  return cachedStore
+}
+
+export function getSceneOperations(): Promise<SceneOperations> {
+  if (!cachedOperations) {
+    cachedOperations = (async () => {
+      const store = await getSceneStore()
+      const mod = (await import('@pascal-app/mcp/operations')) as {
+        createSceneOperations: (options: { store: SceneStore }) => SceneOperations
+      }
+      return mod.createSceneOperations({ store })
+    })()
+  }
+  return cachedOperations
 }
 
 /**
@@ -29,5 +39,6 @@ export function getSceneStore(): Promise<SceneStore> {
  * callers.
  */
 export function __resetSceneStoreForTests(): void {
-  cached = null
+  cachedStore = null
+  cachedOperations = null
 }

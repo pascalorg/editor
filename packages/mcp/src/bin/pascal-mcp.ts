@@ -19,6 +19,9 @@ OPTIONS:
   --stdio          Use stdio transport (default)
   --http           Use Streamable HTTP transport
   --port <n>       HTTP port (default 3917)
+  --host <host>    HTTP bind host (default 127.0.0.1)
+  --auth-token <t> Bearer token required for HTTP calls
+  --cors-origin <o> Repeatable allowed HTTP CORS origin
   --scene <path>   Initial scene JSON to load
   --version        Print version
   --help           Print this help
@@ -30,6 +33,9 @@ async function main(): Promise<void> {
       stdio: { type: 'boolean', default: false },
       http: { type: 'boolean', default: false },
       port: { type: 'string', default: '3917' },
+      host: { type: 'string', default: '127.0.0.1' },
+      'auth-token': { type: 'string' },
+      'cors-origin': { type: 'string', multiple: true, default: [] },
       scene: { type: 'string' },
       help: { type: 'boolean', default: false },
       version: { type: 'boolean', default: false },
@@ -61,8 +67,12 @@ async function main(): Promise<void> {
     if (!Number.isFinite(portNum) || portNum < 0 || portNum > 65535) {
       throw new Error(`invalid --port value: ${values.port}`)
     }
-    const handle = await connectHttp(server, portNum)
-    console.error(`[pascal-mcp] HTTP server listening on :${handle.port}`)
+    const handle = await connectHttp(server, portNum, {
+      host: values.host,
+      authToken: values['auth-token'],
+      allowedOrigins: values['cors-origin'],
+    })
+    console.error(`[pascal-mcp] HTTP server listening on ${handle.host}:${handle.port}`)
     const shutdown = async () => {
       try {
         await handle.close()

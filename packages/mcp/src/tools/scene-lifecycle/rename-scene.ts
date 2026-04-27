@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { SceneNotFoundError, type SceneStore, SceneVersionConflictError } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
+import { SceneNotFoundError, SceneVersionConflictError } from '../../storage/types'
 import { ErrorCode, throwMcpError } from '../errors'
 
 export const renameSceneInput = {
@@ -22,7 +23,7 @@ export const renameSceneOutput = {
   nodeCount: z.number(),
 }
 
-export function registerRenameScene(server: McpServer, store: SceneStore): void {
+export function registerRenameScene(server: McpServer, operations: SceneOperations): void {
   server.registerTool(
     'rename_scene',
     {
@@ -34,7 +35,7 @@ export function registerRenameScene(server: McpServer, store: SceneStore): void 
     },
     async ({ id, newName, expectedVersion }) => {
       try {
-        const meta = await store.rename(id, newName, {
+        const meta = await operations.renameStoredScene(id, newName, {
           ...(expectedVersion !== undefined ? { expectedVersion } : {}),
         })
         const payload = {

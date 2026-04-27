@@ -62,3 +62,39 @@ test('connectHttp close() stops the server', async () => {
   }
   expect(didConnect).toBe(false)
 })
+
+test('connectHttp requires auth when binding a non-loopback host', async () => {
+  await expect(connectHttp(server, 0, { host: '0.0.0.0' })).rejects.toThrow(
+    /requires PASCAL_MCP_HTTP_TOKEN/,
+  )
+})
+
+test('connectHttp rejects unauthenticated requests when a token is configured', async () => {
+  handle = await connectHttp(server, 0, { authToken: 'secret' })
+
+  const response = await fetch(`http://127.0.0.1:${handle.port}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  })
+
+  expect(response.status).toBe(401)
+})
+
+test('connectHttp handles allowed CORS preflight', async () => {
+  handle = await connectHttp(server, 0, {
+    authToken: 'secret',
+    allowedOrigins: ['https://app.example'],
+  })
+
+  const response = await fetch(`http://127.0.0.1:${handle.port}/mcp`, {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'https://app.example',
+      'access-control-request-method': 'POST',
+    },
+  })
+
+  expect(response.status).toBe(204)
+  expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example')
+})

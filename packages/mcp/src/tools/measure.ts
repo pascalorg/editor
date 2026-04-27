@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { NodeIdSchema } from './schemas'
 
@@ -84,7 +84,7 @@ function shoelaceArea(polygon: Array<[number, number]>): number {
   return Math.abs(sum) / 2
 }
 
-export function registerMeasure(server: McpServer, bridge: SceneBridge): void {
+export function registerMeasure(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'measure',
     {

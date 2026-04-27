@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../../bridge/scene-bridge'
+import type { SceneOperations } from '../../operations'
 import { registerAnalyzeFloorplanImage } from './analyze-floorplan-image'
 import { registerAnalyzeRoomPhoto } from './analyze-room-photo'
 
@@ -9,9 +9,9 @@ import { registerAnalyzeRoomPhoto } from './analyze-room-photo'
  * not advertise `sampling` support, calling either tool returns
  * `sampling_unavailable`.
  */
-export function registerVisionTools(server: McpServer, bridge: SceneBridge): void {
-  registerAnalyzeFloorplanImage(server, bridge)
-  registerAnalyzeRoomPhoto(server, bridge)
+export function registerVisionTools(server: McpServer, operations: SceneOperations): void {
+  registerAnalyzeFloorplanImage(server, operations)
+  registerAnalyzeRoomPhoto(server, operations)
 }
 
 export {

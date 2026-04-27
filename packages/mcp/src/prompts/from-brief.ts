@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
 
 const PREAMBLE = [
@@ -37,7 +37,7 @@ export function buildFromBriefPrompt(args: {
   return parts.join('\n')
 }
 
-export function registerFromBrief(server: McpServer, _bridge: SceneBridge): void {
+export function registerFromBrief(server: McpServer, _bridge: SceneOperations): void {
   server.registerPrompt(
     'from_brief',
     {

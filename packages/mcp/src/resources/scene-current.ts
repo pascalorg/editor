@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 /**
  * `pascal://scene/current` — full `{ nodes, rootNodeIds, collections }` snapshot.
  *
  * Static URI (not a template). MIME `application/json`.
  */
-export function registerSceneCurrent(server: McpServer, bridge: SceneBridge): void {
+export function registerSceneCurrent(server: McpServer, bridge: SceneOperations): void {
   server.registerResource(
     'scene-current',
     'pascal://scene/current',

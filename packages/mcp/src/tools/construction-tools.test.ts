@@ -4,8 +4,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { LevelNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
-import { registerSceneQueryTools } from './scene-query'
 import { registerConstructionTools } from './construction-tools'
+import { registerSceneQueryTools } from './scene-query'
 
 describe('construction tools', () => {
   let client: Client

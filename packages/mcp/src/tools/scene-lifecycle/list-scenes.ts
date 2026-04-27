@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { ErrorCode, throwMcpError } from '../errors'
 
 const DEFAULT_LIMIT = 100
@@ -27,7 +27,7 @@ export const listScenesOutput = {
   ),
 }
 
-export function registerListScenes(server: McpServer, store: SceneStore): void {
+export function registerListScenes(server: McpServer, operations: SceneOperations): void {
   server.registerTool(
     'list_scenes',
     {
@@ -39,7 +39,7 @@ export function registerListScenes(server: McpServer, store: SceneStore): void {
     },
     async ({ projectId, limit }) => {
       try {
-        const scenes = await store.list({
+        const scenes = await operations.listScenes({
           ...(projectId !== undefined ? { projectId } : {}),
           limit: limit ?? DEFAULT_LIMIT,
         })

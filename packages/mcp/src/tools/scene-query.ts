@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import {
   distance2D,
   pointInPolygon,
@@ -88,7 +88,7 @@ function textResult<T extends Record<string, unknown>>(payload: T) {
   }
 }
 
-function getLevels(bridge: SceneBridge): AnyNode[] {
+function getLevels(bridge: SceneOperations): AnyNode[] {
   return bridge.findNodes({ type: 'level' }).sort((a, b) => {
     const aa = a.type === 'level' ? a.level : 0
     const bb = b.type === 'level' ? b.level : 0
@@ -96,13 +96,16 @@ function getLevels(bridge: SceneBridge): AnyNode[] {
   })
 }
 
-function getDefaultLevelId(bridge: SceneBridge, requested?: string | undefined): AnyNodeId | null {
+function getDefaultLevelId(
+  bridge: SceneOperations,
+  requested?: string | undefined,
+): AnyNodeId | null {
   if (requested) return requested as AnyNodeId
   const level = getLevels(bridge)[0]
   return (level?.id as AnyNodeId | undefined) ?? null
 }
 
-function nodesOnLevel(bridge: SceneBridge, levelId: AnyNodeId): AnyNode[] {
+function nodesOnLevel(bridge: SceneOperations, levelId: AnyNodeId): AnyNode[] {
   return Object.values(bridge.getNodes()).filter(
     (node) => node.id !== levelId && bridge.resolveLevelId(node.id as AnyNodeId) === levelId,
   )
@@ -140,7 +143,7 @@ function classifyLevel(level: AnyNode, counts: ContentCounts): LevelRole {
   return 'occupied'
 }
 
-function openingSummaries(bridge: SceneBridge, wallId: AnyNodeId) {
+function openingSummaries(bridge: SceneOperations, wallId: AnyNodeId) {
   return bridge
     .getChildren(wallId)
     .filter((child) => child.type === 'door' || child.type === 'window')
@@ -153,7 +156,7 @@ function openingSummaries(bridge: SceneBridge, wallId: AnyNodeId) {
     }))
 }
 
-function wallSummary(bridge: SceneBridge, wall: AnyNode) {
+function wallSummary(bridge: SceneOperations, wall: AnyNode) {
   if (wall.type !== 'wall') return null
   const length = distance2D(wall.start, wall.end)
   return {
@@ -280,7 +283,10 @@ function computeSegmentTransforms(segments: StairSegmentLike[]): SegmentTransfor
   return transforms
 }
 
-function stairFootprintPolygons(bridge: SceneBridge, stair: AnyNode & { type: 'stair' }): Vec2[][] {
+function stairFootprintPolygons(
+  bridge: SceneOperations,
+  stair: AnyNode & { type: 'stair' },
+): Vec2[][] {
   if (stair.stairType === 'curved' || stair.stairType === 'spiral') {
     const radius = Math.max(0.05, stair.innerRadius ?? 0.9) + Math.max(stair.width ?? 1, 0.4)
     return [
@@ -345,7 +351,7 @@ function getLevelNumber(
 }
 
 function targetLevelIdsForStair(
-  bridge: SceneBridge,
+  bridge: SceneOperations,
   stair: AnyNode & { type: 'stair' },
 ): AnyNodeId[] {
   const nodes = bridge.getNodes()
@@ -388,7 +394,7 @@ function parentListsChild(parent: AnyNode, childId: string): boolean {
   })
 }
 
-function levelSummary(bridge: SceneBridge, levelId: AnyNodeId) {
+function levelSummary(bridge: SceneOperations, levelId: AnyNodeId) {
   const level = bridge.getNode(levelId)
   if (!level || level.type !== 'level') {
     throw new Error(`Level not found: ${levelId}`)
@@ -454,7 +460,7 @@ function levelSummary(bridge: SceneBridge, levelId: AnyNodeId) {
   }
 }
 
-export function registerListLevels(server: McpServer, bridge: SceneBridge): void {
+export function registerListLevels(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'list_levels',
     {
@@ -497,7 +503,7 @@ export function registerListLevels(server: McpServer, bridge: SceneBridge): void
   )
 }
 
-export function registerGetLevelSummary(server: McpServer, bridge: SceneBridge): void {
+export function registerGetLevelSummary(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'get_level_summary',
     {
@@ -515,7 +521,7 @@ export function registerGetLevelSummary(server: McpServer, bridge: SceneBridge):
   )
 }
 
-export function registerGetWalls(server: McpServer, bridge: SceneBridge): void {
+export function registerGetWalls(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'get_walls',
     {
@@ -536,7 +542,7 @@ export function registerGetWalls(server: McpServer, bridge: SceneBridge): void {
   )
 }
 
-export function registerGetZones(server: McpServer, bridge: SceneBridge): void {
+export function registerGetZones(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'get_zones',
     {
@@ -557,7 +563,7 @@ export function registerGetZones(server: McpServer, bridge: SceneBridge): void {
   )
 }
 
-export function registerVerifyScene(server: McpServer, bridge: SceneBridge): void {
+export function registerVerifyScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'verify_scene',
     {
@@ -817,7 +823,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneBridge): voi
   )
 }
 
-export function registerSceneQueryTools(server: McpServer, bridge: SceneBridge): void {
+export function registerSceneQueryTools(server: McpServer, bridge: SceneOperations): void {
   registerListLevels(server, bridge)
   registerGetLevelSummary(server, bridge)
   registerGetWalls(server, bridge)

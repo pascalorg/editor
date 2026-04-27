@@ -11,8 +11,7 @@ import {
   ZoneNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../../bridge/scene-bridge'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { appendLiveSceneEvent } from '../live-sync'
 
 /**
@@ -341,11 +340,7 @@ function buildSceneGraphFromVision(
   }
 }
 
-export function registerPhotoToScene(
-  server: McpServer,
-  bridge: SceneBridge,
-  store: SceneStore,
-): void {
+export function registerPhotoToScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'photo_to_scene',
     {
@@ -375,12 +370,12 @@ export function registerPhotoToScene(
 
       // 4. Save or return inline.
       if (save) {
-        const meta = await store.save({
+        const meta = await bridge.saveScene({
           name,
           graph,
         })
         bridge.setActiveScene(meta)
-        await appendLiveSceneEvent(store, meta.id, meta.version, 'photo_to_scene', graph)
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'photo_to_scene', graph)
         const payload: {
           sceneId: string
           url: string

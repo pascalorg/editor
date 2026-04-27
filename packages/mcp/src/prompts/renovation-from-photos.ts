@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 const PREAMBLE = [
   'You are renovating an existing room based on photos of the current space and reference photos of the target aesthetic.',
@@ -138,7 +138,7 @@ export function buildRenovationMessages(args: {
   return messages
 }
 
-export function registerRenovationFromPhotos(server: McpServer, _bridge: SceneBridge): void {
+export function registerRenovationFromPhotos(server: McpServer, _bridge: SceneOperations): void {
   server.registerPrompt(
     'renovation_from_photos',
     {

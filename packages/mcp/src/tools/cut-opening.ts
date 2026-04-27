@@ -2,8 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { DoorNode, WindowNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { wallLength, wallLocalXFromT } from './geometry'
 import { publishLiveSceneSnapshot } from './live-sync'
@@ -21,11 +20,7 @@ export const cutOpeningOutput = {
   openingId: z.string(),
 }
 
-export function registerCutOpening(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerCutOpening(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'cut_opening',
     {
@@ -73,7 +68,7 @@ export function registerCutOpening(
               position: [base.position[0], 0.9 + height / 2, 0],
             })
       const id = bridge.createNode(opening, wallId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, store, 'cut_opening')
+      await publishLiveSceneSnapshot(bridge, 'cut_opening')
 
       const payload = { openingId: id as string }
       return {

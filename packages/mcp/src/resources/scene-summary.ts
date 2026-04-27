@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeType } from '@pascal-app/core/schema'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 type Poly2D = ReadonlyArray<readonly [number, number]>
 
@@ -77,7 +77,9 @@ function countByType(nodes: AnyNode[]): Record<string, number> {
 }
 
 /** Build the markdown summary. Pure over the SceneGraph snapshot. */
-export function buildSceneSummaryMarkdown(snapshot: ReturnType<SceneBridge['exportJSON']>): string {
+export function buildSceneSummaryMarkdown(
+  snapshot: ReturnType<SceneOperations['exportJSON']>,
+): string {
   const { nodes, rootNodeIds } = snapshot
   const allNodes = Object.values(nodes) as AnyNode[]
 
@@ -193,7 +195,7 @@ function walkToLevel(node: AnyNode, nodes: Record<string, AnyNode>): string | nu
  * `pascal://scene/current/summary` — human-readable scene overview.
  * MIME `text/markdown`.
  */
-export function registerSceneSummary(server: McpServer, bridge: SceneBridge): void {
+export function registerSceneSummary(server: McpServer, bridge: SceneOperations): void {
   server.registerResource(
     'scene-summary',
     'pascal://scene/current/summary',

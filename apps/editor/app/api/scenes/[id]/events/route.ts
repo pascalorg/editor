@@ -1,5 +1,10 @@
-import { NextResponse } from 'next/server'
-import { getSceneStore } from '@/lib/scene-store-server'
+import {
+  guardSceneApiRequest,
+  sceneApiJson,
+  sceneApiPreflight,
+  withSceneApiHeaders,
+} from '@/lib/scene-api-security'
+import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -10,17 +15,24 @@ const POLL_MS = 250
 const HEARTBEAT_MS = 15_000
 const MAX_EVENTS_PER_POLL = 50
 
-export async function GET(request: Request, { params }: RouteParams) {
-  const { id } = await params
-  const store = await getSceneStore()
+export function OPTIONS(request: Request) {
+  return sceneApiPreflight(request)
+}
 
-  if (!store.listSceneEvents) {
-    return NextResponse.json({ error: 'scene_events_unavailable' }, { status: 501 })
+export async function GET(request: Request, { params }: RouteParams) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
+  const { id } = await params
+  const operations = await getSceneOperations()
+
+  if (!operations.canListSceneEvents) {
+    return sceneApiJson(request, { error: 'scene_events_unavailable' }, { status: 501 })
   }
 
-  const scene = await store.load(id)
+  const scene = await operations.loadStoredScene(id)
   if (!scene) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
   }
 
   const url = new URL(request.url)
@@ -61,7 +73,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       const poll = async () => {
         if (closed) return
         try {
-          const events = await store.listSceneEvents!(id, {
+          const events = await operations.listSceneEvents(id, {
             afterEventId: cursor,
             limit: MAX_EVENTS_PER_POLL,
           })
@@ -90,12 +102,15 @@ export async function GET(request: Request, { params }: RouteParams) {
     },
   })
 
-  return new Response(stream, {
-    headers: {
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'X-Accel-Buffering': 'no',
-    },
-  })
+  return withSceneApiHeaders(
+    request,
+    new Response(stream, {
+      headers: {
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'X-Accel-Buffering': 'no',
+      },
+    }),
+  )
 }

@@ -1,13 +1,13 @@
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { syncAutoStairOpenings } from '@pascal-app/core/stair-openings'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import { type SceneStore, SceneVersionConflictError } from '../storage/types'
+import type { SceneOperations } from '../operations'
+import { SceneVersionConflictError } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
 
-export function syncDerivedStairOpenings(bridge: SceneBridge): number {
-  const updates = syncAutoStairOpenings(bridge.getNodes())
+export function syncDerivedStairOpenings(operations: SceneOperations): number {
+  const updates = syncAutoStairOpenings(operations.getNodes())
   if (updates.length === 0) return 0
-  bridge.applyPatch(
+  operations.applyPatch(
     updates.map((update) => ({
       op: 'update' as const,
       id: update.id,
@@ -23,24 +23,18 @@ export function syncDerivedStairOpenings(bridge: SceneBridge): number {
  * bound to a saved scene.
  */
 export async function publishLiveSceneSnapshot(
-  bridge: SceneBridge,
-  store: SceneStore | undefined,
+  operations: SceneOperations,
   kind: string,
 ): Promise<void> {
-  syncDerivedStairOpenings(bridge)
+  syncDerivedStairOpenings(operations)
 
-  const active = bridge.getActiveScene()
-  if (!active || !store?.appendSceneEvent) return
+  const active = operations.getActiveScene()
+  if (!active || !operations.canAppendSceneEvents) return
 
-  const exported = bridge.exportJSON()
-  const graph: SceneGraph = {
-    nodes: exported.nodes,
-    rootNodeIds: exported.rootNodeIds,
-    collections: exported.collections as SceneGraph['collections'],
-  }
+  const graph = operations.exportSceneGraph()
 
   try {
-    const meta = await store.save({
+    const meta = await operations.saveScene({
       id: active.id,
       name: active.name,
       projectId: active.projectId,
@@ -49,8 +43,8 @@ export async function publishLiveSceneSnapshot(
       graph,
       expectedVersion: active.version,
     })
-    bridge.setActiveScene(meta)
-    await store.appendSceneEvent({
+    operations.setActiveScene(meta)
+    await operations.appendSceneEvent({
       sceneId: meta.id,
       version: meta.version,
       kind,
@@ -69,12 +63,12 @@ export async function publishLiveSceneSnapshot(
 }
 
 export async function appendLiveSceneEvent(
-  store: SceneStore,
+  operations: SceneOperations,
   sceneId: string,
   version: number,
   kind: string,
   graph: SceneGraph,
 ): Promise<void> {
-  if (!store.appendSceneEvent) return
-  await store.appendSceneEvent({ sceneId, version, kind, graph })
+  if (!operations.canAppendSceneEvents) return
+  await operations.appendSceneEvent({ sceneId, version, kind, graph })
 }

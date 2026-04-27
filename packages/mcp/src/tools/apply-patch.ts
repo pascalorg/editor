@@ -1,8 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { Patch as BridgePatch, SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { Patch as BridgePatch } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { publishLiveSceneSnapshot } from './live-sync'
 import { PatchSchema } from './schemas'
@@ -17,11 +17,7 @@ export const applyPatchOutput = {
   createdIds: z.array(z.string()),
 }
 
-export function registerApplyPatch(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerApplyPatch(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'apply_patch',
     {
@@ -56,7 +52,7 @@ export function registerApplyPatch(
 
       try {
         const result = bridge.applyPatch(bridgePatches)
-        await publishLiveSceneSnapshot(bridge, store, 'apply_patch')
+        await publishLiveSceneSnapshot(bridge, 'apply_patch')
         const payload = {
           appliedOps: result.appliedOps,
           deletedIds: result.deletedIds as unknown as string[],

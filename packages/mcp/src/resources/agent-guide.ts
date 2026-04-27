@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 export const AGENT_GUIDE = [
   '# Pascal MCP agent guide',
@@ -46,7 +46,7 @@ export const AGENT_GUIDE = [
   '- Use `apply_patch` for bulk exact edits after semantic tools have established the main structure.',
 ].join('\n')
 
-export function registerAgentGuide(server: McpServer, _bridge: SceneBridge): void {
+export function registerAgentGuide(server: McpServer, _bridge: SceneOperations): void {
   server.registerResource(
     'agent-guide',
     'pascal://agent/guide',

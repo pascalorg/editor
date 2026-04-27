@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
 import { pointInPolygon } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { NodeIdSchema } from './schemas'
 
 const ALL_NODE_TYPES = [
@@ -68,7 +68,7 @@ function getPointForZoneFilter(node: AnyNode): [number, number] | null {
   return null
 }
 
-export function registerFindNodes(server: McpServer, bridge: SceneBridge): void {
+export function registerFindNodes(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'find_nodes',
     {

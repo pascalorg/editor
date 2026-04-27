@@ -1,7 +1,8 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
-import { getSceneStore } from '@/lib/scene-store-server'
+import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
+import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,33 +19,45 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(500).optional(),
 })
 
+export function OPTIONS(request: NextRequest) {
+  return sceneApiPreflight(request)
+}
+
 export async function GET(request: NextRequest) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
   const url = new URL(request.url)
   const parsed = listQuerySchema.safeParse({
     projectId: url.searchParams.get('projectId') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
   })
   if (!parsed.success) {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: parsed.error.issues },
       { status: 400 },
     )
   }
 
-  const store = await getSceneStore()
-  const scenes = await store.list({
+  const operations = await getSceneOperations()
+  const scenes = await operations.listScenes({
     projectId: parsed.data.projectId,
     limit: parsed.data.limit,
   })
-  return NextResponse.json({ scenes })
+  return sceneApiJson(request, { scenes })
 }
 
 export async function POST(request: NextRequest) {
+  const guard = guardSceneApiRequest(request)
+  if (guard) return guard
+
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: 'body must be valid JSON' },
       { status: 400 },
     )
@@ -52,44 +65,45 @@ export async function POST(request: NextRequest) {
 
   const parsed = createSceneSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
+    return sceneApiJson(
+      request,
       { error: 'invalid_request', details: parsed.error.issues },
       { status: 400 },
     )
   }
 
-  const store = await getSceneStore()
+  const operations = await getSceneOperations()
   try {
-    const meta = await store.save({
+    const meta = await operations.saveScene({
       id: parsed.data.id,
       name: parsed.data.name,
       projectId: parsed.data.projectId ?? null,
       graph: parsed.data.graph as never,
       thumbnailUrl: parsed.data.thumbnailUrl ?? null,
     })
-    return NextResponse.json(meta, {
+    return sceneApiJson(request, meta, {
       status: 201,
       headers: { Location: `/scene/${meta.id}` },
     })
   } catch (error) {
-    return handleStoreError(error)
+    return handleStoreError(request, error)
   }
 }
 
-function handleStoreError(error: unknown): NextResponse {
+function handleStoreError(request: NextRequest, error: unknown): NextResponse {
   const code = (error as { code?: string })?.code
   if (code === 'version_conflict') {
-    return NextResponse.json({ error: 'version_conflict' }, { status: 409 })
+    return sceneApiJson(request, { error: 'version_conflict' }, { status: 409 })
   }
   if (code === 'not_found') {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
   }
   if (code === 'too_large') {
-    return NextResponse.json({ error: 'too_large' }, { status: 413 })
+    return sceneApiJson(request, { error: 'too_large' }, { status: 413 })
   }
   if (code === 'invalid') {
-    return NextResponse.json({ error: 'invalid' }, { status: 400 })
+    return sceneApiJson(request, { error: 'invalid' }, { status: 400 })
   }
   const message = error instanceof Error ? error.message : 'unexpected_error'
-  return NextResponse.json({ error: 'internal_error', message }, { status: 500 })
+  return sceneApiJson(request, { error: 'internal_error', message }, { status: 500 })
 }

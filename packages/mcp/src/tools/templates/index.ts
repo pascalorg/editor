@@ -1,6 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../../bridge/scene-bridge'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { registerCreateFromTemplate } from './create-from-template'
 import { registerListTemplates } from './list-templates'
 
@@ -8,17 +7,12 @@ import { registerListTemplates } from './list-templates'
  * Register the template MCP tools (`list_templates`, `create_from_template`)
  * against the given server.
  *
- * `store` is optional: when omitted, `create_from_template` still applies the
- * template to the bridge but skips the save step. This makes the tool safe
- * to wire into headless bridge-only deployments.
+ * When persistence operations are unavailable, `create_from_template` still
+ * applies the template to the bridge but skips the save step.
  */
-export function registerTemplateTools(
-  server: McpServer,
-  bridge: SceneBridge,
-  store?: SceneStore,
-): void {
+export function registerTemplateTools(server: McpServer, bridge: SceneOperations): void {
   registerListTemplates(server)
-  registerCreateFromTemplate(server, bridge, store)
+  registerCreateFromTemplate(server, bridge)
 }
 
 export {

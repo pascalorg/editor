@@ -1,7 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
-import type { SceneStore } from '../storage/types'
+import type { SceneOperations } from '../operations'
 import { publishLiveSceneSnapshot } from './live-sync'
 
 export const redoInput = {
@@ -12,7 +11,7 @@ export const redoOutput = {
   redone: z.number(),
 }
 
-export function registerRedo(server: McpServer, bridge: SceneBridge, store?: SceneStore): void {
+export function registerRedo(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'redo',
     {
@@ -24,7 +23,7 @@ export function registerRedo(server: McpServer, bridge: SceneBridge, store?: Sce
     },
     async ({ steps }) => {
       const redone = bridge.redo(steps ?? 1)
-      if (redone > 0) await publishLiveSceneSnapshot(bridge, store, 'redo')
+      if (redone > 0) await publishLiveSceneSnapshot(bridge, 'redo')
       const payload = { redone }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

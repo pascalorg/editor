@@ -1,3 +1,5 @@
+import { SceneBridge } from '../../bridge/scene-bridge'
+import { createSceneOperations, type SceneOperations } from '../../operations'
 import {
   type SceneListOptions,
   type SceneMeta,
@@ -13,6 +15,20 @@ export type StoredTextContent = { type: string; text: string }
 
 export function parseToolText(content: StoredTextContent[]): Record<string, unknown> {
   return JSON.parse(content[0]!.text) as Record<string, unknown>
+}
+
+export function createTestSceneOperations(options?: {
+  bridge?: SceneBridge
+  store?: InMemorySceneStore
+}): {
+  bridge: SceneBridge
+  store: InMemorySceneStore
+  operations: SceneOperations
+} {
+  const bridge = options?.bridge ?? new SceneBridge()
+  const store = options?.store ?? new InMemorySceneStore()
+  const operations = createSceneOperations({ bridge, store })
+  return { bridge, store, operations }
 }
 
 /**

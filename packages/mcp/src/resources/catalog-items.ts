@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 import { MCP_CATALOG_ITEMS } from '../tools/asset-catalog'
 
 /**
@@ -8,7 +8,7 @@ import { MCP_CATALOG_ITEMS } from '../tools/asset-catalog'
  * The editor UI owns the full catalog. MCP intentionally keeps a dependency-free
  * subset so headless agents can still place realistic furniture and fixtures.
  */
-export function registerCatalogItems(server: McpServer, _bridge: SceneBridge): void {
+export function registerCatalogItems(server: McpServer, _bridge: SceneOperations): void {
   server.registerResource(
     'catalog-items',
     'pascal://catalog/items',

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { SceneBridge } from '../bridge/scene-bridge'
+import type { SceneOperations } from '../operations'
 
 export const getSceneInput = {}
 
@@ -10,7 +10,7 @@ export const getSceneOutput = {
   collections: z.record(z.string(), z.unknown()).optional(),
 }
 
-export function registerGetScene(server: McpServer, bridge: SceneBridge): void {
+export function registerGetScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'get_scene',
     {

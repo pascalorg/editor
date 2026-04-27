@@ -2,8 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { forkSceneGraph, type SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { type AnyNode, AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import type { SceneBridge } from '../../bridge/scene-bridge'
-import type { SceneStore } from '../../storage/types'
+import type { SceneOperations } from '../../operations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { applyMutation, describeVariant, type MutationKind, mulberry32 } from './mutations'
 
@@ -93,17 +92,13 @@ function countInvalidNodes(graph: SceneGraph): number {
   return invalid
 }
 
-export function registerGenerateVariants(
-  server: McpServer,
-  bridge: SceneBridge,
-  store: SceneStore,
-): void {
+export function registerGenerateVariants(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'generate_variants',
     {
       title: 'Generate variants',
       description:
-        'Generate N variations of a base scene by forking and applying seeded mutations. Example: "give me 5 variations of this kitchen". If `save=true`, each variant is persisted via the SceneStore and returned with an id + URL; otherwise the graph is returned inline.',
+        'Generate N variations of a base scene by forking and applying seeded mutations. Example: "give me 5 variations of this kitchen". If `save=true`, each variant is persisted via scene operations and returned with an id + URL; otherwise the graph is returned inline.',
       inputSchema: generateVariantsInput,
       outputSchema: generateVariantsOutput,
     },
@@ -112,19 +107,14 @@ export function registerGenerateVariants(
       let base: SceneGraph
       let baseName = 'scene'
       if (baseSceneId) {
-        const loaded = await store.load(baseSceneId)
+        const loaded = await bridge.loadStoredScene(baseSceneId)
         if (!loaded) {
           throwMcpError(ErrorCode.InvalidParams, 'scene_not_found', { id: baseSceneId })
         }
         base = loaded.graph
         baseName = loaded.name
       } else {
-        const exported = bridge.exportJSON()
-        base = {
-          nodes: exported.nodes,
-          rootNodeIds: exported.rootNodeIds,
-          collections: exported.collections as SceneGraph['collections'],
-        }
+        base = bridge.exportSceneGraph()
       }
 
       // 2. Seed the RNG. Default seed is a time-ish number so runs vary, but
@@ -167,7 +157,7 @@ export function registerGenerateVariants(
 
         if (save) {
           try {
-            const meta = await store.save({
+            const meta = await bridge.saveScene({
               name: `${baseName}-variant-${i + 1}`,
               graph: forked,
             })

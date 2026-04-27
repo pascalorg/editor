@@ -5,7 +5,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerLoadScene } from './load-scene'
-import { InMemorySceneStore, parseToolText, type StoredTextContent } from './test-utils'
+import {
+  createTestSceneOperations,
+  InMemorySceneStore,
+  parseToolText,
+  type StoredTextContent,
+} from './test-utils'
 
 describe('load_scene', () => {
   let client: Client
@@ -17,8 +22,9 @@ describe('load_scene', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     store = new InMemorySceneStore()
+    const { operations } = createTestSceneOperations({ bridge, store })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerLoadScene(server, bridge, store)
+    registerLoadScene(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
