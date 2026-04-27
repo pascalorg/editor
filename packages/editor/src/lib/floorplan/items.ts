@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getScaledDimensions,
   type ItemNode,
   type LevelNode,
   sceneRegistry,
@@ -8,7 +9,7 @@ import {
 } from '@pascal-app/core'
 import type { Object3D } from 'three'
 import { Box3, Matrix4, Vector3 } from 'three'
-import { rotatePlanVector } from './geometry'
+import { getRotatedRectanglePolygon, rotatePlanVector } from './geometry'
 import type { FloorplanItemEntry, FloorplanNodeTransform, LevelDescendantMap } from './types'
 
 export function collectLevelDescendants(
@@ -146,7 +147,10 @@ export function buildFloorplanItemEntry(
     return null
   }
 
+  const dimensionPolygon = getItemDimensionPolygon(item, transform)
+
   return {
+    dimensionPolygon,
     item,
     polygon: realMeshPolygon,
     usesRealMesh: realMeshPolygon !== null,
@@ -156,6 +160,22 @@ export function buildFloorplanItemEntry(
 type Point = {
   x: number
   y: number
+}
+
+function getItemDimensionPolygon(item: ItemNode, transform: FloorplanNodeTransform): Point[] {
+  const [width, , depth] = getScaledDimensions(item)
+  const centerLocalZ = item.asset.attachTo === 'wall-side' ? -depth / 2 : 0
+  const [offsetX, offsetY] = rotatePlanVector(0, centerLocalZ, transform.rotation)
+
+  return getRotatedRectanglePolygon(
+    {
+      x: transform.position.x + offsetX,
+      y: transform.position.y + offsetY,
+    },
+    width,
+    depth,
+    transform.rotation,
+  )
 }
 
 function getCachedLocalMeshPolygon(item: ItemNode): Point[] | null {

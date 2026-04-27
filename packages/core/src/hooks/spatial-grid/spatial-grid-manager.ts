@@ -1,8 +1,7 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions } from '../../schema'
-import { sceneRegistry } from '../scene-registry/scene-registry'
 import useScene from '../../store/use-scene'
-import { Box3, Matrix4, Vector3, type Object3D } from 'three'
+import { Vector3 } from 'three'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -78,84 +77,43 @@ function getFallbackItemLocalBounds(item: ItemNode): ItemLocalBounds {
   }
 }
 
-function getItemLocalBoundsFromObject(object: Object3D | null): ItemLocalBounds | null {
-  if (!object) return null
-
-  object.updateWorldMatrix(true, true)
-
-  const inverseRootMatrix = new Matrix4().copy(object.matrixWorld).invert()
-  const localMatrix = new Matrix4()
-  const localBounds = new Box3()
-  const scratchBounds = new Box3()
-  let hasBounds = false
-  const registeredNodeObjects = new Set(sceneRegistry.nodes.values())
-
-  const expandBounds = (child: Object3D) => {
-    if (child !== object && registeredNodeObjects.has(child)) return
-
-    const mesh = child as Object3D & {
-      isMesh?: boolean
-      name?: string
-      geometry?: {
-        boundingBox: Box3 | null
-        computeBoundingBox?: () => void
-      }
-    }
-
-    if (mesh.isMesh && mesh.name !== 'cutout' && mesh.geometry) {
-      if (!mesh.geometry.boundingBox && mesh.geometry.computeBoundingBox) {
-        mesh.geometry.computeBoundingBox()
-      }
-
-      if (mesh.geometry.boundingBox) {
-        localMatrix.copy(inverseRootMatrix).multiply(mesh.matrixWorld)
-        scratchBounds.copy(mesh.geometry.boundingBox).applyMatrix4(localMatrix)
-        if (!hasBounds) {
-          localBounds.copy(scratchBounds)
-          hasBounds = true
-        } else {
-          localBounds.union(scratchBounds)
-        }
-      }
-    }
-
-    for (const grandchild of child.children) {
-      expandBounds(grandchild)
-    }
-  }
-
-  for (const child of object.children) {
-    expandBounds(child)
-  }
-
-  if (!hasBounds) return null
-
-  return {
-    min: [localBounds.min.x, localBounds.min.y, localBounds.min.z],
-    max: [localBounds.max.x, localBounds.max.y, localBounds.max.z],
-  }
-}
-
 function getItemLocalBounds(item: ItemNode): ItemLocalBounds {
-  return getItemLocalBoundsFromObject(sceneRegistry.nodes.get(item.id) ?? null) ?? getFallbackItemLocalBounds(item)
+  const metadata =
+    typeof item.metadata === 'object' && item.metadata !== null && !Array.isArray(item.metadata)
+      ? (item.metadata as Record<string, unknown>)
+      : null
+  const rawBounds =
+    typeof metadata?.meshLocalBounds === 'object' &&
+    metadata.meshLocalBounds !== null &&
+    !Array.isArray(metadata.meshLocalBounds)
+      ? (metadata.meshLocalBounds as Record<string, unknown>)
+      : null
+  const min = rawBounds?.min
+  const max = rawBounds?.max
+
+  if (
+    Array.isArray(min) &&
+    min.length >= 3 &&
+    Array.isArray(max) &&
+    max.length >= 3 &&
+    typeof min[0] === 'number' &&
+    typeof min[1] === 'number' &&
+    typeof min[2] === 'number' &&
+    typeof max[0] === 'number' &&
+    typeof max[1] === 'number' &&
+    typeof max[2] === 'number'
+  ) {
+    return {
+      min: [min[0], min[1], min[2]],
+      max: [max[0], max[1], max[2]],
+    }
+  }
+
+  return getFallbackItemLocalBounds(item)
 }
 
 function getItemParentAabb(item: ItemNode): ItemParentAabb {
-  const object = sceneRegistry.nodes.get(item.id)
   const bounds = getItemLocalBounds(item)
-
-  if (!object) {
-    return {
-      minX: bounds.min[0] + item.position[0],
-      maxX: bounds.max[0] + item.position[0],
-      minY: bounds.min[1] + item.position[1],
-      maxY: bounds.max[1] + item.position[1],
-      minZ: bounds.min[2] + item.position[2],
-      maxZ: bounds.max[2] + item.position[2],
-    }
-  }
-
-  object.updateMatrix()
   const corners = [
     new Vector3(bounds.min[0], bounds.min[1], bounds.min[2]),
     new Vector3(bounds.min[0], bounds.min[1], bounds.max[2]),
@@ -166,6 +124,9 @@ function getItemParentAabb(item: ItemNode): ItemParentAabb {
     new Vector3(bounds.max[0], bounds.max[1], bounds.min[2]),
     new Vector3(bounds.max[0], bounds.max[1], bounds.max[2]),
   ]
+  const yRot = item.rotation[1] ?? 0
+  const cos = Math.cos(yRot)
+  const sin = Math.sin(yRot)
 
   let minX = Number.POSITIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
@@ -175,13 +136,17 @@ function getItemParentAabb(item: ItemNode): ItemParentAabb {
   let maxZ = Number.NEGATIVE_INFINITY
 
   for (const corner of corners) {
-    corner.applyMatrix4(object.matrix)
-    minX = Math.min(minX, corner.x)
-    minY = Math.min(minY, corner.y)
-    minZ = Math.min(minZ, corner.z)
-    maxX = Math.max(maxX, corner.x)
-    maxY = Math.max(maxY, corner.y)
-    maxZ = Math.max(maxZ, corner.z)
+    const rotatedX = corner.x * cos + corner.z * sin
+    const rotatedZ = -corner.x * sin + corner.z * cos
+    const worldX = rotatedX + item.position[0]
+    const worldY = corner.y + item.position[1]
+    const worldZ = rotatedZ + item.position[2]
+    minX = Math.min(minX, worldX)
+    minY = Math.min(minY, worldY)
+    minZ = Math.min(minZ, worldZ)
+    maxX = Math.max(maxX, worldX)
+    maxY = Math.max(maxY, worldY)
+    maxZ = Math.max(maxZ, worldZ)
   }
 
   return { minX, maxX, minY, maxY, minZ, maxZ }

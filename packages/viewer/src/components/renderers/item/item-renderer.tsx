@@ -94,6 +94,11 @@ type Point = {
   y: number
 }
 
+type LocalBounds = {
+  min: [number, number, number]
+  max: [number, number, number]
+}
+
 function getLocalMeshFloorplanPolygon(object: Object3D): Point[] {
   object.updateWorldMatrix(true, true)
 
@@ -168,6 +173,59 @@ function getLocalMeshFloorplanPolygon(object: Object3D): Point[] {
   }
 
   return getMinimumAreaBoundingRect(footprintPoints) ?? []
+}
+
+function getLocalMeshBounds(object: Object3D): LocalBounds | null {
+  object.updateWorldMatrix(true, true)
+
+  const inverseRootMatrix = new Matrix4().copy(object.matrixWorld).invert()
+  const localMatrix = new Matrix4()
+  const localBounds = new Box3()
+  const scratchBounds = new Box3()
+  let hasBounds = false
+
+  const expandBounds = (child: Object3D) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean
+      name?: string
+      geometry?: {
+        boundingBox: Box3 | null
+        computeBoundingBox?: () => void
+      }
+    }
+
+    if (mesh.isMesh && mesh.name !== 'cutout' && mesh.geometry) {
+      if (!mesh.geometry.boundingBox && mesh.geometry.computeBoundingBox) {
+        mesh.geometry.computeBoundingBox()
+      }
+
+      if (mesh.geometry.boundingBox) {
+        localMatrix.copy(inverseRootMatrix).multiply(mesh.matrixWorld)
+        scratchBounds.copy(mesh.geometry.boundingBox).applyMatrix4(localMatrix)
+        if (!hasBounds) {
+          localBounds.copy(scratchBounds)
+          hasBounds = true
+        } else {
+          localBounds.union(scratchBounds)
+        }
+      }
+    }
+
+    for (const grandchild of child.children) {
+      expandBounds(grandchild)
+    }
+  }
+
+  for (const child of object.children) {
+    expandBounds(child)
+  }
+
+  if (!hasBounds) return null
+
+  return {
+    min: [localBounds.min.x, localBounds.min.y, localBounds.min.z],
+    max: [localBounds.max.x, localBounds.max.y, localBounds.max.z],
+  }
 }
 
 function getMinimumAreaBoundingRect(points: Point[]) {
@@ -273,30 +331,53 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     if (!cloneRoot) return
 
     const polygon = getLocalMeshFloorplanPolygon(cloneRoot)
-    if (polygon.length < 3) return
+    const bounds = getLocalMeshBounds(cloneRoot)
+    if (polygon.length < 3 && !bounds) return
 
-    const nextPolygon = polygon.map(({ x, y }) => [x, y] as [number, number])
+    const nextPolygon = polygon.length >= 3 ? polygon.map(({ x, y }) => [x, y] as [number, number]) : null
+    const nextBounds = bounds ? { min: bounds.min, max: bounds.max } : null
     const metadata =
       typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
         ? (node.metadata as Record<string, unknown>)
         : {}
     const currentPolygon = metadata.floorplanLocalPolygon
+    const currentBounds =
+      typeof metadata.meshLocalBounds === 'object' &&
+      metadata.meshLocalBounds !== null &&
+      !Array.isArray(metadata.meshLocalBounds)
+        ? (metadata.meshLocalBounds as { min?: unknown; max?: unknown })
+        : null
     const unchanged =
-      Array.isArray(currentPolygon) &&
-      currentPolygon.length === nextPolygon.length &&
-      currentPolygon.every(
-        (point, index) =>
-          Array.isArray(point) &&
-          point[0] === nextPolygon[index]?.[0] &&
-          point[1] === nextPolygon[index]?.[1],
-      )
+      ((nextPolygon === null &&
+        (currentPolygon === undefined || currentPolygon === null || currentPolygon === false)) ||
+        (Array.isArray(currentPolygon) &&
+          nextPolygon !== null &&
+          currentPolygon.length === nextPolygon.length &&
+          currentPolygon.every(
+            (point, index) =>
+              Array.isArray(point) &&
+              point[0] === nextPolygon[index]?.[0] &&
+              point[1] === nextPolygon[index]?.[1],
+          ))) &&
+      ((nextBounds === null &&
+        (currentBounds === undefined || currentBounds === null || currentBounds === false)) ||
+        (nextBounds !== null &&
+          Array.isArray(currentBounds?.min) &&
+          Array.isArray(currentBounds?.max) &&
+          currentBounds.min[0] === nextBounds.min[0] &&
+          currentBounds.min[1] === nextBounds.min[1] &&
+          currentBounds.min[2] === nextBounds.min[2] &&
+          currentBounds.max[0] === nextBounds.max[0] &&
+          currentBounds.max[1] === nextBounds.max[1] &&
+          currentBounds.max[2] === nextBounds.max[2]))
 
     if (unchanged) return
 
     useScene.getState().updateNode(node.id, {
       metadata: {
         ...metadata,
-        floorplanLocalPolygon: nextPolygon,
+        ...(nextPolygon ? { floorplanLocalPolygon: nextPolygon } : {}),
+        ...(nextBounds ? { meshLocalBounds: nextBounds } : {}),
       },
     })
   }, [node.id, node.metadata, scene])

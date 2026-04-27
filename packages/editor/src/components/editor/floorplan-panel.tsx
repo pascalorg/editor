@@ -169,6 +169,7 @@ const FLOORPLAN_WALL_INNER_MEASUREMENT_EXTENSION = 'rgba(147, 197, 253, 0.9)'
 const FLOORPLAN_OPENING_MEASUREMENT_STROKE = 'rgba(249, 115, 22, 0.98)'
 const FLOORPLAN_OPENING_MEASUREMENT_TEXT = 'rgba(234, 88, 12, 0.98)'
 const FLOORPLAN_OPENING_MEASUREMENT_EXTENSION = 'rgba(251, 146, 60, 0.9)'
+const FLOORPLAN_ITEM_DIMENSION_OFFSET = 0.24
 const FLOORPLAN_ITEM_CLEARANCE_MAX_DISTANCE = 12
 const FLOORPLAN_ITEM_CLEARANCE_MIN_DISTANCE = 0.05
 const FLOORPLAN_ITEM_CLEARANCE_EDGE_PARALLEL_THRESHOLD = 0.65
@@ -446,6 +447,7 @@ type FloorplanPolygonEntry = {
 }
 
 type FloorplanItemEntry = {
+  dimensionPolygon: Point2D[]
   item: ItemNode
   points: string
   polygon: Point2D[]
@@ -1963,10 +1965,13 @@ function getLinearMeasurementOverlay(
   end: Point2D,
   label: string,
   options?: {
+    extensionOvershoot?: number
     offsetDistance?: number
     offsetVector?: Point2D
   },
 ): LinearMeasurementOverlay | null {
+  const extensionOvershoot =
+    options?.extensionOvershoot ?? FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT
   const offsetDistance = options?.offsetDistance ?? 0
   const offsetVector = options?.offsetVector
   const offsetStart =
@@ -2035,14 +2040,14 @@ function getLinearMeasurementOverlay(
         offsetVector
           ? start.x +
               offsetVector.x *
-                (offsetDistance + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT)
+                (offsetDistance + extensionOvershoot)
           : start.x,
       ),
       y2: toSvgY(
         offsetVector
           ? start.y +
               offsetVector.y *
-                (offsetDistance + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT)
+                (offsetDistance + extensionOvershoot)
           : start.y,
       ),
     },
@@ -2051,14 +2056,12 @@ function getLinearMeasurementOverlay(
       y1: toSvgY(end.y),
       x2: toSvgX(
         offsetVector
-          ? end.x +
-              offsetVector.x * (offsetDistance + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT)
+          ? end.x + offsetVector.x * (offsetDistance + extensionOvershoot)
           : end.x,
       ),
       y2: toSvgY(
         offsetVector
-          ? end.y +
-              offsetVector.y * (offsetDistance + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT)
+          ? end.y + offsetVector.y * (offsetDistance + extensionOvershoot)
           : end.y,
       ),
     },
@@ -2317,6 +2320,113 @@ function getSelectedWallMeasurementOverlays(
   }
 
   return overlays
+}
+
+function getItemDimensionMeasurementOverlays(
+  itemEntry: FloorplanItemEntry,
+  unit: 'metric' | 'imperial',
+): LinearMeasurementOverlay[] {
+  const itemMetadata =
+    typeof itemEntry.item.metadata === 'object' &&
+    itemEntry.item.metadata !== null &&
+    !Array.isArray(itemEntry.item.metadata)
+      ? (itemEntry.item.metadata as Record<string, unknown>)
+      : null
+
+  if (itemMetadata?.isTransient !== true) {
+    return []
+  }
+
+  const polygon = itemEntry.polygon
+  if (polygon.length < 4) {
+    return []
+  }
+
+  const centroid = polygonCentroid(polygon)
+  const configuredWidth = formatMeasurement(itemEntry.item.scale[0] * itemEntry.item.asset.dimensions[0], unit)
+  const configuredDepth = formatMeasurement(itemEntry.item.scale[2] * itemEntry.item.asset.dimensions[2], unit)
+  const buildSideOverlay = (id: string, start: Point2D, end: Point2D) => {
+    const edgeVector = {
+      x: end.x - start.x,
+      y: end.y - start.y,
+    }
+    const tangent = normalizePlanVector(edgeVector)
+    if (!tangent) {
+      return null
+    }
+
+    let outwardNormal: Point2D = {
+      x: -tangent.y,
+      y: tangent.x,
+    }
+    const midpoint = {
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2,
+    }
+    const centroidVector = {
+      x: midpoint.x - centroid.x,
+      y: midpoint.y - centroid.y,
+    }
+
+    if (dotPlanVectors(outwardNormal, centroidVector) < 0) {
+      outwardNormal = {
+        x: -outwardNormal.x,
+        y: -outwardNormal.y,
+      }
+    }
+
+    const overlay = getLinearMeasurementOverlay(
+      id,
+      start,
+      end,
+      id.includes(':width') ? configuredWidth : configuredDepth,
+      {
+        extensionOvershoot: 0,
+        offsetDistance: FLOORPLAN_ITEM_DIMENSION_OFFSET,
+        offsetVector: outwardNormal,
+      },
+    )
+
+    return overlay
+      ? {
+          dashedExtensions: false,
+          ...overlay,
+          isSelected: true,
+          showTicks: false,
+        }
+      : null
+  }
+
+  const widthCandidates = [
+    polygon[0] && polygon[1]
+      ? buildSideOverlay(`${itemEntry.item.id}:width-a`, polygon[0], polygon[1])
+      : null,
+    polygon[2] && polygon[3]
+      ? buildSideOverlay(`${itemEntry.item.id}:width-b`, polygon[3], polygon[2])
+      : null,
+  ].filter((overlay): overlay is LinearMeasurementOverlay => overlay !== null)
+
+  const depthCandidates = [
+    polygon[1] && polygon[2]
+      ? buildSideOverlay(`${itemEntry.item.id}:depth-a`, polygon[1], polygon[2])
+      : null,
+    polygon[0] && polygon[3]
+      ? buildSideOverlay(`${itemEntry.item.id}:depth-b`, polygon[0], polygon[3])
+      : null,
+  ].filter((overlay): overlay is LinearMeasurementOverlay => overlay !== null)
+
+  const widthOverlay =
+    widthCandidates.length > 0
+      ? widthCandidates.reduce((best, current) => (current.labelY > best.labelY ? current : best))
+      : null
+  const depthOverlay =
+    depthCandidates.length > 0
+      ? depthCandidates.reduce((best, current) => (current.labelX < best.labelX ? current : best))
+      : null
+
+  return [widthOverlay, depthOverlay].filter(
+    (overlay): overlay is LinearMeasurementOverlay => overlay !== null,
+  )
 }
 
 function getOpeningFootprint(wall: WallNode, node: WindowNode | DoorNode): Point2D[] {
@@ -6163,6 +6273,7 @@ export function FloorplanPanel() {
 
       return [
         {
+          dimensionPolygon: entry.dimensionPolygon,
           item: entry.item,
           points: formatPolygonPoints(entry.polygon),
           polygon: entry.polygon,
@@ -6665,6 +6776,15 @@ export function FloorplanPanel() {
     isFenceEndpointMoveActive ||
     isFloorItemBuildActive ||
     isFloorItemMoveActive
+  const itemPlacementDimensionMeasurements = useMemo(() => {
+    if (!isItemPlacementPreviewActive) {
+      return [] as LinearMeasurementOverlay[]
+    }
+
+    return floorplanItemEntries.flatMap((itemEntry) =>
+      getItemDimensionMeasurementOverlays(itemEntry, unit),
+    )
+  }, [floorplanItemEntries, isItemPlacementPreviewActive, unit])
   const floorplanPreviewStairSegment = useMemo(
     () =>
       StairSegmentNodeSchema.parse({
@@ -11874,6 +11994,12 @@ export function FloorplanPanel() {
                 highlightedIdSet={highlightedFloorplanIdSet}
                 roofEntries={floorplanRoofEntries}
                 selectedIdSet={selectedIdSet}
+              />
+
+              <FloorplanMeasurementsLayer
+                className="item-dimension-measurement"
+                measurements={itemPlacementDimensionMeasurements}
+                palette={palette}
               />
 
               <FloorplanMeasurementsLayer

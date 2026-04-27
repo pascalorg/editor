@@ -10,6 +10,7 @@ const FLOORPLAN_MEASUREMENT_EXTENSION_DASH = '0.08 0.12'
 const FLOORPLAN_MEASUREMENT_END_TICK = 0.18
 
 export type LinearMeasurementOverlay = {
+  dashedExtensions?: boolean
   id: string
   dimensionLineEnd: { x1: number; y1: number; x2: number; y2: number }
   dimensionLineStart: { x1: number; y1: number; x2: number; y2: number }
@@ -22,6 +23,7 @@ export type LinearMeasurementOverlay = {
   extensionStroke?: string
   isSelected?: boolean
   labelFill?: string
+  showTicks?: boolean
   stroke?: string
 }
 
@@ -125,7 +127,7 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
       {measurements.map((measurement) => (
         <g className={className} key={measurement.id} pointerEvents="none" style={{ userSelect: 'none' }}>
           <FloorplanMeasurementLine
-            dashed
+            dashed={measurement.dashedExtensions ?? true}
             isSelected={measurement.isSelected}
             palette={palette}
             segment={measurement.extensionStart}
@@ -144,28 +146,32 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
             stroke={measurement.stroke}
           />
           <FloorplanMeasurementLine
-            dashed
+            dashed={measurement.dashedExtensions ?? true}
             isSelected={measurement.isSelected}
             palette={palette}
             segment={measurement.extensionEnd}
             stroke={measurement.extensionStroke}
           />
-          <FloorplanMeasurementTick
-            angleDeg={measurement.labelAngleDeg}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            stroke={measurement.stroke}
-            x={measurement.dimensionLineStart.x1}
-            y={measurement.dimensionLineStart.y1}
-          />
-          <FloorplanMeasurementTick
-            angleDeg={measurement.labelAngleDeg}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            stroke={measurement.stroke}
-            x={measurement.dimensionLineEnd.x2}
-            y={measurement.dimensionLineEnd.y2}
-          />
+          {measurement.showTicks !== false ? (
+            <>
+              <FloorplanMeasurementTick
+                angleDeg={measurement.labelAngleDeg}
+                isSelected={measurement.isSelected}
+                palette={palette}
+                stroke={measurement.stroke}
+                x={measurement.dimensionLineStart.x1}
+                y={measurement.dimensionLineStart.y1}
+              />
+              <FloorplanMeasurementTick
+                angleDeg={measurement.labelAngleDeg}
+                isSelected={measurement.isSelected}
+                palette={palette}
+                stroke={measurement.stroke}
+                x={measurement.dimensionLineEnd.x2}
+                y={measurement.dimensionLineEnd.y2}
+              />
+            </>
+          ) : null}
           <text
             dominantBaseline="central"
             fill={measurement.labelFill ?? palette.measurementStroke}
