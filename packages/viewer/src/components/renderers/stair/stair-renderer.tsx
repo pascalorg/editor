@@ -5,7 +5,7 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import {
@@ -13,6 +13,11 @@ import {
   createMaterialFromPresetRef,
   DEFAULT_STAIR_MATERIAL,
 } from '../../../lib/materials'
+import {
+  getStairBodyMaterials,
+  getStairRailingMaterial,
+  type StairBodyMaterials,
+} from '../../../systems/stair/stair-materials'
 import { NodeRenderer } from '../node-renderer'
 
 type SegmentTransform = {
@@ -71,6 +76,24 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
     node.material?.texture,
   ])
 
+  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node), [node])
+
+  const railingMaterial = useMemo(() => getStairRailingMaterial(node), [node])
+
+  const straightPlaceholderGeometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    geometry.addGroup(0, 0, 0)
+    geometry.addGroup(0, 0, 1)
+    return geometry
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      straightPlaceholderGeometry.dispose()
+    }
+  }, [straightPlaceholderGeometry])
+
   return (
     <group
       position-x={node.position[0]}
@@ -81,12 +104,18 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
       {...handlers}
     >
       {isSegmentBasedStair ? (
-        <mesh castShadow material={material} name="merged-stair" receiveShadow>
-          <boxGeometry args={[0, 0, 0]} />
-        </mesh>
+        <mesh
+          castShadow
+          geometry={straightPlaceholderGeometry}
+          material={straightBodyMaterials}
+          name="merged-stair"
+          receiveShadow
+        />
       ) : null}
-      {!isSegmentBasedStair ? <CurvedStairBody material={material} stair={node} /> : null}
-      <StairRailings material={material} stair={node} />
+      {!isSegmentBasedStair ? (
+        <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} />
+      ) : null}
+      <StairRailings material={railingMaterial} stair={node} />
       {isSegmentBasedStair ? (
         <group name="segments-wrapper" visible={false}>
           {(node.children ?? []).map((childId) => (
@@ -170,6 +199,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                   geometry={BALUSTER_GEOMETRY}
                   key={`${stair.id}-curved-baluster-${sideIndex}-${pointIndex}`}
                   material={material}
+                  name="stair-railing-baluster"
                   position={[point[0], point[1] + railHeight / 2, point[2]]}
                   receiveShadow
                   scale={[balusterRadius, railHeight, balusterRadius]}
@@ -227,6 +257,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                   geometry={BALUSTER_GEOMETRY}
                   key={`${segmentPath.layout.segment.id}-${sidePath.side}-baluster-${pointIndex}`}
                   material={material}
+                  name="stair-railing-baluster"
                   position={[point[2], point[1] + railHeight / 2, point[0]]}
                   receiveShadow
                   scale={[balusterRadius, railHeight, balusterRadius]}
@@ -333,6 +364,8 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
 
 const BALUSTER_GEOMETRY = new THREE.CylinderGeometry(1, 1, 1, 8)
 const RAIL_GEOMETRY = new THREE.CylinderGeometry(1, 1, 1, 8)
+const STAIR_TREAD_MATERIAL_INDEX = 0
+const STAIR_SIDE_MATERIAL_INDEX = 1
 
 function RailSegment({
   start,
@@ -367,6 +400,7 @@ function RailSegment({
       castShadow
       geometry={RAIL_GEOMETRY}
       material={material}
+      name="stair-railing-rail"
       position={[midpoint.x, midpoint.y, midpoint.z]}
       quaternion={quaternion}
       receiveShadow
@@ -375,7 +409,14 @@ function RailSegment({
   )
 }
 
-function CurvedStairBody({ stair, material }: { stair: StairNode; material: THREE.Material }) {
+function CurvedStairBody({
+  stair,
+  bodyMaterials,
+}: {
+  stair: StairNode
+  bodyMaterials: StairBodyMaterials
+}) {
+  const sideMaterial = bodyMaterials[1]
   const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
   const totalRise = Math.max(stair.totalRise ?? 2.5, 0.1)
   const stepHeight = totalRise / stepCount
@@ -411,7 +452,8 @@ function CurvedStairBody({ stair, material }: { stair: StairNode; material: THRE
         <mesh
           castShadow
           receiveShadow
-          material={material}
+          material={sideMaterial}
+          name="stair-side"
           position={[0, spiralColumnHeight / 2, 0]}
         >
           <cylinderGeometry
@@ -443,7 +485,8 @@ function CurvedStairBody({ stair, material }: { stair: StairNode; material: THRE
             {isSpiral && (stair.showStepSupports ?? true) ? (
               <mesh
                 castShadow
-                material={material}
+                material={sideMaterial}
+                name="stair-side"
                 position={[
                   Math.cos(midAngle) *
                     (spiralColumnRadius +
@@ -470,7 +513,7 @@ function CurvedStairBody({ stair, material }: { stair: StairNode; material: THRE
             <CurvedStepMesh
               endAngle={endAngle}
               innerRadius={innerRadius}
-              material={material}
+              material={bodyMaterials}
               outerRadius={outerRadius}
               positionY={0}
               startAngle={startAngle}
@@ -484,7 +527,7 @@ function CurvedStairBody({ stair, material }: { stair: StairNode; material: THRE
         <CurvedStepMesh
           endAngle={sweepAngle / 2 + spiralLandingSweep}
           innerRadius={innerRadius}
-          material={material}
+          material={bodyMaterials}
           outerRadius={outerRadius}
           positionY={spiralLastStepTop}
           startAngle={sweepAngle / 2}
@@ -513,7 +556,7 @@ function CurvedStepMesh({
   stepHeight: number
   thickness: number
   positionY: number
-  material: THREE.Material
+  material: THREE.Material | THREE.Material[]
 }) {
   const geometry = useMemo(
     () =>
@@ -556,15 +599,39 @@ function buildCurvedStepGeometry(
 
   const positions: number[] = []
   const normals: number[] = []
+  const uvs: number[] = []
+  const triangleMaterialIndices: number[] = []
 
   const pointOnArc = (radius: number, angle: number, y: number) =>
     new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius)
+
+  const pushUv = (point: THREE.Vector3, normal: THREE.Vector3, materialIndex: number) => {
+    if (materialIndex === STAIR_TREAD_MATERIAL_INDEX) {
+      const angle = Math.atan2(point.z, point.x)
+      const arcOffset = (angle - startAngle) * Math.max((innerRadius + outerRadius) * 0.5, 0.01)
+      uvs.push(arcOffset, Math.sqrt(point.x * point.x + point.z * point.z) - innerRadius)
+      return
+    }
+
+    const absX = Math.abs(normal.x)
+    const absY = Math.abs(normal.y)
+    const absZ = Math.abs(normal.z)
+
+    if (absY >= absX && absY >= absZ) {
+      uvs.push(point.x, point.z)
+    } else if (absX >= absZ) {
+      uvs.push(point.z, point.y)
+    } else {
+      uvs.push(point.x, point.y)
+    }
+  }
 
   const pushTriangle = (
     a: THREE.Vector3,
     b: THREE.Vector3,
     c: THREE.Vector3,
     normal: THREE.Vector3,
+    materialIndex: number,
   ) => {
     const edgeAB = b.clone().sub(a)
     const edgeAC = c.clone().sub(a)
@@ -573,7 +640,9 @@ function buildCurvedStepGeometry(
     for (const point of ordered) {
       positions.push(point.x, point.y, point.z)
       normals.push(normal.x, normal.y, normal.z)
+      pushUv(point, normal, materialIndex)
     }
+    triangleMaterialIndices.push(materialIndex)
   }
 
   const pushQuad = (
@@ -582,9 +651,10 @@ function buildCurvedStepGeometry(
     c: THREE.Vector3,
     d: THREE.Vector3,
     normal: THREE.Vector3,
+    materialIndex: number,
   ) => {
-    pushTriangle(a, b, c, normal)
-    pushTriangle(a, c, d, normal)
+    pushTriangle(a, b, c, normal, materialIndex)
+    pushTriangle(a, c, d, normal, materialIndex)
   }
 
   const upNormal = new THREE.Vector3(0, 1, 0)
@@ -609,10 +679,38 @@ function buildCurvedStepGeometry(
     const outerNormal = new THREE.Vector3(Math.cos(midAngle), 0, Math.sin(midAngle)).normalize()
     const innerNormal = new THREE.Vector3(-Math.cos(midAngle), 0, -Math.sin(midAngle)).normalize()
 
-    pushQuad(innerStartTop, outerStartTop, outerEndTop, innerEndTop, upNormal)
-    pushQuad(innerStartBottom, innerEndBottom, outerEndBottom, outerStartBottom, downNormal)
-    pushQuad(innerStartBottom, innerStartTop, innerEndTop, innerEndBottom, innerNormal)
-    pushQuad(outerStartBottom, outerEndBottom, outerEndTop, outerStartTop, outerNormal)
+    pushQuad(
+      innerStartTop,
+      outerStartTop,
+      outerEndTop,
+      innerEndTop,
+      upNormal,
+      STAIR_TREAD_MATERIAL_INDEX,
+    )
+    pushQuad(
+      innerStartBottom,
+      innerEndBottom,
+      outerEndBottom,
+      outerStartBottom,
+      downNormal,
+      STAIR_SIDE_MATERIAL_INDEX,
+    )
+    pushQuad(
+      innerStartBottom,
+      innerStartTop,
+      innerEndTop,
+      innerEndBottom,
+      innerNormal,
+      STAIR_SIDE_MATERIAL_INDEX,
+    )
+    pushQuad(
+      outerStartBottom,
+      outerEndBottom,
+      outerEndTop,
+      outerStartTop,
+      outerNormal,
+      STAIR_SIDE_MATERIAL_INDEX,
+    )
   }
 
   const startInnerBottom = pointOnArc(innerRadius, startAngle, y0)
@@ -634,12 +732,49 @@ function buildCurvedStepGeometry(
     sweepDirection * Math.cos(endAngle),
   ).normalize()
 
-  pushQuad(startInnerBottom, startOuterBottom, startOuterTop, startInnerTop, startNormal)
-  pushQuad(endInnerBottom, endInnerTop, endOuterTop, endOuterBottom, endNormal)
+  pushQuad(
+    startInnerBottom,
+    startOuterBottom,
+    startOuterTop,
+    startInnerTop,
+    startNormal,
+    STAIR_SIDE_MATERIAL_INDEX,
+  )
+  pushQuad(
+    endInnerBottom,
+    endInnerTop,
+    endOuterTop,
+    endOuterBottom,
+    endNormal,
+    STAIR_SIDE_MATERIAL_INDEX,
+  )
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.clearGroups()
+
+  let currentMaterial = triangleMaterialIndices[0]
+  let groupStart = 0
+
+  for (let triangleIndex = 1; triangleIndex < triangleMaterialIndices.length; triangleIndex++) {
+    const materialIndex = triangleMaterialIndices[triangleIndex]
+    if (materialIndex === currentMaterial) continue
+
+    geometry.addGroup(groupStart * 3, (triangleIndex - groupStart) * 3, currentMaterial)
+    groupStart = triangleIndex
+    currentMaterial = materialIndex
+  }
+
+  if (triangleMaterialIndices.length > 0) {
+    geometry.addGroup(
+      groupStart * 3,
+      (triangleMaterialIndices.length - groupStart) * 3,
+      currentMaterial ?? STAIR_SIDE_MATERIAL_INDEX,
+    )
+  }
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
   geometry.computeVertexNormals()
   return geometry
 }

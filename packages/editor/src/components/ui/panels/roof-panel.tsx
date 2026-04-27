@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type MaterialSchema,
   type RoofNode,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
@@ -17,7 +16,6 @@ import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -48,20 +46,6 @@ export function RoofPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const handleMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -170,11 +154,13 @@ export function RoofPanel() {
             </button>
           ))}
         </div>
-        <ActionButton
-          icon={<Plus className="h-3.5 w-3.5" />}
-          label="Add Segment"
-          onClick={handleAddSegment}
-        />
+        <ActionGroup>
+          <ActionButton
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="Add Segment"
+            onClick={handleAddSegment}
+          />
+        </ActionGroup>
       </PanelSection>
 
       <PanelSection title="Position">
@@ -265,15 +251,6 @@ export function RoofPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
-      </PanelSection>
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="roof"
-          onChange={handleMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
       </PanelSection>
     </PanelWrapper>
   )

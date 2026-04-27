@@ -4,7 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   type LevelNode,
-  type MaterialSchema,
   type StairNode,
   type StairRailingMode,
   type StairSlabOpeningMode,
@@ -23,7 +22,6 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -90,20 +88,6 @@ export function StairPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
-  )
-
-  const handleMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -567,15 +551,6 @@ export function StairPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
-      </PanelSection>
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="stair"
-          onChange={handleMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
       </PanelSection>
     </PanelWrapper>
   )

@@ -42,9 +42,11 @@ export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialPresetByRef,
-  getMaterialsForTarget,
+  getMaterialsForCategory,
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
+  MATERIAL_CATEGORIES,
+  type MaterialCategory,
   type MaterialCatalogItem,
   toLibraryMaterialRef,
 } from './material-library'
@@ -55,6 +57,12 @@ export {
   type ItemInteractiveState,
   useInteractive,
 } from './store/use-interactive'
+export {
+  getSceneHistoryPauseDepth,
+  pauseSceneHistory,
+  resetSceneHistoryPauseDepth,
+  resumeSceneHistory,
+} from './store/history-control'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

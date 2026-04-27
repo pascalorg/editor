@@ -23,6 +23,7 @@ import {
   Moon,
   MousePointer2,
   Package,
+  PaintBucket,
   PencilLine,
   Plus,
   Redo2,
@@ -35,6 +36,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
+import { runRedo, runUndo } from '../../../lib/history'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
@@ -48,6 +50,7 @@ export function EditorCommands() {
   const setMode = useEditor((s) => s.setMode)
   const setTool = useEditor((s) => s.setTool)
   const setStructureLayer = useEditor((s) => s.setStructureLayer)
+  const primeMaterialPaintFromSelection = useEditor((s) => s.primeMaterialPaintFromSelection)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
@@ -147,6 +150,21 @@ export function EditorCommands() {
           run(() => {
             const { selectedIds } = useViewer.getState().selection
             useScene.getState().deleteNodes(selectedIds as any[])
+          }),
+      },
+      {
+        id: 'editor.mode.material-paint',
+        label: 'Material Paint',
+        group: 'Scene',
+        icon: <PaintBucket className="h-4 w-4" />,
+        keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
+        shortcut: ['P'],
+        execute: () =>
+          run(() => {
+            primeMaterialPaintFromSelection()
+            setPhase('structure')
+            setStructureLayer('elements')
+            setMode('material-paint')
           }),
       },
 
@@ -313,7 +331,7 @@ export function EditorCommands() {
         group: 'History',
         icon: <Undo2 className="h-4 w-4" />,
         keywords: ['undo', 'revert', 'back'],
-        execute: () => run(() => useScene.temporal.getState().undo()),
+        execute: () => run(() => runUndo()),
       },
       {
         id: 'editor.history.redo',
@@ -321,7 +339,7 @@ export function EditorCommands() {
         group: 'History',
         icon: <Redo2 className="h-4 w-4" />,
         keywords: ['redo', 'forward', 'repeat'],
-        execute: () => run(() => useScene.temporal.getState().redo()),
+        execute: () => run(() => runRedo()),
       },
 
       // ── Export & Share ───────────────────────────────────────────────────
@@ -354,7 +372,7 @@ export function EditorCommands() {
               icon: <Box className="h-4 w-4" />,
               keywords: ['export', 'glb', 'gltf', '3d', 'model', 'download'],
               execute: () => run(() => exportScene()),
-            } as const,
+            },
           ]
         : []),
       {

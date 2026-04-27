@@ -11,7 +11,7 @@ import useScene from '../../store/use-scene'
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
 ;(csgEvaluator as any).consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
-csgEvaluator.attributes = ['position', 'normal']
+csgEvaluator.attributes = ['position', 'normal', 'uv']
 
 function prepareBrushForCSG(brush: Brush) {
   brush.geometry.computeBoundsTree = computeBoundsTree
@@ -25,6 +25,7 @@ const _position = new THREE.Vector3()
 const _quaternion = new THREE.Quaternion()
 const _scale = new THREE.Vector3(1, 1, 1)
 const _yAxis = new THREE.Vector3(0, 1, 0)
+const _uvFaceNormal = new THREE.Vector3()
 
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
@@ -251,6 +252,7 @@ function updateMergedRoofGeometry(
         g.materialIndex = mapRoofGroupMaterialIndex(g.materialIndex, resultMaterials, matToIndex)
       }
 
+      ensureUv2Attribute(resultGeo)
       resultGeo.computeVertexNormals()
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = resultGeo
@@ -641,6 +643,7 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
   wallBrush.geometry.dispose()
   innerBrush.geometry.dispose()
 
+  ensureUv2Attribute(resultGeo)
   resultGeo.computeVertexNormals()
   return resultGeo
 }
@@ -936,6 +939,7 @@ function createGeometryFromFaces(
 ): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
+  const uvs: number[] = []
   const indices: number[] = []
   const groups: { start: number; count: number; materialIndex: number }[] = []
   let vertexCount = 0
@@ -974,6 +978,10 @@ function createGeometryFromFaces(
       normals.push(normal.x, normal.y, normal.z)
       normals.push(normal.x, normal.y, normal.z)
 
+      pushRoofUv(uvs, p0, normal)
+      pushRoofUv(uvs, fi, normal)
+      pushRoofUv(uvs, fi1, normal)
+
       indices.push(vertexCount, vertexCount + 1, vertexCount + 2)
 
       faceVertexCount += 3
@@ -990,6 +998,7 @@ function createGeometryFromFaces(
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   geometry.setIndex(indices)
 
   for (const g of groups) {
@@ -999,6 +1008,34 @@ function createGeometryFromFaces(
   // Merge identical vertices to optimize geometry for CSG and create clean topology
   const mergedGeo = mergeVertices(geometry, 1e-4)
   geometry.dispose()
+  ensureUv2Attribute(mergedGeo)
 
   return mergedGeo
+}
+
+function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) {
+  _uvFaceNormal.copy(normal).normalize()
+
+  const absX = Math.abs(_uvFaceNormal.x)
+  const absY = Math.abs(_uvFaceNormal.y)
+  const absZ = Math.abs(_uvFaceNormal.z)
+
+  if (absY >= absX && absY >= absZ) {
+    uvs.push(point.x, point.z)
+    return
+  }
+
+  if (absX >= absZ) {
+    uvs.push(point.z, point.y)
+    return
+  }
+
+  uvs.push(point.x, point.y)
+}
+
+function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
+  const uv = geometry.getAttribute('uv')
+  if (!uv) return
+
+  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }

@@ -21,6 +21,20 @@ function stepPrecision(s: number): number {
   return Math.max(0, Math.ceil(-Math.log10(s)))
 }
 
+function getAdjustedStep(
+  baseStep: number,
+  modifiers: {
+    shiftKey?: boolean
+    metaKey?: boolean
+    ctrlKey?: boolean
+    altKey?: boolean
+  },
+): number {
+  if (modifiers.shiftKey) return baseStep * 10
+  if (modifiers.metaKey || modifiers.ctrlKey || modifiers.altKey) return baseStep * 0.1
+  return baseStep
+}
+
 export function SliderControl({
   label,
   value,
@@ -58,16 +72,14 @@ export function SliderControl({
       if (isEditing) return
       e.preventDefault()
       const direction = e.deltaY < 0 ? 1 : -1
-      let s = step
-      if (e.shiftKey) s = step * 10
-      else if (e.altKey) s = step * 0.1
+      const s = getAdjustedStep(step, e)
       const newValue = clamp(valueRef.current + direction * s)
       const final = Number.parseFloat(newValue.toFixed(stepPrecision(s)))
       if (final !== valueRef.current) onChange(final)
     }
     el.addEventListener('wheel', handleWheel, { passive: false })
     return () => el.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, clamp, onChange, precision])
+  }, [isEditing, step, clamp, onChange])
 
   // Arrow key support while hovered
   useEffect(() => {
@@ -78,9 +90,7 @@ export function SliderControl({
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') direction = -1
       if (direction !== 0) {
         e.preventDefault()
-        let s = step
-        if (e.shiftKey) s = step * 10
-        else if (e.metaKey || e.ctrlKey) s = step * 0.1
+        const s = getAdjustedStep(step, e)
         const newValue = clamp(valueRef.current + direction * s)
         const final = Number.parseFloat(newValue.toFixed(stepPrecision(s)))
         if (final !== valueRef.current) onChange(final)
@@ -88,7 +98,7 @@ export function SliderControl({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, clamp, onChange, precision])
+  }, [isHovered, isEditing, step, clamp, onChange])
 
   const handleLabelPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -107,16 +117,14 @@ export function SliderControl({
       if (!dragRef.current) return
       const { startX, startValue } = dragRef.current
       const dx = e.clientX - startX
-      let s = step
-      if (e.shiftKey) s = step * 10
-      else if (e.metaKey || e.ctrlKey) s = step * 0.1
+      const s = getAdjustedStep(step, e)
       // 4 px per step at default sensitivity
       const newValue = clamp(
         Number.parseFloat((startValue + (dx / 4) * s).toFixed(stepPrecision(s))),
       )
       onChange(newValue)
     },
-    [step, precision, clamp, onChange],
+    [step, clamp, onChange],
   )
 
   const handleLabelPointerUp = useCallback(
@@ -163,12 +171,18 @@ export function SliderControl({
         setIsEditing(false)
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const newV = clamp(value + step)
+        const adjustedStep = getAdjustedStep(step, e)
+        const newV = clamp(
+          Number.parseFloat((value + adjustedStep).toFixed(stepPrecision(adjustedStep))),
+        )
         onChange(newV)
         setInputValue(newV.toFixed(precision))
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const newV = clamp(value - step)
+        const adjustedStep = getAdjustedStep(step, e)
+        const newV = clamp(
+          Number.parseFloat((value - adjustedStep).toFixed(stepPrecision(adjustedStep))),
+        )
         onChange(newV)
         setInputValue(newV.toFixed(precision))
       }

@@ -9,7 +9,15 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
-type ControlId = 'select' | 'box-select' | 'site-edit' | 'build' | 'furnish' | 'zone' | 'delete'
+type ControlId =
+  | 'select'
+  | 'box-select'
+  | 'site-edit'
+  | 'build'
+  | 'material-paint'
+  | 'furnish'
+  | 'zone'
+  | 'delete'
 
 type ControlConfig = {
   id: ControlId
@@ -55,6 +63,14 @@ const controls: ControlConfig[] = [
     activeColor: 'bg-green-500/20 text-green-400',
   },
   {
+    id: 'material-paint',
+    imageSrc: '/icons/paint.png',
+    label: 'Material Paint',
+    shortcut: 'P',
+    color: 'hover:bg-amber-500/20 hover:text-amber-400',
+    activeColor: 'bg-amber-500/20 text-amber-400',
+  },
+  {
     id: 'furnish',
     imageSrc: '/icons/couch.png',
     label: 'Furnish',
@@ -88,6 +104,7 @@ export function ControlModes() {
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
+  const primeMaterialPaintFromSelection = useEditor((state) => state.primeMaterialPaintFromSelection)
   const levelId = useViewer((s) => s.selection.levelId)
 
   // Only subscribe to the primitive `level` number — when walls are added to
@@ -112,6 +129,7 @@ export function ControlModes() {
     if (id === 'site-edit') return false
     if (id === 'build')
       return mode === 'build' && phase === 'structure' && structureLayer === 'elements'
+    if (id === 'material-paint') return mode === 'material-paint'
     if (id === 'furnish') return mode === 'build' && phase === 'furnish'
     if (id === 'zone')
       return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
@@ -154,6 +172,15 @@ export function ControlModes() {
         setPhase('structure')
         setStructureLayer('elements')
         setMode('build')
+      }
+    } else if (id === 'material-paint') {
+      if (getIsActive('material-paint')) {
+        setMode('select')
+      } else {
+        primeMaterialPaintFromSelection()
+        setPhase('structure')
+        setStructureLayer('elements')
+        setMode('material-paint')
       }
     } else if (id === 'furnish') {
       if (getIsActive('furnish')) {

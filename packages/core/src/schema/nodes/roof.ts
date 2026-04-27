@@ -1,14 +1,26 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { MaterialSchema } from '../material'
+import { type MaterialSchema, MaterialSchema as MaterialSchemaSchema } from '../material'
 import { RoofSegmentNode } from './roof-segment'
+
+export type RoofSurfaceMaterialRole = 'top' | 'edge' | 'wall'
+export type RoofSurfaceMaterialSpec = {
+  material?: MaterialSchema
+  materialPreset?: string
+}
 
 export const RoofNode = BaseNode.extend({
   id: objectId('roof'),
   type: nodeType('roof'),
-  material: MaterialSchema.optional(),
+  material: MaterialSchemaSchema.optional(),
   materialPreset: z.string().optional(),
+  topMaterial: MaterialSchemaSchema.optional(),
+  topMaterialPreset: z.string().optional(),
+  edgeMaterial: MaterialSchemaSchema.optional(),
+  edgeMaterialPreset: z.string().optional(),
+  wallMaterial: MaterialSchemaSchema.optional(),
+  wallMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
@@ -26,3 +38,66 @@ export const RoofNode = BaseNode.extend({
 )
 
 export type RoofNode = z.infer<typeof RoofNode>
+
+function getLegacyRoofSurfaceMaterial(node: RoofNode): RoofSurfaceMaterialSpec {
+  return {
+    material: node.material,
+    materialPreset: node.materialPreset,
+  }
+}
+
+export function getEffectiveRoofSurfaceMaterial(
+  node: RoofNode,
+  role: RoofSurfaceMaterialRole,
+): RoofSurfaceMaterialSpec {
+  if (role === 'top') {
+    if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
+      return {
+        material: node.topMaterial,
+        materialPreset: typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
+      }
+    }
+  }
+
+  if (role === 'edge') {
+    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
+      return {
+        material: node.edgeMaterial,
+        materialPreset:
+          typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined,
+      }
+    }
+  }
+
+  if (role === 'wall') {
+    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
+      return {
+        material: node.wallMaterial,
+        materialPreset:
+          typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined,
+      }
+    }
+  }
+
+  if (role === 'edge') {
+    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
+      return {
+        material: node.wallMaterial,
+        materialPreset:
+          typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined,
+      }
+    }
+  }
+
+  if (role === 'wall') {
+    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
+      return {
+        material: node.edgeMaterial,
+        materialPreset:
+          typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined,
+      }
+    }
+  }
+
+  return getLegacyRoofSurfaceMaterial(node)
+}

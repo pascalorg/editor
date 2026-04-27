@@ -64,6 +64,8 @@ export function useNodeEvents<T extends NodeType>(node: NodeConfig[T]['node'], t
       position: [e.point.x, e.point.y, e.point.z],
       localPosition: [localPoint.x, localPoint.y, localPoint.z],
       normal: e.face ? [e.face.normal.x, e.face.normal.y, e.face.normal.z] : undefined,
+      faceIndex: e.faceIndex ?? undefined,
+      object: e.object,
       stopPropagation: () => e.stopPropagation(),
       nativeEvent: e,
     } as NodeConfig[T]['event']

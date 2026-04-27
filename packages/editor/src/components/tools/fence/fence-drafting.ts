@@ -1,7 +1,9 @@
-import { FenceNode, useScene, type WallNode } from '@pascal-app/core'
+import { FenceNode, getWallCurveFrameAt, getWallCurveLength, isCurvedWall, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
+  getWallAngleSnapStep,
+  getWallGridStep,
   type WallPlanPoint,
   findWallSnapTarget,
   isWallLongEnough,
@@ -58,11 +60,16 @@ function findFenceSnapTarget(
       continue
     }
 
-    const candidates: Array<FencePlanPoint | null> = [
-      fence.start,
-      fence.end,
-      projectPointOntoSegment(point, fence),
-    ]
+    const candidates: Array<FencePlanPoint | null> = [fence.start, fence.end]
+    if (isCurvedWall(fence)) {
+      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(fence) / 0.3))
+      for (let index = 0; index <= sampleCount; index += 1) {
+        const frame = getWallCurveFrameAt(fence, index / sampleCount)
+        candidates.push([frame.point.x, frame.point.y])
+      }
+    } else {
+      candidates.push(projectPointOntoSegment(point, fence))
+    }
 
     for (const candidate of candidates) {
       if (!candidate) {
@@ -94,7 +101,12 @@ export function snapFenceDraftPoint(args: {
   ignoreFenceIds?: string[]
 }): FencePlanPoint {
   const { point, walls, fences, start, angleSnap = false, ignoreFenceIds } = args
-  const basePoint = start && angleSnap ? snapPointTo45Degrees(start, point) : snapPointToGrid(point)
+  const gridStep = getWallGridStep()
+  const angleStep = getWallAngleSnapStep(gridStep)
+  const basePoint =
+    start && angleSnap
+      ? snapPointTo45Degrees(start, point, gridStep, angleStep)
+      : snapPointToGrid(point, gridStep)
   const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
 
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint

@@ -7,7 +7,6 @@ import {
   getMaxWallCurveOffset,
   getWallCurveLength,
   normalizeWallCurveOffset,
-  type MaterialSchema,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -17,7 +16,6 @@ import { useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -79,20 +77,6 @@ export function WallPanel() {
       handleUpdate({ end: newEnd })
     },
     [node, handleUpdate],
-  )
-
-  const handleMaterialPresetChange = useCallback(
-    (materialPreset: string) => {
-      handleUpdate({ materialPreset, material: undefined })
-    },
-    [handleUpdate],
-  )
-
-  const handleCustomMaterialChange = useCallback(
-    (material: MaterialSchema) => {
-      handleUpdate({ material, materialPreset: undefined })
-    },
-    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -169,33 +153,25 @@ export function WallPanel() {
             min={-Math.max(0.01, maxCurveOffset)}
             onChange={(v) => handleUpdate({ curveOffset: normalizeWallCurveOffset(node, v) })}
             precision={2}
-            step={0.01}
+            step={0.1}
             unit="m"
             value={Math.round(curveOffset * 100) / 100}
           />
         )}
       </PanelSection>
 
-      <PanelSection title="Material">
-        <MaterialPicker
-          nodeType="wall"
-          onChange={handleCustomMaterialChange}
-          onSelectMaterialPreset={handleMaterialPresetChange}
-          selectedMaterialPreset={node.materialPreset}
-          value={node.material}
-        />
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          {!hasWallChildrenBlockingCurve && (
+            <ActionButton
+              icon={<Spline className="h-3.5 w-3.5" />}
+              label="Curve"
+              onClick={handleCurve}
+            />
+          )}
+        </ActionGroup>
       </PanelSection>
-
-      <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-        {!hasWallChildrenBlockingCurve && (
-          <ActionButton
-            icon={<Spline className="h-3.5 w-3.5" />}
-            label="Curve"
-            onClick={handleCurve}
-          />
-        )}
-      </ActionGroup>
     </PanelWrapper>
   )
 }

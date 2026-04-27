@@ -4,6 +4,11 @@ import {
   isCurvedWall,
 } from '../systems/wall/wall-curve'
 import { CeilingNode, SlabNode, type CeilingNode as CeilingNodeType, type SlabNode as SlabNodeType, type WallNode } from '../schema'
+import {
+  getSceneHistoryPauseDepth,
+  pauseSceneHistory,
+  resumeSceneHistory,
+} from '../store/history-control'
 import { simplifyClosedPolygon } from './polygon-geometry'
 
 type Point2D = { x: number; y: number }
@@ -855,6 +860,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
 
   const unsubscribe = sceneStore.subscribe((state: any) => {
     if (isProcessing) return
+    if (getSceneHistoryPauseDepth() > 0) return
 
     const nodes = state.nodes
     const wallsByLevel = new Map<string, WallNode[]>()
@@ -889,11 +895,11 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
     }
 
     isProcessing = true
-    sceneStore.temporal.getState().pause()
+    pauseSceneHistory(sceneStore)
     try {
       runSpaceDetection([...levelsToUpdate], sceneStore, editorStore, nodes)
     } finally {
-      sceneStore.temporal.getState().resume()
+      resumeSceneHistory(sceneStore)
       previousSnapshots.clear()
       for (const [levelId, snapshot] of currentSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)

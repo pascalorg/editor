@@ -1,7 +1,9 @@
 import {
   type AnyNodeId,
   emitter,
+  type FenceNode,
   type GridEvent,
+  type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
   type StairNode,
@@ -9,13 +11,16 @@ import {
   sceneRegistry,
   useLiveTransforms,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { snapFenceDraftPoint } from '../fence/fence-drafting'
 import { CursorSphere } from '../shared/cursor-sphere'
+import type { WallPlanPoint } from '../wall/wall-drafting'
 
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
@@ -118,6 +123,46 @@ export const MoveRoofTool: React.FC<{
       }
     }
 
+    const resolveLevelId = () => {
+      if (movingNode.type === 'roof' || movingNode.type === 'stair') {
+        return movingNode.parentId ?? null
+      }
+
+      if (
+        (movingNode.type === 'roof-segment' || movingNode.type === 'stair-segment') &&
+        movingNode.parentId
+      ) {
+        const parentNode = useScene.getState().nodes[movingNode.parentId as AnyNodeId]
+        return parentNode && 'parentId' in parentNode ? (parentNode.parentId ?? null) : null
+      }
+
+      return null
+    }
+
+    const levelId = resolveLevelId()
+    const levelNode =
+      levelId && useScene.getState().nodes[levelId as AnyNodeId]?.type === 'level'
+        ? (useScene.getState().nodes[levelId as AnyNodeId] as LevelNode)
+        : null
+    const levelChildren = levelNode?.children ?? []
+    const levelWalls = levelChildren
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .filter((node): node is WallNode => node?.type === 'wall')
+    const levelFences = levelChildren
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .filter((node): node is FenceNode => node?.type === 'fence')
+    const buildingId = useViewer.getState().selection.buildingId
+    const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+
+    const localToWorldPoint = (localPoint: WallPlanPoint, y: number): [number, number, number] => {
+      if (buildingObj) {
+        const worldPoint = buildingObj.localToWorld(new THREE.Vector3(localPoint[0], y, localPoint[1]))
+        return [worldPoint.x, worldPoint.y, worldPoint.z]
+      }
+
+      return [localPoint[0], y, localPoint[1]]
+    }
+
     const computeLocal = (
       gridX: number,
       gridZ: number,
@@ -155,21 +200,21 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onGridMove = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
 
-      if (
-        previousGridPosRef.current &&
-        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
-      ) {
+      const snappedLocal = snapFenceDraftPoint({
+        point: [event.localPosition[0], event.localPosition[2]],
+        walls: levelWalls,
+        fences: levelFences,
+      })
+      const [gridX, , gridZ] = localToWorldPoint(snappedLocal, y)
+
+      if (previousGridPosRef.current && (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
       previousGridPosRef.current = [gridX, gridZ]
-      // Cursor is inside the building-local ToolManager group — use local position
-      const lx = Math.round(event.localPosition[0] * 2) / 2
-      const lz = Math.round(event.localPosition[2] * 2) / 2
+      const [lx, lz] = snappedLocal
       setCursorWorldPos([lx, event.localPosition[1], lz])
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
@@ -189,11 +234,14 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2 // world, for computeLocal
-      const gridZ = Math.round(event.position[2] * 2) / 2
       const y = event.position[1]
-      const lx = Math.round(event.localPosition[0] * 2) / 2
-      const lz = Math.round(event.localPosition[2] * 2) / 2
+      const snappedLocal = snapFenceDraftPoint({
+        point: [event.localPosition[0], event.localPosition[2]],
+        walls: levelWalls,
+        fences: levelFences,
+      })
+      const [gridX, , gridZ] = localToWorldPoint(snappedLocal, y)
+      const [lx, lz] = snappedLocal
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
 

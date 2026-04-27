@@ -1,6 +1,7 @@
 import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { runRedo, runUndo } from '../lib/history'
 import { sfxEmitter } from '../lib/sfx-bus'
 import useEditor from '../store/use-editor'
 
@@ -88,14 +89,21 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
         if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setMode('delete')
+      } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        useEditor.getState().primeMaterialPaintFromSelection()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setMode('material-paint')
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useScene.temporal.getState().undo()
+        runUndo()
       } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useScene.temporal.getState().redo()
+        runRedo()
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         const { buildingId, levelId } = useViewer.getState().selection
