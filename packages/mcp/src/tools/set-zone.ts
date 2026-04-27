@@ -40,6 +40,17 @@ export function registerSetZone(server: McpServer, bridge: SceneBridge, store?: 
           `Node ${levelId} is a ${parent.type}, expected level`,
         )
       }
+      if (
+        typeof parent.metadata === 'object' &&
+        parent.metadata !== null &&
+        'role' in parent.metadata &&
+        parent.metadata.role === 'roof'
+      ) {
+        throwMcpError(
+          ErrorCode.InvalidParams,
+          `Roof support level ${levelId} is not an occupied story; create zones on an occupied level instead`,
+        )
+      }
 
       const zone = ZoneNode.parse({
         name: label,

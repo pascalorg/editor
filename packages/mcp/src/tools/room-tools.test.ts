@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { LevelNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerRoomTools } from './room-tools'
 
@@ -54,6 +55,32 @@ describe('room tools', () => {
     expect(parsed.wallIds).toHaveLength(4)
     expect(parsed.areaSqMeters).toBe(12)
     expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('create_room rejects dedicated roof support levels', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const roofLevel = LevelNode.parse({
+      name: 'Roof',
+      level: 1,
+      metadata: { role: 'roof' },
+      children: [],
+    })
+    bridge.createNode(roofLevel, building.id)
+
+    const result = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId: roofLevel.id,
+        name: 'Accidental attic room',
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 3],
+          [0, 3],
+        ],
+      },
+    })
+    expect(result.isError).toBe(true)
   })
 
   test('add_door and add_window convert t to wall-local meters', async () => {

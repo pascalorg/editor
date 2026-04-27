@@ -232,7 +232,12 @@ export function registerConstructionTools(
       slabMaterialPreset,
       ceilingMaterialPreset,
     }) => {
-      assertNode(bridge, levelId, 'level')
+      const level = assertNode(bridge, levelId, 'level')
+      if (isRoofLevel(level)) {
+        throw new Error(
+          `Cannot create a story shell on roof support level ${levelId}; create or choose an occupied story level instead`,
+        )
+      }
       const points = footprint as [number, number][]
       const wallIds: string[] = []
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
@@ -324,7 +329,12 @@ export function registerConstructionTools(
       let createdRoofLevelId: string | null = null
 
       if (roofLevelId !== undefined) {
-        assertNode(bridge, roofLevelId, 'level')
+        const roofLevel = assertNode(bridge, roofLevelId, 'level')
+        if (!isRoofLevel(roofLevel)) {
+          throw new Error(
+            `roofLevelId ${roofLevelId} must reference a dedicated roof level with metadata.role = "roof"; omit roofLevelId to create one automatically`,
+          )
+        }
         targetRoofLevelId = roofLevelId as AnyNodeId
       } else if (useDedicatedRoofLevel && !isRoofLevel(referenceLevel)) {
         const buildingId = getBuildingIdForLevel(bridge, levelId)
@@ -411,8 +421,13 @@ export function registerConstructionTools(
       materialPreset,
       name,
     }) => {
-      assertNode(bridge, fromLevelId, 'level')
-      assertNode(bridge, toLevelId, 'level')
+      const fromLevel = assertNode(bridge, fromLevelId, 'level')
+      const toLevel = assertNode(bridge, toLevelId, 'level')
+      if (isRoofLevel(fromLevel) || isRoofLevel(toLevel)) {
+        throw new Error(
+          'Roof support levels are not occupied stories; create a separate occupied attic/story level if a stair-accessible attic is required',
+        )
+      }
 
       const segment = StairSegmentNode.parse({
         segmentType: 'stair',

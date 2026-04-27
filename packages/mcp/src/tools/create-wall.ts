@@ -45,6 +45,17 @@ export function registerCreateWall(
           `Node ${levelId} is a ${parent.type}, expected level`,
         )
       }
+      if (
+        typeof parent.metadata === 'object' &&
+        parent.metadata !== null &&
+        'role' in parent.metadata &&
+        parent.metadata.role === 'roof'
+      ) {
+        throwMcpError(
+          ErrorCode.InvalidParams,
+          `Roof support level ${levelId} is not an occupied story; create walls on an occupied level instead`,
+        )
+      }
 
       const wall = WallNode.parse({
         start: start as [number, number],

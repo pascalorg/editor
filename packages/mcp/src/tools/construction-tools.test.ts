@@ -174,6 +174,66 @@ describe('construction tools', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
+  test('story construction tools reject dedicated roof support levels', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const roofLevel = LevelNode.parse({
+      name: 'Roof',
+      level: 1,
+      children: [],
+      metadata: { role: 'roof', referenceLevelId: level.id },
+    })
+    bridge.createNode(roofLevel, building.id)
+
+    const shell = await client.callTool({
+      name: 'create_story_shell',
+      arguments: {
+        levelId: roofLevel.id,
+        footprint: [
+          [-4, -3],
+          [4, -3],
+          [4, 3],
+          [-4, 3],
+        ],
+      },
+    })
+    expect(shell.isError).toBe(true)
+
+    const stair = await client.callTool({
+      name: 'create_stair_between_levels',
+      arguments: {
+        fromLevelId: level.id,
+        toLevelId: roofLevel.id,
+        position: [0, 0, 0],
+        runLength: 3,
+        totalRise: 2.8,
+      },
+    })
+    expect(stair.isError).toBe(true)
+  })
+
+  test('create_roof requires an explicit roof support level when roofLevelId is provided', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const occupiedUpper = LevelNode.parse({
+      name: 'Second Floor',
+      level: 1,
+      children: [],
+    })
+    bridge.createNode(occupiedUpper, building.id)
+
+    const result = await client.callTool({
+      name: 'create_roof',
+      arguments: {
+        levelId: level.id,
+        roofLevelId: occupiedUpper.id,
+        width: 8,
+        depth: 6,
+      },
+    })
+    expect(result.isError).toBe(true)
+  })
+
   test('verify_scene flags roofs mixed into occupied levels', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     await client.callTool({

@@ -124,6 +124,17 @@ function assertLevel(bridge: SceneBridge, levelId: string): AnyNode {
   if (level.type !== 'level') {
     throwMcpError(ErrorCode.InvalidParams, `Node ${levelId} is a ${level.type}, expected level`)
   }
+  if (
+    typeof level.metadata === 'object' &&
+    level.metadata !== null &&
+    'role' in level.metadata &&
+    level.metadata.role === 'roof'
+  ) {
+    throwMcpError(
+      ErrorCode.InvalidParams,
+      `Roof support level ${levelId} is not an occupied story; create rooms or furnishings on an occupied level instead`,
+    )
+  }
   return level
 }
 

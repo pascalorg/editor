@@ -20,12 +20,21 @@ const jsonObject = z.record(z.string(), z.unknown())
 
 export const listLevelsOutput = {
   activeSceneId: z.string().nullable(),
+  levelCount: z.number(),
+  occupiedStoryCount: z.number(),
+  supportLevelCount: z.number(),
+  roofLevelIds: z.array(z.string()),
   levels: z.array(jsonObject),
 }
 
 export const getLevelSummaryOutput = {
   levelId: z.string(),
   levelName: z.string().optional(),
+  role: z.string(),
+  metadataRole: z.string().nullable(),
+  isOccupiedStory: z.boolean(),
+  isSupportLevel: z.boolean(),
+  referenceLevelId: z.string().nullable(),
   counts: jsonObject,
   walls: z.array(jsonObject),
   zones: z.array(jsonObject),
@@ -48,12 +57,29 @@ export const verifySceneOutput = {
   ok: z.boolean(),
   valid: z.boolean(),
   levelCount: z.number(),
+  occupiedStoryCount: z.number(),
+  supportLevelCount: z.number(),
+  roofLevelIds: z.array(z.string()),
   activeSceneId: z.string().nullable(),
   levels: z.array(jsonObject),
   emptyLevelIds: z.array(z.string()),
   issues: z.array(z.string()),
   hasIssues: z.boolean(),
 }
+
+type ContentCounts = {
+  walls: number
+  zones: number
+  doors: number
+  windows: number
+  items: number
+  slabs: number
+  ceilings: number
+  roofs: number
+  stairs: number
+}
+
+type LevelRole = 'occupied' | 'roof' | 'support'
 
 function textResult<T extends Record<string, unknown>>(payload: T) {
   return {
@@ -80,6 +106,38 @@ function nodesOnLevel(bridge: SceneBridge, levelId: AnyNodeId): AnyNode[] {
   return Object.values(bridge.getNodes()).filter(
     (node) => node.id !== levelId && bridge.resolveLevelId(node.id as AnyNodeId) === levelId,
   )
+}
+
+function metadataRecord(node: AnyNode): Record<string, unknown> | null {
+  return typeof node.metadata === 'object' && node.metadata !== null
+    ? (node.metadata as Record<string, unknown>)
+    : null
+}
+
+function metadataString(node: AnyNode, key: string): string | undefined {
+  const value = metadataRecord(node)?.[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function occupiedContentCount(counts: ContentCounts): number {
+  return (
+    counts.walls +
+    counts.zones +
+    counts.doors +
+    counts.windows +
+    counts.items +
+    counts.slabs +
+    counts.ceilings +
+    counts.stairs
+  )
+}
+
+function classifyLevel(level: AnyNode, counts: ContentCounts): LevelRole {
+  const metadataRole = metadataString(level, 'role')
+  if (metadataRole === 'roof') return 'roof'
+  if (metadataRole === 'support') return 'support'
+  if (counts.roofs > 0 && occupiedContentCount(counts) === 0) return 'roof'
+  return 'occupied'
 }
 
 function openingSummaries(bridge: SceneBridge, wallId: AnyNodeId) {
@@ -317,6 +375,19 @@ function holeBelongsToStair(
   return metadata?.source === 'stair' && metadata.stairId === stairId
 }
 
+function parentListsChild(parent: AnyNode, childId: string): boolean {
+  if (!('children' in parent) || !Array.isArray(parent.children)) return false
+  return parent.children.some((child) => {
+    if (typeof child === 'string') return child === childId
+    return (
+      child !== null &&
+      typeof child === 'object' &&
+      'id' in child &&
+      (child as { id?: unknown }).id === childId
+    )
+  })
+}
+
 function levelSummary(bridge: SceneBridge, levelId: AnyNodeId) {
   const level = bridge.getNode(levelId)
   if (!level || level.type !== 'level') {
@@ -350,22 +421,31 @@ function levelSummary(bridge: SceneBridge, levelId: AnyNodeId) {
   const windows = nodes.filter((node) => node.type === 'window')
   const roofs = nodes.filter((node) => node.type === 'roof')
   const stairs = nodes.filter((node) => node.type === 'stair')
+  const counts: ContentCounts = {
+    walls: walls.length,
+    zones: zones.length,
+    doors: doors.length,
+    windows: windows.length,
+    items: items.length,
+    slabs: slabs.length,
+    ceilings: ceilings.length,
+    roofs: roofs.length,
+    stairs: stairs.length,
+  }
+  const role = classifyLevel(level, counts)
+  const metadataRole = metadataString(level, 'role') ?? null
+  const referenceLevelId = metadataString(level, 'referenceLevelId') ?? null
 
   return {
     levelId,
     levelName: level.name,
     floorIndex: level.level,
-    counts: {
-      walls: walls.length,
-      zones: zones.length,
-      doors: doors.length,
-      windows: windows.length,
-      items: items.length,
-      slabs: slabs.length,
-      ceilings: ceilings.length,
-      roofs: roofs.length,
-      stairs: stairs.length,
-    },
+    role,
+    metadataRole,
+    isOccupiedStory: role === 'occupied',
+    isSupportLevel: role !== 'occupied',
+    referenceLevelId,
+    counts,
     walls,
     zones,
     items,
@@ -386,14 +466,33 @@ export function registerListLevels(server: McpServer, bridge: SceneBridge): void
     },
     async () => {
       const activeScene = bridge.getActiveScene()
-      const levels = getLevels(bridge).map((level) => ({
-        id: level.id,
-        name: level.name,
-        floorIndex: level.type === 'level' ? level.level : 0,
-        parentId: level.parentId,
-        childCount: bridge.getChildren(level.id as AnyNodeId).length,
-      }))
-      return textResult({ activeSceneId: activeScene?.id ?? null, levels })
+      const levels = getLevels(bridge).map((level) => {
+        const summary = levelSummary(bridge, level.id as AnyNodeId)
+        return {
+          id: level.id,
+          name: level.name,
+          floorIndex: level.type === 'level' ? level.level : 0,
+          parentId: level.parentId,
+          role: summary.role,
+          metadataRole: summary.metadataRole,
+          isOccupiedStory: summary.isOccupiedStory,
+          isSupportLevel: summary.isSupportLevel,
+          referenceLevelId: summary.referenceLevelId,
+          childCount: bridge.getChildren(level.id as AnyNodeId).length,
+        }
+      })
+      const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+      const roofLevelIds = levels
+        .filter((level) => level.role === 'roof')
+        .map((level) => level.id as string)
+      return textResult({
+        activeSceneId: activeScene?.id ?? null,
+        levelCount: levels.length,
+        occupiedStoryCount,
+        supportLevelCount: levels.length - occupiedStoryCount,
+        roofLevelIds,
+        levels,
+      })
     },
   )
 }
@@ -480,18 +579,50 @@ export function registerVerifyScene(server: McpServer, bridge: SceneBridge): voi
           levelId: level.id,
           levelName: level.name ?? `Level ${summary.floorIndex}`,
           floorIndex: summary.floorIndex,
+          role: summary.role,
+          metadataRole: summary.metadataRole,
+          isOccupiedStory: summary.isOccupiedStory,
+          isSupportLevel: summary.isSupportLevel,
+          referenceLevelId: summary.referenceLevelId,
           isEmpty: totalContent === 0,
           content: summary.counts,
         }
       })
 
       const issues: string[] = []
+      const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+      const roofLevelIds = levels
+        .filter((level) => level.role === 'roof')
+        .map((level) => level.levelId as string)
       const emptyLevelIds = levels.filter((level) => level.isEmpty).map((level) => level.levelId)
       if (emptyLevelIds.length > 0) {
         issues.push(`Empty level(s): ${emptyLevelIds.join(', ')}`)
       }
 
       for (const level of levels) {
+        const occupiedContent = occupiedContentCount(level.content)
+        if (level.role === 'roof') {
+          if (level.content.roofs === 0) {
+            issues.push(
+              `${level.levelName} is a roof support level but has no roof geometry; add or move roof geometry there rather than deleting the support level to satisfy story count`,
+            )
+          }
+          if (occupiedContent > 0) {
+            issues.push(
+              `${level.levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, ceilings, and items to an occupied story and keep the roof level for roof geometry only`,
+            )
+          }
+          if (level.referenceLevelId) {
+            const referenceLevel = bridge.getNode(level.referenceLevelId as AnyNodeId)
+            if (referenceLevel?.type === 'level' && level.floorIndex <= referenceLevel.level) {
+              issues.push(
+                `${level.levelName} roof support level should be above its reference occupied level ${referenceLevel.name ?? referenceLevel.id}`,
+              )
+            }
+          }
+          continue
+        }
+
         if (level.content.walls > 0 && level.content.zones === 0) {
           issues.push(`${level.levelName} has walls but no zones/rooms`)
         }
@@ -514,10 +645,12 @@ export function registerVerifyScene(server: McpServer, bridge: SceneBridge): voi
         }
       }
 
-      const hasMultipleLevels = levels.length > 1
-      if (hasMultipleLevels) {
+      const hasMultipleOccupiedStories = occupiedStoryCount > 1
+      if (hasMultipleOccupiedStories) {
         for (const level of getLevels(bridge)) {
           if (level.type !== 'level') continue
+          const summary = levels.find((entry) => entry.levelId === level.id)
+          if (!summary?.isOccupiedStory) continue
           const expectedHeight =
             typeof level.metadata === 'object' &&
             level.metadata !== null &&
@@ -545,11 +678,28 @@ export function registerVerifyScene(server: McpServer, bridge: SceneBridge): voi
             issues.push(`${node.type} ${node.id} is not parented to a wall`)
             continue
           }
+          if (node.wallId !== parent.id) {
+            issues.push(
+              `${node.type} ${node.id} has wallId ${node.wallId ?? 'unset'} but is parented to wall ${parent.id}`,
+            )
+          }
+          if (!parentListsChild(parent, node.id)) {
+            issues.push(`${node.type} ${node.id} is not listed in wall ${parent.id} children`)
+          }
           const length = wallLength(parent)
           const width = node.width ?? (node.type === 'door' ? 0.9 : 1.5)
+          const height = node.height ?? (node.type === 'door' ? 2.1 : 1.5)
           const localX = node.position[0]
           if (localX - width / 2 < -0.01 || localX + width / 2 > length + 0.01) {
             issues.push(`${node.type} ${node.id} extends outside wall ${parent.id}`)
+          }
+          const wallHeight = parent.height ?? 2.5
+          const bottom = node.position[1] - height / 2
+          const top = node.position[1] + height / 2
+          if (bottom < -0.01 || top > wallHeight + 0.01) {
+            issues.push(
+              `${node.type} ${node.id} vertical bounds [${bottom.toFixed(2)}, ${top.toFixed(2)}] exceed wall ${parent.id} height ${wallHeight.toFixed(2)}m`,
+            )
           }
         }
       }
@@ -561,6 +711,24 @@ export function registerVerifyScene(server: McpServer, bridge: SceneBridge): voi
         if (sourceLevelId) {
           const sourceLevel = bridge.getNode(sourceLevelId)
           const footprints = stairFootprintPolygons(bridge, stair)
+          const sourceSlabs = nodesOnLevel(bridge, sourceLevelId).filter(
+            (node): node is AnyNode & { type: 'slab' } => node.type === 'slab',
+          )
+          if (sourceSlabs.length > 0) {
+            const outsideFootprints = footprints.filter(
+              (footprint) =>
+                !sourceSlabs.some((slab) =>
+                  polygonContainsPolygon(slab.polygon as Vec2[], footprint),
+                ),
+            )
+            if (outsideFootprints.length > 0) {
+              issues.push(
+                `Stair ${stair.name ?? stair.id} footprint extends outside source floor slab on ${
+                  sourceLevel?.name ?? sourceLevelId
+                }`,
+              )
+            }
+          }
           const obstructingWalls = nodesOnLevel(bridge, sourceLevelId)
             .filter((node): node is AnyNode & { type: 'wall' } => node.type === 'wall')
             .filter((wall) =>
@@ -635,6 +803,9 @@ export function registerVerifyScene(server: McpServer, bridge: SceneBridge): voi
         ok: true,
         valid: validation.valid,
         levelCount: levels.length,
+        occupiedStoryCount,
+        supportLevelCount: levels.length - occupiedStoryCount,
+        roofLevelIds,
         activeSceneId: bridge.getActiveScene()?.id ?? null,
         levels,
         emptyLevelIds,
