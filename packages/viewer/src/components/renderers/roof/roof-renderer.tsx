@@ -24,22 +24,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     return geometry
   }, [])
 
-  const customMaterial = useMemo(
-    () => getRoofMaterialArray(node),
-    [
-      node.materialPreset,
-      node.material,
-      node.material?.preset,
-      node.material?.properties,
-      node.material?.texture,
-      node.topMaterial,
-      node.topMaterialPreset,
-      node.edgeMaterial,
-      node.edgeMaterialPreset,
-      node.wallMaterial,
-      node.wallMaterialPreset,
-    ],
-  )
+  const customMaterial = useMemo(() => getRoofMaterialArray(node), [node])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 
