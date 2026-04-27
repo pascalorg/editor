@@ -13,6 +13,7 @@ export type FloorplanLineSegment = {
 export type FloorplanItemEntry = {
   item: ItemNode
   polygon: Point2D[]
+  usesRealMesh: boolean
 }
 
 export type FloorplanStairSegmentEntry = {

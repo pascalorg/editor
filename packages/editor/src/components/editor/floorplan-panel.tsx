@@ -449,6 +449,7 @@ type FloorplanItemEntry = {
   item: ItemNode
   points: string
   polygon: Point2D[]
+  usesRealMesh: boolean
 }
 
 type FloorplanStairSegmentEntry = {
@@ -6165,10 +6166,12 @@ export function FloorplanPanel() {
           item: entry.item,
           points: formatPolygonPoints(entry.polygon),
           polygon: entry.polygon,
+          usesRealMesh: entry.usesRealMesh,
         },
       ]
     })
   }, [cursorPoint, floorplanItems, levelDescendantNodeById, movingFloorplanNodeRevision])
+  const hasPendingItemMeshFootprints = floorplanItemEntries.some((entry) => !entry.usesRealMesh)
   const floorplanStairEntries = useMemo(
     () =>
       floorplanStairs.flatMap((stair) => {
@@ -8043,6 +8046,20 @@ export function FloorplanPanel() {
       emitter.off('item:leave', refreshFloorplanItemPreview as any)
     }
   }, [isItemPlacementPreviewActive])
+
+  useEffect(() => {
+    if (!hasPendingItemMeshFootprints) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setMovingFloorplanNodeRevision((current) => current + 1)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [hasPendingItemMeshFootprints])
 
   useEffect(() => {
     if (!(movingNode?.type === 'door' || movingNode?.type === 'window')) {

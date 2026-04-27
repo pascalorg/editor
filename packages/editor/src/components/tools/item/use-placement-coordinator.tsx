@@ -20,11 +20,14 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import {
   BoxGeometry,
+  Box3,
   EdgesGeometry,
   Euler,
   type Group,
   type LineSegments,
+  Matrix4,
   type Mesh,
+  type Object3D,
   PlaneGeometry,
   Quaternion,
   Vector3,
@@ -45,6 +48,108 @@ import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
+
+type PreviewBounds = {
+  min: [number, number, number]
+  max: [number, number, number]
+  dimensions: [number, number, number]
+  center: [number, number, number]
+}
+
+function getPreviewBoundsFromObject(object: Object3D | null): PreviewBounds | null {
+  if (!object) return null
+
+  object.updateWorldMatrix(true, true)
+
+  const inverseRootMatrix = new Matrix4().copy(object.matrixWorld).invert()
+  const localMatrix = new Matrix4()
+  const localBounds = new Box3()
+  const scratchBounds = new Box3()
+  const hasBounds = { current: false }
+  const registeredNodeObjects = new Set(sceneRegistry.nodes.values())
+
+  const expandBounds = (child: Object3D) => {
+    if (child !== object && registeredNodeObjects.has(child)) {
+      return
+    }
+
+    const mesh = child as Object3D & {
+      isMesh?: boolean
+      name?: string
+      geometry?: {
+        boundingBox: Box3 | null
+        computeBoundingBox?: () => void
+      }
+    }
+
+    if (mesh.isMesh && mesh.name !== 'cutout' && mesh.geometry) {
+      if (!mesh.geometry.boundingBox && mesh.geometry.computeBoundingBox) {
+        mesh.geometry.computeBoundingBox()
+      }
+
+      if (mesh.geometry.boundingBox) {
+        localMatrix.copy(inverseRootMatrix).multiply(mesh.matrixWorld)
+        scratchBounds.copy(mesh.geometry.boundingBox).applyMatrix4(localMatrix)
+        if (Number.isFinite(scratchBounds.min.x) && Number.isFinite(scratchBounds.max.x)) {
+          if (!hasBounds.current) {
+            localBounds.copy(scratchBounds)
+            hasBounds.current = true
+          } else {
+            localBounds.union(scratchBounds)
+          }
+        }
+      }
+    }
+
+    for (const grandchild of child.children) {
+      expandBounds(grandchild)
+    }
+  }
+
+  for (const child of object.children) {
+    expandBounds(child)
+  }
+
+  if (!hasBounds.current) return null
+
+  const size = new Vector3()
+  const center = new Vector3()
+  localBounds.getSize(size)
+  localBounds.getCenter(center)
+
+  if (size.x <= 0 || size.y <= 0 || size.z <= 0) {
+    return null
+  }
+
+  return {
+    min: [localBounds.min.x, localBounds.min.y, localBounds.min.z],
+    max: [localBounds.max.x, localBounds.max.y, localBounds.max.z],
+    dimensions: [size.x, size.y, size.z],
+    center: [center.x, center.y, center.z],
+  }
+}
+
+function getFallbackPreviewBounds(
+  item: import('@pascal-app/core').ItemNode | null,
+  asset: AssetInput,
+  attachTo: AssetInput['attachTo'],
+): PreviewBounds {
+  const dims = item ? getScaledDimensions(item) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
+  return {
+    min: [
+      -dims[0] / 2,
+      0,
+      attachTo === 'wall-side' ? -dims[2] : -dims[2] / 2,
+    ],
+    max: [
+      dims[0] / 2,
+      dims[1],
+      attachTo === 'wall-side' ? 0 : dims[2] / 2,
+    ],
+    dimensions: dims,
+    center: [0, dims[1] / 2, attachTo === 'wall-side' ? -dims[2] / 2 : 0],
+  }
+}
 
 // Shared materials for placement cursor - we just change colors, not swap materials
 // Note: EdgesGeometry doesn't work with dashed lines, so using solid lines
@@ -89,6 +194,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null },
   )
   const shiftFreeRef = useRef(false)
+  const previewBoundsSignatureRef = useRef<string | null>(null)
+  const meshPreviewAppliedRef = useRef(false)
 
   // Store config callbacks in refs to avoid re-running effect when they change
   const configRef = useRef(config)
@@ -97,9 +204,33 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling } = useSpatialQuery()
   const { asset, draftNode } = config
 
+  const updatePreviewGeometry = (bounds: PreviewBounds) => {
+    const [width, height, depth] = bounds.dimensions
+    const [centerX, centerY, centerZ] = bounds.center
+    const signature = `${width.toFixed(4)}:${height.toFixed(4)}:${depth.toFixed(4)}:${centerX.toFixed(4)}:${centerY.toFixed(4)}:${centerZ.toFixed(4)}`
+
+    if (previewBoundsSignatureRef.current === signature) return
+    previewBoundsSignatureRef.current = signature
+
+    const nextBoxGeometry = new BoxGeometry(width, height, depth)
+    nextBoxGeometry.translate(centerX, centerY, centerZ)
+    const nextEdgesGeometry = new EdgesGeometry(nextBoxGeometry)
+
+    const nextBasePlaneGeometry = new PlaneGeometry(width, depth)
+    nextBasePlaneGeometry.rotateX(-Math.PI / 2)
+    nextBasePlaneGeometry.translate(centerX, 0.01, centerZ)
+
+    edgesRef.current.geometry.dispose()
+    edgesRef.current.geometry = nextEdgesGeometry
+    basePlaneRef.current.geometry.dispose()
+    basePlaneRef.current.geometry = nextBasePlaneGeometry
+    nextBoxGeometry.dispose()
+  }
+
   useEffect(() => {
     if (!asset) return
     useScene.temporal.getState().pause()
+    meshPreviewAppliedRef.current = false
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
@@ -825,12 +956,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Bounding box geometry ----
 
     const draft = draftNode.current
-    const dims = draft ? getScaledDimensions(draft) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
-    const boxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
-    const wallSideZOffset = asset.attachTo === 'wall-side' ? -dims[2] / 2 : 0
-    boxGeometry.translate(0, dims[1] / 2, wallSideZOffset)
-    const edgesGeometry = new EdgesGeometry(boxGeometry)
-    edgesRef.current.geometry = edgesGeometry
+    const fallbackBounds = getFallbackPreviewBounds(draft, asset, asset.attachTo)
+    updatePreviewGeometry(
+      draft
+        ? (getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null) ??
+          fallbackBounds)
+        : fallbackBounds,
+    )
 
     // ---- Undo protection ----
     // Undo replaces the entire `nodes` object with a previous snapshot, which doesn't
@@ -874,6 +1006,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     return () => {
       tearingDown = true
+      meshPreviewAppliedRef.current = false
       unsubDraftWatch()
       // Clear live transform for any remaining draft
       if (draftNode.current) {
@@ -919,6 +1052,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (!draftNode.current) return
     const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
+
+    if (!meshPreviewAppliedRef.current) {
+      const previewBounds = getPreviewBoundsFromObject(mesh)
+      if (previewBounds) {
+        updatePreviewGeometry(previewBounds)
+        meshPreviewAppliedRef.current = true
+      }
+    }
 
     // Hide wall/ceiling-attached items when between surfaces (only cursor visible)
     if (asset.attachTo && placementState.current.surface === 'floor') {
