@@ -80,6 +80,8 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   rotatePlanVector as rotateSharedPlanVector,
 } from '../../lib/floorplan'
+import { duplicateRoofSubtree } from '../../lib/roof-duplication'
+import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -10118,60 +10120,15 @@ export function FloorplanPanel() {
   )
   const duplicateSelectedStair = useCallback(() => {
     const stair = selectedStairEntry?.stair
-    if (!stair?.parentId) {
+    if (!stair) {
       return
     }
 
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
 
-    const cloned = structuredClone(stair) as Record<string, unknown>
-    delete cloned.id
-    cloned.metadata = {
-      ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
-    }
-    delete (cloned.metadata as Record<string, unknown>).isNew
-
-    const nextPosition =
-      Array.isArray(cloned.position) && cloned.position.length >= 3
-        ? [
-            Number(cloned.position[0]) + 1,
-            Number(cloned.position[1]),
-            Number(cloned.position[2]) + 1,
-          ]
-        : [stair.position[0] + 1, stair.position[1], stair.position[2] + 1]
-
-    cloned.position = nextPosition
-
     try {
-      const duplicate = StairNodeSchema.parse(cloned)
-      const nodesState = useScene.getState().nodes
-      const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = [
-        { node: duplicate, parentId: stair.parentId as AnyNodeId },
-      ]
-
-      for (const childId of stair.children ?? []) {
-        const childNode = nodesState[childId]
-        if (childNode?.type !== 'stair-segment') {
-          continue
-        }
-
-        const childClone = structuredClone(childNode) as Record<string, unknown>
-        delete childClone.id
-        childClone.metadata = {
-          ...(typeof childClone.metadata === 'object' && childClone.metadata !== null
-            ? childClone.metadata
-            : {}),
-        }
-        delete (childClone.metadata as Record<string, unknown>).isNew
-
-        const childDuplicate = StairSegmentNodeSchema.parse(childClone)
-        createOps.push({ node: childDuplicate, parentId: duplicate.id as AnyNodeId })
-      }
-
-      useScene.getState().createNodes(createOps)
-
-      setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
+      duplicateStairSubtree(stair.id as AnyNodeId, { mode: 'move' })
     } catch (error) {
       console.error('Failed to duplicate stair', error)
     }
@@ -10215,6 +10172,27 @@ export function FloorplanPanel() {
       setSelection({ selectedIds: [] })
     },
     [selectedRoofEntry, setMovingNode, setSelection],
+  )
+  const duplicateSelectedRoof = useCallback(() => {
+    const roof = selectedRoofEntry?.roof
+    if (!roof) {
+      return
+    }
+
+    sfxEmitter.emit('sfx:item-pick')
+
+    try {
+      duplicateRoofSubtree(roof.id as AnyNodeId, { mode: 'move' })
+    } catch (error) {
+      console.error('Failed to duplicate roof', error)
+    }
+  }, [selectedRoofEntry])
+  const handleSelectedRoofDuplicate = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      duplicateSelectedRoof()
+    },
+    [duplicateSelectedRoof],
   )
   const handleSelectedRoofDelete = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -11081,7 +11059,7 @@ export function FloorplanPanel() {
     site,
   ])
   const hasDuplicatableFloorplanSelection = Boolean(
-    selectedItemEntry || selectedOpeningEntry || selectedStairEntry,
+    selectedItemEntry || selectedOpeningEntry || selectedStairEntry || selectedRoofEntry,
   )
   const handleDuplicateFloorplanSelection = useCallback(() => {
     if (selectedOpeningEntry) {
@@ -11094,13 +11072,19 @@ export function FloorplanPanel() {
     }
     if (selectedStairEntry) {
       duplicateSelectedStair()
+      return
+    }
+    if (selectedRoofEntry) {
+      duplicateSelectedRoof()
     }
   }, [
     duplicateSelectedItem,
     duplicateSelectedOpening,
+    duplicateSelectedRoof,
     duplicateSelectedStair,
     selectedItemEntry,
     selectedOpeningEntry,
+    selectedRoofEntry,
     selectedStairEntry,
   ])
   const activeDraftAnchorPoint =
@@ -11174,6 +11158,7 @@ export function FloorplanPanel() {
           roof={{
             position: selectedRoofActionMenuPosition,
             onDelete: handleSelectedRoofDelete,
+            onDuplicate: handleSelectedRoofDuplicate,
             onMove: handleSelectedRoofMove,
           }}
           slab={{

@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { clearRoofDuplicateMetadata } from '../../../lib/roof-duplication'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { snapFenceDraftPoint } from '../fence/fence-drafting'
@@ -100,6 +101,7 @@ export const MoveRoofTool: React.FC<{
     // resetting the mesh position (it resets on dirty) and from triggering
     // expensive merged-mesh CSG rebuilds on every frame.
     let wasCommitted = false
+    let wasCancelled = false
 
     // Track pending rotation — no store updates during drag
     let pendingRotation: number = movingNode.rotation as number
@@ -251,11 +253,19 @@ export const MoveRoofTool: React.FC<{
       // Resume temporal and apply the final state as a single undoable step.
       useScene.temporal.getState().resume()
 
-      useScene.getState().updateNode(movingNode.id, {
-        position: [localX, movingNode.position[1], localZ],
-        rotation: pendingRotation,
-        metadata: committedMeta,
-      })
+      if (isNew && movingNode.type === 'roof') {
+        clearRoofDuplicateMetadata(movingNode.id as AnyNodeId, {
+          position: [localX, movingNode.position[1], localZ],
+          rotation: pendingRotation,
+          metadata: committedMeta,
+        })
+      } else {
+        useScene.getState().updateNode(movingNode.id, {
+          position: [localX, movingNode.position[1], localZ],
+          rotation: pendingRotation,
+          metadata: committedMeta,
+        })
+      }
 
       useScene.temporal.getState().pause()
 
@@ -267,6 +277,7 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onCancel = () => {
+      wasCancelled = true
       useLiveTransforms.getState().clear(movingNode.id)
       if (isNew) {
         useScene.getState().deleteNode(movingNode.id)
@@ -325,16 +336,12 @@ export const MoveRoofTool: React.FC<{
       // Clear ephemeral live transform
       useLiveTransforms.getState().clear(movingNode.id)
 
-      if (!wasCommitted) {
-        if (isNew) {
-          useScene.getState().deleteNode(movingNode.id)
-        } else {
-          useScene.getState().updateNode(movingNode.id, {
-            position: original.position,
-            rotation: original.rotation,
-            metadata: original.metadata,
-          })
-        }
+      if (!(wasCommitted || wasCancelled || isNew)) {
+        useScene.getState().updateNode(movingNode.id, {
+          position: original.position,
+          rotation: original.rotation,
+          metadata: original.metadata,
+        })
       }
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)

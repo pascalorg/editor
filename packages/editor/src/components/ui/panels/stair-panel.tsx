@@ -12,7 +12,6 @@ import {
   type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
-  StairNode as StairNodeSchema,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
   useScene,
@@ -20,6 +19,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { duplicateStairSubtree } from '../../../lib/stair-duplication'
 import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -88,7 +88,6 @@ export function StairPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
-  const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
 
@@ -209,46 +208,15 @@ export function StairPanel() {
   )
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
+    if (!node) return
     sfxEmitter.emit('sfx:item-pick')
 
-    let duplicateInfo = structuredClone(node) as any
-    delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata }
-    duplicateInfo.children = []
-    duplicateInfo.position = [
-      duplicateInfo.position[0] + 1,
-      duplicateInfo.position[1],
-      duplicateInfo.position[2] + 1,
-    ]
-
     try {
-      const duplicate = StairNodeSchema.parse(duplicateInfo)
-
-      const nodesState = useScene.getState().nodes
-      const children = node.children || []
-      const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = [
-        { node: duplicate, parentId: duplicate.parentId as AnyNodeId },
-      ]
-
-      for (const childId of children) {
-        const childNode = nodesState[childId]
-        if (childNode && childNode.type === 'stair-segment') {
-          let childDuplicateInfo = structuredClone(childNode) as any
-          delete childDuplicateInfo.id
-          childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata }
-          const childDuplicate = StairSegmentNodeSchema.parse(childDuplicateInfo)
-          createOps.push({ node: childDuplicate, parentId: duplicate.id as AnyNodeId })
-        }
-      }
-
-      createNodes(createOps)
-
-      setSelection({ selectedIds: [duplicate.id as AnyNode['id']] })
+      duplicateStairSubtree(node.id as AnyNodeId, { mode: 'move' })
     } catch (e) {
       console.error('Failed to duplicate stair', e)
     }
-  }, [createNodes, node, setSelection])
+  }, [node])
 
   const handleMove = useCallback(() => {
     if (node) {
