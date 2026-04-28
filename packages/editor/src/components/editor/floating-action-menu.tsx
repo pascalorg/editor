@@ -10,6 +10,7 @@ import {
   RoofNode,
   RoofSegmentNode,
   type SlabNode,
+  SpawnNode,
   StairNode,
   StairSegmentNode,
   sceneRegistry,
@@ -39,6 +40,7 @@ const ALLOWED_TYPES = [
   'fence',
   'slab',
   'ceiling',
+  'spawn',
 ]
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
@@ -184,6 +186,7 @@ export function FloatingActionMenu() {
         node.type === 'fence' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
+        node.type === 'spawn' ||
         node.type === 'roof' ||
         node.type === 'roof-segment' ||
         node.type === 'stair' ||
@@ -266,6 +269,8 @@ export function FloatingActionMenu() {
           duplicate = StairNode.parse(duplicateInfo)
         } else if (node.type === 'stair-segment') {
           duplicate = StairSegmentNode.parse(duplicateInfo)
+        } else if (node.type === 'spawn') {
+          duplicate = SpawnNode.parse(duplicateInfo)
         }
       } catch (error) {
         console.error('Failed to parse duplicate', error)
@@ -358,6 +363,7 @@ export function FloatingActionMenu() {
           duplicate.type === 'door' ||
           duplicate.type === 'roof' ||
           duplicate.type === 'roof-segment' ||
+          duplicate.type === 'spawn' ||
           duplicate.type === 'stair-segment'
         ) {
           setMovingNode(duplicate as any)
@@ -453,7 +459,10 @@ export function FloatingActionMenu() {
             }
             onDelete={handleDelete}
             onDuplicate={
-              node && !DELETE_ONLY_TYPES.includes(node.type) && !HOLE_TYPES.includes(node.type)
+              node &&
+              node.type !== 'spawn' &&
+              !DELETE_ONLY_TYPES.includes(node.type) &&
+              !HOLE_TYPES.includes(node.type)
                 ? handleDuplicate
                 : undefined
             }

@@ -366,7 +366,7 @@ const ReferenceItem = memo(function ReferenceItem({
         <InlineRenameInput
           defaultName={refNode.type === 'scan' ? '3D Scan' : 'Guide Image'}
           isEditing={isEditing}
-          node={refNode}
+          nodeId={refNode.id}
           onStartEditing={() => setIsEditing(true)}
           onStopEditing={() => setIsEditing(false)}
         />
@@ -688,7 +688,7 @@ const LevelItem = memo(function LevelItem({
           <InlineRenameInput
             defaultName={`Level ${level.level}`}
             isEditing={isEditing}
-            node={level}
+            nodeId={level.id}
             onStartEditing={() => setIsEditing(true)}
             onStopEditing={() => setIsEditing(false)}
           />
@@ -1133,7 +1133,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
         <InlineRenameInput
           defaultName={defaultName}
           isEditing={isEditing}
-          node={zone}
+          nodeId={zone.id}
           onStartEditing={() => setIsEditing(true)}
           onStopEditing={() => setIsEditing(false)}
         />

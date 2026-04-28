@@ -939,7 +939,9 @@ export default function Editor({
   presetsAdapter,
   commandPaletteEmptyAction,
 }: EditorProps) {
-  useKeyboard({ isVersionPreviewMode })
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+
+  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode })
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
@@ -951,7 +953,6 @@ export default function Editor({
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
-  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)

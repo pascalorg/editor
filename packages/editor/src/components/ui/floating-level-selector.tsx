@@ -302,7 +302,10 @@ export function FloatingLevelSelector() {
 
       createNodes(createOps)
 
-      setSelection({ buildingId: resolvedBuildingId ?? undefined, levelId: newLevelId })
+      setSelection({
+        buildingId: resolvedBuildingId ?? undefined,
+        levelId: newLevelId as LevelNode['id'],
+      })
     },
     [createNodes, levels, resolvedBuildingId, setSelection],
   )

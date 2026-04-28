@@ -13,6 +13,7 @@ export type {
   RoofSegmentEvent,
   SiteEvent,
   SlabEvent,
+  SpawnEvent,
   StairEvent,
   StairSegmentEvent,
   WallEvent,

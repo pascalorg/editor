@@ -1,7 +1,7 @@
 'use client'
 
 import { type CameraControlEvent, emitter, sceneRegistry, useScene } from '@pascal-app/core'
-import { useViewer, WalkthroughControls, ZONE_LAYER } from '@pascal-app/viewer'
+import { useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -22,7 +22,7 @@ const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl>(null!)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
-  const walkthroughMode = useViewer((s) => s.walkthroughMode)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
   const currentLevelId = selection.levelId
@@ -365,8 +365,8 @@ export const CustomCameraControls = () => {
     useViewer.getState().setCameraDragging(false)
   }, [])
 
-  if (walkthroughMode) {
-    return <WalkthroughControls />
+  if (isFirstPersonMode) {
+    return null
   }
 
   return (

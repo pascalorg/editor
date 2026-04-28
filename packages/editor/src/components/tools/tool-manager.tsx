@@ -21,6 +21,7 @@ import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
 import { SlabHoleEditor } from './slab/slab-hole-editor'
 import { SlabTool } from './slab/slab-tool'
+import { SpawnTool } from './spawn/spawn-tool'
 import { StairTool } from './stair/stair-tool'
 import { CurveWallTool } from './wall/curve-wall-tool'
 import { MoveWallEndpointTool } from './wall/move-wall-endpoint-tool'
@@ -43,6 +44,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     door: DoorTool,
     item: ItemTool,
     zone: ZoneTool,
+    spawn: SpawnTool,
     window: WindowTool,
   },
   furnish: {

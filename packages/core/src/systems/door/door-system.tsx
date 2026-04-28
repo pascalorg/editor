@@ -86,6 +86,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     contentPadding,
     hingesSide,
   } = node
+  const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
 
   // Leaf occupies the full opening (no bottom frame bar — door opens to floor)
   const leafW = width - 2 * frameThickness
@@ -146,13 +147,13 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   // ── Leaf — contentPadding border strips (no full backing; glass areas are open) ──
   const cpX = contentPadding[0]
   const cpY = contentPadding[1]
-  if (cpY > 0) {
+  if (hasLeafContent && cpY > 0) {
     // Top strip
     addBox(mesh, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY + leafH / 2 - cpY / 2, 0)
     // Bottom strip
     addBox(mesh, baseMaterial, leafW, cpY, leafDepth, 0, leafCenterY - leafH / 2 + cpY / 2, 0)
   }
-  if (cpX > 0) {
+  if (hasLeafContent && cpX > 0) {
     const innerH = leafH - 2 * cpY
     // Left strip
     addBox(mesh, baseMaterial, cpX, innerH, leafDepth, -leafW / 2 + cpX / 2, leafCenterY, 0)
@@ -188,20 +189,22 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     }
 
     // Column dividers within this segment
-    cx = -contentW / 2
-    for (let c = 0; c < numCols - 1; c++) {
-      cx += colWidths[c]!
-      addBox(
-        mesh,
-        baseMaterial,
-        seg.dividerThickness,
-        segH,
-        leafDepth + 0.001,
-        cx + seg.dividerThickness / 2,
-        segCenterY,
-        0,
-      )
-      cx += seg.dividerThickness
+    if (seg.type !== 'empty') {
+      cx = -contentW / 2
+      for (let c = 0; c < numCols - 1; c++) {
+        cx += colWidths[c]!
+        addBox(
+          mesh,
+          baseMaterial,
+          seg.dividerThickness,
+          segH,
+          leafDepth + 0.001,
+          cx + seg.dividerThickness / 2,
+          segCenterY,
+          0,
+        )
+        cx += seg.dividerThickness
+      }
     }
 
     // Segment content per column
@@ -225,8 +228,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
           addBox(mesh, baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
         }
       } else {
-        // 'empty' — opaque backing, no detail
-        addBox(mesh, baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        // 'empty' leaves the opening unfilled
       }
     }
 
@@ -234,7 +236,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   }
 
   // ── Handle ──
-  if (handle) {
+  if (hasLeafContent && handle) {
     // Convert from floor-based height to mesh-center-based Y
     const handleY = handleHeight - height / 2
     // Handle grip sits on the front face (+Z) of the leaf
@@ -250,7 +252,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   }
 
   // ── Door closer (commercial hardware at top) ──
-  if (doorCloser) {
+  if (hasLeafContent && doorCloser) {
     const closerY = leafCenterY + leafH / 2 - 0.04
     // Body
     addBox(mesh, baseMaterial, 0.28, 0.055, 0.055, 0, closerY, leafDepth / 2 + 0.03)
@@ -268,13 +270,13 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   }
 
   // ── Panic bar ──
-  if (panicBar) {
+  if (hasLeafContent && panicBar) {
     const barY = panicBarHeight - height / 2
     addBox(mesh, baseMaterial, leafW * 0.72, 0.04, 0.055, 0, barY, leafDepth / 2 + 0.03)
   }
 
   // ── Hinges (3 knuckle-style hinges on the hinge side) ──
-  {
+  if (hasLeafContent) {
     const hingeX = hingesSide === 'right' ? leafW / 2 - 0.012 : -leafW / 2 + 0.012
     const hingeZ = 0 // centered in leaf depth
     const hingeH = 0.1

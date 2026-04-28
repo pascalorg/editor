@@ -12,6 +12,7 @@ import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { RoofSegmentPanel } from './roof-segment-panel'
 import { SlabPanel } from './slab-panel'
+import { SpawnPanel } from './spawn-panel'
 import { StairPanel } from './stair-panel'
 import { StairSegmentPanel } from './stair-segment-panel'
 import { WallPanel } from './wall-panel'
@@ -60,6 +61,8 @@ export function PanelManager() {
         return <StairSegmentPanel />
       case 'slab':
         return <SlabPanel />
+      case 'spawn':
+        return <SpawnPanel />
       case 'ceiling':
         return <CeilingPanel />
       case 'wall':

@@ -7,6 +7,7 @@ import type {
   RoofNode,
   RoofSegmentNode,
   SlabNode,
+  SpawnNode,
   StairNode,
   StairSegmentNode,
   WallNode,
@@ -21,6 +22,7 @@ import { MoveDoorTool } from '../door/move-door-tool'
 import { MoveFenceTool } from '../fence/move-fence-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
 import { MoveSlabTool } from '../slab/move-slab-tool'
+import { MoveSpawnTool } from '../spawn/move-spawn-tool'
 import { MoveWallTool } from '../wall/move-wall-tool'
 import { MoveWindowTool } from '../window/move-window-tool'
 import type { PlacementState } from './placement-types'
@@ -100,6 +102,7 @@ export const MoveTool: React.FC = () => {
   if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
+  if (movingNode.type === 'spawn') return <MoveSpawnTool node={movingNode as SpawnNode} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
     return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
   return <MoveItemContent movingNode={movingNode as ItemNode} />

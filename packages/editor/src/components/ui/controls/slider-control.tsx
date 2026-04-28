@@ -8,6 +8,7 @@ interface SliderControlProps {
   label: React.ReactNode
   value: number
   onChange: (value: number) => void
+  onCommit?: (value: number) => void
   min?: number
   max?: number
   precision?: number
@@ -39,6 +40,7 @@ export function SliderControl({
   label,
   value,
   onChange,
+  onCommit,
   min = Number.NEGATIVE_INFINITY,
   max = Number.POSITIVE_INFINITY,
   precision = 0,
@@ -76,10 +78,11 @@ export function SliderControl({
       const newValue = clamp(valueRef.current + direction * s)
       const final = Number.parseFloat(newValue.toFixed(stepPrecision(s)))
       if (final !== valueRef.current) onChange(final)
+      onCommit?.(final)
     }
     el.addEventListener('wheel', handleWheel, { passive: false })
     return () => el.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, clamp, onChange])
+  }, [isEditing, step, clamp, onChange, onCommit])
 
   // Arrow key support while hovered
   useEffect(() => {
@@ -94,11 +97,12 @@ export function SliderControl({
         const newValue = clamp(valueRef.current + direction * s)
         const final = Number.parseFloat(newValue.toFixed(stepPrecision(s)))
         if (final !== valueRef.current) onChange(final)
+        onCommit?.(final)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, clamp, onChange])
+  }, [isHovered, isEditing, step, clamp, onChange, onCommit])
 
   const handleLabelPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -140,11 +144,13 @@ export function SliderControl({
         onChange(startValue)
         useScene.temporal.getState().resume()
         onChange(finalVal)
+        onCommit?.(finalVal)
       } else {
         useScene.temporal.getState().resume()
+        onCommit?.(finalVal)
       }
     },
-    [onChange],
+    [onChange, onCommit],
   )
 
   const handleValueClick = useCallback(() => {
@@ -157,10 +163,12 @@ export function SliderControl({
     if (Number.isNaN(numValue)) {
       setInputValue(value.toFixed(precision))
     } else {
-      onChange(clamp(Number.parseFloat(numValue.toFixed(precision))))
+      const nextValue = clamp(Number.parseFloat(numValue.toFixed(precision)))
+      onChange(nextValue)
+      onCommit?.(nextValue)
     }
     setIsEditing(false)
-  }, [inputValue, onChange, clamp, precision, value])
+  }, [inputValue, onChange, onCommit, clamp, precision, value])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
