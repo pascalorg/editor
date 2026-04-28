@@ -18,6 +18,7 @@ import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
+import { ItemMeshMetadataSystem } from '../../systems/item-mesh-metadata/item-mesh-metadata-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
@@ -172,6 +173,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <GPUDeviceWatcher />
 
       <ItemLightSystem />
+      <ItemMeshMetadataSystem />
       {selectionManager === 'default' && <SelectionManager />}
       {perf && <PerfMonitor />}
       {children}

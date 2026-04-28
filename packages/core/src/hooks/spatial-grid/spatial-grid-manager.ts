@@ -1,7 +1,6 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions } from '../../schema'
 import useScene from '../../store/use-scene'
-import { Vector3 } from 'three'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -114,15 +113,15 @@ function getItemLocalBounds(item: ItemNode): ItemLocalBounds {
 
 function getItemParentAabb(item: ItemNode): ItemParentAabb {
   const bounds = getItemLocalBounds(item)
-  const corners = [
-    new Vector3(bounds.min[0], bounds.min[1], bounds.min[2]),
-    new Vector3(bounds.min[0], bounds.min[1], bounds.max[2]),
-    new Vector3(bounds.min[0], bounds.max[1], bounds.min[2]),
-    new Vector3(bounds.min[0], bounds.max[1], bounds.max[2]),
-    new Vector3(bounds.max[0], bounds.min[1], bounds.min[2]),
-    new Vector3(bounds.max[0], bounds.min[1], bounds.max[2]),
-    new Vector3(bounds.max[0], bounds.max[1], bounds.min[2]),
-    new Vector3(bounds.max[0], bounds.max[1], bounds.max[2]),
+  const corners: Array<[number, number, number]> = [
+    [bounds.min[0], bounds.min[1], bounds.min[2]],
+    [bounds.min[0], bounds.min[1], bounds.max[2]],
+    [bounds.min[0], bounds.max[1], bounds.min[2]],
+    [bounds.min[0], bounds.max[1], bounds.max[2]],
+    [bounds.max[0], bounds.min[1], bounds.min[2]],
+    [bounds.max[0], bounds.min[1], bounds.max[2]],
+    [bounds.max[0], bounds.max[1], bounds.min[2]],
+    [bounds.max[0], bounds.max[1], bounds.max[2]],
   ]
   const yRot = item.rotation[1] ?? 0
   const cos = Math.cos(yRot)
@@ -135,11 +134,11 @@ function getItemParentAabb(item: ItemNode): ItemParentAabb {
   let maxY = Number.NEGATIVE_INFINITY
   let maxZ = Number.NEGATIVE_INFINITY
 
-  for (const corner of corners) {
-    const rotatedX = corner.x * cos + corner.z * sin
-    const rotatedZ = -corner.x * sin + corner.z * cos
+  for (const [cx, cy, cz] of corners) {
+    const rotatedX = cx * cos + cz * sin
+    const rotatedZ = -cx * sin + cz * cos
     const worldX = rotatedX + item.position[0]
-    const worldY = corner.y + item.position[1]
+    const worldY = cy + item.position[1]
     const worldZ = rotatedZ + item.position[2]
     minX = Math.min(minX, worldX)
     minY = Math.min(minY, worldY)

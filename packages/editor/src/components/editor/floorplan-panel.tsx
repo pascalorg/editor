@@ -5361,6 +5361,7 @@ export function FloorplanPanel() {
   const [shiftPressed, setShiftPressed] = useState(false)
   const [rotationModifierPressed, setRotationModifierPressed] = useState(false)
   const [movingFloorplanNodeRevision, setMovingFloorplanNodeRevision] = useState(0)
+  const movingFloorplanNodeRefreshFrameRef = useRef<number | null>(null)
   const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
   const [isPanning, setIsPanning] = useState(false)
@@ -5387,6 +5388,27 @@ export function FloorplanPanel() {
   useEffect(() => {
     setIsMacPlatform(navigator.platform.toUpperCase().includes('MAC'))
   }, [])
+
+  const scheduleMovingFloorplanNodeRefresh = useCallback(() => {
+    if (movingFloorplanNodeRefreshFrameRef.current !== null) {
+      return
+    }
+
+    movingFloorplanNodeRefreshFrameRef.current = window.requestAnimationFrame(() => {
+      movingFloorplanNodeRefreshFrameRef.current = null
+      setMovingFloorplanNodeRevision((current) => current + 1)
+    })
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (movingFloorplanNodeRefreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(movingFloorplanNodeRefreshFrameRef.current)
+        movingFloorplanNodeRefreshFrameRef.current = null
+      }
+    },
+    [],
+  )
 
   const sitePolygonEntry = useMemo(() => {
     const polygonPoints = site?.polygon?.points
@@ -6913,10 +6935,35 @@ export function FloorplanPanel() {
       return
     }
 
-    if (!hasUserAdjustedViewportRef.current) {
+    // While the cursor drives live geometry (items, drafts, moves), `fittedViewport` changes every
+    // pointermove. Syncing `viewport` here would call setState in a tight loop (max update depth).
+    const transientFloorplanFit =
+      cursorPoint != null ||
+      movingNode != null ||
+      movingFenceEndpoint != null ||
+      curvingWall != null ||
+      curvingFence != null ||
+      slabVertexDragState != null ||
+      siteVertexDragState != null ||
+      zoneVertexDragState != null ||
+      isPolygonDraftBuildActive
+
+    if (!hasUserAdjustedViewportRef.current && !transientFloorplanFit) {
       setViewport((current) => (floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport))
     }
-  }, [fittedViewport, levelId])
+  }, [
+    curvingFence,
+    curvingWall,
+    cursorPoint,
+    fittedViewport,
+    isPolygonDraftBuildActive,
+    levelId,
+    movingFenceEndpoint,
+    movingNode,
+    siteVertexDragState,
+    slabVertexDragState,
+    zoneVertexDragState,
+  ])
 
   const viewBox = useMemo(() => {
     const currentViewport = viewport ?? fittedViewport
@@ -7661,7 +7708,7 @@ export function FloorplanPanel() {
     }
 
     const refreshFloorplanItemPreview = () => {
-      setMovingFloorplanNodeRevision((current) => current + 1)
+      scheduleMovingFloorplanNodeRefresh()
     }
 
     emitter.on('grid:move', refreshFloorplanItemPreview)
@@ -7687,21 +7734,15 @@ export function FloorplanPanel() {
       emitter.off('item:move', refreshFloorplanItemPreview as any)
       emitter.off('item:leave', refreshFloorplanItemPreview as any)
     }
-  }, [isItemPlacementPreviewActive])
+  }, [isItemPlacementPreviewActive, scheduleMovingFloorplanNodeRefresh])
 
   useEffect(() => {
     if (!hasPendingItemMeshFootprints) {
       return
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      setMovingFloorplanNodeRevision((current) => current + 1)
-    })
-
-    return () => {
-      window.cancelAnimationFrame(frameId)
-    }
-  }, [hasPendingItemMeshFootprints])
+    scheduleMovingFloorplanNodeRefresh()
+  }, [hasPendingItemMeshFootprints, scheduleMovingFloorplanNodeRefresh])
 
   useEffect(() => {
     if (!(movingNode?.type === 'door' || movingNode?.type === 'window')) {
@@ -7710,7 +7751,7 @@ export function FloorplanPanel() {
 
     const movingOpeningId = movingNode.id
     const refreshOpeningPreview = () => {
-      setMovingFloorplanNodeRevision((current) => current + 1)
+      scheduleMovingFloorplanNodeRefresh()
     }
 
     refreshOpeningPreview()
@@ -7725,7 +7766,7 @@ export function FloorplanPanel() {
     })
 
     return unsubscribe
-  }, [movingNode])
+  }, [movingNode, scheduleMovingFloorplanNodeRefresh])
 
   useEffect(() => {
     if (movingNode?.type !== 'fence') {
@@ -7753,7 +7794,7 @@ export function FloorplanPanel() {
     }
 
     const refreshFencePreview = () => {
-      setMovingFloorplanNodeRevision((current) => current + 1)
+      scheduleMovingFloorplanNodeRefresh()
     }
 
     refreshFencePreview()
@@ -7768,7 +7809,7 @@ export function FloorplanPanel() {
     })
 
     return unsubscribe
-  }, [fences, movingNode])
+  }, [fences, movingNode, scheduleMovingFloorplanNodeRefresh])
 
   useEffect(() => {
     if (!(movingNode?.type === 'roof' || movingNode?.type === 'roof-segment')) {
@@ -7777,7 +7818,7 @@ export function FloorplanPanel() {
 
     const movingRoofNodeId = movingNode.id
     const refreshRoofPreview = () => {
-      setMovingFloorplanNodeRevision((current) => current + 1)
+      scheduleMovingFloorplanNodeRefresh()
     }
 
     refreshRoofPreview()
@@ -7792,7 +7833,7 @@ export function FloorplanPanel() {
     })
 
     return unsubscribe
-  }, [movingNode])
+  }, [movingNode, scheduleMovingFloorplanNodeRefresh])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
