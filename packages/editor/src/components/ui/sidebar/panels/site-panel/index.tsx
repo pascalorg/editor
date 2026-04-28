@@ -3,9 +3,9 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
-  type GuideNode,
+  GuideNode,
   LevelNode,
-  type ScanNode,
+  ScanNode,
   type SiteNode,
   useScene,
   type ZoneNode,
@@ -14,6 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import {
   Camera,
   ChevronDown,
+  Copy,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -32,9 +33,14 @@ import {
   PopoverTrigger,
 } from './../../../../../components/ui/primitives/popover'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
+import {
+  buildLevelDuplicateCreateOps,
+  type LevelDuplicatePreset,
+} from './../../../../../lib/level-duplication'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
+import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
@@ -558,6 +564,7 @@ const LevelReferences = memo(function LevelReferences({
 
 const LevelItem = memo(function LevelItem({
   level,
+  levels,
   selectedLevelId,
   setSelection,
   updateNode,
@@ -567,6 +574,7 @@ const LevelItem = memo(function LevelItem({
   onDeleteAsset,
 }: {
   level: LevelNode
+  levels: LevelNode[]
   selectedLevelId: string | null
   setSelection: (selection: any) => void
   updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void
@@ -576,7 +584,9 @@ const LevelItem = memo(function LevelItem({
   onDeleteAsset?: (projectId: string, url: string) => void
 }) {
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const createNodes = useScene((s) => s.createNodes)
   const itemRef = useRef<HTMLDivElement>(null)
   const isSelected = selectedLevelId === level.id
   const canDeleteLevel = level.level !== 0
@@ -598,6 +608,19 @@ const LevelItem = memo(function LevelItem({
 
   const handleDoubleClick = () => {
     focusTreeNode(level.id)
+  }
+
+  const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
+    const { createOps, newLevelId } = buildLevelDuplicateCreateOps({
+      nodes: useScene.getState().nodes,
+      level,
+      levels,
+      preset,
+    })
+
+    createNodes(createOps)
+    setSelection({ levelId: newLevelId })
+    setDuplicateDialogOpen(false)
   }
 
   return (
@@ -750,7 +773,23 @@ const LevelItem = memo(function LevelItem({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-40 p-1" side="right">
+          <PopoverContent align="start" className="w-48 p-1" side="right">
+            <button
+              className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              onClick={() => handleDuplicateLevel()}
+              title="Duplicate level"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate
+            </button>
+            <button
+              className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              onClick={() => setDuplicateDialogOpen(true)}
+              title="Duplicate level with options"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate with options...
+            </button>
             <button
               className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors enabled:cursor-pointer enabled:hover:bg-accent enabled:hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canDeleteLevel}
@@ -782,6 +821,12 @@ const LevelItem = memo(function LevelItem({
           </motion.div>
         )}
       </AnimatePresence>
+      <LevelDuplicateDialog
+        level={level}
+        onConfirm={handleDuplicateLevel}
+        onOpenChange={setDuplicateDialogOpen}
+        open={duplicateDialogOpen}
+      />
     </div>
   )
 })
@@ -859,6 +904,7 @@ const LevelsSection = memo(function LevelsSection({
             isLast={index === levels.length - 1}
             key={level.id}
             level={level}
+            levels={levels}
             onDeleteAsset={onDeleteAsset}
             onUploadAsset={onUploadAsset}
             projectId={projectId}

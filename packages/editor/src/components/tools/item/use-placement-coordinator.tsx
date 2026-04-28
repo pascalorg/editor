@@ -614,7 +614,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      lastRawPos.current.set(event.position[0], event.position[1], event.position[2])
+      lastRawPos.current.set(
+        event.localPosition[0],
+        event.localPosition[1],
+        event.localPosition[2],
+      )
       const result = ceilingStrategy.move(getContext(), event)
       if (!result) return
 
