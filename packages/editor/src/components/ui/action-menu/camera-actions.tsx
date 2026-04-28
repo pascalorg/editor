@@ -4,7 +4,7 @@ import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
 import { ActionButton } from './action-button'
 
-export function CameraActions() {
+export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
   const goToTopView = () => {
     emitter.emit('camera-controls:top-view')
   }
@@ -19,39 +19,43 @@ export function CameraActions() {
 
   return (
     <div className="flex items-center gap-1">
-      {/* Orbit CCW */}
-      <ActionButton
-        className="group hover:bg-white/5"
-        label="Orbit Left"
-        onClick={orbitCCW}
-        size="icon"
-        variant="ghost"
-      >
-        <Image
-          alt="Orbit Left"
-          className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
-          height={28}
-          src="/icons/rotate.png"
-          width={28}
-        />
-      </ActionButton>
+      {!hideOrbit && (
+        <>
+          {/* Orbit CCW */}
+          <ActionButton
+            className="group hover:bg-white/5"
+            label="Orbit Left"
+            onClick={orbitCCW}
+            size="icon"
+            variant="ghost"
+          >
+            <Image
+              alt="Orbit Left"
+              className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
+              height={28}
+              src="/icons/rotate.png"
+              width={28}
+            />
+          </ActionButton>
 
-      {/* Orbit CW */}
-      <ActionButton
-        className="group hover:bg-white/5"
-        label="Orbit Right"
-        onClick={orbitCW}
-        size="icon"
-        variant="ghost"
-      >
-        <Image
-          alt="Orbit Right"
-          className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-          height={28}
-          src="/icons/rotate.png"
-          width={28}
-        />
-      </ActionButton>
+          {/* Orbit CW */}
+          <ActionButton
+            className="group hover:bg-white/5"
+            label="Orbit Right"
+            onClick={orbitCW}
+            size="icon"
+            variant="ghost"
+          >
+            <Image
+              alt="Orbit Right"
+              className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+              height={28}
+              src="/icons/rotate.png"
+              width={28}
+            />
+          </ActionButton>
+        </>
+      )}
 
       {/* Top View */}
       <ActionButton

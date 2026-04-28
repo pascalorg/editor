@@ -23,6 +23,7 @@ import { LevelSystem } from '../../systems/level/level-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
 import { ZoneSystem } from '../../systems/zone/zone-system'
+import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
@@ -78,6 +79,10 @@ type WebGPUDeviceLossInfo = {
 
 type WebGPUDeviceLike = {
   lost: Promise<WebGPUDeviceLossInfo>
+  label?: string
+  features?: Set<string>
+  addEventListener?: (type: string, listener: EventListener) => void
+  removeEventListener?: (type: string, listener: EventListener) => void
 }
 
 function GPUDeviceWatcher() {
@@ -87,7 +92,18 @@ function GPUDeviceWatcher() {
     const backend = (gl as any).backend
     const device = backend?.device as WebGPUDeviceLike | undefined
 
-    if (!device) return
+    if (!device) {
+      console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
+        backend: backend?.constructor?.name ?? 'unknown',
+        rendererType: (gl as any).constructor?.name ?? 'unknown',
+      })
+      return
+    }
+
+    console.log('[viewer] WebGPU device ready', {
+      label: device.label,
+      features: device.features ? Array.from(device.features) : [],
+    })
 
     device.lost.then((info: WebGPUDeviceLossInfo) => {
       console.error(
@@ -95,6 +111,17 @@ function GPUDeviceWatcher() {
           'The page must be reloaded to recover the GPU context.',
       )
     })
+
+    // Uncaptured errors are normally silent (only console-warned by Chrome at
+    // best). Pipe them to console.error so silent mobile crashes show up.
+    const onUncapturedError = (event: any) => {
+      console.error('[viewer] WebGPU uncaptured error:', event?.error?.message, event?.error)
+    }
+    device.addEventListener?.('uncapturederror', onUncapturedError)
+
+    return () => {
+      device.removeEventListener?.('uncapturederror', onUncapturedError)
+    }
   }, [gl])
 
   return null
@@ -121,17 +148,34 @@ const Viewer: React.FC<ViewerProps> = ({
       dpr={[1, 1.5]}
       frameloop="never"
       gl={async (props) => {
-        const renderer = new THREE.WebGPURenderer(props as any)
-        renderer.toneMapping = THREE.ACESFilmicToneMapping
-        renderer.toneMappingExposure = 0.9
-        // Awaiting init() is required when the browser falls back to the
-        // WebGL2 backend (Safari without the WebGPU flag, older Chrome on
-        // machines without a WebGPU device). In native WebGPU mode the
-        // init resolves almost instantly. Without this await, the first
-        // render throws "Renderer: .render() called before the backend is
-        // initialized" from the post-processing fallback path.
-        await renderer.init()
-        return renderer
+        try {
+          // Surface the env we're about to ask WebGPU for — catches "no
+          // navigator.gpu" / "adapter request failed" silently failing in
+          // mobile WebViews where WebGPU is gated behind flags.
+          const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator
+          console.log('[viewer] Creating WebGPURenderer', {
+            hasNavigatorGPU: hasGpu,
+            ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
+          })
+          const renderer = new THREE.WebGPURenderer(props as any)
+          renderer.toneMapping = THREE.ACESFilmicToneMapping
+          renderer.toneMappingExposure = 0.9
+          // Awaiting init() is required when the browser falls back to the
+          // WebGL2 backend (Safari without the WebGPU flag, older Chrome on
+          // machines without a WebGPU device). In native WebGPU mode the
+          // init resolves almost instantly. Without this await, the first
+          // render throws "Renderer: .render() called before the backend is
+          // initialized" from the post-processing fallback path.
+          await renderer.init()
+          console.log('[viewer] WebGPURenderer ready', {
+            backend: (renderer as any).backend?.constructor?.name,
+            isWebGPU: (renderer as any).isWebGPURenderer === true,
+          })
+          return renderer
+        } catch (err) {
+          console.error('[viewer] WebGPURenderer init failed', err)
+          throw err
+        }
       }}
       resize={{
         debounce: 100,
@@ -144,39 +188,41 @@ const Viewer: React.FC<ViewerProps> = ({
       <FrameLimiter fps={50} />
       {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
-
-      {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
-        /> */}
-      <Lights />
-      <Bvh>
-        <SceneRenderer />
-      </Bvh>
-
-      {/* Default Systems */}
-      <LevelSystem />
-      <GuideSystem />
-      <ScanSystem />
-      <WallCutout />
-      {/* Core systems */}
-      <CeilingSystem />
-      <DoorSystem />
-      <FenceSystem />
-      <ItemSystem />
-      <RoofSystem />
-      <SlabSystem />
-      <StairSystem />
-      <WallSystem />
-      <WindowSystem />
-      <ZoneSystem />
-      <PostProcessing hoverStyles={hoverStyles} />
-      {/* <DebugRenderer /> */}
       <GPUDeviceWatcher />
 
-      <ItemLightSystem />
-      <ItemMeshMetadataSystem />
-      {selectionManager === 'default' && <SelectionManager />}
-      {perf && <PerfMonitor />}
-      {children}
+      <ErrorBoundary fallback={null} scope="viewer-scene">
+        {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
+          /> */}
+        <Lights />
+        <Bvh>
+          <SceneRenderer />
+        </Bvh>
+
+        {/* Default Systems */}
+        <LevelSystem />
+        <GuideSystem />
+        <ScanSystem />
+        <WallCutout />
+        {/* Core systems */}
+        <CeilingSystem />
+        <DoorSystem />
+        <FenceSystem />
+        <ItemSystem />
+        <RoofSystem />
+        <SlabSystem />
+        <StairSystem />
+        <WallSystem />
+        <WindowSystem />
+        <ZoneSystem />
+        <PostProcessing hoverStyles={hoverStyles} />
+        {/* <DebugRenderer /> */}
+
+        <ItemLightSystem />
+        <ItemMeshMetadataSystem />
+        {selectionManager === 'default' && <SelectionManager />}
+        {perf && <PerfMonitor />}
+        {children}
+      </ErrorBoundary>
     </Canvas>
   )
 }

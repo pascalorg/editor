@@ -15,6 +15,10 @@ export type FloorplanItemEntry = {
   item: ItemNode
   polygon: Point2D[]
   usesRealMesh: boolean
+  center: Point2D
+  rotation: number
+  width: number
+  depth: number
 }
 
 export type FloorplanStairSegmentEntry = {

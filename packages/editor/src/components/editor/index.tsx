@@ -1076,7 +1076,13 @@ export default function Editor({
       return <Component />
     }
 
-    const tabBarTabs = sidebarTabs?.map(({ id, label }) => ({ id, label })) ?? []
+    const tabBarTabs =
+      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon }) => ({
+        id,
+        label,
+        mobileDefaultSnap,
+        mobileIcon,
+      })) ?? []
 
     return (
       <PresetsProvider adapter={presetsAdapter}>
