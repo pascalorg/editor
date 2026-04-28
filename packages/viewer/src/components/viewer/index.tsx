@@ -65,6 +65,22 @@ declare module '@react-three/fiber' {
 
 extend(THREE as any)
 
+// R3F's <Canvas> useLayoutEffect has no deps, so any re-render (theme switch,
+// parent re-render, StrictMode double-mount) re-invokes `configure()`. With a
+// sync `gl` factory that's harmless — the renderer is created once and reused.
+// With an async factory (WebGPURenderer needs `await init()`), two configure
+// calls can race: both see `state.gl == null` and both create a renderer. The
+// first to resolve gets `setSize`/`setDpr` called on it; the second overwrites
+// `state.gl` but R3F's store already holds the new size/dpr, so the new
+// renderer is never resized and stays at the canvas's 300×150 default.
+//
+// Caching by canvas guarantees both branches return the same instance, so
+// "duplicate" configure calls become no-ops on an already-sized renderer.
+// We cache the in-flight Promise (not just the resolved renderer) so two
+// concurrent configure() calls await the same init instead of creating two
+// renderers in parallel and only caching the second.
+const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
+
 /**
  * Monitors the WebGPU device for loss events and logs them.
  * WebGPU device loss can happen when:
@@ -147,8 +163,11 @@ const Viewer: React.FC<ViewerProps> = ({
       className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
       dpr={[1, 1.5]}
       frameloop="never"
-      gl={async (props) => {
-        try {
+      gl={
+        ((props: { canvas?: HTMLCanvasElement }) => {
+          const canvas = props.canvas
+          const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
+          if (cached) return cached
           // Surface the env we're about to ask WebGPU for — catches "no
           // navigator.gpu" / "adapter request failed" silently failing in
           // mobile WebViews where WebGPU is gated behind flags.
@@ -157,26 +176,30 @@ const Viewer: React.FC<ViewerProps> = ({
             hasNavigatorGPU: hasGpu,
             ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
           })
-          const renderer = new THREE.WebGPURenderer(props as any)
-          renderer.toneMapping = THREE.ACESFilmicToneMapping
-          renderer.toneMappingExposure = 0.9
-          // Awaiting init() is required when the browser falls back to the
-          // WebGL2 backend (Safari without the WebGPU flag, older Chrome on
-          // machines without a WebGPU device). In native WebGPU mode the
-          // init resolves almost instantly. Without this await, the first
-          // render throws "Renderer: .render() called before the backend is
-          // initialized" from the post-processing fallback path.
-          await renderer.init()
-          console.log('[viewer] WebGPURenderer ready', {
-            backend: (renderer as any).backend?.constructor?.name,
-            isWebGPU: (renderer as any).isWebGPURenderer === true,
-          })
-          return renderer
-        } catch (err) {
-          console.error('[viewer] WebGPURenderer init failed', err)
-          throw err
-        }
-      }}
+          const promise = (async () => {
+            try {
+              const renderer = new THREE.WebGPURenderer(props as any)
+              renderer.toneMapping = THREE.ACESFilmicToneMapping
+              renderer.toneMappingExposure = 0.9
+              await renderer.init()
+              console.log('[viewer] WebGPURenderer ready', {
+                backend: (renderer as any).backend?.constructor?.name,
+                isWebGPU: (renderer as any).isWebGPURenderer === true,
+              })
+              return renderer
+            } catch (err) {
+              // Drop the failed promise from the cache so a future Canvas
+              // mount on the same DOM can retry instead of inheriting the
+              // rejection forever.
+              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
+              console.error('[viewer] WebGPURenderer init failed', err)
+              throw err
+            }
+          })()
+          if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
+          return promise
+        }) as any
+      }
       resize={{
         debounce: 100,
       }}
