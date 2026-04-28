@@ -174,8 +174,21 @@ const PostProcessingPasses = ({
     void pipelineVersion
 
     if (!(renderer && scene && camera)) {
+      console.warn('[viewer/post-processing] Skipping pipeline build — missing dependency.', {
+        hasRenderer: !!renderer,
+        hasScene: !!scene,
+        hasCamera: !!camera,
+      })
       return
     }
+
+    console.log('[viewer/post-processing] Building pipeline', {
+      version: pipelineVersion,
+      ssgi: SSGI_PARAMS.enabled,
+      hoverHighlightMode,
+      projectId,
+      rendererCtor: (renderer as any).constructor?.name,
+    })
 
     hasPipelineErrorRef.current = false
 
@@ -318,10 +331,16 @@ const PostProcessingPasses = ({
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
+      console.log('[viewer/post-processing] Pipeline built OK', { version: pipelineVersion })
     } catch (error) {
       hasPipelineErrorRef.current = true
       console.error(
-        '[viewer] Failed to set up post-processing pipeline. Rendering without post FX.',
+        '[viewer/post-processing] Failed to set up post-processing pipeline. Rendering without post FX.',
+        {
+          version: pipelineVersion,
+          ssgi: SSGI_PARAMS.enabled,
+          rendererCtor: (renderer as any).constructor?.name,
+        },
         error,
       )
       if (renderPipelineRef.current) {
@@ -366,7 +385,7 @@ const PostProcessingPasses = ({
         }
         ;(renderer as any).render(scene, camera)
       } catch (fallbackError) {
-        console.error('[viewer] Fallback render failed.', fallbackError)
+        console.error('[viewer/post-processing] Fallback render failed.', fallbackError)
       }
       return
     }
@@ -378,7 +397,11 @@ const PostProcessingPasses = ({
       renderPipelineRef.current.render()
     } catch (error) {
       hasPipelineErrorRef.current = true
-      console.error('[viewer] Post-processing render pass failed.', error)
+      console.error('[viewer/post-processing] Render pass failed.', {
+        retryCount: retryCountRef.current,
+        rendererCtor: (renderer as any).constructor?.name,
+        error,
+      })
       if (renderPipelineRef.current) {
         renderPipelineRef.current.dispose()
       }
@@ -388,7 +411,7 @@ const PostProcessingPasses = ({
         // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit
         retryCountRef.current++
         console.warn(
-          `[viewer] Scheduling post-processing rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
+          `[viewer/post-processing] Scheduling pipeline rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
         )
         if (rebuildTimeoutRef.current !== null) {
           clearTimeout(rebuildTimeoutRef.current)
@@ -396,7 +419,7 @@ const PostProcessingPasses = ({
         rebuildTimeoutRef.current = setTimeout(requestPipelineRebuild, RETRY_DELAY_MS)
       } else {
         console.error(
-          '[viewer] Post-processing retries exhausted. Rendering without post FX for this session.',
+          '[viewer/post-processing] Retries exhausted. Rendering without post FX for this session.',
         )
       }
     }

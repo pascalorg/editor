@@ -1,16 +1,24 @@
 'use client'
 
-import { type AnyNodeId, type FenceNode, emitter, type GridEvent, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  type FenceNode,
+  type GridEvent,
+  type LevelNode,
+  sceneRegistry,
+  useLiveTransforms,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type * as THREE from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { snapFenceDraftPoint } from './fence-drafting'
 import { CursorSphere } from '../shared/cursor-sphere'
-
-function snap(value: number) {
-  return Math.round(value * 2) / 2
-}
 
 function samePoint(a: [number, number], b: [number, number]) {
   return a[0] === b[0] && a[1] === b[1]
@@ -24,15 +32,20 @@ type LinkedFenceSnapshot = {
 
 function getLinkedFenceSnapshots(args: {
   fenceId: FenceNode['id']
+  fenceParentId: string | null
   originalStart: [number, number]
   originalEnd: [number, number]
 }) {
-  const { fenceId, originalStart, originalEnd } = args
+  const { fenceId, fenceParentId, originalStart, originalEnd } = args
   const { nodes } = useScene.getState()
   const snapshots: LinkedFenceSnapshot[] = []
 
   for (const node of Object.values(nodes)) {
     if (!(node?.type === 'fence' && node.id !== fenceId)) {
+      continue
+    }
+
+    if ((node.parentId ?? null) !== fenceParentId) {
       continue
     }
 
@@ -78,12 +91,14 @@ function getLinkedFenceUpdates(
 }
 
 export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
+  const activatedAtRef = useRef<number>(Date.now())
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
   const linkedOriginalsRef = useRef(
     getLinkedFenceSnapshots({
       fenceId: node.id,
+      fenceParentId: node.parentId ?? null,
       originalStart: node.start,
       originalEnd: node.end,
     }),
@@ -106,9 +121,48 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     const nodeId = nodeIdRef.current
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
+    const levelNode =
+      node.parentId && useScene.getState().nodes[node.parentId as AnyNodeId]?.type === 'level'
+        ? (useScene.getState().nodes[node.parentId as AnyNodeId] as LevelNode)
+        : null
+    const levelChildren = levelNode?.children ?? []
+    const levelWalls = levelChildren
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .filter((child): child is WallNode => child?.type === 'wall')
+    const levelFences = levelChildren
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .filter((child): child is FenceNode => child?.type === 'fence')
 
     useScene.temporal.getState().pause()
     let wasCommitted = false
+
+    const setMeshOffset = (fenceId: FenceNode['id'], deltaX: number, deltaZ: number) => {
+      const mesh = sceneRegistry.nodes.get(fenceId) as THREE.Object3D | undefined
+      if (!mesh) {
+        return
+      }
+
+      mesh.position.set(deltaX, 0, deltaZ)
+    }
+
+    const setFenceLiveTransform = (fence: FenceNode, deltaX: number, deltaZ: number) => {
+      const originalCenterX = (fence.start[0] + fence.end[0]) / 2
+      const originalCenterZ = (fence.start[1] + fence.end[1]) / 2
+      useLiveTransforms.getState().set(fence.id, {
+        position: [originalCenterX + deltaX, 0, originalCenterZ + deltaZ],
+        rotation: 0,
+      })
+    }
+
+    const clearPreviewState = () => {
+      setMeshOffset(nodeId, 0, 0)
+      useLiveTransforms.getState().clear(nodeId)
+
+      for (const linkedFence of linkedOriginalsRef.current) {
+        setMeshOffset(linkedFence.id, 0, 0)
+        useLiveTransforms.getState().clear(linkedFence.id)
+      }
+    }
 
     const applyNodePreview = (updates: Array<{ id: FenceNode['id']; start: [number, number]; end: [number, number] }>) => {
       useScene.getState().updateNodes(
@@ -127,21 +181,33 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       const centerX = (nextStart[0] + nextEnd[0]) / 2
       const centerZ = (nextStart[1] + nextEnd[1]) / 2
       setCursorLocalPos([centerX, 0, centerZ])
-      applyNodePreview([
-        { id: nodeId, start: nextStart, end: nextEnd },
-        ...getLinkedFenceUpdates(
-          linkedOriginalsRef.current,
-          originalStart,
-          originalEnd,
-          nextStart,
-          nextEnd,
-        ),
-      ])
+      const deltaX = nextStart[0] - originalStart[0]
+      const deltaZ = nextStart[1] - originalStart[1]
+      setMeshOffset(nodeId, deltaX, deltaZ)
+      setFenceLiveTransform(node, deltaX, deltaZ)
+
+      for (const linkedFence of linkedOriginalsRef.current) {
+        setMeshOffset(linkedFence.id, deltaX, deltaZ)
+        setFenceLiveTransform(
+          {
+            ...node,
+            id: linkedFence.id,
+            start: linkedFence.start,
+            end: linkedFence.end,
+          },
+          deltaX,
+          deltaZ,
+        )
+      }
     }
 
     const onGridMove = (event: GridEvent) => {
-      const localX = snap(event.localPosition[0])
-      const localZ = snap(event.localPosition[2])
+      const [localX, localZ] = snapFenceDraftPoint({
+        point: [event.localPosition[0], event.localPosition[2]],
+        walls: levelWalls,
+        fences: levelFences,
+        ignoreFenceIds: [nodeId],
+      })
 
       if (
         previousGridPosRef.current &&
@@ -164,16 +230,14 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (Date.now() - activatedAtRef.current < 150) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
 
       wasCommitted = true
-
-      // Restore original baseline while paused so the next resume+update
-      // registers as a single tracked change (undo reverts to original).
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
 
       useScene.temporal.getState().resume()
       applyNodePreview([
@@ -186,6 +250,10 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
           preview.end,
         ),
       ])
+      useLiveTransforms.getState().clear(nodeId)
+      for (const linkedFence of linkedOriginalsRef.current) {
+        useLiveTransforms.getState().clear(linkedFence.id)
+      }
       useScene.temporal.getState().pause()
 
       sfxEmitter.emit('sfx:item-place')
@@ -195,10 +263,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
+      clearPreviewState()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
@@ -211,17 +276,19 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
 
     return () => {
       if (!wasCommitted) {
-        applyNodePreview([
-          { id: nodeId, start: originalStart, end: originalEnd },
-          ...linkedOriginalsRef.current,
-        ])
+        clearPreviewState()
+      } else {
+        useLiveTransforms.getState().clear(nodeId)
+        for (const linkedFence of linkedOriginalsRef.current) {
+          useLiveTransforms.getState().clear(linkedFence.id)
+        }
       }
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [exitMoveMode])
+  }, [exitMoveMode, node])
 
   return (
     <group>

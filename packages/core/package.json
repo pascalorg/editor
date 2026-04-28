@@ -20,6 +20,31 @@
       "types": "./dist/utils/clone-scene-graph.d.ts",
       "import": "./dist/utils/clone-scene-graph.js",
       "default": "./dist/utils/clone-scene-graph.js"
+    },
+    "./store": {
+      "types": "./dist/store/use-scene.d.ts",
+      "import": "./dist/store/use-scene.js",
+      "default": "./dist/store/use-scene.js"
+    },
+    "./material-library": {
+      "types": "./dist/material-library.d.ts",
+      "import": "./dist/material-library.js",
+      "default": "./dist/material-library.js"
+    },
+    "./spatial-grid": {
+      "types": "./dist/hooks/spatial-grid/spatial-grid-manager.d.ts",
+      "import": "./dist/hooks/spatial-grid/spatial-grid-manager.js",
+      "default": "./dist/hooks/spatial-grid/spatial-grid-manager.js"
+    },
+    "./wall": {
+      "types": "./dist/systems/wall/wall-footprint.d.ts",
+      "import": "./dist/systems/wall/wall-footprint.js",
+      "default": "./dist/systems/wall/wall-footprint.js"
+    },
+    "./stair-openings": {
+      "types": "./dist/systems/stair/stair-opening-sync.d.ts",
+      "import": "./dist/systems/stair/stair-opening-sync.js",
+      "default": "./dist/systems/stair/stair-opening-sync.js"
     }
   },
   "files": [

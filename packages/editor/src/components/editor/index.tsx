@@ -20,6 +20,7 @@ import {
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
@@ -940,6 +941,7 @@ export default function Editor({
   commandPaletteEmptyAction,
 }: EditorProps) {
   useKeyboard({ isVersionPreviewMode })
+  useAutoFrame()
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
@@ -1074,7 +1076,13 @@ export default function Editor({
       return <Component />
     }
 
-    const tabBarTabs = sidebarTabs?.map(({ id, label }) => ({ id, label })) ?? []
+    const tabBarTabs =
+      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon }) => ({
+        id,
+        label,
+        mobileDefaultSnap,
+        mobileIcon,
+      })) ?? []
 
     return (
       <PresetsProvider adapter={presetsAdapter}>

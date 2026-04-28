@@ -111,15 +111,15 @@ export const CeilingTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
 
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
       const gridPosition: [number, number] = [gridX, gridZ]
 
       setCursorPosition(gridPosition)
-      setLevelY(event.position[1])
+      setLevelY(event.localPosition[1])
 
-      const ceilingY = event.position[1] + CEILING_HEIGHT
-      const gridY = event.position[1] + GRID_OFFSET
+      const ceilingY = event.localPosition[1] + CEILING_HEIGHT
+      const gridY = event.localPosition[1] + GRID_OFFSET
 
       // Calculate snapped display position (bypass snap when Shift is held)
       const lastPoint = points[points.length - 1]

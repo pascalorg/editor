@@ -5,7 +5,13 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  transpilePackages: ['three', '@pascal-app/viewer', '@pascal-app/core', '@pascal-app/editor'],
+  transpilePackages: [
+    'three',
+    '@pascal-app/viewer',
+    '@pascal-app/core',
+    '@pascal-app/editor',
+    '@pascal-app/mcp',
+  ],
   turbopack: {
     root: path.resolve(__dirname, '../..'),
     resolveAlias: {

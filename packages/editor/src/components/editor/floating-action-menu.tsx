@@ -6,8 +6,8 @@ import {
   type CeilingNode,
   DoorNode,
   FenceNode,
+  generateId,
   ItemNode,
-  RoofNode,
   RoofSegmentNode,
   type SlabNode,
   StairNode,
@@ -24,6 +24,8 @@ import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { getHomeAssistantLink } from '../../lib/home-assistant'
+import { duplicateRoofSubtree } from '../../lib/roof-duplication'
+import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
@@ -238,6 +240,16 @@ export function FloatingActionMenu() {
       e.stopPropagation()
       if (!node?.parentId) return
       sfxEmitter.emit('sfx:item-pick')
+
+      if (node.type === 'roof') {
+        try {
+          duplicateRoofSubtree(node.id as AnyNodeId, { mode: 'move' })
+        } catch (error) {
+          console.error('Failed to duplicate roof', error)
+        }
+        return
+      }
+
       useScene.temporal.getState().pause()
 
       let duplicateInfo = structuredClone(node) as any
@@ -258,10 +270,8 @@ export function FloatingActionMenu() {
           duplicate = FenceNode.parse(duplicateInfo)
           duplicate.start = [duplicate.start[0] + 1, duplicate.start[1] + 1]
           duplicate.end = [duplicate.end[0] + 1, duplicate.end[1] + 1]
-        } else if (node.type === 'roof') {
-          duplicateInfo.children = []
-          duplicate = RoofNode.parse(duplicateInfo)
         } else if (node.type === 'roof-segment') {
+          duplicateInfo.id = generateId('rseg')
           duplicate = RoofSegmentNode.parse(duplicateInfo)
         } else if (node.type === 'stair') {
           duplicateInfo.children = []
@@ -290,7 +300,6 @@ export function FloatingActionMenu() {
         } else if (duplicate.type === 'fence') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (
-          duplicate.type === 'roof' ||
           duplicate.type === 'roof-segment' ||
           duplicate.type === 'stair' ||
           duplicate.type === 'stair-segment'
@@ -304,52 +313,9 @@ export function FloatingActionMenu() {
             ]
           }
           if (node.type === 'stair' && duplicate.type === 'stair') {
-            const nodesState = useScene.getState().nodes
-            const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = [
-              { node: duplicate, parentId: duplicate.parentId as AnyNodeId },
-            ]
-
-            for (const childId of node.children ?? []) {
-              const childNode = nodesState[childId]
-              if (childNode?.type !== 'stair-segment') {
-                continue
-              }
-
-              let childDuplicateInfo = structuredClone(childNode) as any
-              delete childDuplicateInfo.id
-              childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata }
-              delete childDuplicateInfo.metadata?.isNew
-
-              try {
-                const childDuplicate = StairSegmentNode.parse(childDuplicateInfo)
-                createOps.push({ node: childDuplicate, parentId: duplicate.id as AnyNodeId })
-              } catch (e) {
-                console.error('Failed to duplicate stair segment', e)
-              }
-            }
-
-            useScene.getState().createNodes(createOps)
+            duplicateStairSubtree(node.id as AnyNodeId, { mode: 'move' })
           } else {
             useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-          }
-
-          // Duplicate children for roof nodes
-          if (node.type === 'roof' && node.children) {
-            const nodesState = useScene.getState().nodes
-            for (const childId of node.children) {
-              const childNode = nodesState[childId]
-              if (childNode && childNode.type === 'roof-segment') {
-                let childDuplicateInfo = structuredClone(childNode) as any
-                delete childDuplicateInfo.id
-                childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata, isNew: true }
-                try {
-                  const childDuplicate = RoofSegmentNode.parse(childDuplicateInfo)
-                  useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
-                } catch (e) {
-                  console.error('Failed to duplicate roof segment', e)
-                }
-              }
-            }
           }
 
           // Duplicate children for stair nodes
@@ -360,7 +326,6 @@ export function FloatingActionMenu() {
           duplicate.type === 'fence' ||
           duplicate.type === 'window' ||
           duplicate.type === 'door' ||
-          duplicate.type === 'roof' ||
           duplicate.type === 'roof-segment' ||
           duplicate.type === 'stair-segment'
         ) {

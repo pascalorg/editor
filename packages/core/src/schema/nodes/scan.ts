@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 
 export const ScanNode = BaseNode.extend({
   id: objectId('scan'),
   type: nodeType('scan'),
-  url: z.string(),
+  url: AssetUrl,
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   scale: z.number().default(1),
