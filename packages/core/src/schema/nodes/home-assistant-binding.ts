@@ -71,7 +71,6 @@ const homeAssistantResourceBindingSchema = z.object({
 })
 
 const homeAssistantRoomControlGroupSchema = z.object({
-  id: z.string(),
   memberResourceIds: z.array(z.string()),
 })
 
@@ -85,8 +84,6 @@ const homeAssistantBindingPresentationSchema = z.object({
   label: z.string().optional(),
   rtsHidden: z.boolean().optional(),
   rtsRoomControls: homeAssistantRoomControlCompositionSchema.optional(),
-  rtsExcludedResourceIds: z.array(z.string()).optional(),
-  rtsGroups: z.array(z.array(z.string())).optional(),
   rtsOrder: z.number().optional(),
   rtsScreenPosition: z
     .object({
@@ -129,6 +126,23 @@ export type HomeAssistantBindingPresentation = z.infer<
 >
 export type HomeAssistantCollectionBinding = z.infer<typeof homeAssistantCollectionBindingSchema>
 export type HomeAssistantCollectionBindingMap = Record<CollectionId, HomeAssistantCollectionBinding>
+
+type LegacyHomeAssistantRoomControlComposition = Omit<
+  HomeAssistantRoomControlComposition,
+  'groups'
+> & {
+  groups?: Array<HomeAssistantRoomControlGroup & { id?: string }>
+}
+
+type LegacyHomeAssistantBindingPresentation = HomeAssistantBindingPresentation & {
+  rtsExcludedResourceIds?: string[]
+  rtsGroups?: string[][]
+  rtsRoomControls?: LegacyHomeAssistantRoomControlComposition
+}
+
+type LegacyHomeAssistantCollectionBinding = Omit<HomeAssistantCollectionBinding, 'presentation'> & {
+  presentation?: LegacyHomeAssistantBindingPresentation
+}
 
 export const HomeAssistantBindingNode = BaseNode.extend({
   id: objectId('ha-binding'),
@@ -288,7 +302,7 @@ const normalizeRoomControlComposition = ({
   resources,
 }: {
   collectionId: CollectionId
-  presentation: HomeAssistantBindingPresentation | undefined
+  presentation: LegacyHomeAssistantBindingPresentation | undefined
   resources: HomeAssistantResourceBinding[]
 }): HomeAssistantRoomControlComposition | undefined => {
   const resourceIds = new Set(resources.map((resource) => resource.id))
@@ -326,10 +340,7 @@ const normalizeRoomControlComposition = ({
         ),
       )
 
-      return {
-        id: existingComposition?.groups?.[index]?.id || `group-${index + 1}`,
-        memberResourceIds,
-      }
+      return { memberResourceIds }
     })
     .filter((group) => group.memberResourceIds.length > 0)
   const excludedResourceIds = dedupeStringArray(
@@ -347,7 +358,7 @@ const normalizeRoomControlComposition = ({
 }
 
 export const normalizeHomeAssistantCollectionBinding = (
-  binding: HomeAssistantCollectionBinding,
+  binding: HomeAssistantCollectionBinding | LegacyHomeAssistantCollectionBinding,
 ): HomeAssistantCollectionBinding | null => {
   if (!(binding && typeof binding === 'object')) {
     return null

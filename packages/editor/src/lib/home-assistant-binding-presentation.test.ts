@@ -38,8 +38,8 @@ describe('home assistant binding presentation helpers', () => {
       resources,
     )
 
-    expect(nextPresentation.rtsGroups).toBeUndefined()
-    expect(nextPresentation.rtsExcludedResourceIds).toBeUndefined()
+    expect((nextPresentation as Record<string, unknown>).rtsGroups).toBeUndefined()
+    expect((nextPresentation as Record<string, unknown>).rtsExcludedResourceIds).toBeUndefined()
     expect(nextPresentation.rtsRoomControls?.excludedResourceIds).toEqual([resources[1]!.id])
     expect(nextPresentation.rtsRoomControls?.groups?.[0]?.memberResourceIds).toEqual([
       resources[0]!.id,
@@ -52,7 +52,7 @@ describe('home assistant binding presentation helpers', () => {
       {
         rtsRoomControls: {
           excludedResourceIds: resources.map((resource) => resource.id),
-          groups: [{ id: 'group-1', memberResourceIds: [resources[0]!.id] }],
+          groups: [{ memberResourceIds: [resources[0]!.id] }],
         },
       },
       collectionId,
@@ -71,16 +71,16 @@ describe('home assistant binding presentation helpers', () => {
       {
         rtsExcludedResourceIds: ['light.legacy'],
         rtsGroups: [['legacy-tile']],
-      },
+      } as never,
       {
         rtsRoomControls: {
-          groups: [{ id: 'group-1', memberResourceIds: ['light.master_1'] }],
+          groups: [{ memberResourceIds: ['light.master_1'] }],
         },
       },
     )
 
-    expect(merged?.rtsExcludedResourceIds).toBeUndefined()
-    expect(merged?.rtsGroups).toBeUndefined()
+    expect((merged as Record<string, unknown> | undefined)?.rtsExcludedResourceIds).toBeUndefined()
+    expect((merged as Record<string, unknown> | undefined)?.rtsGroups).toBeUndefined()
     expect(merged?.rtsRoomControls?.groups?.[0]?.memberResourceIds).toEqual(['light.master_1'])
   })
 
@@ -90,7 +90,7 @@ describe('home assistant binding presentation helpers', () => {
         {
           aggregation: 'single',
           collectionId,
-          presentation: { label: 'Master', rtsGroups: undefined },
+          presentation: { label: 'Master', rtsHidden: undefined },
           primaryResourceId: 'light.master_1',
           resources: [light('light.master_1')],
         },

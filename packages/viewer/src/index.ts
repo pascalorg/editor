@@ -23,18 +23,7 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'
-export {
-  buildRoomControlGroups,
-  InteractiveSystem,
-  type InteractiveSystemProps,
-  normalizeRoomControlGroupList,
-  type RoomControlChange,
-  type RoomControlChangeSource,
-  type RoomControlGroup,
-  type RoomControlTile,
-  type RoomOverlayNode,
-  selectRoomControlGroupSource,
-} from './systems/interactive/interactive-system'
+export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'

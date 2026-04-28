@@ -28,8 +28,8 @@ type ViewerState = {
   nodeEventsSuppressed: boolean
   nodeEventsSuppressedUntil: number
   suppressNodeEvents: (durationMs?: number) => void
-  roomControlOverlayActive: boolean
-  setRoomControlOverlayActive: (active: boolean) => void
+  interactiveOverlayActive: boolean
+  setInteractiveOverlayActive: (active: boolean) => void
   itemTriggerEffects: Record<AnyNodeId, ItemTriggerEffect>
   triggerItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
   clearItemEffect: (itemId: AnyNodeId) => void

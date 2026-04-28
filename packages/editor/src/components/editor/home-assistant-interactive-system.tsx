@@ -23,18 +23,18 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
+import { InteractiveSystem, useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   buildRoomControlGroups,
-  InteractiveSystem,
   normalizeRoomControlGroupList,
   type RoomControlChange,
   type RoomControlChangeSource,
+  RoomControlOverlay,
   type RoomControlTile,
   type RoomOverlayNode,
   selectRoomControlGroupSource,
-  useViewer,
-} from '@pascal-app/viewer'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+} from '../../features/home-assistant/room-overlay/room-control-overlay'
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,
   cloneSmartHomeResourceBinding,
@@ -798,8 +798,6 @@ export function HomeAssistantInteractiveSystem({
             groups: normalizedGroups,
             resources: bindingNode.resources,
           }),
-          rtsExcludedResourceIds: undefined,
-          rtsGroups: undefined,
         },
       } as Partial<AnyNode>)
       requestSceneImmediateSave()
@@ -872,8 +870,6 @@ export function HomeAssistantInteractiveSystem({
             groups: nextRtsGroups,
             resources: [...targetBindingNode.resources, sourceResource],
           }),
-          rtsExcludedResourceIds: undefined,
-          rtsGroups: undefined,
         },
         primaryResourceId: isSmartHomeDeviceComponentResource(currentPrimaryResource)
           ? (currentPrimaryResource?.id ?? sourceResource.id)
@@ -948,8 +944,6 @@ export function HomeAssistantInteractiveSystem({
             ),
             resources: nextResources,
           }),
-          rtsExcludedResourceIds: undefined,
-          rtsGroups: undefined,
         },
         primaryResourceId: nextPrimaryResourceId,
         resources: nextResources,
@@ -1042,12 +1036,15 @@ export function HomeAssistantInteractiveSystem({
   )
 
   return (
-    <InteractiveSystem
-      onApplyRoomGrouping={applyRoomGroupingToCollection}
-      onCopyRoomControlToRoom={copyDeviceResourceToGroup}
-      onRemoveRoomControlFromRoom={removeDeviceResourceFromGroup}
-      onRoomControlChange={handleRoomControlChange}
-      roomOverlayNodes={roomOverlayNodes}
-    />
+    <>
+      <InteractiveSystem />
+      <RoomControlOverlay
+        onApplyRoomGrouping={applyRoomGroupingToCollection}
+        onCopyRoomControlToRoom={copyDeviceResourceToGroup}
+        onRemoveRoomControlFromRoom={removeDeviceResourceFromGroup}
+        onRoomControlChange={handleRoomControlChange}
+        roomOverlayNodes={roomOverlayNodes}
+      />
+    </>
   )
 }

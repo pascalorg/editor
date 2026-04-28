@@ -186,7 +186,7 @@ function MobilePanelLayer({
 export function PanelManager() {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const roomControlOverlayActive = useViewer((s) => s.roomControlOverlayActive)
+  const interactiveOverlayActive = useViewer((s) => s.interactiveOverlayActive)
   const homeAssistantPairingResourceId = useEditor((s) => s.homeAssistantPairingResourceId)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
@@ -223,7 +223,7 @@ export function PanelManager() {
     return <ReferencePanel />
   }
 
-  if (roomControlOverlayActive || homeAssistantPairingResourceId) {
+  if (interactiveOverlayActive || homeAssistantPairingResourceId) {
     return null
   }
 

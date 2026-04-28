@@ -37,8 +37,8 @@ type ViewerState = {
   nodeEventsSuppressed: boolean
   nodeEventsSuppressedUntil: number
   suppressNodeEvents: (durationMs?: number) => void
-  roomControlOverlayActive: boolean
-  setRoomControlOverlayActive: (active: boolean) => void
+  interactiveOverlayActive: boolean
+  setInteractiveOverlayActive: (active: boolean) => void
   itemTriggerEffects: Record<AnyNodeId, ItemTriggerEffect>
   triggerItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
   clearItemEffect: (itemId: AnyNodeId) => void
@@ -112,8 +112,8 @@ const useViewer = create<ViewerState>()(
           nodeEventsSuppressedUntil:
             (typeof performance !== 'undefined' ? performance.now() : Date.now()) + durationMs,
         }),
-      roomControlOverlayActive: false,
-      setRoomControlOverlayActive: (roomControlOverlayActive) => set({ roomControlOverlayActive }),
+      interactiveOverlayActive: false,
+      setInteractiveOverlayActive: (interactiveOverlayActive) => set({ interactiveOverlayActive }),
       itemTriggerEffects: {},
       triggerItemEffect: (itemId, fadeInMs = 450) =>
         set((state) => {

@@ -1051,7 +1051,7 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
-      if (useViewer.getState().roomControlOverlayActive) return
+      if (useViewer.getState().interactiveOverlayActive) return
 
       const node = event.node
       if (isHomeAssistantPairingModeActive()) {
@@ -1188,7 +1188,7 @@ export const SelectionManager = () => {
     })
 
     const onGridClick = () => {
-      if (useViewer.getState().roomControlOverlayActive) return
+      if (useViewer.getState().interactiveOverlayActive) return
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
       if (isHomeAssistantPairingModeActive()) {
@@ -1225,7 +1225,7 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
-      if (useViewer.getState().roomControlOverlayActive) return
+      if (useViewer.getState().interactiveOverlayActive) return
       const node = event.node
       if (isHomeAssistantPairingModeActive()) {
         if (!isNodeInCurrentLevel(node) || !isHomeAssistantPairingItem(node)) {
@@ -1287,7 +1287,7 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      if (useViewer.getState().roomControlOverlayActive) return
+      if (useViewer.getState().interactiveOverlayActive) return
       if (isHomeAssistantPairingModeActive()) return
       const node = event.node
       const currentPhase = useEditor.getState().phase

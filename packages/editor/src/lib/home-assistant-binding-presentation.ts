@@ -11,6 +11,13 @@ import {
   getSmartHomeRoomControlTileId,
 } from './smart-home-composition'
 
+type HomeAssistantPresentationWithLegacy = NonNullable<
+  HomeAssistantCollectionBinding['presentation']
+> & {
+  rtsExcludedResourceIds?: string[]
+  rtsGroups?: string[][]
+}
+
 export function mergeHomeAssistantPresentation(
   current: HomeAssistantCollectionBinding['presentation'],
   incoming: HomeAssistantCollectionBinding['presentation'],
@@ -19,7 +26,7 @@ export function mergeHomeAssistantPresentation(
     return undefined
   }
 
-  const merged: NonNullable<HomeAssistantCollectionBinding['presentation']> = {
+  const merged: HomeAssistantPresentationWithLegacy = {
     ...(current ?? {}),
   }
 
@@ -54,7 +61,7 @@ export function getPresentationAfterResourceRemoval(
   const nextExcludedResourceIds = Array.from(
     new Set([...getSmartHomeExcludedResourceIds(presentation), resourceId]),
   )
-  const nextPresentation: NonNullable<HomeAssistantCollectionBinding['presentation']> = {
+  const nextPresentation: HomeAssistantPresentationWithLegacy = {
     ...(presentation ?? {}),
     rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
       collectionId,
@@ -62,9 +69,9 @@ export function getPresentationAfterResourceRemoval(
       groups: nextGroups,
       resources,
     }),
-    rtsExcludedResourceIds: undefined,
-    rtsGroups: undefined,
   }
+  delete nextPresentation.rtsExcludedResourceIds
+  delete nextPresentation.rtsGroups
 
   return nextPresentation
 }
@@ -82,7 +89,7 @@ export function getPresentationAfterResourceInclusion(
     return presentation
   }
 
-  const nextPresentation: NonNullable<HomeAssistantCollectionBinding['presentation']> = {
+  const nextPresentation: HomeAssistantPresentationWithLegacy = {
     ...(presentation ?? {}),
     rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
       collectionId,
@@ -90,9 +97,9 @@ export function getPresentationAfterResourceInclusion(
       groups: getSmartHomeRoomControlTileGroups({ collectionId, presentation }),
       resources,
     }),
-    rtsExcludedResourceIds: undefined,
-    rtsGroups: undefined,
   }
+  delete nextPresentation.rtsExcludedResourceIds
+  delete nextPresentation.rtsGroups
 
   if (nextExcludedResourceIds.length === 0) {
     delete nextPresentation.rtsRoomControls?.excludedResourceIds

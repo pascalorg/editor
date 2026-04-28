@@ -57,7 +57,7 @@ function binding(
   return {
     aggregation: 'all',
     collectionId,
-    presentation: rtsGroups ? { rtsGroups } : undefined,
+    presentation: rtsGroups ? ({ rtsGroups } as never) : undefined,
     primaryResourceId: resources[0]?.id ?? null,
     resources,
   }
@@ -165,7 +165,9 @@ describe('smart home composition', () => {
       lights[0]!.id,
       lights[1]!.id,
     ])
-    expect(normalized?.presentation?.rtsGroups).toBeUndefined()
+    expect(
+      (normalized?.presentation as Record<string, unknown> | undefined)?.rtsGroups,
+    ).toBeUndefined()
   })
 
   test('marks hidden group presentation as durable scene state', () => {

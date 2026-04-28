@@ -1983,7 +1983,7 @@ export function HomeAssistantPanel() {
       window.clearTimeout(placementSuppressionTimeoutRef.current)
       placementSuppressionTimeoutRef.current = null
     }
-    useViewer.getState().setRoomControlOverlayActive(true)
+    useViewer.getState().setInteractiveOverlayActive(true)
     setPositioningPointer(centerPoint)
     setPositioningPreview(resolveHomeAssistantPlacementPreview(centerPoint.x, centerPoint.y))
     setPositioningResource(resource)
@@ -2211,8 +2211,6 @@ export function HomeAssistantPanel() {
           }),
           resources: existingBinding?.resources ?? [],
         })
-        delete nextPresentation.rtsExcludedResourceIds
-        delete nextPresentation.rtsGroups
       }
       const existingResources = existingBinding?.resources ?? []
       const nextResourceMap = new Map<string, HomeAssistantResourceBinding>([
@@ -2313,7 +2311,7 @@ export function HomeAssistantPanel() {
         worldPosition,
       })
       placementSuppressionTimeoutRef.current = window.setTimeout(() => {
-        useViewer.getState().setRoomControlOverlayActive(false)
+        useViewer.getState().setInteractiveOverlayActive(false)
         placementSuppressionTimeoutRef.current = null
       }, 220)
       stopGroupPositioning()
@@ -2322,7 +2320,7 @@ export function HomeAssistantPanel() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        useViewer.getState().setRoomControlOverlayActive(false)
+        useViewer.getState().setInteractiveOverlayActive(false)
         stopGroupPositioning()
       }
     }
@@ -2336,7 +2334,7 @@ export function HomeAssistantPanel() {
       window.removeEventListener('pointerdown', handlePointerDown, true)
       window.removeEventListener('keydown', handleKeyDown, true)
       if (placementSuppressionTimeoutRef.current === null) {
-        useViewer.getState().setRoomControlOverlayActive(false)
+        useViewer.getState().setInteractiveOverlayActive(false)
       }
     }
   }, [positioningResource])

@@ -41,6 +41,11 @@ const DEPRECATED_DEMO_COLLECTION_IDS = new Set([
   'collection_demo3_master_fan',
   'collection_demo4_living_script',
 ])
+
+type LegacyHomeAssistantBindingPresentation = HomeAssistantBindingPresentation & {
+  rtsExcludedResourceIds?: string[]
+  rtsGroups?: string[][]
+}
 const DEPRECATED_DEMO_RESOURCE_IDS = new Set([
   'light.pascal_dining_single',
   'light.pascal_dining_group',
@@ -142,12 +147,12 @@ function readWorldPosition(value: unknown) {
 
 function readLegacyHomeAssistantPresentation(
   value: unknown,
-): HomeAssistantBindingPresentation | undefined {
+): LegacyHomeAssistantBindingPresentation | undefined {
   if (!isRecord(value)) {
     return undefined
   }
 
-  const presentation: HomeAssistantBindingPresentation = {}
+  const presentation: LegacyHomeAssistantBindingPresentation = {}
   if (typeof value.icon === 'string') {
     presentation.icon = value.icon
   }
@@ -620,8 +625,6 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
             groups: nextGroups,
             resources: bindingWithRepairedResources.resources,
           }),
-          rtsExcludedResourceIds: undefined,
-          rtsGroups: undefined,
         },
       }
     }

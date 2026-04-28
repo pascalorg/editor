@@ -6,6 +6,11 @@ import type {
 } from '@pascal-app/core/schema'
 import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
 
+type SmartHomeBindingPresentationWithLegacy = HomeAssistantCollectionBinding['presentation'] & {
+  rtsExcludedResourceIds?: string[]
+  rtsGroups?: string[][]
+}
+
 export function getSmartHomeRoomControlTileId(
   collectionId: CollectionId | string,
   resourceId: string,
@@ -34,8 +39,11 @@ export function normalizeSmartHomeStringGroups(value: unknown) {
 export function getSmartHomeExcludedResourceIds(
   presentation: HomeAssistantCollectionBinding['presentation'],
 ) {
+  const legacyPresentation = presentation as SmartHomeBindingPresentationWithLegacy | undefined
   return (
-    presentation?.rtsRoomControls?.excludedResourceIds ?? presentation?.rtsExcludedResourceIds ?? []
+    legacyPresentation?.rtsRoomControls?.excludedResourceIds ??
+    legacyPresentation?.rtsExcludedResourceIds ??
+    []
   )
 }
 
@@ -58,6 +66,7 @@ export function getSmartHomeRoomControlTileGroups({
   collectionId: CollectionId | string
   presentation: HomeAssistantCollectionBinding['presentation']
 }) {
+  const legacyPresentation = presentation as SmartHomeBindingPresentationWithLegacy | undefined
   const resourceGroups = getSmartHomeRoomControlResourceGroups(presentation)
   if (resourceGroups.length > 0) {
     return resourceGroups.map((group) =>
@@ -65,7 +74,7 @@ export function getSmartHomeRoomControlTileGroups({
     )
   }
 
-  return normalizeSmartHomeStringGroups(presentation?.rtsGroups)
+  return normalizeSmartHomeStringGroups(legacyPresentation?.rtsGroups)
 }
 
 export function buildSmartHomeRoomControlCompositionFromTileGroups({
@@ -90,7 +99,7 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
   }
 
   const resourceGroups = groups
-    .map((group, index) => {
+    .map((group) => {
       const memberResourceIds = Array.from(
         new Set(
           group
@@ -106,10 +115,7 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
         ),
       )
 
-      return {
-        id: `group-${index + 1}`,
-        memberResourceIds,
-      }
+      return { memberResourceIds }
     })
     .filter((group) => group.memberResourceIds.length > 0)
   const excluded = Array.from(new Set(excludedResourceIds))
@@ -497,8 +503,6 @@ export function repairHomeAssistantBindingResourcesFromGroups({
         }),
         resources: nextResources,
       }),
-      rtsExcludedResourceIds: undefined,
-      rtsGroups: undefined,
     },
     primaryResourceId:
       binding.primaryResourceId && nextResourcesById.has(binding.primaryResourceId)
