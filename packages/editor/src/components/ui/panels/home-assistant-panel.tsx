@@ -61,13 +61,7 @@ import {
 } from '../../../lib/home-assistant-placement-ground'
 import { cn } from '../../../lib/utils'
 
-type ProviderId =
-  | 'home-assistant'
-  | 'google-home'
-  | 'apple-home'
-  | 'amazon-alexa'
-  | 'smartthings'
-  | 'homey'
+type ProviderId = 'home-assistant'
 
 type ActivePanel =
   | { kind: 'chooser' }
@@ -212,115 +206,6 @@ function HomeAssistantMark({ className }: IconProps) {
   )
 }
 
-function GoogleHomeMark({ className }: IconProps) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24">
-      <path d="M6.2 10.2 12 5.6l5.8 4.6v8.2H6.2z" fill="#34A853" opacity="0.24" />
-      <path
-        d="M12 5.6 4.8 11.4"
-        stroke="#4285F4"
-        strokeLinecap="round"
-        strokeWidth="2.2"
-      />
-      <path
-        d="M12 5.6 19.2 11.4"
-        stroke="#EA4335"
-        strokeLinecap="round"
-        strokeWidth="2.2"
-      />
-      <path d="M6.2 10.3v8" stroke="#34A853" strokeLinecap="round" strokeWidth="2.2" />
-      <path d="M17.8 10.3v8" stroke="#FBBC04" strokeLinecap="round" strokeWidth="2.2" />
-      <path d="M9.6 18.3v-4.1h4.8v4.1" stroke="currentColor" strokeWidth="1.35" />
-    </svg>
-  )
-}
-
-function AppleHomeMark({ className }: IconProps) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24">
-      <defs>
-        <linearGradient id="apple-home-gradient" x1="5" x2="19" y1="5" y2="19">
-          <stop offset="0%" stopColor="#F59E0B" />
-          <stop offset="55%" stopColor="#F97316" />
-          <stop offset="100%" stopColor="#EC4899" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M12 4.8 5.6 10v8.2a1.1 1.1 0 0 0 1.1 1.1h10.6a1.1 1.1 0 0 0 1.1-1.1V10z"
-        stroke="url(#apple-home-gradient)"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-      <path
-        d="M9.7 19.3v-5h4.6v5"
-        stroke="url(#apple-home-gradient)"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-    </svg>
-  )
-}
-
-function AlexaMark({ className }: IconProps) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" fill="#0EA5E9" opacity="0.18" r="7.4" />
-      <path
-        d="M7.2 12a4.8 4.8 0 1 1 9.6 0"
-        stroke="#0EA5E9"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-      <path
-        d="M8.1 15.2c1.3 1.5 3 2.2 5 2.2 1.2 0 2.4-.25 3.3-.7"
-        stroke="#38BDF8"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-    </svg>
-  )
-}
-
-function SmartThingsMark({ className }: IconProps) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24">
-      <circle cx="9" cy="9" fill="#1D4ED8" opacity="0.25" r="2.2" />
-      <circle cx="15.8" cy="7" fill="#2563EB" opacity="0.6" r="1.7" />
-      <circle cx="16.2" cy="15.4" fill="#60A5FA" opacity="0.38" r="2.9" />
-      <circle cx="7.2" cy="15.8" fill="#1D4ED8" opacity="0.48" r="1.55" />
-      <path
-        d="M10.7 9.5 14.1 7.8M10.4 10.8l4.3 3M8.7 11.1l-1 3"
-        stroke="#60A5FA"
-        strokeLinecap="round"
-        strokeWidth="1.6"
-      />
-    </svg>
-  )
-}
-
-function HomeyMark({ className }: IconProps) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24">
-      <defs>
-        <linearGradient id="homey-gradient" x1="5" x2="19" y1="5" y2="19">
-          <stop offset="0%" stopColor="#60A5FA" />
-          <stop offset="34%" stopColor="#8B5CF6" />
-          <stop offset="68%" stopColor="#F43F5E" />
-          <stop offset="100%" stopColor="#F59E0B" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M12 5.3a6.7 6.7 0 1 0 0 13.4 5.1 5.1 0 0 0 0-10.2 3.5 3.5 0 1 1 0 7 1.9 1.9 0 1 1 0-3.8"
-        stroke="url(#homey-gradient)"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.1"
-      />
-    </svg>
-  )
-}
-
 const PROVIDERS: ProviderDefinition[] = [
   {
     accentClassName: 'text-cyan-200',
@@ -328,41 +213,6 @@ const PROVIDERS: ProviderDefinition[] = [
     icon: HomeAssistantMark,
     id: 'home-assistant',
     name: 'Home Assistant',
-  },
-  {
-    accentClassName: 'text-zinc-200',
-    connectable: false,
-    icon: GoogleHomeMark,
-    id: 'google-home',
-    name: 'Google Home',
-  },
-  {
-    accentClassName: 'text-zinc-200',
-    connectable: false,
-    icon: AppleHomeMark,
-    id: 'apple-home',
-    name: 'Apple Home',
-  },
-  {
-    accentClassName: 'text-zinc-200',
-    connectable: false,
-    icon: AlexaMark,
-    id: 'amazon-alexa',
-    name: 'Amazon Alexa',
-  },
-  {
-    accentClassName: 'text-zinc-200',
-    connectable: false,
-    icon: SmartThingsMark,
-    id: 'smartthings',
-    name: 'Samsung SmartThings',
-  },
-  {
-    accentClassName: 'text-zinc-200',
-    connectable: false,
-    icon: HomeyMark,
-    id: 'homey',
-    name: 'Homey',
   },
 ]
 
