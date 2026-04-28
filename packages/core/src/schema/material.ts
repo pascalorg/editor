@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AssetUrl } from './asset-url'
 
 export const MaterialPreset = z.enum([
   'white',
@@ -30,7 +31,7 @@ export const MaterialSchema = z.object({
   properties: MaterialProperties.optional(),
   texture: z
     .object({
-      url: z.string(),
+      url: AssetUrl,
       repeat: z.tuple([z.number(), z.number()]).optional(),
       scale: z.number().optional(),
     })
@@ -56,16 +57,16 @@ export const TextureWrapMode = z.enum(['Repeat', 'ClampToEdge', 'MirroredRepeat'
 export type TextureWrapMode = z.infer<typeof TextureWrapMode>
 
 export const MaterialMapsSchema = z.object({
-  albedoMap: z.string().optional(),
-  metalnessMap: z.string().optional(),
-  roughnessMap: z.string().optional(),
-  normalMap: z.string().optional(),
-  displacementMap: z.string().optional(),
-  aoMap: z.string().optional(),
-  emissiveMap: z.string().optional(),
-  bumpMap: z.string().optional(),
-  alphaMap: z.string().optional(),
-  lightMap: z.string().optional(),
+  albedoMap: AssetUrl.optional(),
+  metalnessMap: AssetUrl.optional(),
+  roughnessMap: AssetUrl.optional(),
+  normalMap: AssetUrl.optional(),
+  displacementMap: AssetUrl.optional(),
+  aoMap: AssetUrl.optional(),
+  emissiveMap: AssetUrl.optional(),
+  bumpMap: AssetUrl.optional(),
+  alphaMap: AssetUrl.optional(),
+  lightMap: AssetUrl.optional(),
 })
 export type MaterialMaps = z.infer<typeof MaterialMapsSchema>
 

@@ -7,7 +7,16 @@ import type {
   StairNode,
   StairSegmentNode,
 } from '../../schema'
+
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CeilingNode,
+  SlabNode,
+  StairNode,
+  StairSegmentNode,
+} from '../../schema'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
 type Point2D = [number, number]
@@ -285,6 +294,36 @@ function polygonArea(points: Point2D[]) {
   return area / 2
 }
 
+function pointOnSegment(point: Point2D, a: Point2D, b: Point2D, tolerance = 1e-6) {
+  const cross = (point[1] - a[1]) * (b[0] - a[0]) - (point[0] - a[0]) * (b[1] - a[1])
+  if (Math.abs(cross) > tolerance) return false
+  const dot = (point[0] - a[0]) * (b[0] - a[0]) + (point[1] - a[1]) * (b[1] - a[1])
+  if (dot < -tolerance) return false
+  const lenSq = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2
+  return dot <= lenSq + tolerance
+}
+
+function pointInPolygon(point: Point2D, polygon: Point2D[]) {
+  if (polygon.length < 3) return false
+  let inside = false
+  const [x, z] = point
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]!
+    const b = polygon[j]!
+    if (pointOnSegment(point, a, b)) return true
+    const intersects =
+      a[1] > z !== b[1] > z && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1]) + a[0]
+    if (intersects) inside = !inside
+  }
+
+  return inside
+}
+
+function polygonContainsPolygon(outer: Point2D[], inner: Point2D[]) {
+  return inner.every((point) => pointInPolygon(point, outer))
+}
+
 function getAxisAlignedRectFromPolygon(polygon: Point2D[]): AxisAlignedRect | null {
   if (polygon.length < 4) return null
   const xs = polygon.map(([x]) => x)
@@ -444,6 +483,7 @@ function buildArcOpeningPolygon(
   for (let index = segmentCount; index >= 0; index--) {
     const t = index / segmentCount
     const angle = startAngle + sweep * t
+
     innerPoints.push(
       toWorldPlanPoint(stair, Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius),
     )
@@ -737,6 +777,7 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           },
         })),
       )
+      .filter((hole) => polygonContainsPolygon(slab.polygon, hole.polygon))
 
     const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
     const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]
@@ -787,6 +828,7 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           },
         })),
       )
+      .filter((hole) => polygonContainsPolygon(ceiling.polygon, hole.polygon))
 
     const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
     const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]

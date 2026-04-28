@@ -102,6 +102,21 @@ export interface ThumbnailGenerateEvent {
   snapLevels?: boolean
 }
 
+export interface CameraControlFitSceneEvent {
+  /**
+   * XZ-plane axis-aligned bounds of the scene's geometry, computed from the
+   * scene graph (see `@pascal-app/editor`'s `computeSceneBoundsXZ`). The
+   * viewer's camera-controls listener frames the camera onto this box.
+   * Omitted values fall back to the camera's default pose.
+   */
+  bounds?: {
+    min: [number, number]
+    max: [number, number]
+    center: [number, number]
+    size: [number, number]
+  }
+}
+
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:focus': CameraControlEvent
@@ -109,6 +124,7 @@ type CameraControlEvents = {
   'camera-controls:top-view': undefined
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
+  'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
 }
 
