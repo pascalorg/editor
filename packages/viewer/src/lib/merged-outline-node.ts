@@ -166,6 +166,14 @@ export class MergedOutlineNode extends TempNode {
   private readonly _cacheA = new Set<Object3D>()
   private readonly _cacheB = new Set<Object3D>()
 
+  // Tracks whether either group rendered last frame. We use this to decide
+  // when it's safe to skip renderer state manipulation entirely — touching
+  // the renderer (resetRendererAndSceneState + setRenderTarget + clearColor)
+  // corrupts the FBO state on the WebGL2 backend (iOS Chrome fallback) and
+  // the subsequent scene render comes out blank.
+  private _wroteGroupALastFrame = false
+  private _wroteGroupBLastFrame = false
+
   private readonly _textureNodeA: any
   private readonly _textureNodeB: any
 
@@ -294,6 +302,17 @@ export class MergedOutlineNode extends TempNode {
   updateBefore(frame: any) {
     const hasPrimary = this.primaryObjects.length > 0
     const hasSecondary = this.secondaryObjects.length > 0
+    const hasAny = hasPrimary || hasSecondary
+
+    // Fast-path: nothing to render and nothing was rendered last frame either,
+    // so there are no stale composites to clear. Touch nothing — on the WebGL2
+    // backend (iOS Chrome fallback) even an empty reset/setRenderTarget cycle
+    // corrupts the framebuffer state and the next scene render goes blank.
+    const needsCleanupA = !hasPrimary && this._wroteGroupALastFrame
+    const needsCleanupB = !hasSecondary && this._wroteGroupBLastFrame
+    if (!(hasAny || needsCleanupA || needsCleanupB)) {
+      return
+    }
 
     const { renderer } = frame
     const { camera, scene } = this
@@ -303,24 +322,27 @@ export class MergedOutlineNode extends TempNode {
     const size = renderer.getDrawingBufferSize(_size)
     this.setSize(size.width, size.height)
 
-    // Clear composites for inactive groups so stale outlines don't persist on GPU.
-    // Must happen inside resetRendererAndSceneState to avoid MSAA state corruption.
-    if (!hasPrimary) {
+    // Clear composites for groups that just transitioned from "has content"
+    // to "empty" — without this, the previous outline lingers on the GPU.
+    if (needsCleanupA) {
       renderer.setRenderTarget(this._groupA.composite)
       renderer.clearColor()
+      this._wroteGroupALastFrame = false
     }
-    if (!hasSecondary) {
+    if (needsCleanupB) {
       renderer.setRenderTarget(this._groupB.composite)
       renderer.clearColor()
+      this._wroteGroupBLastFrame = false
     }
 
-    const hasAny = hasPrimary || hasSecondary
     if (!hasAny) {
       RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
       return
     }
 
     renderer.setClearColor(0xff_ff_ff, 1)
+    this._wroteGroupALastFrame = hasPrimary
+    this._wroteGroupBLastFrame = hasSecondary
 
     if (hasPrimary) this._buildCache(this.primaryObjects, this._cacheA)
     if (hasSecondary) this._buildCache(this.secondaryObjects, this._cacheB)

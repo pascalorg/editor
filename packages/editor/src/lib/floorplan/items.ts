@@ -148,12 +148,17 @@ export function buildFloorplanItemEntry(
   }
 
   const dimensionPolygon = getItemDimensionPolygon(item, transform)
+  const [width, , depth] = getScaledDimensions(item)
 
   return {
     dimensionPolygon,
     item,
     polygon: realMeshPolygon,
     usesRealMesh: realMeshPolygon !== null,
+    center: transform.position,
+    rotation: transform.rotation,
+    width,
+    depth,
   }
 }
 
@@ -389,7 +394,10 @@ function getConvexHull(points: Point[]) {
 
   const lower: Point[] = []
   for (const point of uniquePoints) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, point) <= 0) {
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2]!, lower[lower.length - 1]!, point) <= 0
+    ) {
       lower.pop()
     }
     lower.push(point)
@@ -398,7 +406,10 @@ function getConvexHull(points: Point[]) {
   const upper: Point[] = []
   for (let index = uniquePoints.length - 1; index >= 0; index -= 1) {
     const point = uniquePoints[index]!
-    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, point) <= 0) {
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2]!, upper[upper.length - 1]!, point) <= 0
+    ) {
       upper.pop()
     }
     upper.push(point)

@@ -80,6 +80,9 @@ const assetSchema = z.object({
   category: z.string(),
   name: z.string(),
   thumbnail: z.string(),
+  // Optional top-down 2D image shown inside the item's footprint on the
+  // floor plan. When present, replaces the default diagonal-cross marker.
+  floorPlanUrl: z.string().optional(),
   src: AssetUrl,
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),

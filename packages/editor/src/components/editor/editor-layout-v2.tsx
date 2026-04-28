@@ -1,9 +1,12 @@
 'use client'
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import { useIsMobile } from '../../hooks/use-mobile'
 import useEditor from '../../store/use-editor'
+
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { type SidebarTab, TabBar } from '../ui/sidebar/tab-bar'
+import { EditorLayoutMobile } from './editor-layout-mobile'
 
 const SIDEBAR_MIN_WIDTH = 300
 const SIDEBAR_MAX_WIDTH = 800
@@ -202,6 +205,23 @@ export function EditorLayoutV2({
   viewerContent,
   overlays,
 }: EditorLayoutV2Props) {
+  const isMobile = useIsMobile()
+
+  if (isMobile) {
+    return (
+      <EditorLayoutMobile
+        navbarSlot={navbarSlot}
+        overlays={overlays}
+        renderTabContent={renderTabContent}
+        sidebarOverlay={sidebarOverlay}
+        sidebarTabs={sidebarTabs}
+        viewerContent={viewerContent}
+        viewerToolbarLeft={viewerToolbarLeft}
+        viewerToolbarRight={viewerToolbarRight}
+      />
+    )
+  }
+
   return (
     <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}

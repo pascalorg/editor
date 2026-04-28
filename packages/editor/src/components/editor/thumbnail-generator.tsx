@@ -265,18 +265,49 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           )) as Uint8Array
 
           const actualBytesPerRow = width * 4
+          const tightTotal = actualBytesPerRow * height
           const paddedBytesPerRow = Math.ceil(actualBytesPerRow / 256) * 256
+          // Two readback shapes to handle:
+          // - WebGPU (`copyTextureToBuffer`): top-down + 256-byte row padding
+          //   when width*4 isn't already a multiple of 256.
+          // - WebGL2 fallback (iOS Chrome, etc.): tightly-packed but bottom-up
+          //   (OpenGL framebuffer convention).
+          // `isWebGPURenderer` lies — it stays true even when the renderer
+          // falls back to the WebGL backend. Inspect the actual backend
+          // instead (presence of a GPU device, or backend constructor name).
+          const backend = (renderer as any).backend
+          const isWebGPU =
+            !!backend?.device ||
+            backend?.isWebGPUBackend === true ||
+            backend?.constructor?.name === 'WebGPUBackend'
           let tightPixels: Uint8ClampedArray
-          if (paddedBytesPerRow === actualBytesPerRow) {
-            tightPixels = new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength)
+          if (isWebGPU) {
+            // WebGPU: depad rows if needed; orientation is already top-down.
+            if (paddedBytesPerRow === actualBytesPerRow) {
+              tightPixels = new Uint8ClampedArray(
+                pixels.buffer,
+                pixels.byteOffset,
+                Math.min(pixels.byteLength, tightTotal),
+              )
+            } else {
+              tightPixels = new Uint8ClampedArray(tightTotal)
+              for (let row = 0; row < height; row++) {
+                tightPixels.set(
+                  pixels.subarray(
+                    row * paddedBytesPerRow,
+                    row * paddedBytesPerRow + actualBytesPerRow,
+                  ),
+                  row * actualBytesPerRow,
+                )
+              }
+            }
           } else {
-            tightPixels = new Uint8ClampedArray(width * height * 4)
+            // WebGL2: tight buffer in bottom-up order — flip rows.
+            tightPixels = new Uint8ClampedArray(tightTotal)
             for (let row = 0; row < height; row++) {
+              const srcStart = (height - 1 - row) * actualBytesPerRow
               tightPixels.set(
-                pixels.subarray(
-                  row * paddedBytesPerRow,
-                  row * paddedBytesPerRow + actualBytesPerRow,
-                ),
+                pixels.subarray(srcStart, srcStart + actualBytesPerRow),
                 row * actualBytesPerRow,
               )
             }

@@ -2,18 +2,18 @@ import * as React from 'react'
 
 const MOBILE_BREAKPOINT = 768
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+const subscribe = (callback: () => void): (() => void) => {
+  const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+  mql.addEventListener('change', callback)
+  return () => mql.removeEventListener('change', callback)
+}
 
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener('change', onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener('change', onChange)
-  }, [])
+const getClientSnapshot = (): boolean => window.innerWidth < MOBILE_BREAKPOINT
 
-  return !!isMobile
+// Server can't know the viewport — assume desktop. React's useSyncExternalStore
+// reconciles the SSR / client snapshots without a hydration mismatch warning.
+const getServerSnapshot = (): boolean => false
+
+export function useIsMobile(): boolean {
+  return React.useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot)
 }

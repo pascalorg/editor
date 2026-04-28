@@ -118,6 +118,49 @@ export const CustomCameraControls = () => {
     }
   }, [cameraMode, isPreviewMode])
 
+  // Touch gestures (mobile / trackpad).
+  // - One finger drag    → rotate by default (much easier on a phone), but
+  //                        falls back to NONE while the user is actively
+  //                        placing/moving something OR in box-select mode,
+  //                        so the editor's pointer handlers (place tool,
+  //                        drag-to-move endpoint, marquee selection drag)
+  //                        keep priority over the camera.
+  //                        In preview mode it's TOUCH_TRUCK (pan), matching
+  //                        preview's left = SCREEN_PAN.
+  // - Two finger pinch   → zoom + pan together (TOUCH_DOLLY_TRUCK for
+  //                        perspective, TOUCH_ZOOM_TRUCK for orthographic).
+  // - Three finger drag  → rotate, so the camera is always orbitable even
+  //                        when one-finger is suppressed by an active
+  //                        editor action.
+  const tool = useEditor((s) => s.tool)
+  const mode = useEditor((s) => s.mode)
+  const selectionTool = useEditor((s) => s.floorplanSelectionTool)
+  const movingNode = useEditor((s) => s.movingNode)
+  const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
+  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
+  const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
+  const isInteracting = Boolean(
+    tool || movingNode || movingWallEndpoint || movingFenceEndpoint || isBoxSelectActive,
+  )
+  const touches = useMemo(() => {
+    const twoFingerAction =
+      cameraMode === 'orthographic'
+        ? CameraControlsImpl.ACTION.TOUCH_ZOOM_TRUCK
+        : CameraControlsImpl.ACTION.TOUCH_DOLLY_TRUCK
+
+    const oneFingerAction = isPreviewMode
+      ? CameraControlsImpl.ACTION.TOUCH_TRUCK
+      : isInteracting
+        ? CameraControlsImpl.ACTION.NONE
+        : CameraControlsImpl.ACTION.TOUCH_ROTATE
+
+    return {
+      one: oneFingerAction,
+      two: twoFingerAction,
+      three: CameraControlsImpl.ACTION.TOUCH_ROTATE,
+    }
+  }, [cameraMode, isPreviewMode, isInteracting])
+
   useEffect(() => {
     const keyState = {
       shiftRight: false,
@@ -407,6 +450,7 @@ export const CustomCameraControls = () => {
       onTransitionStart={onTransitionStart}
       ref={controls}
       restThreshold={0.01}
+      touches={touches}
     />
   )
 }

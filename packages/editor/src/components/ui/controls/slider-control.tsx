@@ -21,6 +21,17 @@ function stepPrecision(s: number): number {
   return Math.max(0, Math.ceil(-Math.log10(s)))
 }
 
+function getStepMultiplier(modifiers: {
+  shiftKey?: boolean
+  metaKey?: boolean
+  ctrlKey?: boolean
+  altKey?: boolean
+}): number {
+  if (modifiers.shiftKey) return 10
+  if (modifiers.metaKey || modifiers.ctrlKey || modifiers.altKey) return 0.1
+  return 1
+}
+
 function getAdjustedStep(
   baseStep: number,
   modifiers: {
@@ -30,9 +41,7 @@ function getAdjustedStep(
     altKey?: boolean
   },
 ): number {
-  if (modifiers.shiftKey) return baseStep * 10
-  if (modifiers.metaKey || modifiers.ctrlKey || modifiers.altKey) return baseStep * 0.1
-  return baseStep
+  return baseStep * getStepMultiplier(modifiers)
 }
 
 export function SliderControl({
@@ -51,7 +60,17 @@ export function SliderControl({
   const [isHovered, setIsHovered] = useState(false)
   const [inputValue, setInputValue] = useState(value.toFixed(precision))
 
-  const dragRef = useRef<{ startX: number; startValue: number } | null>(null)
+  const dragRef = useRef<{
+    // Original value at drag start — preserved across modifier re-anchors so
+    // undo/redo rolls back to the pre-drag state, not to a mid-drag anchor.
+    originValue: number
+    // Anchor pointer position and value — updated whenever modifier keys
+    // change so the delta calculation continues smoothly from the current
+    // position at the new step size.
+    anchorX: number
+    anchorValue: number
+    stepMultiplier: number
+  } | null>(null)
   const labelRef = useRef<HTMLDivElement>(null)
   const valueRef = useRef(value)
   valueRef.current = value
@@ -105,7 +124,12 @@ export function SliderControl({
       if (isEditing) return
       e.preventDefault()
       e.currentTarget.setPointerCapture(e.pointerId)
-      dragRef.current = { startX: e.clientX, startValue: valueRef.current }
+      dragRef.current = {
+        originValue: valueRef.current,
+        anchorX: e.clientX,
+        anchorValue: valueRef.current,
+        stepMultiplier: getStepMultiplier(e),
+      }
       setIsDragging(true)
       useScene.temporal.getState().pause()
     },
@@ -115,12 +139,23 @@ export function SliderControl({
   const handleLabelPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragRef.current) return
-      const { startX, startValue } = dragRef.current
-      const dx = e.clientX - startX
-      const s = getAdjustedStep(step, e)
+      const multiplier = getStepMultiplier(e)
+      // If modifier keys changed mid-drag, re-anchor from the current pointer
+      // position and value — otherwise the accumulated dx would be applied
+      // with a new step size and jump the value (e.g. pressing Cmd while
+      // already far from the starting point would snap back toward it).
+      if (multiplier !== dragRef.current.stepMultiplier) {
+        dragRef.current.anchorX = e.clientX
+        dragRef.current.anchorValue = valueRef.current
+        dragRef.current.stepMultiplier = multiplier
+        return
+      }
+      const { anchorX, anchorValue } = dragRef.current
+      const dx = e.clientX - anchorX
+      const s = step * multiplier
       // 4 px per step at default sensitivity
       const newValue = clamp(
-        Number.parseFloat((startValue + (dx / 4) * s).toFixed(stepPrecision(s))),
+        Number.parseFloat((anchorValue + (dx / 4) * s).toFixed(stepPrecision(s))),
       )
       onChange(newValue)
     },
@@ -130,14 +165,14 @@ export function SliderControl({
   const handleLabelPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragRef.current) return
-      const { startValue } = dragRef.current
+      const { originValue } = dragRef.current
       const finalVal = valueRef.current
       dragRef.current = null
       setIsDragging(false)
       e.currentTarget.releasePointerCapture(e.pointerId)
 
-      if (startValue !== finalVal) {
-        onChange(startValue)
+      if (originValue !== finalVal) {
+        onChange(originValue)
         useScene.temporal.getState().resume()
         onChange(finalVal)
       } else {
