@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { DashboardSidebar } from './_components/DashboardSidebar'
+import { WorkspaceSetupModal } from './_components/WorkspaceSetupModal'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -19,19 +20,25 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     orderBy: { createdAt: 'asc' },
   })
 
-  if (memberships.length === 0) redirect('/onboarding')
-
+  const hasOrg = memberships.length > 0
   const orgs = memberships.map((m) => ({ ...m.organization, role: m.role }))
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex">
-      <DashboardSidebar
-        orgs={orgs}
-        user={{ name: session.user.name ?? null, email: session.user.email ?? null, image: session.user.image ?? null }}
-      />
-      <main className="flex-1 ml-64 overflow-y-auto min-h-screen">
+      {hasOrg && (
+        <DashboardSidebar
+          orgs={orgs}
+          user={{
+            name: session.user.name ?? null,
+            email: session.user.email ?? null,
+            image: session.user.image ?? null,
+          }}
+        />
+      )}
+      <main className={`flex-1 ${hasOrg ? 'ml-64' : ''} overflow-y-auto min-h-screen`}>
         {children}
       </main>
+      {!hasOrg && <WorkspaceSetupModal />}
     </div>
   )
 }

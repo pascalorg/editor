@@ -23,6 +23,39 @@ async function uniqueSlug(base: string): Promise<string> {
   return slug
 }
 
+export async function createWorkspace(
+  orgName: string,
+  _useCase?: string,
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return { success: false, error: 'Not authenticated' }
+
+  const userId = (session.user as { id: string }).id
+  const name = orgName.trim()
+
+  if (name.length < 2) return { success: false, error: 'Name must be at least 2 characters.' }
+
+  const existing = await prisma.organizationMember.findFirst({ where: { userId } })
+  if (existing) return { success: true }
+
+  const slug = await uniqueSlug(toSlug(name))
+
+  try {
+    await prisma.organization.create({
+      data: {
+        name,
+        slug,
+        status: 'APPROVED',
+        members: { create: { userId, role: 'OWNER' } },
+        teams: { create: { name: 'General' } },
+      },
+    })
+    return { success: true }
+  } catch {
+    return { success: false, error: 'Could not create workspace. Try again.' }
+  }
+}
+
 export async function provisionWorkspace(formData: FormData) {
   const session = await getServerSession(authOptions)
   if (!session?.user) redirect('/login')
