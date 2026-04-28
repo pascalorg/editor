@@ -37,7 +37,6 @@ const DEPRECATED_DEMO_RESOURCE_IDS = new Set([
   'light.pascal_dining_single',
   'light.pascal_dining_group',
   'fan.pascal_master_bedroom',
-  'script.pascal_living_room_demo',
 ])
 const PROJECT_ID = 'local-editor'
 
