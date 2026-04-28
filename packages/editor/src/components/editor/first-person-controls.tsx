@@ -1,10 +1,8 @@
 'use client'
 
-import { sceneRegistry } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
-import { Box3, Euler, Vector3 } from 'three'
+import { Euler, Vector3 } from 'three'
 import useEditor from '../../store/use-editor'
 
 // Average human eye height in meters
@@ -25,120 +23,50 @@ const _forward = new Vector3()
 const _right = new Vector3()
 const _moveVector = new Vector3()
 const _euler = new Euler(0, 0, 0, 'YXZ')
-const _initialDirection = new Vector3()
-const _levelBox = new Box3()
-const _levelCenter = new Vector3()
 
 export const FirstPersonControls = () => {
   const { camera, gl } = useThree()
-  const currentLevelId = useViewer((s) => s.selection.levelId)
   const keysRef = useRef<Set<string>>(new Set())
   const yawRef = useRef(0)
   const pitchRef = useRef(0)
   const isLockedRef = useRef(false)
-  const isFallbackLookActiveRef = useRef(false)
   const initializedRef = useRef(false)
 
-  // Initialize camera from the current view, projected onto the active level plane.
+  // Initialize camera for first-person view: start at center of scene, on the ground
   useEffect(() => {
     if (initializedRef.current) return
     initializedRef.current = true
 
-    const levelMesh = currentLevelId ? sceneRegistry.nodes.get(currentLevelId) : null
-    const floorY = levelMesh ? levelMesh.position.y : 0
-    let spawnX = camera.position.x
-    let spawnZ = camera.position.z
-
-    camera.getWorldDirection(_initialDirection)
-
-    if (_initialDirection.y < -0.001) {
-      const distanceToFloor = (floorY - camera.position.y) / _initialDirection.y
-      if (Number.isFinite(distanceToFloor) && distanceToFloor > 0) {
-        spawnX = camera.position.x + _initialDirection.x * distanceToFloor
-        spawnZ = camera.position.z + _initialDirection.z * distanceToFloor
-      }
-    } else if (levelMesh) {
-      _levelBox.setFromObject(levelMesh)
-      if (!_levelBox.isEmpty()) {
-        _levelBox.getCenter(_levelCenter)
-        spawnX = _levelCenter.x
-        spawnZ = _levelCenter.z
-      }
-    }
-
-    camera.position.set(spawnX, floorY + EYE_HEIGHT, spawnZ)
-    const horizontalLength = Math.hypot(_initialDirection.x, _initialDirection.z)
-    yawRef.current =
-      horizontalLength > 0.0001 ? Math.atan2(-_initialDirection.x, -_initialDirection.z) : 0
+    // Place camera at the origin (center of grid) at eye height, looking along +X
+    camera.position.set(0, EYE_HEIGHT, 0)
+    yawRef.current = 0
     pitchRef.current = 0
-  }, [camera, currentLevelId])
+  }, [camera])
 
   // Pointer lock and event handlers
   useEffect(() => {
     const canvas = gl.domElement
 
-    const applyLookDelta = (movementX: number, movementY: number) => {
-      yawRef.current -= movementX * MOUSE_SENSITIVITY
-      pitchRef.current -= movementY * MOUSE_SENSITIVITY
-      // Clamp pitch to prevent flipping (almost straight up/down)
-      pitchRef.current = Math.max(
-        -Math.PI / 2 + 0.05,
-        Math.min(Math.PI / 2 - 0.05, pitchRef.current),
-      )
-    }
-
-    const startFallbackLook = (pointerId: number) => {
-      isFallbackLookActiveRef.current = true
-      try {
-        canvas.setPointerCapture(pointerId)
-      } catch {
-        // Pointer capture is best-effort; document pointermove still handles drag-look.
-      }
-    }
-
-    const requestLock = (e: PointerEvent) => {
-      if (isLockedRef.current) return
-
-      try {
-        const lockRequest = canvas.requestPointerLock()
-        if (lockRequest && typeof lockRequest.catch === 'function') {
-          lockRequest.catch(() => startFallbackLook(e.pointerId))
-        }
-      } catch {
-        startFallbackLook(e.pointerId)
+    const requestLock = () => {
+      if (!isLockedRef.current) {
+        canvas.requestPointerLock()
       }
     }
 
     const handlePointerLockChange = () => {
       isLockedRef.current = document.pointerLockElement === canvas
-      if (isLockedRef.current) {
-        isFallbackLookActiveRef.current = false
-      }
     }
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isLockedRef.current) return
-      applyLookDelta(e.movementX, e.movementY)
-    }
 
-    const handlePointerDown = (e: PointerEvent) => {
-      if (e.button !== 0) return
-      e.preventDefault()
-      requestLock(e)
-    }
-
-    const handlePointerMove = (e: PointerEvent) => {
-      if (isLockedRef.current || !isFallbackLookActiveRef.current) return
-      applyLookDelta(e.movementX, e.movementY)
-    }
-
-    const stopFallbackLook = (e: PointerEvent) => {
-      isFallbackLookActiveRef.current = false
-      try {
-        canvas.releasePointerCapture(e.pointerId)
-      } catch {
-        // Pointer capture may not have been acquired.
-      }
+      yawRef.current -= e.movementX * MOUSE_SENSITIVITY
+      pitchRef.current -= e.movementY * MOUSE_SENSITIVITY
+      // Clamp pitch to prevent flipping (almost straight up/down)
+      pitchRef.current = Math.max(
+        -Math.PI / 2 + 0.05,
+        Math.min(Math.PI / 2 - 0.05, pitchRef.current),
+      )
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -180,30 +108,23 @@ export const FirstPersonControls = () => {
       keysRef.current.delete(e.code)
     }
 
-    canvas.addEventListener('pointerdown', handlePointerDown)
+    canvas.addEventListener('click', requestLock)
     document.addEventListener('pointerlockchange', handlePointerLockChange)
     document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('pointermove', handlePointerMove)
-    document.addEventListener('pointerup', stopFallbackLook)
-    document.addEventListener('pointercancel', stopFallbackLook)
     // Use capture phase so we intercept movement keys before the global keyboard handler
     document.addEventListener('keydown', handleKeyDown, true)
     document.addEventListener('keyup', handleKeyUp)
 
     return () => {
-      canvas.removeEventListener('pointerdown', handlePointerDown)
+      canvas.removeEventListener('click', requestLock)
       document.removeEventListener('pointerlockchange', handlePointerLockChange)
       document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('pointermove', handlePointerMove)
-      document.removeEventListener('pointerup', stopFallbackLook)
-      document.removeEventListener('pointercancel', stopFallbackLook)
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('keyup', handleKeyUp)
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock()
       }
       keysRef.current.clear()
-      isFallbackLookActiveRef.current = false
     }
   }, [gl])
 
@@ -300,7 +221,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
           <div className="h-5 w-px bg-border/30" />
           <ControlHint label="Sprint" keys={['Shift']} />
           <div className="h-5 w-px bg-border/30" />
-          <span className="text-muted-foreground/60 text-xs">Click or drag to look around</span>
+          <span className="text-muted-foreground/60 text-xs">Click to look around</span>
         </div>
       </div>
     </>

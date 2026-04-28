@@ -600,7 +600,8 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
         <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
       )}
       {!(isLoading || isVersionPreviewMode) && !isFirstPersonMode && <ToolManager />}
-      {isFirstPersonMode ? <FirstPersonControls /> : <CustomCameraControls />}
+      {isFirstPersonMode && <FirstPersonControls />}
+      <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
