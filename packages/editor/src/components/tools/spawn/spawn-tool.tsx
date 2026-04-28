@@ -20,7 +20,7 @@ const SPAWN_ICON = (
   // eslint-disable-next-line @next/next/no-img-element
   <img
     alt="Spawn Point"
-    src="/icons/spawn-point.svg"
+    src="/icons/site.png"
     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
   />
 )

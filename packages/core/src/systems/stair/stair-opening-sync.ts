@@ -9,14 +9,6 @@ import type {
 } from '../../schema'
 
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type {
-  AnyNode,
-  AnyNodeId,
-  CeilingNode,
-  SlabNode,
-  StairNode,
-  StairSegmentNode,
-} from '../../schema'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
 type Point2D = [number, number]
