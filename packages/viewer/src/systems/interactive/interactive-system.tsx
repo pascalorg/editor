@@ -603,35 +603,6 @@ const writeSceneSnapshotToLocalStorage = () => {
   )
 }
 
-const traceRoomGrouping = (event: string, payload: Record<string, unknown>) => {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const host = window.location.hostname
-  if (!(host === 'localhost' || host === '127.0.0.1')) {
-    return
-  }
-
-  try {
-    const body = JSON.stringify({
-      event,
-      href: window.location.href,
-      payload,
-    })
-    const blob = new Blob([body], { type: 'application/json' })
-    if (navigator.sendBeacon?.('/api/debug/room-groups', blob)) {
-      return
-    }
-    fetch('/api/debug/room-groups', {
-      body,
-      headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
-      method: 'POST',
-    }).catch(() => {})
-  } catch {}
-}
-
 const isQuickEditTap = (
   startedAt: number,
   startX: number,
@@ -812,16 +783,6 @@ export const InteractiveSystem = () => {
             localStoredGroups,
             defaultGroups,
           )
-          traceRoomGrouping('overlay-select-groups', {
-            collectionId: collection.id,
-            controlIds: roomControls.map((control) => control.id),
-            defaultGroups,
-            hasBinding: Boolean(binding),
-            presentationGroups,
-            selectedGroups: storedGroups,
-            storedGroups: localStoredGroups,
-          })
-
           return {
             controlGroups: buildRoomControlGroups(roomControls, storedGroups),
             id: collection.id,
@@ -1096,14 +1057,6 @@ export const InteractiveSystem = () => {
       })
 
       const bindingNode = homeAssistantBindings[collectionId]
-      traceRoomGrouping('overlay-apply-grouping', {
-        collectionId,
-        hasBinding: Boolean(bindingNode),
-        nextGroups: normalizedGroups,
-        previousPresentationGroups: bindingNode?.presentation?.rtsGroups ?? null,
-        resourceIds: bindingNode?.resources.map((resource) => resource.id) ?? [],
-        storedAfter: readStoredRoomGroups()[collectionId] ?? null,
-      })
       if (!bindingNode) {
         return
       }
@@ -1774,11 +1727,6 @@ const RoomPanel = ({
     const normalizedGroups = nextGroups.filter((group) => group.length > 0)
     lastAppliedGroupingRef.current = normalizedGroups
     writeStoredRoomGroupsForRoom(roomId, normalizedGroups)
-    traceRoomGrouping('room-panel-apply-grouping', {
-      nextGroups: normalizedGroups,
-      roomId,
-      storedAfter: readStoredRoomGroups()[roomId] ?? null,
-    })
     onApplyGrouping(normalizedGroups)
   }, [onApplyGrouping, roomId])
 
