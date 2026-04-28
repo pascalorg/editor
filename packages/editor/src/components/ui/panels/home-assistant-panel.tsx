@@ -54,6 +54,19 @@ import {
   isHiddenHomeAssistantGroupResourceId,
 } from '../../../lib/home-assistant-collections'
 import {
+  cloneSmartHomeResourceBinding as cloneResourceBinding,
+  getLegacySmartHomeRoomControlTileId as getLegacyRoomControlTileId,
+  getSmartHomeBindingControlResources as getBindingControlResources,
+  getSmartHomeRoomControlTileId as getRoomControlTileId,
+  getSmartHomeRoomGroupMemberResourceId as getRoomGroupMemberResourceId,
+  hasSmartHomeGroupResource as bindingHasGroupResource,
+  isSmartHomeDeviceComponentResource as isBindingDeviceResource,
+  isSmartHomeGroupResource as isBindingGroupResource,
+  mergeSmartHomeIncomingResourcesWithLocalDevices as mergeIncomingBindingResourcesWithLocalDevices,
+  normalizeSmartHomeStringGroups,
+  smartHomeRoomGroupMemberReferencesResource as roomGroupMemberReferencesResource,
+} from '../../../lib/smart-home-composition'
+import {
   resolveHomeAssistantGroundPoint,
   resolveHomeAssistantPlacementPreview,
   type HomeAssistantGroundPoint,
@@ -77,7 +90,6 @@ type ScreenPoint = {
   y: number
 }
 
-const ROOM_GROUPS_STORAGE_KEY = 'pascal-room-control-groups:v1'
 const DELETED_GROUPS_STORAGE_KEY = 'pascal-home-assistant-deleted-groups:v1'
 const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
 
@@ -124,7 +136,7 @@ const DEVICE_GRID_MIN_COLUMNS = 3
 const DEVICE_GRID_MAX_COLUMNS = 5
 const DEVICE_SECTION_SCROLL_BOTTOM_SAFE_AREA = 28
 const SMART_HOME_PANEL_DEFAULT_WIDTH = 400
-const SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT = 240
+const SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT = 196
 const SMART_HOME_PANEL_EXPANDED_MIN_HEIGHT = 340
 const SMART_HOME_PANEL_DEFAULT_HEIGHT = SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT
 const SMART_HOME_PANEL_MIN_WIDTH = 320
@@ -290,29 +302,6 @@ function mergeHomeAssistantPresentation(
   return Object.keys(merged).length > 0 ? merged : undefined
 }
 
-function readStoredRoomGroups(collectionId: CollectionId) {
-  if (typeof window === 'undefined') {
-    return []
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(ROOM_GROUPS_STORAGE_KEY)
-    if (!rawValue) {
-      return []
-    }
-    const parsed = JSON.parse(rawValue)
-    const groups = parsed?.[collectionId]
-    return Array.isArray(groups)
-      ? groups
-          .filter(Array.isArray)
-          .map((group) => group.filter((entry): entry is string => typeof entry === 'string'))
-          .filter((group) => group.length > 0)
-      : []
-  } catch {
-    return []
-  }
-}
-
 function readDeletedGroupResourceIds() {
   if (typeof window === 'undefined') {
     return new Set<string>()
@@ -359,82 +348,17 @@ function clearDeletedGroupResource(resourceId: string) {
   writeDeletedGroupResourceIds(deletedResourceIds)
 }
 
-function removeStoredRoomGroups(collectionId: CollectionId) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(ROOM_GROUPS_STORAGE_KEY)
-    if (!rawValue) {
-      return
-    }
-    const parsed = JSON.parse(rawValue)
-    if (!(parsed && typeof parsed === 'object' && !Array.isArray(parsed))) {
-      return
-    }
-
-    const nextGroups = { ...(parsed as Record<string, unknown>) }
-    delete nextGroups[collectionId]
-    if (Object.keys(nextGroups).length === 0) {
-      window.localStorage.removeItem(ROOM_GROUPS_STORAGE_KEY)
-      return
-    }
-    window.localStorage.setItem(ROOM_GROUPS_STORAGE_KEY, JSON.stringify(nextGroups))
-  } catch {}
-}
-
-function removeResourceFromStoredRoomGroups(collectionId: CollectionId, resourceId: string) {
-  if (typeof window === 'undefined') {
-    return []
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(ROOM_GROUPS_STORAGE_KEY)
-    if (!rawValue) {
-      return []
-    }
-    const parsed = JSON.parse(rawValue)
-    if (!(parsed && typeof parsed === 'object' && !Array.isArray(parsed))) {
-      return []
-    }
-
-    const currentGroups = Array.isArray(parsed[collectionId]) ? parsed[collectionId] : []
-    const currentId = getRoomControlTileId(collectionId, resourceId)
-    const legacyId = getLegacyRoomControlTileId(collectionId, resourceId)
-    const removedIds = new Set([currentId, `${currentId}:0`, legacyId, `${legacyId}:0`])
-    const nextGroups = currentGroups
-      .filter(Array.isArray)
-      .map((group) =>
-        group.filter((entry): entry is string => typeof entry === 'string' && !removedIds.has(entry)),
-      )
-      .filter((group) => group.length > 0)
-
-    const nextStoredGroups = { ...(parsed as Record<string, unknown>) }
-    if (nextGroups.length > 0) {
-      nextStoredGroups[collectionId] = nextGroups
-    } else {
-      delete nextStoredGroups[collectionId]
-    }
-
-    if (Object.keys(nextStoredGroups).length === 0) {
-      window.localStorage.removeItem(ROOM_GROUPS_STORAGE_KEY)
-    } else {
-      window.localStorage.setItem(ROOM_GROUPS_STORAGE_KEY, JSON.stringify(nextStoredGroups))
-    }
-
-    return nextGroups
-  } catch {
-    return []
-  }
-}
-
 function getPresentationAfterResourceRemoval(
   presentation: HomeAssistantCollectionBinding['presentation'],
   collectionId: CollectionId,
   resourceId: string,
 ) {
-  const nextStoredGroups = removeResourceFromStoredRoomGroups(collectionId, resourceId)
+  const currentId = getRoomControlTileId(collectionId, resourceId)
+  const legacyId = getLegacyRoomControlTileId(collectionId, resourceId)
+  const removedIds = new Set([currentId, `${currentId}:0`, legacyId, `${legacyId}:0`])
+  const nextGroups = normalizeSmartHomeStringGroups(presentation?.rtsGroups)
+    .map((group) => group.filter((entry) => !removedIds.has(entry)))
+    .filter((group) => group.length > 0)
   const nextExcludedResourceIds = Array.from(
     new Set([...(presentation?.rtsExcludedResourceIds ?? []), resourceId]),
   )
@@ -443,10 +367,35 @@ function getPresentationAfterResourceRemoval(
     rtsExcludedResourceIds: nextExcludedResourceIds,
   }
 
-  if (nextStoredGroups.length > 0) {
-    nextPresentation.rtsGroups = nextStoredGroups
+  if (nextGroups.length > 0) {
+    nextPresentation.rtsGroups = nextGroups
   } else {
     delete nextPresentation.rtsGroups
+  }
+
+  return nextPresentation
+}
+
+function getPresentationAfterResourceInclusion(
+  presentation: HomeAssistantCollectionBinding['presentation'],
+  resourceId: string,
+) {
+  const currentExcludedResourceIds = presentation?.rtsExcludedResourceIds ?? []
+  const nextExcludedResourceIds = currentExcludedResourceIds.filter(
+    (entry) => entry !== resourceId,
+  )
+
+  if (nextExcludedResourceIds.length === currentExcludedResourceIds.length) {
+    return presentation
+  }
+
+  const nextPresentation: NonNullable<HomeAssistantCollectionBinding['presentation']> = {
+    ...(presentation ?? {}),
+    rtsExcludedResourceIds: nextExcludedResourceIds,
+  }
+
+  if (nextExcludedResourceIds.length === 0) {
+    delete nextPresentation.rtsExcludedResourceIds
   }
 
   return nextPresentation
@@ -493,141 +442,11 @@ function ensureHomeAssistantResourceCollection(
   return useScene.getState().collections[collectionId] ?? collection
 }
 
-function getRoomControlTileId(collectionId: CollectionId, resourceId: string) {
-  return `${collectionId}:home-assistant:${encodeURIComponent(resourceId)}`
-}
-
-function getLegacyRoomControlTileId(collectionId: CollectionId, resourceId: string) {
-  return `${collectionId}:home-assistant:${resourceId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
-}
-
-function getBindingControlResources(resources: HomeAssistantResourceBinding[]) {
-  const entityResources = resources.filter((resource) => resource.kind === 'entity')
-  const deviceResources = entityResources.filter(isBindingDeviceResource)
-  const controllableResources = entityResources.filter(
-    (resource) =>
-      resource.entityId?.trim() ||
-      (resource.memberEntityIds?.length ?? 0) > 0 ||
-      (resource.actions?.length ?? 0) > 0,
-  )
-
-  return deviceResources.length > 0
-    ? deviceResources
-    : controllableResources.length > 0
-      ? controllableResources
-      : entityResources.filter(isBindingGroupResource).slice(0, 1)
-}
-
-function normalizeStoredRoomGroupsForBinding(
-  collectionId: CollectionId,
-  resources: HomeAssistantResourceBinding[],
-  groups: string[][],
-) {
-  const controlResources = getBindingControlResources(resources)
-  const controlIds = controlResources.map((resource) => getRoomControlTileId(collectionId, resource.id))
-  const validControlIds = new Set(controlIds)
-  const aliases = new Map<string, string>()
-
-  controlResources.forEach((resource, index) => {
-    const currentId = getRoomControlTileId(collectionId, resource.id)
-    const legacyId = getLegacyRoomControlTileId(collectionId, resource.id)
-    for (const alias of [currentId, `${currentId}:${index}`, legacyId, `${legacyId}:${index}`]) {
-      aliases.set(alias, currentId)
-    }
-  })
-
-  const assignedIds = new Set<string>()
-  return groups
-    .map((group) => {
-      const memberIds: string[] = []
-      for (const rawMemberId of group) {
-        const memberId = aliases.get(rawMemberId) ?? rawMemberId
-        if (!validControlIds.has(memberId) || assignedIds.has(memberId)) {
-          continue
-        }
-        assignedIds.add(memberId)
-        memberIds.push(memberId)
-      }
-      return memberIds
-    })
-    .filter((group) => group.length > 0)
-}
-
-function isDefaultMergedRoomGroup(
-  groups: string[][],
-  collectionId: CollectionId,
-  resources: HomeAssistantResourceBinding[],
-) {
-  const controlIds = getBindingControlResources(resources).map((resource) =>
-    getRoomControlTileId(collectionId, resource.id),
-  )
-  return (
-    groups.length === 1 &&
-    groups[0]?.length === controlIds.length &&
-    controlIds.every((controlId) => groups[0]?.includes(controlId))
-  )
-}
-
-function roomGroupsCoverControls(
-  groups: string[][],
-  collectionId: CollectionId,
-  resources: HomeAssistantResourceBinding[],
-) {
-  const controlIds = getBindingControlResources(resources).map((resource) =>
-    getRoomControlTileId(collectionId, resource.id),
-  )
-  const groupedIds = new Set(groups.flat())
-  return controlIds.length > 0 && controlIds.every((controlId) => groupedIds.has(controlId))
-}
-
-function mergePresentationWithStoredRoomGroups(
-  presentation: HomeAssistantCollectionBinding['presentation'],
-  collectionId: CollectionId,
-  resources: HomeAssistantResourceBinding[],
-) {
-  const storedGroups = normalizeStoredRoomGroupsForBinding(
-    collectionId,
-    resources,
-    readStoredRoomGroups(collectionId),
-  )
-  if (
-    storedGroups.length === 0 ||
-    !roomGroupsCoverControls(storedGroups, collectionId, resources) ||
-    isDefaultMergedRoomGroup(storedGroups, collectionId, resources)
-  ) {
-    return presentation
-  }
-
-  return {
-    ...(presentation ?? {}),
-    rtsGroups: storedGroups,
-  }
-}
-
 function isGroupResource(resource: HomeAssistantImportedResource) {
   return (
     resource.kind === 'entity' &&
     (resource.isGroup === true || (resource.memberEntityIds?.length ?? 0) > 0)
   )
-}
-
-function bindingHasGroupResource(binding: HomeAssistantCollectionBinding) {
-  return binding.resources.some(
-    (resource) =>
-      resource.kind === 'entity' &&
-      (resource.isGroup === true || (resource.memberEntityIds?.length ?? 0) > 0),
-  )
-}
-
-function isBindingGroupResource(resource: HomeAssistantResourceBinding) {
-  return (
-    resource.kind === 'entity' &&
-    (resource.isGroup === true || (resource.memberEntityIds?.length ?? 0) > 0)
-  )
-}
-
-function isBindingDeviceResource(resource: HomeAssistantResourceBinding) {
-  return resource.kind === 'entity' && !isBindingGroupResource(resource)
 }
 
 function getBindingResourceEntityId(resource: HomeAssistantResourceBinding) {
@@ -645,8 +464,8 @@ function getEntityObjectId(entityId: string | null | undefined, fallbackId: stri
     .replace(/^_+|_+$/g, '')
 }
 
-function getRoomGroupStem(resource: HomeAssistantImportedResource) {
-  let stem = getEntityObjectId(resource.entityId, resource.id)
+function getRoomGroupStemFromIdentity(entityId: string | null | undefined, fallbackId: string) {
+  let stem = getEntityObjectId(entityId, fallbackId)
   const suffixPatterns = [
     /_all_lights_group$/,
     /_lights_all_group$/,
@@ -664,6 +483,14 @@ function getRoomGroupStem(resource: HomeAssistantImportedResource) {
   }
 
   return stem.length >= 4 ? stem : null
+}
+
+function getRoomGroupStem(resource: HomeAssistantImportedResource) {
+  return getRoomGroupStemFromIdentity(resource.entityId, resource.id)
+}
+
+function getBindingRoomGroupStem(resource: HomeAssistantResourceBinding) {
+  return getRoomGroupStemFromIdentity(resource.entityId, resource.id)
 }
 
 function bindingResourceMatchesGroup(
@@ -688,6 +515,41 @@ function bindingResourceMatchesGroup(
   return objectId === groupStem || objectId.startsWith(`${groupStem}_`)
 }
 
+function bindingResourceIsExplicitGroupMember(
+  resource: HomeAssistantResourceBinding,
+  memberEntityIds: Set<string>,
+) {
+  return memberEntityIds.has(resource.id) || memberEntityIds.has(getBindingResourceEntityId(resource))
+}
+
+function excludedResourceIdIsExplicitGroupMember(
+  binding: HomeAssistantCollectionBinding,
+  resourceId: string,
+  memberEntityIds: Set<string>,
+) {
+  if (memberEntityIds.has(resourceId)) {
+    return true
+  }
+
+  const resource = binding.resources.find((entry) => entry.id === resourceId)
+  return resource ? bindingResourceIsExplicitGroupMember(resource, memberEntityIds) : false
+}
+
+function bindingHasGroupResourceForDevice(
+  binding: HomeAssistantCollectionBinding,
+  resource: HomeAssistantResourceBinding,
+) {
+  return binding.resources.some(
+    (groupResource) =>
+      isBindingGroupResource(groupResource) &&
+      bindingResourceMatchesGroup(
+        resource,
+        new Set(groupResource.memberEntityIds ?? []),
+        getBindingRoomGroupStem(groupResource),
+      ),
+  )
+}
+
 function toResourceBinding(resource: HomeAssistantImportedResource): HomeAssistantResourceBinding {
   const memberEntityIds = resource.memberEntityIds ?? []
   const isGroup = resource.isGroup === true || memberEntityIds.length > 0
@@ -709,43 +571,61 @@ function toResourceBinding(resource: HomeAssistantImportedResource): HomeAssista
   }
 }
 
-function cloneResourceBinding(resource: HomeAssistantResourceBinding): HomeAssistantResourceBinding {
-  return {
-    ...resource,
-    actions: resource.actions.map((action) => ({
-      ...action,
-      fields: action.fields?.map((field) => ({ ...field })),
-    })),
-    capabilities: [...resource.capabilities],
-    ...(resource.memberEntityIds ? { memberEntityIds: [...resource.memberEntityIds] } : {}),
-  }
-}
-
-function mergeIncomingBindingResourcesWithLocalDevices(
-  incomingResources: HomeAssistantResourceBinding[],
-  existingResources: HomeAssistantResourceBinding[],
-  excludedResourceIds: readonly string[] = [],
-) {
-  const excludedIds = new Set(excludedResourceIds)
-  const resourcesById = new Map<string, HomeAssistantResourceBinding>()
-
-  for (const resource of incomingResources) {
-    resourcesById.set(resource.id, cloneResourceBinding(resource))
+function bindingHasUserManagedGroupComposition({
+  binding,
+  collectionId,
+  groupResourceId,
+  groupStem,
+  memberEntityIds,
+}: {
+  binding: HomeAssistantCollectionBinding | null | undefined
+  collectionId: CollectionId
+  groupResourceId: string
+  groupStem: string | null
+  memberEntityIds: Set<string>
+}) {
+  if (!binding) {
+    return false
   }
 
-  for (const resource of existingResources) {
-    if (
-      resourcesById.has(resource.id) ||
-      excludedIds.has(resource.id) ||
-      !isBindingDeviceResource(resource)
-    ) {
-      continue
+  const excludedResourceIds = binding.presentation?.rtsExcludedResourceIds ?? []
+  if (excludedResourceIds.length > 0 && binding.resources.some(isBindingDeviceResource)) {
+    const hasUserManagedExclusion = excludedResourceIds.some(
+      (resourceId) => !excludedResourceIdIsExplicitGroupMember(binding, resourceId, memberEntityIds),
+    )
+    if (hasUserManagedExclusion) {
+      return true
     }
-
-    resourcesById.set(resource.id, cloneResourceBinding(resource))
   }
 
-  return Array.from(resourcesById.values())
+  const groupedMemberIds = binding.presentation?.rtsGroups?.flat() ?? []
+  if (
+    groupedMemberIds.some((memberId) => {
+      if (roomGroupMemberReferencesResource(collectionId, memberId, groupResourceId)) {
+        return false
+      }
+
+      const resourceId = getRoomGroupMemberResourceId(collectionId, memberId)
+      if (!resourceId) {
+        return true
+      }
+
+      const resource = binding.resources.find((entry) => entry.id === resourceId)
+      return (
+        !resource ||
+        !isBindingDeviceResource(resource) ||
+        !bindingResourceMatchesGroup(resource, memberEntityIds, groupStem)
+      )
+    })
+  ) {
+    return true
+  }
+
+  return binding.resources.some(
+    (resource) =>
+      isBindingDeviceResource(resource) &&
+      !bindingResourceMatchesGroup(resource, memberEntityIds, groupStem),
+  )
 }
 
 function bindingsAreEqual(
@@ -879,10 +759,6 @@ function getResourceAccentClasses(resource: HomeAssistantImportedResource) {
 
 function isDeviceResource(resource: HomeAssistantImportedResource) {
   return resource.kind === 'entity' && !isGroupResource(resource)
-}
-
-function isActionResource(resource: HomeAssistantImportedResource) {
-  return resource.kind === 'scene' || resource.kind === 'script' || resource.kind === 'automation'
 }
 
 function getDeviceGroupColor(index: number) {
@@ -1292,7 +1168,7 @@ export function HomeAssistantPanel() {
   const [positioningPreview, setPositioningPreview] =
     useState<HomeAssistantPlacementPreview | null>(null)
   const [deviceSectionWidth, setDeviceSectionWidth] = useState(0)
-  const hasOpenImportSection = openSections.actions || openSections.devices || openSections.groups
+  const hasOpenImportSection = openSections.devices || openSections.groups
   const smartHomePanelMinHeight = hasOpenImportSection
     ? SMART_HOME_PANEL_EXPANDED_MIN_HEIGHT
     : SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT
@@ -1412,10 +1288,6 @@ export function HomeAssistantPanel() {
 
     return Array.from(resourcesById.values())
   }, [collections, homeAssistantBindings, imports])
-  const actionImports = useMemo(
-    () => imports.filter((resource) => isActionResource(resource)),
-    [imports],
-  )
   const groupColorById = useMemo(() => {
     const colorById = new Map<string, DeviceGroupColor>()
     const sortedGroups = [...groupImports].sort((left, right) =>
@@ -1627,7 +1499,6 @@ export function HomeAssistantPanel() {
 
     return () => window.cancelAnimationFrame(animationFrame)
   }, [
-    actionImports.length,
     activePanel?.kind,
     activePanelProviderId,
     deviceCategoryGroups.length,
@@ -1639,7 +1510,6 @@ export function HomeAssistantPanel() {
     openDeviceCategories.light,
     openDeviceCategories.media_player,
     openDeviceCategories.other,
-    openSections.actions,
     openSections.devices,
     openSections.groups,
   ])
@@ -1828,19 +1698,15 @@ export function HomeAssistantPanel() {
     }
 
     if (existingBindingNode) {
+      const excludedResourceIdsForMerge = nextNode.presentation
+        ? (nextNode.presentation.rtsExcludedResourceIds ?? [])
+        : (existingBindingNode.presentation?.rtsExcludedResourceIds ?? [])
       const mergedResources = mergeIncomingBindingResourcesWithLocalDevices(
         nextNode.resources,
         existingBindingNode.resources,
-        [
-          ...(existingBindingNode.presentation?.rtsExcludedResourceIds ?? []),
-          ...(nextNode.presentation?.rtsExcludedResourceIds ?? []),
-        ],
+        excludedResourceIdsForMerge,
       )
-      const nextPresentation = mergePresentationWithStoredRoomGroups(
-        nextNode.presentation,
-        nextNode.collectionId,
-        mergedResources,
-      )
+      const nextPresentation = nextNode.presentation
       const nextPrimaryResourceId =
         existingBindingNode.primaryResourceId &&
         mergedResources.some((resource) => resource.id === existingBindingNode.primaryResourceId)
@@ -1880,22 +1746,16 @@ export function HomeAssistantPanel() {
       return
     }
 
-    const nextPresentation = mergePresentationWithStoredRoomGroups(
-      nextNode.presentation,
-      nextNode.collectionId,
-      nextNode.resources,
-    )
-
     createNode({
       ...nextNode,
-      presentation: nextPresentation,
     })
   }
 
   const removeResourceFromOtherCollections = (
-    resourceId: string,
+    resource: HomeAssistantImportedResource,
     targetCollectionId: CollectionId,
   ) => {
+    const resourceBinding = toResourceBinding(resource)
     const state = useScene.getState()
     const currentBindings = getHomeAssistantBindingNodeMap(
       state.nodes as Record<AnyNodeId, AnyNode>,
@@ -1906,16 +1766,31 @@ export function HomeAssistantPanel() {
         continue
       }
 
-      if (!bindingNode.resources.some((entry) => entry.id === resourceId)) {
+      const binding = toCollectionBinding(bindingNode)
+      if (bindingHasGroupResourceForDevice(binding, resourceBinding)) {
+        const nextPresentation = getPresentationAfterResourceInclusion(
+          bindingNode.presentation,
+          resource.id,
+        )
+        if (nextPresentation !== bindingNode.presentation) {
+          updateNode(bindingNode.id, {
+            presentation: nextPresentation,
+          } as Partial<AnyNode>)
+          requestSceneImmediateSave()
+        }
+        continue
+      }
+
+      if (!bindingNode.resources.some((entry) => entry.id === resource.id)) {
         continue
       }
 
       const collection = state.collections[bindingNode.collectionId]
-      const nextResources = bindingNode.resources.filter((entry) => entry.id !== resourceId)
+      const nextResources = bindingNode.resources.filter((entry) => entry.id !== resource.id)
       const nextPresentation = getPresentationAfterResourceRemoval(
         bindingNode.presentation,
         bindingNode.collectionId,
-        resourceId,
+        resource.id,
       )
 
       if (!collection || nextResources.length === 0) {
@@ -1933,7 +1808,7 @@ export function HomeAssistantPanel() {
               ? 'all'
               : 'single',
         primaryResourceId:
-          bindingNode.primaryResourceId === resourceId
+          bindingNode.primaryResourceId === resource.id
             ? nextResources[0]?.id ?? null
             : bindingNode.primaryResourceId ?? nextResources[0]?.id ?? null,
         presentation: nextPresentation,
@@ -1960,7 +1835,7 @@ export function HomeAssistantPanel() {
       return
     }
 
-    removeResourceFromOtherCollections(resource.id, collection.id)
+    removeResourceFromOtherCollections(resource, collection.id)
 
     const currentBindings = getHomeAssistantBindingNodeMap(
       useScene.getState().nodes as Record<AnyNodeId, AnyNode>,
@@ -2045,7 +1920,6 @@ export function HomeAssistantPanel() {
     }
 
     const collection = state.collections[existingBindingNode.collectionId]
-    removeStoredRoomGroups(existingBindingNode.collectionId)
     deleteNode(existingBindingNode.id)
     requestSceneImmediateSave()
 
@@ -2251,7 +2125,6 @@ export function HomeAssistantPanel() {
         continue
       }
 
-      removeStoredRoomGroups(bindingNode.collectionId)
       deleteNode(bindingNode.id)
       if (useScene.getState().collections[bindingNode.collectionId]) {
         deleteCollection(bindingNode.collectionId)
@@ -2401,10 +2274,42 @@ export function HomeAssistantPanel() {
       const existingBinding = existingBindingNode
         ? toCollectionBinding(existingBindingNode)
         : null
+      const detachedResourceIds = new Set(existingBinding?.presentation?.rtsExcludedResourceIds ?? [])
       const groupBindingResource = toResourceBinding(groupResource)
-      const hasUserManagedComposition = Boolean(existingBinding)
-      const memberResources = hasUserManagedComposition ? [] : Array.from(boundMemberResources.values())
+      const hasUserManagedComposition = bindingHasUserManagedGroupComposition({
+        binding: existingBinding,
+        collectionId: collection.id,
+        groupResourceId: groupResource.id,
+        memberEntityIds,
+        groupStem,
+      })
+      const memberResources = hasUserManagedComposition
+        ? []
+        : Array.from(boundMemberResources.values()).filter(
+            (resource) => !detachedResourceIds.has(resource.id),
+          )
       const excludedResourceIds = new Set(existingBinding?.presentation?.rtsExcludedResourceIds ?? [])
+      if (!hasUserManagedComposition) {
+        for (const resource of boundMemberResources.values()) {
+          if (
+            bindingResourceIsExplicitGroupMember(resource, memberEntityIds) &&
+            !detachedResourceIds.has(resource.id)
+          ) {
+            excludedResourceIds.delete(resource.id)
+          }
+        }
+      }
+      const nextPresentation: NonNullable<HomeAssistantCollectionBinding['presentation']> = {
+        ...(existingBinding?.presentation ?? {}),
+        label: existingBinding?.presentation?.label ?? groupResource.label,
+      }
+      if (!hasUserManagedComposition) {
+        if (excludedResourceIds.size > 0) {
+          nextPresentation.rtsExcludedResourceIds = Array.from(excludedResourceIds)
+        } else {
+          delete nextPresentation.rtsExcludedResourceIds
+        }
+      }
       const existingResources = existingBinding?.resources ?? []
       const nextResourceMap = new Map<string, HomeAssistantResourceBinding>([
         [groupBindingResource.id, groupBindingResource],
@@ -2454,10 +2359,7 @@ export function HomeAssistantPanel() {
             ? 'all'
             : 'single',
         collectionId: collection.id,
-        presentation: {
-          ...(existingBinding?.presentation ?? {}),
-          label: existingBinding?.presentation?.label ?? groupResource.label,
-        },
+        presentation: nextPresentation,
         primaryResourceId,
         resources: nextResources,
       })
@@ -2467,6 +2369,7 @@ export function HomeAssistantPanel() {
       }
 
       upsertBindingNode(collection, nextBinding)
+      requestSceneImmediateSave()
     }
   }, [createCollection, imports, homeAssistantBindings])
 
@@ -2753,14 +2656,14 @@ export function HomeAssistantPanel() {
           'relative flex items-center gap-2 transition',
           sectionKey === 'devices'
             ? cn('h-8 rounded-lg px-2 text-zinc-950', deviceBindingSurfaceClassName)
-            : 'min-h-10 w-full rounded-xl bg-white/68 px-2.5 py-2.5 text-zinc-950 hover:bg-white',
+            : 'w-full rounded-lg bg-white/68 px-2 text-zinc-950 hover:bg-white',
           isPairing ? 'ring-2 ring-amber-300/70' : '',
         )}
         key={resource.id}
         style={
           sectionKey === 'devices'
             ? { height: DEVICE_GROUP_CHIP_HEIGHT, width: DEVICE_GROUP_CHIP_WIDTH }
-            : undefined
+            : { height: DEVICE_GROUP_CHIP_HEIGHT }
         }
       >
         {isRenaming ? (
@@ -3216,7 +3119,6 @@ export function HomeAssistantPanel() {
                 {([
                   { key: 'devices' as const, label: 'Devices', resources: deviceImports },
                   { key: 'groups' as const, label: 'Groups', resources: groupImports },
-                  { key: 'actions' as const, label: 'Actions', resources: actionImports },
                 ] as const).map((section) => {
                   const isOpen = openSections[section.key]
                   const SectionChevron = isOpen ? ChevronDown : ChevronRight
@@ -3298,8 +3200,8 @@ export function HomeAssistantPanel() {
                             section.key === 'devices'
                               ? 'flex flex-col gap-1.5'
                               : section.key === 'groups'
-                                ? 'grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5'
-                                : 'grid gap-1.5 grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]',
+                                ? 'grid content-start grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5'
+                                : 'grid content-start gap-1.5 grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]',
                           )}
                           data-smart-home-section-body
                           ref={section.key === 'devices' ? deviceSectionRef : undefined}

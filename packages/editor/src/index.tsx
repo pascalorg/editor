@@ -24,6 +24,16 @@ export {
   HIDDEN_HOME_ASSISTANT_GROUP_RESOURCE_IDS,
   isHiddenHomeAssistantGroupResourceId,
 } from './lib/home-assistant-collections'
+export {
+  getSmartHomeBindingControlIds,
+  getSmartHomeBindingControlResources,
+  getSmartHomeRoomControlTileId,
+  isDefaultSmartHomeRoomGroup,
+  normalizeSmartHomeRoomGroupsForBinding,
+  repairHomeAssistantBindingResourcesFromGroups,
+  smartHomeRoomGroupsCoverControlIds,
+  smartHomeRoomGroupsEqual,
+} from './lib/smart-home-composition'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
 export { default as useAudio } from './store/use-audio'

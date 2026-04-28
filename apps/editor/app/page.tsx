@@ -3,9 +3,15 @@
 import {
   CATALOG_ITEMS,
   Editor,
+  getSmartHomeBindingControlIds,
   isHiddenHomeAssistantGroupResourceId,
+  isDefaultSmartHomeRoomGroup,
+  normalizeSmartHomeRoomGroupsForBinding,
+  repairHomeAssistantBindingResourcesFromGroups,
   type SceneGraph,
   type SidebarTab,
+  smartHomeRoomGroupsCoverControlIds,
+  smartHomeRoomGroupsEqual,
   ViewerToolbarLeft,
   ViewerToolbarRight,
 } from '@pascal-app/editor'
@@ -25,7 +31,6 @@ import { useCallback } from 'react'
 
 const DEFAULT_LAYOUT_FILE = '/api/default-layout'
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
-const ROOM_GROUPS_STORAGE_KEY = 'pascal-room-control-groups:v1'
 const LEGACY_EXCLUDED_ASSET_IDS = new Set(['pascal-truck'])
 const DEPRECATED_DEMO_COLLECTION_IDS = new Set([
   'collection_demo1_dining_light',
@@ -77,48 +82,6 @@ function readStringGroups(value: unknown) {
     .filter((group) => group.length > 0)
 
   return groups.length > 0 ? groups : undefined
-}
-
-function readStoredRoomGroups(): Record<string, string[][]> {
-  if (typeof window === 'undefined') {
-    return {}
-  }
-
-  try {
-    const raw = window.localStorage.getItem(ROOM_GROUPS_STORAGE_KEY)
-    if (!raw) {
-      return {}
-    }
-    const parsed = JSON.parse(raw)
-    if (!isRecord(parsed)) {
-      return {}
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed).flatMap(([collectionId, groups]) => {
-        const normalizedGroups = readStringGroups(groups)
-        return normalizedGroups?.length ? [[collectionId, normalizedGroups]] : []
-      }),
-    )
-  } catch {
-    return {}
-  }
-}
-
-function writeStoredRoomGroups(groups: Record<string, string[][]>): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    const entries = Object.entries(groups).filter(([, value]) => value.length > 0)
-    if (entries.length === 0) {
-      window.localStorage.removeItem(ROOM_GROUPS_STORAGE_KEY)
-      return
-    }
-
-    window.localStorage.setItem(ROOM_GROUPS_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
-  } catch {}
 }
 
 function readScreenPosition(value: unknown) {
@@ -350,7 +313,6 @@ function stripDeprecatedDemoBindings(scene: SceneGraph): SceneGraph {
 function stripHiddenHomeAssistantGroupBindings(scene: SceneGraph): SceneGraph {
   let changed = false
   const removedCollectionIds = new Set<string>()
-  const nextStoredRoomGroups = readStoredRoomGroups()
 
   const nextNodes = Object.fromEntries(
     Object.entries(scene.nodes ?? {}).filter(([, rawNode]) => {
@@ -368,7 +330,6 @@ function stripHiddenHomeAssistantGroupBindings(scene: SceneGraph): SceneGraph {
         changed = true
         if (typeof rawNode.collectionId === 'string') {
           removedCollectionIds.add(rawNode.collectionId)
-          delete nextStoredRoomGroups[rawNode.collectionId]
         }
         return false
       }
@@ -392,8 +353,6 @@ function stripHiddenHomeAssistantGroupBindings(scene: SceneGraph): SceneGraph {
         }),
       )
     : undefined
-
-  writeStoredRoomGroups(nextStoredRoomGroups)
 
   return changed
     ? {
@@ -543,273 +502,7 @@ function extractLegacyHomeAssistantBindings(scene: LegacySceneGraph): SceneGraph
     : { collections: scene.collections, nodes: scene.nodes, rootNodeIds: scene.rootNodeIds }
 }
 
-function getRoomControlTileId(collectionId: string, resourceId: string) {
-  return `${collectionId}:home-assistant:${encodeURIComponent(resourceId)}`
-}
-
-function getLegacyRoomControlTileId(collectionId: string, resourceId: string) {
-  return `${collectionId}:home-assistant:${resourceId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
-}
-
-function cloneHomeAssistantResourceBinding(
-  resource: HomeAssistantResourceBinding,
-): HomeAssistantResourceBinding {
-  return {
-    ...resource,
-    actions: resource.actions.map((action) => ({
-      ...action,
-      fields: action.fields?.map((field) => ({ ...field })),
-    })),
-    capabilities: [...resource.capabilities],
-    ...(resource.memberEntityIds ? { memberEntityIds: [...resource.memberEntityIds] } : {}),
-  }
-}
-
-function isHomeAssistantGroupResource(resource: HomeAssistantResourceBinding | null | undefined) {
-  return Boolean(
-    resource?.kind === 'entity' &&
-      (resource.isGroup === true || (resource.memberEntityIds?.length ?? 0) > 0),
-  )
-}
-
-function resourceHasControllableTarget(resource: HomeAssistantResourceBinding | null | undefined) {
-  return Boolean(
-    resource?.kind === 'entity' &&
-      (resource.entityId?.trim() ||
-        (resource.memberEntityIds?.length ?? 0) > 0 ||
-        (resource.actions?.length ?? 0) > 0),
-  )
-}
-
-function isHomeAssistantControllableEntityResource(
-  resource: HomeAssistantResourceBinding | null | undefined,
-) {
-  return Boolean(resource?.kind === 'entity' && resourceHasControllableTarget(resource))
-}
-
-function isHomeAssistantDeviceComponentResource(
-  resource: HomeAssistantResourceBinding | null | undefined,
-): resource is HomeAssistantResourceBinding {
-  return Boolean(
-    resource?.kind === 'entity' &&
-      !isHomeAssistantGroupResource(resource) &&
-      resourceHasControllableTarget(resource),
-  )
-}
-
-function getBindingPillControlResources(resources: HomeAssistantResourceBinding[]) {
-  const entityResources = resources.filter((resource) => resource.kind === 'entity')
-  const deviceResources = entityResources.filter(isHomeAssistantDeviceComponentResource)
-  const controllableResources = entityResources.filter(isHomeAssistantControllableEntityResource)
-
-  return deviceResources.length > 0
-    ? deviceResources
-    : controllableResources.length > 0
-      ? controllableResources
-      : entityResources.filter(isHomeAssistantGroupResource).slice(0, 1)
-}
-
-function normalizeHomeAssistantRtsGroupsForBinding(
-  collectionId: string,
-  resources: HomeAssistantResourceBinding[],
-  rawGroups: unknown,
-) {
-  const controlResources = getBindingPillControlResources(resources)
-  const controlIds = controlResources.map((resource) => getRoomControlTileId(collectionId, resource.id))
-  const validControlIds = new Set(controlIds)
-  const aliasMap = new Map<string, string>()
-  const rawStringGroups = readStringGroups(rawGroups)
-
-  if (!rawStringGroups?.length) {
-    return []
-  }
-
-  controlResources.forEach((resource, index) => {
-    const currentTileId = getRoomControlTileId(collectionId, resource.id)
-    const legacyTileId = getLegacyRoomControlTileId(collectionId, resource.id)
-    for (const alias of [
-      currentTileId,
-      `${currentTileId}:${index}`,
-      legacyTileId,
-      `${legacyTileId}:${index}`,
-    ]) {
-      aliasMap.set(alias, currentTileId)
-    }
-  })
-
-  const assigned = new Set<string>()
-  const groups = rawStringGroups
-    .map((group) => {
-      const members: string[] = []
-      for (const rawMemberId of group) {
-        const memberId = aliasMap.get(rawMemberId) ?? rawMemberId
-        if (!validControlIds.has(memberId) || assigned.has(memberId)) {
-          continue
-        }
-        assigned.add(memberId)
-        members.push(memberId)
-      }
-      return members
-    })
-    .filter((group) => group.length > 0)
-
-  for (const controlId of controlIds) {
-    if (!assigned.has(controlId)) {
-      groups.push([controlId])
-    }
-  }
-
-  return groups
-}
-
-function groupsMatch(left: string[][], right: string[][]) {
-  return JSON.stringify(left) === JSON.stringify(right)
-}
-
-function isDefaultMergedGroup(groups: string[][], controlIds: string[]) {
-  return (
-    groups.length === 1 &&
-    groups[0]?.length === controlIds.length &&
-    controlIds.every((controlId) => groups[0]?.includes(controlId))
-  )
-}
-
-function groupsCoverControlIds(groups: string[][], controlIds: string[]) {
-  const groupedIds = new Set(groups.flat())
-  return controlIds.length > 0 && controlIds.every((controlId) => groupedIds.has(controlId))
-}
-
-function storedRoomGroupsMatch(
-  left: Record<string, string[][]>,
-  right: Record<string, string[][]>,
-) {
-  return JSON.stringify(left) === JSON.stringify(right)
-}
-
-function getReferencedResourceIdsFromRoomGroups(
-  collectionId: string,
-  rawGroups: unknown,
-  availableResources: HomeAssistantResourceBinding[],
-) {
-  const rawStringGroups = readStringGroups(rawGroups)
-  if (!rawStringGroups?.length) {
-    return new Set<string>()
-  }
-
-  const prefix = `${collectionId}:home-assistant:`
-  const resourceAliases = new Map<string, string>()
-  for (const resource of availableResources) {
-    const currentTileId = getRoomControlTileId(collectionId, resource.id)
-    const legacyTileId = getLegacyRoomControlTileId(collectionId, resource.id)
-    resourceAliases.set(currentTileId, resource.id)
-    resourceAliases.set(legacyTileId, resource.id)
-    resourceAliases.set(`${currentTileId}:0`, resource.id)
-    resourceAliases.set(`${legacyTileId}:0`, resource.id)
-  }
-
-  const referencedResourceIds = new Set<string>()
-  for (const rawMemberId of rawStringGroups.flat()) {
-    const aliasedResourceId = resourceAliases.get(rawMemberId)
-    if (aliasedResourceId) {
-      referencedResourceIds.add(aliasedResourceId)
-      continue
-    }
-
-    if (!rawMemberId.startsWith(prefix)) {
-      continue
-    }
-
-    const encodedResourceId = rawMemberId.slice(prefix.length).replace(/:\d+$/, '')
-    try {
-      referencedResourceIds.add(decodeURIComponent(encodedResourceId))
-    } catch {
-      referencedResourceIds.add(encodedResourceId)
-    }
-  }
-
-  return referencedResourceIds
-}
-
-function repairHomeAssistantBindingResourcesFromGroups(
-  bindingNode: ReturnType<typeof getHomeAssistantBindingNodes>[number],
-  allResourcesById: Map<string, HomeAssistantResourceBinding>,
-  rawGroups: unknown,
-) {
-  if (!bindingNode.resources.some(isHomeAssistantGroupResource)) {
-    return bindingNode
-  }
-
-  const collectionId = bindingNode.collectionId as string
-  const referencedResourceIds = getReferencedResourceIdsFromRoomGroups(
-    collectionId,
-    rawGroups,
-    Array.from(allResourcesById.values()),
-  )
-  if (referencedResourceIds.size === 0) {
-    return bindingNode
-  }
-
-  const currentControlResourceIds = new Set(
-    getBindingPillControlResources(bindingNode.resources).map((resource) => resource.id),
-  )
-  const nextResourcesById = new Map<string, HomeAssistantResourceBinding>()
-
-  for (const resource of bindingNode.resources) {
-    if (
-      isHomeAssistantDeviceComponentResource(resource) &&
-      !referencedResourceIds.has(resource.id)
-    ) {
-      continue
-    }
-    nextResourcesById.set(resource.id, cloneHomeAssistantResourceBinding(resource))
-  }
-
-  for (const resourceId of referencedResourceIds) {
-    if (nextResourcesById.has(resourceId)) {
-      continue
-    }
-    const referencedResource = allResourcesById.get(resourceId)
-    if (!isHomeAssistantDeviceComponentResource(referencedResource)) {
-      continue
-    }
-    nextResourcesById.set(resourceId, cloneHomeAssistantResourceBinding(referencedResource))
-  }
-
-  const nextExcludedResourceIds = Array.from(
-    new Set([
-      ...(bindingNode.presentation?.rtsExcludedResourceIds ?? []),
-      ...Array.from(currentControlResourceIds).filter(
-        (resourceId) => !referencedResourceIds.has(resourceId),
-      ),
-    ]),
-  )
-  const nextResources = Array.from(nextResourcesById.values())
-  const nextBinding = normalizeHomeAssistantCollectionBinding({
-    aggregation: nextResources.some((resource) => resource.kind !== 'entity')
-      ? 'trigger_only'
-      : nextResources.filter(isHomeAssistantDeviceComponentResource).length > 1
-        ? 'all'
-        : 'single',
-    collectionId: bindingNode.collectionId,
-    presentation: {
-      ...(bindingNode.presentation ?? {}),
-      rtsExcludedResourceIds: nextExcludedResourceIds,
-    },
-    primaryResourceId:
-      bindingNode.primaryResourceId && nextResourcesById.has(bindingNode.primaryResourceId)
-        ? bindingNode.primaryResourceId
-        : (nextResources.find(isHomeAssistantDeviceComponentResource)?.id ??
-          nextResources[0]?.id ??
-          null),
-    resources: nextResources,
-  })
-
-  return nextBinding ? { ...bindingNode, ...nextBinding } : bindingNode
-}
-
 function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
-  const storedRoomGroups = readStoredRoomGroups()
-  const nextStoredRoomGroups = { ...storedRoomGroups }
   let nextNodes: SceneGraph['nodes'] | null = null
   const allResourcesById = new Map<string, HomeAssistantResourceBinding>()
 
@@ -820,53 +513,38 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
   }
 
   for (const bindingNode of getHomeAssistantBindingNodes(scene.nodes as any)) {
-    const storedRawGroups = storedRoomGroups[bindingNode.collectionId as string]
     const sceneRawGroups = bindingNode.presentation?.rtsGroups
-    const bindingWithRepairedResources = repairHomeAssistantBindingResourcesFromGroups(
-      bindingNode,
-      allResourcesById,
-      readStringGroups(storedRawGroups)?.length ? storedRawGroups : sceneRawGroups,
-    )
     const collectionId = bindingNode.collectionId as string
-    const controlIds = getBindingPillControlResources(bindingWithRepairedResources.resources).map((resource) =>
-      getRoomControlTileId(collectionId, resource.id),
+    const bindingWithRepairedResources = repairHomeAssistantBindingResourcesFromGroups({
+      binding: bindingNode,
+      detachedResourceIds: bindingNode.presentation?.rtsExcludedResourceIds ?? [],
+      rawGroups: sceneRawGroups,
+      allResourcesById,
+    })
+    const controlIds = getSmartHomeBindingControlIds(
+      collectionId,
+      bindingWithRepairedResources.resources,
     )
     if (controlIds.length === 0) {
       continue
     }
 
     const defaultGroups = [controlIds]
-    const sceneGroups = normalizeHomeAssistantRtsGroupsForBinding(
+    const sceneGroups = normalizeSmartHomeRoomGroupsForBinding({
       collectionId,
-      bindingWithRepairedResources.resources,
-      bindingWithRepairedResources.presentation?.rtsGroups,
-    )
-    const storedGroups = normalizeHomeAssistantRtsGroupsForBinding(
-      collectionId,
-      bindingWithRepairedResources.resources,
-      storedRoomGroups[collectionId],
-    )
+      resources: bindingWithRepairedResources.resources,
+      rawGroups: bindingWithRepairedResources.presentation?.rtsGroups,
+      appendMissingControls: true,
+    })
     const sceneHasCustomGroups =
       sceneGroups.length > 0 &&
-      groupsCoverControlIds(sceneGroups, controlIds) &&
-      !isDefaultMergedGroup(sceneGroups, controlIds)
-    const storedHasCustomGroups =
-      storedGroups.length > 0 &&
-      groupsCoverControlIds(storedGroups, controlIds) &&
-      !isDefaultMergedGroup(storedGroups, controlIds)
-    const nextGroups = storedHasCustomGroups
-      ? storedGroups
-      : sceneGroups.length > 0
-        ? sceneGroups
-        : defaultGroups
-
-    if (!groupsMatch(storedRoomGroups[collectionId] ?? [], nextGroups)) {
-      nextStoredRoomGroups[collectionId] = nextGroups
-    }
+      smartHomeRoomGroupsCoverControlIds(sceneGroups, controlIds) &&
+      !isDefaultSmartHomeRoomGroup(sceneGroups, controlIds)
+    const nextGroups = sceneHasCustomGroups ? sceneGroups : defaultGroups
 
     if (
       bindingWithRepairedResources !== bindingNode ||
-      !groupsMatch(bindingWithRepairedResources.presentation?.rtsGroups ?? [], nextGroups)
+      !smartHomeRoomGroupsEqual(bindingWithRepairedResources.presentation?.rtsGroups ?? [], nextGroups)
     ) {
       nextNodes ??= { ...scene.nodes }
       nextNodes[bindingNode.id] = {
@@ -877,10 +555,6 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
         },
       }
     }
-  }
-
-  if (!storedRoomGroupsMatch(storedRoomGroups, nextStoredRoomGroups)) {
-    writeStoredRoomGroups(nextStoredRoomGroups)
   }
 
   return nextNodes ? { ...scene, nodes: nextNodes } : scene

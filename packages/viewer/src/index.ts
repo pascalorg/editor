@@ -42,7 +42,7 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'
-export { InteractiveSystem } from './systems/interactive/interactive-system'
+export { InteractiveSystem, type HomeAssistantDeviceActionDispatch } from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'

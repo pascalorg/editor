@@ -7,7 +7,13 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  type HomeAssistantDeviceActionDispatch,
+  type HoverStyles,
+  InteractiveSystem,
+  useViewer,
+  Viewer,
+} from '@pascal-app/viewer'
 import {
   memo,
   type ReactNode,
@@ -570,6 +576,16 @@ function PaintCursorBadge({
   )
 }
 
+function dispatchHomeAssistantDeviceAction(payload: HomeAssistantDeviceActionDispatch) {
+  void fetch('/api/home-assistant/device-action', {
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  }).catch(() => {})
+}
+
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
 
 const ViewerSceneContent = memo(function ViewerSceneContent({
@@ -606,7 +622,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <HomeAssistantPlacementGroundSystem />
-      <InteractiveSystem />
+      <InteractiveSystem onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction} />
     </>
   )
 })
@@ -1043,7 +1059,7 @@ export default function Editor({
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      <InteractiveSystem />
+      <InteractiveSystem onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction} />
     </Viewer>
   )
 

@@ -89,8 +89,6 @@ const INTENSITY_STRIP_HEIGHT = 8
 const INTENSITY_STRIP_GAP = 4
 const INTENSITY_SEGMENT_BOUNDARY_INSET = 2
 const INTENSITY_CONTENT_BOTTOM_OFFSET = INTENSITY_STRIP_INSET + INTENSITY_STRIP_HEIGHT + 2
-const ROOM_GROUPS_STORAGE_KEY = 'pascal-room-control-groups:v1'
-const SCENE_STORAGE_KEY = 'pascal-editor-scene'
 const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
 
 const _anchor = new Vector3()
@@ -561,8 +559,6 @@ type PendingLongPressState = {
   startY: number
 }
 
-type StoredRoomGroupsState = Record<string, string[][]>
-
 type ExpandedGroupMemberLayout = {
   buttonSize: number
   columns: number
@@ -571,6 +567,16 @@ type ExpandedGroupMemberLayout = {
 type RoomControlLookupEntry = {
   member: RoomControlTile
   source: 'primary' | 'intensity'
+}
+
+export type HomeAssistantDeviceActionDispatch = {
+  binding: HomeAssistantCollectionBinding
+  collectionName: string
+  request: HomeAssistantActionRequest
+}
+
+type InteractiveSystemProps = {
+  onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
 }
 
 const projectToViewportOrigin = () => [0, 0] as [number, number]
@@ -585,22 +591,6 @@ const requestSceneImmediateSave = () => {
   }
 
   window.dispatchEvent(new Event(SCENE_IMMEDIATE_SAVE_EVENT))
-}
-
-const writeSceneSnapshotToLocalStorage = () => {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const { collections, nodes, rootNodeIds } = useScene.getState()
-  window.localStorage.setItem(
-    SCENE_STORAGE_KEY,
-    JSON.stringify({
-      collections,
-      nodes,
-      rootNodeIds,
-    }),
-  )
 }
 
 const isQuickEditTap = (
@@ -664,7 +654,7 @@ const getReorderPlacement = (
   return { placeAfter, ready }
 }
 
-export const InteractiveSystem = () => {
+export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSystemProps = {}) => {
   const theme = useViewer((state) => state.theme)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -674,7 +664,7 @@ export const InteractiveSystem = () => {
     (state) => state.homeAssistantOverlayVisibility,
   )
   const sceneNodes = useScene((state) => state.nodes)
-  const sceneCollections = useScene((state) => state.collections)
+  const sceneCollections = useScene((state) => state.collections ?? {})
   const updateNode = useScene((state) => state.updateNode)
   const homeAssistantBindings = useMemo(
     () => getHomeAssistantBindingNodeMap(sceneNodes),
@@ -693,8 +683,6 @@ export const InteractiveSystem = () => {
   const setControlValue = useInteractive((state) => state.setControlValue)
   const [openRoomId, setOpenRoomId] = useState<string | null>(null)
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
-  const [storedRoomGroups, setStoredRoomGroups] = useState<StoredRoomGroupsState>({})
-  const [storedRoomGroupsReady, setStoredRoomGroupsReady] = useState(false)
 
   const domRefsRef = useRef<Record<string, OverlayDomRefs>>({})
   const layoutRef = useRef<Record<string, OverlayLayout>>({})
@@ -709,22 +697,6 @@ export const InteractiveSystem = () => {
       }
     }
   }, [initItem, interactiveNodes])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-    setStoredRoomGroups(readStoredRoomGroups())
-    setStoredRoomGroupsReady(true)
-  }, [])
-
-  useEffect(() => {
-    if (!(storedRoomGroupsReady && typeof window !== 'undefined')) {
-      return
-    }
-
-    writeStoredRoomGroups(storedRoomGroups)
-  }, [storedRoomGroups, storedRoomGroupsReady])
 
   const roomOverlayNodes = useMemo<RoomOverlayNode[]>(
     () =>
@@ -776,11 +748,9 @@ export const InteractiveSystem = () => {
           const defaultGroups =
             roomControls.length > 0 ? [roomControls.map((control) => control.id)] : []
           const presentationGroups = normalizeRoomControlGroupList(binding?.presentation?.rtsGroups)
-          const localStoredGroups = normalizeRoomControlGroupList(storedRoomGroups[collection.id])
           const storedGroups = selectRoomControlGroupSource(
             roomControls,
             presentationGroups,
-            localStoredGroups,
             defaultGroups,
           )
           return {
@@ -806,7 +776,6 @@ export const InteractiveSystem = () => {
       sceneCollections,
       sceneNodes,
       selectedLevelId,
-      storedRoomGroups,
     ],
   )
 
@@ -1004,17 +973,15 @@ export const InteractiveSystem = () => {
 
     const delayMs = request.kind === 'range' ? 120 : 0
     pendingCollectionActionTimeoutsRef.current[member.collectionId] = window.setTimeout(() => {
-      void fetch('/api/home-assistant/device-action', {
-        body: JSON.stringify({
-          binding: actionBinding,
-          collectionName: getCollectionDisplayName(collection, homeAssistantBindings),
-          request,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      }).catch(() => {})
+      if (onHomeAssistantDeviceAction) {
+        void Promise.resolve(
+          onHomeAssistantDeviceAction({
+            binding: actionBinding,
+            collectionName: getCollectionDisplayName(collection, homeAssistantBindings),
+            request,
+          }),
+        ).catch(() => {})
+      }
       if (request.kind === 'trigger' && member.control.kind === 'toggle') {
         window.setTimeout(() => {
           setControlValue(member.itemId, member.controlIndex, false)
@@ -1047,14 +1014,6 @@ export const InteractiveSystem = () => {
   const applyRoomGroupingToCollection = useCallback(
     (collectionId: CollectionId, nextGroups: string[][]) => {
       const normalizedGroups = normalizeRoomControlGroupList(nextGroups)
-      setStoredRoomGroups((current) => {
-        const nextStoredRoomGroups = {
-          ...current,
-          [collectionId]: normalizedGroups,
-        }
-        writeStoredRoomGroups(nextStoredRoomGroups)
-        return nextStoredRoomGroups
-      })
 
       const bindingNode = homeAssistantBindings[collectionId]
       if (!bindingNode) {
@@ -1067,119 +1026,10 @@ export const InteractiveSystem = () => {
           rtsGroups: normalizedGroups,
         },
       } as Partial<AnyNode>)
-      writeSceneSnapshotToLocalStorage()
       requestSceneImmediateSave()
     },
     [homeAssistantBindings, updateNode],
   )
-
-  useEffect(() => {
-    const currentBindings = getHomeAssistantBindingNodeMap(useScene.getState().nodes)
-    const allResourcesById = new Map<string, HomeAssistantResourceBinding>()
-
-    for (const bindingNode of Object.values(currentBindings)) {
-      for (const resource of bindingNode.resources) {
-        allResourcesById.set(resource.id, resource)
-      }
-    }
-
-    for (const bindingNode of Object.values(currentBindings)) {
-      if (!bindingHasGroupResource(bindingNode)) {
-        continue
-      }
-
-      const storedGroups = normalizeRoomControlGroupList(storedRoomGroups[bindingNode.collectionId])
-      const sourceGroups =
-        storedGroups.length > 0
-          ? storedGroups
-          : normalizeRoomControlGroupList(bindingNode.presentation?.rtsGroups)
-      if (sourceGroups.length === 0) {
-        continue
-      }
-
-      const referencedResourceIds = getReferencedRoomControlResourceIds(
-        bindingNode.collectionId,
-        sourceGroups,
-        Array.from(allResourcesById.values()),
-      )
-      if (referencedResourceIds.size === 0) {
-        continue
-      }
-
-      let changed = false
-      const currentDeviceResourceIds = new Set(
-        bindingNode.resources
-          .filter(isHomeAssistantDeviceComponentResource)
-          .map((resource) => resource.id),
-      )
-      const nextResourcesById = new Map<string, HomeAssistantResourceBinding>()
-
-      for (const resource of bindingNode.resources) {
-        if (
-          isHomeAssistantDeviceComponentResource(resource) &&
-          !referencedResourceIds.has(resource.id)
-        ) {
-          changed = true
-          continue
-        }
-        nextResourcesById.set(resource.id, cloneHomeAssistantResourceBinding(resource))
-      }
-
-      for (const resourceId of referencedResourceIds) {
-        if (nextResourcesById.has(resourceId)) {
-          continue
-        }
-        const referencedResource = allResourcesById.get(resourceId)
-        if (!isHomeAssistantDeviceComponentResource(referencedResource)) {
-          continue
-        }
-        nextResourcesById.set(resourceId, cloneHomeAssistantResourceBinding(referencedResource))
-        changed = true
-      }
-
-      if (!changed) {
-        continue
-      }
-
-      const nextResources = Array.from(nextResourcesById.values())
-      const nextExcludedResourceIds = Array.from(
-        new Set([
-          ...(bindingNode.presentation?.rtsExcludedResourceIds ?? []),
-          ...Array.from(currentDeviceResourceIds).filter(
-            (resourceId) => !referencedResourceIds.has(resourceId),
-          ),
-        ]),
-      )
-      const nextBinding = normalizeHomeAssistantCollectionBinding({
-        aggregation: nextResources.some((resource) => resource.kind !== 'entity')
-          ? 'trigger_only'
-          : nextResources.filter(isHomeAssistantDeviceComponentResource).length > 1
-            ? 'all'
-            : 'single',
-        collectionId: bindingNode.collectionId,
-        presentation: {
-          ...(bindingNode.presentation ?? {}),
-          rtsExcludedResourceIds: nextExcludedResourceIds,
-          rtsGroups: sourceGroups,
-        },
-        primaryResourceId:
-          bindingNode.primaryResourceId && nextResourcesById.has(bindingNode.primaryResourceId)
-            ? bindingNode.primaryResourceId
-            : (nextResources.find(isHomeAssistantDeviceComponentResource)?.id ??
-              nextResources[0]?.id ??
-              null),
-        resources: nextResources,
-      })
-
-      if (!nextBinding) {
-        continue
-      }
-
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
-      writeSceneSnapshotToLocalStorage()
-      requestSceneImmediateSave()
-    }
-  }, [homeAssistantBindings, storedRoomGroups, updateNode])
 
   const copyDeviceResourceToGroup = useCallback(
     (sourceCollectionId: CollectionId, targetCollectionId: CollectionId) => {
@@ -1205,7 +1055,6 @@ export const InteractiveSystem = () => {
       const existingGroups = normalizeRoomControlGroupList(
         targetBindingNode.presentation?.rtsGroups,
       )
-      const storedGroups = normalizeRoomControlGroupList(storedRoomGroups[targetCollectionId])
       const targetDeviceResources =
         targetBindingNode.resources.filter(isHomeAssistantDeviceComponentResource)
       const existingCombinedGroup =
@@ -1217,9 +1066,7 @@ export const InteractiveSystem = () => {
       const baseGroups =
         existingGroups.length > 0
           ? existingGroups
-          : storedGroups.length > 0
-            ? storedGroups
-            : existingCombinedGroup.length > 0
+          : existingCombinedGroup.length > 0
               ? [existingCombinedGroup]
               : []
       const copiedMemberId = getRoomControlTileId(targetCollectionId, sourceResource.id)
@@ -1255,19 +1102,10 @@ export const InteractiveSystem = () => {
         return
       }
 
-      setStoredRoomGroups((current) => {
-        const nextStoredRoomGroups = {
-          ...current,
-          [targetCollectionId]: nextRtsGroups,
-        }
-        writeStoredRoomGroups(nextStoredRoomGroups)
-        return nextStoredRoomGroups
-      })
       updateNode(targetBindingNode.id, nextBinding as Partial<AnyNode>)
-      writeSceneSnapshotToLocalStorage()
       requestSceneImmediateSave()
     },
-    [homeAssistantBindings, storedRoomGroups, updateNode],
+    [homeAssistantBindings, updateNode],
   )
 
   const removeDeviceResourceFromGroup = useCallback(
@@ -1326,7 +1164,6 @@ export const InteractiveSystem = () => {
       }
 
       updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
-      writeSceneSnapshotToLocalStorage()
       requestSceneImmediateSave()
     },
     [updateNode],
@@ -1726,9 +1563,8 @@ const RoomPanel = ({
   const applyRoomGrouping = useCallback((nextGroups: string[][]) => {
     const normalizedGroups = nextGroups.filter((group) => group.length > 0)
     lastAppliedGroupingRef.current = normalizedGroups
-    writeStoredRoomGroupsForRoom(roomId, normalizedGroups)
     onApplyGrouping(normalizedGroups)
-  }, [onApplyGrouping, roomId])
+  }, [onApplyGrouping])
 
   const scheduleSuppressedClickReset = (key: string) => {
     if (typeof window === 'undefined') {
@@ -4181,46 +4017,6 @@ const getRoomControlTileId = (collectionId: CollectionId, resourceId: string) =>
 const getLegacyRoomControlResourceKey = (resourceId: string) =>
   resourceId.replace(/[^a-zA-Z0-9_-]/g, '-')
 
-const getReferencedRoomControlResourceIds = (
-  collectionId: CollectionId,
-  groups: string[][],
-  availableResources: HomeAssistantResourceBinding[],
-) => {
-  const prefix = `${collectionId}:home-assistant:`
-  const resourceAliases = new Map<string, string>()
-
-  for (const resource of availableResources) {
-    const currentTileId = getRoomControlTileId(collectionId, resource.id)
-    const legacyTileId = `${collectionId}:home-assistant:${getLegacyRoomControlResourceKey(resource.id)}`
-    resourceAliases.set(currentTileId, resource.id)
-    resourceAliases.set(legacyTileId, resource.id)
-    resourceAliases.set(`${currentTileId}:0`, resource.id)
-    resourceAliases.set(`${legacyTileId}:0`, resource.id)
-  }
-
-  const referencedResourceIds = new Set<string>()
-  for (const rawMemberId of groups.flat()) {
-    const aliasedResourceId = resourceAliases.get(rawMemberId)
-    if (aliasedResourceId) {
-      referencedResourceIds.add(aliasedResourceId)
-      continue
-    }
-
-    if (!rawMemberId.startsWith(prefix)) {
-      continue
-    }
-
-    const encodedResourceId = rawMemberId.slice(prefix.length).replace(/:\d+$/, '')
-    try {
-      referencedResourceIds.add(decodeURIComponent(encodedResourceId))
-    } catch {
-      referencedResourceIds.add(encodedResourceId)
-    }
-  }
-
-  return referencedResourceIds
-}
-
 const getBindingPillControlResources = (
   binding: HomeAssistantCollectionBinding | null | undefined,
 ) => {
@@ -4274,11 +4070,12 @@ const buildCollectionRoomControlTiles = (
   const controlSourceNodes =
     itemNodes.length > 0 ? itemNodes : fallbackControlNode ? [fallbackControlNode] : []
 
+  const controlResources = getBindingPillControlResources(binding)
   if (
-    controlSourceNodes.length === 0 &&
-    hasPositionedPill
+    hasPositionedPill &&
+    (controlSourceNodes.length === 0 ||
+      (bindingHasGroupResource(binding) && controlResources.length > controlSourceNodes.length))
   ) {
-    const controlResources = getBindingPillControlResources(binding)
     return controlResources.map((resource, index) => {
       const disabled = !isHomeAssistantControllableEntityResource(resource)
       const syntheticIntensityControl = getResourceSyntheticIntensityControl(resource)
@@ -4317,13 +4114,33 @@ const buildCollectionRoomControlTiles = (
     })
   }
 
-  const primaryResource = getBindingDeviceComponentResources(binding)[0] ?? null
-  const disabled = !isHomeAssistantDeviceComponentResource(primaryResource)
-  return controlSourceNodes.map((itemNode) => {
+  const deviceResources = getBindingDeviceComponentResources(binding)
+  const resourceByLinkedItemId = new Map<AnyNodeId, HomeAssistantResourceBinding>()
+
+  for (const resource of deviceResources) {
+    const linkedItemNode = getResourceLinkedItemNode(
+      resource,
+      collection.id,
+      collections,
+      bindings,
+      sceneNodes,
+    )
+    if (linkedItemNode) {
+      resourceByLinkedItemId.set(linkedItemNode.id, resource)
+    }
+  }
+
+  const primaryResource = deviceResources[0] ?? null
+  return controlSourceNodes.map((itemNode, index) => {
+    const itemResource =
+      resourceByLinkedItemId.get(itemNode.id) ??
+      (deviceResources.length === controlSourceNodes.length ? deviceResources[index] : null) ??
+      primaryResource
+    const disabled = !isHomeAssistantDeviceComponentResource(itemResource)
     const controls = itemNode.asset.interactive?.controls ?? []
     const selectedControl = getPrimaryRoomControl(controls)
     const syntheticIntensityControl =
-      selectedControl?.intensityControl ?? getResourceSyntheticIntensityControl(primaryResource)
+      selectedControl?.intensityControl ?? getResourceSyntheticIntensityControl(itemResource)
     const control = isHomeAssistantTriggerBinding(binding)
       ? createCollectionFallbackControl('Run')
       : (selectedControl?.control ?? createCollectionFallbackControl('Toggle'))
@@ -4342,9 +4159,12 @@ const buildCollectionRoomControlTiles = (
         selectedControl?.intensityControlIndex ??
         (syntheticIntensityControl ? controls.length : null),
       itemId: itemNode.id,
-      itemKind: getOverlayItemKind(itemNode.asset.name?.trim() || collectionLabel || 'item'),
-      itemName: itemNode.asset.name?.trim() || collectionLabel || 'Item',
-      resourceId: primaryResource?.id,
+      itemKind: getResourceItemKind(
+        itemResource,
+        itemNode.asset.name?.trim() || collectionLabel || 'item',
+      ),
+      itemName: itemResource?.label ?? itemNode.asset.name?.trim() ?? collectionLabel ?? 'Item',
+      resourceId: itemResource?.id,
     }
   })
 }
@@ -4422,66 +4242,6 @@ const buildCollectionActionRequest = (
   }
 }
 
-const normalizeStoredRoomGroups = (value: unknown): StoredRoomGroupsState => {
-  if (!(value && typeof value === 'object')) {
-    return {}
-  }
-
-  const normalizedEntries = Object.entries(value).flatMap(([roomId, groups]) => {
-    if (!Array.isArray(groups)) {
-      return []
-    }
-
-    const normalizedGroups = groups
-      .filter(Array.isArray)
-      .map((group) => group.filter((memberId): memberId is string => typeof memberId === 'string'))
-      .filter((group) => group.length > 0)
-
-    return normalizedGroups.length > 0 ? [[roomId, normalizedGroups] as const] : []
-  })
-
-  return Object.fromEntries(normalizedEntries)
-}
-
-const readStoredRoomGroups = (): StoredRoomGroupsState => {
-  if (typeof window === 'undefined') {
-    return {}
-  }
-
-  const rawValue = window.localStorage.getItem(ROOM_GROUPS_STORAGE_KEY)
-  if (!rawValue) {
-    return {}
-  }
-
-  try {
-    return normalizeStoredRoomGroups(JSON.parse(rawValue))
-  } catch {
-    return {}
-  }
-}
-
-const writeStoredRoomGroups = (groups: StoredRoomGroupsState) => {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  if (Object.keys(groups).length === 0) {
-    window.localStorage.removeItem(ROOM_GROUPS_STORAGE_KEY)
-    return
-  }
-
-  window.localStorage.setItem(ROOM_GROUPS_STORAGE_KEY, JSON.stringify(groups))
-}
-
-const writeStoredRoomGroupsForRoom = (roomId: string, groups: string[][]) => {
-  const normalizedGroups = normalizeRoomControlGroupList(groups)
-  const currentGroups = readStoredRoomGroups()
-  writeStoredRoomGroups({
-    ...currentGroups,
-    [roomId]: normalizedGroups,
-  })
-}
-
 const normalizeRoomControlGroupList = (groups: unknown) =>
   Array.isArray(groups)
     ? groups
@@ -4495,14 +4255,9 @@ const normalizeRoomControlGroupList = (groups: unknown) =>
 const selectRoomControlGroupSource = (
   controls: RoomControlTile[],
   presentationGroups: string[][],
-  storedGroups: string[][],
   defaultGroups: string[][],
 ) => {
-  if (storedGroups.length > 0 && roomControlGroupsCoverControls(storedGroups, controls)) {
-    return storedGroups
-  }
-
-  if (presentationGroups.length > 0) {
+  if (presentationGroups.length > 0 && roomControlGroupsCoverControls(presentationGroups, controls)) {
     return presentationGroups
   }
 
