@@ -14,7 +14,7 @@ function isMetadataUnchanged(
   nextBounds: { min: [number, number, number]; max: [number, number, number] } | null,
   metadata: Record<string, unknown>,
 ): boolean {
-  const currentPolygon = metadata.floorplanLocalPolygon
+  const currentPolygon = metadata.meshLocalPlanPolygon
   const currentBounds =
     typeof metadata.meshLocalBounds === 'object' &&
     metadata.meshLocalBounds !== null &&
@@ -76,14 +76,14 @@ function trySyncItemMeshMetadata(itemId: string, nodes: Record<string, AnyNode |
   useScene.getState().updateNode(itemId as AnyNodeId, {
     metadata: {
       ...metadata,
-      ...(nextPolygon ? { floorplanLocalPolygon: nextPolygon } : {}),
+      ...(nextPolygon ? { meshLocalPlanPolygon: nextPolygon } : {}),
       ...(nextBounds ? { meshLocalBounds: nextBounds } : {}),
     },
   })
 }
 
 /**
- * Writes `floorplanLocalPolygon` / `meshLocalBounds` from loaded item meshes.
+ * Writes `meshLocalPlanPolygon` / `meshLocalBounds` from loaded item meshes.
  * ModelRenderer requests sync via `requestItemMeshMetadataSync` when GLTF is ready.
  */
 export function ItemMeshMetadataSystem() {

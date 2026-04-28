@@ -183,7 +183,7 @@ function getCachedLocalMeshPolygon(item: ItemNode): Point[] | null {
     typeof item.metadata === 'object' && item.metadata !== null && !Array.isArray(item.metadata)
       ? (item.metadata as Record<string, unknown>)
       : null
-  const rawPolygon = metadata?.floorplanLocalPolygon
+  const rawPolygon = metadata?.meshLocalPlanPolygon
   if (!Array.isArray(rawPolygon)) {
     return null
   }
