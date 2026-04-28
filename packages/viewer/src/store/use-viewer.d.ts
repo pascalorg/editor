@@ -1,5 +1,6 @@
 import type {
   AnyNode,
+  AnyNodeId,
   BaseNode,
   BuildingNode,
   LevelNode,
@@ -16,6 +17,12 @@ type Outliner = {
   selectedObjects: Object3D[]
   hoveredObjects: Object3D[]
 }
+export type HomeAssistantItemTriggerEffect = {
+  fadeInMs: number
+  startedAtMs: number
+}
+export type HomeAssistantOverlaySection = 'actions' | 'devices' | 'groups'
+export type HomeAssistantOverlayVisibility = Record<HomeAssistantOverlaySection, boolean>
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
@@ -25,6 +32,14 @@ type ViewerState = {
   suppressNodeEvents: (durationMs?: number) => void
   roomControlOverlayActive: boolean
   setRoomControlOverlayActive: (active: boolean) => void
+  homeAssistantOverlayVisibility: HomeAssistantOverlayVisibility
+  setHomeAssistantOverlaySectionVisible: (
+    section: HomeAssistantOverlaySection,
+    visible: boolean,
+  ) => void
+  homeAssistantItemTriggerEffects: Record<AnyNodeId, HomeAssistantItemTriggerEffect>
+  triggerHomeAssistantItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
+  clearHomeAssistantItemEffect: (itemId: AnyNodeId) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null

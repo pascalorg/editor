@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./home-assistant-bindings": {
+      "types": "./dist/lib/home-assistant-bindings.d.ts",
+      "import": "./dist/lib/home-assistant-bindings.js",
+      "default": "./dist/lib/home-assistant-bindings.js"
     }
   },
   "files": [

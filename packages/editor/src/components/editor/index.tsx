@@ -44,6 +44,7 @@ import { FloatingLevelSelector } from '../ui/floating-level-selector'
 import { HelperManager } from '../ui/helpers/helper-manager'
 import { HomeAssistantPanel } from '../ui/panels/home-assistant-panel'
 import { PanelManager } from '../ui/panels/panel-manager'
+import { HomeAssistantPlacementGroundSystem } from './home-assistant-placement-ground-system'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
@@ -598,11 +599,11 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
         <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
       )}
       {!(isLoading || isVersionPreviewMode) && !isFirstPersonMode && <ToolManager />}
-      {isFirstPersonMode && <FirstPersonControls />}
-      <CustomCameraControls />
+      {isFirstPersonMode ? <FirstPersonControls /> : <CustomCameraControls />}
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
+      <HomeAssistantPlacementGroundSystem />
       <InteractiveSystem />
     </>
   )

@@ -20,6 +20,7 @@ import { WindowPanel } from './window-panel'
 export function PanelManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const roomControlOverlayActive = useViewer((s) => s.roomControlOverlayActive)
+  const homeAssistantPairingResourceId = useEditor((s) => s.homeAssistantPairingResourceId)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
   const mode = useEditor((s) => s.mode)
@@ -37,7 +38,7 @@ export function PanelManager() {
     return <ReferencePanel />
   }
 
-  if (roomControlOverlayActive) {
+  if (roomControlOverlayActive || homeAssistantPairingResourceId) {
     return null
   }
 

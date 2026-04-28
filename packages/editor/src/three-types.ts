@@ -1,3 +1,20 @@
-// Pull in React Three Fiber JSX type augmentations (mesh, group, etc.)
-// This import triggers R3F's module augmentation of react/jsx-runtime
+import type { ThreeElements } from '@react-three/fiber'
 import '@react-three/fiber'
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements extends ThreeElements {}
+  }
+}
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements extends ThreeElements {}
+  }
+}
+
+declare module 'react/jsx-runtime' {
+  namespace JSX {
+    interface IntrinsicElements extends ThreeElements {}
+  }
+}

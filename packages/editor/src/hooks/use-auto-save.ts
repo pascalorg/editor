@@ -5,6 +5,7 @@ import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
+const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
@@ -64,6 +65,44 @@ export function useAutoSave({
       nodes: useScene.getState().nodes,
     })
 
+    function updateSnapshot(snapshot: {
+      collections: SceneGraph['collections']
+      nodes: SceneGraph['nodes']
+    }) {
+      const currentSceneSnapshot = JSON.stringify(snapshot)
+      if (currentSceneSnapshot === lastSceneSnapshot) {
+        return false
+      }
+
+      lastSceneSnapshot = currentSceneSnapshot
+      return true
+    }
+
+    function scheduleSaveIfNeeded(snapshot: {
+      collections: SceneGraph['collections']
+      nodes: SceneGraph['nodes']
+    }) {
+      if (!updateSnapshot(snapshot)) {
+        return
+      }
+
+      hasDirtyChangesRef.current = true
+      onDirtyRef.current?.()
+      setSaveStatus('pending')
+
+      if (isSavingRef.current) {
+        pendingSaveRef.current = true
+        return
+      }
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+
+      saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = undefined
+        executeSave()
+      }, AUTOSAVE_DEBOUNCE_MS)
+    }
+
     async function executeSave() {
       if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
         pendingSaveRef.current = true
@@ -104,9 +143,21 @@ export function useAutoSave({
 
     executeSaveRef.current = executeSave
 
+    function flushImmediately() {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = undefined
+      }
+      if (isSavingRef.current) {
+        pendingSaveRef.current = true
+        return
+      }
+      void executeSave()
+    }
+
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
-        lastSceneSnapshot = JSON.stringify({
+        updateSnapshot({
           collections: state.collections,
           nodes: state.nodes,
         })
@@ -115,35 +166,17 @@ export function useAutoSave({
 
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
-        lastSceneSnapshot = JSON.stringify({
+        updateSnapshot({
           collections: state.collections,
           nodes: state.nodes,
         })
         return
       }
 
-      const currentSceneSnapshot = JSON.stringify({
+      scheduleSaveIfNeeded({
         collections: state.collections,
         nodes: state.nodes,
       })
-      if (currentSceneSnapshot === lastSceneSnapshot) return
-
-      lastSceneSnapshot = currentSceneSnapshot
-      hasDirtyChangesRef.current = true
-      onDirtyRef.current?.()
-      setSaveStatus('pending')
-
-      if (isSavingRef.current) {
-        pendingSaveRef.current = true
-        return
-      }
-
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-
-      saveTimeoutRef.current = setTimeout(() => {
-        saveTimeoutRef.current = undefined
-        executeSave()
-      }, AUTOSAVE_DEBOUNCE_MS)
     })
 
     function flushOnExit() {
@@ -159,10 +192,12 @@ export function useAutoSave({
     }
 
     window.addEventListener('beforeunload', flushOnExit)
+    window.addEventListener(SCENE_IMMEDIATE_SAVE_EVENT, flushImmediately)
 
     return () => {
       executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
+      window.removeEventListener(SCENE_IMMEDIATE_SAVE_EVENT, flushImmediately)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       flushOnExit()
       unsubscribe()

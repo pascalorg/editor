@@ -26,7 +26,7 @@ type InteractiveStore = {
 }
 
 const defaultControlValue = (interactive: Interactive, index: number): ControlValue => {
-  const control = interactive.controls[index]
+  const control = interactive.controls?.[index]
   if (!control) return false
   switch (control.kind) {
     case 'toggle':
@@ -42,7 +42,7 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   items: {},
 
   initItem: (itemId, interactive) => {
-    const { controls } = interactive
+    const controls = interactive.controls ?? []
     if (controls.length === 0) return
 
     // Don't overwrite existing state (idempotent)

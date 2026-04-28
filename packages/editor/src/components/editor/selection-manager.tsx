@@ -419,6 +419,18 @@ function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRol
   })
 }
 
+function isHomeAssistantPairingModeActive() {
+  return Boolean(useEditor.getState().homeAssistantPairingResourceId)
+}
+
+function isHomeAssistantPairingItem(node: AnyNode): node is ItemNode {
+  return (
+    node.type === 'item' &&
+    node.asset.category !== 'door' &&
+    node.asset.category !== 'window'
+  )
+}
+
 const HIGHLIGHT_PROFILES = {
   delete: {
     color: new Color('#dc2626'),
@@ -432,10 +444,19 @@ const HIGHLIGHT_PROFILES = {
     emissiveBlend: 0.7,
     emissiveIntensity: 0.42,
   },
+  pair: {
+    color: new Color('#14b8a6'),
+    blend: 0.46,
+    emissiveBlend: 0.82,
+    emissiveIntensity: 0.48,
+  },
 } as const
 
+const HOME_ASSISTANT_PAIR_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='8.5' cy='9.5' r='4.5' fill='%230b0f12' stroke='%2322d3ee' stroke-width='1.8'/%3E%3Ccircle cx='19.5' cy='18.5' r='4.5' fill='%230b0f12' stroke='%23fbbf24' stroke-width='1.8'/%3E%3Cpath d='M11.7 12.2L16.4 15.9' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round'/%3E%3Cpath d='M14.1 6.4h7.5' stroke='%2322d3ee' stroke-width='1.6' stroke-linecap='round' opacity='0.9'/%3E%3Cpath d='M6.3 20.6h7.5' stroke='%23fbbf24' stroke-width='1.6' stroke-linecap='round' opacity='0.9'/%3E%3C/svg%3E\") 8 8, crosshair"
+
 type HighlightKind = keyof typeof HIGHLIGHT_PROFILES
-type HoverHighlightMode = 'default' | 'delete' | 'paint-ready' | 'paint-disabled'
+type HoverHighlightMode = 'default' | 'delete' | 'paint-ready' | 'paint-disabled' | 'pair'
 
 type HighlightableMaterial = Material & {
   color?: Color
@@ -690,6 +711,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 export const SelectionManager = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
+  const pairingResourceId = useEditor((s) => s.homeAssistantPairingResourceId)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
   const modifierKeysRef = useRef<ModifierKeys>({
     meta: false,
@@ -702,13 +724,24 @@ export const SelectionManager = () => {
   const curvingFence = useEditor((s) => s.curvingFence)
 
   useEffect(() => {
-    const nextHoverMode: HoverHighlightMode = mode === 'delete' ? 'delete' : 'default'
-    setHoverHighlightMode(nextHoverMode)
+    const hoverMode: HoverHighlightMode =
+      mode === 'delete' ? 'delete' : mode === 'select' && pairingResourceId ? 'pair' : 'default'
+
+    setHoverHighlightMode(hoverMode)
+
+    const previousCursor = typeof document !== 'undefined' ? document.body.style.cursor : ''
+    if (typeof document !== 'undefined') {
+      document.body.style.cursor = hoverMode === 'pair' ? HOME_ASSISTANT_PAIR_CURSOR : ''
+    }
 
     return () => {
+      if (typeof document !== 'undefined') {
+        document.body.style.cursor = previousCursor
+      }
       setHoverHighlightMode('default')
+      useViewer.getState().setPreviewSelectedIds([])
     }
-  }, [mode, setHoverHighlightMode])
+  }, [mode, pairingResourceId, setHoverHighlightMode])
 
   useEffect(() => {
     if (mode !== 'material-paint') return
@@ -1025,6 +1058,22 @@ export const SelectionManager = () => {
       if (useViewer.getState().roomControlOverlayActive) return
 
       const node = event.node
+      if (isHomeAssistantPairingModeActive()) {
+        if (!isNodeInCurrentLevel(node) || !isHomeAssistantPairingItem(node)) {
+          return
+        }
+
+        event.stopPropagation()
+        clickHandledRef.current = true
+        useEditor.getState().setHomeAssistantPairingTargetItemId(node.id as AnyNodeId)
+        useViewer.setState({ hoveredId: null, hoveredIds: [], previewSelectedIds: [] })
+        useEditor.getState().setSelectedMaterialTarget(null)
+        setTimeout(() => {
+          clickHandledRef.current = false
+        }, 50)
+        return
+      }
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
 
@@ -1146,6 +1195,13 @@ export const SelectionManager = () => {
       if (useViewer.getState().roomControlOverlayActive) return
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
+      if (isHomeAssistantPairingModeActive()) {
+        useEditor.getState().setHomeAssistantPairingResourceId(null)
+        useEditor.getState().setHomeAssistantPairingTargetItemId(null)
+        useEditor.getState().setSelectedMaterialTarget(null)
+        useViewer.setState({ hoveredId: null, hoveredIds: [], previewSelectedIds: [] })
+        return
+      }
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
@@ -1175,6 +1231,28 @@ export const SelectionManager = () => {
     const onEnter = (event: NodeEvent) => {
       if (useViewer.getState().roomControlOverlayActive) return
       const node = event.node
+      if (isHomeAssistantPairingModeActive()) {
+        if (!isNodeInCurrentLevel(node) || !isHomeAssistantPairingItem(node)) {
+          return
+        }
+        event.stopPropagation()
+        const viewerState = useViewer.getState()
+        const isAlreadyPairHovered =
+          viewerState.hoveredId === node.id &&
+          viewerState.hoveredIds.length === 1 &&
+          viewerState.hoveredIds[0] === node.id &&
+          viewerState.previewSelectedIds.length === 0
+
+        if (!isAlreadyPairHovered) {
+          useViewer.setState({
+            hoveredId: node.id,
+            hoveredIds: [node.id],
+            previewSelectedIds: [],
+          })
+        }
+        return
+      }
+
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1203,12 +1281,18 @@ export const SelectionManager = () => {
     const onLeave = (event: NodeEvent) => {
       const nodeId = event?.node?.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
-        useViewer.setState({ hoveredId: null })
+        const isPairing = isHomeAssistantPairingModeActive()
+        useViewer.setState({
+          hoveredId: null,
+          hoveredIds: isPairing ? [] : useViewer.getState().hoveredIds,
+          previewSelectedIds: isPairing ? [] : useViewer.getState().previewSelectedIds,
+        })
       }
     }
 
     const onDoubleClick = (event: NodeEvent) => {
       if (useViewer.getState().roomControlOverlayActive) return
+      if (isHomeAssistantPairingModeActive()) return
       const node = event.node
       const currentPhase = useEditor.getState().phase
 
@@ -1489,12 +1573,19 @@ const SelectionMaterialSync = () => {
         activeMeshes.add(child)
         const existingEntry = highlightedMaterialsRef.current.get(child)
         if (existingEntry) {
-          const materialWasOverwritten = child.material !== existingEntry.highlightedMaterial
-          if (materialWasOverwritten || existingEntry.kind !== kind) {
+          const materialIsOriginal = child.material === existingEntry.originalMaterial
+          const materialIsHighlighted = child.material === existingEntry.highlightedMaterial
+
+          if (existingEntry.kind === kind && materialIsOriginal) {
+            child.material = existingEntry.highlightedMaterial
+            return
+          }
+
+          if (existingEntry.kind !== kind || !materialIsHighlighted) {
             disposeHighlightedMaterials(existingEntry.highlightedMaterial)
-            const originalMaterial = materialWasOverwritten
-              ? child.material
-              : existingEntry.originalMaterial
+            const originalMaterial = materialIsOriginal || materialIsHighlighted
+              ? existingEntry.originalMaterial
+              : child.material
             const highlightedMaterial = createHighlightedMaterials(originalMaterial, kind)
             child.material = highlightedMaterial
             highlightedMaterialsRef.current.set(child, {
@@ -1525,21 +1616,25 @@ const SelectionMaterialSync = () => {
       if (mesh.material === entry.highlightedMaterial) {
         mesh.material = entry.originalMaterial
       }
-      disposeHighlightedMaterials(entry.highlightedMaterial)
-      highlightedMaterialsRef.current.delete(mesh)
+      if (!mesh.parent) {
+        disposeHighlightedMaterials(entry.highlightedMaterial)
+        highlightedMaterialsRef.current.delete(mesh)
+      }
     }
   }, [])
 
   useEffect(() => {
     const nextHighlightKinds = new Map<string, HighlightKind>()
 
-    for (const id of new Set([...selectedIds, ...previewSelectedIds])) {
-      nextHighlightKinds.set(id, 'selection')
+    if (hoverHighlightMode !== 'pair') {
+      for (const id of new Set([...selectedIds, ...previewSelectedIds])) {
+        nextHighlightKinds.set(id, 'selection')
+      }
     }
 
     if (hoverHighlightMode === 'delete') {
       for (const id of new Set([hoveredId, ...hoveredIds].filter(Boolean))) {
-        nextHighlightKinds.set(id as string, 'delete')
+        nextHighlightKinds.set(id as string, hoverHighlightMode)
       }
     }
 

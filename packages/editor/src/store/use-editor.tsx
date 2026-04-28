@@ -175,6 +175,12 @@ type EditorState = {
   setSelectedReferenceId: (id: string | null) => void
   homeAssistantControlItemId: string | null
   setHomeAssistantControlItemId: (id: string | null) => void
+  homeAssistantPairingResourceId: string | null
+  setHomeAssistantPairingResourceId: (id: string | null) => void
+  homeAssistantPairingTargetItemId: AnyNodeId | null
+  setHomeAssistantPairingTargetItemId: (id: AnyNodeId | null) => void
+  isSmartHomePanelOpen: boolean
+  setSmartHomePanelOpen: (open: boolean) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -601,6 +607,12 @@ const useEditor = create<EditorState>()(
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
       homeAssistantControlItemId: null,
       setHomeAssistantControlItemId: (id) => set({ homeAssistantControlItemId: id }),
+      homeAssistantPairingResourceId: null,
+      setHomeAssistantPairingResourceId: (id) => set({ homeAssistantPairingResourceId: id }),
+      homeAssistantPairingTargetItemId: null,
+      setHomeAssistantPairingTargetItemId: (id) => set({ homeAssistantPairingTargetItemId: id }),
+      isSmartHomePanelOpen: false,
+      setSmartHomePanelOpen: (open) => set({ isSmartHomePanelOpen: open }),
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,

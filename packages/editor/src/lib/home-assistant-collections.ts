@@ -1,34 +1,43 @@
-import type {
-  AnyNodeId,
-  Collection,
-  CollectionCapability,
-  CollectionHomeAssistantAction,
-  CollectionHomeAssistantActionField,
-  CollectionHomeAssistantResourceBinding,
-  CollectionId,
-  CollectionKind,
-  CollectionZoneId,
-  ItemNode,
-} from '@pascal-app/core/schema'
+import type { AnyNodeId, Collection, CollectionId, ItemNode } from '@pascal-app/core/schema'
 import { normalizeCollection } from '@pascal-app/core/schema'
+import type {
+  HomeAssistantAction,
+  HomeAssistantActionField,
+  HomeAssistantBindingPresentation,
+  HomeAssistantCollectionBinding,
+  HomeAssistantCollectionCapability,
+  HomeAssistantResourceBinding,
+} from '@pascal-app/viewer/home-assistant-bindings'
+import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/viewer/home-assistant-bindings'
 import type {
   HomeAssistantAvailableAction,
   HomeAssistantAvailableActionField,
   HomeAssistantDiscoveredDevice,
 } from './home-assistant'
 
-export type HomeAssistantImportedResource = CollectionHomeAssistantResourceBinding & {
+export type HomeAssistantImportedResource = HomeAssistantResourceBinding & {
   description: string
   domain: string | null
   state: string | null
 }
 
-const dedupeCapabilities = (capabilities: CollectionCapability[]) =>
+export const HIDDEN_HOME_ASSISTANT_GROUP_RESOURCE_IDS = new Set([
+  'light.pascal_kitchen_perimeter_lights_group',
+  'light.pascal_kitchen_table_lights_group',
+  'light.pascal_living_room_lamps_group',
+  'light.pascal_main_floor_lights_group',
+])
+
+export function isHiddenHomeAssistantGroupResourceId(resourceId: string | null | undefined) {
+  return Boolean(resourceId && HIDDEN_HOME_ASSISTANT_GROUP_RESOURCE_IDS.has(resourceId))
+}
+
+const dedupeCapabilities = (capabilities: HomeAssistantCollectionCapability[]) =>
   Array.from(new Set(capabilities))
 
 const mapField = (
   field: HomeAssistantAvailableActionField,
-): CollectionHomeAssistantActionField => ({
+): HomeAssistantActionField => ({
   defaultValue: field.defaultValue,
   key: field.key,
   label: field.label,
@@ -39,7 +48,7 @@ const mapField = (
 const inferCapabilitiesFromAction = (
   action: Pick<HomeAssistantAvailableAction, 'actionKind' | 'domain' | 'fields' | 'service'>,
 ) => {
-  const capabilities: CollectionCapability[] = []
+  const capabilities: HomeAssistantCollectionCapability[] = []
 
   switch (action.actionKind) {
     case 'connect':
@@ -69,11 +78,7 @@ const inferCapabilitiesFromAction = (
     capabilities.push(action.domain === 'fan' ? 'speed' : 'brightness')
   }
 
-  if (
-    action.fields.some((field) =>
-      ['brightness', 'brightness_pct'].includes(field.key),
-    )
-  ) {
+  if (action.fields.some((field) => ['brightness', 'brightness_pct'].includes(field.key))) {
     capabilities.push('brightness')
   }
 
@@ -92,9 +97,7 @@ const inferCapabilitiesFromAction = (
   return dedupeCapabilities(capabilities)
 }
 
-export const toCollectionHomeAssistantAction = (
-  action: HomeAssistantAvailableAction,
-): CollectionHomeAssistantAction => ({
+export const toHomeAssistantAction = (action: HomeAssistantAvailableAction): HomeAssistantAction => ({
   capability: inferCapabilitiesFromAction(action)[0] ?? 'trigger',
   domain: action.domain,
   fields: action.fields.map((field) => mapField(field)),
@@ -106,10 +109,15 @@ export const toCollectionHomeAssistantAction = (
 export const toImportedEntityResource = (
   device: HomeAssistantDiscoveredDevice,
 ): HomeAssistantImportedResource => {
-  const actions = device.availableActions.map((action) => toCollectionHomeAssistantAction(action))
+  const actions = device.availableActions.map((action) => toHomeAssistantAction(action))
+  const capabilities = dedupeCapabilities([
+    ...actions.map((action) => action.capability),
+    ...device.availableActions.flatMap((action) => inferCapabilitiesFromAction(action)),
+  ])
+
   return {
     actions,
-    capabilities: dedupeCapabilities(actions.map((action) => action.capability)),
+    capabilities,
     defaultActionKey: device.defaultActionKey,
     description: device.description,
     domain: device.haEntityId?.split('.')[0] ?? null,
@@ -121,44 +129,54 @@ export const toImportedEntityResource = (
   }
 }
 
-export const buildCollectionBindingFromResource = (
+const toResourceBinding = (
   resource: HomeAssistantImportedResource,
-): Collection['homeAssistant'] => ({
-  aggregation: resource.kind === 'entity' ? 'single' : 'trigger_only',
-  primaryResourceId: resource.id,
-  resources: [
-    {
-      actions: resource.actions,
-      capabilities: resource.capabilities,
-      defaultActionKey: resource.defaultActionKey,
-      entityId: resource.entityId,
-      id: resource.id,
-      kind: resource.kind,
-      label: resource.label,
-    },
-  ],
-})
+): HomeAssistantResourceBinding => {
+  const memberEntityIds = resource.memberEntityIds ?? []
+  const isGroup = resource.isGroup === true || memberEntityIds.length > 0
 
-export const getCollectionRoomZoneIds = (
-  collection: Collection,
-  zoneIds: CollectionZoneId[] = [],
-) => {
-  const normalizedZoneIds = Array.from(
-    new Set([...(collection.zoneIds ?? []), ...zoneIds]),
-  ).filter((zoneId): zoneId is CollectionZoneId => typeof zoneId === 'string')
-
-  return normalizedZoneIds.length > 0 ? normalizedZoneIds : undefined
+  return {
+    actions: resource.actions,
+    capabilities: resource.capabilities,
+    defaultActionKey: resource.defaultActionKey,
+    entityId: resource.entityId,
+    id: resource.id,
+    ...(isGroup
+      ? {
+          isGroup: true,
+          memberEntityIds,
+        }
+      : {}),
+    kind: resource.kind,
+    label: resource.label,
+  }
 }
 
-export const inferCollectionKindFromResource = (
-  resource: HomeAssistantImportedResource,
-): CollectionKind => (resource.kind === 'entity' ? 'device' : 'automation')
+export const buildCollectionBindingFromResource = ({
+  collectionId,
+  presentation,
+  resource,
+}: {
+  collectionId: CollectionId
+  presentation?: HomeAssistantBindingPresentation
+  resource: HomeAssistantImportedResource
+}) =>
+  normalizeHomeAssistantCollectionBinding({
+    aggregation: resource.kind === 'entity' ? 'single' : 'trigger_only',
+    collectionId,
+    presentation,
+    primaryResourceId: resource.id,
+    resources: [toResourceBinding(resource)],
+  }) as HomeAssistantCollectionBinding
 
-export const getCollectionBindingDisplayLabel = (collection: Collection) =>
-  collection.presentation?.label?.trim() || collection.name.trim() || 'Collection'
+export const getCollectionBindingDisplayLabel = (
+  collection: Collection,
+  binding?: HomeAssistantCollectionBinding | null,
+) => binding?.presentation?.label?.trim() || collection.name.trim() || 'Collection'
 
-export const collectionHasHomeAssistantBinding = (collection: Collection | null | undefined) =>
-  Boolean(collection?.homeAssistant?.resources?.length)
+export const collectionHasHomeAssistantBinding = (
+  binding: HomeAssistantCollectionBinding | null | undefined,
+) => Boolean(binding?.resources?.length)
 
 export const resolveCollectionForSelectedItems = ({
   collections,
@@ -194,13 +212,11 @@ export const buildCollectionForSelection = ({
   controlNodeId,
   name,
   selectedItems,
-  zoneIds,
 }: {
   color?: string
   controlNodeId?: AnyNodeId
   name: string
   selectedItems: ItemNode[]
-  zoneIds?: CollectionZoneId[]
 }) =>
   normalizeCollection({
     color,
@@ -208,76 +224,36 @@ export const buildCollectionForSelection = ({
     name,
     nodeIds: selectedItems.map((item) => item.id),
     controlNodeId: controlNodeId ?? selectedItems[0]?.id,
-    zoneIds,
   })
 
-export const bindResourceToCollection = ({
+export const bindResourceToCollectionBinding = ({
   collection,
+  existingBinding,
+  presentation,
   resource,
-  zoneIds,
 }: {
   collection: Collection
+  existingBinding?: HomeAssistantCollectionBinding | null
+  presentation?: HomeAssistantBindingPresentation
   resource: HomeAssistantImportedResource
-  zoneIds?: CollectionZoneId[]
 }) => {
-  const existingResources = collection.homeAssistant?.resources ?? []
+  const existingResources = existingBinding?.resources ?? []
   const nextResources = existingResources.some((entry) => entry.id === resource.id)
     ? existingResources.map((entry) =>
-        entry.id === resource.id
-          ? {
-              actions: resource.actions,
-              capabilities: resource.capabilities,
-              defaultActionKey: resource.defaultActionKey,
-              entityId: resource.entityId,
-              id: resource.id,
-              kind: resource.kind,
-              label: resource.label,
-            }
-          : entry,
+        entry.id === resource.id ? toResourceBinding(resource) : entry,
       )
-    : [
-        ...existingResources,
-        {
-          actions: resource.actions,
-          capabilities: resource.capabilities,
-          defaultActionKey: resource.defaultActionKey,
-          entityId: resource.entityId,
-          id: resource.id,
-          kind: resource.kind,
-          label: resource.label,
-        },
-      ]
+    : [...existingResources, toResourceBinding(resource)]
 
-  const nextCapabilities = dedupeCapabilities([
-    ...(collection.capabilities ?? []),
-    ...nextResources.flatMap((entry) => entry.capabilities),
-  ])
-
-  const nextKind =
-    resource.kind === 'entity'
-      ? nextResources.length > 1 || collection.nodeIds.length > 1
-        ? 'group'
-        : 'device'
-      : 'automation'
-
-  return normalizeCollection({
-    ...collection,
-    capabilities: nextCapabilities,
-    homeAssistant: {
-      aggregation:
-        nextKind === 'automation'
-          ? 'trigger_only'
-          : nextResources.length > 1
-            ? 'all'
-            : 'single',
-      primaryResourceId: collection.homeAssistant?.primaryResourceId ?? resource.id,
-      resources: nextResources,
-    },
-    kind: nextKind,
-    presentation: {
-      ...collection.presentation,
-      label: collection.presentation?.label ?? resource.label,
-    },
-    zoneIds: getCollectionRoomZoneIds(collection, zoneIds),
-  })
+  return normalizeHomeAssistantCollectionBinding({
+    aggregation:
+      nextResources.some((entry) => entry.kind !== 'entity')
+        ? 'trigger_only'
+        : nextResources.length > 1 || collection.nodeIds.length > 1
+          ? 'all'
+          : 'single',
+    collectionId: collection.id,
+    presentation,
+    primaryResourceId: existingBinding?.primaryResourceId ?? resource.id,
+    resources: nextResources,
+  }) as HomeAssistantCollectionBinding
 }

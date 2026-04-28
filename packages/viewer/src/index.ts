@@ -6,6 +6,25 @@ export {
 } from './components/viewer/post-processing'
 export { WalkthroughControls } from './components/viewer/walkthrough-controls'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+export {
+  getHomeAssistantBindingCapabilities,
+  getHomeAssistantBindingDisplayLabel,
+  hasHomeAssistantBinding,
+  isHomeAssistantTriggerBinding,
+  normalizeHomeAssistantCollectionBinding,
+} from './lib/home-assistant-bindings'
+export type {
+  HomeAssistantAction,
+  HomeAssistantActionField,
+  HomeAssistantActionRequest,
+  HomeAssistantBindingAggregation,
+  HomeAssistantBindingPresentation,
+  HomeAssistantCollectionBinding,
+  HomeAssistantCollectionBindingMap,
+  HomeAssistantCollectionCapability,
+  HomeAssistantResourceBinding,
+  HomeAssistantResourceKind,
+} from './lib/home-assistant-bindings'
 export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,

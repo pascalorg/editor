@@ -21,10 +21,11 @@ export const useItemLightPool = create<ItemLightPoolStore>((set) => ({
   registrations: new Map(),
 
   register: (key, nodeId, effect, interactive) => {
-    const toggleIndex = interactive.controls.findIndex((c) => c.kind === 'toggle')
-    const sliderIndex = interactive.controls.findIndex((c) => c.kind === 'slider')
+    const controls = interactive.controls ?? []
+    const toggleIndex = controls.findIndex((c) => c.kind === 'toggle')
+    const sliderIndex = controls.findIndex((c) => c.kind === 'slider')
     const sliderControl =
-      sliderIndex >= 0 ? (interactive.controls[sliderIndex] as SliderControl) : null
+      sliderIndex >= 0 ? (controls[sliderIndex] as SliderControl) : null
 
     const registration: LightRegistration = {
       nodeId,

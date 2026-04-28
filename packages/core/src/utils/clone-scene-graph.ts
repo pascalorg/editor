@@ -1,6 +1,7 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
+import { isHomeAssistantBindingNode } from '../schema/nodes/home-assistant-binding'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -120,6 +121,14 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
           }
         }
       }
+    }
+
+    for (const node of Object.values(clonedNodes)) {
+      if (!isHomeAssistantBindingNode(node)) {
+        continue
+      }
+
+      node.collectionId = collectionIdMap.get(node.collectionId) ?? node.collectionId
     }
   }
 

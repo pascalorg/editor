@@ -1,14 +1,8 @@
 'use client'
 
 import type { ItemNode } from '@pascal-app/core'
-import {
-  ArrowLeft,
-  Check,
-  LoaderCircle,
-  Power,
-  RefreshCw,
-  Tv,
-} from 'lucide-react'
+import { useViewer } from '@pascal-app/viewer'
+import { ArrowLeft, Check, LoaderCircle, Power, RefreshCw, Tv } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type {
   HomeAssistantAvailableAction,
@@ -68,14 +62,26 @@ function getCategoryMeta(category: HomeAssistantCapabilityCategory) {
     case 'power':
       return { icon: <Power className="h-4 w-4" />, label: 'Power' }
     case 'playback':
-      return { icon: <HomeAssistantActionIconView className="h-4 w-4" icon="play" />, label: 'Playback' }
+      return {
+        icon: <HomeAssistantActionIconView className="h-4 w-4" icon="play" />,
+        label: 'Playback',
+      }
     case 'audio':
-      return { icon: <HomeAssistantActionIconView className="h-4 w-4" icon="volume_set" />, label: 'Audio' }
+      return {
+        icon: <HomeAssistantActionIconView className="h-4 w-4" icon="volume_set" />,
+        label: 'Audio',
+      }
     case 'access':
-      return { icon: <HomeAssistantActionIconView className="h-4 w-4" icon="lock" />, label: 'Access' }
+      return {
+        icon: <HomeAssistantActionIconView className="h-4 w-4" icon="lock" />,
+        label: 'Access',
+      }
     case 'other':
     default:
-      return { icon: <HomeAssistantActionIconView className="h-4 w-4" icon="custom" />, label: 'Other' }
+      return {
+        icon: <HomeAssistantActionIconView className="h-4 w-4" icon="custom" />,
+        label: 'Other',
+      }
   }
 }
 
@@ -120,6 +126,40 @@ function getLinkKey(link: Pick<HomeAssistantLink, 'haEntityId' | 'deviceId'>) {
   return link.haEntityId ?? link.deviceId
 }
 
+function isTelevisionItem(item: ItemNode) {
+  const candidates = [item.asset.id, item.asset.name, item.asset.src, ...(item.asset.tags ?? [])]
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+
+  return candidates.some(
+    (candidate) =>
+      candidate === 'tv' ||
+      candidate.includes('television') ||
+      candidate.includes('flat-screen-tv'),
+  )
+}
+
+function isHomeAssistantOffAction(action: HomeAssistantAvailableAction, link: HomeAssistantLink) {
+  return (
+    action.actionKind === 'turn_off' ||
+    action.service === 'turn_off' ||
+    link.serviceName === 'turn_off'
+  )
+}
+
+function isDeferredHomeAssistantPowerToggle(
+  action: HomeAssistantAvailableAction,
+  link: HomeAssistantLink,
+) {
+  return (
+    action.actionKind === 'power' || action.service === 'toggle' || link.serviceName === 'toggle'
+  )
+}
+
+function isHomeAssistantOffState(state: string) {
+  return state.trim().toLowerCase() === 'off'
+}
+
 type HomeAssistantConnectivityPanelProps = {
   item: ItemNode
   link: HomeAssistantLink
@@ -135,8 +175,9 @@ export function HomeAssistantConnectivityPanel({
   const [reloadToken, setReloadToken] = useState(0)
   const [loadError, setLoadError] = useState('')
   const [device, setDevice] = useState<HomeAssistantDiscoveredDevice | null>(null)
-  const [selectedCategory, setSelectedCategory] =
-    useState<HomeAssistantCapabilityCategory | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<HomeAssistantCapabilityCategory | null>(
+    null,
+  )
   const [selectedActionKey, setSelectedActionKey] = useState<string | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({})
   const [isActionRunning, setIsActionRunning] = useState(false)
@@ -208,10 +249,11 @@ export function HomeAssistantConnectivityPanel({
           return
         }
 
-        const nextCategories = CATEGORY_ORDER.filter((category) =>
-          nextDevice.availableActions.some(
-            (action) => getHomeAssistantCapabilityCategory(action.actionKind) === category,
-          ) && enabledCategories.includes(category),
+        const nextCategories = CATEGORY_ORDER.filter(
+          (category) =>
+            nextDevice.availableActions.some(
+              (action) => getHomeAssistantCapabilityCategory(action.actionKind) === category,
+            ) && enabledCategories.includes(category),
         )
         const defaultCategory = nextCategories[0] ?? null
 
@@ -251,12 +293,15 @@ export function HomeAssistantConnectivityPanel({
     }
 
     setFieldValues((currentValues) =>
-      getHomeAssistantRenderableFields(selectedAction, device).reduce<Record<string, unknown>>((values, field) => {
-        values[field.key] =
-          currentValues[field.key] ??
-          getHomeAssistantActionInitialFieldValue(selectedAction, field, device, link.serviceData)
-        return values
-      }, {}),
+      getHomeAssistantRenderableFields(selectedAction, device).reduce<Record<string, unknown>>(
+        (values, field) => {
+          values[field.key] =
+            currentValues[field.key] ??
+            getHomeAssistantActionInitialFieldValue(selectedAction, field, device, link.serviceData)
+          return values
+        },
+        {},
+      ),
     )
   }, [device, link, selectedAction])
 
@@ -295,6 +340,14 @@ export function HomeAssistantConnectivityPanel({
       setActionError('')
       setActionResult(null)
       setStatusMessage(`Running ${actionToRun.label} on ${device.name}...`)
+      if (isTelevisionItem(item)) {
+        const viewer = useViewer.getState()
+        if (isHomeAssistantOffAction(actionToRun, actionLink)) {
+          viewer.clearHomeAssistantItemEffect(item.id)
+        } else if (!isDeferredHomeAssistantPowerToggle(actionToRun, actionLink)) {
+          viewer.triggerHomeAssistantItemEffect(item.id)
+        }
+      }
 
       const response = await fetch('/api/home-assistant/device-action', {
         body: JSON.stringify({
@@ -313,6 +366,14 @@ export function HomeAssistantConnectivityPanel({
       }
 
       setActionResult(payload)
+      if (isTelevisionItem(item)) {
+        const viewer = useViewer.getState()
+        if (isHomeAssistantOffState(payload.finalState)) {
+          viewer.clearHomeAssistantItemEffect(item.id)
+        } else {
+          viewer.triggerHomeAssistantItemEffect(item.id)
+        }
+      }
       setStatusMessage(payload.message)
     } catch (error) {
       const message =
@@ -329,9 +390,10 @@ export function HomeAssistantConnectivityPanel({
       return
     }
 
-    const nextFieldValues = getHomeAssistantRenderableFields(action, device ?? buildFallbackDevice(link)).reduce<
-      Record<string, unknown>
-    >((values, field) => {
+    const nextFieldValues = getHomeAssistantRenderableFields(
+      action,
+      device ?? buildFallbackDevice(link),
+    ).reduce<Record<string, unknown>>((values, field) => {
       values[field.key] =
         fieldValues[field.key] ??
         getHomeAssistantActionInitialFieldValue(
@@ -348,7 +410,13 @@ export function HomeAssistantConnectivityPanel({
     setActionError('')
     setActionResult(null)
 
-    if (canRunHomeAssistantActionImmediately(action, device ?? buildFallbackDevice(link), nextFieldValues)) {
+    if (
+      canRunHomeAssistantActionImmediately(
+        action,
+        device ?? buildFallbackDevice(link),
+        nextFieldValues,
+      )
+    ) {
       await runAction(action, nextFieldValues)
       return
     }
@@ -445,7 +513,9 @@ export function HomeAssistantConnectivityPanel({
                   ) : (
                     <HomeAssistantActionIconView
                       className="h-4 w-4 shrink-0"
-                      icon={selectorKey === 'boolean' && option.value === false ? 'toggle' : 'connect'}
+                      icon={
+                        selectorKey === 'boolean' && option.value === false ? 'toggle' : 'connect'
+                      }
                     />
                   )}
                 </button>
@@ -458,7 +528,9 @@ export function HomeAssistantConnectivityPanel({
 
     if (selectorKey === 'number') {
       const numberSelector =
-        field.selector?.number && typeof field.selector.number === 'object' ? field.selector.number : null
+        field.selector?.number && typeof field.selector.number === 'object'
+          ? field.selector.number
+          : null
       const min = numberSelector && 'min' in numberSelector ? Number(numberSelector.min) : 0
       const max = numberSelector && 'max' in numberSelector ? Number(numberSelector.max) : 100
       const step = numberSelector && 'step' in numberSelector ? Number(numberSelector.step) : 1
@@ -715,10 +787,12 @@ export function HomeAssistantConnectivityPanel({
         {selectedAction &&
           device &&
           getHomeAssistantRenderableFields(selectedAction, device).length > 0 && (
-          <div className="mt-3 grid gap-2" data-testid="ha-connectivity-fields">
-            {getHomeAssistantRenderableFields(selectedAction, device).map((field) => renderField(field))}
-          </div>
-        )}
+            <div className="mt-3 grid gap-2" data-testid="ha-connectivity-fields">
+              {getHomeAssistantRenderableFields(selectedAction, device).map((field) =>
+                renderField(field),
+              )}
+            </div>
+          )}
       </div>
 
       <div

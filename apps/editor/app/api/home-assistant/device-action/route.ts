@@ -1,7 +1,7 @@
 import type {
-  CollectionHomeAssistantActionRequest,
-  CollectionHomeAssistantBinding,
-} from '@pascal-app/core/schema'
+  HomeAssistantActionRequest,
+  HomeAssistantCollectionBinding,
+} from '@pascal-app/viewer/home-assistant-bindings'
 import { getHomeAssistantLink } from '../../../../../../packages/editor/src/lib/home-assistant'
 import {
   resolveHomeAssistantServerConfig,
@@ -12,11 +12,11 @@ import {
 export const runtime = 'nodejs'
 
 type DeviceActionRequestBody = {
-  binding?: CollectionHomeAssistantBinding
+  binding?: HomeAssistantCollectionBinding
   collectionName?: string
   itemName?: string
   link?: unknown
-  request?: CollectionHomeAssistantActionRequest
+  request?: HomeAssistantActionRequest
 }
 
 export async function POST(request: Request) {

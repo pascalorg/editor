@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
@@ -79,7 +79,7 @@ type WebGPUDeviceLike = {
   lost: Promise<WebGPUDeviceLossInfo>
 }
 
-function GPUDeviceWatcher() {
+function GPUDeviceWatcher({ onDeviceLost }: { onDeviceLost: () => void }) {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
@@ -88,13 +88,21 @@ function GPUDeviceWatcher() {
 
     if (!device) return
 
+    let active = true
     device.lost.then((info: WebGPUDeviceLossInfo) => {
-      console.error(
+      if (!active) return
+
+      console.warn(
         `[viewer] WebGPU device lost: reason="${info.reason ?? 'unknown'}", message="${info.message ?? ''}". ` +
-          'The page must be reloaded to recover the GPU context.',
+          'Remounting the viewer renderer.',
       )
+      onDeviceLost()
     })
-  }, [gl])
+
+    return () => {
+      active = false
+    }
+  }, [gl, onDeviceLost])
 
   return null
 }
@@ -113,6 +121,11 @@ const Viewer: React.FC<ViewerProps> = ({
   perf = false,
 }) => {
   const theme = useViewer((state) => state.theme)
+  const [rendererResetKey, setRendererResetKey] = useState(0)
+  const handleDeviceLost = useCallback(() => {
+    setRendererResetKey((currentKey) => currentKey + 1)
+  }, [])
+
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
@@ -132,6 +145,7 @@ const Viewer: React.FC<ViewerProps> = ({
         await renderer.init()
         return renderer
       }}
+      key={rendererResetKey}
       resize={{
         debounce: 100,
       }}
@@ -169,7 +183,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <ZoneSystem />
       <PostProcessing hoverStyles={hoverStyles} />
       {/* <DebugRenderer /> */}
-      <GPUDeviceWatcher />
+      <GPUDeviceWatcher onDeviceLost={handleDeviceLost} />
 
       <ItemLightSystem />
       {selectionManager === 'default' && <SelectionManager />}

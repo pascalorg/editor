@@ -20,6 +20,10 @@ export type { PresetsAdapter, PresetsTab } from './contexts/presets-context'
 export { PresetsProvider } from './contexts/presets-context'
 export type { SaveStatus } from './hooks/use-auto-save'
 export type { SceneGraph } from './lib/scene'
+export {
+  HIDDEN_HOME_ASSISTANT_GROUP_RESOURCE_IDS,
+  isHiddenHomeAssistantGroupResourceId,
+} from './lib/home-assistant-collections'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
 export { default as useAudio } from './store/use-audio'

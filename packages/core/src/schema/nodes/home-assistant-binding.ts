@@ -1,0 +1,389 @@
+import { z } from 'zod'
+import { BaseNode, nodeType, objectId } from '../base'
+import type { CollectionId } from '../collections'
+import type { AnyNode, AnyNodeId } from '../types'
+
+export const HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT = 3.5
+
+export type HomeAssistantCollectionCapability =
+  | 'brightness'
+  | 'media'
+  | 'power'
+  | 'speed'
+  | 'temperature'
+  | 'trigger'
+  | 'volume'
+
+export type HomeAssistantResourceKind = 'automation' | 'entity' | 'scene' | 'script'
+
+export type HomeAssistantBindingAggregation =
+  | 'all'
+  | 'any_on'
+  | 'primary'
+  | 'single'
+  | 'trigger_only'
+
+const homeAssistantActionFieldSchema = z.object({
+  defaultValue: z.unknown().optional(),
+  key: z.string(),
+  label: z.string(),
+  required: z.boolean(),
+  selector: z.record(z.string(), z.unknown()).nullable().optional(),
+})
+
+const homeAssistantActionSchema = z.object({
+  capability: z.enum([
+    'brightness',
+    'media',
+    'power',
+    'speed',
+    'temperature',
+    'trigger',
+    'volume',
+  ] satisfies HomeAssistantCollectionCapability[]),
+  domain: z.string(),
+  fields: z.array(homeAssistantActionFieldSchema).optional(),
+  key: z.string(),
+  label: z.string(),
+  service: z.string(),
+})
+
+const homeAssistantResourceBindingSchema = z.object({
+  actions: z.array(homeAssistantActionSchema).default([]),
+  capabilities: z.array(
+    z.enum([
+      'brightness',
+      'media',
+      'power',
+      'speed',
+      'temperature',
+      'trigger',
+      'volume',
+    ] satisfies HomeAssistantCollectionCapability[]),
+  ),
+  defaultActionKey: z.string().nullable().optional(),
+  entityId: z.string().nullable().optional(),
+  id: z.string(),
+  isGroup: z.boolean().optional(),
+  kind: z.enum(['automation', 'entity', 'scene', 'script'] satisfies HomeAssistantResourceKind[]),
+  label: z.string(),
+  memberEntityIds: z.array(z.string()).optional(),
+})
+
+const homeAssistantBindingPresentationSchema = z.object({
+  icon: z.string().optional(),
+  label: z.string().optional(),
+  rtsExcludedResourceIds: z.array(z.string()).optional(),
+  rtsGroups: z.array(z.array(z.string())).optional(),
+  rtsOrder: z.number().optional(),
+  rtsScreenPosition: z
+    .object({
+      x: z.number(),
+      y: z.number(),
+    })
+    .optional(),
+  rtsWorldPosition: z
+    .object({
+      x: z.number(),
+      y: z.number(),
+      z: z.number(),
+    })
+    .optional(),
+})
+
+const homeAssistantCollectionBindingSchema = z.object({
+  aggregation: z.enum(
+    ['all', 'any_on', 'primary', 'single', 'trigger_only'] satisfies HomeAssistantBindingAggregation[],
+  ),
+  collectionId: z.custom<CollectionId>(),
+  presentation: homeAssistantBindingPresentationSchema.optional(),
+  primaryResourceId: z.string().nullable().optional(),
+  resources: z.array(homeAssistantResourceBindingSchema),
+})
+
+export type HomeAssistantActionField = z.infer<typeof homeAssistantActionFieldSchema>
+export type HomeAssistantAction = z.infer<typeof homeAssistantActionSchema>
+export type HomeAssistantResourceBinding = z.infer<typeof homeAssistantResourceBindingSchema>
+export type HomeAssistantBindingPresentation = z.infer<
+  typeof homeAssistantBindingPresentationSchema
+>
+export type HomeAssistantCollectionBinding = z.infer<
+  typeof homeAssistantCollectionBindingSchema
+>
+export type HomeAssistantCollectionBindingMap = Record<CollectionId, HomeAssistantCollectionBinding>
+
+export const HomeAssistantBindingNode = BaseNode.extend({
+  id: objectId('ha-binding'),
+  type: nodeType('home-assistant-binding'),
+  aggregation: z.enum(
+    ['all', 'any_on', 'primary', 'single', 'trigger_only'] satisfies HomeAssistantBindingAggregation[],
+  ).default('single'),
+  collectionId: z.custom<CollectionId>(),
+  presentation: homeAssistantBindingPresentationSchema.optional(),
+  primaryResourceId: z.string().nullable().optional(),
+  resources: z.array(homeAssistantResourceBindingSchema).default([]),
+})
+
+export type HomeAssistantBindingNode = z.infer<typeof HomeAssistantBindingNode>
+export type HomeAssistantBindingNodeId = HomeAssistantBindingNode['id']
+export type HomeAssistantBindingNodeMap = Record<CollectionId, HomeAssistantBindingNode>
+
+export type HomeAssistantActionRequest =
+  | {
+      capability: Extract<
+        HomeAssistantCollectionCapability,
+        'brightness' | 'speed' | 'temperature' | 'volume'
+      >
+      kind: 'range'
+      value: number
+    }
+  | {
+      kind: 'toggle'
+      value: boolean
+    }
+  | {
+      kind: 'trigger'
+    }
+
+const dedupeStringArray = <T extends string>(values: T[] | undefined) =>
+  Array.from(new Set((values ?? []).filter((value): value is T => typeof value === 'string')))
+
+const normalizeAction = (action: HomeAssistantAction): HomeAssistantAction | null => {
+  if (!(action && typeof action === 'object')) {
+    return null
+  }
+
+  if (
+    typeof action.key !== 'string' ||
+    typeof action.label !== 'string' ||
+    typeof action.domain !== 'string' ||
+    typeof action.service !== 'string' ||
+    typeof action.capability !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    capability: action.capability,
+    domain: action.domain,
+    fields: Array.isArray(action.fields)
+      ? action.fields
+          .filter(
+            (field): field is HomeAssistantActionField =>
+              Boolean(
+                field &&
+                  typeof field === 'object' &&
+                  typeof field.key === 'string' &&
+                  typeof field.label === 'string' &&
+                  typeof field.required === 'boolean',
+              ),
+          )
+          .map((field) => ({
+            defaultValue: field.defaultValue,
+            key: field.key,
+            label: field.label,
+            required: field.required,
+            selector:
+              field.selector && typeof field.selector === 'object' && !Array.isArray(field.selector)
+                ? field.selector
+                : null,
+          }))
+      : [],
+    key: action.key,
+    label: action.label,
+    service: action.service,
+  }
+}
+
+const normalizeResource = (
+  resource: HomeAssistantResourceBinding,
+): HomeAssistantResourceBinding | null => {
+  if (!(resource && typeof resource === 'object')) {
+    return null
+  }
+
+  if (
+    typeof resource.id !== 'string' ||
+    typeof resource.kind !== 'string' ||
+    typeof resource.label !== 'string'
+  ) {
+    return null
+  }
+
+  const memberEntityIds = dedupeStringArray(resource.memberEntityIds)
+  const isGroup = resource.isGroup === true || memberEntityIds.length > 0
+
+  return {
+    actions: Array.isArray(resource.actions)
+      ? resource.actions
+          .map((action) => normalizeAction(action))
+          .filter((action): action is HomeAssistantAction => Boolean(action))
+      : [],
+    capabilities: dedupeStringArray(resource.capabilities),
+    defaultActionKey:
+      typeof resource.defaultActionKey === 'string' ? resource.defaultActionKey : null,
+    entityId: typeof resource.entityId === 'string' ? resource.entityId : null,
+    id: resource.id,
+    ...(isGroup ? { isGroup, memberEntityIds } : {}),
+    kind: resource.kind,
+    label: resource.label,
+  }
+}
+
+const clampUnit = (value: number) => Math.max(0, Math.min(1, value))
+
+const normalizeStringGroups = (groups: unknown) =>
+  Array.isArray(groups)
+    ? groups
+        .filter(Array.isArray)
+        .map((group) =>
+          group.filter((memberId): memberId is string => typeof memberId === 'string'),
+        )
+        .filter((group) => group.length > 0)
+    : undefined
+
+export const normalizeHomeAssistantCollectionBinding = (
+  binding: HomeAssistantCollectionBinding,
+): HomeAssistantCollectionBinding | null => {
+  if (!(binding && typeof binding === 'object')) {
+    return null
+  }
+
+  const collectionId =
+    typeof binding.collectionId === 'string' ? (binding.collectionId as CollectionId) : null
+  if (!collectionId) {
+    return null
+  }
+
+  const normalizedResources = Array.isArray(binding.resources)
+    ? binding.resources
+        .map((resource) => normalizeResource(resource))
+        .filter((resource): resource is HomeAssistantResourceBinding => Boolean(resource))
+    : []
+
+  if (normalizedResources.length === 0) {
+    return null
+  }
+
+  return {
+    aggregation: binding.aggregation ?? 'single',
+    collectionId,
+    presentation:
+      binding.presentation &&
+      typeof binding.presentation === 'object' &&
+      !Array.isArray(binding.presentation)
+        ? {
+            icon:
+              typeof binding.presentation.icon === 'string' ? binding.presentation.icon : undefined,
+            label:
+              typeof binding.presentation.label === 'string'
+                ? binding.presentation.label
+                : undefined,
+            rtsExcludedResourceIds: dedupeStringArray(
+              binding.presentation.rtsExcludedResourceIds,
+            ),
+            rtsGroups: normalizeStringGroups(binding.presentation.rtsGroups),
+            rtsOrder:
+              typeof binding.presentation.rtsOrder === 'number'
+                ? binding.presentation.rtsOrder
+                : undefined,
+            rtsScreenPosition:
+              binding.presentation.rtsScreenPosition &&
+              typeof binding.presentation.rtsScreenPosition.x === 'number' &&
+              typeof binding.presentation.rtsScreenPosition.y === 'number'
+                ? {
+                    x: clampUnit(binding.presentation.rtsScreenPosition.x),
+                    y: clampUnit(binding.presentation.rtsScreenPosition.y),
+                  }
+                : undefined,
+            rtsWorldPosition:
+              binding.presentation.rtsWorldPosition &&
+              typeof binding.presentation.rtsWorldPosition.x === 'number' &&
+              typeof binding.presentation.rtsWorldPosition.y === 'number' &&
+              typeof binding.presentation.rtsWorldPosition.z === 'number'
+                ? {
+                    x: binding.presentation.rtsWorldPosition.x,
+                    y: binding.presentation.rtsWorldPosition.y,
+                    z: binding.presentation.rtsWorldPosition.z,
+                  }
+                : undefined,
+          }
+        : undefined,
+    primaryResourceId:
+      typeof binding.primaryResourceId === 'string'
+        ? binding.primaryResourceId
+        : normalizedResources[0]?.id ?? null,
+    resources: normalizedResources,
+  }
+}
+
+export const createHomeAssistantBindingNode = ({
+  binding,
+  id,
+  name,
+}: {
+  binding: HomeAssistantCollectionBinding
+  id?: HomeAssistantBindingNodeId
+  name?: string
+}) => {
+  const normalizedBinding = normalizeHomeAssistantCollectionBinding(binding)
+  if (!normalizedBinding) {
+    return null
+  }
+
+  return HomeAssistantBindingNode.parse({
+    ...normalizedBinding,
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+  })
+}
+
+export const isHomeAssistantBindingNode = (
+  node: AnyNode | null | undefined,
+): node is HomeAssistantBindingNode => node?.type === 'home-assistant-binding'
+
+export const getHomeAssistantBindingNodes = (nodes: Record<AnyNodeId, AnyNode>) =>
+  Object.values(nodes).filter((node): node is HomeAssistantBindingNode =>
+    isHomeAssistantBindingNode(node),
+  )
+
+export const getHomeAssistantBindingNodeMap = (
+  nodes: Record<AnyNodeId, AnyNode>,
+): HomeAssistantBindingNodeMap =>
+  Object.fromEntries(
+    getHomeAssistantBindingNodes(nodes).flatMap((node) =>
+      node.resources.length > 0 ? [[node.collectionId, node]] : [],
+    ),
+  ) as HomeAssistantBindingNodeMap
+
+export const getHomeAssistantBindingNodeForCollection = (
+  nodes: Record<AnyNodeId, AnyNode>,
+  collectionId: CollectionId,
+) => getHomeAssistantBindingNodes(nodes).find((node) => node.collectionId === collectionId) ?? null
+
+export const getHomeAssistantBindingNodeIdForCollection = (
+  nodes: Record<AnyNodeId, AnyNode>,
+  collectionId: CollectionId,
+) => getHomeAssistantBindingNodeForCollection(nodes, collectionId)?.id ?? null
+
+export const getHomeAssistantBindingCapabilities = (
+  binding: HomeAssistantCollectionBinding | null | undefined,
+) =>
+  new Set(binding?.resources.flatMap((resource) => resource.capabilities ?? []) ?? [])
+
+export const hasHomeAssistantBinding = (
+  binding: HomeAssistantCollectionBinding | null | undefined,
+) => Boolean(binding?.resources?.length)
+
+export const isHomeAssistantTriggerBinding = (
+  binding: HomeAssistantCollectionBinding | null | undefined,
+) =>
+  binding?.aggregation === 'trigger_only' ||
+  (hasHomeAssistantBinding(binding) &&
+    getHomeAssistantBindingCapabilities(binding).has('trigger') &&
+    !getHomeAssistantBindingCapabilities(binding).has('power'))
+
+export const getHomeAssistantBindingDisplayLabel = (
+  binding: HomeAssistantCollectionBinding | null | undefined,
+  fallbackLabel: string,
+) => binding?.presentation?.label?.trim() || fallbackLabel.trim() || 'Collection'

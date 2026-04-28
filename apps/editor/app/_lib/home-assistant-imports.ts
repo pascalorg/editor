@@ -1,16 +1,19 @@
 import type {
-  CollectionCapability,
-  CollectionHomeAssistantAction,
+  HomeAssistantAction,
+  HomeAssistantCollectionCapability,
   HomeAssistantResourceKind,
-} from '@pascal-app/core/schema'
+} from '@pascal-app/viewer/home-assistant-bindings'
 import type { HomeAssistantImportedResource } from '../../../../packages/editor/src/lib/home-assistant-collections'
-import { toImportedEntityResource } from '../../../../packages/editor/src/lib/home-assistant-collections'
+import {
+  isHiddenHomeAssistantGroupResourceId,
+  toImportedEntityResource,
+} from '../../../../packages/editor/src/lib/home-assistant-collections'
 import { discoverHomeAssistantDevices } from './home-assistant-discovery'
 import type { HomeAssistantEntityState, HomeAssistantServerConfig } from './home-assistant-server'
 import { listEntityStates } from './home-assistant-server'
 
 const IMPORTABLE_TRIGGER_DOMAINS: Array<{
-  capability: CollectionCapability
+  capability: HomeAssistantCollectionCapability
   kind: HomeAssistantResourceKind
   service: string
   stateEntityDomain: string
@@ -39,7 +42,7 @@ function createTriggerAction(
   domain: string,
   label: string,
   service: string,
-): CollectionHomeAssistantAction {
+): HomeAssistantAction {
   return {
     capability: 'trigger',
     domain,
@@ -87,6 +90,89 @@ function getTriggerResources(states: HomeAssistantEntityState[]) {
   })
 }
 
+function getMemberEntityIds(state: HomeAssistantEntityState | undefined) {
+  const rawEntityIds =
+    state?.attributes?.entity_id ?? state?.attributes?.entities ?? state?.attributes?.members
+  const values = Array.isArray(rawEntityIds)
+    ? rawEntityIds
+    : typeof rawEntityIds === 'string'
+      ? rawEntityIds.split(/[\s,]+/)
+      : []
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => (typeof value === 'string' ? value.trim() : ''))
+        .filter((value) => /^[a-z0-9_]+\.[a-z0-9_]+$/i.test(value)),
+    ),
+  )
+}
+
+function isLikelyGroupEntity(resource: HomeAssistantImportedResource, state: HomeAssistantEntityState | undefined) {
+  const label =
+    typeof state?.attributes?.friendly_name === 'string'
+      ? state.attributes.friendly_name
+      : resource.label
+  const haystack = `${resource.entityId ?? resource.id} ${label}`.toLowerCase()
+
+  return /\b(group|all[_\s-]?lights|lights[_\s-]?all)\b/.test(haystack)
+}
+
+function applyGroupMetadata(
+  resource: HomeAssistantImportedResource,
+  statesByEntityId: Map<string, HomeAssistantEntityState>,
+): HomeAssistantImportedResource {
+  if (!(resource.kind === 'entity' && resource.entityId)) {
+    return resource
+  }
+
+  const state = statesByEntityId.get(resource.entityId)
+  const memberEntityIds = getMemberEntityIds(state)
+  if (memberEntityIds.length === 0 && !isLikelyGroupEntity(resource, state)) {
+    return resource
+  }
+
+  return {
+    ...resource,
+    description:
+      memberEntityIds.length > 0
+        ? `${resource.description}; ${memberEntityIds.length} grouped HA entities`
+        : `${resource.description}; grouped HA entity`,
+    isGroup: true,
+    memberEntityIds,
+  }
+}
+
+function isImportedDeviceResource(resource: HomeAssistantImportedResource) {
+  return resource.kind === 'entity' && resource.isGroup !== true && Boolean(resource.entityId)
+}
+
+function removeHiddenGroupMembers(
+  resources: HomeAssistantImportedResource[],
+): HomeAssistantImportedResource[] {
+  const importedDeviceEntityIds = new Set(
+    resources
+      .filter(isImportedDeviceResource)
+      .map((resource) => resource.entityId)
+      .filter((entityId): entityId is string => Boolean(entityId)),
+  )
+
+  return resources.map((resource) => {
+    if (!(resource.kind === 'entity' && resource.isGroup === true)) {
+      return resource
+    }
+
+    const memberEntityIds = (resource.memberEntityIds ?? []).filter((entityId) =>
+      importedDeviceEntityIds.has(entityId),
+    )
+
+    return {
+      ...resource,
+      memberEntityIds,
+    }
+  })
+}
+
 export async function listImportableHomeAssistantResources(
   config: HomeAssistantServerConfig,
 ): Promise<HomeAssistantImportedResource[]> {
@@ -94,18 +180,24 @@ export async function listImportableHomeAssistantResources(
     discoverHomeAssistantDevices(config),
     listEntityStates(config),
   ])
+  const statesByEntityId = new Map(states.map((state) => [state.entity_id, state]))
 
   const resources = [
-    ...devices.map((device) => toImportedEntityResource(device)),
+    ...devices
+      .map((device) => toImportedEntityResource(device))
+      .map((resource) => applyGroupMetadata(resource, statesByEntityId)),
     ...getTriggerResources(states),
   ]
 
   const uniqueResources = new Map<string, HomeAssistantImportedResource>()
   for (const resource of resources) {
+    if (isHiddenHomeAssistantGroupResourceId(resource.id)) {
+      continue
+    }
     uniqueResources.set(resource.id, resource)
   }
 
-  return Array.from(uniqueResources.values()).sort((left, right) =>
+  return removeHiddenGroupMembers(Array.from(uniqueResources.values())).sort((left, right) =>
     left.label.localeCompare(right.label),
   )
 }

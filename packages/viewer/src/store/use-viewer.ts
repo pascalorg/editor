@@ -1,11 +1,17 @@
 'use client'
 
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
@@ -18,6 +24,14 @@ type Outliner = {
   hoveredObjects: Object3D[]
 }
 
+export type HomeAssistantItemTriggerEffect = {
+  fadeInMs: number
+  startedAtMs: number
+}
+
+export type HomeAssistantOverlaySection = 'actions' | 'devices' | 'groups'
+export type HomeAssistantOverlayVisibility = Record<HomeAssistantOverlaySection, boolean>
+
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
@@ -27,13 +41,20 @@ type ViewerState = {
   suppressNodeEvents: (durationMs?: number) => void
   roomControlOverlayActive: boolean
   setRoomControlOverlayActive: (active: boolean) => void
+  homeAssistantOverlayVisibility: HomeAssistantOverlayVisibility
+  setHomeAssistantOverlaySectionVisible: (
+    section: HomeAssistantOverlaySection,
+    visible: boolean,
+  ) => void
+  homeAssistantItemTriggerEffects: Record<AnyNodeId, HomeAssistantItemTriggerEffect>
+  triggerHomeAssistantItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
+  clearHomeAssistantItemEffect: (itemId: AnyNodeId) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   setHoveredIds: (ids: Array<AnyNode['id'] | ZoneNode['id']>) => void
-
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
@@ -85,6 +106,12 @@ type ViewerState = {
   setCameraDragging: (dragging: boolean) => void
 }
 
+const DEFAULT_HOME_ASSISTANT_OVERLAY_VISIBILITY: HomeAssistantOverlayVisibility = {
+  actions: true,
+  devices: true,
+  groups: true,
+}
+
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
@@ -99,8 +126,43 @@ const useViewer = create<ViewerState>()(
             (typeof performance !== 'undefined' ? performance.now() : Date.now()) + durationMs,
         }),
       roomControlOverlayActive: false,
-      setRoomControlOverlayActive: (roomControlOverlayActive) =>
-        set({ roomControlOverlayActive }),
+      setRoomControlOverlayActive: (roomControlOverlayActive) => set({ roomControlOverlayActive }),
+      homeAssistantOverlayVisibility: DEFAULT_HOME_ASSISTANT_OVERLAY_VISIBILITY,
+      setHomeAssistantOverlaySectionVisible: (section, visible) =>
+        set((state) => {
+          if (state.homeAssistantOverlayVisibility[section] === visible) {
+            return state
+          }
+
+          return {
+            homeAssistantOverlayVisibility: {
+              ...state.homeAssistantOverlayVisibility,
+              [section]: visible,
+            },
+          }
+        }),
+      homeAssistantItemTriggerEffects: {},
+      triggerHomeAssistantItemEffect: (itemId, fadeInMs = 450) =>
+        set((state) => {
+          if (state.homeAssistantItemTriggerEffects[itemId]) {
+            return state
+          }
+
+          return {
+            homeAssistantItemTriggerEffects: {
+              ...state.homeAssistantItemTriggerEffects,
+              [itemId]: {
+                fadeInMs: Math.max(1, fadeInMs),
+                startedAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+              },
+            },
+          }
+        }),
+      clearHomeAssistantItemEffect: (itemId) =>
+        set((state) => {
+          const { [itemId]: _removed, ...rest } = state.homeAssistantItemTriggerEffects
+          return { homeAssistantItemTriggerEffects: rest }
+        }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
@@ -231,6 +293,7 @@ const useViewer = create<ViewerState>()(
         unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
+        homeAssistantOverlayVisibility: state.homeAssistantOverlayVisibility,
         projectPreferences: state.projectPreferences,
       }),
     },

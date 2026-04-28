@@ -91,8 +91,12 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
 
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area += polygon[i]?.[0] * polygon[j]?.[1]
-    area -= polygon[j]?.[0] * polygon[i]?.[1]
+    const current = polygon[i]
+    const next = polygon[j]
+    if (!(current && next)) continue
+
+    area += current[0] * next[1]
+    area -= next[0] * current[1]
   }
 
   return Math.abs(area) / 2

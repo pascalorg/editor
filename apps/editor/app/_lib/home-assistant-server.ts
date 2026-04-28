@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type {
-  CollectionHomeAssistantActionRequest,
-  CollectionHomeAssistantBinding,
-} from '@pascal-app/core/schema'
+  HomeAssistantActionRequest,
+  HomeAssistantCollectionBinding,
+} from '@pascal-app/viewer/home-assistant-bindings'
 import type { HomeAssistantActionKind, HomeAssistantLink } from '../../../../packages/editor/src/lib/home-assistant'
 import { refreshHomeAssistantAccessToken } from './home-assistant-auth'
 import {
@@ -471,9 +471,9 @@ export function callService(
 }
 
 function getResourceActionForRequest(
-  binding: CollectionHomeAssistantBinding,
-  resource: CollectionHomeAssistantBinding['resources'][number],
-  request: CollectionHomeAssistantActionRequest,
+  binding: HomeAssistantCollectionBinding,
+  resource: HomeAssistantCollectionBinding['resources'][number],
+  request: HomeAssistantActionRequest,
 ) {
   const actions = resource.actions ?? []
   const defaultAction =
@@ -497,7 +497,7 @@ function getResourceActionForRequest(
   }
 
   const serviceCandidatesByCapability: Record<
-    Extract<CollectionHomeAssistantActionRequest, { kind: 'range' }>['capability'],
+  Extract<HomeAssistantActionRequest, { kind: 'range' }>['capability'],
     string[]
   > = {
     brightness: ['turn_on', 'set_percentage'],
@@ -543,7 +543,7 @@ function normalizeRangeValueForField(fieldKey: string, value: number) {
 
 function buildCollectionServiceData(
   action: NonNullable<ReturnType<typeof getResourceActionForRequest>>,
-  request: CollectionHomeAssistantActionRequest,
+  request: HomeAssistantActionRequest,
 ) {
   if (request.kind !== 'range') {
     return {}
@@ -551,7 +551,7 @@ function buildCollectionServiceData(
 
   const fieldKeys = (action.fields ?? []).map((field) => field.key)
   const preferredFieldKeyByCapability: Record<
-    Extract<CollectionHomeAssistantActionRequest, { kind: 'range' }>['capability'],
+  Extract<HomeAssistantActionRequest, { kind: 'range' }>['capability'],
     string[]
   > = {
     brightness: ['brightness_pct', 'brightness'],
@@ -778,8 +778,8 @@ export async function runHomeAssistantDeviceAction(
 export async function runHomeAssistantCollectionAction(
   config: HomeAssistantServerConfig,
   collectionName: string,
-  binding: CollectionHomeAssistantBinding,
-  request: CollectionHomeAssistantActionRequest,
+  binding: HomeAssistantCollectionBinding,
+  request: HomeAssistantActionRequest,
 ): Promise<HomeAssistantCollectionActionResponse> {
   if (!hasHomeAssistantServerConfig(config)) {
     throw new Error('Home Assistant is not linked yet.')

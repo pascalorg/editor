@@ -1,4 +1,4 @@
-import { type AnyNodeId, useScene, type ZoneNode } from '@pascal-app/core'
+import { useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
@@ -7,7 +7,7 @@ import { focusTreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface ZoneTreeNodeProps {
-  nodeId: AnyNodeId
+  nodeId: ZoneNode['id']
   depth: number
   isLast?: boolean
 }
@@ -20,7 +20,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color)
+  const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color ?? '#3b82f6')
   const polygon = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.polygon ?? [])
   const isSelected = useViewer((state) => state.selection.zoneId === nodeId)
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
@@ -78,8 +78,12 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
 
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area += polygon[i]?.[0] * polygon[j]?.[1]
-    area -= polygon[j]?.[0] * polygon[i]?.[1]
+    const current = polygon[i]
+    const next = polygon[j]
+    if (!(current && next)) continue
+
+    area += current[0] * next[1]
+    area -= next[0] * current[1]
   }
 
   return Math.abs(area) / 2

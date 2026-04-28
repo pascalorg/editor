@@ -6,6 +6,11 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId, normalizeCollection } from '../schema/collections'
+import {
+  getHomeAssistantBindingNodes,
+  isHomeAssistantBindingNode,
+  type HomeAssistantBindingNode,
+} from '../schema/nodes/home-assistant-binding'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -406,13 +411,29 @@ function normalizeCollectionsRecord(
   collections: Record<CollectionId, Collection> | undefined,
   nodes: Record<AnyNodeId, AnyNode>,
 ) {
+  const positionedHomeAssistantCollectionIds = new Set(
+    getHomeAssistantBindingNodes(nodes)
+      .filter(
+        (bindingNode) =>
+          Boolean(
+            bindingNode.presentation?.rtsScreenPosition ||
+              bindingNode.presentation?.rtsWorldPosition,
+          ) &&
+          bindingNode.resources.some((resource) => resource.kind === 'entity'),
+      )
+      .map((bindingNode) => bindingNode.collectionId),
+  )
+
   const normalizedCollections = Object.fromEntries(
     Object.entries(collections ?? {}).flatMap(([id, collection]) => {
       const normalizedNodeIds = Array.from(
         new Set(collection.nodeIds.filter((nodeId) => Boolean(nodes[nodeId]))),
       ) as AnyNodeId[]
 
-      if (normalizedNodeIds.length === 0) {
+      if (
+        normalizedNodeIds.length === 0 &&
+        !positionedHomeAssistantCollectionIds.has(id as CollectionId)
+      ) {
         return []
       }
 
@@ -444,6 +465,38 @@ function normalizeCollectionsRecord(
   }
 
   return normalizedCollections
+}
+
+function normalizeHomeAssistantBindingNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  collections: Record<CollectionId, Collection>,
+  rootNodeIds: AnyNodeId[],
+) {
+  const nextNodes = { ...nodes }
+  const nextRootNodeIds = [...rootNodeIds]
+  let changed = false
+
+  for (const bindingNode of getHomeAssistantBindingNodes(nodes)) {
+    const hasCollection = Boolean(collections[bindingNode.collectionId])
+    const hasResources = bindingNode.resources.length > 0
+
+    if (!(hasCollection && hasResources)) {
+      delete nextNodes[bindingNode.id]
+      const rootIndex = nextRootNodeIds.indexOf(bindingNode.id)
+      if (rootIndex >= 0) {
+        nextRootNodeIds.splice(rootIndex, 1)
+      }
+      changed = true
+      continue
+    }
+
+    if (!nextRootNodeIds.includes(bindingNode.id)) {
+      nextRootNodeIds.push(bindingNode.id)
+      changed = true
+    }
+  }
+
+  return changed ? { nodes: nextNodes, rootNodeIds: nextRootNodeIds } : { nodes, rootNodeIds }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -499,15 +552,20 @@ const useScene: UseSceneStore = create<SceneState>()(
         }
 
         const normalizedCollections = normalizeCollectionsRecord(collections, cleanedNodes)
+        const normalizedScene = normalizeHomeAssistantBindingNodes(
+          cleanedNodes,
+          normalizedCollections,
+          rootNodeIds,
+        )
 
         set({
-          nodes: cleanedNodes,
-          rootNodeIds,
+          nodes: normalizedScene.nodes,
+          rootNodeIds: normalizedScene.rootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
           collections: normalizedCollections,
         })
         // Mark all nodes as dirty to trigger re-validation
-        Object.values(cleanedNodes).forEach((node) => {
+        Object.values(normalizedScene.nodes).forEach((node) => {
           get().markDirty(node.id)
         })
       },
@@ -598,6 +656,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           delete nextCollections[id]
           // Remove collectionId from all member nodes
           const nextNodes = { ...state.nodes }
+          let nextRootIds = [...state.rootNodeIds]
           for (const nodeId of col?.nodeIds ?? []) {
             const node = nextNodes[nodeId]
             if (!(node && 'collectionIds' in node)) continue
@@ -606,7 +665,17 @@ const useScene: UseSceneStore = create<SceneState>()(
               collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
             } as AnyNode
           }
-          return { collections: nextCollections, nodes: nextNodes }
+
+          for (const bindingNode of getHomeAssistantBindingNodes(nextNodes)) {
+            if (bindingNode.collectionId !== id) {
+              continue
+            }
+
+            delete nextNodes[bindingNode.id]
+            nextRootIds = nextRootIds.filter((rootId) => rootId !== bindingNode.id)
+          }
+
+          return { collections: nextCollections, nodes: nextNodes, rootNodeIds: nextRootIds }
         })
       },
 
