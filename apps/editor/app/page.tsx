@@ -15,10 +15,8 @@ import {
   type CollectionId,
   createHomeAssistantBindingNode,
   getHomeAssistantBindingNodes,
-  type HomeAssistantAction,
   type HomeAssistantBindingPresentation,
   type HomeAssistantCollectionBindingMap,
-  type HomeAssistantCollectionCapability,
   type HomeAssistantResourceBinding,
   normalizeHomeAssistantCollectionBinding,
 } from '@pascal-app/core/schema'
@@ -27,63 +25,21 @@ import { useCallback } from 'react'
 
 const DEFAULT_LAYOUT_FILE = '/api/default-layout'
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
-const DEMO_SCENE_VERSION_KEY = 'pascal-editor-ha-demo-version'
-const DEMO_SCENE_VERSION = 3
 const ROOM_GROUPS_STORAGE_KEY = 'pascal-room-control-groups:v1'
 const LEGACY_EXCLUDED_ASSET_IDS = new Set(['pascal-truck'])
-const DEPRECATED_DEMO_COLLECTION_IDS = new Set(['collection_demo4_living_script'])
-const DEPRECATED_DEMO_RESOURCE_IDS = new Set(['script.pascal_living_room_demo'])
+const DEPRECATED_DEMO_COLLECTION_IDS = new Set([
+  'collection_demo1_dining_light',
+  'collection_demo2_dining_group',
+  'collection_demo3_master_fan',
+  'collection_demo4_living_script',
+])
+const DEPRECATED_DEMO_RESOURCE_IDS = new Set([
+  'light.pascal_dining_single',
+  'light.pascal_dining_group',
+  'fan.pascal_master_bedroom',
+  'script.pascal_living_room_demo',
+])
 const PROJECT_ID = 'local-editor'
-const DEMO_COLLECTIONS = [
-  {
-    id: 'collection_demo1_dining_light',
-    itemNodeIds: ['item_4u7v10lcuew1uz5d'],
-    controlNodeId: 'item_4u7v10lcuew1uz5d',
-    kind: 'device',
-    label: 'Ceiling Lamp',
-    color: '#f59e0b',
-    rtsOrder: 0,
-    resource: {
-      id: 'light.pascal_dining_single',
-      kind: 'entity',
-      entityId: 'light.pascal_dining_single',
-      label: 'Ceiling Lamp',
-      capabilities: ['brightness', 'power'],
-    },
-  },
-  {
-    id: 'collection_demo2_dining_group',
-    itemNodeIds: ['item_4u7v10lcuew1uz5d', 'item_bsaz99veyhvvk64d', 'item_hl4fnqqei6rw93zv'],
-    controlNodeId: 'item_4u7v10lcuew1uz5d',
-    kind: 'group',
-    label: 'Dining Lights',
-    color: '#f59e0b',
-    rtsOrder: 1,
-    resource: {
-      id: 'light.pascal_dining_group',
-      kind: 'entity',
-      entityId: 'light.pascal_dining_group',
-      label: 'Dining Lights',
-      capabilities: ['brightness', 'power'],
-    },
-  },
-  {
-    id: 'collection_demo3_master_fan',
-    itemNodeIds: ['item_17lmti0qxpd9qg2e'],
-    controlNodeId: 'item_17lmti0qxpd9qg2e',
-    kind: 'device',
-    label: 'Ceiling fan',
-    color: '#3b82f6',
-    rtsOrder: 0,
-    resource: {
-      id: 'fan.pascal_master_bedroom',
-      kind: 'entity',
-      entityId: 'fan.pascal_master_bedroom',
-      label: 'Ceiling fan',
-      capabilities: ['power', 'speed'],
-    },
-  },
-] as const
 
 const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   {
@@ -268,159 +224,6 @@ function writeStoredScene(scene: SceneGraph): void {
   } catch {}
 }
 
-function readDemoSceneVersion(): number {
-  if (typeof window === 'undefined') {
-    return 0
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(DEMO_SCENE_VERSION_KEY)
-    return rawValue ? Number.parseInt(rawValue, 10) || 0 : 0
-  } catch {
-    return 0
-  }
-}
-
-function writeDemoSceneVersion(version: number): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    window.localStorage.setItem(DEMO_SCENE_VERSION_KEY, `${version}`)
-  } catch {}
-}
-
-function hasBoundResource(scene: SceneGraph, resourceId: string): boolean {
-  return getHomeAssistantBindingNodes(scene.nodes as any).some((bindingNode) =>
-    bindingNode.resources.some((resource) => resource.id === resourceId),
-  )
-}
-
-function buildResourceActions(
-  definition: (typeof DEMO_COLLECTIONS)[number],
-): HomeAssistantAction[] {
-  const resourceDomain = definition.resource.id.split('.')[0] ?? 'homeassistant'
-  const hasCapability = (capability: HomeAssistantCollectionCapability) =>
-    (definition.resource.capabilities as readonly HomeAssistantCollectionCapability[]).includes(
-      capability,
-    )
-
-  if (definition.resource.kind !== 'entity') {
-    return [
-      {
-        capability: 'trigger',
-        domain: resourceDomain,
-        fields: [],
-        key: `${resourceDomain}.turn_on`,
-        label: 'Run',
-        service: definition.resource.kind === 'automation' ? 'trigger' : 'turn_on',
-      },
-    ]
-  }
-
-  const actions: HomeAssistantAction[] = []
-
-  if (hasCapability('power')) {
-    actions.push(
-      {
-        capability: 'power',
-        domain: resourceDomain,
-        fields: hasCapability('brightness')
-          ? [
-              {
-                defaultValue: 100,
-                key: 'brightness_pct',
-                label: 'Brightness',
-                required: false,
-                selector: null,
-              },
-            ]
-          : [],
-        key: `${resourceDomain}.turn_on`,
-        label: 'Turn on',
-        service: 'turn_on',
-      },
-      {
-        capability: 'power',
-        domain: resourceDomain,
-        fields: [],
-        key: `${resourceDomain}.turn_off`,
-        label: 'Turn off',
-        service: 'turn_off',
-      },
-    )
-  }
-
-  if (hasCapability('speed')) {
-    actions.push({
-      capability: 'speed',
-      domain: resourceDomain,
-      fields: [
-        {
-          defaultValue: 66,
-          key: 'percentage',
-          label: 'Speed',
-          required: true,
-          selector: null,
-        },
-      ],
-      key: `${resourceDomain}.set_percentage`,
-      label: 'Set speed',
-      service: 'set_percentage',
-    })
-  }
-
-  return actions
-}
-
-function buildDemoCollection(definition: (typeof DEMO_COLLECTIONS)[number]) {
-  return {
-    color: definition.color,
-    controlNodeId: definition.controlNodeId as AnyNodeId,
-    id: definition.id as CollectionId,
-    name: definition.label,
-    nodeIds: [...definition.itemNodeIds] as AnyNodeId[],
-  } satisfies Collection
-}
-
-function buildDemoBindingNode(definition: (typeof DEMO_COLLECTIONS)[number]) {
-  const actions = buildResourceActions(definition)
-  const resourceKind = definition.resource.kind as string
-  const binding = normalizeHomeAssistantCollectionBinding({
-    aggregation:
-      resourceKind === 'automation'
-        ? 'trigger_only'
-        : definition.itemNodeIds.length > 1
-          ? 'all'
-          : 'single',
-    collectionId: definition.id,
-    presentation: {
-      label: definition.label,
-      rtsOrder: definition.rtsOrder,
-    },
-    primaryResourceId: definition.resource.id,
-    resources: [
-      {
-        actions,
-        capabilities: [...definition.resource.capabilities],
-        defaultActionKey: actions[0]?.key ?? null,
-        entityId: definition.resource.entityId,
-        id: definition.resource.id,
-        kind: definition.resource.kind,
-        label: definition.resource.label,
-      },
-    ],
-  })
-
-  return binding
-    ? createHomeAssistantBindingNode({
-        binding,
-        name: `${definition.label} Home Assistant binding`,
-      })
-    : null
-}
-
 function sanitizeLegacyScene(scene: SceneGraph): SceneGraph {
   const excludedNodeIds = new Set<string>()
 
@@ -599,41 +402,6 @@ function stripHiddenHomeAssistantGroupBindings(scene: SceneGraph): SceneGraph {
         collections: nextCollections,
         nodes: nextNodes,
         rootNodeIds: scene.rootNodeIds.filter((nodeId) => nodeId in nextNodes),
-      }
-    : scene
-}
-
-function ensureDemoScenes(scene: SceneGraph): SceneGraph {
-  const nextCollections = { ...(scene.collections ?? {}) }
-  const nextNodes = { ...scene.nodes }
-  const nextRootNodeIds = [...scene.rootNodeIds]
-  let changed = false
-
-  for (const definition of DEMO_COLLECTIONS) {
-    const hasAllItems = definition.itemNodeIds.every((itemNodeId) =>
-      Boolean(scene.nodes[itemNodeId]),
-    )
-    if (!(hasAllItems && !hasBoundResource(scene, definition.resource.id))) {
-      continue
-    }
-
-    nextCollections[definition.id] = buildDemoCollection(definition)
-    const nextBindingNode = buildDemoBindingNode(definition)
-    if (nextBindingNode) {
-      nextNodes[nextBindingNode.id] = nextBindingNode
-      if (!nextRootNodeIds.includes(nextBindingNode.id)) {
-        nextRootNodeIds.push(nextBindingNode.id)
-      }
-    }
-    changed = true
-  }
-
-  return changed
-    ? {
-        ...scene,
-        collections: nextCollections,
-        nodes: nextNodes,
-        rootNodeIds: nextRootNodeIds,
       }
     : scene
 }
@@ -1119,10 +887,6 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
   return nextNodes ? { ...scene, nodes: nextNodes } : scene
 }
 
-function maybeApplyDemoScenes(scene: SceneGraph): SceneGraph {
-  return readDemoSceneVersion() < DEMO_SCENE_VERSION ? ensureDemoScenes(scene) : scene
-}
-
 function hydrateInteractiveAssets(scene: SceneGraph): SceneGraph {
   let nextNodes: SceneGraph['nodes'] | null = null
 
@@ -1162,13 +926,11 @@ async function loadHomeScene(): Promise<SceneGraph | null> {
         extractLegacyHomeAssistantBindings(sanitizeLegacyScene(storedScene)),
       ),
     )
-    const demoStoredScene = maybeApplyDemoScenes(sanitizedStoredScene)
-    const repairedStoredScene = repairHomeAssistantPersistedState(demoStoredScene)
+    const repairedStoredScene = repairHomeAssistantPersistedState(sanitizedStoredScene)
     if (sceneHasBuilding(repairedStoredScene)) {
       const hydratedStoredScene = hydrateInteractiveAssets(repairedStoredScene)
       if (hydratedStoredScene !== storedScene) {
         writeStoredScene(hydratedStoredScene)
-        writeDemoSceneVersion(DEMO_SCENE_VERSION)
       }
       return hydratedStoredScene
     }
@@ -1189,11 +951,9 @@ async function loadHomeScene(): Promise<SceneGraph | null> {
       extractLegacyHomeAssistantBindings(sanitizeLegacyScene(layoutScene)),
     ),
   )
-  const demoLayoutScene = maybeApplyDemoScenes(sanitizedLayoutScene)
-  const repairedLayoutScene = repairHomeAssistantPersistedState(demoLayoutScene)
+  const repairedLayoutScene = repairHomeAssistantPersistedState(sanitizedLayoutScene)
   const hydratedLayoutScene = hydrateInteractiveAssets(repairedLayoutScene)
   writeStoredScene(hydratedLayoutScene)
-  writeDemoSceneVersion(DEMO_SCENE_VERSION)
   return hydratedLayoutScene
 }
 
