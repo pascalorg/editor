@@ -1,95 +1,106 @@
-import { getDashboardData } from "./actions";
-import { FolderKanban, Users, Building2 } from "lucide-react";
+import { getDashboardData } from './actions'
+import { ProjectCard } from './_components/ProjectCard'
+import { Plus, FolderKanban, Users, Building2 } from 'lucide-react'
+import Link from 'next/link'
 
 export default async function DashboardOverview() {
-  const data = await getDashboardData();
-  
+  const data = await getDashboardData()
+
   if (!data || data.organizations.length === 0) {
     return (
-      <div className="p-10">
-        <h1 className="text-3xl font-bold mb-4">Dashboard</h1>
-        <div className="bg-zinc-900 border border-white/5 rounded-2xl p-6 text-center text-gray-400">
-          You are not part of any organization yet.
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
+            <Building2 className="w-8 h-8 text-zinc-600" />
+          </div>
+          <p className="text-zinc-400 text-sm">No organization found.</p>
         </div>
       </div>
-    );
+    )
   }
 
-  const org = data.organizations[0]!.organization;
-  const totalTeams = org.teams.length;
-  const totalProjects = org.teams.reduce((acc, team) => acc + team.projects.length, 0);
-  const totalMembers = org.members.length;
+  const org = data.organizations[0]!.organization
+  const totalTeams = org.teams.length
+  const totalProjects = org.teams.reduce((acc, t) => acc + t.projects.length, 0)
+  const totalMembers = org.members.length
+
+  const allProjects = org.teams.flatMap((team) =>
+    team.projects.map((proj) => ({ ...proj, teamName: team.name }))
+  )
+
+  const recentProjects = [...allProjects]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 9)
 
   return (
-    <div className="p-10">
-      <header className="mb-12">
-        <h1 className="text-3xl font-bold">{org.name} Workspace</h1>
-        <p className="text-gray-400 mt-1">Overview of your organization's activity.</p>
+    <div className="p-8 max-w-[1400px]">
+      {/* Header */}
+      <header className="mb-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{org.name}</h1>
+            <p className="text-zinc-500 text-sm mt-0.5">Your workspace overview</p>
+          </div>
+          <Link
+            href="/dashboard/projects"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-sm font-semibold rounded-xl hover:bg-indigo-500/20 transition-all"
+          >
+            <Plus className="w-4 h-4" /> New Project
+          </Link>
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <StatsCard label="Total Teams" value={totalTeams} icon={<Building2 className="text-blue-400" />} />
-        <StatsCard label="Total Projects" value={totalProjects} icon={<FolderKanban className="text-purple-400" />} />
-        <StatsCard label="Total Members" value={totalMembers} icon={<Users className="text-green-400" />} />
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-10">
+        <StatCard label="Teams" value={totalTeams} icon={<Building2 className="w-4 h-4 text-indigo-400" />} />
+        <StatCard label="Projects" value={totalProjects} icon={<FolderKanban className="w-4 h-4 text-violet-400" />} />
+        <StatCard label="Members" value={totalMembers} icon={<Users className="w-4 h-4 text-emerald-400" />} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6">
-          <h2 className="text-xl font-bold mb-6">Recent Teams</h2>
-          {org.teams.length === 0 ? (
-            <p className="text-gray-500 text-sm">No teams created yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {org.teams.slice(0, 5).map(team => (
-                <div key={team.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl border border-white/5">
-                  <div>
-                    <h3 className="font-semibold text-sm">{team.name}</h3>
-                    <p className="text-xs text-gray-500">{team.projects.length} projects</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Recent projects masonry grid */}
+      <section>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Recent Projects</h2>
+          <Link href="/dashboard/projects" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
+            View all →
+          </Link>
         </div>
 
-        <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6">
-          <h2 className="text-xl font-bold mb-6">Organization Members</h2>
-          {org.members.length === 0 ? (
-            <p className="text-gray-500 text-sm">No members yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {org.members.slice(0, 5).map(member => (
-                <div key={member.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl border border-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold">
-                      {member.user.name?.[0] || member.user.email?.[0] || "?"}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm">{member.user.name || "Unknown"}</h3>
-                      <p className="text-xs text-gray-500">{member.user.email}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs bg-white/10 px-2 py-1 rounded-md">{member.role}</span>
-                </div>
-              ))}
+        {recentProjects.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/[0.08] py-20 flex flex-col items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+              <FolderKanban className="w-6 h-6 text-zinc-600" />
             </div>
-          )}
-        </div>
-      </div>
+            <div className="text-center">
+              <p className="text-zinc-400 font-medium text-sm">No projects yet</p>
+              <p className="text-zinc-600 text-xs mt-1">Create your first project to get started</p>
+            </div>
+            <Link href="/dashboard/projects" className="px-4 py-2 bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-sm font-semibold rounded-xl hover:bg-indigo-500/20 transition-all">
+              Create Project
+            </Link>
+          </div>
+        ) : (
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
+            {recentProjects.map((project) => (
+              <div key={project.id} className="break-inside-avoid">
+                <ProjectCard project={project} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
-  );
+  )
 }
 
-function StatsCard({ label, value, icon }: { label: string, value: number, icon: React.ReactNode }) {
+function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
   return (
-    <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-colors">
-      <div className="flex items-center justify-between mb-4">
-        <div className="p-2 bg-white/5 rounded-lg">{icon}</div>
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 hover:border-white/[0.10] transition-all">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="p-1.5 bg-white/[0.05] rounded-lg">{icon}</div>
+        <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
       </div>
-      <div className="flex flex-col">
-        <span className="text-gray-400 text-sm font-medium">{label}</span>
-        <span className="text-3xl font-bold mt-1">{value}</span>
-      </div>
+      <span className="text-3xl font-bold">{value}</span>
     </div>
   )
 }

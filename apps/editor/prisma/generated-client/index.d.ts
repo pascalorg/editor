@@ -44,6 +44,21 @@ export type TeamMember = $Result.DefaultSelection<Prisma.$TeamMemberPayload>
  */
 export type Project = $Result.DefaultSelection<Prisma.$ProjectPayload>
 /**
+ * Model ProjectMember
+ * 
+ */
+export type ProjectMember = $Result.DefaultSelection<Prisma.$ProjectMemberPayload>
+/**
+ * Model MarketplaceAsset
+ * 
+ */
+export type MarketplaceAsset = $Result.DefaultSelection<Prisma.$MarketplaceAssetPayload>
+/**
+ * Model ProjectClone
+ * 
+ */
+export type ProjectClone = $Result.DefaultSelection<Prisma.$ProjectClonePayload>
+/**
  * Model EarlyAccessApplication
  * 
  */
@@ -70,6 +85,16 @@ export const OrgRole: {
 
 export type OrgRole = (typeof OrgRole)[keyof typeof OrgRole]
 
+
+export const ProjectRole: {
+  OWNER: 'OWNER',
+  EDITOR: 'EDITOR',
+  VIEWER: 'VIEWER',
+  COMMENTER: 'COMMENTER'
+};
+
+export type ProjectRole = (typeof ProjectRole)[keyof typeof ProjectRole]
+
 }
 
 export type OrgStatus = $Enums.OrgStatus
@@ -79,6 +104,10 @@ export const OrgStatus: typeof $Enums.OrgStatus
 export type OrgRole = $Enums.OrgRole
 
 export const OrgRole: typeof $Enums.OrgRole
+
+export type ProjectRole = $Enums.ProjectRole
+
+export const ProjectRole: typeof $Enums.ProjectRole
 
 /**
  * ##  Prisma Client ʲˢ
@@ -261,6 +290,36 @@ export class PrismaClient<
     * ```
     */
   get project(): Prisma.ProjectDelegate<ExtArgs>;
+
+  /**
+   * `prisma.projectMember`: Exposes CRUD operations for the **ProjectMember** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more ProjectMembers
+    * const projectMembers = await prisma.projectMember.findMany()
+    * ```
+    */
+  get projectMember(): Prisma.ProjectMemberDelegate<ExtArgs>;
+
+  /**
+   * `prisma.marketplaceAsset`: Exposes CRUD operations for the **MarketplaceAsset** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MarketplaceAssets
+    * const marketplaceAssets = await prisma.marketplaceAsset.findMany()
+    * ```
+    */
+  get marketplaceAsset(): Prisma.MarketplaceAssetDelegate<ExtArgs>;
+
+  /**
+   * `prisma.projectClone`: Exposes CRUD operations for the **ProjectClone** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more ProjectClones
+    * const projectClones = await prisma.projectClone.findMany()
+    * ```
+    */
+  get projectClone(): Prisma.ProjectCloneDelegate<ExtArgs>;
 
   /**
    * `prisma.earlyAccessApplication`: Exposes CRUD operations for the **EarlyAccessApplication** model.
@@ -747,6 +806,9 @@ export namespace Prisma {
     Team: 'Team',
     TeamMember: 'TeamMember',
     Project: 'Project',
+    ProjectMember: 'ProjectMember',
+    MarketplaceAsset: 'MarketplaceAsset',
+    ProjectClone: 'ProjectClone',
     EarlyAccessApplication: 'EarlyAccessApplication'
   };
 
@@ -764,7 +826,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     meta: {
-      modelProps: 'user' | 'organization' | 'organizationMember' | 'team' | 'teamMember' | 'project' | 'earlyAccessApplication'
+      modelProps: 'user' | 'organization' | 'organizationMember' | 'team' | 'teamMember' | 'project' | 'projectMember' | 'marketplaceAsset' | 'projectClone' | 'earlyAccessApplication'
       txIsolationLevel: Prisma.TransactionIsolationLevel
     },
     model: {
@@ -1164,6 +1226,204 @@ export namespace Prisma {
           }
         }
       }
+      ProjectMember: {
+        payload: Prisma.$ProjectMemberPayload<ExtArgs>
+        fields: Prisma.ProjectMemberFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ProjectMemberFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ProjectMemberFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>
+          }
+          findFirst: {
+            args: Prisma.ProjectMemberFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ProjectMemberFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>
+          }
+          findMany: {
+            args: Prisma.ProjectMemberFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>[]
+          }
+          create: {
+            args: Prisma.ProjectMemberCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>
+          }
+          createMany: {
+            args: Prisma.ProjectMemberCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          delete: {
+            args: Prisma.ProjectMemberDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>
+          }
+          update: {
+            args: Prisma.ProjectMemberUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>
+          }
+          deleteMany: {
+            args: Prisma.ProjectMemberDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ProjectMemberUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.ProjectMemberUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectMemberPayload>
+          }
+          aggregate: {
+            args: Prisma.ProjectMemberAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateProjectMember>
+          }
+          groupBy: {
+            args: Prisma.ProjectMemberGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<ProjectMemberGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ProjectMemberCountArgs<ExtArgs>,
+            result: $Utils.Optional<ProjectMemberCountAggregateOutputType> | number
+          }
+        }
+      }
+      MarketplaceAsset: {
+        payload: Prisma.$MarketplaceAssetPayload<ExtArgs>
+        fields: Prisma.MarketplaceAssetFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MarketplaceAssetFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MarketplaceAssetFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>
+          }
+          findFirst: {
+            args: Prisma.MarketplaceAssetFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MarketplaceAssetFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>
+          }
+          findMany: {
+            args: Prisma.MarketplaceAssetFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>[]
+          }
+          create: {
+            args: Prisma.MarketplaceAssetCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>
+          }
+          createMany: {
+            args: Prisma.MarketplaceAssetCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          delete: {
+            args: Prisma.MarketplaceAssetDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>
+          }
+          update: {
+            args: Prisma.MarketplaceAssetUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>
+          }
+          deleteMany: {
+            args: Prisma.MarketplaceAssetDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MarketplaceAssetUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.MarketplaceAssetUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$MarketplaceAssetPayload>
+          }
+          aggregate: {
+            args: Prisma.MarketplaceAssetAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateMarketplaceAsset>
+          }
+          groupBy: {
+            args: Prisma.MarketplaceAssetGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<MarketplaceAssetGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MarketplaceAssetCountArgs<ExtArgs>,
+            result: $Utils.Optional<MarketplaceAssetCountAggregateOutputType> | number
+          }
+        }
+      }
+      ProjectClone: {
+        payload: Prisma.$ProjectClonePayload<ExtArgs>
+        fields: Prisma.ProjectCloneFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ProjectCloneFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ProjectCloneFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>
+          }
+          findFirst: {
+            args: Prisma.ProjectCloneFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ProjectCloneFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>
+          }
+          findMany: {
+            args: Prisma.ProjectCloneFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>[]
+          }
+          create: {
+            args: Prisma.ProjectCloneCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>
+          }
+          createMany: {
+            args: Prisma.ProjectCloneCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          delete: {
+            args: Prisma.ProjectCloneDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>
+          }
+          update: {
+            args: Prisma.ProjectCloneUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>
+          }
+          deleteMany: {
+            args: Prisma.ProjectCloneDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ProjectCloneUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.ProjectCloneUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$ProjectClonePayload>
+          }
+          aggregate: {
+            args: Prisma.ProjectCloneAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateProjectClone>
+          }
+          groupBy: {
+            args: Prisma.ProjectCloneGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<ProjectCloneGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ProjectCloneCountArgs<ExtArgs>,
+            result: $Utils.Optional<ProjectCloneCountAggregateOutputType> | number
+          }
+        }
+      }
       EarlyAccessApplication: {
         payload: Prisma.$EarlyAccessApplicationPayload<ExtArgs>
         fields: Prisma.EarlyAccessApplicationFieldRefs
@@ -1391,11 +1651,17 @@ export namespace Prisma {
   export type UserCountOutputType = {
     organizations: number
     teamMemberships: number
+    projectMemberships: number
+    publishedAssets: number
+    clonedProjects: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     organizations?: boolean | UserCountOutputTypeCountOrganizationsArgs
     teamMemberships?: boolean | UserCountOutputTypeCountTeamMembershipsArgs
+    projectMemberships?: boolean | UserCountOutputTypeCountProjectMembershipsArgs
+    publishedAssets?: boolean | UserCountOutputTypeCountPublishedAssetsArgs
+    clonedProjects?: boolean | UserCountOutputTypeCountClonedProjectsArgs
   }
 
   // Custom InputTypes
@@ -1424,6 +1690,30 @@ export namespace Prisma {
    */
   export type UserCountOutputTypeCountTeamMembershipsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: TeamMemberWhereInput
+  }
+
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountProjectMembershipsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ProjectMemberWhereInput
+  }
+
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountPublishedAssetsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MarketplaceAssetWhereInput
+  }
+
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountClonedProjectsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ProjectCloneWhereInput
   }
 
 
@@ -1517,6 +1807,74 @@ export namespace Prisma {
 
 
   /**
+   * Count Type ProjectCountOutputType
+   */
+
+  export type ProjectCountOutputType = {
+    members: number
+  }
+
+  export type ProjectCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    members?: boolean | ProjectCountOutputTypeCountMembersArgs
+  }
+
+  // Custom InputTypes
+
+  /**
+   * ProjectCountOutputType without action
+   */
+  export type ProjectCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectCountOutputType
+     */
+    select?: ProjectCountOutputTypeSelect<ExtArgs> | null
+  }
+
+
+  /**
+   * ProjectCountOutputType without action
+   */
+  export type ProjectCountOutputTypeCountMembersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ProjectMemberWhereInput
+  }
+
+
+
+  /**
+   * Count Type MarketplaceAssetCountOutputType
+   */
+
+  export type MarketplaceAssetCountOutputType = {
+    clones: number
+  }
+
+  export type MarketplaceAssetCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    clones?: boolean | MarketplaceAssetCountOutputTypeCountClonesArgs
+  }
+
+  // Custom InputTypes
+
+  /**
+   * MarketplaceAssetCountOutputType without action
+   */
+  export type MarketplaceAssetCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAssetCountOutputType
+     */
+    select?: MarketplaceAssetCountOutputTypeSelect<ExtArgs> | null
+  }
+
+
+  /**
+   * MarketplaceAssetCountOutputType without action
+   */
+  export type MarketplaceAssetCountOutputTypeCountClonesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ProjectCloneWhereInput
+  }
+
+
+
+  /**
    * Models
    */
 
@@ -1537,6 +1895,7 @@ export namespace Prisma {
     emailVerified: Date | null
     image: string | null
     password: string | null
+    bio: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1548,6 +1907,7 @@ export namespace Prisma {
     emailVerified: Date | null
     image: string | null
     password: string | null
+    bio: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1559,6 +1919,7 @@ export namespace Prisma {
     emailVerified: number
     image: number
     password: number
+    bio: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -1572,6 +1933,7 @@ export namespace Prisma {
     emailVerified?: true
     image?: true
     password?: true
+    bio?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -1583,6 +1945,7 @@ export namespace Prisma {
     emailVerified?: true
     image?: true
     password?: true
+    bio?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -1594,6 +1957,7 @@ export namespace Prisma {
     emailVerified?: true
     image?: true
     password?: true
+    bio?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -1678,6 +2042,7 @@ export namespace Prisma {
     emailVerified: Date | null
     image: string | null
     password: string | null
+    bio: string | null
     createdAt: Date
     updatedAt: Date
     _count: UserCountAggregateOutputType | null
@@ -1706,10 +2071,14 @@ export namespace Prisma {
     emailVerified?: boolean
     image?: boolean
     password?: boolean
+    bio?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     organizations?: boolean | User$organizationsArgs<ExtArgs>
     teamMemberships?: boolean | User$teamMembershipsArgs<ExtArgs>
+    projectMemberships?: boolean | User$projectMembershipsArgs<ExtArgs>
+    publishedAssets?: boolean | User$publishedAssetsArgs<ExtArgs>
+    clonedProjects?: boolean | User$clonedProjectsArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -1720,6 +2089,7 @@ export namespace Prisma {
     emailVerified?: boolean
     image?: boolean
     password?: boolean
+    bio?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
@@ -1727,6 +2097,9 @@ export namespace Prisma {
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     organizations?: boolean | User$organizationsArgs<ExtArgs>
     teamMemberships?: boolean | User$teamMembershipsArgs<ExtArgs>
+    projectMemberships?: boolean | User$projectMembershipsArgs<ExtArgs>
+    publishedAssets?: boolean | User$publishedAssetsArgs<ExtArgs>
+    clonedProjects?: boolean | User$clonedProjectsArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -1736,6 +2109,9 @@ export namespace Prisma {
     objects: {
       organizations: Prisma.$OrganizationMemberPayload<ExtArgs>[]
       teamMemberships: Prisma.$TeamMemberPayload<ExtArgs>[]
+      projectMemberships: Prisma.$ProjectMemberPayload<ExtArgs>[]
+      publishedAssets: Prisma.$MarketplaceAssetPayload<ExtArgs>[]
+      clonedProjects: Prisma.$ProjectClonePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -1744,6 +2120,7 @@ export namespace Prisma {
       emailVerified: Date | null
       image: string | null
       password: string | null
+      bio: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["user"]>
@@ -2115,6 +2492,12 @@ export namespace Prisma {
 
     teamMemberships<T extends User$teamMembershipsArgs<ExtArgs> = {}>(args?: Subset<T, User$teamMembershipsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TeamMemberPayload<ExtArgs>, T, 'findMany'> | Null>;
 
+    projectMemberships<T extends User$projectMembershipsArgs<ExtArgs> = {}>(args?: Subset<T, User$projectMembershipsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findMany'> | Null>;
+
+    publishedAssets<T extends User$publishedAssetsArgs<ExtArgs> = {}>(args?: Subset<T, User$publishedAssetsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findMany'> | Null>;
+
+    clonedProjects<T extends User$clonedProjectsArgs<ExtArgs> = {}>(args?: Subset<T, User$clonedProjectsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findMany'> | Null>;
+
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2149,6 +2532,7 @@ export namespace Prisma {
     readonly emailVerified: FieldRef<"User", 'DateTime'>
     readonly image: FieldRef<"User", 'String'>
     readonly password: FieldRef<"User", 'String'>
+    readonly bio: FieldRef<"User", 'String'>
     readonly createdAt: FieldRef<"User", 'DateTime'>
     readonly updatedAt: FieldRef<"User", 'DateTime'>
   }
@@ -2501,6 +2885,69 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: TeamMemberScalarFieldEnum | TeamMemberScalarFieldEnum[]
+  }
+
+
+  /**
+   * User.projectMemberships
+   */
+  export type User$projectMembershipsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    where?: ProjectMemberWhereInput
+    orderBy?: ProjectMemberOrderByWithRelationInput | ProjectMemberOrderByWithRelationInput[]
+    cursor?: ProjectMemberWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ProjectMemberScalarFieldEnum | ProjectMemberScalarFieldEnum[]
+  }
+
+
+  /**
+   * User.publishedAssets
+   */
+  export type User$publishedAssetsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    where?: MarketplaceAssetWhereInput
+    orderBy?: MarketplaceAssetOrderByWithRelationInput | MarketplaceAssetOrderByWithRelationInput[]
+    cursor?: MarketplaceAssetWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MarketplaceAssetScalarFieldEnum | MarketplaceAssetScalarFieldEnum[]
+  }
+
+
+  /**
+   * User.clonedProjects
+   */
+  export type User$clonedProjectsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    where?: ProjectCloneWhereInput
+    orderBy?: ProjectCloneOrderByWithRelationInput | ProjectCloneOrderByWithRelationInput[]
+    cursor?: ProjectCloneWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ProjectCloneScalarFieldEnum | ProjectCloneScalarFieldEnum[]
   }
 
 
@@ -6377,6 +6824,7 @@ export namespace Prisma {
     description: string | null
     thumbnailUrl: string | null
     stateUrl: string | null
+    isPublic: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -6388,6 +6836,7 @@ export namespace Prisma {
     description: string | null
     thumbnailUrl: string | null
     stateUrl: string | null
+    isPublic: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -6399,6 +6848,7 @@ export namespace Prisma {
     description: number
     thumbnailUrl: number
     stateUrl: number
+    isPublic: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -6412,6 +6862,7 @@ export namespace Prisma {
     description?: true
     thumbnailUrl?: true
     stateUrl?: true
+    isPublic?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -6423,6 +6874,7 @@ export namespace Prisma {
     description?: true
     thumbnailUrl?: true
     stateUrl?: true
+    isPublic?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -6434,6 +6886,7 @@ export namespace Prisma {
     description?: true
     thumbnailUrl?: true
     stateUrl?: true
+    isPublic?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -6518,6 +6971,7 @@ export namespace Prisma {
     description: string | null
     thumbnailUrl: string | null
     stateUrl: string | null
+    isPublic: boolean
     createdAt: Date
     updatedAt: Date
     _count: ProjectCountAggregateOutputType | null
@@ -6546,9 +7000,14 @@ export namespace Prisma {
     description?: boolean
     thumbnailUrl?: boolean
     stateUrl?: boolean
+    isPublic?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     team?: boolean | TeamDefaultArgs<ExtArgs>
+    members?: boolean | Project$membersArgs<ExtArgs>
+    publishedAsset?: boolean | Project$publishedAssetArgs<ExtArgs>
+    clonedFrom?: boolean | Project$clonedFromArgs<ExtArgs>
+    _count?: boolean | ProjectCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["project"]>
 
   export type ProjectSelectScalar = {
@@ -6558,12 +7017,17 @@ export namespace Prisma {
     description?: boolean
     thumbnailUrl?: boolean
     stateUrl?: boolean
+    isPublic?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
   export type ProjectInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     team?: boolean | TeamDefaultArgs<ExtArgs>
+    members?: boolean | Project$membersArgs<ExtArgs>
+    publishedAsset?: boolean | Project$publishedAssetArgs<ExtArgs>
+    clonedFrom?: boolean | Project$clonedFromArgs<ExtArgs>
+    _count?: boolean | ProjectCountOutputTypeDefaultArgs<ExtArgs>
   }
 
 
@@ -6571,6 +7035,9 @@ export namespace Prisma {
     name: "Project"
     objects: {
       team: Prisma.$TeamPayload<ExtArgs>
+      members: Prisma.$ProjectMemberPayload<ExtArgs>[]
+      publishedAsset: Prisma.$MarketplaceAssetPayload<ExtArgs> | null
+      clonedFrom: Prisma.$ProjectClonePayload<ExtArgs> | null
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -6579,6 +7046,7 @@ export namespace Prisma {
       description: string | null
       thumbnailUrl: string | null
       stateUrl: string | null
+      isPublic: boolean
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["project"]>
@@ -6948,6 +7416,12 @@ export namespace Prisma {
 
     team<T extends TeamDefaultArgs<ExtArgs> = {}>(args?: Subset<T, TeamDefaultArgs<ExtArgs>>): Prisma__TeamClient<$Result.GetResult<Prisma.$TeamPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
 
+    members<T extends Project$membersArgs<ExtArgs> = {}>(args?: Subset<T, Project$membersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findMany'> | Null>;
+
+    publishedAsset<T extends Project$publishedAssetArgs<ExtArgs> = {}>(args?: Subset<T, Project$publishedAssetArgs<ExtArgs>>): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findUniqueOrThrow'> | null, null, ExtArgs>;
+
+    clonedFrom<T extends Project$clonedFromArgs<ExtArgs> = {}>(args?: Subset<T, Project$clonedFromArgs<ExtArgs>>): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findUniqueOrThrow'> | null, null, ExtArgs>;
+
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -6982,6 +7456,7 @@ export namespace Prisma {
     readonly description: FieldRef<"Project", 'String'>
     readonly thumbnailUrl: FieldRef<"Project", 'String'>
     readonly stateUrl: FieldRef<"Project", 'String'>
+    readonly isPublic: FieldRef<"Project", 'Boolean'>
     readonly createdAt: FieldRef<"Project", 'DateTime'>
     readonly updatedAt: FieldRef<"Project", 'DateTime'>
   }
@@ -7296,6 +7771,59 @@ export namespace Prisma {
 
 
   /**
+   * Project.members
+   */
+  export type Project$membersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    where?: ProjectMemberWhereInput
+    orderBy?: ProjectMemberOrderByWithRelationInput | ProjectMemberOrderByWithRelationInput[]
+    cursor?: ProjectMemberWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ProjectMemberScalarFieldEnum | ProjectMemberScalarFieldEnum[]
+  }
+
+
+  /**
+   * Project.publishedAsset
+   */
+  export type Project$publishedAssetArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    where?: MarketplaceAssetWhereInput
+  }
+
+
+  /**
+   * Project.clonedFrom
+   */
+  export type Project$clonedFromArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    where?: ProjectCloneWhereInput
+  }
+
+
+  /**
    * Project without action
    */
   export type ProjectDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -7307,6 +7835,2904 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well.
      */
     include?: ProjectInclude<ExtArgs> | null
+  }
+
+
+
+  /**
+   * Model ProjectMember
+   */
+
+  export type AggregateProjectMember = {
+    _count: ProjectMemberCountAggregateOutputType | null
+    _min: ProjectMemberMinAggregateOutputType | null
+    _max: ProjectMemberMaxAggregateOutputType | null
+  }
+
+  export type ProjectMemberMinAggregateOutputType = {
+    id: string | null
+    projectId: string | null
+    userId: string | null
+    role: $Enums.ProjectRole | null
+    createdAt: Date | null
+  }
+
+  export type ProjectMemberMaxAggregateOutputType = {
+    id: string | null
+    projectId: string | null
+    userId: string | null
+    role: $Enums.ProjectRole | null
+    createdAt: Date | null
+  }
+
+  export type ProjectMemberCountAggregateOutputType = {
+    id: number
+    projectId: number
+    userId: number
+    role: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type ProjectMemberMinAggregateInputType = {
+    id?: true
+    projectId?: true
+    userId?: true
+    role?: true
+    createdAt?: true
+  }
+
+  export type ProjectMemberMaxAggregateInputType = {
+    id?: true
+    projectId?: true
+    userId?: true
+    role?: true
+    createdAt?: true
+  }
+
+  export type ProjectMemberCountAggregateInputType = {
+    id?: true
+    projectId?: true
+    userId?: true
+    role?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type ProjectMemberAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ProjectMember to aggregate.
+     */
+    where?: ProjectMemberWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectMembers to fetch.
+     */
+    orderBy?: ProjectMemberOrderByWithRelationInput | ProjectMemberOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ProjectMemberWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectMembers from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectMembers.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned ProjectMembers
+    **/
+    _count?: true | ProjectMemberCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ProjectMemberMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ProjectMemberMaxAggregateInputType
+  }
+
+  export type GetProjectMemberAggregateType<T extends ProjectMemberAggregateArgs> = {
+        [P in keyof T & keyof AggregateProjectMember]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateProjectMember[P]>
+      : GetScalarType<T[P], AggregateProjectMember[P]>
+  }
+
+
+
+
+  export type ProjectMemberGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ProjectMemberWhereInput
+    orderBy?: ProjectMemberOrderByWithAggregationInput | ProjectMemberOrderByWithAggregationInput[]
+    by: ProjectMemberScalarFieldEnum[] | ProjectMemberScalarFieldEnum
+    having?: ProjectMemberScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ProjectMemberCountAggregateInputType | true
+    _min?: ProjectMemberMinAggregateInputType
+    _max?: ProjectMemberMaxAggregateInputType
+  }
+
+  export type ProjectMemberGroupByOutputType = {
+    id: string
+    projectId: string
+    userId: string
+    role: $Enums.ProjectRole
+    createdAt: Date
+    _count: ProjectMemberCountAggregateOutputType | null
+    _min: ProjectMemberMinAggregateOutputType | null
+    _max: ProjectMemberMaxAggregateOutputType | null
+  }
+
+  type GetProjectMemberGroupByPayload<T extends ProjectMemberGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ProjectMemberGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ProjectMemberGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ProjectMemberGroupByOutputType[P]>
+            : GetScalarType<T[P], ProjectMemberGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ProjectMemberSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    projectId?: boolean
+    userId?: boolean
+    role?: boolean
+    createdAt?: boolean
+    project?: boolean | ProjectDefaultArgs<ExtArgs>
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["projectMember"]>
+
+  export type ProjectMemberSelectScalar = {
+    id?: boolean
+    projectId?: boolean
+    userId?: boolean
+    role?: boolean
+    createdAt?: boolean
+  }
+
+  export type ProjectMemberInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    project?: boolean | ProjectDefaultArgs<ExtArgs>
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+
+  export type $ProjectMemberPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "ProjectMember"
+    objects: {
+      project: Prisma.$ProjectPayload<ExtArgs>
+      user: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      projectId: string
+      userId: string
+      role: $Enums.ProjectRole
+      createdAt: Date
+    }, ExtArgs["result"]["projectMember"]>
+    composites: {}
+  }
+
+
+  type ProjectMemberGetPayload<S extends boolean | null | undefined | ProjectMemberDefaultArgs> = $Result.GetResult<Prisma.$ProjectMemberPayload, S>
+
+  type ProjectMemberCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<ProjectMemberFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: ProjectMemberCountAggregateInputType | true
+    }
+
+  export interface ProjectMemberDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['ProjectMember'], meta: { name: 'ProjectMember' } }
+    /**
+     * Find zero or one ProjectMember that matches the filter.
+     * @param {ProjectMemberFindUniqueArgs} args - Arguments to find a ProjectMember
+     * @example
+     * // Get one ProjectMember
+     * const projectMember = await prisma.projectMember.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends ProjectMemberFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectMemberFindUniqueArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one ProjectMember that matches the filter or throw an error  with `error.code='P2025'` 
+     *     if no matches were found.
+     * @param {ProjectMemberFindUniqueOrThrowArgs} args - Arguments to find a ProjectMember
+     * @example
+     * // Get one ProjectMember
+     * const projectMember = await prisma.projectMember.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends ProjectMemberFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectMemberFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first ProjectMember that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberFindFirstArgs} args - Arguments to find a ProjectMember
+     * @example
+     * // Get one ProjectMember
+     * const projectMember = await prisma.projectMember.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends ProjectMemberFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectMemberFindFirstArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first ProjectMember that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberFindFirstOrThrowArgs} args - Arguments to find a ProjectMember
+     * @example
+     * // Get one ProjectMember
+     * const projectMember = await prisma.projectMember.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends ProjectMemberFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectMemberFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more ProjectMembers that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all ProjectMembers
+     * const projectMembers = await prisma.projectMember.findMany()
+     * 
+     * // Get first 10 ProjectMembers
+     * const projectMembers = await prisma.projectMember.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const projectMemberWithIdOnly = await prisma.projectMember.findMany({ select: { id: true } })
+     * 
+    **/
+    findMany<T extends ProjectMemberFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectMemberFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a ProjectMember.
+     * @param {ProjectMemberCreateArgs} args - Arguments to create a ProjectMember.
+     * @example
+     * // Create one ProjectMember
+     * const ProjectMember = await prisma.projectMember.create({
+     *   data: {
+     *     // ... data to create a ProjectMember
+     *   }
+     * })
+     * 
+    **/
+    create<T extends ProjectMemberCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectMemberCreateArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many ProjectMembers.
+     *     @param {ProjectMemberCreateManyArgs} args - Arguments to create many ProjectMembers.
+     *     @example
+     *     // Create many ProjectMembers
+     *     const projectMember = await prisma.projectMember.createMany({
+     *       data: {
+     *         // ... provide data here
+     *       }
+     *     })
+     *     
+    **/
+    createMany<T extends ProjectMemberCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectMemberCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a ProjectMember.
+     * @param {ProjectMemberDeleteArgs} args - Arguments to delete one ProjectMember.
+     * @example
+     * // Delete one ProjectMember
+     * const ProjectMember = await prisma.projectMember.delete({
+     *   where: {
+     *     // ... filter to delete one ProjectMember
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends ProjectMemberDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectMemberDeleteArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one ProjectMember.
+     * @param {ProjectMemberUpdateArgs} args - Arguments to update one ProjectMember.
+     * @example
+     * // Update one ProjectMember
+     * const projectMember = await prisma.projectMember.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends ProjectMemberUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectMemberUpdateArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more ProjectMembers.
+     * @param {ProjectMemberDeleteManyArgs} args - Arguments to filter ProjectMembers to delete.
+     * @example
+     * // Delete a few ProjectMembers
+     * const { count } = await prisma.projectMember.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends ProjectMemberDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectMemberDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ProjectMembers.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many ProjectMembers
+     * const projectMember = await prisma.projectMember.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends ProjectMemberUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectMemberUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one ProjectMember.
+     * @param {ProjectMemberUpsertArgs} args - Arguments to update or create a ProjectMember.
+     * @example
+     * // Update or create a ProjectMember
+     * const projectMember = await prisma.projectMember.upsert({
+     *   create: {
+     *     // ... data to create a ProjectMember
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the ProjectMember we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends ProjectMemberUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectMemberUpsertArgs<ExtArgs>>
+    ): Prisma__ProjectMemberClient<$Result.GetResult<Prisma.$ProjectMemberPayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of ProjectMembers.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberCountArgs} args - Arguments to filter ProjectMembers to count.
+     * @example
+     * // Count the number of ProjectMembers
+     * const count = await prisma.projectMember.count({
+     *   where: {
+     *     // ... the filter for the ProjectMembers we want to count
+     *   }
+     * })
+    **/
+    count<T extends ProjectMemberCountArgs>(
+      args?: Subset<T, ProjectMemberCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ProjectMemberCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a ProjectMember.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ProjectMemberAggregateArgs>(args: Subset<T, ProjectMemberAggregateArgs>): Prisma.PrismaPromise<GetProjectMemberAggregateType<T>>
+
+    /**
+     * Group by ProjectMember.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectMemberGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ProjectMemberGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ProjectMemberGroupByArgs['orderBy'] }
+        : { orderBy?: ProjectMemberGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ProjectMemberGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetProjectMemberGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the ProjectMember model
+   */
+  readonly fields: ProjectMemberFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for ProjectMember.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ProjectMemberClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    project<T extends ProjectDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProjectDefaultArgs<ExtArgs>>): Prisma__ProjectClient<$Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the ProjectMember model
+   */ 
+  interface ProjectMemberFieldRefs {
+    readonly id: FieldRef<"ProjectMember", 'String'>
+    readonly projectId: FieldRef<"ProjectMember", 'String'>
+    readonly userId: FieldRef<"ProjectMember", 'String'>
+    readonly role: FieldRef<"ProjectMember", 'ProjectRole'>
+    readonly createdAt: FieldRef<"ProjectMember", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+
+  /**
+   * ProjectMember findUnique
+   */
+  export type ProjectMemberFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectMember to fetch.
+     */
+    where: ProjectMemberWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectMember findUniqueOrThrow
+   */
+  export type ProjectMemberFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectMember to fetch.
+     */
+    where: ProjectMemberWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectMember findFirst
+   */
+  export type ProjectMemberFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectMember to fetch.
+     */
+    where?: ProjectMemberWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectMembers to fetch.
+     */
+    orderBy?: ProjectMemberOrderByWithRelationInput | ProjectMemberOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ProjectMembers.
+     */
+    cursor?: ProjectMemberWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectMembers from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectMembers.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ProjectMembers.
+     */
+    distinct?: ProjectMemberScalarFieldEnum | ProjectMemberScalarFieldEnum[]
+  }
+
+
+  /**
+   * ProjectMember findFirstOrThrow
+   */
+  export type ProjectMemberFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectMember to fetch.
+     */
+    where?: ProjectMemberWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectMembers to fetch.
+     */
+    orderBy?: ProjectMemberOrderByWithRelationInput | ProjectMemberOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ProjectMembers.
+     */
+    cursor?: ProjectMemberWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectMembers from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectMembers.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ProjectMembers.
+     */
+    distinct?: ProjectMemberScalarFieldEnum | ProjectMemberScalarFieldEnum[]
+  }
+
+
+  /**
+   * ProjectMember findMany
+   */
+  export type ProjectMemberFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectMembers to fetch.
+     */
+    where?: ProjectMemberWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectMembers to fetch.
+     */
+    orderBy?: ProjectMemberOrderByWithRelationInput | ProjectMemberOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing ProjectMembers.
+     */
+    cursor?: ProjectMemberWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectMembers from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectMembers.
+     */
+    skip?: number
+    distinct?: ProjectMemberScalarFieldEnum | ProjectMemberScalarFieldEnum[]
+  }
+
+
+  /**
+   * ProjectMember create
+   */
+  export type ProjectMemberCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * The data needed to create a ProjectMember.
+     */
+    data: XOR<ProjectMemberCreateInput, ProjectMemberUncheckedCreateInput>
+  }
+
+
+  /**
+   * ProjectMember createMany
+   */
+  export type ProjectMemberCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many ProjectMembers.
+     */
+    data: ProjectMemberCreateManyInput | ProjectMemberCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+
+  /**
+   * ProjectMember update
+   */
+  export type ProjectMemberUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * The data needed to update a ProjectMember.
+     */
+    data: XOR<ProjectMemberUpdateInput, ProjectMemberUncheckedUpdateInput>
+    /**
+     * Choose, which ProjectMember to update.
+     */
+    where: ProjectMemberWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectMember updateMany
+   */
+  export type ProjectMemberUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update ProjectMembers.
+     */
+    data: XOR<ProjectMemberUpdateManyMutationInput, ProjectMemberUncheckedUpdateManyInput>
+    /**
+     * Filter which ProjectMembers to update
+     */
+    where?: ProjectMemberWhereInput
+  }
+
+
+  /**
+   * ProjectMember upsert
+   */
+  export type ProjectMemberUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * The filter to search for the ProjectMember to update in case it exists.
+     */
+    where: ProjectMemberWhereUniqueInput
+    /**
+     * In case the ProjectMember found by the `where` argument doesn't exist, create a new ProjectMember with this data.
+     */
+    create: XOR<ProjectMemberCreateInput, ProjectMemberUncheckedCreateInput>
+    /**
+     * In case the ProjectMember was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ProjectMemberUpdateInput, ProjectMemberUncheckedUpdateInput>
+  }
+
+
+  /**
+   * ProjectMember delete
+   */
+  export type ProjectMemberDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+    /**
+     * Filter which ProjectMember to delete.
+     */
+    where: ProjectMemberWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectMember deleteMany
+   */
+  export type ProjectMemberDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ProjectMembers to delete
+     */
+    where?: ProjectMemberWhereInput
+  }
+
+
+  /**
+   * ProjectMember without action
+   */
+  export type ProjectMemberDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectMember
+     */
+    select?: ProjectMemberSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectMemberInclude<ExtArgs> | null
+  }
+
+
+
+  /**
+   * Model MarketplaceAsset
+   */
+
+  export type AggregateMarketplaceAsset = {
+    _count: MarketplaceAssetCountAggregateOutputType | null
+    _avg: MarketplaceAssetAvgAggregateOutputType | null
+    _sum: MarketplaceAssetSumAggregateOutputType | null
+    _min: MarketplaceAssetMinAggregateOutputType | null
+    _max: MarketplaceAssetMaxAggregateOutputType | null
+  }
+
+  export type MarketplaceAssetAvgAggregateOutputType = {
+    cloneCount: number | null
+  }
+
+  export type MarketplaceAssetSumAggregateOutputType = {
+    cloneCount: number | null
+  }
+
+  export type MarketplaceAssetMinAggregateOutputType = {
+    id: string | null
+    projectId: string | null
+    authorId: string | null
+    title: string | null
+    description: string | null
+    thumbnailUrl: string | null
+    isPublished: boolean | null
+    cloneCount: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MarketplaceAssetMaxAggregateOutputType = {
+    id: string | null
+    projectId: string | null
+    authorId: string | null
+    title: string | null
+    description: string | null
+    thumbnailUrl: string | null
+    isPublished: boolean | null
+    cloneCount: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MarketplaceAssetCountAggregateOutputType = {
+    id: number
+    projectId: number
+    authorId: number
+    title: number
+    description: number
+    tags: number
+    thumbnailUrl: number
+    isPublished: number
+    cloneCount: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MarketplaceAssetAvgAggregateInputType = {
+    cloneCount?: true
+  }
+
+  export type MarketplaceAssetSumAggregateInputType = {
+    cloneCount?: true
+  }
+
+  export type MarketplaceAssetMinAggregateInputType = {
+    id?: true
+    projectId?: true
+    authorId?: true
+    title?: true
+    description?: true
+    thumbnailUrl?: true
+    isPublished?: true
+    cloneCount?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MarketplaceAssetMaxAggregateInputType = {
+    id?: true
+    projectId?: true
+    authorId?: true
+    title?: true
+    description?: true
+    thumbnailUrl?: true
+    isPublished?: true
+    cloneCount?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MarketplaceAssetCountAggregateInputType = {
+    id?: true
+    projectId?: true
+    authorId?: true
+    title?: true
+    description?: true
+    tags?: true
+    thumbnailUrl?: true
+    isPublished?: true
+    cloneCount?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MarketplaceAssetAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MarketplaceAsset to aggregate.
+     */
+    where?: MarketplaceAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MarketplaceAssets to fetch.
+     */
+    orderBy?: MarketplaceAssetOrderByWithRelationInput | MarketplaceAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MarketplaceAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MarketplaceAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MarketplaceAssets.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MarketplaceAssets
+    **/
+    _count?: true | MarketplaceAssetCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MarketplaceAssetAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MarketplaceAssetSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MarketplaceAssetMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MarketplaceAssetMaxAggregateInputType
+  }
+
+  export type GetMarketplaceAssetAggregateType<T extends MarketplaceAssetAggregateArgs> = {
+        [P in keyof T & keyof AggregateMarketplaceAsset]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMarketplaceAsset[P]>
+      : GetScalarType<T[P], AggregateMarketplaceAsset[P]>
+  }
+
+
+
+
+  export type MarketplaceAssetGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MarketplaceAssetWhereInput
+    orderBy?: MarketplaceAssetOrderByWithAggregationInput | MarketplaceAssetOrderByWithAggregationInput[]
+    by: MarketplaceAssetScalarFieldEnum[] | MarketplaceAssetScalarFieldEnum
+    having?: MarketplaceAssetScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MarketplaceAssetCountAggregateInputType | true
+    _avg?: MarketplaceAssetAvgAggregateInputType
+    _sum?: MarketplaceAssetSumAggregateInputType
+    _min?: MarketplaceAssetMinAggregateInputType
+    _max?: MarketplaceAssetMaxAggregateInputType
+  }
+
+  export type MarketplaceAssetGroupByOutputType = {
+    id: string
+    projectId: string
+    authorId: string
+    title: string
+    description: string | null
+    tags: string[]
+    thumbnailUrl: string | null
+    isPublished: boolean
+    cloneCount: number
+    createdAt: Date
+    updatedAt: Date
+    _count: MarketplaceAssetCountAggregateOutputType | null
+    _avg: MarketplaceAssetAvgAggregateOutputType | null
+    _sum: MarketplaceAssetSumAggregateOutputType | null
+    _min: MarketplaceAssetMinAggregateOutputType | null
+    _max: MarketplaceAssetMaxAggregateOutputType | null
+  }
+
+  type GetMarketplaceAssetGroupByPayload<T extends MarketplaceAssetGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MarketplaceAssetGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MarketplaceAssetGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MarketplaceAssetGroupByOutputType[P]>
+            : GetScalarType<T[P], MarketplaceAssetGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MarketplaceAssetSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    projectId?: boolean
+    authorId?: boolean
+    title?: boolean
+    description?: boolean
+    tags?: boolean
+    thumbnailUrl?: boolean
+    isPublished?: boolean
+    cloneCount?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    project?: boolean | ProjectDefaultArgs<ExtArgs>
+    author?: boolean | UserDefaultArgs<ExtArgs>
+    clones?: boolean | MarketplaceAsset$clonesArgs<ExtArgs>
+    _count?: boolean | MarketplaceAssetCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["marketplaceAsset"]>
+
+  export type MarketplaceAssetSelectScalar = {
+    id?: boolean
+    projectId?: boolean
+    authorId?: boolean
+    title?: boolean
+    description?: boolean
+    tags?: boolean
+    thumbnailUrl?: boolean
+    isPublished?: boolean
+    cloneCount?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MarketplaceAssetInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    project?: boolean | ProjectDefaultArgs<ExtArgs>
+    author?: boolean | UserDefaultArgs<ExtArgs>
+    clones?: boolean | MarketplaceAsset$clonesArgs<ExtArgs>
+    _count?: boolean | MarketplaceAssetCountOutputTypeDefaultArgs<ExtArgs>
+  }
+
+
+  export type $MarketplaceAssetPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MarketplaceAsset"
+    objects: {
+      project: Prisma.$ProjectPayload<ExtArgs>
+      author: Prisma.$UserPayload<ExtArgs>
+      clones: Prisma.$ProjectClonePayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      projectId: string
+      authorId: string
+      title: string
+      description: string | null
+      tags: string[]
+      thumbnailUrl: string | null
+      isPublished: boolean
+      cloneCount: number
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["marketplaceAsset"]>
+    composites: {}
+  }
+
+
+  type MarketplaceAssetGetPayload<S extends boolean | null | undefined | MarketplaceAssetDefaultArgs> = $Result.GetResult<Prisma.$MarketplaceAssetPayload, S>
+
+  type MarketplaceAssetCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<MarketplaceAssetFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: MarketplaceAssetCountAggregateInputType | true
+    }
+
+  export interface MarketplaceAssetDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MarketplaceAsset'], meta: { name: 'MarketplaceAsset' } }
+    /**
+     * Find zero or one MarketplaceAsset that matches the filter.
+     * @param {MarketplaceAssetFindUniqueArgs} args - Arguments to find a MarketplaceAsset
+     * @example
+     * // Get one MarketplaceAsset
+     * const marketplaceAsset = await prisma.marketplaceAsset.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends MarketplaceAssetFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, MarketplaceAssetFindUniqueArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one MarketplaceAsset that matches the filter or throw an error  with `error.code='P2025'` 
+     *     if no matches were found.
+     * @param {MarketplaceAssetFindUniqueOrThrowArgs} args - Arguments to find a MarketplaceAsset
+     * @example
+     * // Get one MarketplaceAsset
+     * const marketplaceAsset = await prisma.marketplaceAsset.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends MarketplaceAssetFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, MarketplaceAssetFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first MarketplaceAsset that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetFindFirstArgs} args - Arguments to find a MarketplaceAsset
+     * @example
+     * // Get one MarketplaceAsset
+     * const marketplaceAsset = await prisma.marketplaceAsset.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends MarketplaceAssetFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, MarketplaceAssetFindFirstArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first MarketplaceAsset that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetFindFirstOrThrowArgs} args - Arguments to find a MarketplaceAsset
+     * @example
+     * // Get one MarketplaceAsset
+     * const marketplaceAsset = await prisma.marketplaceAsset.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends MarketplaceAssetFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, MarketplaceAssetFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more MarketplaceAssets that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MarketplaceAssets
+     * const marketplaceAssets = await prisma.marketplaceAsset.findMany()
+     * 
+     * // Get first 10 MarketplaceAssets
+     * const marketplaceAssets = await prisma.marketplaceAsset.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const marketplaceAssetWithIdOnly = await prisma.marketplaceAsset.findMany({ select: { id: true } })
+     * 
+    **/
+    findMany<T extends MarketplaceAssetFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, MarketplaceAssetFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a MarketplaceAsset.
+     * @param {MarketplaceAssetCreateArgs} args - Arguments to create a MarketplaceAsset.
+     * @example
+     * // Create one MarketplaceAsset
+     * const MarketplaceAsset = await prisma.marketplaceAsset.create({
+     *   data: {
+     *     // ... data to create a MarketplaceAsset
+     *   }
+     * })
+     * 
+    **/
+    create<T extends MarketplaceAssetCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, MarketplaceAssetCreateArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many MarketplaceAssets.
+     *     @param {MarketplaceAssetCreateManyArgs} args - Arguments to create many MarketplaceAssets.
+     *     @example
+     *     // Create many MarketplaceAssets
+     *     const marketplaceAsset = await prisma.marketplaceAsset.createMany({
+     *       data: {
+     *         // ... provide data here
+     *       }
+     *     })
+     *     
+    **/
+    createMany<T extends MarketplaceAssetCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, MarketplaceAssetCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a MarketplaceAsset.
+     * @param {MarketplaceAssetDeleteArgs} args - Arguments to delete one MarketplaceAsset.
+     * @example
+     * // Delete one MarketplaceAsset
+     * const MarketplaceAsset = await prisma.marketplaceAsset.delete({
+     *   where: {
+     *     // ... filter to delete one MarketplaceAsset
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends MarketplaceAssetDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, MarketplaceAssetDeleteArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one MarketplaceAsset.
+     * @param {MarketplaceAssetUpdateArgs} args - Arguments to update one MarketplaceAsset.
+     * @example
+     * // Update one MarketplaceAsset
+     * const marketplaceAsset = await prisma.marketplaceAsset.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends MarketplaceAssetUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, MarketplaceAssetUpdateArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more MarketplaceAssets.
+     * @param {MarketplaceAssetDeleteManyArgs} args - Arguments to filter MarketplaceAssets to delete.
+     * @example
+     * // Delete a few MarketplaceAssets
+     * const { count } = await prisma.marketplaceAsset.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends MarketplaceAssetDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, MarketplaceAssetDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MarketplaceAssets.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MarketplaceAssets
+     * const marketplaceAsset = await prisma.marketplaceAsset.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends MarketplaceAssetUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, MarketplaceAssetUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one MarketplaceAsset.
+     * @param {MarketplaceAssetUpsertArgs} args - Arguments to update or create a MarketplaceAsset.
+     * @example
+     * // Update or create a MarketplaceAsset
+     * const marketplaceAsset = await prisma.marketplaceAsset.upsert({
+     *   create: {
+     *     // ... data to create a MarketplaceAsset
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MarketplaceAsset we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends MarketplaceAssetUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, MarketplaceAssetUpsertArgs<ExtArgs>>
+    ): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of MarketplaceAssets.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetCountArgs} args - Arguments to filter MarketplaceAssets to count.
+     * @example
+     * // Count the number of MarketplaceAssets
+     * const count = await prisma.marketplaceAsset.count({
+     *   where: {
+     *     // ... the filter for the MarketplaceAssets we want to count
+     *   }
+     * })
+    **/
+    count<T extends MarketplaceAssetCountArgs>(
+      args?: Subset<T, MarketplaceAssetCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MarketplaceAssetCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MarketplaceAsset.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MarketplaceAssetAggregateArgs>(args: Subset<T, MarketplaceAssetAggregateArgs>): Prisma.PrismaPromise<GetMarketplaceAssetAggregateType<T>>
+
+    /**
+     * Group by MarketplaceAsset.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MarketplaceAssetGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MarketplaceAssetGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MarketplaceAssetGroupByArgs['orderBy'] }
+        : { orderBy?: MarketplaceAssetGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MarketplaceAssetGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMarketplaceAssetGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MarketplaceAsset model
+   */
+  readonly fields: MarketplaceAssetFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MarketplaceAsset.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MarketplaceAssetClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    project<T extends ProjectDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProjectDefaultArgs<ExtArgs>>): Prisma__ProjectClient<$Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    author<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    clones<T extends MarketplaceAsset$clonesArgs<ExtArgs> = {}>(args?: Subset<T, MarketplaceAsset$clonesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findMany'> | Null>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the MarketplaceAsset model
+   */ 
+  interface MarketplaceAssetFieldRefs {
+    readonly id: FieldRef<"MarketplaceAsset", 'String'>
+    readonly projectId: FieldRef<"MarketplaceAsset", 'String'>
+    readonly authorId: FieldRef<"MarketplaceAsset", 'String'>
+    readonly title: FieldRef<"MarketplaceAsset", 'String'>
+    readonly description: FieldRef<"MarketplaceAsset", 'String'>
+    readonly tags: FieldRef<"MarketplaceAsset", 'String[]'>
+    readonly thumbnailUrl: FieldRef<"MarketplaceAsset", 'String'>
+    readonly isPublished: FieldRef<"MarketplaceAsset", 'Boolean'>
+    readonly cloneCount: FieldRef<"MarketplaceAsset", 'Int'>
+    readonly createdAt: FieldRef<"MarketplaceAsset", 'DateTime'>
+    readonly updatedAt: FieldRef<"MarketplaceAsset", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+
+  /**
+   * MarketplaceAsset findUnique
+   */
+  export type MarketplaceAssetFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * Filter, which MarketplaceAsset to fetch.
+     */
+    where: MarketplaceAssetWhereUniqueInput
+  }
+
+
+  /**
+   * MarketplaceAsset findUniqueOrThrow
+   */
+  export type MarketplaceAssetFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * Filter, which MarketplaceAsset to fetch.
+     */
+    where: MarketplaceAssetWhereUniqueInput
+  }
+
+
+  /**
+   * MarketplaceAsset findFirst
+   */
+  export type MarketplaceAssetFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * Filter, which MarketplaceAsset to fetch.
+     */
+    where?: MarketplaceAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MarketplaceAssets to fetch.
+     */
+    orderBy?: MarketplaceAssetOrderByWithRelationInput | MarketplaceAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MarketplaceAssets.
+     */
+    cursor?: MarketplaceAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MarketplaceAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MarketplaceAssets.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MarketplaceAssets.
+     */
+    distinct?: MarketplaceAssetScalarFieldEnum | MarketplaceAssetScalarFieldEnum[]
+  }
+
+
+  /**
+   * MarketplaceAsset findFirstOrThrow
+   */
+  export type MarketplaceAssetFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * Filter, which MarketplaceAsset to fetch.
+     */
+    where?: MarketplaceAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MarketplaceAssets to fetch.
+     */
+    orderBy?: MarketplaceAssetOrderByWithRelationInput | MarketplaceAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MarketplaceAssets.
+     */
+    cursor?: MarketplaceAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MarketplaceAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MarketplaceAssets.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MarketplaceAssets.
+     */
+    distinct?: MarketplaceAssetScalarFieldEnum | MarketplaceAssetScalarFieldEnum[]
+  }
+
+
+  /**
+   * MarketplaceAsset findMany
+   */
+  export type MarketplaceAssetFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * Filter, which MarketplaceAssets to fetch.
+     */
+    where?: MarketplaceAssetWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MarketplaceAssets to fetch.
+     */
+    orderBy?: MarketplaceAssetOrderByWithRelationInput | MarketplaceAssetOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MarketplaceAssets.
+     */
+    cursor?: MarketplaceAssetWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MarketplaceAssets from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MarketplaceAssets.
+     */
+    skip?: number
+    distinct?: MarketplaceAssetScalarFieldEnum | MarketplaceAssetScalarFieldEnum[]
+  }
+
+
+  /**
+   * MarketplaceAsset create
+   */
+  export type MarketplaceAssetCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MarketplaceAsset.
+     */
+    data: XOR<MarketplaceAssetCreateInput, MarketplaceAssetUncheckedCreateInput>
+  }
+
+
+  /**
+   * MarketplaceAsset createMany
+   */
+  export type MarketplaceAssetCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MarketplaceAssets.
+     */
+    data: MarketplaceAssetCreateManyInput | MarketplaceAssetCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+
+  /**
+   * MarketplaceAsset update
+   */
+  export type MarketplaceAssetUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MarketplaceAsset.
+     */
+    data: XOR<MarketplaceAssetUpdateInput, MarketplaceAssetUncheckedUpdateInput>
+    /**
+     * Choose, which MarketplaceAsset to update.
+     */
+    where: MarketplaceAssetWhereUniqueInput
+  }
+
+
+  /**
+   * MarketplaceAsset updateMany
+   */
+  export type MarketplaceAssetUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MarketplaceAssets.
+     */
+    data: XOR<MarketplaceAssetUpdateManyMutationInput, MarketplaceAssetUncheckedUpdateManyInput>
+    /**
+     * Filter which MarketplaceAssets to update
+     */
+    where?: MarketplaceAssetWhereInput
+  }
+
+
+  /**
+   * MarketplaceAsset upsert
+   */
+  export type MarketplaceAssetUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MarketplaceAsset to update in case it exists.
+     */
+    where: MarketplaceAssetWhereUniqueInput
+    /**
+     * In case the MarketplaceAsset found by the `where` argument doesn't exist, create a new MarketplaceAsset with this data.
+     */
+    create: XOR<MarketplaceAssetCreateInput, MarketplaceAssetUncheckedCreateInput>
+    /**
+     * In case the MarketplaceAsset was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MarketplaceAssetUpdateInput, MarketplaceAssetUncheckedUpdateInput>
+  }
+
+
+  /**
+   * MarketplaceAsset delete
+   */
+  export type MarketplaceAssetDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+    /**
+     * Filter which MarketplaceAsset to delete.
+     */
+    where: MarketplaceAssetWhereUniqueInput
+  }
+
+
+  /**
+   * MarketplaceAsset deleteMany
+   */
+  export type MarketplaceAssetDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MarketplaceAssets to delete
+     */
+    where?: MarketplaceAssetWhereInput
+  }
+
+
+  /**
+   * MarketplaceAsset.clones
+   */
+  export type MarketplaceAsset$clonesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    where?: ProjectCloneWhereInput
+    orderBy?: ProjectCloneOrderByWithRelationInput | ProjectCloneOrderByWithRelationInput[]
+    cursor?: ProjectCloneWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ProjectCloneScalarFieldEnum | ProjectCloneScalarFieldEnum[]
+  }
+
+
+  /**
+   * MarketplaceAsset without action
+   */
+  export type MarketplaceAssetDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MarketplaceAsset
+     */
+    select?: MarketplaceAssetSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: MarketplaceAssetInclude<ExtArgs> | null
+  }
+
+
+
+  /**
+   * Model ProjectClone
+   */
+
+  export type AggregateProjectClone = {
+    _count: ProjectCloneCountAggregateOutputType | null
+    _min: ProjectCloneMinAggregateOutputType | null
+    _max: ProjectCloneMaxAggregateOutputType | null
+  }
+
+  export type ProjectCloneMinAggregateOutputType = {
+    id: string | null
+    sourceAssetId: string | null
+    clonedProjectId: string | null
+    clonedByUserId: string | null
+    createdAt: Date | null
+  }
+
+  export type ProjectCloneMaxAggregateOutputType = {
+    id: string | null
+    sourceAssetId: string | null
+    clonedProjectId: string | null
+    clonedByUserId: string | null
+    createdAt: Date | null
+  }
+
+  export type ProjectCloneCountAggregateOutputType = {
+    id: number
+    sourceAssetId: number
+    clonedProjectId: number
+    clonedByUserId: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type ProjectCloneMinAggregateInputType = {
+    id?: true
+    sourceAssetId?: true
+    clonedProjectId?: true
+    clonedByUserId?: true
+    createdAt?: true
+  }
+
+  export type ProjectCloneMaxAggregateInputType = {
+    id?: true
+    sourceAssetId?: true
+    clonedProjectId?: true
+    clonedByUserId?: true
+    createdAt?: true
+  }
+
+  export type ProjectCloneCountAggregateInputType = {
+    id?: true
+    sourceAssetId?: true
+    clonedProjectId?: true
+    clonedByUserId?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type ProjectCloneAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ProjectClone to aggregate.
+     */
+    where?: ProjectCloneWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectClones to fetch.
+     */
+    orderBy?: ProjectCloneOrderByWithRelationInput | ProjectCloneOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ProjectCloneWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectClones from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectClones.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned ProjectClones
+    **/
+    _count?: true | ProjectCloneCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ProjectCloneMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ProjectCloneMaxAggregateInputType
+  }
+
+  export type GetProjectCloneAggregateType<T extends ProjectCloneAggregateArgs> = {
+        [P in keyof T & keyof AggregateProjectClone]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateProjectClone[P]>
+      : GetScalarType<T[P], AggregateProjectClone[P]>
+  }
+
+
+
+
+  export type ProjectCloneGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ProjectCloneWhereInput
+    orderBy?: ProjectCloneOrderByWithAggregationInput | ProjectCloneOrderByWithAggregationInput[]
+    by: ProjectCloneScalarFieldEnum[] | ProjectCloneScalarFieldEnum
+    having?: ProjectCloneScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ProjectCloneCountAggregateInputType | true
+    _min?: ProjectCloneMinAggregateInputType
+    _max?: ProjectCloneMaxAggregateInputType
+  }
+
+  export type ProjectCloneGroupByOutputType = {
+    id: string
+    sourceAssetId: string
+    clonedProjectId: string
+    clonedByUserId: string
+    createdAt: Date
+    _count: ProjectCloneCountAggregateOutputType | null
+    _min: ProjectCloneMinAggregateOutputType | null
+    _max: ProjectCloneMaxAggregateOutputType | null
+  }
+
+  type GetProjectCloneGroupByPayload<T extends ProjectCloneGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ProjectCloneGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ProjectCloneGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ProjectCloneGroupByOutputType[P]>
+            : GetScalarType<T[P], ProjectCloneGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ProjectCloneSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    sourceAssetId?: boolean
+    clonedProjectId?: boolean
+    clonedByUserId?: boolean
+    createdAt?: boolean
+    asset?: boolean | MarketplaceAssetDefaultArgs<ExtArgs>
+    clonedProject?: boolean | ProjectDefaultArgs<ExtArgs>
+    clonedBy?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["projectClone"]>
+
+  export type ProjectCloneSelectScalar = {
+    id?: boolean
+    sourceAssetId?: boolean
+    clonedProjectId?: boolean
+    clonedByUserId?: boolean
+    createdAt?: boolean
+  }
+
+  export type ProjectCloneInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    asset?: boolean | MarketplaceAssetDefaultArgs<ExtArgs>
+    clonedProject?: boolean | ProjectDefaultArgs<ExtArgs>
+    clonedBy?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+
+  export type $ProjectClonePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "ProjectClone"
+    objects: {
+      asset: Prisma.$MarketplaceAssetPayload<ExtArgs>
+      clonedProject: Prisma.$ProjectPayload<ExtArgs>
+      clonedBy: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      sourceAssetId: string
+      clonedProjectId: string
+      clonedByUserId: string
+      createdAt: Date
+    }, ExtArgs["result"]["projectClone"]>
+    composites: {}
+  }
+
+
+  type ProjectCloneGetPayload<S extends boolean | null | undefined | ProjectCloneDefaultArgs> = $Result.GetResult<Prisma.$ProjectClonePayload, S>
+
+  type ProjectCloneCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<ProjectCloneFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: ProjectCloneCountAggregateInputType | true
+    }
+
+  export interface ProjectCloneDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['ProjectClone'], meta: { name: 'ProjectClone' } }
+    /**
+     * Find zero or one ProjectClone that matches the filter.
+     * @param {ProjectCloneFindUniqueArgs} args - Arguments to find a ProjectClone
+     * @example
+     * // Get one ProjectClone
+     * const projectClone = await prisma.projectClone.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends ProjectCloneFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectCloneFindUniqueArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one ProjectClone that matches the filter or throw an error  with `error.code='P2025'` 
+     *     if no matches were found.
+     * @param {ProjectCloneFindUniqueOrThrowArgs} args - Arguments to find a ProjectClone
+     * @example
+     * // Get one ProjectClone
+     * const projectClone = await prisma.projectClone.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends ProjectCloneFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectCloneFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first ProjectClone that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneFindFirstArgs} args - Arguments to find a ProjectClone
+     * @example
+     * // Get one ProjectClone
+     * const projectClone = await prisma.projectClone.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends ProjectCloneFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectCloneFindFirstArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first ProjectClone that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneFindFirstOrThrowArgs} args - Arguments to find a ProjectClone
+     * @example
+     * // Get one ProjectClone
+     * const projectClone = await prisma.projectClone.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends ProjectCloneFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectCloneFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more ProjectClones that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all ProjectClones
+     * const projectClones = await prisma.projectClone.findMany()
+     * 
+     * // Get first 10 ProjectClones
+     * const projectClones = await prisma.projectClone.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const projectCloneWithIdOnly = await prisma.projectClone.findMany({ select: { id: true } })
+     * 
+    **/
+    findMany<T extends ProjectCloneFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectCloneFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a ProjectClone.
+     * @param {ProjectCloneCreateArgs} args - Arguments to create a ProjectClone.
+     * @example
+     * // Create one ProjectClone
+     * const ProjectClone = await prisma.projectClone.create({
+     *   data: {
+     *     // ... data to create a ProjectClone
+     *   }
+     * })
+     * 
+    **/
+    create<T extends ProjectCloneCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectCloneCreateArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many ProjectClones.
+     *     @param {ProjectCloneCreateManyArgs} args - Arguments to create many ProjectClones.
+     *     @example
+     *     // Create many ProjectClones
+     *     const projectClone = await prisma.projectClone.createMany({
+     *       data: {
+     *         // ... provide data here
+     *       }
+     *     })
+     *     
+    **/
+    createMany<T extends ProjectCloneCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectCloneCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a ProjectClone.
+     * @param {ProjectCloneDeleteArgs} args - Arguments to delete one ProjectClone.
+     * @example
+     * // Delete one ProjectClone
+     * const ProjectClone = await prisma.projectClone.delete({
+     *   where: {
+     *     // ... filter to delete one ProjectClone
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends ProjectCloneDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectCloneDeleteArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one ProjectClone.
+     * @param {ProjectCloneUpdateArgs} args - Arguments to update one ProjectClone.
+     * @example
+     * // Update one ProjectClone
+     * const projectClone = await prisma.projectClone.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends ProjectCloneUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectCloneUpdateArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more ProjectClones.
+     * @param {ProjectCloneDeleteManyArgs} args - Arguments to filter ProjectClones to delete.
+     * @example
+     * // Delete a few ProjectClones
+     * const { count } = await prisma.projectClone.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends ProjectCloneDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, ProjectCloneDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ProjectClones.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many ProjectClones
+     * const projectClone = await prisma.projectClone.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends ProjectCloneUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectCloneUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one ProjectClone.
+     * @param {ProjectCloneUpsertArgs} args - Arguments to update or create a ProjectClone.
+     * @example
+     * // Update or create a ProjectClone
+     * const projectClone = await prisma.projectClone.upsert({
+     *   create: {
+     *     // ... data to create a ProjectClone
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the ProjectClone we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends ProjectCloneUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, ProjectCloneUpsertArgs<ExtArgs>>
+    ): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of ProjectClones.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneCountArgs} args - Arguments to filter ProjectClones to count.
+     * @example
+     * // Count the number of ProjectClones
+     * const count = await prisma.projectClone.count({
+     *   where: {
+     *     // ... the filter for the ProjectClones we want to count
+     *   }
+     * })
+    **/
+    count<T extends ProjectCloneCountArgs>(
+      args?: Subset<T, ProjectCloneCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ProjectCloneCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a ProjectClone.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ProjectCloneAggregateArgs>(args: Subset<T, ProjectCloneAggregateArgs>): Prisma.PrismaPromise<GetProjectCloneAggregateType<T>>
+
+    /**
+     * Group by ProjectClone.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ProjectCloneGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ProjectCloneGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ProjectCloneGroupByArgs['orderBy'] }
+        : { orderBy?: ProjectCloneGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ProjectCloneGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetProjectCloneGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the ProjectClone model
+   */
+  readonly fields: ProjectCloneFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for ProjectClone.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ProjectCloneClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    asset<T extends MarketplaceAssetDefaultArgs<ExtArgs> = {}>(args?: Subset<T, MarketplaceAssetDefaultArgs<ExtArgs>>): Prisma__MarketplaceAssetClient<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    clonedProject<T extends ProjectDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProjectDefaultArgs<ExtArgs>>): Prisma__ProjectClient<$Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    clonedBy<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the ProjectClone model
+   */ 
+  interface ProjectCloneFieldRefs {
+    readonly id: FieldRef<"ProjectClone", 'String'>
+    readonly sourceAssetId: FieldRef<"ProjectClone", 'String'>
+    readonly clonedProjectId: FieldRef<"ProjectClone", 'String'>
+    readonly clonedByUserId: FieldRef<"ProjectClone", 'String'>
+    readonly createdAt: FieldRef<"ProjectClone", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+
+  /**
+   * ProjectClone findUnique
+   */
+  export type ProjectCloneFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectClone to fetch.
+     */
+    where: ProjectCloneWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectClone findUniqueOrThrow
+   */
+  export type ProjectCloneFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectClone to fetch.
+     */
+    where: ProjectCloneWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectClone findFirst
+   */
+  export type ProjectCloneFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectClone to fetch.
+     */
+    where?: ProjectCloneWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectClones to fetch.
+     */
+    orderBy?: ProjectCloneOrderByWithRelationInput | ProjectCloneOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ProjectClones.
+     */
+    cursor?: ProjectCloneWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectClones from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectClones.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ProjectClones.
+     */
+    distinct?: ProjectCloneScalarFieldEnum | ProjectCloneScalarFieldEnum[]
+  }
+
+
+  /**
+   * ProjectClone findFirstOrThrow
+   */
+  export type ProjectCloneFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectClone to fetch.
+     */
+    where?: ProjectCloneWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectClones to fetch.
+     */
+    orderBy?: ProjectCloneOrderByWithRelationInput | ProjectCloneOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ProjectClones.
+     */
+    cursor?: ProjectCloneWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectClones from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectClones.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ProjectClones.
+     */
+    distinct?: ProjectCloneScalarFieldEnum | ProjectCloneScalarFieldEnum[]
+  }
+
+
+  /**
+   * ProjectClone findMany
+   */
+  export type ProjectCloneFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * Filter, which ProjectClones to fetch.
+     */
+    where?: ProjectCloneWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ProjectClones to fetch.
+     */
+    orderBy?: ProjectCloneOrderByWithRelationInput | ProjectCloneOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing ProjectClones.
+     */
+    cursor?: ProjectCloneWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ProjectClones from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ProjectClones.
+     */
+    skip?: number
+    distinct?: ProjectCloneScalarFieldEnum | ProjectCloneScalarFieldEnum[]
+  }
+
+
+  /**
+   * ProjectClone create
+   */
+  export type ProjectCloneCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * The data needed to create a ProjectClone.
+     */
+    data: XOR<ProjectCloneCreateInput, ProjectCloneUncheckedCreateInput>
+  }
+
+
+  /**
+   * ProjectClone createMany
+   */
+  export type ProjectCloneCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many ProjectClones.
+     */
+    data: ProjectCloneCreateManyInput | ProjectCloneCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+
+  /**
+   * ProjectClone update
+   */
+  export type ProjectCloneUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * The data needed to update a ProjectClone.
+     */
+    data: XOR<ProjectCloneUpdateInput, ProjectCloneUncheckedUpdateInput>
+    /**
+     * Choose, which ProjectClone to update.
+     */
+    where: ProjectCloneWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectClone updateMany
+   */
+  export type ProjectCloneUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update ProjectClones.
+     */
+    data: XOR<ProjectCloneUpdateManyMutationInput, ProjectCloneUncheckedUpdateManyInput>
+    /**
+     * Filter which ProjectClones to update
+     */
+    where?: ProjectCloneWhereInput
+  }
+
+
+  /**
+   * ProjectClone upsert
+   */
+  export type ProjectCloneUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * The filter to search for the ProjectClone to update in case it exists.
+     */
+    where: ProjectCloneWhereUniqueInput
+    /**
+     * In case the ProjectClone found by the `where` argument doesn't exist, create a new ProjectClone with this data.
+     */
+    create: XOR<ProjectCloneCreateInput, ProjectCloneUncheckedCreateInput>
+    /**
+     * In case the ProjectClone was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ProjectCloneUpdateInput, ProjectCloneUncheckedUpdateInput>
+  }
+
+
+  /**
+   * ProjectClone delete
+   */
+  export type ProjectCloneDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
+    /**
+     * Filter which ProjectClone to delete.
+     */
+    where: ProjectCloneWhereUniqueInput
+  }
+
+
+  /**
+   * ProjectClone deleteMany
+   */
+  export type ProjectCloneDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ProjectClones to delete
+     */
+    where?: ProjectCloneWhereInput
+  }
+
+
+  /**
+   * ProjectClone without action
+   */
+  export type ProjectCloneDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ProjectClone
+     */
+    select?: ProjectCloneSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: ProjectCloneInclude<ExtArgs> | null
   }
 
 
@@ -8291,6 +11717,7 @@ export namespace Prisma {
     emailVerified: 'emailVerified',
     image: 'image',
     password: 'password',
+    bio: 'bio',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -8354,11 +11781,51 @@ export namespace Prisma {
     description: 'description',
     thumbnailUrl: 'thumbnailUrl',
     stateUrl: 'stateUrl',
+    isPublic: 'isPublic',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
 
   export type ProjectScalarFieldEnum = (typeof ProjectScalarFieldEnum)[keyof typeof ProjectScalarFieldEnum]
+
+
+  export const ProjectMemberScalarFieldEnum: {
+    id: 'id',
+    projectId: 'projectId',
+    userId: 'userId',
+    role: 'role',
+    createdAt: 'createdAt'
+  };
+
+  export type ProjectMemberScalarFieldEnum = (typeof ProjectMemberScalarFieldEnum)[keyof typeof ProjectMemberScalarFieldEnum]
+
+
+  export const MarketplaceAssetScalarFieldEnum: {
+    id: 'id',
+    projectId: 'projectId',
+    authorId: 'authorId',
+    title: 'title',
+    description: 'description',
+    tags: 'tags',
+    thumbnailUrl: 'thumbnailUrl',
+    isPublished: 'isPublished',
+    cloneCount: 'cloneCount',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MarketplaceAssetScalarFieldEnum = (typeof MarketplaceAssetScalarFieldEnum)[keyof typeof MarketplaceAssetScalarFieldEnum]
+
+
+  export const ProjectCloneScalarFieldEnum: {
+    id: 'id',
+    sourceAssetId: 'sourceAssetId',
+    clonedProjectId: 'clonedProjectId',
+    clonedByUserId: 'clonedByUserId',
+    createdAt: 'createdAt'
+  };
+
+  export type ProjectCloneScalarFieldEnum = (typeof ProjectCloneScalarFieldEnum)[keyof typeof ProjectCloneScalarFieldEnum]
 
 
   export const EarlyAccessApplicationScalarFieldEnum: {
@@ -8463,6 +11930,27 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Boolean'
+   */
+  export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+  /**
+   * Reference to a field of type 'ProjectRole'
+   */
+  export type EnumProjectRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectRole'>
+    
+
+
+  /**
+   * Reference to a field of type 'ProjectRole[]'
+   */
+  export type ListEnumProjectRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectRole[]'>
+    
+
+
+  /**
    * Reference to a field of type 'Int'
    */
   export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
@@ -8503,10 +11991,14 @@ export namespace Prisma {
     emailVerified?: DateTimeNullableFilter<"User"> | Date | string | null
     image?: StringNullableFilter<"User"> | string | null
     password?: StringNullableFilter<"User"> | string | null
+    bio?: StringNullableFilter<"User"> | string | null
     createdAt?: DateTimeFilter<"User"> | Date | string
     updatedAt?: DateTimeFilter<"User"> | Date | string
     organizations?: OrganizationMemberListRelationFilter
     teamMemberships?: TeamMemberListRelationFilter
+    projectMemberships?: ProjectMemberListRelationFilter
+    publishedAssets?: MarketplaceAssetListRelationFilter
+    clonedProjects?: ProjectCloneListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -8516,10 +12008,14 @@ export namespace Prisma {
     emailVerified?: SortOrderInput | SortOrder
     image?: SortOrderInput | SortOrder
     password?: SortOrderInput | SortOrder
+    bio?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     organizations?: OrganizationMemberOrderByRelationAggregateInput
     teamMemberships?: TeamMemberOrderByRelationAggregateInput
+    projectMemberships?: ProjectMemberOrderByRelationAggregateInput
+    publishedAssets?: MarketplaceAssetOrderByRelationAggregateInput
+    clonedProjects?: ProjectCloneOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -8532,10 +12028,14 @@ export namespace Prisma {
     emailVerified?: DateTimeNullableFilter<"User"> | Date | string | null
     image?: StringNullableFilter<"User"> | string | null
     password?: StringNullableFilter<"User"> | string | null
+    bio?: StringNullableFilter<"User"> | string | null
     createdAt?: DateTimeFilter<"User"> | Date | string
     updatedAt?: DateTimeFilter<"User"> | Date | string
     organizations?: OrganizationMemberListRelationFilter
     teamMemberships?: TeamMemberListRelationFilter
+    projectMemberships?: ProjectMemberListRelationFilter
+    publishedAssets?: MarketplaceAssetListRelationFilter
+    clonedProjects?: ProjectCloneListRelationFilter
   }, "id" | "email">
 
   export type UserOrderByWithAggregationInput = {
@@ -8545,6 +12045,7 @@ export namespace Prisma {
     emailVerified?: SortOrderInput | SortOrder
     image?: SortOrderInput | SortOrder
     password?: SortOrderInput | SortOrder
+    bio?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: UserCountOrderByAggregateInput
@@ -8562,6 +12063,7 @@ export namespace Prisma {
     emailVerified?: DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
     image?: StringNullableWithAggregatesFilter<"User"> | string | null
     password?: StringNullableWithAggregatesFilter<"User"> | string | null
+    bio?: StringNullableWithAggregatesFilter<"User"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
   }
@@ -8838,9 +12340,13 @@ export namespace Prisma {
     description?: StringNullableFilter<"Project"> | string | null
     thumbnailUrl?: StringNullableFilter<"Project"> | string | null
     stateUrl?: StringNullableFilter<"Project"> | string | null
+    isPublic?: BoolFilter<"Project"> | boolean
     createdAt?: DateTimeFilter<"Project"> | Date | string
     updatedAt?: DateTimeFilter<"Project"> | Date | string
     team?: XOR<TeamRelationFilter, TeamWhereInput>
+    members?: ProjectMemberListRelationFilter
+    publishedAsset?: XOR<MarketplaceAssetNullableRelationFilter, MarketplaceAssetWhereInput> | null
+    clonedFrom?: XOR<ProjectCloneNullableRelationFilter, ProjectCloneWhereInput> | null
   }
 
   export type ProjectOrderByWithRelationInput = {
@@ -8850,9 +12356,13 @@ export namespace Prisma {
     description?: SortOrderInput | SortOrder
     thumbnailUrl?: SortOrderInput | SortOrder
     stateUrl?: SortOrderInput | SortOrder
+    isPublic?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     team?: TeamOrderByWithRelationInput
+    members?: ProjectMemberOrderByRelationAggregateInput
+    publishedAsset?: MarketplaceAssetOrderByWithRelationInput
+    clonedFrom?: ProjectCloneOrderByWithRelationInput
   }
 
   export type ProjectWhereUniqueInput = Prisma.AtLeast<{
@@ -8865,9 +12375,13 @@ export namespace Prisma {
     description?: StringNullableFilter<"Project"> | string | null
     thumbnailUrl?: StringNullableFilter<"Project"> | string | null
     stateUrl?: StringNullableFilter<"Project"> | string | null
+    isPublic?: BoolFilter<"Project"> | boolean
     createdAt?: DateTimeFilter<"Project"> | Date | string
     updatedAt?: DateTimeFilter<"Project"> | Date | string
     team?: XOR<TeamRelationFilter, TeamWhereInput>
+    members?: ProjectMemberListRelationFilter
+    publishedAsset?: XOR<MarketplaceAssetNullableRelationFilter, MarketplaceAssetWhereInput> | null
+    clonedFrom?: XOR<ProjectCloneNullableRelationFilter, ProjectCloneWhereInput> | null
   }, "id">
 
   export type ProjectOrderByWithAggregationInput = {
@@ -8877,6 +12391,7 @@ export namespace Prisma {
     description?: SortOrderInput | SortOrder
     thumbnailUrl?: SortOrderInput | SortOrder
     stateUrl?: SortOrderInput | SortOrder
+    isPublic?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: ProjectCountOrderByAggregateInput
@@ -8894,8 +12409,222 @@ export namespace Prisma {
     description?: StringNullableWithAggregatesFilter<"Project"> | string | null
     thumbnailUrl?: StringNullableWithAggregatesFilter<"Project"> | string | null
     stateUrl?: StringNullableWithAggregatesFilter<"Project"> | string | null
+    isPublic?: BoolWithAggregatesFilter<"Project"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"Project"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Project"> | Date | string
+  }
+
+  export type ProjectMemberWhereInput = {
+    AND?: ProjectMemberWhereInput | ProjectMemberWhereInput[]
+    OR?: ProjectMemberWhereInput[]
+    NOT?: ProjectMemberWhereInput | ProjectMemberWhereInput[]
+    id?: StringFilter<"ProjectMember"> | string
+    projectId?: StringFilter<"ProjectMember"> | string
+    userId?: StringFilter<"ProjectMember"> | string
+    role?: EnumProjectRoleFilter<"ProjectMember"> | $Enums.ProjectRole
+    createdAt?: DateTimeFilter<"ProjectMember"> | Date | string
+    project?: XOR<ProjectRelationFilter, ProjectWhereInput>
+    user?: XOR<UserRelationFilter, UserWhereInput>
+  }
+
+  export type ProjectMemberOrderByWithRelationInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    createdAt?: SortOrder
+    project?: ProjectOrderByWithRelationInput
+    user?: UserOrderByWithRelationInput
+  }
+
+  export type ProjectMemberWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    projectId_userId?: ProjectMemberProjectIdUserIdCompoundUniqueInput
+    AND?: ProjectMemberWhereInput | ProjectMemberWhereInput[]
+    OR?: ProjectMemberWhereInput[]
+    NOT?: ProjectMemberWhereInput | ProjectMemberWhereInput[]
+    projectId?: StringFilter<"ProjectMember"> | string
+    userId?: StringFilter<"ProjectMember"> | string
+    role?: EnumProjectRoleFilter<"ProjectMember"> | $Enums.ProjectRole
+    createdAt?: DateTimeFilter<"ProjectMember"> | Date | string
+    project?: XOR<ProjectRelationFilter, ProjectWhereInput>
+    user?: XOR<UserRelationFilter, UserWhereInput>
+  }, "id" | "projectId_userId">
+
+  export type ProjectMemberOrderByWithAggregationInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    createdAt?: SortOrder
+    _count?: ProjectMemberCountOrderByAggregateInput
+    _max?: ProjectMemberMaxOrderByAggregateInput
+    _min?: ProjectMemberMinOrderByAggregateInput
+  }
+
+  export type ProjectMemberScalarWhereWithAggregatesInput = {
+    AND?: ProjectMemberScalarWhereWithAggregatesInput | ProjectMemberScalarWhereWithAggregatesInput[]
+    OR?: ProjectMemberScalarWhereWithAggregatesInput[]
+    NOT?: ProjectMemberScalarWhereWithAggregatesInput | ProjectMemberScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"ProjectMember"> | string
+    projectId?: StringWithAggregatesFilter<"ProjectMember"> | string
+    userId?: StringWithAggregatesFilter<"ProjectMember"> | string
+    role?: EnumProjectRoleWithAggregatesFilter<"ProjectMember"> | $Enums.ProjectRole
+    createdAt?: DateTimeWithAggregatesFilter<"ProjectMember"> | Date | string
+  }
+
+  export type MarketplaceAssetWhereInput = {
+    AND?: MarketplaceAssetWhereInput | MarketplaceAssetWhereInput[]
+    OR?: MarketplaceAssetWhereInput[]
+    NOT?: MarketplaceAssetWhereInput | MarketplaceAssetWhereInput[]
+    id?: StringFilter<"MarketplaceAsset"> | string
+    projectId?: StringFilter<"MarketplaceAsset"> | string
+    authorId?: StringFilter<"MarketplaceAsset"> | string
+    title?: StringFilter<"MarketplaceAsset"> | string
+    description?: StringNullableFilter<"MarketplaceAsset"> | string | null
+    tags?: StringNullableListFilter<"MarketplaceAsset">
+    thumbnailUrl?: StringNullableFilter<"MarketplaceAsset"> | string | null
+    isPublished?: BoolFilter<"MarketplaceAsset"> | boolean
+    cloneCount?: IntFilter<"MarketplaceAsset"> | number
+    createdAt?: DateTimeFilter<"MarketplaceAsset"> | Date | string
+    updatedAt?: DateTimeFilter<"MarketplaceAsset"> | Date | string
+    project?: XOR<ProjectRelationFilter, ProjectWhereInput>
+    author?: XOR<UserRelationFilter, UserWhereInput>
+    clones?: ProjectCloneListRelationFilter
+  }
+
+  export type MarketplaceAssetOrderByWithRelationInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    authorId?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    tags?: SortOrder
+    thumbnailUrl?: SortOrderInput | SortOrder
+    isPublished?: SortOrder
+    cloneCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    project?: ProjectOrderByWithRelationInput
+    author?: UserOrderByWithRelationInput
+    clones?: ProjectCloneOrderByRelationAggregateInput
+  }
+
+  export type MarketplaceAssetWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    projectId?: string
+    AND?: MarketplaceAssetWhereInput | MarketplaceAssetWhereInput[]
+    OR?: MarketplaceAssetWhereInput[]
+    NOT?: MarketplaceAssetWhereInput | MarketplaceAssetWhereInput[]
+    authorId?: StringFilter<"MarketplaceAsset"> | string
+    title?: StringFilter<"MarketplaceAsset"> | string
+    description?: StringNullableFilter<"MarketplaceAsset"> | string | null
+    tags?: StringNullableListFilter<"MarketplaceAsset">
+    thumbnailUrl?: StringNullableFilter<"MarketplaceAsset"> | string | null
+    isPublished?: BoolFilter<"MarketplaceAsset"> | boolean
+    cloneCount?: IntFilter<"MarketplaceAsset"> | number
+    createdAt?: DateTimeFilter<"MarketplaceAsset"> | Date | string
+    updatedAt?: DateTimeFilter<"MarketplaceAsset"> | Date | string
+    project?: XOR<ProjectRelationFilter, ProjectWhereInput>
+    author?: XOR<UserRelationFilter, UserWhereInput>
+    clones?: ProjectCloneListRelationFilter
+  }, "id" | "projectId">
+
+  export type MarketplaceAssetOrderByWithAggregationInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    authorId?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    tags?: SortOrder
+    thumbnailUrl?: SortOrderInput | SortOrder
+    isPublished?: SortOrder
+    cloneCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MarketplaceAssetCountOrderByAggregateInput
+    _avg?: MarketplaceAssetAvgOrderByAggregateInput
+    _max?: MarketplaceAssetMaxOrderByAggregateInput
+    _min?: MarketplaceAssetMinOrderByAggregateInput
+    _sum?: MarketplaceAssetSumOrderByAggregateInput
+  }
+
+  export type MarketplaceAssetScalarWhereWithAggregatesInput = {
+    AND?: MarketplaceAssetScalarWhereWithAggregatesInput | MarketplaceAssetScalarWhereWithAggregatesInput[]
+    OR?: MarketplaceAssetScalarWhereWithAggregatesInput[]
+    NOT?: MarketplaceAssetScalarWhereWithAggregatesInput | MarketplaceAssetScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MarketplaceAsset"> | string
+    projectId?: StringWithAggregatesFilter<"MarketplaceAsset"> | string
+    authorId?: StringWithAggregatesFilter<"MarketplaceAsset"> | string
+    title?: StringWithAggregatesFilter<"MarketplaceAsset"> | string
+    description?: StringNullableWithAggregatesFilter<"MarketplaceAsset"> | string | null
+    tags?: StringNullableListFilter<"MarketplaceAsset">
+    thumbnailUrl?: StringNullableWithAggregatesFilter<"MarketplaceAsset"> | string | null
+    isPublished?: BoolWithAggregatesFilter<"MarketplaceAsset"> | boolean
+    cloneCount?: IntWithAggregatesFilter<"MarketplaceAsset"> | number
+    createdAt?: DateTimeWithAggregatesFilter<"MarketplaceAsset"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MarketplaceAsset"> | Date | string
+  }
+
+  export type ProjectCloneWhereInput = {
+    AND?: ProjectCloneWhereInput | ProjectCloneWhereInput[]
+    OR?: ProjectCloneWhereInput[]
+    NOT?: ProjectCloneWhereInput | ProjectCloneWhereInput[]
+    id?: StringFilter<"ProjectClone"> | string
+    sourceAssetId?: StringFilter<"ProjectClone"> | string
+    clonedProjectId?: StringFilter<"ProjectClone"> | string
+    clonedByUserId?: StringFilter<"ProjectClone"> | string
+    createdAt?: DateTimeFilter<"ProjectClone"> | Date | string
+    asset?: XOR<MarketplaceAssetRelationFilter, MarketplaceAssetWhereInput>
+    clonedProject?: XOR<ProjectRelationFilter, ProjectWhereInput>
+    clonedBy?: XOR<UserRelationFilter, UserWhereInput>
+  }
+
+  export type ProjectCloneOrderByWithRelationInput = {
+    id?: SortOrder
+    sourceAssetId?: SortOrder
+    clonedProjectId?: SortOrder
+    clonedByUserId?: SortOrder
+    createdAt?: SortOrder
+    asset?: MarketplaceAssetOrderByWithRelationInput
+    clonedProject?: ProjectOrderByWithRelationInput
+    clonedBy?: UserOrderByWithRelationInput
+  }
+
+  export type ProjectCloneWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    clonedProjectId?: string
+    AND?: ProjectCloneWhereInput | ProjectCloneWhereInput[]
+    OR?: ProjectCloneWhereInput[]
+    NOT?: ProjectCloneWhereInput | ProjectCloneWhereInput[]
+    sourceAssetId?: StringFilter<"ProjectClone"> | string
+    clonedByUserId?: StringFilter<"ProjectClone"> | string
+    createdAt?: DateTimeFilter<"ProjectClone"> | Date | string
+    asset?: XOR<MarketplaceAssetRelationFilter, MarketplaceAssetWhereInput>
+    clonedProject?: XOR<ProjectRelationFilter, ProjectWhereInput>
+    clonedBy?: XOR<UserRelationFilter, UserWhereInput>
+  }, "id" | "clonedProjectId">
+
+  export type ProjectCloneOrderByWithAggregationInput = {
+    id?: SortOrder
+    sourceAssetId?: SortOrder
+    clonedProjectId?: SortOrder
+    clonedByUserId?: SortOrder
+    createdAt?: SortOrder
+    _count?: ProjectCloneCountOrderByAggregateInput
+    _max?: ProjectCloneMaxOrderByAggregateInput
+    _min?: ProjectCloneMinOrderByAggregateInput
+  }
+
+  export type ProjectCloneScalarWhereWithAggregatesInput = {
+    AND?: ProjectCloneScalarWhereWithAggregatesInput | ProjectCloneScalarWhereWithAggregatesInput[]
+    OR?: ProjectCloneScalarWhereWithAggregatesInput[]
+    NOT?: ProjectCloneScalarWhereWithAggregatesInput | ProjectCloneScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"ProjectClone"> | string
+    sourceAssetId?: StringWithAggregatesFilter<"ProjectClone"> | string
+    clonedProjectId?: StringWithAggregatesFilter<"ProjectClone"> | string
+    clonedByUserId?: StringWithAggregatesFilter<"ProjectClone"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"ProjectClone"> | Date | string
   }
 
   export type EarlyAccessApplicationWhereInput = {
@@ -8984,10 +12713,14 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -8997,10 +12730,14 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
   }
 
   export type UserUpdateInput = {
@@ -9010,10 +12747,14 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -9023,10 +12764,14 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -9036,6 +12781,7 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -9047,6 +12793,7 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -9058,6 +12805,7 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -9338,9 +13086,13 @@ export namespace Prisma {
     description?: string | null
     thumbnailUrl?: string | null
     stateUrl?: string | null
+    isPublic?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     team: TeamCreateNestedOneWithoutProjectsInput
+    members?: ProjectMemberCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
   }
 
   export type ProjectUncheckedCreateInput = {
@@ -9350,8 +13102,12 @@ export namespace Prisma {
     description?: string | null
     thumbnailUrl?: string | null
     stateUrl?: string | null
+    isPublic?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
   }
 
   export type ProjectUpdateInput = {
@@ -9360,9 +13116,13 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
+    members?: ProjectMemberUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateInput = {
@@ -9372,8 +13132,12 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
   }
 
   export type ProjectCreateManyInput = {
@@ -9383,6 +13147,7 @@ export namespace Prisma {
     description?: string | null
     thumbnailUrl?: string | null
     stateUrl?: string | null
+    isPublic?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -9393,6 +13158,7 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -9404,8 +13170,216 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberCreateInput = {
+    id?: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+    project: ProjectCreateNestedOneWithoutMembersInput
+    user: UserCreateNestedOneWithoutProjectMembershipsInput
+  }
+
+  export type ProjectMemberUncheckedCreateInput = {
+    id?: string
+    projectId: string
+    userId: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type ProjectMemberUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    project?: ProjectUpdateOneRequiredWithoutMembersNestedInput
+    user?: UserUpdateOneRequiredWithoutProjectMembershipsNestedInput
+  }
+
+  export type ProjectMemberUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberCreateManyInput = {
+    id?: string
+    projectId: string
+    userId: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type ProjectMemberUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MarketplaceAssetCreateInput = {
+    id?: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    project: ProjectCreateNestedOneWithoutPublishedAssetInput
+    author: UserCreateNestedOneWithoutPublishedAssetsInput
+    clones?: ProjectCloneCreateNestedManyWithoutAssetInput
+  }
+
+  export type MarketplaceAssetUncheckedCreateInput = {
+    id?: string
+    projectId: string
+    authorId: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    clones?: ProjectCloneUncheckedCreateNestedManyWithoutAssetInput
+  }
+
+  export type MarketplaceAssetUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    project?: ProjectUpdateOneRequiredWithoutPublishedAssetNestedInput
+    author?: UserUpdateOneRequiredWithoutPublishedAssetsNestedInput
+    clones?: ProjectCloneUpdateManyWithoutAssetNestedInput
+  }
+
+  export type MarketplaceAssetUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    authorId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clones?: ProjectCloneUncheckedUpdateManyWithoutAssetNestedInput
+  }
+
+  export type MarketplaceAssetCreateManyInput = {
+    id?: string
+    projectId: string
+    authorId: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MarketplaceAssetUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MarketplaceAssetUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    authorId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneCreateInput = {
+    id?: string
+    createdAt?: Date | string
+    asset: MarketplaceAssetCreateNestedOneWithoutClonesInput
+    clonedProject: ProjectCreateNestedOneWithoutClonedFromInput
+    clonedBy: UserCreateNestedOneWithoutClonedProjectsInput
+  }
+
+  export type ProjectCloneUncheckedCreateInput = {
+    id?: string
+    sourceAssetId: string
+    clonedProjectId: string
+    clonedByUserId: string
+    createdAt?: Date | string
+  }
+
+  export type ProjectCloneUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    asset?: MarketplaceAssetUpdateOneRequiredWithoutClonesNestedInput
+    clonedProject?: ProjectUpdateOneRequiredWithoutClonedFromNestedInput
+    clonedBy?: UserUpdateOneRequiredWithoutClonedProjectsNestedInput
+  }
+
+  export type ProjectCloneUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceAssetId?: StringFieldUpdateOperationsInput | string
+    clonedProjectId?: StringFieldUpdateOperationsInput | string
+    clonedByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneCreateManyInput = {
+    id?: string
+    sourceAssetId: string
+    clonedProjectId: string
+    clonedByUserId: string
+    createdAt?: Date | string
+  }
+
+  export type ProjectCloneUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceAssetId?: StringFieldUpdateOperationsInput | string
+    clonedProjectId?: StringFieldUpdateOperationsInput | string
+    clonedByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type EarlyAccessApplicationCreateInput = {
@@ -9563,6 +13537,24 @@ export namespace Prisma {
     none?: TeamMemberWhereInput
   }
 
+  export type ProjectMemberListRelationFilter = {
+    every?: ProjectMemberWhereInput
+    some?: ProjectMemberWhereInput
+    none?: ProjectMemberWhereInput
+  }
+
+  export type MarketplaceAssetListRelationFilter = {
+    every?: MarketplaceAssetWhereInput
+    some?: MarketplaceAssetWhereInput
+    none?: MarketplaceAssetWhereInput
+  }
+
+  export type ProjectCloneListRelationFilter = {
+    every?: ProjectCloneWhereInput
+    some?: ProjectCloneWhereInput
+    none?: ProjectCloneWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -9576,6 +13568,18 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
+  export type ProjectMemberOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MarketplaceAssetOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ProjectCloneOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type UserCountOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
@@ -9583,6 +13587,7 @@ export namespace Prisma {
     emailVerified?: SortOrder
     image?: SortOrder
     password?: SortOrder
+    bio?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -9594,6 +13599,7 @@ export namespace Prisma {
     emailVerified?: SortOrder
     image?: SortOrder
     password?: SortOrder
+    bio?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -9605,6 +13611,7 @@ export namespace Prisma {
     emailVerified?: SortOrder
     image?: SortOrder
     password?: SortOrder
+    bio?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -9863,6 +13870,21 @@ export namespace Prisma {
     updatedAt?: SortOrder
   }
 
+  export type BoolFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
+  export type MarketplaceAssetNullableRelationFilter = {
+    is?: MarketplaceAssetWhereInput | null
+    isNot?: MarketplaceAssetWhereInput | null
+  }
+
+  export type ProjectCloneNullableRelationFilter = {
+    is?: ProjectCloneWhereInput | null
+    isNot?: ProjectCloneWhereInput | null
+  }
+
   export type ProjectCountOrderByAggregateInput = {
     id?: SortOrder
     teamId?: SortOrder
@@ -9870,6 +13892,7 @@ export namespace Prisma {
     description?: SortOrder
     thumbnailUrl?: SortOrder
     stateUrl?: SortOrder
+    isPublic?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -9881,6 +13904,7 @@ export namespace Prisma {
     description?: SortOrder
     thumbnailUrl?: SortOrder
     stateUrl?: SortOrder
+    isPublic?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -9892,8 +13916,76 @@ export namespace Prisma {
     description?: SortOrder
     thumbnailUrl?: SortOrder
     stateUrl?: SortOrder
+    isPublic?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedBoolFilter<$PrismaModel>
+    _max?: NestedBoolFilter<$PrismaModel>
+  }
+
+  export type EnumProjectRoleFilter<$PrismaModel = never> = {
+    equals?: $Enums.ProjectRole | EnumProjectRoleFieldRefInput<$PrismaModel>
+    in?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    not?: NestedEnumProjectRoleFilter<$PrismaModel> | $Enums.ProjectRole
+  }
+
+  export type ProjectRelationFilter = {
+    is?: ProjectWhereInput
+    isNot?: ProjectWhereInput
+  }
+
+  export type ProjectMemberProjectIdUserIdCompoundUniqueInput = {
+    projectId: string
+    userId: string
+  }
+
+  export type ProjectMemberCountOrderByAggregateInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ProjectMemberMaxOrderByAggregateInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ProjectMemberMinOrderByAggregateInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type EnumProjectRoleWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.ProjectRole | EnumProjectRoleFieldRefInput<$PrismaModel>
+    in?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    not?: NestedEnumProjectRoleWithAggregatesFilter<$PrismaModel> | $Enums.ProjectRole
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumProjectRoleFilter<$PrismaModel>
+    _max?: NestedEnumProjectRoleFilter<$PrismaModel>
+  }
+
+  export type StringNullableListFilter<$PrismaModel = never> = {
+    equals?: string[] | ListStringFieldRefInput<$PrismaModel> | null
+    has?: string | StringFieldRefInput<$PrismaModel> | null
+    hasEvery?: string[] | ListStringFieldRefInput<$PrismaModel>
+    hasSome?: string[] | ListStringFieldRefInput<$PrismaModel>
+    isEmpty?: boolean
   }
 
   export type IntFilter<$PrismaModel = never> = {
@@ -9905,6 +13997,99 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntFilter<$PrismaModel> | number
+  }
+
+  export type MarketplaceAssetCountOrderByAggregateInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    authorId?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    tags?: SortOrder
+    thumbnailUrl?: SortOrder
+    isPublished?: SortOrder
+    cloneCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MarketplaceAssetAvgOrderByAggregateInput = {
+    cloneCount?: SortOrder
+  }
+
+  export type MarketplaceAssetMaxOrderByAggregateInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    authorId?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    thumbnailUrl?: SortOrder
+    isPublished?: SortOrder
+    cloneCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MarketplaceAssetMinOrderByAggregateInput = {
+    id?: SortOrder
+    projectId?: SortOrder
+    authorId?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    thumbnailUrl?: SortOrder
+    isPublished?: SortOrder
+    cloneCount?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MarketplaceAssetSumOrderByAggregateInput = {
+    cloneCount?: SortOrder
+  }
+
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
+  export type MarketplaceAssetRelationFilter = {
+    is?: MarketplaceAssetWhereInput
+    isNot?: MarketplaceAssetWhereInput
+  }
+
+  export type ProjectCloneCountOrderByAggregateInput = {
+    id?: SortOrder
+    sourceAssetId?: SortOrder
+    clonedProjectId?: SortOrder
+    clonedByUserId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ProjectCloneMaxOrderByAggregateInput = {
+    id?: SortOrder
+    sourceAssetId?: SortOrder
+    clonedProjectId?: SortOrder
+    clonedByUserId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type ProjectCloneMinOrderByAggregateInput = {
+    id?: SortOrder
+    sourceAssetId?: SortOrder
+    clonedProjectId?: SortOrder
+    clonedByUserId?: SortOrder
+    createdAt?: SortOrder
   }
 
   export type EarlyAccessApplicationCountOrderByAggregateInput = {
@@ -9954,22 +14139,6 @@ export namespace Prisma {
     teamSize?: SortOrder
   }
 
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
-  }
-
   export type OrganizationMemberCreateNestedManyWithoutUserInput = {
     create?: XOR<OrganizationMemberCreateWithoutUserInput, OrganizationMemberUncheckedCreateWithoutUserInput> | OrganizationMemberCreateWithoutUserInput[] | OrganizationMemberUncheckedCreateWithoutUserInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutUserInput | OrganizationMemberCreateOrConnectWithoutUserInput[]
@@ -9984,6 +14153,27 @@ export namespace Prisma {
     connect?: TeamMemberWhereUniqueInput | TeamMemberWhereUniqueInput[]
   }
 
+  export type ProjectMemberCreateNestedManyWithoutUserInput = {
+    create?: XOR<ProjectMemberCreateWithoutUserInput, ProjectMemberUncheckedCreateWithoutUserInput> | ProjectMemberCreateWithoutUserInput[] | ProjectMemberUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutUserInput | ProjectMemberCreateOrConnectWithoutUserInput[]
+    createMany?: ProjectMemberCreateManyUserInputEnvelope
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+  }
+
+  export type MarketplaceAssetCreateNestedManyWithoutAuthorInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutAuthorInput, MarketplaceAssetUncheckedCreateWithoutAuthorInput> | MarketplaceAssetCreateWithoutAuthorInput[] | MarketplaceAssetUncheckedCreateWithoutAuthorInput[]
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutAuthorInput | MarketplaceAssetCreateOrConnectWithoutAuthorInput[]
+    createMany?: MarketplaceAssetCreateManyAuthorInputEnvelope
+    connect?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+  }
+
+  export type ProjectCloneCreateNestedManyWithoutClonedByInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedByInput, ProjectCloneUncheckedCreateWithoutClonedByInput> | ProjectCloneCreateWithoutClonedByInput[] | ProjectCloneUncheckedCreateWithoutClonedByInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedByInput | ProjectCloneCreateOrConnectWithoutClonedByInput[]
+    createMany?: ProjectCloneCreateManyClonedByInputEnvelope
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+  }
+
   export type OrganizationMemberUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<OrganizationMemberCreateWithoutUserInput, OrganizationMemberUncheckedCreateWithoutUserInput> | OrganizationMemberCreateWithoutUserInput[] | OrganizationMemberUncheckedCreateWithoutUserInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutUserInput | OrganizationMemberCreateOrConnectWithoutUserInput[]
@@ -9996,6 +14186,27 @@ export namespace Prisma {
     connectOrCreate?: TeamMemberCreateOrConnectWithoutUserInput | TeamMemberCreateOrConnectWithoutUserInput[]
     createMany?: TeamMemberCreateManyUserInputEnvelope
     connect?: TeamMemberWhereUniqueInput | TeamMemberWhereUniqueInput[]
+  }
+
+  export type ProjectMemberUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<ProjectMemberCreateWithoutUserInput, ProjectMemberUncheckedCreateWithoutUserInput> | ProjectMemberCreateWithoutUserInput[] | ProjectMemberUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutUserInput | ProjectMemberCreateOrConnectWithoutUserInput[]
+    createMany?: ProjectMemberCreateManyUserInputEnvelope
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+  }
+
+  export type MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutAuthorInput, MarketplaceAssetUncheckedCreateWithoutAuthorInput> | MarketplaceAssetCreateWithoutAuthorInput[] | MarketplaceAssetUncheckedCreateWithoutAuthorInput[]
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutAuthorInput | MarketplaceAssetCreateOrConnectWithoutAuthorInput[]
+    createMany?: MarketplaceAssetCreateManyAuthorInputEnvelope
+    connect?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+  }
+
+  export type ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedByInput, ProjectCloneUncheckedCreateWithoutClonedByInput> | ProjectCloneCreateWithoutClonedByInput[] | ProjectCloneUncheckedCreateWithoutClonedByInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedByInput | ProjectCloneCreateOrConnectWithoutClonedByInput[]
+    createMany?: ProjectCloneCreateManyClonedByInputEnvelope
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -10042,6 +14253,48 @@ export namespace Prisma {
     deleteMany?: TeamMemberScalarWhereInput | TeamMemberScalarWhereInput[]
   }
 
+  export type ProjectMemberUpdateManyWithoutUserNestedInput = {
+    create?: XOR<ProjectMemberCreateWithoutUserInput, ProjectMemberUncheckedCreateWithoutUserInput> | ProjectMemberCreateWithoutUserInput[] | ProjectMemberUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutUserInput | ProjectMemberCreateOrConnectWithoutUserInput[]
+    upsert?: ProjectMemberUpsertWithWhereUniqueWithoutUserInput | ProjectMemberUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: ProjectMemberCreateManyUserInputEnvelope
+    set?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    disconnect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    delete?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    update?: ProjectMemberUpdateWithWhereUniqueWithoutUserInput | ProjectMemberUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: ProjectMemberUpdateManyWithWhereWithoutUserInput | ProjectMemberUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: ProjectMemberScalarWhereInput | ProjectMemberScalarWhereInput[]
+  }
+
+  export type MarketplaceAssetUpdateManyWithoutAuthorNestedInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutAuthorInput, MarketplaceAssetUncheckedCreateWithoutAuthorInput> | MarketplaceAssetCreateWithoutAuthorInput[] | MarketplaceAssetUncheckedCreateWithoutAuthorInput[]
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutAuthorInput | MarketplaceAssetCreateOrConnectWithoutAuthorInput[]
+    upsert?: MarketplaceAssetUpsertWithWhereUniqueWithoutAuthorInput | MarketplaceAssetUpsertWithWhereUniqueWithoutAuthorInput[]
+    createMany?: MarketplaceAssetCreateManyAuthorInputEnvelope
+    set?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    disconnect?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    delete?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    connect?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    update?: MarketplaceAssetUpdateWithWhereUniqueWithoutAuthorInput | MarketplaceAssetUpdateWithWhereUniqueWithoutAuthorInput[]
+    updateMany?: MarketplaceAssetUpdateManyWithWhereWithoutAuthorInput | MarketplaceAssetUpdateManyWithWhereWithoutAuthorInput[]
+    deleteMany?: MarketplaceAssetScalarWhereInput | MarketplaceAssetScalarWhereInput[]
+  }
+
+  export type ProjectCloneUpdateManyWithoutClonedByNestedInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedByInput, ProjectCloneUncheckedCreateWithoutClonedByInput> | ProjectCloneCreateWithoutClonedByInput[] | ProjectCloneUncheckedCreateWithoutClonedByInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedByInput | ProjectCloneCreateOrConnectWithoutClonedByInput[]
+    upsert?: ProjectCloneUpsertWithWhereUniqueWithoutClonedByInput | ProjectCloneUpsertWithWhereUniqueWithoutClonedByInput[]
+    createMany?: ProjectCloneCreateManyClonedByInputEnvelope
+    set?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    disconnect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    delete?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    update?: ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput | ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput[]
+    updateMany?: ProjectCloneUpdateManyWithWhereWithoutClonedByInput | ProjectCloneUpdateManyWithWhereWithoutClonedByInput[]
+    deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
+  }
+
   export type OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<OrganizationMemberCreateWithoutUserInput, OrganizationMemberUncheckedCreateWithoutUserInput> | OrganizationMemberCreateWithoutUserInput[] | OrganizationMemberUncheckedCreateWithoutUserInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutUserInput | OrganizationMemberCreateOrConnectWithoutUserInput[]
@@ -10068,6 +14321,48 @@ export namespace Prisma {
     update?: TeamMemberUpdateWithWhereUniqueWithoutUserInput | TeamMemberUpdateWithWhereUniqueWithoutUserInput[]
     updateMany?: TeamMemberUpdateManyWithWhereWithoutUserInput | TeamMemberUpdateManyWithWhereWithoutUserInput[]
     deleteMany?: TeamMemberScalarWhereInput | TeamMemberScalarWhereInput[]
+  }
+
+  export type ProjectMemberUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<ProjectMemberCreateWithoutUserInput, ProjectMemberUncheckedCreateWithoutUserInput> | ProjectMemberCreateWithoutUserInput[] | ProjectMemberUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutUserInput | ProjectMemberCreateOrConnectWithoutUserInput[]
+    upsert?: ProjectMemberUpsertWithWhereUniqueWithoutUserInput | ProjectMemberUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: ProjectMemberCreateManyUserInputEnvelope
+    set?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    disconnect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    delete?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    update?: ProjectMemberUpdateWithWhereUniqueWithoutUserInput | ProjectMemberUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: ProjectMemberUpdateManyWithWhereWithoutUserInput | ProjectMemberUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: ProjectMemberScalarWhereInput | ProjectMemberScalarWhereInput[]
+  }
+
+  export type MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutAuthorInput, MarketplaceAssetUncheckedCreateWithoutAuthorInput> | MarketplaceAssetCreateWithoutAuthorInput[] | MarketplaceAssetUncheckedCreateWithoutAuthorInput[]
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutAuthorInput | MarketplaceAssetCreateOrConnectWithoutAuthorInput[]
+    upsert?: MarketplaceAssetUpsertWithWhereUniqueWithoutAuthorInput | MarketplaceAssetUpsertWithWhereUniqueWithoutAuthorInput[]
+    createMany?: MarketplaceAssetCreateManyAuthorInputEnvelope
+    set?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    disconnect?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    delete?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    connect?: MarketplaceAssetWhereUniqueInput | MarketplaceAssetWhereUniqueInput[]
+    update?: MarketplaceAssetUpdateWithWhereUniqueWithoutAuthorInput | MarketplaceAssetUpdateWithWhereUniqueWithoutAuthorInput[]
+    updateMany?: MarketplaceAssetUpdateManyWithWhereWithoutAuthorInput | MarketplaceAssetUpdateManyWithWhereWithoutAuthorInput[]
+    deleteMany?: MarketplaceAssetScalarWhereInput | MarketplaceAssetScalarWhereInput[]
+  }
+
+  export type ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedByInput, ProjectCloneUncheckedCreateWithoutClonedByInput> | ProjectCloneCreateWithoutClonedByInput[] | ProjectCloneUncheckedCreateWithoutClonedByInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedByInput | ProjectCloneCreateOrConnectWithoutClonedByInput[]
+    upsert?: ProjectCloneUpsertWithWhereUniqueWithoutClonedByInput | ProjectCloneUpsertWithWhereUniqueWithoutClonedByInput[]
+    createMany?: ProjectCloneCreateManyClonedByInputEnvelope
+    set?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    disconnect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    delete?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    update?: ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput | ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput[]
+    updateMany?: ProjectCloneUpdateManyWithWhereWithoutClonedByInput | ProjectCloneUpdateManyWithWhereWithoutClonedByInput[]
+    deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
   }
 
   export type OrganizationMemberCreateNestedManyWithoutOrganizationInput = {
@@ -10322,6 +14617,48 @@ export namespace Prisma {
     connect?: TeamWhereUniqueInput
   }
 
+  export type ProjectMemberCreateNestedManyWithoutProjectInput = {
+    create?: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput> | ProjectMemberCreateWithoutProjectInput[] | ProjectMemberUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutProjectInput | ProjectMemberCreateOrConnectWithoutProjectInput[]
+    createMany?: ProjectMemberCreateManyProjectInputEnvelope
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+  }
+
+  export type MarketplaceAssetCreateNestedOneWithoutProjectInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutProjectInput, MarketplaceAssetUncheckedCreateWithoutProjectInput>
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutProjectInput
+    connect?: MarketplaceAssetWhereUniqueInput
+  }
+
+  export type ProjectCloneCreateNestedOneWithoutClonedProjectInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedProjectInput
+    connect?: ProjectCloneWhereUniqueInput
+  }
+
+  export type ProjectMemberUncheckedCreateNestedManyWithoutProjectInput = {
+    create?: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput> | ProjectMemberCreateWithoutProjectInput[] | ProjectMemberUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutProjectInput | ProjectMemberCreateOrConnectWithoutProjectInput[]
+    createMany?: ProjectMemberCreateManyProjectInputEnvelope
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+  }
+
+  export type MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutProjectInput, MarketplaceAssetUncheckedCreateWithoutProjectInput>
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutProjectInput
+    connect?: MarketplaceAssetWhereUniqueInput
+  }
+
+  export type ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedProjectInput
+    connect?: ProjectCloneWhereUniqueInput
+  }
+
+  export type BoolFieldUpdateOperationsInput = {
+    set?: boolean
+  }
+
   export type TeamUpdateOneRequiredWithoutProjectsNestedInput = {
     create?: XOR<TeamCreateWithoutProjectsInput, TeamUncheckedCreateWithoutProjectsInput>
     connectOrCreate?: TeamCreateOrConnectWithoutProjectsInput
@@ -10330,12 +14667,233 @@ export namespace Prisma {
     update?: XOR<XOR<TeamUpdateToOneWithWhereWithoutProjectsInput, TeamUpdateWithoutProjectsInput>, TeamUncheckedUpdateWithoutProjectsInput>
   }
 
+  export type ProjectMemberUpdateManyWithoutProjectNestedInput = {
+    create?: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput> | ProjectMemberCreateWithoutProjectInput[] | ProjectMemberUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutProjectInput | ProjectMemberCreateOrConnectWithoutProjectInput[]
+    upsert?: ProjectMemberUpsertWithWhereUniqueWithoutProjectInput | ProjectMemberUpsertWithWhereUniqueWithoutProjectInput[]
+    createMany?: ProjectMemberCreateManyProjectInputEnvelope
+    set?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    disconnect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    delete?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    update?: ProjectMemberUpdateWithWhereUniqueWithoutProjectInput | ProjectMemberUpdateWithWhereUniqueWithoutProjectInput[]
+    updateMany?: ProjectMemberUpdateManyWithWhereWithoutProjectInput | ProjectMemberUpdateManyWithWhereWithoutProjectInput[]
+    deleteMany?: ProjectMemberScalarWhereInput | ProjectMemberScalarWhereInput[]
+  }
+
+  export type MarketplaceAssetUpdateOneWithoutProjectNestedInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutProjectInput, MarketplaceAssetUncheckedCreateWithoutProjectInput>
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutProjectInput
+    upsert?: MarketplaceAssetUpsertWithoutProjectInput
+    disconnect?: MarketplaceAssetWhereInput | boolean
+    delete?: MarketplaceAssetWhereInput | boolean
+    connect?: MarketplaceAssetWhereUniqueInput
+    update?: XOR<XOR<MarketplaceAssetUpdateToOneWithWhereWithoutProjectInput, MarketplaceAssetUpdateWithoutProjectInput>, MarketplaceAssetUncheckedUpdateWithoutProjectInput>
+  }
+
+  export type ProjectCloneUpdateOneWithoutClonedProjectNestedInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedProjectInput
+    upsert?: ProjectCloneUpsertWithoutClonedProjectInput
+    disconnect?: ProjectCloneWhereInput | boolean
+    delete?: ProjectCloneWhereInput | boolean
+    connect?: ProjectCloneWhereUniqueInput
+    update?: XOR<XOR<ProjectCloneUpdateToOneWithWhereWithoutClonedProjectInput, ProjectCloneUpdateWithoutClonedProjectInput>, ProjectCloneUncheckedUpdateWithoutClonedProjectInput>
+  }
+
+  export type ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput = {
+    create?: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput> | ProjectMemberCreateWithoutProjectInput[] | ProjectMemberUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: ProjectMemberCreateOrConnectWithoutProjectInput | ProjectMemberCreateOrConnectWithoutProjectInput[]
+    upsert?: ProjectMemberUpsertWithWhereUniqueWithoutProjectInput | ProjectMemberUpsertWithWhereUniqueWithoutProjectInput[]
+    createMany?: ProjectMemberCreateManyProjectInputEnvelope
+    set?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    disconnect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    delete?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    connect?: ProjectMemberWhereUniqueInput | ProjectMemberWhereUniqueInput[]
+    update?: ProjectMemberUpdateWithWhereUniqueWithoutProjectInput | ProjectMemberUpdateWithWhereUniqueWithoutProjectInput[]
+    updateMany?: ProjectMemberUpdateManyWithWhereWithoutProjectInput | ProjectMemberUpdateManyWithWhereWithoutProjectInput[]
+    deleteMany?: ProjectMemberScalarWhereInput | ProjectMemberScalarWhereInput[]
+  }
+
+  export type MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutProjectInput, MarketplaceAssetUncheckedCreateWithoutProjectInput>
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutProjectInput
+    upsert?: MarketplaceAssetUpsertWithoutProjectInput
+    disconnect?: MarketplaceAssetWhereInput | boolean
+    delete?: MarketplaceAssetWhereInput | boolean
+    connect?: MarketplaceAssetWhereUniqueInput
+    update?: XOR<XOR<MarketplaceAssetUpdateToOneWithWhereWithoutProjectInput, MarketplaceAssetUpdateWithoutProjectInput>, MarketplaceAssetUncheckedUpdateWithoutProjectInput>
+  }
+
+  export type ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput = {
+    create?: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedProjectInput
+    upsert?: ProjectCloneUpsertWithoutClonedProjectInput
+    disconnect?: ProjectCloneWhereInput | boolean
+    delete?: ProjectCloneWhereInput | boolean
+    connect?: ProjectCloneWhereUniqueInput
+    update?: XOR<XOR<ProjectCloneUpdateToOneWithWhereWithoutClonedProjectInput, ProjectCloneUpdateWithoutClonedProjectInput>, ProjectCloneUncheckedUpdateWithoutClonedProjectInput>
+  }
+
+  export type ProjectCreateNestedOneWithoutMembersInput = {
+    create?: XOR<ProjectCreateWithoutMembersInput, ProjectUncheckedCreateWithoutMembersInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutMembersInput
+    connect?: ProjectWhereUniqueInput
+  }
+
+  export type UserCreateNestedOneWithoutProjectMembershipsInput = {
+    create?: XOR<UserCreateWithoutProjectMembershipsInput, UserUncheckedCreateWithoutProjectMembershipsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutProjectMembershipsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type EnumProjectRoleFieldUpdateOperationsInput = {
+    set?: $Enums.ProjectRole
+  }
+
+  export type ProjectUpdateOneRequiredWithoutMembersNestedInput = {
+    create?: XOR<ProjectCreateWithoutMembersInput, ProjectUncheckedCreateWithoutMembersInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutMembersInput
+    upsert?: ProjectUpsertWithoutMembersInput
+    connect?: ProjectWhereUniqueInput
+    update?: XOR<XOR<ProjectUpdateToOneWithWhereWithoutMembersInput, ProjectUpdateWithoutMembersInput>, ProjectUncheckedUpdateWithoutMembersInput>
+  }
+
+  export type UserUpdateOneRequiredWithoutProjectMembershipsNestedInput = {
+    create?: XOR<UserCreateWithoutProjectMembershipsInput, UserUncheckedCreateWithoutProjectMembershipsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutProjectMembershipsInput
+    upsert?: UserUpsertWithoutProjectMembershipsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutProjectMembershipsInput, UserUpdateWithoutProjectMembershipsInput>, UserUncheckedUpdateWithoutProjectMembershipsInput>
+  }
+
+  export type MarketplaceAssetCreatetagsInput = {
+    set: string[]
+  }
+
+  export type ProjectCreateNestedOneWithoutPublishedAssetInput = {
+    create?: XOR<ProjectCreateWithoutPublishedAssetInput, ProjectUncheckedCreateWithoutPublishedAssetInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutPublishedAssetInput
+    connect?: ProjectWhereUniqueInput
+  }
+
+  export type UserCreateNestedOneWithoutPublishedAssetsInput = {
+    create?: XOR<UserCreateWithoutPublishedAssetsInput, UserUncheckedCreateWithoutPublishedAssetsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutPublishedAssetsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type ProjectCloneCreateNestedManyWithoutAssetInput = {
+    create?: XOR<ProjectCloneCreateWithoutAssetInput, ProjectCloneUncheckedCreateWithoutAssetInput> | ProjectCloneCreateWithoutAssetInput[] | ProjectCloneUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutAssetInput | ProjectCloneCreateOrConnectWithoutAssetInput[]
+    createMany?: ProjectCloneCreateManyAssetInputEnvelope
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+  }
+
+  export type ProjectCloneUncheckedCreateNestedManyWithoutAssetInput = {
+    create?: XOR<ProjectCloneCreateWithoutAssetInput, ProjectCloneUncheckedCreateWithoutAssetInput> | ProjectCloneCreateWithoutAssetInput[] | ProjectCloneUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutAssetInput | ProjectCloneCreateOrConnectWithoutAssetInput[]
+    createMany?: ProjectCloneCreateManyAssetInputEnvelope
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+  }
+
+  export type MarketplaceAssetUpdatetagsInput = {
+    set?: string[]
+    push?: string | string[]
+  }
+
   export type IntFieldUpdateOperationsInput = {
     set?: number
     increment?: number
     decrement?: number
     multiply?: number
     divide?: number
+  }
+
+  export type ProjectUpdateOneRequiredWithoutPublishedAssetNestedInput = {
+    create?: XOR<ProjectCreateWithoutPublishedAssetInput, ProjectUncheckedCreateWithoutPublishedAssetInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutPublishedAssetInput
+    upsert?: ProjectUpsertWithoutPublishedAssetInput
+    connect?: ProjectWhereUniqueInput
+    update?: XOR<XOR<ProjectUpdateToOneWithWhereWithoutPublishedAssetInput, ProjectUpdateWithoutPublishedAssetInput>, ProjectUncheckedUpdateWithoutPublishedAssetInput>
+  }
+
+  export type UserUpdateOneRequiredWithoutPublishedAssetsNestedInput = {
+    create?: XOR<UserCreateWithoutPublishedAssetsInput, UserUncheckedCreateWithoutPublishedAssetsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutPublishedAssetsInput
+    upsert?: UserUpsertWithoutPublishedAssetsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutPublishedAssetsInput, UserUpdateWithoutPublishedAssetsInput>, UserUncheckedUpdateWithoutPublishedAssetsInput>
+  }
+
+  export type ProjectCloneUpdateManyWithoutAssetNestedInput = {
+    create?: XOR<ProjectCloneCreateWithoutAssetInput, ProjectCloneUncheckedCreateWithoutAssetInput> | ProjectCloneCreateWithoutAssetInput[] | ProjectCloneUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutAssetInput | ProjectCloneCreateOrConnectWithoutAssetInput[]
+    upsert?: ProjectCloneUpsertWithWhereUniqueWithoutAssetInput | ProjectCloneUpsertWithWhereUniqueWithoutAssetInput[]
+    createMany?: ProjectCloneCreateManyAssetInputEnvelope
+    set?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    disconnect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    delete?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    update?: ProjectCloneUpdateWithWhereUniqueWithoutAssetInput | ProjectCloneUpdateWithWhereUniqueWithoutAssetInput[]
+    updateMany?: ProjectCloneUpdateManyWithWhereWithoutAssetInput | ProjectCloneUpdateManyWithWhereWithoutAssetInput[]
+    deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
+  }
+
+  export type ProjectCloneUncheckedUpdateManyWithoutAssetNestedInput = {
+    create?: XOR<ProjectCloneCreateWithoutAssetInput, ProjectCloneUncheckedCreateWithoutAssetInput> | ProjectCloneCreateWithoutAssetInput[] | ProjectCloneUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: ProjectCloneCreateOrConnectWithoutAssetInput | ProjectCloneCreateOrConnectWithoutAssetInput[]
+    upsert?: ProjectCloneUpsertWithWhereUniqueWithoutAssetInput | ProjectCloneUpsertWithWhereUniqueWithoutAssetInput[]
+    createMany?: ProjectCloneCreateManyAssetInputEnvelope
+    set?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    disconnect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    delete?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+    update?: ProjectCloneUpdateWithWhereUniqueWithoutAssetInput | ProjectCloneUpdateWithWhereUniqueWithoutAssetInput[]
+    updateMany?: ProjectCloneUpdateManyWithWhereWithoutAssetInput | ProjectCloneUpdateManyWithWhereWithoutAssetInput[]
+    deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
+  }
+
+  export type MarketplaceAssetCreateNestedOneWithoutClonesInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutClonesInput, MarketplaceAssetUncheckedCreateWithoutClonesInput>
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutClonesInput
+    connect?: MarketplaceAssetWhereUniqueInput
+  }
+
+  export type ProjectCreateNestedOneWithoutClonedFromInput = {
+    create?: XOR<ProjectCreateWithoutClonedFromInput, ProjectUncheckedCreateWithoutClonedFromInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutClonedFromInput
+    connect?: ProjectWhereUniqueInput
+  }
+
+  export type UserCreateNestedOneWithoutClonedProjectsInput = {
+    create?: XOR<UserCreateWithoutClonedProjectsInput, UserUncheckedCreateWithoutClonedProjectsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutClonedProjectsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type MarketplaceAssetUpdateOneRequiredWithoutClonesNestedInput = {
+    create?: XOR<MarketplaceAssetCreateWithoutClonesInput, MarketplaceAssetUncheckedCreateWithoutClonesInput>
+    connectOrCreate?: MarketplaceAssetCreateOrConnectWithoutClonesInput
+    upsert?: MarketplaceAssetUpsertWithoutClonesInput
+    connect?: MarketplaceAssetWhereUniqueInput
+    update?: XOR<XOR<MarketplaceAssetUpdateToOneWithWhereWithoutClonesInput, MarketplaceAssetUpdateWithoutClonesInput>, MarketplaceAssetUncheckedUpdateWithoutClonesInput>
+  }
+
+  export type ProjectUpdateOneRequiredWithoutClonedFromNestedInput = {
+    create?: XOR<ProjectCreateWithoutClonedFromInput, ProjectUncheckedCreateWithoutClonedFromInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutClonedFromInput
+    upsert?: ProjectUpsertWithoutClonedFromInput
+    connect?: ProjectWhereUniqueInput
+    update?: XOR<XOR<ProjectUpdateToOneWithWhereWithoutClonedFromInput, ProjectUpdateWithoutClonedFromInput>, ProjectUncheckedUpdateWithoutClonedFromInput>
+  }
+
+  export type UserUpdateOneRequiredWithoutClonedProjectsNestedInput = {
+    create?: XOR<UserCreateWithoutClonedProjectsInput, UserUncheckedCreateWithoutClonedProjectsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutClonedProjectsInput
+    upsert?: UserUpsertWithoutClonedProjectsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutClonedProjectsInput, UserUpdateWithoutClonedProjectsInput>, UserUncheckedUpdateWithoutClonedProjectsInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -10506,6 +15064,36 @@ export namespace Prisma {
     _max?: NestedEnumOrgRoleFilter<$PrismaModel>
   }
 
+  export type NestedBoolFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
+  export type NestedBoolWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedBoolFilter<$PrismaModel>
+    _max?: NestedBoolFilter<$PrismaModel>
+  }
+
+  export type NestedEnumProjectRoleFilter<$PrismaModel = never> = {
+    equals?: $Enums.ProjectRole | EnumProjectRoleFieldRefInput<$PrismaModel>
+    in?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    not?: NestedEnumProjectRoleFilter<$PrismaModel> | $Enums.ProjectRole
+  }
+
+  export type NestedEnumProjectRoleWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.ProjectRole | EnumProjectRoleFieldRefInput<$PrismaModel>
+    in?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
+    not?: NestedEnumProjectRoleWithAggregatesFilter<$PrismaModel> | $Enums.ProjectRole
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumProjectRoleFilter<$PrismaModel>
+    _max?: NestedEnumProjectRoleFilter<$PrismaModel>
+  }
+
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[] | ListIntFieldRefInput<$PrismaModel>
@@ -10583,6 +15171,92 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type ProjectMemberCreateWithoutUserInput = {
+    id?: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+    project: ProjectCreateNestedOneWithoutMembersInput
+  }
+
+  export type ProjectMemberUncheckedCreateWithoutUserInput = {
+    id?: string
+    projectId: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type ProjectMemberCreateOrConnectWithoutUserInput = {
+    where: ProjectMemberWhereUniqueInput
+    create: XOR<ProjectMemberCreateWithoutUserInput, ProjectMemberUncheckedCreateWithoutUserInput>
+  }
+
+  export type ProjectMemberCreateManyUserInputEnvelope = {
+    data: ProjectMemberCreateManyUserInput | ProjectMemberCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MarketplaceAssetCreateWithoutAuthorInput = {
+    id?: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    project: ProjectCreateNestedOneWithoutPublishedAssetInput
+    clones?: ProjectCloneCreateNestedManyWithoutAssetInput
+  }
+
+  export type MarketplaceAssetUncheckedCreateWithoutAuthorInput = {
+    id?: string
+    projectId: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    clones?: ProjectCloneUncheckedCreateNestedManyWithoutAssetInput
+  }
+
+  export type MarketplaceAssetCreateOrConnectWithoutAuthorInput = {
+    where: MarketplaceAssetWhereUniqueInput
+    create: XOR<MarketplaceAssetCreateWithoutAuthorInput, MarketplaceAssetUncheckedCreateWithoutAuthorInput>
+  }
+
+  export type MarketplaceAssetCreateManyAuthorInputEnvelope = {
+    data: MarketplaceAssetCreateManyAuthorInput | MarketplaceAssetCreateManyAuthorInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type ProjectCloneCreateWithoutClonedByInput = {
+    id?: string
+    createdAt?: Date | string
+    asset: MarketplaceAssetCreateNestedOneWithoutClonesInput
+    clonedProject: ProjectCreateNestedOneWithoutClonedFromInput
+  }
+
+  export type ProjectCloneUncheckedCreateWithoutClonedByInput = {
+    id?: string
+    sourceAssetId: string
+    clonedProjectId: string
+    createdAt?: Date | string
+  }
+
+  export type ProjectCloneCreateOrConnectWithoutClonedByInput = {
+    where: ProjectCloneWhereUniqueInput
+    create: XOR<ProjectCloneCreateWithoutClonedByInput, ProjectCloneUncheckedCreateWithoutClonedByInput>
+  }
+
+  export type ProjectCloneCreateManyClonedByInputEnvelope = {
+    data: ProjectCloneCreateManyClonedByInput | ProjectCloneCreateManyClonedByInput[]
+    skipDuplicates?: boolean
+  }
+
   export type OrganizationMemberUpsertWithWhereUniqueWithoutUserInput = {
     where: OrganizationMemberWhereUniqueInput
     update: XOR<OrganizationMemberUpdateWithoutUserInput, OrganizationMemberUncheckedUpdateWithoutUserInput>
@@ -10636,6 +15310,93 @@ export namespace Prisma {
     userId?: StringFilter<"TeamMember"> | string
     createdAt?: DateTimeFilter<"TeamMember"> | Date | string
     updatedAt?: DateTimeFilter<"TeamMember"> | Date | string
+  }
+
+  export type ProjectMemberUpsertWithWhereUniqueWithoutUserInput = {
+    where: ProjectMemberWhereUniqueInput
+    update: XOR<ProjectMemberUpdateWithoutUserInput, ProjectMemberUncheckedUpdateWithoutUserInput>
+    create: XOR<ProjectMemberCreateWithoutUserInput, ProjectMemberUncheckedCreateWithoutUserInput>
+  }
+
+  export type ProjectMemberUpdateWithWhereUniqueWithoutUserInput = {
+    where: ProjectMemberWhereUniqueInput
+    data: XOR<ProjectMemberUpdateWithoutUserInput, ProjectMemberUncheckedUpdateWithoutUserInput>
+  }
+
+  export type ProjectMemberUpdateManyWithWhereWithoutUserInput = {
+    where: ProjectMemberScalarWhereInput
+    data: XOR<ProjectMemberUpdateManyMutationInput, ProjectMemberUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type ProjectMemberScalarWhereInput = {
+    AND?: ProjectMemberScalarWhereInput | ProjectMemberScalarWhereInput[]
+    OR?: ProjectMemberScalarWhereInput[]
+    NOT?: ProjectMemberScalarWhereInput | ProjectMemberScalarWhereInput[]
+    id?: StringFilter<"ProjectMember"> | string
+    projectId?: StringFilter<"ProjectMember"> | string
+    userId?: StringFilter<"ProjectMember"> | string
+    role?: EnumProjectRoleFilter<"ProjectMember"> | $Enums.ProjectRole
+    createdAt?: DateTimeFilter<"ProjectMember"> | Date | string
+  }
+
+  export type MarketplaceAssetUpsertWithWhereUniqueWithoutAuthorInput = {
+    where: MarketplaceAssetWhereUniqueInput
+    update: XOR<MarketplaceAssetUpdateWithoutAuthorInput, MarketplaceAssetUncheckedUpdateWithoutAuthorInput>
+    create: XOR<MarketplaceAssetCreateWithoutAuthorInput, MarketplaceAssetUncheckedCreateWithoutAuthorInput>
+  }
+
+  export type MarketplaceAssetUpdateWithWhereUniqueWithoutAuthorInput = {
+    where: MarketplaceAssetWhereUniqueInput
+    data: XOR<MarketplaceAssetUpdateWithoutAuthorInput, MarketplaceAssetUncheckedUpdateWithoutAuthorInput>
+  }
+
+  export type MarketplaceAssetUpdateManyWithWhereWithoutAuthorInput = {
+    where: MarketplaceAssetScalarWhereInput
+    data: XOR<MarketplaceAssetUpdateManyMutationInput, MarketplaceAssetUncheckedUpdateManyWithoutAuthorInput>
+  }
+
+  export type MarketplaceAssetScalarWhereInput = {
+    AND?: MarketplaceAssetScalarWhereInput | MarketplaceAssetScalarWhereInput[]
+    OR?: MarketplaceAssetScalarWhereInput[]
+    NOT?: MarketplaceAssetScalarWhereInput | MarketplaceAssetScalarWhereInput[]
+    id?: StringFilter<"MarketplaceAsset"> | string
+    projectId?: StringFilter<"MarketplaceAsset"> | string
+    authorId?: StringFilter<"MarketplaceAsset"> | string
+    title?: StringFilter<"MarketplaceAsset"> | string
+    description?: StringNullableFilter<"MarketplaceAsset"> | string | null
+    tags?: StringNullableListFilter<"MarketplaceAsset">
+    thumbnailUrl?: StringNullableFilter<"MarketplaceAsset"> | string | null
+    isPublished?: BoolFilter<"MarketplaceAsset"> | boolean
+    cloneCount?: IntFilter<"MarketplaceAsset"> | number
+    createdAt?: DateTimeFilter<"MarketplaceAsset"> | Date | string
+    updatedAt?: DateTimeFilter<"MarketplaceAsset"> | Date | string
+  }
+
+  export type ProjectCloneUpsertWithWhereUniqueWithoutClonedByInput = {
+    where: ProjectCloneWhereUniqueInput
+    update: XOR<ProjectCloneUpdateWithoutClonedByInput, ProjectCloneUncheckedUpdateWithoutClonedByInput>
+    create: XOR<ProjectCloneCreateWithoutClonedByInput, ProjectCloneUncheckedCreateWithoutClonedByInput>
+  }
+
+  export type ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput = {
+    where: ProjectCloneWhereUniqueInput
+    data: XOR<ProjectCloneUpdateWithoutClonedByInput, ProjectCloneUncheckedUpdateWithoutClonedByInput>
+  }
+
+  export type ProjectCloneUpdateManyWithWhereWithoutClonedByInput = {
+    where: ProjectCloneScalarWhereInput
+    data: XOR<ProjectCloneUpdateManyMutationInput, ProjectCloneUncheckedUpdateManyWithoutClonedByInput>
+  }
+
+  export type ProjectCloneScalarWhereInput = {
+    AND?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
+    OR?: ProjectCloneScalarWhereInput[]
+    NOT?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
+    id?: StringFilter<"ProjectClone"> | string
+    sourceAssetId?: StringFilter<"ProjectClone"> | string
+    clonedProjectId?: StringFilter<"ProjectClone"> | string
+    clonedByUserId?: StringFilter<"ProjectClone"> | string
+    createdAt?: DateTimeFilter<"ProjectClone"> | Date | string
   }
 
   export type OrganizationMemberCreateWithoutOrganizationInput = {
@@ -10774,9 +15535,13 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
   }
 
   export type UserUncheckedCreateWithoutOrganizationsInput = {
@@ -10786,9 +15551,13 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
   }
 
   export type UserCreateOrConnectWithoutOrganizationsInput = {
@@ -10849,9 +15618,13 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutOrganizationsInput = {
@@ -10861,9 +15634,13 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
   }
 
   export type OrganizationCreateWithoutTeamsInput = {
@@ -10925,8 +15702,12 @@ export namespace Prisma {
     description?: string | null
     thumbnailUrl?: string | null
     stateUrl?: string | null
+    isPublic?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    members?: ProjectMemberCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
   }
 
   export type ProjectUncheckedCreateWithoutTeamInput = {
@@ -10935,8 +15716,12 @@ export namespace Prisma {
     description?: string | null
     thumbnailUrl?: string | null
     stateUrl?: string | null
+    isPublic?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
   }
 
   export type ProjectCreateOrConnectWithoutTeamInput = {
@@ -11026,6 +15811,7 @@ export namespace Prisma {
     description?: StringNullableFilter<"Project"> | string | null
     thumbnailUrl?: StringNullableFilter<"Project"> | string | null
     stateUrl?: StringNullableFilter<"Project"> | string | null
+    isPublic?: BoolFilter<"Project"> | boolean
     createdAt?: DateTimeFilter<"Project"> | Date | string
     updatedAt?: DateTimeFilter<"Project"> | Date | string
   }
@@ -11062,9 +15848,13 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
   }
 
   export type UserUncheckedCreateWithoutTeamMembershipsInput = {
@@ -11074,9 +15864,13 @@ export namespace Prisma {
     emailVerified?: Date | string | null
     image?: string | null
     password?: string | null
+    bio?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
   }
 
   export type UserCreateOrConnectWithoutTeamMembershipsInput = {
@@ -11133,9 +15927,13 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutTeamMembershipsInput = {
@@ -11145,9 +15943,13 @@ export namespace Prisma {
     emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
   }
 
   export type TeamCreateWithoutProjectsInput = {
@@ -11173,6 +15975,82 @@ export namespace Prisma {
   export type TeamCreateOrConnectWithoutProjectsInput = {
     where: TeamWhereUniqueInput
     create: XOR<TeamCreateWithoutProjectsInput, TeamUncheckedCreateWithoutProjectsInput>
+  }
+
+  export type ProjectMemberCreateWithoutProjectInput = {
+    id?: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutProjectMembershipsInput
+  }
+
+  export type ProjectMemberUncheckedCreateWithoutProjectInput = {
+    id?: string
+    userId: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type ProjectMemberCreateOrConnectWithoutProjectInput = {
+    where: ProjectMemberWhereUniqueInput
+    create: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput>
+  }
+
+  export type ProjectMemberCreateManyProjectInputEnvelope = {
+    data: ProjectMemberCreateManyProjectInput | ProjectMemberCreateManyProjectInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MarketplaceAssetCreateWithoutProjectInput = {
+    id?: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    author: UserCreateNestedOneWithoutPublishedAssetsInput
+    clones?: ProjectCloneCreateNestedManyWithoutAssetInput
+  }
+
+  export type MarketplaceAssetUncheckedCreateWithoutProjectInput = {
+    id?: string
+    authorId: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    clones?: ProjectCloneUncheckedCreateNestedManyWithoutAssetInput
+  }
+
+  export type MarketplaceAssetCreateOrConnectWithoutProjectInput = {
+    where: MarketplaceAssetWhereUniqueInput
+    create: XOR<MarketplaceAssetCreateWithoutProjectInput, MarketplaceAssetUncheckedCreateWithoutProjectInput>
+  }
+
+  export type ProjectCloneCreateWithoutClonedProjectInput = {
+    id?: string
+    createdAt?: Date | string
+    asset: MarketplaceAssetCreateNestedOneWithoutClonesInput
+    clonedBy: UserCreateNestedOneWithoutClonedProjectsInput
+  }
+
+  export type ProjectCloneUncheckedCreateWithoutClonedProjectInput = {
+    id?: string
+    sourceAssetId: string
+    clonedByUserId: string
+    createdAt?: Date | string
+  }
+
+  export type ProjectCloneCreateOrConnectWithoutClonedProjectInput = {
+    where: ProjectCloneWhereUniqueInput
+    create: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
   }
 
   export type TeamUpsertWithoutProjectsInput = {
@@ -11206,6 +16084,654 @@ export namespace Prisma {
     members?: TeamMemberUncheckedUpdateManyWithoutTeamNestedInput
   }
 
+  export type ProjectMemberUpsertWithWhereUniqueWithoutProjectInput = {
+    where: ProjectMemberWhereUniqueInput
+    update: XOR<ProjectMemberUpdateWithoutProjectInput, ProjectMemberUncheckedUpdateWithoutProjectInput>
+    create: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput>
+  }
+
+  export type ProjectMemberUpdateWithWhereUniqueWithoutProjectInput = {
+    where: ProjectMemberWhereUniqueInput
+    data: XOR<ProjectMemberUpdateWithoutProjectInput, ProjectMemberUncheckedUpdateWithoutProjectInput>
+  }
+
+  export type ProjectMemberUpdateManyWithWhereWithoutProjectInput = {
+    where: ProjectMemberScalarWhereInput
+    data: XOR<ProjectMemberUpdateManyMutationInput, ProjectMemberUncheckedUpdateManyWithoutProjectInput>
+  }
+
+  export type MarketplaceAssetUpsertWithoutProjectInput = {
+    update: XOR<MarketplaceAssetUpdateWithoutProjectInput, MarketplaceAssetUncheckedUpdateWithoutProjectInput>
+    create: XOR<MarketplaceAssetCreateWithoutProjectInput, MarketplaceAssetUncheckedCreateWithoutProjectInput>
+    where?: MarketplaceAssetWhereInput
+  }
+
+  export type MarketplaceAssetUpdateToOneWithWhereWithoutProjectInput = {
+    where?: MarketplaceAssetWhereInput
+    data: XOR<MarketplaceAssetUpdateWithoutProjectInput, MarketplaceAssetUncheckedUpdateWithoutProjectInput>
+  }
+
+  export type MarketplaceAssetUpdateWithoutProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    author?: UserUpdateOneRequiredWithoutPublishedAssetsNestedInput
+    clones?: ProjectCloneUpdateManyWithoutAssetNestedInput
+  }
+
+  export type MarketplaceAssetUncheckedUpdateWithoutProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    authorId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clones?: ProjectCloneUncheckedUpdateManyWithoutAssetNestedInput
+  }
+
+  export type ProjectCloneUpsertWithoutClonedProjectInput = {
+    update: XOR<ProjectCloneUpdateWithoutClonedProjectInput, ProjectCloneUncheckedUpdateWithoutClonedProjectInput>
+    create: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
+    where?: ProjectCloneWhereInput
+  }
+
+  export type ProjectCloneUpdateToOneWithWhereWithoutClonedProjectInput = {
+    where?: ProjectCloneWhereInput
+    data: XOR<ProjectCloneUpdateWithoutClonedProjectInput, ProjectCloneUncheckedUpdateWithoutClonedProjectInput>
+  }
+
+  export type ProjectCloneUpdateWithoutClonedProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    asset?: MarketplaceAssetUpdateOneRequiredWithoutClonesNestedInput
+    clonedBy?: UserUpdateOneRequiredWithoutClonedProjectsNestedInput
+  }
+
+  export type ProjectCloneUncheckedUpdateWithoutClonedProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceAssetId?: StringFieldUpdateOperationsInput | string
+    clonedByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCreateWithoutMembersInput = {
+    id?: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    team: TeamCreateNestedOneWithoutProjectsInput
+    publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+  }
+
+  export type ProjectUncheckedCreateWithoutMembersInput = {
+    id?: string
+    teamId: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+  }
+
+  export type ProjectCreateOrConnectWithoutMembersInput = {
+    where: ProjectWhereUniqueInput
+    create: XOR<ProjectCreateWithoutMembersInput, ProjectUncheckedCreateWithoutMembersInput>
+  }
+
+  export type UserCreateWithoutProjectMembershipsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserUncheckedCreateWithoutProjectMembershipsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserCreateOrConnectWithoutProjectMembershipsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutProjectMembershipsInput, UserUncheckedCreateWithoutProjectMembershipsInput>
+  }
+
+  export type ProjectUpsertWithoutMembersInput = {
+    update: XOR<ProjectUpdateWithoutMembersInput, ProjectUncheckedUpdateWithoutMembersInput>
+    create: XOR<ProjectCreateWithoutMembersInput, ProjectUncheckedCreateWithoutMembersInput>
+    where?: ProjectWhereInput
+  }
+
+  export type ProjectUpdateToOneWithWhereWithoutMembersInput = {
+    where?: ProjectWhereInput
+    data: XOR<ProjectUpdateWithoutMembersInput, ProjectUncheckedUpdateWithoutMembersInput>
+  }
+
+  export type ProjectUpdateWithoutMembersInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
+    publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+  }
+
+  export type ProjectUncheckedUpdateWithoutMembersInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    teamId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
+  }
+
+  export type UserUpsertWithoutProjectMembershipsInput = {
+    update: XOR<UserUpdateWithoutProjectMembershipsInput, UserUncheckedUpdateWithoutProjectMembershipsInput>
+    create: XOR<UserCreateWithoutProjectMembershipsInput, UserUncheckedCreateWithoutProjectMembershipsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutProjectMembershipsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutProjectMembershipsInput, UserUncheckedUpdateWithoutProjectMembershipsInput>
+  }
+
+  export type UserUpdateWithoutProjectMembershipsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutProjectMembershipsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type ProjectCreateWithoutPublishedAssetInput = {
+    id?: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    team: TeamCreateNestedOneWithoutProjectsInput
+    members?: ProjectMemberCreateNestedManyWithoutProjectInput
+    clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+  }
+
+  export type ProjectUncheckedCreateWithoutPublishedAssetInput = {
+    id?: string
+    teamId: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
+    clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+  }
+
+  export type ProjectCreateOrConnectWithoutPublishedAssetInput = {
+    where: ProjectWhereUniqueInput
+    create: XOR<ProjectCreateWithoutPublishedAssetInput, ProjectUncheckedCreateWithoutPublishedAssetInput>
+  }
+
+  export type UserCreateWithoutPublishedAssetsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserUncheckedCreateWithoutPublishedAssetsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserCreateOrConnectWithoutPublishedAssetsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutPublishedAssetsInput, UserUncheckedCreateWithoutPublishedAssetsInput>
+  }
+
+  export type ProjectCloneCreateWithoutAssetInput = {
+    id?: string
+    createdAt?: Date | string
+    clonedProject: ProjectCreateNestedOneWithoutClonedFromInput
+    clonedBy: UserCreateNestedOneWithoutClonedProjectsInput
+  }
+
+  export type ProjectCloneUncheckedCreateWithoutAssetInput = {
+    id?: string
+    clonedProjectId: string
+    clonedByUserId: string
+    createdAt?: Date | string
+  }
+
+  export type ProjectCloneCreateOrConnectWithoutAssetInput = {
+    where: ProjectCloneWhereUniqueInput
+    create: XOR<ProjectCloneCreateWithoutAssetInput, ProjectCloneUncheckedCreateWithoutAssetInput>
+  }
+
+  export type ProjectCloneCreateManyAssetInputEnvelope = {
+    data: ProjectCloneCreateManyAssetInput | ProjectCloneCreateManyAssetInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type ProjectUpsertWithoutPublishedAssetInput = {
+    update: XOR<ProjectUpdateWithoutPublishedAssetInput, ProjectUncheckedUpdateWithoutPublishedAssetInput>
+    create: XOR<ProjectCreateWithoutPublishedAssetInput, ProjectUncheckedCreateWithoutPublishedAssetInput>
+    where?: ProjectWhereInput
+  }
+
+  export type ProjectUpdateToOneWithWhereWithoutPublishedAssetInput = {
+    where?: ProjectWhereInput
+    data: XOR<ProjectUpdateWithoutPublishedAssetInput, ProjectUncheckedUpdateWithoutPublishedAssetInput>
+  }
+
+  export type ProjectUpdateWithoutPublishedAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
+    members?: ProjectMemberUpdateManyWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+  }
+
+  export type ProjectUncheckedUpdateWithoutPublishedAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    teamId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
+  }
+
+  export type UserUpsertWithoutPublishedAssetsInput = {
+    update: XOR<UserUpdateWithoutPublishedAssetsInput, UserUncheckedUpdateWithoutPublishedAssetsInput>
+    create: XOR<UserCreateWithoutPublishedAssetsInput, UserUncheckedCreateWithoutPublishedAssetsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutPublishedAssetsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutPublishedAssetsInput, UserUncheckedUpdateWithoutPublishedAssetsInput>
+  }
+
+  export type UserUpdateWithoutPublishedAssetsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutPublishedAssetsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type ProjectCloneUpsertWithWhereUniqueWithoutAssetInput = {
+    where: ProjectCloneWhereUniqueInput
+    update: XOR<ProjectCloneUpdateWithoutAssetInput, ProjectCloneUncheckedUpdateWithoutAssetInput>
+    create: XOR<ProjectCloneCreateWithoutAssetInput, ProjectCloneUncheckedCreateWithoutAssetInput>
+  }
+
+  export type ProjectCloneUpdateWithWhereUniqueWithoutAssetInput = {
+    where: ProjectCloneWhereUniqueInput
+    data: XOR<ProjectCloneUpdateWithoutAssetInput, ProjectCloneUncheckedUpdateWithoutAssetInput>
+  }
+
+  export type ProjectCloneUpdateManyWithWhereWithoutAssetInput = {
+    where: ProjectCloneScalarWhereInput
+    data: XOR<ProjectCloneUpdateManyMutationInput, ProjectCloneUncheckedUpdateManyWithoutAssetInput>
+  }
+
+  export type MarketplaceAssetCreateWithoutClonesInput = {
+    id?: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    project: ProjectCreateNestedOneWithoutPublishedAssetInput
+    author: UserCreateNestedOneWithoutPublishedAssetsInput
+  }
+
+  export type MarketplaceAssetUncheckedCreateWithoutClonesInput = {
+    id?: string
+    projectId: string
+    authorId: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MarketplaceAssetCreateOrConnectWithoutClonesInput = {
+    where: MarketplaceAssetWhereUniqueInput
+    create: XOR<MarketplaceAssetCreateWithoutClonesInput, MarketplaceAssetUncheckedCreateWithoutClonesInput>
+  }
+
+  export type ProjectCreateWithoutClonedFromInput = {
+    id?: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    team: TeamCreateNestedOneWithoutProjectsInput
+    members?: ProjectMemberCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
+  }
+
+  export type ProjectUncheckedCreateWithoutClonedFromInput = {
+    id?: string
+    teamId: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
+  }
+
+  export type ProjectCreateOrConnectWithoutClonedFromInput = {
+    where: ProjectWhereUniqueInput
+    create: XOR<ProjectCreateWithoutClonedFromInput, ProjectUncheckedCreateWithoutClonedFromInput>
+  }
+
+  export type UserCreateWithoutClonedProjectsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+  }
+
+  export type UserUncheckedCreateWithoutClonedProjectsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+  }
+
+  export type UserCreateOrConnectWithoutClonedProjectsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutClonedProjectsInput, UserUncheckedCreateWithoutClonedProjectsInput>
+  }
+
+  export type MarketplaceAssetUpsertWithoutClonesInput = {
+    update: XOR<MarketplaceAssetUpdateWithoutClonesInput, MarketplaceAssetUncheckedUpdateWithoutClonesInput>
+    create: XOR<MarketplaceAssetCreateWithoutClonesInput, MarketplaceAssetUncheckedCreateWithoutClonesInput>
+    where?: MarketplaceAssetWhereInput
+  }
+
+  export type MarketplaceAssetUpdateToOneWithWhereWithoutClonesInput = {
+    where?: MarketplaceAssetWhereInput
+    data: XOR<MarketplaceAssetUpdateWithoutClonesInput, MarketplaceAssetUncheckedUpdateWithoutClonesInput>
+  }
+
+  export type MarketplaceAssetUpdateWithoutClonesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    project?: ProjectUpdateOneRequiredWithoutPublishedAssetNestedInput
+    author?: UserUpdateOneRequiredWithoutPublishedAssetsNestedInput
+  }
+
+  export type MarketplaceAssetUncheckedUpdateWithoutClonesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    authorId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectUpsertWithoutClonedFromInput = {
+    update: XOR<ProjectUpdateWithoutClonedFromInput, ProjectUncheckedUpdateWithoutClonedFromInput>
+    create: XOR<ProjectCreateWithoutClonedFromInput, ProjectUncheckedCreateWithoutClonedFromInput>
+    where?: ProjectWhereInput
+  }
+
+  export type ProjectUpdateToOneWithWhereWithoutClonedFromInput = {
+    where?: ProjectWhereInput
+    data: XOR<ProjectUpdateWithoutClonedFromInput, ProjectUncheckedUpdateWithoutClonedFromInput>
+  }
+
+  export type ProjectUpdateWithoutClonedFromInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
+    members?: ProjectMemberUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
+  }
+
+  export type ProjectUncheckedUpdateWithoutClonedFromInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    teamId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
+  }
+
+  export type UserUpsertWithoutClonedProjectsInput = {
+    update: XOR<UserUpdateWithoutClonedProjectsInput, UserUncheckedUpdateWithoutClonedProjectsInput>
+    create: XOR<UserCreateWithoutClonedProjectsInput, UserUncheckedCreateWithoutClonedProjectsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutClonedProjectsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutClonedProjectsInput, UserUncheckedUpdateWithoutClonedProjectsInput>
+  }
+
+  export type UserUpdateWithoutClonedProjectsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutClonedProjectsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+  }
+
   export type OrganizationMemberCreateManyUserInput = {
     id?: string
     organizationId: string
@@ -11219,6 +16745,33 @@ export namespace Prisma {
     teamId: string
     createdAt?: Date | string
     updatedAt?: Date | string
+  }
+
+  export type ProjectMemberCreateManyUserInput = {
+    id?: string
+    projectId: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type MarketplaceAssetCreateManyAuthorInput = {
+    id?: string
+    projectId: string
+    title: string
+    description?: string | null
+    tags?: MarketplaceAssetCreatetagsInput | string[]
+    thumbnailUrl?: string | null
+    isPublished?: boolean
+    cloneCount?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ProjectCloneCreateManyClonedByInput = {
+    id?: string
+    sourceAssetId: string
+    clonedProjectId: string
+    createdAt?: Date | string
   }
 
   export type OrganizationMemberUpdateWithoutUserInput = {
@@ -11264,6 +16817,89 @@ export namespace Prisma {
     teamId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    project?: ProjectUpdateOneRequiredWithoutMembersNestedInput
+  }
+
+  export type ProjectMemberUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MarketplaceAssetUpdateWithoutAuthorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    project?: ProjectUpdateOneRequiredWithoutPublishedAssetNestedInput
+    clones?: ProjectCloneUpdateManyWithoutAssetNestedInput
+  }
+
+  export type MarketplaceAssetUncheckedUpdateWithoutAuthorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clones?: ProjectCloneUncheckedUpdateManyWithoutAssetNestedInput
+  }
+
+  export type MarketplaceAssetUncheckedUpdateManyWithoutAuthorInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    tags?: MarketplaceAssetUpdatetagsInput | string[]
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublished?: BoolFieldUpdateOperationsInput | boolean
+    cloneCount?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneUpdateWithoutClonedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    asset?: MarketplaceAssetUpdateOneRequiredWithoutClonesNestedInput
+    clonedProject?: ProjectUpdateOneRequiredWithoutClonedFromNestedInput
+  }
+
+  export type ProjectCloneUncheckedUpdateWithoutClonedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceAssetId?: StringFieldUpdateOperationsInput | string
+    clonedProjectId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneUncheckedUpdateManyWithoutClonedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceAssetId?: StringFieldUpdateOperationsInput | string
+    clonedProjectId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type OrganizationMemberCreateManyOrganizationInput = {
@@ -11347,6 +16983,7 @@ export namespace Prisma {
     description?: string | null
     thumbnailUrl?: string | null
     stateUrl?: string | null
+    isPublic?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -11378,8 +17015,12 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: ProjectMemberUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateWithoutTeamInput = {
@@ -11388,8 +17029,12 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateManyWithoutTeamInput = {
@@ -11398,8 +17043,65 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberCreateManyProjectInput = {
+    id?: string
+    userId: string
+    role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type ProjectMemberUpdateWithoutProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutProjectMembershipsNestedInput
+  }
+
+  export type ProjectMemberUncheckedUpdateWithoutProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectMemberUncheckedUpdateManyWithoutProjectInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneCreateManyAssetInput = {
+    id?: string
+    clonedProjectId: string
+    clonedByUserId: string
+    createdAt?: Date | string
+  }
+
+  export type ProjectCloneUpdateWithoutAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clonedProject?: ProjectUpdateOneRequiredWithoutClonedFromNestedInput
+    clonedBy?: UserUpdateOneRequiredWithoutClonedProjectsNestedInput
+  }
+
+  export type ProjectCloneUncheckedUpdateWithoutAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clonedProjectId?: StringFieldUpdateOperationsInput | string
+    clonedByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProjectCloneUncheckedUpdateManyWithoutAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clonedProjectId?: StringFieldUpdateOperationsInput | string
+    clonedByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
 
@@ -11419,6 +17121,14 @@ export namespace Prisma {
      * @deprecated Use TeamCountOutputTypeDefaultArgs instead
      */
     export type TeamCountOutputTypeArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = TeamCountOutputTypeDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use ProjectCountOutputTypeDefaultArgs instead
+     */
+    export type ProjectCountOutputTypeArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = ProjectCountOutputTypeDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use MarketplaceAssetCountOutputTypeDefaultArgs instead
+     */
+    export type MarketplaceAssetCountOutputTypeArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = MarketplaceAssetCountOutputTypeDefaultArgs<ExtArgs>
     /**
      * @deprecated Use UserDefaultArgs instead
      */
@@ -11443,6 +17153,18 @@ export namespace Prisma {
      * @deprecated Use ProjectDefaultArgs instead
      */
     export type ProjectArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = ProjectDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use ProjectMemberDefaultArgs instead
+     */
+    export type ProjectMemberArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = ProjectMemberDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use MarketplaceAssetDefaultArgs instead
+     */
+    export type MarketplaceAssetArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = MarketplaceAssetDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use ProjectCloneDefaultArgs instead
+     */
+    export type ProjectCloneArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = ProjectCloneDefaultArgs<ExtArgs>
     /**
      * @deprecated Use EarlyAccessApplicationDefaultArgs instead
      */

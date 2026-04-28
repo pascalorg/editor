@@ -25,9 +25,10 @@ interface EditorClientProps {
   projectId: string;
   userId: string;
   userName: string;
+  accessLevel?: 'edit' | 'view';
 }
 
-export default function EditorClient({ projectId, userId, userName }: EditorClientProps) {
+export default function EditorClient({ projectId, userId, userName, accessLevel = 'edit' }: EditorClientProps) {
 
   const handleLoad = async () => {
     if (!projectId) return null;
@@ -53,9 +54,18 @@ export default function EditorClient({ projectId, userId, userName }: EditorClie
         </Link>
       </div>
 
-      <YjsCollaborationProvider 
-        projectId={projectId || 'local-editor'} 
-        userId={userId} 
+      {/* Read-only badge */}
+      {accessLevel === 'view' && (
+        <div className="absolute top-3 right-3 z-[100] pointer-events-none">
+          <div className="px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 backdrop-blur-md text-amber-400 text-xs font-semibold">
+            View Only
+          </div>
+        </div>
+      )}
+
+      <YjsCollaborationProvider
+        projectId={projectId || 'local-editor'}
+        userId={userId}
         userName={userName}
         socket={getSocket()}
       >
@@ -66,7 +76,7 @@ export default function EditorClient({ projectId, userId, userName }: EditorClie
           viewerToolbarLeft={<EditorToolbarLeft />}
           viewerToolbarRight={<EditorToolbarRight />}
           onLoad={handleLoad}
-          onSave={handleSave}
+          onSave={accessLevel === 'edit' ? handleSave : undefined}
         />
       </YjsCollaborationProvider>
 

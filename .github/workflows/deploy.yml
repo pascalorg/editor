@@ -18,36 +18,19 @@ jobs:
         with:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           source: "."
-          target: ${{ secrets.DEPLOY_PATH }}
+          target: "/opt/archly"
           rm: false
-          strip_components: 0
-          exclude: |
-            node_modules
-            .git
-            .next
-            dist
-            .env
-            *.log
 
-      - name: Deploy and Build via SSH
+      - name: Run deploy script on VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH }}
-            
-            # Ensure Docker Compose is up to date
-            # We assume .env already exists on the VPS with sensitive keys
-            # Or we can inject them here if needed
-            
-            echo "🚀 Building and starting containers..."
-            docker-compose up --build -d
-            
-            echo "🧹 Cleaning up old images..."
-            docker image prune -f
-            
-            echo "✅ Deployment complete!"
+            cd /opt/archly
+            docker compose pull
+            docker compose up -d --build
+            docker compose exec -T app bun prisma migrate deploy

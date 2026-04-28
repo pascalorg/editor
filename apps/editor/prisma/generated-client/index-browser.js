@@ -114,6 +114,7 @@ exports.Prisma.UserScalarFieldEnum = {
   emailVerified: 'emailVerified',
   image: 'image',
   password: 'password',
+  bio: 'bio',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -162,8 +163,39 @@ exports.Prisma.ProjectScalarFieldEnum = {
   description: 'description',
   thumbnailUrl: 'thumbnailUrl',
   stateUrl: 'stateUrl',
+  isPublic: 'isPublic',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ProjectMemberScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  userId: 'userId',
+  role: 'role',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MarketplaceAssetScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  authorId: 'authorId',
+  title: 'title',
+  description: 'description',
+  tags: 'tags',
+  thumbnailUrl: 'thumbnailUrl',
+  isPublished: 'isPublished',
+  cloneCount: 'cloneCount',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ProjectCloneScalarFieldEnum = {
+  id: 'id',
+  sourceAssetId: 'sourceAssetId',
+  clonedProjectId: 'clonedProjectId',
+  clonedByUserId: 'clonedByUserId',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.EarlyAccessApplicationScalarFieldEnum = {
@@ -205,6 +237,13 @@ exports.OrgRole = exports.$Enums.OrgRole = {
   MEMBER: 'MEMBER'
 };
 
+exports.ProjectRole = exports.$Enums.ProjectRole = {
+  OWNER: 'OWNER',
+  EDITOR: 'EDITOR',
+  VIEWER: 'VIEWER',
+  COMMENTER: 'COMMENTER'
+};
+
 exports.Prisma.ModelName = {
   User: 'User',
   Organization: 'Organization',
@@ -212,6 +251,9 @@ exports.Prisma.ModelName = {
   Team: 'Team',
   TeamMember: 'TeamMember',
   Project: 'Project',
+  ProjectMember: 'ProjectMember',
+  MarketplaceAsset: 'MarketplaceAsset',
+  ProjectClone: 'ProjectClone',
   EarlyAccessApplication: 'EarlyAccessApplication'
 };
 

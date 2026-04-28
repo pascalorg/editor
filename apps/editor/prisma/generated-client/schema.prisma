@@ -16,10 +16,14 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
-  
-  organizations OrganizationMember[]
-  teamMemberships TeamMember[]
-  
+  bio           String?
+
+  organizations    OrganizationMember[]
+  teamMemberships  TeamMember[]
+  projectMemberships ProjectMember[]
+  publishedAssets  MarketplaceAsset[]
+  clonedProjects   ProjectClone[]
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -50,14 +54,16 @@ model OrganizationMember {
   organizationId String
   userId         String
   role           OrgRole  @default(MEMBER)
-  
+
   organization   Organization @relation(fields: [organizationId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
-  
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId])
 }
 
 enum OrgRole {
@@ -84,14 +90,16 @@ model TeamMember {
   id      String @id @default(cuid())
   teamId  String
   userId  String
-  
+
   team    Team @relation(fields: [teamId], references: [id])
   user    User @relation(fields: [userId], references: [id])
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
 }
 
 model Project {
@@ -100,12 +108,79 @@ model Project {
   name         String
   description  String?
   thumbnailUrl String?
-  stateUrl     String?  // URL to R2 storage for the project JSON state
-  
-  team         Team     @relation(fields: [teamId], references: [id])
-  
+  stateUrl     String?
+  isPublic     Boolean  @default(false)
+
+  team             Team              @relation(fields: [teamId], references: [id])
+  members          ProjectMember[]
+  publishedAsset   MarketplaceAsset?
+  clonedFrom       ProjectClone?     @relation("ClonedProject")
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([teamId])
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole @default(VIEWER)
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+enum ProjectRole {
+  OWNER
+  EDITOR
+  VIEWER
+  COMMENTER
+}
+
+model MarketplaceAsset {
+  id           String   @id @default(cuid())
+  projectId    String   @unique
+  authorId     String
+  title        String
+  description  String?
+  tags         String[]
+  thumbnailUrl String?
+  isPublished  Boolean  @default(false)
+  cloneCount   Int      @default(0)
+
+  project  Project        @relation(fields: [projectId], references: [id])
+  author   User           @relation(fields: [authorId], references: [id])
+  clones   ProjectClone[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([isPublished])
+}
+
+model ProjectClone {
+  id              String @id @default(cuid())
+  sourceAssetId   String
+  clonedProjectId String @unique
+  clonedByUserId  String
+
+  asset          MarketplaceAsset @relation(fields: [sourceAssetId], references: [id])
+  clonedProject  Project          @relation("ClonedProject", fields: [clonedProjectId], references: [id])
+  clonedBy       User             @relation(fields: [clonedByUserId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([sourceAssetId])
+  @@index([clonedByUserId])
 }
 
 model EarlyAccessApplication {

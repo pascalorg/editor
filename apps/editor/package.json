@@ -11,7 +11,8 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1035.0",
+    "@aws-sdk/client-s3": "3.1038.0",
+    "@aws-sdk/s3-request-presigner": "^3.1038.0",
     "@number-flow/react": "^0.5.14",
     "@pascal-app/core": "*",
     "@pascal-app/editor": "*",
@@ -40,7 +41,8 @@
     "tailwindcss": "^4.2.1",
     "three": "^0.184.0",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.30"
+    "yjs": "^13.6.30",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
@@ -49,6 +51,7 @@
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
+    "@types/three": "^0.184.0",
     "agentation": "^2.3.2",
     "prisma": "5.10.0",
     "react-grab": "^0.1.25",
