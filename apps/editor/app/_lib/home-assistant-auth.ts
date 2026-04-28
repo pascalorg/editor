@@ -62,7 +62,9 @@ export function buildHomeAssistantOauthState(
   }
 }
 
-function getOauthBaseUrl(oauthState: Pick<HomeAssistantOauthCookieState, 'externalUrl' | 'instanceUrl'>) {
+function getOauthBaseUrl(
+  oauthState: Pick<HomeAssistantOauthCookieState, 'externalUrl' | 'instanceUrl'>,
+) {
   return oauthState.externalUrl ?? oauthState.instanceUrl
 }
 
@@ -83,18 +85,19 @@ function buildTokenRequestBody(params: Record<string, string>) {
 }
 
 async function readTokenResponse(response: Response) {
-  const payload = (await response.json()) as HomeAssistantTokenResponse | {
-    error?: string
-    error_description?: string
-  }
+  const payload = (await response.json()) as
+    | HomeAssistantTokenResponse
+    | {
+        error?: string
+        error_description?: string
+      }
 
   if (!response.ok) {
-    const errorPayload =
-      'access_token' in payload
-        ? null
-        : payload
+    const errorPayload = 'access_token' in payload ? null : payload
     throw new Error(
-      errorPayload?.error_description || errorPayload?.error || 'Home Assistant token request failed.',
+      errorPayload?.error_description ||
+        errorPayload?.error ||
+        'Home Assistant token request failed.',
     )
   }
 

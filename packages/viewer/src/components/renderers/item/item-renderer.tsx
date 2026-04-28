@@ -22,7 +22,7 @@ import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
 import { useItemLightPool } from '../../../store/use-item-light-pool'
-import useViewer, { type HomeAssistantItemTriggerEffect } from '../../../store/use-viewer'
+import useViewer, { type ItemTriggerEffect } from '../../../store/use-viewer'
 import {
   requestItemMeshMetadataSync,
   setItemMeshMetadataSourceRoot,
@@ -194,14 +194,11 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const interactive = interactiveRef.current
   const controls = interactive?.controls ?? []
   const effects = interactive?.effects ?? []
-  const animEffect =
-    effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
+  const animEffect = effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
   const lightEffects = effects.filter((e): e is LightEffect => e.kind === 'light')
   const renderScale = multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])
   const televisionTriggerGlowSpec = getTelevisionTriggerGlowSpec(node)
-  const homeAssistantTriggerEffect = useViewer(
-    (state) => state.homeAssistantItemTriggerEffects[node.id] ?? null,
-  )
+  const triggerEffect = useViewer((state) => state.itemTriggerEffects[node.id] ?? null)
 
   return (
     <>
@@ -213,11 +210,11 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         scale={renderScale}
         {...handlers}
       />
-      {televisionTriggerGlowSpec && homeAssistantTriggerEffect && (
+      {televisionTriggerGlowSpec && triggerEffect && (
         <TelevisionScreenTriggerGlow
           assetOffset={node.asset.offset}
           assetRotation={node.asset.rotation}
-          effect={homeAssistantTriggerEffect}
+          effect={triggerEffect}
           renderScale={renderScale}
           screenPosition={televisionTriggerGlowSpec.position}
           screenSize={televisionTriggerGlowSpec.size}
@@ -255,7 +252,7 @@ const TelevisionScreenTriggerGlow = ({
 }: {
   assetOffset: [number, number, number]
   assetRotation: [number, number, number]
-  effect: HomeAssistantItemTriggerEffect
+  effect: ItemTriggerEffect
   renderScale: [number, number, number]
   screenPosition: [number, number, number]
   screenSize: [number, number]

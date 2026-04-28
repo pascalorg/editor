@@ -1,7 +1,7 @@
 import type {
   HomeAssistantActionRequest,
   HomeAssistantCollectionBinding,
-} from '@pascal-app/viewer/home-assistant-bindings'
+} from '@pascal-app/core/schema'
 import { getHomeAssistantLink } from '../../../../../../packages/editor/src/lib/home-assistant'
 import {
   resolveHomeAssistantServerConfig,

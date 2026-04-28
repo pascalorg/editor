@@ -70,9 +70,21 @@ const homeAssistantResourceBindingSchema = z.object({
   memberEntityIds: z.array(z.string()).optional(),
 })
 
+const homeAssistantRoomControlGroupSchema = z.object({
+  id: z.string(),
+  memberResourceIds: z.array(z.string()),
+})
+
+const homeAssistantRoomControlCompositionSchema = z.object({
+  excludedResourceIds: z.array(z.string()).optional(),
+  groups: z.array(homeAssistantRoomControlGroupSchema).optional(),
+})
+
 const homeAssistantBindingPresentationSchema = z.object({
   icon: z.string().optional(),
   label: z.string().optional(),
+  rtsHidden: z.boolean().optional(),
+  rtsRoomControls: homeAssistantRoomControlCompositionSchema.optional(),
   rtsExcludedResourceIds: z.array(z.string()).optional(),
   rtsGroups: z.array(z.array(z.string())).optional(),
   rtsOrder: z.number().optional(),
@@ -92,9 +104,13 @@ const homeAssistantBindingPresentationSchema = z.object({
 })
 
 const homeAssistantCollectionBindingSchema = z.object({
-  aggregation: z.enum(
-    ['all', 'any_on', 'primary', 'single', 'trigger_only'] satisfies HomeAssistantBindingAggregation[],
-  ),
+  aggregation: z.enum([
+    'all',
+    'any_on',
+    'primary',
+    'single',
+    'trigger_only',
+  ] satisfies HomeAssistantBindingAggregation[]),
   collectionId: z.custom<CollectionId>(),
   presentation: homeAssistantBindingPresentationSchema.optional(),
   primaryResourceId: z.string().nullable().optional(),
@@ -104,20 +120,28 @@ const homeAssistantCollectionBindingSchema = z.object({
 export type HomeAssistantActionField = z.infer<typeof homeAssistantActionFieldSchema>
 export type HomeAssistantAction = z.infer<typeof homeAssistantActionSchema>
 export type HomeAssistantResourceBinding = z.infer<typeof homeAssistantResourceBindingSchema>
+export type HomeAssistantRoomControlGroup = z.infer<typeof homeAssistantRoomControlGroupSchema>
+export type HomeAssistantRoomControlComposition = z.infer<
+  typeof homeAssistantRoomControlCompositionSchema
+>
 export type HomeAssistantBindingPresentation = z.infer<
   typeof homeAssistantBindingPresentationSchema
 >
-export type HomeAssistantCollectionBinding = z.infer<
-  typeof homeAssistantCollectionBindingSchema
->
+export type HomeAssistantCollectionBinding = z.infer<typeof homeAssistantCollectionBindingSchema>
 export type HomeAssistantCollectionBindingMap = Record<CollectionId, HomeAssistantCollectionBinding>
 
 export const HomeAssistantBindingNode = BaseNode.extend({
   id: objectId('ha-binding'),
   type: nodeType('home-assistant-binding'),
-  aggregation: z.enum(
-    ['all', 'any_on', 'primary', 'single', 'trigger_only'] satisfies HomeAssistantBindingAggregation[],
-  ).default('single'),
+  aggregation: z
+    .enum([
+      'all',
+      'any_on',
+      'primary',
+      'single',
+      'trigger_only',
+    ] satisfies HomeAssistantBindingAggregation[])
+    .default('single'),
   collectionId: z.custom<CollectionId>(),
   presentation: homeAssistantBindingPresentationSchema.optional(),
   primaryResourceId: z.string().nullable().optional(),
@@ -168,15 +192,14 @@ const normalizeAction = (action: HomeAssistantAction): HomeAssistantAction | nul
     domain: action.domain,
     fields: Array.isArray(action.fields)
       ? action.fields
-          .filter(
-            (field): field is HomeAssistantActionField =>
-              Boolean(
-                field &&
-                  typeof field === 'object' &&
-                  typeof field.key === 'string' &&
-                  typeof field.label === 'string' &&
-                  typeof field.required === 'boolean',
-              ),
+          .filter((field): field is HomeAssistantActionField =>
+            Boolean(
+              field &&
+                typeof field === 'object' &&
+                typeof field.key === 'string' &&
+                typeof field.label === 'string' &&
+                typeof field.required === 'boolean',
+            ),
           )
           .map((field) => ({
             defaultValue: field.defaultValue,
@@ -242,6 +265,87 @@ const normalizeStringGroups = (groups: unknown) =>
         .filter((group) => group.length > 0)
     : undefined
 
+const getRoomControlMemberResourceId = (collectionId: CollectionId, memberId: string) => {
+  const prefix = `${collectionId}:home-assistant:`
+  if (!memberId.startsWith(prefix)) {
+    return null
+  }
+
+  const encodedResourceId = memberId.slice(prefix.length).replace(/:\d+$/, '')
+  try {
+    return decodeURIComponent(encodedResourceId)
+  } catch {
+    return encodedResourceId
+  }
+}
+
+const getLegacyRoomControlMemberId = (collectionId: CollectionId, resourceId: string) =>
+  `${collectionId}:home-assistant:${resourceId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+
+const normalizeRoomControlComposition = ({
+  collectionId,
+  presentation,
+  resources,
+}: {
+  collectionId: CollectionId
+  presentation: HomeAssistantBindingPresentation | undefined
+  resources: HomeAssistantResourceBinding[]
+}): HomeAssistantRoomControlComposition | undefined => {
+  const resourceIds = new Set(resources.map((resource) => resource.id))
+  const resourceAliases = new Map<string, string>()
+  for (const resource of resources) {
+    const currentMemberId = `${collectionId}:home-assistant:${encodeURIComponent(resource.id)}`
+    const legacyMemberId = getLegacyRoomControlMemberId(collectionId, resource.id)
+    resourceAliases.set(currentMemberId, resource.id)
+    resourceAliases.set(legacyMemberId, resource.id)
+  }
+  const existingComposition = presentation?.rtsRoomControls
+  const rawGroups =
+    existingComposition?.groups?.map((group) => group.memberResourceIds) ??
+    normalizeStringGroups(presentation?.rtsGroups) ??
+    []
+  const groups = rawGroups
+    .map((group, index) => {
+      const memberResourceIds = Array.from(
+        new Set(
+          group
+            .map((memberId) => {
+              if (resourceIds.has(memberId)) {
+                return memberId
+              }
+              const canonicalMemberId = memberId.replace(/:\d+$/, '')
+              return (
+                resourceAliases.get(memberId) ??
+                resourceAliases.get(canonicalMemberId) ??
+                getRoomControlMemberResourceId(collectionId, memberId)
+              )
+            })
+            .filter((resourceId): resourceId is string =>
+              Boolean(resourceId && resourceIds.has(resourceId)),
+            ),
+        ),
+      )
+
+      return {
+        id: existingComposition?.groups?.[index]?.id || `group-${index + 1}`,
+        memberResourceIds,
+      }
+    })
+    .filter((group) => group.memberResourceIds.length > 0)
+  const excludedResourceIds = dedupeStringArray(
+    existingComposition?.excludedResourceIds ?? presentation?.rtsExcludedResourceIds,
+  )
+
+  if (groups.length === 0 && excludedResourceIds.length === 0) {
+    return undefined
+  }
+
+  return {
+    ...(excludedResourceIds.length > 0 ? { excludedResourceIds } : {}),
+    ...(groups.length > 0 ? { groups } : {}),
+  }
+}
+
 export const normalizeHomeAssistantCollectionBinding = (
   binding: HomeAssistantCollectionBinding,
 ): HomeAssistantCollectionBinding | null => {
@@ -279,10 +383,13 @@ export const normalizeHomeAssistantCollectionBinding = (
               typeof binding.presentation.label === 'string'
                 ? binding.presentation.label
                 : undefined,
-            rtsExcludedResourceIds: dedupeStringArray(
-              binding.presentation.rtsExcludedResourceIds,
-            ),
-            rtsGroups: normalizeStringGroups(binding.presentation.rtsGroups),
+            rtsHidden:
+              binding.presentation.rtsHidden === true ? binding.presentation.rtsHidden : undefined,
+            rtsRoomControls: normalizeRoomControlComposition({
+              collectionId,
+              presentation: binding.presentation,
+              resources: normalizedResources,
+            }),
             rtsOrder:
               typeof binding.presentation.rtsOrder === 'number'
                 ? binding.presentation.rtsOrder
@@ -312,7 +419,7 @@ export const normalizeHomeAssistantCollectionBinding = (
     primaryResourceId:
       typeof binding.primaryResourceId === 'string'
         ? binding.primaryResourceId
-        : normalizedResources[0]?.id ?? null,
+        : (normalizedResources[0]?.id ?? null),
     resources: normalizedResources,
   }
 }
@@ -368,8 +475,7 @@ export const getHomeAssistantBindingNodeIdForCollection = (
 
 export const getHomeAssistantBindingCapabilities = (
   binding: HomeAssistantCollectionBinding | null | undefined,
-) =>
-  new Set(binding?.resources.flatMap((resource) => resource.capabilities ?? []) ?? [])
+) => new Set(binding?.resources.flatMap((resource) => resource.capabilities ?? []) ?? [])
 
 export const hasHomeAssistantBinding = (
   binding: HomeAssistantCollectionBinding | null | undefined,

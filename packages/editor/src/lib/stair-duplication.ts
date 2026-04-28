@@ -1,11 +1,11 @@
 import {
-  generateId,
   type AnyNodeId,
-  sceneRegistry,
+  generateId,
   type StairNode,
   StairNode as StairNodeSchema,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'

@@ -25,7 +25,8 @@ export async function GET() {
       scannedAt: new Date().toISOString(),
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown Home Assistant discovery error.'
+    const message =
+      error instanceof Error ? error.message : 'Unknown Home Assistant discovery error.'
     return Response.json(
       {
         devices: [],

@@ -12,6 +12,7 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
@@ -24,13 +25,10 @@ type Outliner = {
   hoveredObjects: Object3D[]
 }
 
-export type HomeAssistantItemTriggerEffect = {
+export type ItemTriggerEffect = {
   fadeInMs: number
   startedAtMs: number
 }
-
-export type HomeAssistantOverlaySection = 'actions' | 'devices' | 'groups'
-export type HomeAssistantOverlayVisibility = Record<HomeAssistantOverlaySection, boolean>
 
 type ViewerState = {
   selection: SelectionPath
@@ -41,14 +39,9 @@ type ViewerState = {
   suppressNodeEvents: (durationMs?: number) => void
   roomControlOverlayActive: boolean
   setRoomControlOverlayActive: (active: boolean) => void
-  homeAssistantOverlayVisibility: HomeAssistantOverlayVisibility
-  setHomeAssistantOverlaySectionVisible: (
-    section: HomeAssistantOverlaySection,
-    visible: boolean,
-  ) => void
-  homeAssistantItemTriggerEffects: Record<AnyNodeId, HomeAssistantItemTriggerEffect>
-  triggerHomeAssistantItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
-  clearHomeAssistantItemEffect: (itemId: AnyNodeId) => void
+  itemTriggerEffects: Record<AnyNodeId, ItemTriggerEffect>
+  triggerItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
+  clearItemEffect: (itemId: AnyNodeId) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -106,12 +99,6 @@ type ViewerState = {
   setCameraDragging: (dragging: boolean) => void
 }
 
-const DEFAULT_HOME_ASSISTANT_OVERLAY_VISIBILITY: HomeAssistantOverlayVisibility = {
-  actions: true,
-  devices: true,
-  groups: true,
-}
-
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
@@ -127,30 +114,16 @@ const useViewer = create<ViewerState>()(
         }),
       roomControlOverlayActive: false,
       setRoomControlOverlayActive: (roomControlOverlayActive) => set({ roomControlOverlayActive }),
-      homeAssistantOverlayVisibility: DEFAULT_HOME_ASSISTANT_OVERLAY_VISIBILITY,
-      setHomeAssistantOverlaySectionVisible: (section, visible) =>
+      itemTriggerEffects: {},
+      triggerItemEffect: (itemId, fadeInMs = 450) =>
         set((state) => {
-          if (state.homeAssistantOverlayVisibility[section] === visible) {
+          if (state.itemTriggerEffects[itemId]) {
             return state
           }
 
           return {
-            homeAssistantOverlayVisibility: {
-              ...state.homeAssistantOverlayVisibility,
-              [section]: visible,
-            },
-          }
-        }),
-      homeAssistantItemTriggerEffects: {},
-      triggerHomeAssistantItemEffect: (itemId, fadeInMs = 450) =>
-        set((state) => {
-          if (state.homeAssistantItemTriggerEffects[itemId]) {
-            return state
-          }
-
-          return {
-            homeAssistantItemTriggerEffects: {
-              ...state.homeAssistantItemTriggerEffects,
+            itemTriggerEffects: {
+              ...state.itemTriggerEffects,
               [itemId]: {
                 fadeInMs: Math.max(1, fadeInMs),
                 startedAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
@@ -158,10 +131,10 @@ const useViewer = create<ViewerState>()(
             },
           }
         }),
-      clearHomeAssistantItemEffect: (itemId) =>
+      clearItemEffect: (itemId) =>
         set((state) => {
-          const { [itemId]: _removed, ...rest } = state.homeAssistantItemTriggerEffects
-          return { homeAssistantItemTriggerEffects: rest }
+          const { [itemId]: _removed, ...rest } = state.itemTriggerEffects
+          return { itemTriggerEffects: rest }
         }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
@@ -293,7 +266,6 @@ const useViewer = create<ViewerState>()(
         unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
-        homeAssistantOverlayVisibility: state.homeAssistantOverlayVisibility,
         projectPreferences: state.projectPreferences,
       }),
     },

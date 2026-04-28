@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import {
-  HOME_ASSISTANT_OAUTH_COOKIE,
   exchangeAuthorizationCode,
+  HOME_ASSISTANT_OAUTH_COOKIE,
 } from '../../../../_lib/home-assistant-auth'
 import { writeLinkedHomeAssistantProfile } from '../../../../_lib/home-assistant-linked-profile'
 
@@ -69,7 +69,8 @@ export async function GET(request: NextRequest) {
     response.cookies.delete(HOME_ASSISTANT_OAUTH_COOKIE)
     return response
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to complete Home Assistant sign-in.'
+    const message =
+      error instanceof Error ? error.message : 'Failed to complete Home Assistant sign-in.'
     const parsedCookie = JSON.parse(oauthCookie) as { clientId?: string }
     const response = NextResponse.redirect(
       buildRedirectUrl(parsedCookie.clientId ?? fallbackBase, 'error', message),

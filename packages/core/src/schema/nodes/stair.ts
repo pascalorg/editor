@@ -126,18 +126,26 @@ export function getEffectiveStairSurfaceMaterial(
 
   const treadFallback = {
     material: node.treadMaterial,
-    materialPreset: typeof node.treadMaterialPreset === 'string' ? node.treadMaterialPreset : undefined,
+    materialPreset:
+      typeof node.treadMaterialPreset === 'string' ? node.treadMaterialPreset : undefined,
   }
   const sideFallback = {
     material: node.sideMaterial,
-    materialPreset: typeof node.sideMaterialPreset === 'string' ? node.sideMaterialPreset : undefined,
+    materialPreset:
+      typeof node.sideMaterialPreset === 'string' ? node.sideMaterialPreset : undefined,
   }
 
-  if (role === 'tread' && (sideFallback.material !== undefined || sideFallback.materialPreset !== undefined)) {
+  if (
+    role === 'tread' &&
+    (sideFallback.material !== undefined || sideFallback.materialPreset !== undefined)
+  ) {
     return sideFallback
   }
 
-  if (role === 'side' && (treadFallback.material !== undefined || treadFallback.materialPreset !== undefined)) {
+  if (
+    role === 'side' &&
+    (treadFallback.material !== undefined || treadFallback.materialPreset !== undefined)
+  ) {
     return treadFallback
   }
 

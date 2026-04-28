@@ -6,18 +6,14 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId, normalizeCollection } from '../schema/collections'
-import {
-  getHomeAssistantBindingNodes,
-  isHomeAssistantBindingNode,
-  type HomeAssistantBindingNode,
-} from '../schema/nodes/home-assistant-binding'
+import { getHomeAssistantBindingNodes } from '../schema/nodes/home-assistant-binding'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { resetSceneHistoryPauseDepth } from './history-control'
 import * as nodeActions from './actions/node-actions'
+import { resetSceneHistoryPauseDepth } from './history-control'
 
 function getFiniteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -418,8 +414,7 @@ function normalizeCollectionsRecord(
           Boolean(
             bindingNode.presentation?.rtsScreenPosition ||
               bindingNode.presentation?.rtsWorldPosition,
-          ) &&
-          bindingNode.resources.some((resource) => resource.kind === 'entity'),
+          ) && bindingNode.resources.some((resource) => resource.kind === 'entity'),
       )
       .map((bindingNode) => bindingNode.collectionId),
   )
@@ -437,7 +432,9 @@ function normalizeCollectionsRecord(
         return []
       }
 
-      return [[id as CollectionId, normalizeCollection({ ...collection, nodeIds: normalizedNodeIds })]]
+      return [
+        [id as CollectionId, normalizeCollection({ ...collection, nodeIds: normalizedNodeIds })],
+      ]
     }),
   ) as Record<CollectionId, Collection>
 

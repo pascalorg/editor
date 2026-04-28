@@ -1,8 +1,7 @@
 'use client'
 
-import { sceneRegistry } from '@pascal-app/core'
+import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT } from '@pascal-app/viewer/home-assistant-bindings'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Plane, Vector2, Vector3 } from 'three'

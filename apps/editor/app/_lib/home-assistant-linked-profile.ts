@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { promises as fs } from 'node:fs'
 
 const STORAGE_DIRECTORY_NAME = '.pascal-home-assistant'
 const STORAGE_FILE_NAME = 'linked-instance.enc'
@@ -83,11 +83,7 @@ async function decryptPayload(encryptedPayload: string): Promise<StoredHomeAssis
     throw new Error('Invalid linked Home Assistant payload.')
   }
 
-  const decipher = createDecipheriv(
-    'aes-256-gcm',
-    key,
-    Buffer.from(parsed.iv, 'base64'),
-  )
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(parsed.iv, 'base64'))
   decipher.setAuthTag(Buffer.from(parsed.tag, 'base64'))
 
   const decrypted = Buffer.concat([

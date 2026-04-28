@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import dgram from 'node:dgram'
 import type {
   HomeAssistantActionKind,
+  HomeAssistantActionPresentation,
   HomeAssistantAvailableAction,
   HomeAssistantAvailableActionField,
-  HomeAssistantActionPresentation,
   HomeAssistantCapabilityCategory,
   HomeAssistantDiscoveredDevice,
   HomeAssistantServiceTargetFilter,
@@ -15,9 +15,9 @@ import {
 } from '../../../../packages/editor/src/lib/home-assistant'
 import {
   type HomeAssistantEntityState,
+  type HomeAssistantServerConfig,
   type HomeAssistantServiceDescription,
   type HomeAssistantServiceRegistryEntry,
-  type HomeAssistantServerConfig,
   hasHomeAssistantServerConfig,
   listEntityStates,
   listServices,
@@ -285,10 +285,26 @@ function parseMdnsPacket(message: Buffer) {
       const weight = message.readUInt16BE(dataOffset + 2)
       const port = message.readUInt16BE(dataOffset + 4)
       const target = decodeDnsName(message, dataOffset + 6).name
-      records.push({ classCode, name: nameDecoded.name, port, priority, target, ttl, type: 33, weight })
+      records.push({
+        classCode,
+        name: nameDecoded.name,
+        port,
+        priority,
+        target,
+        ttl,
+        type: 33,
+        weight,
+      })
     } else if (type === 16) {
       const parsed = parseTxtRecord(message.subarray(dataOffset, dataEnd))
-      records.push({ classCode, entries: parsed.entries, name: nameDecoded.name, properties: parsed.properties, ttl, type: 16 })
+      records.push({
+        classCode,
+        entries: parsed.entries,
+        name: nameDecoded.name,
+        properties: parsed.properties,
+        ttl,
+        type: 16,
+      })
     } else if (type === 1) {
       const value = Array.from(message.subarray(dataOffset, dataEnd)).join('.')
       records.push({ classCode, name: nameDecoded.name, ttl, type: 1, value })
@@ -622,10 +638,7 @@ async function discoverSsdpDevices(
   return devices
 }
 
-function readStringAttribute(
-  attributes: Record<string, unknown> | undefined,
-  ...keys: string[]
-) {
+function readStringAttribute(attributes: Record<string, unknown> | undefined, ...keys: string[]) {
   for (const key of keys) {
     const value = attributes?.[key]
     if (typeof value === 'string' && value.trim().length > 0) {
@@ -815,41 +828,39 @@ function buildActionFields(
   state: HomeAssistantEntityState,
   entitySupportedFeatures: number | null,
 ) {
-  return Object.entries(serviceDescription.fields ?? {}).reduce<HomeAssistantAvailableActionField[]>(
-    (fields, [fieldKey, fieldDescription]) => {
-      const supportedFeatureFilter = normalizeSupportedFeatureGroups(
-        fieldDescription.filter?.supported_features,
-      )
-      const passesSupportedFeatures = matchesSupportedFeatures(
-        entitySupportedFeatures,
-        supportedFeatureFilter,
-      )
-      const passesAttributeFilter = matchesAttributeFilter(
-        state.attributes,
-        fieldDescription.filter?.attribute,
-      )
+  return Object.entries(serviceDescription.fields ?? {}).reduce<
+    HomeAssistantAvailableActionField[]
+  >((fields, [fieldKey, fieldDescription]) => {
+    const supportedFeatureFilter = normalizeSupportedFeatureGroups(
+      fieldDescription.filter?.supported_features,
+    )
+    const passesSupportedFeatures = matchesSupportedFeatures(
+      entitySupportedFeatures,
+      supportedFeatureFilter,
+    )
+    const passesAttributeFilter = matchesAttributeFilter(
+      state.attributes,
+      fieldDescription.filter?.attribute,
+    )
 
-      if (!passesSupportedFeatures || !passesAttributeFilter) {
-        return fields
-      }
-
-      fields.push({
-        advanced: Boolean(fieldDescription.advanced),
-        defaultValue: fieldDescription.default ?? null,
-        example: fieldDescription.example ?? null,
-        filterAttribute: fieldDescription.filter?.attribute ?? null,
-        filterSupportedFeatures:
-          supportedFeatureFilter.length > 0 ? supportedFeatureFilter : null,
-        key: fieldKey,
-        label: titleCase(fieldKey),
-        required: Boolean(fieldDescription.required),
-        selector: fieldDescription.selector ?? null,
-      })
-
+    if (!passesSupportedFeatures || !passesAttributeFilter) {
       return fields
-    },
-    [],
-  )
+    }
+
+    fields.push({
+      advanced: Boolean(fieldDescription.advanced),
+      defaultValue: fieldDescription.default ?? null,
+      example: fieldDescription.example ?? null,
+      filterAttribute: fieldDescription.filter?.attribute ?? null,
+      filterSupportedFeatures: supportedFeatureFilter.length > 0 ? supportedFeatureFilter : null,
+      key: fieldKey,
+      label: titleCase(fieldKey),
+      required: Boolean(fieldDescription.required),
+      selector: fieldDescription.selector ?? null,
+    })
+
+    return fields
+  }, [])
 }
 
 function buildAvailableActions(
@@ -859,7 +870,9 @@ function buildAvailableActions(
 ) {
   const domain = getEntityDomain(state.entity_id)
   const entitySupportedFeatures =
-    typeof state.attributes?.supported_features === 'number' ? state.attributes.supported_features : null
+    typeof state.attributes?.supported_features === 'number'
+      ? state.attributes.supported_features
+      : null
 
   const actionsByDisplayKey = new Map<
     string,
@@ -949,7 +962,13 @@ function buildAvailableActions(
         domain: serviceRegistryEntry.domain,
         fields: buildActionFields(serviceDescription, state, entitySupportedFeatures),
         key: `${serviceRegistryEntry.domain}.${serviceName}`,
-        label: buildActionLabel(serviceRegistryEntry.domain, serviceName, state, config, actionKind),
+        label: buildActionLabel(
+          serviceRegistryEntry.domain,
+          serviceName,
+          state,
+          config,
+          actionKind,
+        ),
         service: serviceName,
       }
       const presentation = getHomeAssistantAvailableActionPresentation(action)
@@ -988,7 +1007,11 @@ function pickDefaultActionKey(
           actions[0]?.key ?? '',
         ]
 
-  return preferredServiceKeys.find((serviceKey) => actions.some((action) => action.key === serviceKey)) ?? null
+  return (
+    preferredServiceKeys.find((serviceKey) =>
+      actions.some((action) => action.key === serviceKey),
+    ) ?? null
+  )
 }
 
 function classifyHomeAssistantEntity(
@@ -1068,9 +1091,12 @@ async function discoverHomeAssistantEntityDevices(
     )
     const ip = readStringAttribute(state.attributes, 'ip_address', 'ip')
     const isConfiguredCast =
-      state.entity_id === config.castEntityId || (!!castFriendlyName && friendlyName === castFriendlyName)
+      state.entity_id === config.castEntityId ||
+      (!!castFriendlyName && friendlyName === castFriendlyName)
     const supportedFeatures =
-      typeof state.attributes?.supported_features === 'number' ? state.attributes.supported_features : null
+      typeof state.attributes?.supported_features === 'number'
+        ? state.attributes.supported_features
+        : null
     const enabledActionCategories = Array.from(
       new Set<HomeAssistantCapabilityCategory>(
         availableActions.map((action) => getHomeAssistantCapabilityCategory(action.actionKind)),

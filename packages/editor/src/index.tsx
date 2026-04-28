@@ -19,14 +19,19 @@ export { ViewerToolbarLeft, ViewerToolbarRight } from './components/ui/viewer-to
 export type { PresetsAdapter, PresetsTab } from './contexts/presets-context'
 export { PresetsProvider } from './contexts/presets-context'
 export type { SaveStatus } from './hooks/use-auto-save'
-export type { SceneGraph } from './lib/scene'
 export {
   HIDDEN_HOME_ASSISTANT_GROUP_RESOURCE_IDS,
   isHiddenHomeAssistantGroupResourceId,
 } from './lib/home-assistant-collections'
+export type { SceneGraph } from './lib/scene'
+export { applySceneGraphToEditor } from './lib/scene'
+export { triggerSFX } from './lib/sfx-bus'
 export {
+  buildSmartHomeRoomControlCompositionFromTileGroups,
   getSmartHomeBindingControlIds,
   getSmartHomeBindingControlResources,
+  getSmartHomeExcludedResourceIds,
+  getSmartHomeRoomControlTileGroups,
   getSmartHomeRoomControlTileId,
   isDefaultSmartHomeRoomGroup,
   normalizeSmartHomeRoomGroupsForBinding,
@@ -34,8 +39,6 @@ export {
   smartHomeRoomGroupsCoverControlIds,
   smartHomeRoomGroupsEqual,
 } from './lib/smart-home-composition'
-export { applySceneGraphToEditor } from './lib/scene'
-export { triggerSFX } from './lib/sfx-bus'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type { FloorplanSelectionTool, SplitOrientation, ViewMode } from './store/use-editor'

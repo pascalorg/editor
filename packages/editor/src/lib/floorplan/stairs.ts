@@ -200,8 +200,7 @@ function getFloorplanArcPoint(center: Point2D, radius: number, angle: number): P
 
 function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
   const stairType = stair.stairType ?? 'straight'
-  const baseSweepAngle =
-    stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
+  const baseSweepAngle = stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
 
   if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
     return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)

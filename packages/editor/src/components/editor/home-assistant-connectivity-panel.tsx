@@ -76,7 +76,6 @@ function getCategoryMeta(category: HomeAssistantCapabilityCategory) {
         icon: <HomeAssistantActionIconView className="h-4 w-4" icon="lock" />,
         label: 'Access',
       }
-    case 'other':
     default:
       return {
         icon: <HomeAssistantActionIconView className="h-4 w-4" icon="custom" />,
@@ -343,9 +342,9 @@ export function HomeAssistantConnectivityPanel({
       if (isTelevisionItem(item)) {
         const viewer = useViewer.getState()
         if (isHomeAssistantOffAction(actionToRun, actionLink)) {
-          viewer.clearHomeAssistantItemEffect(item.id)
+          viewer.clearItemEffect(item.id)
         } else if (!isDeferredHomeAssistantPowerToggle(actionToRun, actionLink)) {
-          viewer.triggerHomeAssistantItemEffect(item.id)
+          viewer.triggerItemEffect(item.id)
         }
       }
 
@@ -369,9 +368,9 @@ export function HomeAssistantConnectivityPanel({
       if (isTelevisionItem(item)) {
         const viewer = useViewer.getState()
         if (isHomeAssistantOffState(payload.finalState)) {
-          viewer.clearHomeAssistantItemEffect(item.id)
+          viewer.clearItemEffect(item.id)
         } else {
-          viewer.triggerHomeAssistantItemEffect(item.id)
+          viewer.triggerItemEffect(item.id)
         }
       }
       setStatusMessage(payload.message)

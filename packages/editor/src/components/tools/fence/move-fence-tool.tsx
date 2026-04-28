@@ -17,8 +17,8 @@ import type * as THREE from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import { snapFenceDraftPoint } from './fence-drafting'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { snapFenceDraftPoint } from './fence-drafting'
 
 function samePoint(a: [number, number], b: [number, number]) {
   return a[0] === b[0] && a[1] === b[1]
@@ -164,7 +164,9 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       }
     }
 
-    const applyNodePreview = (updates: Array<{ id: FenceNode['id']; start: [number, number]; end: [number, number] }>) => {
+    const applyNodePreview = (
+      updates: Array<{ id: FenceNode['id']; start: [number, number]; end: [number, number] }>,
+    ) => {
       useScene.getState().updateNodes(
         updates.map((entry) => ({
           id: entry.id as AnyNodeId,

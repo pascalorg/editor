@@ -62,7 +62,12 @@ export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
       )}
 
       {polygonDraftPolygonPoints && (
-        <polygon fill={draftFill} fillOpacity={0.2} points={polygonDraftPolygonPoints} stroke="none" />
+        <polygon
+          fill={draftFill}
+          fillOpacity={0.2}
+          points={polygonDraftPolygonPoints}
+          stroke="none"
+        />
       )}
 
       {polygonDraftPolylinePoints && (

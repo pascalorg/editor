@@ -1,21 +1,6 @@
 'use client'
 
 import {
-  CATALOG_ITEMS,
-  Editor,
-  getSmartHomeBindingControlIds,
-  isHiddenHomeAssistantGroupResourceId,
-  isDefaultSmartHomeRoomGroup,
-  normalizeSmartHomeRoomGroupsForBinding,
-  repairHomeAssistantBindingResourcesFromGroups,
-  type SceneGraph,
-  type SidebarTab,
-  smartHomeRoomGroupsCoverControlIds,
-  smartHomeRoomGroupsEqual,
-  ViewerToolbarLeft,
-  ViewerToolbarRight,
-} from '@pascal-app/editor'
-import {
   type AnyNodeId,
   type Collection,
   type CollectionId,
@@ -26,6 +11,24 @@ import {
   type HomeAssistantResourceBinding,
   normalizeHomeAssistantCollectionBinding,
 } from '@pascal-app/core/schema'
+import {
+  buildSmartHomeRoomControlCompositionFromTileGroups,
+  CATALOG_ITEMS,
+  Editor,
+  getSmartHomeBindingControlIds,
+  getSmartHomeExcludedResourceIds,
+  getSmartHomeRoomControlTileGroups,
+  isDefaultSmartHomeRoomGroup,
+  isHiddenHomeAssistantGroupResourceId,
+  normalizeSmartHomeRoomGroupsForBinding,
+  repairHomeAssistantBindingResourcesFromGroups,
+  type SceneGraph,
+  type SidebarTab,
+  smartHomeRoomGroupsCoverControlIds,
+  smartHomeRoomGroupsEqual,
+  ViewerToolbarLeft,
+  ViewerToolbarRight,
+} from '@pascal-app/editor'
 import Link from 'next/link'
 import { useCallback } from 'react'
 
@@ -84,6 +87,44 @@ function readStringGroups(value: unknown) {
   return groups.length > 0 ? groups : undefined
 }
 
+function readLegacyRoomControlComposition(
+  value: unknown,
+): HomeAssistantBindingPresentation['rtsRoomControls'] {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  const excludedResourceIds = readStringArray(value.excludedResourceIds)
+  const groups = Array.isArray(value.groups)
+    ? value.groups
+        .map((group, index) => {
+          if (!isRecord(group)) {
+            return null
+          }
+
+          const memberResourceIds = readStringArray(group.memberResourceIds)
+          if (!(memberResourceIds && memberResourceIds.length > 0)) {
+            return null
+          }
+
+          return {
+            id: typeof group.id === 'string' ? group.id : `group-${index + 1}`,
+            memberResourceIds,
+          }
+        })
+        .filter((group): group is { id: string; memberResourceIds: string[] } => Boolean(group))
+    : undefined
+
+  if (!(excludedResourceIds?.length || groups?.length)) {
+    return undefined
+  }
+
+  return {
+    ...(excludedResourceIds?.length ? { excludedResourceIds } : {}),
+    ...(groups?.length ? { groups } : {}),
+  }
+}
+
 function readScreenPosition(value: unknown) {
   return isRecord(value) && typeof value.x === 'number' && typeof value.y === 'number'
     ? { x: value.x, y: value.y }
@@ -115,6 +156,14 @@ function readLegacyHomeAssistantPresentation(
   }
   if (typeof value.rtsOrder === 'number') {
     presentation.rtsOrder = value.rtsOrder
+  }
+  if (value.rtsHidden === true) {
+    presentation.rtsHidden = true
+  }
+
+  const rtsRoomControls = readLegacyRoomControlComposition(value.rtsRoomControls)
+  if (rtsRoomControls) {
+    presentation.rtsRoomControls = rtsRoomControls
   }
 
   const rtsExcludedResourceIds = readStringArray(value.rtsExcludedResourceIds)
@@ -513,11 +562,14 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
   }
 
   for (const bindingNode of getHomeAssistantBindingNodes(scene.nodes as any)) {
-    const sceneRawGroups = bindingNode.presentation?.rtsGroups
     const collectionId = bindingNode.collectionId as string
+    const sceneRawGroups = getSmartHomeRoomControlTileGroups({
+      collectionId,
+      presentation: bindingNode.presentation,
+    })
     const bindingWithRepairedResources = repairHomeAssistantBindingResourcesFromGroups({
       binding: bindingNode,
-      detachedResourceIds: bindingNode.presentation?.rtsExcludedResourceIds ?? [],
+      detachedResourceIds: getSmartHomeExcludedResourceIds(bindingNode.presentation),
       rawGroups: sceneRawGroups,
       allResourcesById,
     })
@@ -533,7 +585,10 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
     const sceneGroups = normalizeSmartHomeRoomGroupsForBinding({
       collectionId,
       resources: bindingWithRepairedResources.resources,
-      rawGroups: bindingWithRepairedResources.presentation?.rtsGroups,
+      rawGroups: getSmartHomeRoomControlTileGroups({
+        collectionId,
+        presentation: bindingWithRepairedResources.presentation,
+      }),
       appendMissingControls: true,
     })
     const sceneHasCustomGroups =
@@ -544,14 +599,29 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
 
     if (
       bindingWithRepairedResources !== bindingNode ||
-      !smartHomeRoomGroupsEqual(bindingWithRepairedResources.presentation?.rtsGroups ?? [], nextGroups)
+      !smartHomeRoomGroupsEqual(
+        getSmartHomeRoomControlTileGroups({
+          collectionId,
+          presentation: bindingWithRepairedResources.presentation,
+        }),
+        nextGroups,
+      )
     ) {
       nextNodes ??= { ...scene.nodes }
       nextNodes[bindingNode.id] = {
         ...bindingWithRepairedResources,
         presentation: {
           ...(bindingWithRepairedResources.presentation ?? {}),
-          rtsGroups: nextGroups,
+          rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
+            collectionId,
+            excludedResourceIds: getSmartHomeExcludedResourceIds(
+              bindingWithRepairedResources.presentation,
+            ),
+            groups: nextGroups,
+            resources: bindingWithRepairedResources.resources,
+          }),
+          rtsExcludedResourceIds: undefined,
+          rtsGroups: undefined,
         },
       }
     }

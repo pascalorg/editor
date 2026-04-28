@@ -1,6 +1,11 @@
 'use client'
 
-import { memo, type ComponentProps, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import {
+  type ComponentProps,
+  memo,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from '../editor/node-action-menu'
 

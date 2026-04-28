@@ -74,14 +74,7 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   ])
 
   return (
-    <mesh
-      castShadow
-      receiveShadow
-      ref={ref}
-      {...handlers}
-      material={material}
-      visible={visible}
-    >
+    <mesh castShadow receiveShadow ref={ref} {...handlers} material={material} visible={visible}>
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
   )

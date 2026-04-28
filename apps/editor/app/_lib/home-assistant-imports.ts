@@ -2,7 +2,7 @@ import type {
   HomeAssistantAction,
   HomeAssistantCollectionCapability,
   HomeAssistantResourceKind,
-} from '@pascal-app/viewer/home-assistant-bindings'
+} from '@pascal-app/core/schema'
 import type { HomeAssistantImportedResource } from '../../../../packages/editor/src/lib/home-assistant-collections'
 import {
   isHiddenHomeAssistantGroupResourceId,
@@ -38,11 +38,7 @@ const IMPORTABLE_TRIGGER_DOMAINS: Array<{
   },
 ]
 
-function createTriggerAction(
-  domain: string,
-  label: string,
-  service: string,
-): HomeAssistantAction {
+function createTriggerAction(domain: string, label: string, service: string): HomeAssistantAction {
   return {
     capability: 'trigger',
     domain,
@@ -58,7 +54,8 @@ function toTriggerResource(
   domainConfig: (typeof IMPORTABLE_TRIGGER_DOMAINS)[number],
 ): HomeAssistantImportedResource {
   const label =
-    typeof state.attributes?.friendly_name === 'string' && state.attributes.friendly_name.trim().length > 0
+    typeof state.attributes?.friendly_name === 'string' &&
+    state.attributes.friendly_name.trim().length > 0
       ? state.attributes.friendly_name.trim()
       : state.entity_id
 
@@ -108,7 +105,10 @@ function getMemberEntityIds(state: HomeAssistantEntityState | undefined) {
   )
 }
 
-function isLikelyGroupEntity(resource: HomeAssistantImportedResource, state: HomeAssistantEntityState | undefined) {
+function isLikelyGroupEntity(
+  resource: HomeAssistantImportedResource,
+  state: HomeAssistantEntityState | undefined,
+) {
   const label =
     typeof state?.attributes?.friendly_name === 'string'
       ? state.attributes.friendly_name

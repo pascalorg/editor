@@ -46,23 +46,23 @@ export {
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   MATERIAL_CATEGORIES,
-  type MaterialCategory,
   type MaterialCatalogItem,
+  type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
 export { baseMaterial, glassMaterial } from './materials'
 export * from './schema'
-export {
-  type ControlValue,
-  type ItemInteractiveState,
-  useInteractive,
-} from './store/use-interactive'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
+export {
+  type ControlValue,
+  type ItemInteractiveState,
+  useInteractive,
+} from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

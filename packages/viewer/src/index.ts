@@ -6,25 +6,6 @@ export {
 } from './components/viewer/post-processing'
 export { WalkthroughControls } from './components/viewer/walkthrough-controls'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
-export {
-  getHomeAssistantBindingCapabilities,
-  getHomeAssistantBindingDisplayLabel,
-  hasHomeAssistantBinding,
-  isHomeAssistantTriggerBinding,
-  normalizeHomeAssistantCollectionBinding,
-} from './lib/home-assistant-bindings'
-export type {
-  HomeAssistantAction,
-  HomeAssistantActionField,
-  HomeAssistantActionRequest,
-  HomeAssistantBindingAggregation,
-  HomeAssistantBindingPresentation,
-  HomeAssistantCollectionBinding,
-  HomeAssistantCollectionBindingMap,
-  HomeAssistantCollectionCapability,
-  HomeAssistantResourceBinding,
-  HomeAssistantResourceKind,
-} from './lib/home-assistant-bindings'
 export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
@@ -42,7 +23,18 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'
-export { InteractiveSystem, type HomeAssistantDeviceActionDispatch } from './systems/interactive/interactive-system'
+export {
+  buildRoomControlGroups,
+  InteractiveSystem,
+  type InteractiveSystemProps,
+  normalizeRoomControlGroupList,
+  type RoomControlChange,
+  type RoomControlChangeSource,
+  type RoomControlGroup,
+  type RoomControlTile,
+  type RoomOverlayNode,
+  selectRoomControlGroupSource,
+} from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'

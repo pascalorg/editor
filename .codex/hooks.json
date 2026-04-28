@@ -10,6 +10,16 @@
             "statusMessage": "Checking diff noise"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\briss\\.codex\\worktrees\\ha-main-clean\\editor\\.codex\\hooks\\codex-hidden-browser-cleanup.ps1\"",
+            "timeout": 15,
+            "statusMessage": "Cleaning hidden browser renderers"
+          }
+        ]
       }
     ]
   }

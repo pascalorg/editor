@@ -604,7 +604,13 @@ function generateStairRailingGeometry(
   const landingInset = 0.08
   const geometries: THREE.BufferGeometry[] = []
 
-  const segmentRailPaths = buildStairRailPaths(segments, transforms, railingMode, inset, landingInset)
+  const segmentRailPaths = buildStairRailPaths(
+    segments,
+    transforms,
+    railingMode,
+    inset,
+    landingInset,
+  )
 
   for (const segmentRailPath of segmentRailPaths) {
     for (const sidePath of segmentRailPath.sidePaths) {
@@ -613,16 +619,14 @@ function generateStairRailingGeometry(
 
       geometries.push(...buildBalusterGeometries(points, railHeight, postRadius))
       geometries.push(...buildOffsetRailSegmentGeometries(points, railHeight, railRadius))
-      geometries.push(
-        ...buildOffsetRailSegmentGeometries(points, midRailHeight, railRadius * 0.8),
-      )
+      geometries.push(...buildOffsetRailSegmentGeometries(points, midRailHeight, railRadius * 0.8))
     }
   }
 
   for (let index = 1; index < segmentRailPaths.length; index++) {
     const previousPath = segmentRailPaths[index - 1]
     const currentPath = segmentRailPaths[index]
-    if (!(previousPath && currentPath && currentPath.connectFromPrevious)) continue
+    if (!(previousPath && currentPath?.connectFromPrevious)) continue
     if (previousPath.segment.segmentType === 'landing') continue
 
     for (const sidePath of currentPath.sidePaths) {
@@ -690,42 +694,34 @@ function buildStairRailPaths(
         previousSegment?.segmentType === 'stair' &&
         nextSegment?.segmentType === 'stair'
       const visualTurnSide = nextSegment?.attachmentSide
-      const sideCandidates =
-        hideLandingRailing
-          ? visualTurnSide === 'left'
-            ? (['front', 'right'] as const)
-            : visualTurnSide === 'right'
-              ? (['front', 'left'] as const)
-              : (['left', 'right'] as const)
-          : segment.segmentType === 'landing'
-            ? nextSegment?.segmentType === 'landing' && visualTurnSide === 'left'
-              ? (['front', 'right'] as const)
-              : nextSegment?.segmentType === 'landing' && visualTurnSide === 'right'
-                ? (['front', 'left'] as const)
-                : visualTurnSide === 'left'
-                  ? (['right'] as const)
-                  : visualTurnSide === 'right'
-                    ? (['left'] as const)
-                    : (['left', 'right'] as const)
+      const sideCandidates = hideLandingRailing
+        ? visualTurnSide === 'left'
+          ? (['front', 'right'] as const)
+          : visualTurnSide === 'right'
+            ? (['front', 'left'] as const)
             : (['left', 'right'] as const)
+        : segment.segmentType === 'landing'
+          ? nextSegment?.segmentType === 'landing' && visualTurnSide === 'left'
+            ? (['front', 'right'] as const)
+            : nextSegment?.segmentType === 'landing' && visualTurnSide === 'right'
+              ? (['front', 'left'] as const)
+              : visualTurnSide === 'left'
+                ? (['right'] as const)
+                : visualTurnSide === 'right'
+                  ? (['left'] as const)
+                  : (['left', 'right'] as const)
+          : (['left', 'right'] as const)
       const sidePaths = sideCandidates
         .map((side) =>
-          buildSegmentRailPath(
-            layout,
-            side,
-            previousSegment,
-            nextSegment,
-            inset,
-            landingInset,
-          ),
+          buildSegmentRailPath(layout, side, previousSegment, nextSegment, inset, landingInset),
         )
         .filter((entry): entry is StairRailSidePath => entry !== null)
 
       return {
         segment,
-          sidePaths:
+        sidePaths:
           isStraightLineDoubleLandingLayout && index === 1
-            ? ((['left', 'right'] as const)
+            ? (['left', 'right'] as const)
                 .map((side) =>
                   buildSegmentRailPath(
                     layout,
@@ -736,7 +732,7 @@ function buildStairRailPaths(
                     landingInset,
                   ),
                 )
-                .filter((entry): entry is StairRailSidePath => entry !== null))
+                .filter((entry): entry is StairRailSidePath => entry !== null)
             : sidePaths,
         connectFromPrevious:
           index > 0 &&
@@ -775,10 +771,20 @@ function buildStairRailPaths(
           nextAttachmentSide === railingMode
         : true
 
-    const sidePaths =
-      suppressLandingRailing
-        ? []
-        : segment.segmentType !== 'landing'
+    const sidePaths = suppressLandingRailing
+      ? []
+      : segment.segmentType !== 'landing'
+        ? [
+            buildSegmentRailPath(
+              layout,
+              railingMode,
+              previousSegment,
+              nextSegment,
+              inset,
+              landingInset,
+            ),
+          ]
+        : isStraightLineDoubleLandingLayout
           ? [
               buildSegmentRailPath(
                 layout,
@@ -789,19 +795,29 @@ function buildStairRailPaths(
                 landingInset,
               ),
             ]
-          : isStraightLineDoubleLandingLayout
-            ? [
-                buildSegmentRailPath(
-                  layout,
-                  railingMode,
-                  previousSegment,
-                  nextSegment,
-                  inset,
-                  landingInset,
-                ),
-              ]
-            : isMiddleLandingBetweenFlights && railingMode === 'left'
-              ? nextAttachmentSide === 'right'
+          : isMiddleLandingBetweenFlights && railingMode === 'left'
+            ? nextAttachmentSide === 'right'
+              ? [
+                  buildSegmentRailPath(
+                    layout,
+                    'front',
+                    previousSegment,
+                    nextSegment,
+                    inset,
+                    landingInset,
+                  ),
+                  buildSegmentRailPath(
+                    layout,
+                    'left',
+                    previousSegment,
+                    nextSegment,
+                    inset,
+                    landingInset,
+                  ),
+                ]
+              : []
+            : isMiddleLandingBetweenFlights && railingMode === 'right'
+              ? nextAttachmentSide === 'left'
                 ? [
                     buildSegmentRailPath(
                       layout,
@@ -813,7 +829,7 @@ function buildStairRailPaths(
                     ),
                     buildSegmentRailPath(
                       layout,
-                      'left',
+                      'right',
                       previousSegment,
                       nextSegment,
                       inset,
@@ -821,59 +837,38 @@ function buildStairRailPaths(
                     ),
                   ]
                 : []
-              : isMiddleLandingBetweenFlights && railingMode === 'right'
-                ? nextAttachmentSide === 'left'
-                  ? [
-                      buildSegmentRailPath(
-                        layout,
-                        'front',
-                        previousSegment,
-                        nextSegment,
-                        inset,
-                        landingInset,
-                      ),
-                      buildSegmentRailPath(
-                        layout,
-                        'right',
-                        previousSegment,
-                        nextSegment,
-                        inset,
-                        landingInset,
-                      ),
-                    ]
-                  : []
-                : nextSegment?.segmentType === 'landing' &&
-                    nextAttachmentSide != null &&
-                    nextAttachmentSide !== 'front' &&
-                    nextAttachmentSide !== railingMode
-                  ? [
-                      buildSegmentRailPath(
-                        layout,
-                        'front',
-                        previousSegment,
-                        nextSegment,
-                        inset,
-                        landingInset,
-                      ),
-                      buildSegmentRailPath(
-                        layout,
-                        railingMode,
-                        previousSegment,
-                        nextSegment,
-                        inset,
-                        landingInset,
-                      ),
-                    ]
-                  : [
-                      buildSegmentRailPath(
-                        layout,
-                        railingMode,
-                        previousSegment,
-                        nextSegment,
-                        inset,
-                        landingInset,
-                      ),
-                    ]
+              : nextSegment?.segmentType === 'landing' &&
+                  nextAttachmentSide != null &&
+                  nextAttachmentSide !== 'front' &&
+                  nextAttachmentSide !== railingMode
+                ? [
+                    buildSegmentRailPath(
+                      layout,
+                      'front',
+                      previousSegment,
+                      nextSegment,
+                      inset,
+                      landingInset,
+                    ),
+                    buildSegmentRailPath(
+                      layout,
+                      railingMode,
+                      previousSegment,
+                      nextSegment,
+                      inset,
+                      landingInset,
+                    ),
+                  ]
+                : [
+                    buildSegmentRailPath(
+                      layout,
+                      railingMode,
+                      previousSegment,
+                      nextSegment,
+                      inset,
+                      landingInset,
+                    ),
+                  ]
 
     resolved.push({
       segment,
@@ -919,10 +914,11 @@ function buildSegmentRailPath(
   const segmentStepDepth = segment.length / segmentSteps
   const segmentStepHeight = segment.segmentType === 'landing' ? 0 : segment.height / segmentSteps
   const segmentTopThickness = getSegmentTopThickness(segment)
-  const flightSideOffset =
-    side === 'left' ? segment.width / 2 - 0.045 : -segment.width / 2 + 0.045
+  const flightSideOffset = side === 'left' ? segment.width / 2 - 0.045 : -segment.width / 2 + 0.045
   const flightStartX =
-    previousSegment?.segmentType === 'landing' ? -segment.length / 2 + landingInset : -segment.length / 2
+    previousSegment?.segmentType === 'landing'
+      ? -segment.length / 2 + landingInset
+      : -segment.length / 2
   const flightEndX =
     nextSegment?.segmentType === 'landing' ? segment.length / 2 - landingInset : segment.length / 2
 
@@ -942,9 +938,7 @@ function buildSegmentRailPath(
     points: [
       ...(previousSegment?.segmentType === 'landing'
         ? []
-        : [
-            toRailLayoutWorldPoint(layout, flightStartX, segmentTopThickness, flightSideOffset),
-          ]),
+        : [toRailLayoutWorldPoint(layout, flightStartX, segmentTopThickness, flightSideOffset)]),
       ...Array.from({ length: segmentSteps }).map((_, index) =>
         toRailLayoutWorldPoint(
           layout,
@@ -955,9 +949,7 @@ function buildSegmentRailPath(
       ),
       ...(nextSegment?.segmentType === 'landing'
         ? []
-        : [
-            toRailLayoutWorldPoint(layout, flightEndX, segment.height, flightSideOffset),
-          ]),
+        : [toRailLayoutWorldPoint(layout, flightEndX, segment.height, flightSideOffset)]),
     ],
   }
 }

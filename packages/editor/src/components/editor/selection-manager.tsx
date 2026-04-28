@@ -424,11 +424,7 @@ function isHomeAssistantPairingModeActive() {
 }
 
 function isHomeAssistantPairingItem(node: AnyNode): node is ItemNode {
-  return (
-    node.type === 'item' &&
-    node.asset.category !== 'door' &&
-    node.asset.category !== 'window'
-  )
+  return node.type === 'item' && node.asset.category !== 'door' && node.asset.category !== 'window'
 }
 
 const HIGHLIGHT_PROFILES = {
@@ -1583,9 +1579,10 @@ const SelectionMaterialSync = () => {
 
           if (existingEntry.kind !== kind || !materialIsHighlighted) {
             disposeHighlightedMaterials(existingEntry.highlightedMaterial)
-            const originalMaterial = materialIsOriginal || materialIsHighlighted
-              ? existingEntry.originalMaterial
-              : child.material
+            const originalMaterial =
+              materialIsOriginal || materialIsHighlighted
+                ? existingEntry.originalMaterial
+                : child.material
             const highlightedMaterial = createHighlightedMaterials(originalMaterial, kind)
             child.material = highlightedMaterial
             highlightedMaterialsRef.current.set(child, {
@@ -1640,7 +1637,14 @@ const SelectionMaterialSync = () => {
 
     activeHighlightKindsRef.current = nextHighlightKinds
     syncSelectionMaterials()
-  }, [hoverHighlightMode, hoveredId, hoveredIds, previewSelectedIds, selectedIds, syncSelectionMaterials])
+  }, [
+    hoverHighlightMode,
+    hoveredId,
+    hoveredIds,
+    previewSelectedIds,
+    selectedIds,
+    syncSelectionMaterials,
+  ])
 
   useEffect(() => {
     return useScene.subscribe((state, prevState) => {

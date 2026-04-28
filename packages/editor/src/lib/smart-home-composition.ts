@@ -2,6 +2,7 @@ import type {
   CollectionId,
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
+  HomeAssistantRoomControlComposition,
 } from '@pascal-app/core/schema'
 import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
 
@@ -28,6 +29,99 @@ export function normalizeSmartHomeStringGroups(value: unknown) {
     .filter(Array.isArray)
     .map((group) => group.filter((entry): entry is string => typeof entry === 'string'))
     .filter((group) => group.length > 0)
+}
+
+export function getSmartHomeExcludedResourceIds(
+  presentation: HomeAssistantCollectionBinding['presentation'],
+) {
+  return (
+    presentation?.rtsRoomControls?.excludedResourceIds ?? presentation?.rtsExcludedResourceIds ?? []
+  )
+}
+
+export function isSmartHomeBindingPresentationHidden(
+  presentation: HomeAssistantCollectionBinding['presentation'],
+) {
+  return presentation?.rtsHidden === true
+}
+
+export function getSmartHomeRoomControlResourceGroups(
+  presentation: HomeAssistantCollectionBinding['presentation'],
+) {
+  return presentation?.rtsRoomControls?.groups?.map((group) => group.memberResourceIds) ?? []
+}
+
+export function getSmartHomeRoomControlTileGroups({
+  collectionId,
+  presentation,
+}: {
+  collectionId: CollectionId | string
+  presentation: HomeAssistantCollectionBinding['presentation']
+}) {
+  const resourceGroups = getSmartHomeRoomControlResourceGroups(presentation)
+  if (resourceGroups.length > 0) {
+    return resourceGroups.map((group) =>
+      group.map((resourceId) => getSmartHomeRoomControlTileId(collectionId, resourceId)),
+    )
+  }
+
+  return normalizeSmartHomeStringGroups(presentation?.rtsGroups)
+}
+
+export function buildSmartHomeRoomControlCompositionFromTileGroups({
+  collectionId,
+  excludedResourceIds = [],
+  groups,
+  resources = [],
+}: {
+  collectionId: CollectionId | string
+  excludedResourceIds?: readonly string[]
+  groups: string[][]
+  resources?: readonly HomeAssistantResourceBinding[]
+}): HomeAssistantRoomControlComposition | undefined {
+  const resourceAliases = new Map<string, string>()
+  for (const resource of resources) {
+    const currentTileId = getSmartHomeRoomControlTileId(collectionId, resource.id)
+    const legacyTileId = getLegacySmartHomeRoomControlTileId(collectionId, resource.id)
+    resourceAliases.set(currentTileId, resource.id)
+    resourceAliases.set(legacyTileId, resource.id)
+    resourceAliases.set(`${currentTileId}:0`, resource.id)
+    resourceAliases.set(`${legacyTileId}:0`, resource.id)
+  }
+
+  const resourceGroups = groups
+    .map((group, index) => {
+      const memberResourceIds = Array.from(
+        new Set(
+          group
+            .map((memberId) => {
+              const canonicalMemberId = memberId.replace(/:\d+$/, '')
+              return (
+                resourceAliases.get(memberId) ??
+                resourceAliases.get(canonicalMemberId) ??
+                getSmartHomeRoomGroupMemberResourceId(collectionId, memberId)
+              )
+            })
+            .filter((resourceId): resourceId is string => Boolean(resourceId)),
+        ),
+      )
+
+      return {
+        id: `group-${index + 1}`,
+        memberResourceIds,
+      }
+    })
+    .filter((group) => group.memberResourceIds.length > 0)
+  const excluded = Array.from(new Set(excludedResourceIds))
+
+  if (resourceGroups.length === 0 && excluded.length === 0) {
+    return undefined
+  }
+
+  return {
+    ...(excluded.length > 0 ? { excludedResourceIds: excluded } : {}),
+    ...(resourceGroups.length > 0 ? { groups: resourceGroups } : {}),
+  }
 }
 
 export function cloneSmartHomeResourceBinding(
@@ -186,10 +280,7 @@ export function isDefaultSmartHomeRoomGroupForBinding(
   collectionId: CollectionId | string,
   resources: HomeAssistantResourceBinding[],
 ) {
-  return isDefaultSmartHomeRoomGroup(
-    groups,
-    getSmartHomeBindingControlIds(collectionId, resources),
-  )
+  return isDefaultSmartHomeRoomGroup(groups, getSmartHomeBindingControlIds(collectionId, resources))
 }
 
 export function smartHomeRoomGroupsCoverBindingControls(
@@ -285,7 +376,9 @@ export function getSmartHomeGroupMemberDeviceResourceIds({
   resources: HomeAssistantResourceBinding[]
 }) {
   const memberEntityIds = new Set(
-    resources.filter(isSmartHomeGroupResource).flatMap((resource) => resource.memberEntityIds ?? []),
+    resources
+      .filter(isSmartHomeGroupResource)
+      .flatMap((resource) => resource.memberEntityIds ?? []),
   )
   const resourceIds = new Set<string>()
 
@@ -339,14 +432,12 @@ export function repairHomeAssistantBindingResourcesFromGroups({
     groupMemberDeviceResourceIds.delete(resourceId)
   }
 
-  const referencedDeviceResourceIds = new Set(
-    [
-      ...Array.from(referencedResourceIds).filter((resourceId) =>
-        isSmartHomeDeviceComponentResource(allResourcesById.get(resourceId)),
-      ),
-      ...groupMemberDeviceResourceIds,
-    ],
-  )
+  const referencedDeviceResourceIds = new Set([
+    ...Array.from(referencedResourceIds).filter((resourceId) =>
+      isSmartHomeDeviceComponentResource(allResourcesById.get(resourceId)),
+    ),
+    ...groupMemberDeviceResourceIds,
+  ])
   if (referencedDeviceResourceIds.size === 0) {
     return binding
   }
@@ -379,7 +470,7 @@ export function repairHomeAssistantBindingResourcesFromGroups({
 
   const nextExcludedResourceIds = Array.from(
     new Set([
-      ...(binding.presentation?.rtsExcludedResourceIds ?? []).filter(
+      ...getSmartHomeExcludedResourceIds(binding.presentation).filter(
         (resourceId) => !referencedDeviceResourceIds.has(resourceId),
       ),
       ...Array.from(currentControlResourceIds).filter(
@@ -397,14 +488,24 @@ export function repairHomeAssistantBindingResourcesFromGroups({
     collectionId: binding.collectionId,
     presentation: {
       ...(binding.presentation ?? {}),
-      ...(nextExcludedResourceIds.length > 0
-        ? { rtsExcludedResourceIds: nextExcludedResourceIds }
-        : { rtsExcludedResourceIds: undefined }),
+      rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
+        collectionId,
+        excludedResourceIds: nextExcludedResourceIds,
+        groups: getSmartHomeRoomControlTileGroups({
+          collectionId,
+          presentation: binding.presentation,
+        }),
+        resources: nextResources,
+      }),
+      rtsExcludedResourceIds: undefined,
+      rtsGroups: undefined,
     },
     primaryResourceId:
       binding.primaryResourceId && nextResourcesById.has(binding.primaryResourceId)
         ? binding.primaryResourceId
-        : (nextResources.find(isSmartHomeDeviceComponentResource)?.id ?? nextResources[0]?.id ?? null),
+        : (nextResources.find(isSmartHomeDeviceComponentResource)?.id ??
+          nextResources[0]?.id ??
+          null),
     resources: nextResources,
   })
 

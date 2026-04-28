@@ -1,14 +1,11 @@
 'use client'
 
 import {
-  type AnyNode,
   type AnyNodeId,
-  type Collection,
   type CollectionId,
   type Control,
   type ControlValue,
   type ItemNode,
-  resolveLevelId,
   sceneRegistry,
   useInteractive,
   useScene,
@@ -27,23 +24,7 @@ import {
 import { createPortal } from 'react-dom'
 import { type Object3D, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import type {
-  HomeAssistantActionRequest,
-  HomeAssistantCollectionBinding,
-  HomeAssistantCollectionBindingMap,
-  HomeAssistantCollectionCapability,
-  HomeAssistantResourceBinding,
-} from '../../lib/home-assistant-bindings'
-import {
-  getHomeAssistantBindingNodeMap,
-  getHomeAssistantBindingCapabilities,
-  getHomeAssistantBindingDisplayLabel,
-  hasHomeAssistantBinding,
-  HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT,
-  isHomeAssistantTriggerBinding,
-  normalizeHomeAssistantCollectionBinding,
-} from '../../lib/home-assistant-bindings'
-import useViewer, { type HomeAssistantOverlayVisibility } from '../../store/use-viewer'
+import useViewer from '../../store/use-viewer'
 
 const PANEL_CLOSED_MIN_WIDTH = 56
 const PANEL_CLOSED_MAX_WIDTH = 240
@@ -65,6 +46,7 @@ const PANEL_MAX_COLUMNS = 8
 const PANEL_PREFERRED_MAX_ROWS = 3
 const LINE_GAP = 4
 const LINE_END_MARGIN = 12
+const ROOM_CONTROL_PILL_WORLD_HEIGHT = 3.5
 const OFFSCREEN_MARGIN = 64
 const POSITIONED_SCREEN_STICK_HEIGHT = 72
 const WORLD_POSITIONED_LINE_VISIBLE_RATIO = 0.5
@@ -425,12 +407,13 @@ const editModeAnimationCss = `
 }
 `
 
-type RoomControlTile = {
-  collectionBinding?: HomeAssistantCollectionBinding
+export type RoomControlTile = {
+  canDetachFromRoom?: boolean
   collectionId: CollectionId
   collectionLabel: string
   control: Control
   controlIndex: number
+  directActionMode?: 'toggle' | 'trigger' | null
   disabled?: boolean
   id: string
   intensityControl: Extract<Control, { kind: 'slider' }> | null
@@ -443,7 +426,7 @@ type RoomControlTile = {
   resourceId?: string
 }
 
-type RoomControlIntensityTile = RoomControlTile & {
+export type RoomControlIntensityTile = RoomControlTile & {
   intensityControl: Extract<Control, { kind: 'slider' }>
   intensityControlIndex: number
 }
@@ -460,10 +443,9 @@ type GroupVisualSegment = {
   itemKind: string
 }
 
-type RoomControlGroupKind = 'toggle' | 'numeric' | 'mixed'
+export type RoomControlGroupKind = 'toggle' | 'numeric' | 'mixed'
 
-type RoomControlGroup = {
-  binding?: HomeAssistantCollectionBinding
+export type RoomControlGroup = {
   collectionId?: CollectionId
   controlKind: RoomControlGroupKind
   displayName?: string
@@ -479,7 +461,7 @@ type PanelBodyMetrics = {
   rows: number
 }
 
-type RoomOverlayNode = {
+export type RoomOverlayNode = {
   anchorNodeIds: AnyNodeId[]
   controlGroups: RoomControlGroup[]
   id: string
@@ -569,14 +551,23 @@ type RoomControlLookupEntry = {
   source: 'primary' | 'intensity'
 }
 
-export type HomeAssistantDeviceActionDispatch = {
-  binding: HomeAssistantCollectionBinding
-  collectionName: string
-  request: HomeAssistantActionRequest
+export type RoomControlChangeSource = RoomControlLookupEntry['source']
+
+export type RoomControlChange = {
+  member: RoomControlTile
+  nextValue: ControlValue
+  source: RoomControlChangeSource
 }
 
-type InteractiveSystemProps = {
-  onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
+export type InteractiveSystemProps = {
+  onApplyRoomGrouping?: (roomId: string, nextGroups: string[][]) => void
+  onCopyRoomControlToRoom?: (
+    sourceCollectionId: CollectionId,
+    targetCollectionId: CollectionId,
+  ) => void
+  onRemoveRoomControlFromRoom?: (member: RoomControlTile) => void
+  onRoomControlChange?: (payload: RoomControlChange) => void
+  roomOverlayNodes?: RoomOverlayNode[]
 }
 
 const projectToViewportOrigin = () => [0, 0] as [number, number]
@@ -654,22 +645,19 @@ const getReorderPlacement = (
   return { placeAfter, ready }
 }
 
-export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSystemProps = {}) => {
+export const InteractiveSystem = ({
+  onApplyRoomGrouping,
+  onCopyRoomControlToRoom,
+  onRemoveRoomControlFromRoom,
+  onRoomControlChange,
+  roomOverlayNodes = [],
+}: InteractiveSystemProps = {}) => {
   const theme = useViewer((state) => state.theme)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const setHoveredIds = useViewer((state) => state.setHoveredIds)
-  const homeAssistantOverlayVisibility = useViewer(
-    (state) => state.homeAssistantOverlayVisibility,
-  )
   const sceneNodes = useScene((state) => state.nodes)
-  const sceneCollections = useScene((state) => state.collections ?? {})
-  const updateNode = useScene((state) => state.updateNode)
-  const homeAssistantBindings = useMemo(
-    () => getHomeAssistantBindingNodeMap(sceneNodes),
-    [sceneNodes],
-  )
   const interactiveNodes = useScene(
     useShallow((state) =>
       Object.values(state.nodes).filter(
@@ -686,7 +674,6 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
 
   const domRefsRef = useRef<Record<string, OverlayDomRefs>>({})
   const layoutRef = useRef<Record<string, OverlayLayout>>({})
-  const pendingCollectionActionTimeoutsRef = useRef<Record<string, number>>({})
 
   useEffect(() => {
     for (const node of interactiveNodes) {
@@ -697,87 +684,6 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
       }
     }
   }, [initItem, interactiveNodes])
-
-  const roomOverlayNodes = useMemo<RoomOverlayNode[]>(
-    () =>
-      Object.values(sceneCollections)
-        .filter((collection) => {
-          const binding = homeAssistantBindings[collection.id]
-          const derivedWorldPosition = getCollectionRelatedGroupWorldPosition(
-            collection,
-            binding,
-            sceneCollections,
-            homeAssistantBindings,
-            sceneNodes,
-          )
-          return (
-            collectionHasBoundResources(collection, homeAssistantBindings) &&
-            isHomeAssistantOverlayBindingVisible(binding, homeAssistantOverlayVisibility) &&
-            (isCollectionVisibleOnSelectedLevel(collection, sceneNodes, selectedLevelId) ||
-              Boolean(
-                binding?.presentation?.rtsWorldPosition ||
-                  binding?.presentation?.rtsScreenPosition ||
-                  derivedWorldPosition,
-              ))
-          )
-        })
-        .sort((left, right) => compareCollectionsForRoom(left, right, homeAssistantBindings))
-        .map((collection) => {
-          const binding = homeAssistantBindings[collection.id]
-          const iconOnly = isIconOnlyDeviceCollection(collection, binding)
-          const derivedWorldPosition = getCollectionRelatedGroupWorldPosition(
-            collection,
-            binding,
-            sceneCollections,
-            homeAssistantBindings,
-            sceneNodes,
-          )
-          const worldPosition =
-            binding?.presentation?.rtsWorldPosition ??
-            (binding?.presentation?.rtsScreenPosition
-              ? undefined
-              : (derivedWorldPosition ?? undefined))
-          const roomControls = buildCollectionRoomControlTiles(
-            collection,
-            binding,
-            sceneNodes,
-            sceneCollections,
-            homeAssistantBindings,
-            Boolean(worldPosition || binding?.presentation?.rtsScreenPosition),
-          )
-          const defaultGroups =
-            roomControls.length > 0 ? [roomControls.map((control) => control.id)] : []
-          const presentationGroups = normalizeRoomControlGroupList(binding?.presentation?.rtsGroups)
-          const storedGroups = selectRoomControlGroupSource(
-            roomControls,
-            presentationGroups,
-            defaultGroups,
-          )
-          return {
-            controlGroups: buildRoomControlGroups(roomControls, storedGroups),
-            id: collection.id,
-            anchorNodeIds: getCollectionAnchorNodeIds(collection, roomControls, sceneNodes),
-            iconOnly,
-            roomName: getCollectionDisplayName(collection, homeAssistantBindings),
-            screenPosition: binding?.presentation?.rtsScreenPosition,
-            totalSlotCount: roomControls.length,
-            worldPosition,
-          }
-        })
-        .filter(
-          (overlayNode) =>
-            overlayNode.anchorNodeIds.length > 0 ||
-            overlayNode.totalSlotCount > 0 ||
-            Boolean(overlayNode.worldPosition || overlayNode.screenPosition),
-        ),
-    [
-      homeAssistantBindings,
-      homeAssistantOverlayVisibility,
-      sceneCollections,
-      sceneNodes,
-      selectedLevelId,
-    ],
-  )
 
   useEffect(() => {
     for (const roomOverlayNode of roomOverlayNodes) {
@@ -804,7 +710,8 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
             member.linkedItemId &&
             member.linkedItemId !== member.itemId &&
             sceneNodes[member.linkedItemId]?.type === 'item' &&
-            ((sceneNodes[member.linkedItemId] as ItemNode).asset.interactive?.controls.length ?? 0) === 0
+            ((sceneNodes[member.linkedItemId] as ItemNode).asset.interactive?.controls.length ??
+              0) === 0
           ) {
             initItem(member.linkedItemId, interactive)
           }
@@ -910,90 +817,6 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
     return lookup
   }, [roomOverlayNodes])
 
-  useEffect(
-    () => () => {
-      if (typeof window === 'undefined') {
-        return
-      }
-      for (const timeoutId of Object.values(pendingCollectionActionTimeoutsRef.current)) {
-        window.clearTimeout(timeoutId)
-      }
-      pendingCollectionActionTimeoutsRef.current = {}
-    },
-    [],
-  )
-
-  const scheduleCollectionAction = (
-    member: RoomControlTile,
-    nextValue: ControlValue,
-    source: RoomControlLookupEntry['source'],
-  ) => {
-    if (member.disabled) {
-      return
-    }
-
-    const collection = sceneCollections[member.collectionId]
-    const binding = homeAssistantBindings[member.collectionId]
-    if (!(collection && binding) || typeof window === 'undefined') {
-      return
-    }
-
-    const actionBinding = getActionBindingForMember(binding, member)
-    if (!actionBinding) {
-      return
-    }
-
-    const request = buildCollectionActionRequest(actionBinding, member, nextValue, source)
-    if (!request) {
-      return
-    }
-
-    const visualItemId = member.linkedItemId ?? member.itemId
-    if (
-      source === 'primary' &&
-      member.itemKind === 'tv' &&
-      sceneNodes[visualItemId]?.type === 'item'
-    ) {
-      const viewer = useViewer.getState()
-      if (request.kind === 'toggle') {
-        if (request.value) {
-          viewer.triggerHomeAssistantItemEffect(visualItemId)
-        } else {
-          viewer.clearHomeAssistantItemEffect(visualItemId)
-        }
-      } else if (request.kind === 'trigger') {
-        viewer.triggerHomeAssistantItemEffect(visualItemId)
-      }
-    }
-
-    const existingTimeoutId = pendingCollectionActionTimeoutsRef.current[member.collectionId]
-    if (existingTimeoutId) {
-      window.clearTimeout(existingTimeoutId)
-    }
-
-    const delayMs = request.kind === 'range' ? 120 : 0
-    pendingCollectionActionTimeoutsRef.current[member.collectionId] = window.setTimeout(() => {
-      if (onHomeAssistantDeviceAction) {
-        void Promise.resolve(
-          onHomeAssistantDeviceAction({
-            binding: actionBinding,
-            collectionName: getCollectionDisplayName(collection, homeAssistantBindings),
-            request,
-          }),
-        ).catch(() => {})
-      }
-      if (request.kind === 'trigger' && member.control.kind === 'toggle') {
-        window.setTimeout(() => {
-          setControlValue(member.itemId, member.controlIndex, false)
-          if (member.linkedItemId && member.linkedItemId !== member.itemId) {
-            setControlValue(member.linkedItemId, member.controlIndex, false)
-          }
-        }, 220)
-      }
-      delete pendingCollectionActionTimeoutsRef.current[member.collectionId]
-    }, delayMs)
-  }
-
   const handleCollectionControlChange = (
     itemId: AnyNodeId,
     controlIndex: number,
@@ -1008,166 +831,12 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
     if (lookupEntry.member.linkedItemId && lookupEntry.member.linkedItemId !== itemId) {
       setControlValue(lookupEntry.member.linkedItemId, controlIndex, nextValue)
     }
-    scheduleCollectionAction(lookupEntry.member, nextValue, lookupEntry.source)
+    onRoomControlChange?.({
+      member: lookupEntry.member,
+      nextValue,
+      source: lookupEntry.source,
+    })
   }
-
-  const applyRoomGroupingToCollection = useCallback(
-    (collectionId: CollectionId, nextGroups: string[][]) => {
-      const normalizedGroups = normalizeRoomControlGroupList(nextGroups)
-
-      const bindingNode = homeAssistantBindings[collectionId]
-      if (!bindingNode) {
-        return
-      }
-
-      updateNode(bindingNode.id, {
-        presentation: {
-          ...(bindingNode.presentation ?? {}),
-          rtsGroups: normalizedGroups,
-        },
-      } as Partial<AnyNode>)
-      requestSceneImmediateSave()
-    },
-    [homeAssistantBindings, updateNode],
-  )
-
-  const copyDeviceResourceToGroup = useCallback(
-    (sourceCollectionId: CollectionId, targetCollectionId: CollectionId) => {
-      if (sourceCollectionId === targetCollectionId) {
-        return
-      }
-
-      const sourceBinding = homeAssistantBindings[sourceCollectionId]
-      const targetBindingNode = homeAssistantBindings[targetCollectionId]
-      if (!(sourceBinding && targetBindingNode && bindingHasGroupResource(targetBindingNode))) {
-        return
-      }
-
-      const sourceResource = sourceBinding.resources.find(isHomeAssistantDeviceComponentResource)
-      if (!sourceResource) {
-        return
-      }
-
-      if (targetBindingNode.resources.some((resource) => resource.id === sourceResource.id)) {
-        return
-      }
-
-      const existingGroups = normalizeRoomControlGroupList(
-        targetBindingNode.presentation?.rtsGroups,
-      )
-      const targetDeviceResources =
-        targetBindingNode.resources.filter(isHomeAssistantDeviceComponentResource)
-      const existingCombinedGroup =
-        targetDeviceResources.length > 0
-          ? targetDeviceResources.map((resource) =>
-              getRoomControlTileId(targetCollectionId, resource.id),
-            )
-          : []
-      const baseGroups =
-        existingGroups.length > 0
-          ? existingGroups
-          : existingCombinedGroup.length > 0
-              ? [existingCombinedGroup]
-              : []
-      const copiedMemberId = getRoomControlTileId(targetCollectionId, sourceResource.id)
-      const nextRtsGroups = [
-        ...baseGroups
-          .map((group) => group.filter((memberId) => memberId !== copiedMemberId))
-          .filter((group) => group.length > 0),
-        [copiedMemberId],
-      ]
-      const currentPrimaryResource = targetBindingNode.resources.find(
-        (resource) => resource.id === targetBindingNode.primaryResourceId,
-      )
-      const nextBinding = normalizeHomeAssistantCollectionBinding({
-        aggregation: 'all',
-        collectionId: targetBindingNode.collectionId,
-        presentation: {
-          ...(targetBindingNode.presentation ?? {}),
-          rtsExcludedResourceIds: (
-            targetBindingNode.presentation?.rtsExcludedResourceIds ?? []
-          ).filter((resourceId) => resourceId !== sourceResource.id),
-          rtsGroups: nextRtsGroups,
-        },
-        primaryResourceId: isHomeAssistantDeviceComponentResource(currentPrimaryResource)
-          ? (currentPrimaryResource?.id ?? sourceResource.id)
-          : sourceResource.id,
-        resources: [
-          ...targetBindingNode.resources,
-          cloneHomeAssistantResourceBinding(sourceResource),
-        ],
-      })
-
-      if (!nextBinding) {
-        return
-      }
-
-      updateNode(targetBindingNode.id, nextBinding as Partial<AnyNode>)
-      requestSceneImmediateSave()
-    },
-    [homeAssistantBindings, updateNode],
-  )
-
-  const removeDeviceResourceFromGroup = useCallback(
-    (member: RoomControlTile) => {
-      if (!member.resourceId) {
-        return
-      }
-
-      const currentBindings = getHomeAssistantBindingNodeMap(useScene.getState().nodes)
-      const bindingNode = currentBindings[member.collectionId]
-      if (!(bindingNode && bindingHasGroupResource(bindingNode))) {
-        return
-      }
-
-      const removedResource = bindingNode.resources.find(
-        (resource) => resource.id === member.resourceId,
-      )
-      if (!removedResource || !isHomeAssistantDeviceComponentResource(removedResource)) {
-        return
-      }
-
-      const nextResources = bindingNode.resources.filter(
-        (resource) => resource.id !== removedResource.id,
-      )
-      const nextDeviceResources = nextResources.filter(isHomeAssistantDeviceComponentResource)
-      const nextPrimaryResourceId =
-        bindingNode.primaryResourceId === removedResource.id
-          ? (nextDeviceResources[0]?.id ?? nextResources[0]?.id ?? null)
-          : (bindingNode.primaryResourceId ??
-            nextDeviceResources[0]?.id ??
-            nextResources[0]?.id ??
-            null)
-      const nextExcludedResourceIds = Array.from(
-        new Set([
-          ...(bindingNode.presentation?.rtsExcludedResourceIds ?? []),
-          removedResource.id,
-        ]),
-      )
-      const nextBinding = normalizeHomeAssistantCollectionBinding({
-        aggregation: nextResources.some((resource) => resource.kind !== 'entity')
-          ? 'trigger_only'
-          : nextDeviceResources.length > 1
-            ? 'all'
-            : 'single',
-        collectionId: bindingNode.collectionId,
-        presentation: {
-          ...(bindingNode.presentation ?? {}),
-          rtsExcludedResourceIds: nextExcludedResourceIds,
-        },
-        primaryResourceId: nextPrimaryResourceId,
-        resources: nextResources,
-      })
-
-      if (!nextBinding) {
-        return
-      }
-
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
-      requestSceneImmediateSave()
-    },
-    [updateNode],
-  )
 
   useFrame(({ camera, size }) => {
     if (roomOverlayNodes.length === 0) {
@@ -1244,7 +913,7 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
       if (roomOverlayNode.worldPosition) {
         _anchor.set(
           roomOverlayNode.worldPosition.x,
-          roomOverlayNode.worldPosition.y + HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT,
+          roomOverlayNode.worldPosition.y + ROOM_CONTROL_PILL_WORLD_HEIGHT,
           roomOverlayNode.worldPosition.z,
         )
         _groundProjected
@@ -1279,12 +948,7 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
         Math.max(collapsedPanelTop, 14),
         Math.max(14, size.height - metrics.height - PANEL_BOTTOM_MARGIN),
       )
-      const centerDistanceRatio = getRoomPanelCenterDistanceRatio(
-        x,
-        panelTop,
-        metrics.height,
-        size,
-      )
+      const centerDistanceRatio = getRoomPanelCenterDistanceRatio(x, panelTop, metrics.height, size)
       const centerDistanceLimit = open
         ? ROOM_PANEL_OPEN_CENTER_DISTANCE_LIMIT
         : ROOM_PANEL_CENTER_DISTANCE_LIMIT
@@ -1368,10 +1032,12 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
               editing={editingRoomId === roomOverlayNode.id}
               isOpen={openRoomId === roomOverlayNode.id}
               onApplyGrouping={(nextGroups) =>
-                applyRoomGroupingToCollection(roomOverlayNode.id as CollectionId, nextGroups)
+                onApplyRoomGrouping?.(roomOverlayNode.id, nextGroups)
               }
               onChange={handleCollectionControlChange}
-              onCopyDeviceToGroup={copyDeviceResourceToGroup}
+              onCopyDeviceToGroup={(sourceCollectionId, targetCollectionId) =>
+                onCopyRoomControlToRoom?.(sourceCollectionId, targetCollectionId)
+              }
               onOpenIntoEdit={() => {
                 setOpenRoomId(roomOverlayNode.id)
                 setEditingRoomId(roomOverlayNode.id)
@@ -1384,7 +1050,7 @@ export const InteractiveSystem = ({ onHomeAssistantDeviceAction }: InteractiveSy
                   clearHoveredItemTargets()
                 }
               }}
-              onRemoveDeviceFromGroup={removeDeviceResourceFromGroup}
+              onRemoveDeviceFromGroup={(member) => onRemoveRoomControlFromRoom?.(member)}
               refsStore={domRefsRef.current}
               roomId={roomOverlayNode.id}
               roomName={roomOverlayNode.roomName}
@@ -1489,20 +1155,12 @@ const RoomPanel = ({
         collapsedDirectControlMember.controlIndex
       ]
     : undefined
-  const collapsedDirectBinding =
-    collapsedDirectControlMember?.collectionBinding ?? collapsedDirectControlGroup?.binding ?? null
-  const collapsedBindingCapabilities = useMemo(
-    () => getHomeAssistantBindingCapabilities(collapsedDirectBinding),
-    [collapsedDirectBinding],
-  )
-  const collapsedDirectCanTrigger =
-    collapsedDirectBinding?.aggregation === 'trigger_only' ||
-    (collapsedBindingCapabilities.has('trigger') && !collapsedBindingCapabilities.has('power'))
+  const collapsedDirectCanTrigger = collapsedDirectControlMember?.directActionMode === 'trigger'
   const collapsedDirectCanToggle =
-    collapsedDirectControlMember?.control.kind === 'toggle' &&
-    (iconOnly ||
-      (!collapsedDirectControlMember.intensityControl &&
-        !collapsedBindingCapabilities.has('brightness')))
+    collapsedDirectControlMember?.directActionMode === 'toggle' ||
+    (collapsedDirectControlMember?.control.kind === 'toggle' &&
+      iconOnly &&
+      collapsedDirectControlMember.directActionMode !== 'trigger')
   const collapsedDirectActionMode = collapsedDirectControlDisabled
     ? null
     : collapsedDirectCanTrigger
@@ -1537,36 +1195,39 @@ const RoomPanel = ({
     ? collapsedDirectControlDisabled || !collapsedDirectActionMode
     : collapsedGroupDisabled
 
-  const clearLongPress = () => {
+  const clearLongPress = useCallback(() => {
     if (typeof window !== 'undefined' && longPressTimeoutRef.current !== null) {
       window.clearTimeout(longPressTimeoutRef.current)
     }
     longPressTimeoutRef.current = null
     longPressRef.current = null
-  }
+  }, [])
 
-  const clearCollapsedClickTimeout = () => {
+  const clearCollapsedClickTimeout = useCallback(() => {
     if (typeof window !== 'undefined' && collapsedClickTimeoutRef.current !== null) {
       window.clearTimeout(collapsedClickTimeoutRef.current)
     }
     collapsedClickTimeoutRef.current = null
-  }
+  }, [])
 
-  const clearSuppressedClick = () => {
+  const clearSuppressedClick = useCallback(() => {
     if (typeof window !== 'undefined' && suppressedClickTimeoutRef.current !== null) {
       window.clearTimeout(suppressedClickTimeoutRef.current)
     }
     suppressedClickTimeoutRef.current = null
     suppressedClickRef.current = null
-  }
+  }, [])
 
-  const applyRoomGrouping = useCallback((nextGroups: string[][]) => {
-    const normalizedGroups = nextGroups.filter((group) => group.length > 0)
-    lastAppliedGroupingRef.current = normalizedGroups
-    onApplyGrouping(normalizedGroups)
-  }, [onApplyGrouping])
+  const applyRoomGrouping = useCallback(
+    (nextGroups: string[][]) => {
+      const normalizedGroups = nextGroups.filter((group) => group.length > 0)
+      lastAppliedGroupingRef.current = normalizedGroups
+      onApplyGrouping(normalizedGroups)
+    },
+    [onApplyGrouping],
+  )
 
-  const scheduleSuppressedClickReset = (key: string) => {
+  const scheduleSuppressedClickReset = useCallback((key: string) => {
     if (typeof window === 'undefined') {
       return
     }
@@ -1579,19 +1240,22 @@ const RoomPanel = ({
       }
       suppressedClickTimeoutRef.current = null
     }, LONG_PRESS_CLICK_SUPPRESS_MS)
-  }
+  }, [])
 
-  const consumeSuppressedClick = (key: string) => {
-    if (suppressedClickRef.current !== key) {
-      return false
-    }
-    clearSuppressedClick()
-    return true
-  }
+  const consumeSuppressedClick = useCallback(
+    (key: string) => {
+      if (suppressedClickRef.current !== key) {
+        return false
+      }
+      clearSuppressedClick()
+      return true
+    },
+    [clearSuppressedClick],
+  )
 
-  const suppressEditExitActions = () => {
+  const suppressEditExitActions = useCallback(() => {
     editExitActionSuppressedUntilRef.current = Date.now() + EDIT_EXIT_ACTION_SUPPRESS_MS
-  }
+  }, [])
 
   const shouldSuppressEditExitAction = () => editExitActionSuppressedUntilRef.current > Date.now()
 
@@ -1707,50 +1371,56 @@ const RoomPanel = ({
     clearLongPress()
   }
 
-  const clearPendingExpand = () => {
+  const clearPendingExpand = useCallback(() => {
     if (typeof window !== 'undefined' && expandTimeoutRef.current !== null) {
       window.clearTimeout(expandTimeoutRef.current)
     }
     expandTimeoutRef.current = null
     pendingExpandRef.current = null
     setPendingExpand(null)
-  }
+  }, [])
 
-  const startGroupDrag = (groupId: string, clientX: number, clientY: number) => {
-    clearPendingExpand()
-    const nextDragState = {
-      startedAt: Date.now(),
-      startX: clientX,
-      startY: clientY,
-      pointerX: clientX,
-      pointerY: clientY,
-      dropTargetGroupId: null,
-      placeAfterTarget: false,
-      sourceGroupId: groupId,
-      sourceMemberId: null,
-      targetGroupId: null,
-    }
-    dragStateRef.current = nextDragState
-    setDragState(nextDragState)
-  }
+  const startGroupDrag = useCallback(
+    (groupId: string, clientX: number, clientY: number) => {
+      clearPendingExpand()
+      const nextDragState = {
+        startedAt: Date.now(),
+        startX: clientX,
+        startY: clientY,
+        pointerX: clientX,
+        pointerY: clientY,
+        dropTargetGroupId: null,
+        placeAfterTarget: false,
+        sourceGroupId: groupId,
+        sourceMemberId: null,
+        targetGroupId: null,
+      }
+      dragStateRef.current = nextDragState
+      setDragState(nextDragState)
+    },
+    [clearPendingExpand],
+  )
 
-  const startMemberDrag = (groupId: string, memberId: string, clientX: number, clientY: number) => {
-    clearPendingExpand()
-    const nextDragState = {
-      startedAt: Date.now(),
-      startX: clientX,
-      startY: clientY,
-      pointerX: clientX,
-      pointerY: clientY,
-      dropTargetGroupId: null,
-      placeAfterTarget: false,
-      sourceGroupId: groupId,
-      sourceMemberId: memberId,
-      targetGroupId: null,
-    }
-    dragStateRef.current = nextDragState
-    setDragState(nextDragState)
-  }
+  const startMemberDrag = useCallback(
+    (groupId: string, memberId: string, clientX: number, clientY: number) => {
+      clearPendingExpand()
+      const nextDragState = {
+        startedAt: Date.now(),
+        startX: clientX,
+        startY: clientY,
+        pointerX: clientX,
+        pointerY: clientY,
+        dropTargetGroupId: null,
+        placeAfterTarget: false,
+        sourceGroupId: groupId,
+        sourceMemberId: memberId,
+        targetGroupId: null,
+      }
+      dragStateRef.current = nextDragState
+      setDragState(nextDragState)
+    },
+    [clearPendingExpand],
+  )
 
   const startDeviceIconDrag = (
     member: RoomControlTile,
@@ -1770,6 +1440,19 @@ const RoomPanel = ({
     deviceIconDragStateRef.current = nextState
     setDeviceIconDragState(nextState)
   }
+
+  const exitEditMode = useCallback(() => {
+    onApplyGrouping(
+      lastAppliedGroupingRef.current ??
+        orderedGroups
+          .map((group) => group.members.map((member) => member.id))
+          .filter((group) => group.length > 0),
+    )
+    clearPendingExpand()
+    setExpandedGroupId(null)
+    clearHoveredItemTargets()
+    onSetEditing(false)
+  }, [clearHoveredItemTargets, clearPendingExpand, onApplyGrouping, onSetEditing, orderedGroups])
 
   useEffect(() => {
     setOrderedGroupIds((current) =>
@@ -1793,7 +1476,7 @@ const RoomPanel = ({
     () => () => {
       clearCollapsedClickTimeout()
     },
-    [],
+    [clearCollapsedClickTimeout],
   )
 
   useEffect(() => {
@@ -1927,7 +1610,14 @@ const RoomPanel = ({
       window.removeEventListener('pointerup', handlePointerFinish)
       window.removeEventListener('pointercancel', handlePointerFinish)
     }
-  }, [editing, exitEditMode, pendingExpand])
+  }, [
+    clearPendingExpand,
+    editing,
+    exitEditMode,
+    pendingExpand,
+    startGroupDrag,
+    suppressEditExitActions,
+  ])
 
   useEffect(() => {
     if (!expandedGroupId) {
@@ -2094,12 +1784,9 @@ const RoomPanel = ({
           sourceMember &&
           !targetGroup &&
           sourceGroup.members.length === 1 &&
-          bindingHasGroupResource(sourceGroup.binding)
+          sourceMember.canDetachFromRoom
 
-        if (
-          sourceMember &&
-          (releasedOutsidePanel || droppedSingleMemberGroupIntoBlankPanel)
-        ) {
+        if (sourceMember && (releasedOutsidePanel || droppedSingleMemberGroupIntoBlankPanel)) {
           const nextGroups = controlGroups.flatMap((group) => {
             if (group.id === sourceGroup.id) {
               return sourceRemainingIds.length > 0 ? [sourceRemainingIds] : []
@@ -2181,7 +1868,7 @@ const RoomPanel = ({
       } else if (
         sourceGroup &&
         sourceGroup.members.length === 1 &&
-        bindingHasGroupResource(sourceGroup.binding) &&
+        sourceGroup.members[0]?.canDetachFromRoom &&
         (releasedOutsidePanel || !hoveredGroupElement)
       ) {
         const sourceMember = sourceGroup.members[0]
@@ -2260,7 +1947,6 @@ const RoomPanel = ({
     exitEditMode,
     groupById,
     onRemoveDeviceFromGroup,
-    orderedGroups,
     refsStore,
     roomId,
     suppressEditExitActions,
@@ -2272,14 +1958,14 @@ const RoomPanel = ({
       setExpandedGroupId(null)
       clearPendingExpand()
     }
-  }, [editing])
+  }, [clearPendingExpand, editing])
 
   useEffect(
     () => () => {
       clearLongPress()
       clearSuppressedClick()
     },
-    [],
+    [clearLongPress, clearSuppressedClick],
   )
 
   useEffect(() => {
@@ -2353,19 +2039,6 @@ const RoomPanel = ({
   const consumeControlSuppressedClick = (groupId: string) =>
     consumeSuppressedClick(getGroupLongPressKey(groupId))
 
-  function exitEditMode() {
-    onApplyGrouping(
-      lastAppliedGroupingRef.current ??
-        orderedGroups
-          .map((group) => group.members.map((member) => member.id))
-          .filter((group) => group.length > 0),
-    )
-    clearPendingExpand()
-    setExpandedGroupId(null)
-    clearHoveredItemTargets()
-    onSetEditing(false)
-  }
-
   const handlePanelBodyPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!editing || dragState || event.target !== event.currentTarget) {
       return
@@ -2385,7 +2058,7 @@ const RoomPanel = ({
         onChange(
           collapsedDirectControlMember.itemId,
           collapsedDirectControlMember.controlIndex,
-          !Boolean(collapsedDirectControlValue),
+          !collapsedDirectControlValue,
         )
       }
       return
@@ -2429,7 +2102,7 @@ const RoomPanel = ({
 
   return (
     <div
-      data-ha-rts-pill-collection-id={roomId}
+      data-room-control-collection-id={roomId}
       ref={(node) => setOverlayDomRef(refsStore, roomId, 'panel', node)}
       style={panelBaseStyle}
     >
@@ -3457,7 +3130,9 @@ const getPanelBodyMetrics = (
     groups.length > 0
       ? Math.min(
           PANEL_MAX_COLUMNS,
-          Math.max(...groups.map((group) => Math.min(PANEL_MAX_COLUMNS, getMinimumGroupPanelSlots(group)))),
+          Math.max(
+            ...groups.map((group) => Math.min(PANEL_MAX_COLUMNS, getMinimumGroupPanelSlots(group))),
+          ),
         )
       : 1
   let columns = Math.max(baseMetrics.columns, minimumGroupColumns)
@@ -3622,115 +3297,6 @@ const isPointerInMergeHotspot = (pointerX: number, pointerY: number, element: HT
   )
 }
 
-const collectionHasBoundResources = (
-  collection: Collection,
-  bindings: HomeAssistantCollectionBindingMap,
-) => {
-  const binding = bindings[collection.id]
-  return (
-    hasHomeAssistantBinding(binding) &&
-    (binding?.resources ?? []).some((resource) => resource.kind === 'entity')
-  )
-}
-
-const isHomeAssistantGroupResource = (resource: HomeAssistantResourceBinding | null | undefined) =>
-  Boolean(
-    resource?.kind === 'entity' &&
-      (resource.isGroup === true || (resource.memberEntityIds?.length ?? 0) > 0),
-  )
-
-const getHomeAssistantOverlaySection = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-): keyof HomeAssistantOverlayVisibility | null => {
-  if (!binding?.resources.length) {
-    return null
-  }
-
-  if (binding.resources.some((resource) => resource.kind !== 'entity')) {
-    return 'actions'
-  }
-
-  if (binding.resources.some((resource) => isHomeAssistantGroupResource(resource))) {
-    return 'groups'
-  }
-
-  return 'devices'
-}
-
-const isHomeAssistantOverlayBindingVisible = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-  visibility: HomeAssistantOverlayVisibility,
-) => {
-  const section = getHomeAssistantOverlaySection(binding)
-  return section ? visibility[section] : true
-}
-
-const bindingHasGroupResource = (binding: HomeAssistantCollectionBinding | null | undefined) =>
-  Boolean(binding?.resources.some((resource) => isHomeAssistantGroupResource(resource)))
-
-const resourceHasControllableTarget = (resource: HomeAssistantResourceBinding | null | undefined) =>
-  Boolean(
-    resource?.kind === 'entity' &&
-      (resource.entityId?.trim() ||
-        (resource.memberEntityIds?.length ?? 0) > 0 ||
-        (resource.actions?.length ?? 0) > 0),
-  )
-
-const isHomeAssistantControllableEntityResource = (
-  resource: HomeAssistantResourceBinding | null | undefined,
-) => Boolean(resource?.kind === 'entity' && resourceHasControllableTarget(resource))
-
-const isHomeAssistantDeviceComponentResource = (
-  resource: HomeAssistantResourceBinding | null | undefined,
-): resource is HomeAssistantResourceBinding =>
-  Boolean(
-    resource?.kind === 'entity' &&
-      !isHomeAssistantGroupResource(resource) &&
-      resourceHasControllableTarget(resource),
-  )
-
-const getBindingDeviceComponentResources = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-) => binding?.resources.filter(isHomeAssistantDeviceComponentResource) ?? []
-
-const getActionBindingForMember = (
-  binding: HomeAssistantCollectionBinding,
-  member: RoomControlTile,
-): HomeAssistantCollectionBinding | null => {
-  const memberResource = member.resourceId
-    ? binding.resources.find((resource) => resource.id === member.resourceId)
-    : null
-  const resources = memberResource
-    ? isHomeAssistantControllableEntityResource(memberResource)
-      ? [memberResource]
-      : []
-    : binding.resources.filter(isHomeAssistantControllableEntityResource)
-
-  if (resources.length === 0) {
-    return null
-  }
-
-  return {
-    aggregation: resources.length === 1 ? 'single' : 'all',
-    collectionId: binding.collectionId,
-    presentation: binding.presentation,
-    primaryResourceId: resources[0]?.id ?? null,
-    resources,
-  }
-}
-
-const cloneHomeAssistantResourceBinding = (
-  resource: HomeAssistantResourceBinding,
-): HomeAssistantResourceBinding => ({
-  ...resource,
-  actions: resource.actions.map((action) => ({
-    ...action,
-    fields: action.fields?.map((field) => ({ ...field })),
-  })),
-  capabilities: [...resource.capabilities],
-  ...(resource.memberEntityIds ? { memberEntityIds: [...resource.memberEntityIds] } : {}),
-})
-
 const getDeviceDropTargetCollectionId = (
   pointerX: number,
   pointerY: number,
@@ -3742,507 +3308,15 @@ const getDeviceDropTargetCollectionId = (
 
   const targetElement = document
     .elementFromPoint(pointerX, pointerY)
-    ?.closest('[data-ha-rts-pill-collection-id]') as HTMLElement | null
-  const targetCollectionId = targetElement?.dataset.haRtsPillCollectionId as
+    ?.closest('[data-room-control-collection-id]') as HTMLElement | null
+  const targetCollectionId = targetElement?.dataset.roomControlCollectionId as
     | CollectionId
     | undefined
 
   return targetCollectionId && targetCollectionId !== sourceCollectionId ? targetCollectionId : null
 }
 
-const isIconOnlyDeviceCollection = (
-  collection: Collection,
-  binding: HomeAssistantCollectionBinding | null | undefined,
-) =>
-  Boolean(
-    binding &&
-      !bindingHasGroupResource(binding) &&
-      !binding.presentation?.rtsWorldPosition &&
-      !binding.presentation?.rtsScreenPosition &&
-      collection.nodeIds.length === 1 &&
-      binding.resources.some((resource) => resource.kind === 'entity'),
-  )
-
-const getCollectionDisplayName = (
-  collection: Collection,
-  bindings: HomeAssistantCollectionBindingMap,
-) => getHomeAssistantBindingDisplayLabel(bindings[collection.id], collection.name)
-
-const compareCollectionsForRoom = (
-  left: Collection,
-  right: Collection,
-  bindings: HomeAssistantCollectionBindingMap,
-) => {
-  const leftOrder = bindings[left.id]?.presentation?.rtsOrder ?? Number.MAX_SAFE_INTEGER
-  const rightOrder = bindings[right.id]?.presentation?.rtsOrder ?? Number.MAX_SAFE_INTEGER
-  if (leftOrder !== rightOrder) {
-    return leftOrder - rightOrder
-  }
-  return getCollectionDisplayName(left, bindings).localeCompare(
-    getCollectionDisplayName(right, bindings),
-  )
-}
-
-const getCollectionItemNodes = (collection: Collection, sceneNodes: Record<AnyNodeId, any>) =>
-  collection.nodeIds
-    .map((nodeId) => sceneNodes[nodeId])
-    .filter((node): node is ItemNode => node?.type === 'item')
-
-const getCollectionAnchorItemNodes = (
-  collection: Collection,
-  sceneNodes: Record<AnyNodeId, any>,
-) => {
-  const candidateNodeIds = collection.controlNodeId
-    ? [collection.controlNodeId, ...collection.nodeIds]
-    : collection.nodeIds
-
-  return Array.from(new Set(candidateNodeIds))
-    .map((nodeId) => sceneNodes[nodeId])
-    .filter((node): node is ItemNode => node?.type === 'item')
-}
-
-const isCollectionVisibleOnSelectedLevel = (
-  collection: Collection,
-  sceneNodes: Record<AnyNodeId, any>,
-  selectedLevelId: AnyNodeId | null,
-) => {
-  if (!selectedLevelId) {
-    return true
-  }
-
-  const candidateNodeIds = collection.controlNodeId
-    ? [collection.controlNodeId, ...collection.nodeIds]
-    : collection.nodeIds
-
-  return candidateNodeIds.some((nodeId) => {
-    const node = sceneNodes[nodeId]
-    return Boolean(node) && resolveLevelId(node, sceneNodes) === selectedLevelId
-  })
-}
-
-const getCollectionAnchorNodeIds = (
-  collection: Collection,
-  controls: RoomControlTile[],
-  sceneNodes: Record<AnyNodeId, any>,
-) => {
-  const controlItemIds = controls.map((control) => control.linkedItemId ?? control.itemId)
-  const fallbackItemIds = getCollectionItemNodes(collection, sceneNodes).map((node) => node.id)
-  const preferredIds = collection.controlNodeId
-    ? [collection.controlNodeId, ...controlItemIds, ...fallbackItemIds]
-    : [...controlItemIds, ...fallbackItemIds]
-
-  return Array.from(new Set(preferredIds)).filter((nodeId) => sceneNodes[nodeId]?.type === 'item')
-}
-
-const getResourceIdentityKeys = (resource: HomeAssistantResourceBinding | null | undefined) =>
-  Array.from(
-    new Set(
-      [resource?.entityId, resource?.id].filter(
-        (value): value is string => typeof value === 'string' && value.trim().length > 0,
-      ),
-    ),
-  )
-
-const getBindingGroupMemberEntityIds = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-) =>
-  new Set(
-    (binding?.resources ?? [])
-      .filter(isHomeAssistantGroupResource)
-      .flatMap((resource) => resource.memberEntityIds ?? []),
-  )
-
-const getRelatedGroupMemberItemNodes = (
-  collectionId: CollectionId,
-  memberEntityIds: Set<string>,
-  collections: Record<CollectionId, Collection>,
-  bindings: HomeAssistantCollectionBindingMap,
-  sceneNodes: Record<AnyNodeId, any>,
-) => {
-  const nodesById = new Map<AnyNodeId, ItemNode>()
-
-  for (const binding of Object.values(bindings)) {
-    const collection = collections[binding.collectionId]
-    if (!collection) {
-      continue
-    }
-
-    const hasMatchingMemberResource = binding.resources.some(
-      (resource) =>
-        isHomeAssistantDeviceComponentResource(resource) &&
-        getResourceIdentityKeys(resource).some((key) => memberEntityIds.has(key)),
-    )
-
-    if (!hasMatchingMemberResource && binding.collectionId !== collectionId) {
-      continue
-    }
-
-    for (const node of getCollectionAnchorItemNodes(collection, sceneNodes)) {
-      nodesById.set(node.id, node)
-    }
-  }
-
-  return Array.from(nodesById.values())
-}
-
-const getResourceLinkedItemNode = (
-  resource: HomeAssistantResourceBinding,
-  collectionId: CollectionId,
-  collections: Record<CollectionId, Collection>,
-  bindings: HomeAssistantCollectionBindingMap,
-  sceneNodes: Record<AnyNodeId, any>,
-) => {
-  const identityKeys = new Set(getResourceIdentityKeys(resource))
-  if (identityKeys.size === 0) {
-    return null
-  }
-
-  for (const binding of Object.values(bindings)) {
-    if (binding.collectionId === collectionId) {
-      continue
-    }
-
-    const collection = collections[binding.collectionId]
-    if (!collection) {
-      continue
-    }
-
-    const hasMatchingResource = binding.resources.some(
-      (candidate) =>
-        isHomeAssistantDeviceComponentResource(candidate) &&
-        getResourceIdentityKeys(candidate).some((key) => identityKeys.has(key)),
-    )
-    if (!hasMatchingResource) {
-      continue
-    }
-
-    const anchorNode = getCollectionAnchorItemNodes(collection, sceneNodes)[0]
-    if (anchorNode) {
-      return anchorNode
-    }
-  }
-
-  return null
-}
-
-const getItemFootprintCenterWorldPosition = (items: ItemNode[]) => {
-  if (items.length === 0) {
-    return null
-  }
-
-  let minX = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
-
-  for (const item of items) {
-    const [width, , depth] = item.asset.dimensions
-    const [scaleX, , scaleZ] = item.scale
-    const halfWidth = Math.abs(width * scaleX) / 2
-    const halfDepth = Math.abs(depth * scaleZ) / 2
-    minX = Math.min(minX, item.position[0] - halfWidth)
-    maxX = Math.max(maxX, item.position[0] + halfWidth)
-    minZ = Math.min(minZ, item.position[2] - halfDepth)
-    maxZ = Math.max(maxZ, item.position[2] + halfDepth)
-  }
-
-  if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) {
-    return null
-  }
-
-  return {
-    x: (minX + maxX) / 2,
-    y: 0,
-    z: (minZ + maxZ) / 2,
-  }
-}
-
-const getCollectionRelatedGroupWorldPosition = (
-  collection: Collection,
-  binding: HomeAssistantCollectionBinding | null | undefined,
-  collections: Record<CollectionId, Collection>,
-  bindings: HomeAssistantCollectionBindingMap,
-  sceneNodes: Record<AnyNodeId, any>,
-) => {
-  if (
-    !bindingHasGroupResource(binding) ||
-    binding?.presentation?.rtsWorldPosition ||
-    binding?.presentation?.rtsScreenPosition
-  ) {
-    return null
-  }
-
-  const memberEntityIds = getBindingGroupMemberEntityIds(binding)
-  if (memberEntityIds.size === 0) {
-    return null
-  }
-
-  const relatedItemNodes = getRelatedGroupMemberItemNodes(
-    collection.id,
-    memberEntityIds,
-    collections,
-    bindings,
-    sceneNodes,
-  )
-
-  return getItemFootprintCenterWorldPosition(relatedItemNodes)
-}
-
-const createCollectionFallbackControl = (label: string): Control => ({
-  kind: 'toggle',
-  label,
-})
-
-const createSyntheticBrightnessControl = (): Extract<Control, { kind: 'slider' }> => ({
-  kind: 'slider',
-  label: 'Brightness',
-  min: 0,
-  max: 100,
-  step: 1,
-  displayMode: 'slider',
-  default: 100,
-  unit: '%',
-})
-
-const getResourceSyntheticIntensityControl = (
-  resource: HomeAssistantResourceBinding | null | undefined,
-): Extract<Control, { kind: 'slider' }> | null =>
-  resource?.capabilities.includes('brightness') ? createSyntheticBrightnessControl() : null
-
-const getRoomControlResourceKey = (resourceId: string) => encodeURIComponent(resourceId)
-
-const getRoomControlTileId = (collectionId: CollectionId, resourceId: string) =>
-  `${collectionId}:home-assistant:${getRoomControlResourceKey(resourceId)}`
-
-const getLegacyRoomControlResourceKey = (resourceId: string) =>
-  resourceId.replace(/[^a-zA-Z0-9_-]/g, '-')
-
-const getBindingPillControlResources = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-) => {
-  const entityResources = binding?.resources.filter((resource) => resource.kind === 'entity') ?? []
-  const deviceResources = entityResources.filter(isHomeAssistantDeviceComponentResource)
-  const controllableResources = entityResources.filter(isHomeAssistantControllableEntityResource)
-
-  return deviceResources.length > 0
-    ? deviceResources
-    : controllableResources.length > 0
-      ? controllableResources
-      : entityResources.filter(isHomeAssistantGroupResource).slice(0, 1)
-}
-
-const getResourceItemKind = (
-  resource: HomeAssistantResourceBinding | null | undefined,
-  fallbackLabel: string,
-) => {
-  const domain = resource?.entityId?.split('.')[0] ?? null
-
-  if (domain === 'media_player') {
-    return 'tv'
-  }
-  if (domain && domain !== 'group') {
-    return domain
-  }
-
-  return getOverlayItemKind(resource?.label ?? fallbackLabel)
-}
-
-const buildCollectionRoomControlTiles = (
-  collection: Collection,
-  binding: HomeAssistantCollectionBinding | null | undefined,
-  sceneNodes: Record<AnyNodeId, any>,
-  collections: Record<CollectionId, Collection>,
-  bindings: HomeAssistantCollectionBindingMap,
-  hasPositionedPill = Boolean(
-    binding?.presentation?.rtsWorldPosition || binding?.presentation?.rtsScreenPosition,
-  ),
-): RoomControlTile[] => {
-  const collectionLabel = getHomeAssistantBindingDisplayLabel(binding, collection.name)
-  const itemNodes = Array.from(
-    new Map(
-      getCollectionItemNodes(collection, sceneNodes).map((node) => [node.id, node] as const),
-    ).values(),
-  )
-  const fallbackControlNode =
-    collection.controlNodeId && sceneNodes[collection.controlNodeId]?.type === 'item'
-      ? (sceneNodes[collection.controlNodeId] as ItemNode)
-      : null
-  const controlSourceNodes =
-    itemNodes.length > 0 ? itemNodes : fallbackControlNode ? [fallbackControlNode] : []
-
-  const controlResources = getBindingPillControlResources(binding)
-  if (
-    hasPositionedPill &&
-    (controlSourceNodes.length === 0 ||
-      (bindingHasGroupResource(binding) && controlResources.length > controlSourceNodes.length))
-  ) {
-    return controlResources.map((resource, index) => {
-      const disabled = !isHomeAssistantControllableEntityResource(resource)
-      const syntheticIntensityControl = getResourceSyntheticIntensityControl(resource)
-      const linkedItemNode = getResourceLinkedItemNode(
-        resource,
-        collection.id,
-        collections,
-        bindings,
-        sceneNodes,
-      )
-      const control = isHomeAssistantTriggerBinding(binding)
-        ? createCollectionFallbackControl('Run')
-        : createCollectionFallbackControl('Toggle')
-      const legacyResourceKey = getLegacyRoomControlResourceKey(resource.id)
-      const tileId = getRoomControlTileId(collection.id, resource.id)
-      const legacyTileId = `${collection.id}:home-assistant:${legacyResourceKey}`
-
-      return {
-        collectionBinding: binding ?? undefined,
-        collectionId: collection.id,
-        collectionLabel,
-        control,
-        controlIndex: 0,
-        disabled,
-        id: tileId,
-        intensityControl: syntheticIntensityControl,
-        intensityControlIndex: syntheticIntensityControl ? 1 : null,
-        itemId: tileId as AnyNodeId,
-        itemKind: getResourceItemKind(resource, collectionLabel),
-        itemName: resource.label ?? linkedItemNode?.asset.name?.trim() ?? collectionLabel,
-        legacyIds:
-          legacyTileId === tileId ? [`${tileId}:${index}`] : [legacyTileId, `${legacyTileId}:${index}`],
-        linkedItemId: linkedItemNode?.id,
-        resourceId: resource.id,
-      }
-    })
-  }
-
-  const deviceResources = getBindingDeviceComponentResources(binding)
-  const resourceByLinkedItemId = new Map<AnyNodeId, HomeAssistantResourceBinding>()
-
-  for (const resource of deviceResources) {
-    const linkedItemNode = getResourceLinkedItemNode(
-      resource,
-      collection.id,
-      collections,
-      bindings,
-      sceneNodes,
-    )
-    if (linkedItemNode) {
-      resourceByLinkedItemId.set(linkedItemNode.id, resource)
-    }
-  }
-
-  const primaryResource = deviceResources[0] ?? null
-  return controlSourceNodes.map((itemNode, index) => {
-    const itemResource =
-      resourceByLinkedItemId.get(itemNode.id) ??
-      (deviceResources.length === controlSourceNodes.length ? deviceResources[index] : null) ??
-      primaryResource
-    const disabled = !isHomeAssistantDeviceComponentResource(itemResource)
-    const controls = itemNode.asset.interactive?.controls ?? []
-    const selectedControl = getPrimaryRoomControl(controls)
-    const syntheticIntensityControl =
-      selectedControl?.intensityControl ?? getResourceSyntheticIntensityControl(itemResource)
-    const control = isHomeAssistantTriggerBinding(binding)
-      ? createCollectionFallbackControl('Run')
-      : (selectedControl?.control ?? createCollectionFallbackControl('Toggle'))
-    const controlIndex = selectedControl?.controlIndex ?? 0
-
-    return {
-      collectionBinding: binding ?? undefined,
-      collectionId: collection.id,
-      collectionLabel,
-      control,
-      controlIndex,
-      disabled,
-      id: `${collection.id}:${itemNode.id}:${controlIndex}`,
-      intensityControl: syntheticIntensityControl ?? null,
-      intensityControlIndex:
-        selectedControl?.intensityControlIndex ??
-        (syntheticIntensityControl ? controls.length : null),
-      itemId: itemNode.id,
-      itemKind: getResourceItemKind(
-        itemResource,
-        itemNode.asset.name?.trim() || collectionLabel || 'item',
-      ),
-      itemName: itemResource?.label ?? itemNode.asset.name?.trim() ?? collectionLabel ?? 'Item',
-      resourceId: itemResource?.id,
-    }
-  })
-}
-
-const getCollectionRangeCapability = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-  member: RoomControlTile,
-): Extract<
-  HomeAssistantCollectionCapability,
-  'brightness' | 'speed' | 'temperature' | 'volume'
-> | null => {
-  if (member.control.kind === 'temperature') {
-    return 'temperature'
-  }
-
-  const capabilities = getHomeAssistantBindingCapabilities(binding)
-  if (capabilities.has('brightness') || member.itemKind === 'light') {
-    return 'brightness'
-  }
-  if (capabilities.has('speed') || member.itemKind === 'fan') {
-    return 'speed'
-  }
-  if (capabilities.has('volume') || member.itemKind === 'speaker' || member.itemKind === 'tv') {
-    return 'volume'
-  }
-  return capabilities.has('temperature') ? 'temperature' : null
-}
-
-const buildCollectionActionRequest = (
-  binding: HomeAssistantCollectionBinding | null | undefined,
-  member: RoomControlTile,
-  nextValue: ControlValue,
-  source: RoomControlLookupEntry['source'],
-): HomeAssistantActionRequest | null => {
-  if (!binding) {
-    return null
-  }
-
-  if (isHomeAssistantTriggerBinding(binding)) {
-    return { kind: 'trigger' }
-  }
-
-  if (source === 'intensity' && member.intensityControl) {
-    const capability = getCollectionRangeCapability(binding, {
-      ...member,
-      control: member.intensityControl,
-    })
-    if (!capability) {
-      return null
-    }
-
-    return {
-      capability,
-      kind: 'range',
-      value: Number(nextValue),
-    }
-  }
-
-  if (member.control.kind === 'toggle') {
-    return {
-      kind: 'toggle',
-      value: Boolean(nextValue),
-    }
-  }
-
-  const capability = getCollectionRangeCapability(binding, member)
-  if (!capability) {
-    return null
-  }
-
-  return {
-    capability,
-    kind: 'range',
-    value: Number(nextValue),
-  }
-}
-
-const normalizeRoomControlGroupList = (groups: unknown) =>
+export const normalizeRoomControlGroupList = (groups: unknown) =>
   Array.isArray(groups)
     ? groups
         .filter(Array.isArray)
@@ -4252,12 +3326,15 @@ const normalizeRoomControlGroupList = (groups: unknown) =>
         .filter((group) => group.length > 0)
     : []
 
-const selectRoomControlGroupSource = (
+export const selectRoomControlGroupSource = (
   controls: RoomControlTile[],
   presentationGroups: string[][],
   defaultGroups: string[][],
 ) => {
-  if (presentationGroups.length > 0 && roomControlGroupsCoverControls(presentationGroups, controls)) {
+  if (
+    presentationGroups.length > 0 &&
+    roomControlGroupsCoverControls(presentationGroups, controls)
+  ) {
     return presentationGroups
   }
 
@@ -4271,11 +3348,12 @@ const roomControlGroupsCoverControls = (groups: string[][], controls: RoomContro
 
   const groupIds = new Set(groups.flat())
   return controls.every(
-    (control) => groupIds.has(control.id) || (control.legacyIds ?? []).some((id) => groupIds.has(id)),
+    (control) =>
+      groupIds.has(control.id) || (control.legacyIds ?? []).some((id) => groupIds.has(id)),
   )
 }
 
-const buildRoomControlGroups = (
+export const buildRoomControlGroups = (
   controls: RoomControlTile[],
   storedGroups: string[][],
 ): RoomControlGroup[] => {
@@ -4376,11 +3454,8 @@ const createRoomControlGroup = (members: RoomControlTile[]): RoomControlGroup =>
   const singleCollectionId = collectionIds.length === 1 ? collectionIds[0] : undefined
   const collectionLabel =
     singleCollectionId && members.length > 0 ? members[0]?.collectionLabel : undefined
-  const collectionBinding =
-    singleCollectionId && members.length > 0 ? members[0]?.collectionBinding : undefined
 
   return {
-    binding: collectionBinding,
     collectionId: singleCollectionId,
     controlKind: getRoomControlGroupKind(members),
     displayName: collectionLabel,
@@ -4666,10 +3741,8 @@ const getExpandedGroupMemberLayout = (
     if (rows > rowSpan) {
       continue
     }
-    const buttonWidth =
-      (usableWidth - Math.max(columns - 1, 0) * EXPANDED_GROUP_GAP) / columns
-    const buttonHeight =
-      (usableHeight - Math.max(rows - 1, 0) * EXPANDED_GROUP_GAP) / rows
+    const buttonWidth = (usableWidth - Math.max(columns - 1, 0) * EXPANDED_GROUP_GAP) / columns
+    const buttonHeight = (usableHeight - Math.max(rows - 1, 0) * EXPANDED_GROUP_GAP) / rows
     const buttonSize = Math.min(buttonWidth, buttonHeight)
     if (buttonSize >= bestButtonSize) {
       bestButtonSize = buttonSize

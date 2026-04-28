@@ -54,11 +54,14 @@ function getStateSelectorAttributeCandidates(attributeName: string) {
 
 function getNumberSelectorConfig(field: HomeAssistantAvailableActionField) {
   const selector =
-    field.selector?.number && typeof field.selector.number === 'object' ? field.selector.number : null
+    field.selector?.number && typeof field.selector.number === 'object'
+      ? field.selector.number
+      : null
   const min = selector && 'min' in selector ? Number(selector.min) : Number.NaN
   const max = selector && 'max' in selector ? Number(selector.max) : Number.NaN
   const step = selector && 'step' in selector ? Number(selector.step) : Number.NaN
-  const mode = selector && 'mode' in selector && typeof selector.mode === 'string' ? selector.mode : null
+  const mode =
+    selector && 'mode' in selector && typeof selector.mode === 'string' ? selector.mode : null
   const unit =
     selector &&
     'unit_of_measurement' in selector &&
@@ -167,7 +170,11 @@ function buildColorTemperatureOptions(field: HomeAssistantAvailableActionField) 
 }
 
 function isDefaultConnectAction(action: HomeAssistantAvailableAction) {
-  return action.actionKind === 'connect' && action.domain === 'media_player' && action.service === 'play_media'
+  return (
+    action.actionKind === 'connect' &&
+    action.domain === 'media_player' &&
+    action.service === 'play_media'
+  )
 }
 
 function canUseDefaultValue(field: HomeAssistantAvailableActionField) {
@@ -274,18 +281,20 @@ export function getHomeAssistantActionFieldOptions(
     }
 
     const attributes = device.attributes ?? {}
-    const options = getStateSelectorAttributeCandidates(stateSelector.attribute).flatMap((attributeName) => {
-      const rawValue = attributes[attributeName]
-      if (Array.isArray(rawValue)) {
-        return rawValue.filter((entry): entry is string => typeof entry === 'string')
-      }
+    const options = getStateSelectorAttributeCandidates(stateSelector.attribute).flatMap(
+      (attributeName) => {
+        const rawValue = attributes[attributeName]
+        if (Array.isArray(rawValue)) {
+          return rawValue.filter((entry): entry is string => typeof entry === 'string')
+        }
 
-      if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
-        return [rawValue.trim()]
-      }
+        if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
+          return [rawValue.trim()]
+        }
 
-      return []
-    })
+        return []
+      },
+    )
 
     return Array.from(new Set(options)).map((option) => ({
       label: option,
@@ -494,7 +503,10 @@ export function getHomeAssistantRenderableFields(
         case 'time':
           return true
         default:
-          return canUseDefaultValue(field) || getHomeAssistantActionFieldOptions(action, field, device).length > 0
+          return (
+            canUseDefaultValue(field) ||
+            getHomeAssistantActionFieldOptions(action, field, device).length > 0
+          )
       }
     }
 
@@ -516,7 +528,10 @@ export function isHomeAssistantActionLean(
   action: HomeAssistantAvailableAction,
   device: HomeAssistantDiscoveredDevice,
 ) {
-  return getHomeAssistantRenderableFields(action, device).length >= action.fields.filter((field) => field.required).length
+  return (
+    getHomeAssistantRenderableFields(action, device).length >=
+    action.fields.filter((field) => field.required).length
+  )
 }
 
 export function canRunHomeAssistantActionImmediately(
@@ -548,7 +563,9 @@ export function canRunHomeAssistantActionImmediately(
 }
 
 export function normalizeHomeAssistantDiscoveredDevice(device: HomeAssistantDiscoveredDevice) {
-  const availableActions = device.availableActions.filter((action) => isHomeAssistantActionLean(action, device))
+  const availableActions = device.availableActions.filter((action) =>
+    isHomeAssistantActionLean(action, device),
+  )
   const enabledActionCategories =
     device.enabledActionCategories.length > 0
       ? device.enabledActionCategories.filter((category) =>

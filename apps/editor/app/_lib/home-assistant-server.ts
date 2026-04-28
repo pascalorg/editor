@@ -3,8 +3,11 @@ import { promisify } from 'node:util'
 import type {
   HomeAssistantActionRequest,
   HomeAssistantCollectionBinding,
-} from '@pascal-app/viewer/home-assistant-bindings'
-import type { HomeAssistantActionKind, HomeAssistantLink } from '../../../../packages/editor/src/lib/home-assistant'
+} from '@pascal-app/core/schema'
+import type {
+  HomeAssistantActionKind,
+  HomeAssistantLink,
+} from '../../../../packages/editor/src/lib/home-assistant'
 import { refreshHomeAssistantAccessToken } from './home-assistant-auth'
 import {
   clearLinkedHomeAssistantProfile,
@@ -19,7 +22,7 @@ const DEFAULT_TEST_DURATION_SECONDS = 5
 const DEFAULT_WAKE_DELAY_MS = 5000
 const execFileAsync = promisify(execFile)
 
-const CHROMECAST_RELEASE_SCRIPT = String.raw`
+const CHROMECAST_RELEASE_SCRIPT = `
 import json
 import sys
 import time
@@ -223,7 +226,10 @@ export function readHomeAssistantServerConfig(): HomeAssistantServerConfig {
     ),
     testMediaType: process.env.NEXT_PUBLIC_HA_TEST_MEDIA_TYPE?.trim() ?? DEFAULT_TEST_MEDIA_TYPE,
     testMediaUrl: process.env.NEXT_PUBLIC_HA_TEST_MEDIA_URL?.trim() ?? DEFAULT_TEST_MEDIA_URL,
-    wakeDelayMs: parseNonNegativeInt(process.env.NEXT_PUBLIC_HA_WAKE_DELAY_MS, DEFAULT_WAKE_DELAY_MS),
+    wakeDelayMs: parseNonNegativeInt(
+      process.env.NEXT_PUBLIC_HA_WAKE_DELAY_MS,
+      DEFAULT_WAKE_DELAY_MS,
+    ),
   }
 }
 
@@ -319,9 +325,7 @@ export async function resolveHomeAssistantServerConfig() {
 }
 
 function getRequestBaseUrlCandidates(config: HomeAssistantServerConfig) {
-  return Array.from(
-    new Set([config.baseUrl, ...config.baseUrlCandidates].filter(Boolean)),
-  )
+  return Array.from(new Set([config.baseUrl, ...config.baseUrlCandidates].filter(Boolean)))
 }
 
 function shouldRetryHomeAssistantRequest(error: unknown) {
@@ -362,7 +366,9 @@ export async function haRequest<T>(
 
       if (!response.ok) {
         const body = await response.text()
-        const error = new Error(`HA ${response.status} ${response.statusText}: ${body || 'request failed'}`)
+        const error = new Error(
+          `HA ${response.status} ${response.statusText}: ${body || 'request failed'}`,
+        )
 
         if ([502, 503, 504].includes(response.status) && baseUrl !== candidates.at(-1)) {
           lastError = error
@@ -385,9 +391,7 @@ export async function haRequest<T>(
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('Home Assistant request failed.')
+  throw lastError instanceof Error ? lastError : new Error('Home Assistant request failed.')
 }
 
 export function delay(ms: number) {
@@ -399,7 +403,10 @@ async function runPythonReleaseScript(host: string | null, name: string | null) 
   const normalizedName = name && name.trim().length > 0 ? name.trim() : '__none__'
   const candidates = [
     { command: 'python', args: ['-c', CHROMECAST_RELEASE_SCRIPT, normalizedHost, normalizedName] },
-    { command: 'py', args: ['-3', '-c', CHROMECAST_RELEASE_SCRIPT, normalizedHost, normalizedName] },
+    {
+      command: 'py',
+      args: ['-3', '-c', CHROMECAST_RELEASE_SCRIPT, normalizedHost, normalizedName],
+    },
   ] as const
 
   let lastError: unknown = null
@@ -437,9 +444,7 @@ export async function releaseChromecastReceiver(
   return {
     afterAppDisplayName,
     beforeAppDisplayName,
-    released:
-      afterAppDisplayName === 'Backdrop' ||
-      afterAppDisplayName === null,
+    released: afterAppDisplayName === 'Backdrop' || afterAppDisplayName === null,
   }
 }
 
@@ -497,7 +502,7 @@ function getResourceActionForRequest(
   }
 
   const serviceCandidatesByCapability: Record<
-  Extract<HomeAssistantActionRequest, { kind: 'range' }>['capability'],
+    Extract<HomeAssistantActionRequest, { kind: 'range' }>['capability'],
     string[]
   > = {
     brightness: ['turn_on', 'set_percentage'],
@@ -551,7 +556,7 @@ function buildCollectionServiceData(
 
   const fieldKeys = (action.fields ?? []).map((field) => field.key)
   const preferredFieldKeyByCapability: Record<
-  Extract<HomeAssistantActionRequest, { kind: 'range' }>['capability'],
+    Extract<HomeAssistantActionRequest, { kind: 'range' }>['capability'],
     string[]
   > = {
     brightness: ['brightness_pct', 'brightness'],
@@ -561,8 +566,9 @@ function buildCollectionServiceData(
   }
 
   const targetFieldKey =
-    preferredFieldKeyByCapability[request.capability].find((fieldKey) => fieldKeys.includes(fieldKey)) ??
-    fieldKeys[0]
+    preferredFieldKeyByCapability[request.capability].find((fieldKey) =>
+      fieldKeys.includes(fieldKey),
+    ) ?? fieldKeys[0]
 
   return targetFieldKey
     ? {
@@ -613,7 +619,9 @@ export async function validateHomeAssistantConnection(
       const castState = await getEntityState(config, config.castEntityId)
       const friendlyName = castState.attributes?.friendly_name
       castFriendlyName =
-        typeof friendlyName === 'string' && friendlyName.trim().length > 0 ? friendlyName.trim() : null
+        typeof friendlyName === 'string' && friendlyName.trim().length > 0
+          ? friendlyName.trim()
+          : null
     } catch {
       castFriendlyName = null
     }
@@ -674,7 +682,8 @@ export async function runHomeAssistantDeviceAction(
       await delay(1000)
       const sample = await getEntityState(config, entityId)
       timeline.push({
-        appName: typeof sample.attributes?.app_name === 'string' ? sample.attributes.app_name : null,
+        appName:
+          typeof sample.attributes?.app_name === 'string' ? sample.attributes.app_name : null,
         mediaTitle:
           typeof sample.attributes?.media_title === 'string' ? sample.attributes.media_title : null,
         second,
@@ -717,7 +726,11 @@ export async function runHomeAssistantDeviceAction(
     }
   }
 
-  if (link.actionKind === 'power' && link.serviceDomain === 'homeassistant' && link.serviceName === 'toggle') {
+  if (
+    link.actionKind === 'power' &&
+    link.serviceDomain === 'homeassistant' &&
+    link.serviceName === 'toggle'
+  ) {
     const initial = await getEntityState(config, entityId)
     const initiallyOn = initial.state !== 'off'
     const service = initiallyOn ? 'turn_off' : 'turn_on'
@@ -790,10 +803,8 @@ export async function runHomeAssistantCollectionAction(
     throw new Error(`No Home Assistant resources are linked to ${collectionName}.`)
   }
 
-  const shouldUsePrimaryOnly =
-    binding.aggregation === 'primary' || binding.aggregation === 'single'
-  const primaryResourceId =
-    binding.primaryResourceId ?? resources[0]?.id ?? null
+  const shouldUsePrimaryOnly = binding.aggregation === 'primary' || binding.aggregation === 'single'
+  const primaryResourceId = binding.primaryResourceId ?? resources[0]?.id ?? null
   const targetResources = shouldUsePrimaryOnly
     ? resources.filter((resource) => resource.id === primaryResourceId).slice(0, 1)
     : resources

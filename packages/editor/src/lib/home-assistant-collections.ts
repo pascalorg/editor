@@ -1,14 +1,19 @@
-import type { AnyNodeId, Collection, CollectionId, ItemNode } from '@pascal-app/core/schema'
-import { normalizeCollection } from '@pascal-app/core/schema'
 import type {
+  AnyNodeId,
+  Collection,
+  CollectionId,
   HomeAssistantAction,
   HomeAssistantActionField,
   HomeAssistantBindingPresentation,
   HomeAssistantCollectionBinding,
   HomeAssistantCollectionCapability,
   HomeAssistantResourceBinding,
-} from '@pascal-app/viewer/home-assistant-bindings'
-import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/viewer/home-assistant-bindings'
+  ItemNode,
+} from '@pascal-app/core/schema'
+import {
+  normalizeCollection,
+  normalizeHomeAssistantCollectionBinding,
+} from '@pascal-app/core/schema'
 import type {
   HomeAssistantAvailableAction,
   HomeAssistantAvailableActionField,
@@ -35,9 +40,7 @@ export function isHiddenHomeAssistantGroupResourceId(resourceId: string | null |
 const dedupeCapabilities = (capabilities: HomeAssistantCollectionCapability[]) =>
   Array.from(new Set(capabilities))
 
-const mapField = (
-  field: HomeAssistantAvailableActionField,
-): HomeAssistantActionField => ({
+const mapField = (field: HomeAssistantAvailableActionField): HomeAssistantActionField => ({
   defaultValue: field.defaultValue,
   key: field.key,
   label: field.label,
@@ -85,7 +88,8 @@ const inferCapabilitiesFromAction = (
   if (
     action.fields.some((field) =>
       ['temperature', 'target_temp_high', 'target_temp_low'].includes(field.key),
-    ) || action.service === 'set_temperature'
+    ) ||
+    action.service === 'set_temperature'
   ) {
     capabilities.push('temperature')
   }
@@ -97,7 +101,9 @@ const inferCapabilitiesFromAction = (
   return dedupeCapabilities(capabilities)
 }
 
-export const toHomeAssistantAction = (action: HomeAssistantAvailableAction): HomeAssistantAction => ({
+export const toHomeAssistantAction = (
+  action: HomeAssistantAvailableAction,
+): HomeAssistantAction => ({
   capability: inferCapabilitiesFromAction(action)[0] ?? 'trigger',
   domain: action.domain,
   fields: action.fields.map((field) => mapField(field)),
@@ -245,12 +251,11 @@ export const bindResourceToCollectionBinding = ({
     : [...existingResources, toResourceBinding(resource)]
 
   return normalizeHomeAssistantCollectionBinding({
-    aggregation:
-      nextResources.some((entry) => entry.kind !== 'entity')
-        ? 'trigger_only'
-        : nextResources.length > 1 || collection.nodeIds.length > 1
-          ? 'all'
-          : 'single',
+    aggregation: nextResources.some((entry) => entry.kind !== 'entity')
+      ? 'trigger_only'
+      : nextResources.length > 1 || collection.nodeIds.length > 1
+        ? 'all'
+        : 'single',
     collectionId: collection.id,
     presentation,
     primaryResourceId: existingBinding?.primaryResourceId ?? resource.id,

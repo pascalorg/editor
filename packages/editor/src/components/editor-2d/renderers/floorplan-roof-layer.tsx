@@ -1,7 +1,7 @@
 'use client'
 
-import { memo } from 'react'
 import type { Point2D, RoofNode, RoofSegmentNode } from '@pascal-app/core'
+import { memo } from 'react'
 import { toSvgX, toSvgY } from '../svg-paths'
 
 type FloorplanLineSegment = {

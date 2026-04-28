@@ -2,23 +2,23 @@
 
 import {
   type AnyNodeId,
-  type FenceNode,
-  type WallNode,
   emitter,
+  type FenceNode,
   type GridEvent,
   pauseSceneHistory,
   resumeSceneHistory,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
-import { Html } from '@react-three/drei'
 import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor, { type MovingFenceEndpoint } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { snapFenceDraftPoint, type FencePlanPoint } from './fence-drafting'
 import { isWallLongEnough } from '../wall/wall-drafting'
+import { type FencePlanPoint, snapFenceDraftPoint } from './fence-drafting'
 
 function samePoint(a: FencePlanPoint, b: FencePlanPoint) {
   return a[0] === b[0] && a[1] === b[1]

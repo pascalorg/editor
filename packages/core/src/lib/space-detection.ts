@@ -1,14 +1,20 @@
 import {
-  getClampedWallCurveOffset,
-  getWallCurveFrameAt,
-  isCurvedWall,
-} from '../systems/wall/wall-curve'
-import { CeilingNode, SlabNode, type CeilingNode as CeilingNodeType, type SlabNode as SlabNodeType, type WallNode } from '../schema'
+  CeilingNode,
+  type CeilingNode as CeilingNodeType,
+  SlabNode,
+  type SlabNode as SlabNodeType,
+  type WallNode,
+} from '../schema'
 import {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resumeSceneHistory,
 } from '../store/history-control'
+import {
+  getClampedWallCurveOffset,
+  getWallCurveFrameAt,
+  isCurvedWall,
+} from '../systems/wall/wall-curve'
 import { simplifyClosedPolygon } from './polygon-geometry'
 
 type Point2D = { x: number; y: number }
@@ -216,7 +222,13 @@ function sampleWallPointsForRoomDetection(
     return [start, end]
   }
 
-  const subdivide = (t0: number, p0: Point2D, t1: number, p1: Point2D, depth: number): Point2D[] => {
+  const subdivide = (
+    t0: number,
+    p0: Point2D,
+    t1: number,
+    p1: Point2D,
+    depth: number,
+  ): Point2D[] => {
     const midT = (t0 + t1) / 2
     const midPoint = getWallCurveFrameAt(wall, midT).point
     const deviation = pointLineDistance(midPoint, p0, p1)
@@ -442,10 +454,7 @@ function nextAutoRoomName(
   return `Room ${maxIndex + 1} ${suffix}`
 }
 
-function sameTuplePolygon(
-  current: Array<[number, number]>,
-  next: Array<[number, number]>,
-) {
+function sameTuplePolygon(current: Array<[number, number]>, next: Array<[number, number]>) {
   return (
     current.length === next.length &&
     current.every((point, index) => point[0] === next[index]?.[0] && point[1] === next[index]?.[1])
@@ -727,7 +736,9 @@ function syncAutoCeilingsForLevel(
       const polygon = updatesById.get(ceiling.id)
       if (!polygon) return []
 
-      return sameTuplePolygon(ceiling.polygon, polygon) ? [] : [{ id: ceiling.id, data: { polygon } }]
+      return sameTuplePolygon(ceiling.polygon, polygon)
+        ? []
+        : [{ id: ceiling.id, data: { polygon } }]
     })
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]

@@ -25,8 +25,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { getHomeAssistantLink } from '../../lib/home-assistant'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
-import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
 import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { NodeActionMenu } from './node-action-menu'
@@ -149,10 +149,7 @@ export function FloatingActionMenu() {
           node.type === 'wall'
             ? obj.localToWorld(
                 new THREE.Vector3(
-                  Math.hypot(
-                    segment.end[0] - segment.start[0],
-                    segment.end[1] - segment.start[1],
-                  ),
+                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
                   0,
                   0,
                 ),
@@ -405,9 +402,7 @@ export function FloatingActionMenu() {
         return
       }
 
-      setHomeAssistantControlItemId(
-        homeAssistantControlItemId === node.id ? null : String(node.id),
-      )
+      setHomeAssistantControlItemId(homeAssistantControlItemId === node.id ? null : String(node.id))
     },
     [homeAssistantControlItemId, node, setHomeAssistantControlItemId],
   )
@@ -444,8 +439,12 @@ export function FloatingActionMenu() {
             />
           ) : (
             <NodeActionMenu
-              extraActionIcon={linkedHomeAssistantItem?.link?.haEntityId ? 'connectivity' : undefined}
-              extraActionLabel={linkedHomeAssistantItem?.link?.haEntityId ? 'Home Assistant' : undefined}
+              extraActionIcon={
+                linkedHomeAssistantItem?.link?.haEntityId ? 'connectivity' : undefined
+              }
+              extraActionLabel={
+                linkedHomeAssistantItem?.link?.haEntityId ? 'Home Assistant' : undefined
+              }
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
               onCurve={
                 node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
@@ -458,7 +457,9 @@ export function FloatingActionMenu() {
                   ? handleDuplicate
                   : undefined
               }
-              onExtraAction={linkedHomeAssistantItem?.link?.haEntityId ? handleExtraAction : undefined}
+              onExtraAction={
+                linkedHomeAssistantItem?.link?.haEntityId ? handleExtraAction : undefined
+              }
               onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}

@@ -7,13 +7,7 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import {
-  type HomeAssistantDeviceActionDispatch,
-  type HoverStyles,
-  InteractiveSystem,
-  useViewer,
-  Viewer,
-} from '@pascal-app/viewer'
+import { type HoverStyles, useViewer, Viewer } from '@pascal-app/viewer'
 import {
   memo,
   type ReactNode,
@@ -51,7 +45,6 @@ import { FloatingLevelSelector } from '../ui/floating-level-selector'
 import { HelperManager } from '../ui/helpers/helper-manager'
 import { HomeAssistantPanel } from '../ui/panels/home-assistant-panel'
 import { PanelManager } from '../ui/panels/panel-manager'
-import { HomeAssistantPlacementGroundSystem } from './home-assistant-placement-ground-system'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
@@ -69,6 +62,11 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
+import {
+  type HomeAssistantDeviceActionDispatch,
+  HomeAssistantInteractiveSystem,
+} from './home-assistant-interactive-system'
+import { HomeAssistantPlacementGroundSystem } from './home-assistant-placement-ground-system'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
@@ -622,7 +620,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <HomeAssistantPlacementGroundSystem />
-      <InteractiveSystem onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction} />
+      <HomeAssistantInteractiveSystem
+        onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
+      />
     </>
   )
 })
@@ -1059,7 +1059,9 @@ export default function Editor({
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      <InteractiveSystem onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction} />
+      <HomeAssistantInteractiveSystem
+        onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
+      />
     </Viewer>
   )
 

@@ -46,7 +46,6 @@ import {
   memo,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -54,7 +53,6 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { getHomeAssistantLink } from '../../lib/home-assistant'
 import {
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
@@ -62,6 +60,7 @@ import {
   rotatePlanVector as rotateSharedPlanVector,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
 } from '../../lib/floorplan'
+import { getHomeAssistantLink } from '../../lib/home-assistant'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -102,11 +101,8 @@ import {
 } from '../tools/wall/wall-drafting'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/primitives/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
-import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
-import { NodeActionMenu } from './node-action-menu'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
+import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
 import { useFloorplanSceneData } from './use-floorplan-scene-data'

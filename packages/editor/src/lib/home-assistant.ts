@@ -223,7 +223,6 @@ export function getHomeAssistantCapabilityCategory(
     case 'open':
     case 'close':
       return 'access'
-    case 'custom':
     default:
       return 'other'
   }
@@ -253,15 +252,6 @@ function deriveLegacyServiceDomain(actionKind: HomeAssistantActionKind) {
     case 'connect':
     case 'volume':
       return 'media_player'
-    case 'power':
-      return 'homeassistant'
-    case 'turn_on':
-    case 'turn_off':
-    case 'lock':
-    case 'unlock':
-    case 'open':
-    case 'close':
-    case 'custom':
     default:
       return 'homeassistant'
   }
@@ -295,8 +285,6 @@ function deriveLegacyServiceName(actionKind: HomeAssistantActionKind) {
       return 'open_cover'
     case 'close':
       return 'close_cover'
-    case 'power':
-    case 'custom':
     default:
       return 'toggle'
   }
@@ -326,7 +314,11 @@ function buildHomeAssistantActionPresentation({
   serviceDomain: string
   serviceName: string
 }): HomeAssistantActionPresentation {
-  if (serviceDomain === 'media_player' && serviceName === 'play_media' && actionKind === 'connect') {
+  if (
+    serviceDomain === 'media_player' &&
+    serviceName === 'play_media' &&
+    actionKind === 'connect'
+  ) {
     return {
       displayKey: 'connect',
       icon: 'connect',
@@ -483,7 +475,6 @@ function buildHomeAssistantActionPresentation({
       return { displayKey: 'close', icon: 'close', label: 'Close' }
     case 'connect':
       return { displayKey: 'connect', icon: 'connect', label: 'Connect' }
-    case 'custom':
     default:
       return {
         displayKey: `${serviceDomain}.${serviceName}`,
@@ -521,13 +512,13 @@ export function toHomeAssistantLink(
       ? enabledActionCategories
       : device.enabledActionCategories.length > 0
         ? device.enabledActionCategories
-      : Array.from(
-          new Set(
-            device.availableActions.map((candidate) =>
-              getHomeAssistantCapabilityCategory(candidate.actionKind),
+        : Array.from(
+            new Set(
+              device.availableActions.map((candidate) =>
+                getHomeAssistantCapabilityCategory(candidate.actionKind),
+              ),
             ),
-          ),
-        )
+          )
 
   return {
     actionKind: resolvedAction?.actionKind ?? 'custom',
@@ -627,7 +618,7 @@ export function setHomeAssistantLink(metadata: unknown, link: HomeAssistantLink 
 }
 
 export function getHomeAssistantActionPresentation(link: HomeAssistantLink | null) {
-  if (!link || !link.haEntityId) {
+  if (!link?.haEntityId) {
     return null
   }
 

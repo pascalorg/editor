@@ -6,10 +6,7 @@ export function insetPolygonFromCentroid(
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
 
-  const centroid = polygon.reduce(
-    (acc, [x, z]) => ({ x: acc.x + x, z: acc.z + z }),
-    { x: 0, z: 0 },
-  )
+  const centroid = polygon.reduce((acc, [x, z]) => ({ x: acc.x + x, z: acc.z + z }), { x: 0, z: 0 })
   centroid.x /= Math.max(polygon.length, 1)
   centroid.z /= Math.max(polygon.length, 1)
 
@@ -70,7 +67,10 @@ function dedupePolygonPoints(
   return deduped
 }
 
-function simplifyPolyline(points: Array<[number, number]>, tolerance: number): Array<[number, number]> {
+function simplifyPolyline(
+  points: Array<[number, number]>,
+  tolerance: number,
+): Array<[number, number]> {
   if (points.length <= 2) {
     return points.map(([x, z]) => [x, z] as [number, number])
   }

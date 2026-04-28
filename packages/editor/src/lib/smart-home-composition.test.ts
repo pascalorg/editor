@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import type { CollectionId, HomeAssistantCollectionBinding, HomeAssistantResourceBinding } from '@pascal-app/core/schema'
+import type {
+  CollectionId,
+  HomeAssistantCollectionBinding,
+  HomeAssistantResourceBinding,
+} from '@pascal-app/core/schema'
+import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
 import {
+  buildSmartHomeRoomControlCompositionFromTileGroups,
+  getLegacySmartHomeRoomControlTileId,
   getSmartHomeRoomControlTileId,
+  isSmartHomeBindingPresentationHidden,
   normalizeSmartHomeRoomGroupsForBinding,
   repairHomeAssistantBindingResourcesFromGroups,
 } from './smart-home-composition'
@@ -29,10 +37,7 @@ function entityResource(id: string, label = id): HomeAssistantResourceBinding {
   }
 }
 
-function groupResource(
-  id: string,
-  memberEntityIds: string[],
-): HomeAssistantResourceBinding {
+function groupResource(id: string, memberEntityIds: string[]): HomeAssistantResourceBinding {
   return {
     actions: [],
     capabilities: ['power'],
@@ -45,7 +50,10 @@ function groupResource(
   }
 }
 
-function binding(resources: HomeAssistantResourceBinding[], rtsGroups?: string[][]): HomeAssistantCollectionBinding {
+function binding(
+  resources: HomeAssistantResourceBinding[],
+  rtsGroups?: string[][],
+): HomeAssistantCollectionBinding {
   return {
     aggregation: 'all',
     collectionId,
@@ -83,7 +91,9 @@ describe('smart home composition', () => {
   })
 
   test('hydrates all HA group member devices into the binding resources', () => {
-    const allResourcesById = new Map(lights.concat(masterGroup).map((resource) => [resource.id, resource]))
+    const allResourcesById = new Map(
+      lights.concat(masterGroup).map((resource) => [resource.id, resource]),
+    )
     const repaired = repairHomeAssistantBindingResourcesFromGroups({
       allResourcesById,
       binding: binding([masterGroup, lights[0]!]),
@@ -100,7 +110,9 @@ describe('smart home composition', () => {
   })
 
   test('keeps detached HA group members excluded from automatic hydration', () => {
-    const allResourcesById = new Map(lights.concat(masterGroup).map((resource) => [resource.id, resource]))
+    const allResourcesById = new Map(
+      lights.concat(masterGroup).map((resource) => [resource.id, resource]),
+    )
     const repaired = repairHomeAssistantBindingResourcesFromGroups({
       allResourcesById,
       binding: binding([masterGroup, lights[0]!, lights[1]!]),
@@ -114,24 +126,54 @@ describe('smart home composition', () => {
       lights[2]!.id,
       lights[3]!.id,
     ])
-    expect(repaired.presentation?.rtsExcludedResourceIds).toContain(lights[1]!.id)
+    expect(repaired.presentation?.rtsRoomControls?.excludedResourceIds).toContain(lights[1]!.id)
   })
 
   test('preserves user-added resources referenced by authored room groups', () => {
     const tvGroup = [getSmartHomeRoomControlTileId(collectionId, tv.id)]
-    const allResourcesById = new Map(lights.concat(masterGroup, tv).map((resource) => [resource.id, resource]))
+    const allResourcesById = new Map(
+      lights.concat(masterGroup, tv).map((resource) => [resource.id, resource]),
+    )
     const repaired = repairHomeAssistantBindingResourcesFromGroups({
       allResourcesById,
-      binding: binding([masterGroup, lights[0]!, tv], [
-        [getSmartHomeRoomControlTileId(collectionId, lights[0]!.id)],
-        tvGroup,
-      ]),
-      rawGroups: [
-        [getSmartHomeRoomControlTileId(collectionId, lights[0]!.id)],
-        tvGroup,
-      ],
+      binding: binding(
+        [masterGroup, lights[0]!, tv],
+        [[getSmartHomeRoomControlTileId(collectionId, lights[0]!.id)], tvGroup],
+      ),
+      rawGroups: [[getSmartHomeRoomControlTileId(collectionId, lights[0]!.id)], tvGroup],
     })
 
     expect(repaired.resources.some((resource) => resource.id === tv.id)).toBe(true)
+  })
+
+  test('converts legacy tile ids into resource-id room-control composition', () => {
+    const legacyGroup = [
+      `${getLegacySmartHomeRoomControlTileId(collectionId, lights[0]!.id)}:0`,
+      `${getLegacySmartHomeRoomControlTileId(collectionId, lights[1]!.id)}:1`,
+    ]
+    const composition = buildSmartHomeRoomControlCompositionFromTileGroups({
+      collectionId,
+      groups: [legacyGroup],
+      resources: lights,
+    })
+
+    expect(composition?.groups?.[0]?.memberResourceIds).toEqual([lights[0]!.id, lights[1]!.id])
+
+    const normalized = normalizeHomeAssistantCollectionBinding(binding(lights, [legacyGroup]))
+
+    expect(normalized?.presentation?.rtsRoomControls?.groups?.[0]?.memberResourceIds).toEqual([
+      lights[0]!.id,
+      lights[1]!.id,
+    ])
+    expect(normalized?.presentation?.rtsGroups).toBeUndefined()
+  })
+
+  test('marks hidden group presentation as durable scene state', () => {
+    const normalized = normalizeHomeAssistantCollectionBinding({
+      ...binding([masterGroup]),
+      presentation: { rtsHidden: true },
+    })
+
+    expect(isSmartHomeBindingPresentationHidden(normalized?.presentation)).toBe(true)
   })
 })

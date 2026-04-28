@@ -1,6 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
-import type { Object3D } from 'three'
 import mitt from 'mitt'
+import type { Object3D } from 'three'
 import type {
   BuildingNode,
   CeilingNode,

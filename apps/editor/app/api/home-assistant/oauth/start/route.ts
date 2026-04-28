@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import {
-  HOME_ASSISTANT_OAUTH_COOKIE,
   buildHomeAssistantAuthorizeUrl,
   buildHomeAssistantOauthState,
+  HOME_ASSISTANT_OAUTH_COOKIE,
   normalizeOptionalHomeAssistantUrl,
 } from '../../../../_lib/home-assistant-auth'
 
@@ -28,11 +28,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const oauthState = buildHomeAssistantOauthState(
-      request,
-      resolvedInstanceUrl,
-      externalUrl,
-    )
+    const oauthState = buildHomeAssistantOauthState(request, resolvedInstanceUrl, externalUrl)
 
     const response = NextResponse.json({
       authorizeUrl: buildHomeAssistantAuthorizeUrl(oauthState),
@@ -48,7 +44,8 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to start Home Assistant sign-in.'
+    const message =
+      error instanceof Error ? error.message : 'Failed to start Home Assistant sign-in.'
     return Response.json({ error: message }, { status: 500 })
   }
 }
