@@ -67,6 +67,7 @@ export function getPresentationAfterResourceRemoval(
       collectionId,
       excludedResourceIds: nextExcludedResourceIds,
       groups: nextGroups,
+      mode: 'user-managed',
       resources,
     }),
   }
@@ -95,6 +96,7 @@ export function getPresentationAfterResourceInclusion(
       collectionId,
       excludedResourceIds: nextExcludedResourceIds,
       groups: getSmartHomeRoomControlTileGroups({ collectionId, presentation }),
+      mode: 'user-managed',
       resources,
     }),
   }

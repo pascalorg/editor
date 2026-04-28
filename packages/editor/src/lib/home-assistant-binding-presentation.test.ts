@@ -40,6 +40,7 @@ describe('home assistant binding presentation helpers', () => {
 
     expect((nextPresentation as Record<string, unknown>).rtsGroups).toBeUndefined()
     expect((nextPresentation as Record<string, unknown>).rtsExcludedResourceIds).toBeUndefined()
+    expect(nextPresentation.rtsRoomControls?.mode).toBe('user-managed')
     expect(nextPresentation.rtsRoomControls?.excludedResourceIds).toEqual([resources[1]!.id])
     expect(nextPresentation.rtsRoomControls?.groups?.[0]?.memberResourceIds).toEqual([
       resources[0]!.id,
@@ -61,6 +62,7 @@ describe('home assistant binding presentation helpers', () => {
     )
 
     expect(nextPresentation?.rtsRoomControls?.excludedResourceIds).toEqual([resources[0]!.id])
+    expect(nextPresentation?.rtsRoomControls?.mode).toBe('user-managed')
     expect(nextPresentation?.rtsRoomControls?.groups?.[0]?.memberResourceIds).toEqual([
       resources[0]!.id,
     ])

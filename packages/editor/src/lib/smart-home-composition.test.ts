@@ -170,6 +170,28 @@ describe('smart home composition', () => {
     ).toBeUndefined()
   })
 
+  test('preserves explicit user-managed room-control authority', () => {
+    const composition = buildSmartHomeRoomControlCompositionFromTileGroups({
+      collectionId,
+      groups: [[getSmartHomeRoomControlTileId(collectionId, lights[0]!.id)]],
+      mode: 'user-managed',
+      resources: lights,
+    })
+
+    expect(composition?.mode).toBe('user-managed')
+    expect(composition?.groups?.[0]).toEqual({ memberResourceIds: [lights[0]!.id] })
+
+    const normalized = normalizeHomeAssistantCollectionBinding({
+      ...binding(lights),
+      presentation: { rtsRoomControls: composition },
+    })
+
+    expect(normalized?.presentation?.rtsRoomControls?.mode).toBe('user-managed')
+    expect(normalized?.presentation?.rtsRoomControls?.groups?.[0]).toEqual({
+      memberResourceIds: [lights[0]!.id],
+    })
+  })
+
   test('marks hidden group presentation as durable scene state', () => {
     const normalized = normalizeHomeAssistantCollectionBinding({
       ...binding([masterGroup]),

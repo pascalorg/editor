@@ -59,6 +59,12 @@ export function getSmartHomeRoomControlResourceGroups(
   return presentation?.rtsRoomControls?.groups?.map((group) => group.memberResourceIds) ?? []
 }
 
+export function getSmartHomeRoomControlMode(
+  presentation: HomeAssistantCollectionBinding['presentation'],
+) {
+  return presentation?.rtsRoomControls?.mode ?? 'ha-derived'
+}
+
 export function getSmartHomeRoomControlTileGroups({
   collectionId,
   presentation,
@@ -81,11 +87,13 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
   collectionId,
   excludedResourceIds = [],
   groups,
+  mode,
   resources = [],
 }: {
   collectionId: CollectionId | string
   excludedResourceIds?: readonly string[]
   groups: string[][]
+  mode?: HomeAssistantRoomControlComposition['mode']
   resources?: readonly HomeAssistantResourceBinding[]
 }): HomeAssistantRoomControlComposition | undefined {
   const resourceAliases = new Map<string, string>()
@@ -120,13 +128,14 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
     .filter((group) => group.memberResourceIds.length > 0)
   const excluded = Array.from(new Set(excludedResourceIds))
 
-  if (resourceGroups.length === 0 && excluded.length === 0) {
+  if (resourceGroups.length === 0 && excluded.length === 0 && !mode) {
     return undefined
   }
 
   return {
     ...(excluded.length > 0 ? { excludedResourceIds: excluded } : {}),
     ...(resourceGroups.length > 0 ? { groups: resourceGroups } : {}),
+    ...(mode ? { mode } : {}),
   }
 }
 
@@ -501,6 +510,7 @@ export function repairHomeAssistantBindingResourcesFromGroups({
           collectionId,
           presentation: binding.presentation,
         }),
+        mode: getSmartHomeRoomControlMode(binding.presentation),
         resources: nextResources,
       }),
     },

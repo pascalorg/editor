@@ -17,6 +17,7 @@ import {
   Editor,
   getSmartHomeBindingControlIds,
   getSmartHomeExcludedResourceIds,
+  getSmartHomeRoomControlMode,
   getSmartHomeRoomControlTileGroups,
   isDefaultSmartHomeRoomGroup,
   isHiddenHomeAssistantGroupResourceId,
@@ -623,6 +624,9 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
               bindingWithRepairedResources.presentation,
             ),
             groups: nextGroups,
+            mode: sceneHasCustomGroups
+              ? 'user-managed'
+              : getSmartHomeRoomControlMode(bindingWithRepairedResources.presentation),
             resources: bindingWithRepairedResources.resources,
           }),
         },

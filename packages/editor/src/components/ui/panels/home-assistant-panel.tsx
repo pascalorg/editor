@@ -59,6 +59,7 @@ import {
   getSmartHomeExcludedResourceIds,
   getSmartHomeBindingControlResources as getBindingControlResources,
   getSmartHomeRoomControlTileGroups,
+  getSmartHomeRoomControlMode,
   getSmartHomeRoomGroupMemberResourceId as getRoomGroupMemberResourceId,
   hasSmartHomeGroupResource as bindingHasGroupResource,
   isSmartHomeBindingPresentationHidden,
@@ -472,6 +473,10 @@ function bindingHasUserManagedGroupComposition({
 }) {
   if (!binding) {
     return false
+  }
+
+  if (getSmartHomeRoomControlMode(binding.presentation) === 'user-managed') {
+    return true
   }
 
   const excludedResourceIds = getSmartHomeExcludedResourceIds(binding.presentation)
@@ -2209,6 +2214,7 @@ export function HomeAssistantPanel() {
             collectionId: collection.id,
             presentation: existingBinding?.presentation,
           }),
+          mode: 'ha-derived',
           resources: existingBinding?.resources ?? [],
         })
       }

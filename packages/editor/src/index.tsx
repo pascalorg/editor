@@ -31,6 +31,7 @@ export {
   getSmartHomeBindingControlIds,
   getSmartHomeBindingControlResources,
   getSmartHomeExcludedResourceIds,
+  getSmartHomeRoomControlMode,
   getSmartHomeRoomControlTileGroups,
   getSmartHomeRoomControlTileId,
   isDefaultSmartHomeRoomGroup,

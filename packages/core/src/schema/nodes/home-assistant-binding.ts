@@ -77,6 +77,7 @@ const homeAssistantRoomControlGroupSchema = z.object({
 const homeAssistantRoomControlCompositionSchema = z.object({
   excludedResourceIds: z.array(z.string()).optional(),
   groups: z.array(homeAssistantRoomControlGroupSchema).optional(),
+  mode: z.enum(['ha-derived', 'user-managed']).optional(),
 })
 
 const homeAssistantBindingPresentationSchema = z.object({
@@ -346,14 +347,19 @@ const normalizeRoomControlComposition = ({
   const excludedResourceIds = dedupeStringArray(
     existingComposition?.excludedResourceIds ?? presentation?.rtsExcludedResourceIds,
   )
+  const mode =
+    existingComposition?.mode === 'ha-derived' || existingComposition?.mode === 'user-managed'
+      ? existingComposition.mode
+      : undefined
 
-  if (groups.length === 0 && excludedResourceIds.length === 0) {
+  if (groups.length === 0 && excludedResourceIds.length === 0 && !mode) {
     return undefined
   }
 
   return {
     ...(excludedResourceIds.length > 0 ? { excludedResourceIds } : {}),
     ...(groups.length > 0 ? { groups } : {}),
+    ...(mode ? { mode } : {}),
   }
 }
 
