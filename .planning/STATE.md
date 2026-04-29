@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** Make discovering, organizing, and sharing 3D spaces as fluid as Figma makes 2D design
-**Current focus:** Phase 1 — Landing
+**Current focus:** Phase 2 — Authentication
 
 ## Current Position
 
-Phase: 1 of 7 (Landing) — COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 1 complete — ready to begin Phase 2
-Last activity: 2026-04-28 — Human approved OG/Twitter card checkpoint; 01-02 complete; Phase 1 (Landing) fully done
+Phase: 2 of 7 (Authentication) — IN PROGRESS
+Plan: 1 of N complete
+Status: 02-01 complete — Google OAuth + NEXTAUTH_SECRET fix shipped; ready for 02-02
+Last activity: 2026-04-28 — 02-01 complete: GoogleProvider + signIn upsert, env rename, Google button on login page
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
@@ -50,6 +50,9 @@ Recent decisions affecting current work:
 - Enterprise "Contact Sales" tier also routes through /signup for unified auth entry
 - OG image uses next/og (bundled Next.js 16) — no @vercel/og install; Satori requires all styles inline
 - twitter-image.tsx is a self-contained copy of opengraph-image (no cross-import; Next.js file convention)
+- No @auth/prisma-adapter — manual signIn callback upsert preserves JWT session strategy; email as unique key prevents duplicate users
+- allowDangerousEmailAccountLinking: true on GoogleProvider — safe for Google (verifies email); enables credential-user account linking
+- BETTER_AUTH_SECRET renamed to NEXTAUTH_SECRET (was causing silent JWT signing failures)
 
 ### Pending Todos
 
@@ -62,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-28
-Stopped at: Phase 1 fully complete — all 2 plans done (01-01 CTA standardization + human-verified; 01-02 OG/Twitter card + human-verified)
-Resume file: Begin Phase 2
+Stopped at: Phase 2 Plan 01 complete — GoogleProvider + signIn upsert + env rename + Google button on login page
+Resume file: Begin 02-02
