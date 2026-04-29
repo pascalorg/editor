@@ -1,13 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { Box, ArrowRight, AlertCircle } from 'lucide-react'
 
 type Mode = 'signin' | 'signup'
+
+const OAUTH_ERROR_MESSAGES: { [key: string]: string | undefined; Default: string } = {
+  OAuthAccountNotLinked: 'This email is already registered. Please sign in with your password first.',
+  OAuthSignin: 'Could not start Google sign-in. Please try again.',
+  Callback: 'Something went wrong during Google sign-in. Please try again.',
+  Default: 'An error occurred during Google sign-in. Please try again.',
+}
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>('signin')
@@ -15,8 +22,17 @@ export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const oauthError = searchParams.get('error')
+    if (oauthError) {
+      setError(OAUTH_ERROR_MESSAGES[oauthError] ?? OAUTH_ERROR_MESSAGES['Default'])
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,6 +69,13 @@ export default function AuthPage() {
     setError('')
     setPassword('')
     if (m === 'signin') setName('')
+  }
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true)
+    await signIn('google', { callbackUrl: '/dashboard' })
+    // NextAuth redirects — reset only on error (unmount handles the rest)
+    setGoogleLoading(false)
   }
 
   return (
@@ -175,6 +198,33 @@ export default function AuthPage() {
               )}
             </button>
           </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/[0.06]" />
+            <span className="text-xs text-zinc-600">or</span>
+            <div className="h-px flex-1 bg-white/[0.06]" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+            className="w-full bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-white font-medium py-2.5 rounded-xl flex items-center justify-center gap-2.5 text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {googleLoading ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+                  <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
+                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
+              </>
+            )}
+          </button>
         </div>
 
         <p className="mt-5 text-center text-xs text-zinc-600">
