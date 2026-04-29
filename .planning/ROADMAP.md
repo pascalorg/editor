@@ -161,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Landing | 0/2 | Not started | - |
 | 2. Authentication | 0/2 | Not started | - |
 | 3. Onboarding | 0/2 | Not started | - |
-| 4. Dashboard | 0/3 | Not started | - |
+| 4. Dashboard | 0/2 | Not started | - |
 | 5. Teamspaces | 0/3 | Not started | - |
 | 6. Marketplace | 0/4 | Not started | - |
 | 7. Designer Profiles | 0/3 | Not started | - |
