@@ -1,7 +1,10 @@
 import path from 'node:path'
-import type { NextConfig } from 'next'
+import { fileURLToPath } from 'node:url'
 
-const nextConfig: NextConfig = {
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
