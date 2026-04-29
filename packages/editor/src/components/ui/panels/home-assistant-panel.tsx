@@ -2,7 +2,7 @@
 
 import { emitter } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId, Collection, CollectionId, ItemNode } from '@pascal-app/core'
-import { normalizeCollection, useScene } from '@pascal-app/core'
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   createHomeAssistantBindingNode,
@@ -54,19 +54,25 @@ import {
   bindingResourceIsExplicitGroupMember,
   bindingResourceMatchesGroup,
   bindResourceToCollectionBinding,
+  buildHomeAssistantResourceCollection,
   buildCollectionBindingFromResource,
   compareGroupsBySpecificity,
   createPascalGroupResource,
+  getCollectionNameFromItems,
   getGroupMemberEntityIds,
   getNextPascalGroupLabel,
   getResourceEntityId,
   getRoomGroupStem,
   getScenePillResource,
+  getSelectedItems,
   isDeviceResource,
   isGroupResource,
   isHiddenHomeAssistantGroupResourceId,
+  isItemNode,
   orderDeviceGroupsBySharedMembers,
   orderResourcesForNeighborGroups,
+  resolveExactCollectionForItems,
+  toCollectionBinding,
   toResourceBinding,
 } from '../../../lib/home-assistant-collections'
 import {
@@ -223,88 +229,22 @@ const PROVIDERS: ProviderDefinition[] = [
   },
 ]
 
-function isItemNode(value: unknown): value is ItemNode {
-  return Boolean(value && typeof value === 'object' && 'type' in value && value.type === 'item')
-}
-
-function getSelectedItems(nodes: Record<AnyNodeId, AnyNode>, selectedIds: string[]) {
-  return selectedIds
-    .map((selectedId) => nodes[selectedId as AnyNodeId])
-    .filter((node): node is ItemNode => isItemNode(node))
-}
-
-function resolveExactCollectionForItems(
-  collections: Record<CollectionId, Collection>,
-  items: ItemNode[],
-) {
-  const itemIds = items.map((item) => item.id)
-  if (itemIds.length === 0) {
-    return null
-  }
-
-  return (
-    Object.values(collections).find(
-      (collection) =>
-        collection.nodeIds.length === itemIds.length &&
-        itemIds.every((itemId) => collection.nodeIds.includes(itemId)),
-    ) ?? null
-  )
-}
-
-function getCollectionNameFromItems(items: ItemNode[]) {
-  if (items.length === 0) {
-    return 'Home control'
-  }
-
-  if (items.length === 1) {
-    return items[0]?.name?.trim() || items[0]?.asset.name?.trim() || 'Home control'
-  }
-
-  const firstName = items[0]?.name?.trim() || items[0]?.asset.name?.trim() || 'Control group'
-  return `${firstName} group`
-}
-
-function toCollectionBinding(bindingNode: ReturnType<typeof getHomeAssistantBindingNodeMap>[CollectionId]) {
-  return {
-    aggregation: bindingNode.aggregation,
-    collectionId: bindingNode.collectionId,
-    presentation: bindingNode.presentation,
-    primaryResourceId: bindingNode.primaryResourceId ?? null,
-    resources: bindingNode.resources,
-  } satisfies HomeAssistantCollectionBinding
-}
-
-function getStableHomeAssistantCollectionId(resourceId: string): CollectionId {
-  const normalizedResourceId =
-    resourceId
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'resource'
-  return `collection_ha_${normalizedResourceId}` as CollectionId
-}
-
 function ensureHomeAssistantResourceCollection(
   resource: HomeAssistantImportedResource,
 ): Collection | null {
-  const collectionId = getStableHomeAssistantCollectionId(resource.id)
-  const existingCollection = useScene.getState().collections[collectionId]
+  const collection = buildHomeAssistantResourceCollection(resource)
+  const existingCollection = useScene.getState().collections[collection.id]
   if (existingCollection) {
     return existingCollection
   }
 
-  const collection = normalizeCollection({
-    id: collectionId,
-    name: resource.label,
-    nodeIds: [],
-  })
   useScene.setState((state) => ({
     collections: {
       ...state.collections,
-      [collectionId]: collection,
+      [collection.id]: collection,
     },
   }))
-  return useScene.getState().collections[collectionId] ?? collection
+  return useScene.getState().collections[collection.id] ?? collection
 }
 
 function getResourceTypeIcon(resource: HomeAssistantImportedResource) {

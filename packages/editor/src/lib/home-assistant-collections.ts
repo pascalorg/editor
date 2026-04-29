@@ -1,4 +1,5 @@
 import type {
+  AnyNode,
   AnyNodeId,
   Collection,
   CollectionId,
@@ -178,6 +179,79 @@ export function isGroupResource(resource: HomeAssistantImportedResource) {
 
 export function isDeviceResource(resource: HomeAssistantImportedResource) {
   return resource.kind === 'entity' && !isGroupResource(resource)
+}
+
+export function isItemNode(value: unknown): value is ItemNode {
+  return Boolean(value && typeof value === 'object' && 'type' in value && value.type === 'item')
+}
+
+export function getSelectedItems(nodes: Record<AnyNodeId, AnyNode>, selectedIds: string[]) {
+  return selectedIds
+    .map((selectedId) => nodes[selectedId as AnyNodeId])
+    .filter((node): node is ItemNode => isItemNode(node))
+}
+
+export function resolveExactCollectionForItems(
+  collections: Record<CollectionId, Collection>,
+  items: ItemNode[],
+) {
+  const itemIds = items.map((item) => item.id)
+  if (itemIds.length === 0) {
+    return null
+  }
+
+  return (
+    Object.values(collections).find(
+      (collection) =>
+        collection.nodeIds.length === itemIds.length &&
+        itemIds.every((itemId) => collection.nodeIds.includes(itemId)),
+    ) ?? null
+  )
+}
+
+export function getCollectionNameFromItems(items: ItemNode[]) {
+  if (items.length === 0) {
+    return 'Home control'
+  }
+
+  if (items.length === 1) {
+    return items[0]?.name?.trim() || items[0]?.asset.name?.trim() || 'Home control'
+  }
+
+  const firstName = items[0]?.name?.trim() || items[0]?.asset.name?.trim() || 'Control group'
+  return `${firstName} group`
+}
+
+export function toCollectionBinding(
+  bindingNode: HomeAssistantCollectionBinding,
+): HomeAssistantCollectionBinding {
+  return {
+    aggregation: bindingNode.aggregation,
+    collectionId: bindingNode.collectionId,
+    presentation: bindingNode.presentation,
+    primaryResourceId: bindingNode.primaryResourceId ?? null,
+    resources: bindingNode.resources,
+  }
+}
+
+export function getStableHomeAssistantCollectionId(resourceId: string): CollectionId {
+  const normalizedResourceId =
+    resourceId
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'resource'
+  return `collection_ha_${normalizedResourceId}` as CollectionId
+}
+
+export function buildHomeAssistantResourceCollection(
+  resource: HomeAssistantImportedResource,
+): Collection {
+  return normalizeCollection({
+    id: getStableHomeAssistantCollectionId(resource.id),
+    name: resource.label,
+    nodeIds: [],
+  })
 }
 
 export function getResourceEntityId(resource: HomeAssistantImportedResource) {
