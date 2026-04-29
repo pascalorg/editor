@@ -13,7 +13,7 @@ The editor core is complete. This roadmap builds the surrounding platform: marke
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Landing** - Visitor-facing marketing page that converts to sign-up ✓ 2026-04-29
-- [ ] **Phase 2: Authentication** - Email/password polish + Google OAuth + password reset
+- [x] **Phase 2: Authentication** - Email/password polish + Google OAuth + password reset ✓ 2026-04-29
 - [ ] **Phase 3: Onboarding** - Multi-step first-run flow that contextualizes the product
 - [ ] **Phase 4: Dashboard** - Figma-styled project home with grid, recents, starred, and sidebar
 - [ ] **Phase 5: Teamspaces** - Create teams, invite members by role, and switch between them
