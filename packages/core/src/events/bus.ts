@@ -1,6 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
-import type { Object3D } from 'three'
 import mitt from 'mitt'
+import type { Object3D } from 'three'
 import type {
   BuildingNode,
   CeilingNode,
@@ -104,10 +104,8 @@ export interface ThumbnailGenerateEvent {
 
 export interface CameraControlFitSceneEvent {
   /**
-   * XZ-plane axis-aligned bounds of the scene's geometry, computed from the
-   * scene graph (see `@pascal-app/editor`'s `computeSceneBoundsXZ`). The
-   * viewer's camera-controls listener frames the camera onto this box.
-   * Omitted values fall back to the camera's default pose.
+   * XZ-plane axis-aligned bounds for camera framing. Omitted values let the
+   * listener choose its default framing pose.
    */
   bounds?: {
     min: [number, number]

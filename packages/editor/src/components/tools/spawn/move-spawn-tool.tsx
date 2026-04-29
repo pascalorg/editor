@@ -3,12 +3,11 @@ import '../../../three-types'
 import {
   emitter,
   type GridEvent,
-  sceneRegistry,
   type SpawnNode,
+  sceneRegistry,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -35,7 +34,10 @@ function getLevelLocalSpawnPosition(node: SpawnNode, event: GridEvent): [number,
   return [roundToHalf(worldVector.x), worldVector.y, roundToHalf(worldVector.z)]
 }
 
-export const MoveSpawnTool: React.FC<{ node: SpawnNode }> = ({ node }) => {
+export const MoveSpawnTool: React.FC<{
+  node: SpawnNode
+  onCommitted?: (nodeId: SpawnNode['id']) => void
+}> = ({ node, onCommitted }) => {
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(node.position)
 
   const exitMoveMode = useCallback(() => {
@@ -66,7 +68,7 @@ export const MoveSpawnTool: React.FC<{ node: SpawnNode }> = ({ node }) => {
       committed = true
       useScene.temporal.getState().resume()
       useScene.getState().updateNode(node.id, { position: nextPosition })
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      onCommitted?.(node.id)
       useLiveTransforms.getState().clear(node.id)
       sfxEmitter.emit('sfx:item-place')
       exitMoveMode()
@@ -91,7 +93,7 @@ export const MoveSpawnTool: React.FC<{ node: SpawnNode }> = ({ node }) => {
         useScene.temporal.getState().resume()
       }
     }
-  }, [exitMoveMode, node])
+  }, [exitMoveMode, node, onCommitted])
 
   return (
     <CursorSphere color="#60a5fa" height={2.2} position={previewPosition} showTooltip={false} />

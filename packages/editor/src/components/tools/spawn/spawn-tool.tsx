@@ -4,11 +4,11 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
-  sceneRegistry,
   SpawnNode,
+  type SpawnNode as SpawnNodeType,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import type { Group } from 'three'
 import { Vector3 } from 'three'
@@ -56,8 +56,12 @@ function getLevelLocalSpawnPosition(
   return [roundToHalf(worldVector.x), worldVector.y, roundToHalf(worldVector.z)]
 }
 
-export const SpawnTool: React.FC = () => {
-  const currentLevelId = useViewer((state) => state.selection.levelId)
+type SpawnToolProps = {
+  currentLevelId: LevelNode['id'] | null
+  onPlaced?: (spawnId: SpawnNodeType['id']) => void
+}
+
+export const SpawnTool: React.FC<SpawnToolProps> = ({ currentLevelId, onPlaced }) => {
   const [, setCursorPosition] = useState<[number, number, number] | null>(null)
   const cursorRef = useRef<Group>(null)
 
@@ -87,7 +91,7 @@ export const SpawnTool: React.FC = () => {
         if (duplicateSpawnIds.length > 0) {
           useScene.getState().deleteNodes(duplicateSpawnIds)
         }
-        useViewer.getState().setSelection({ selectedIds: [existingSpawnId] })
+        onPlaced?.(existingSpawnId)
       } else {
         const spawn = SpawnNode.parse({
           name: 'Spawn Point',
@@ -95,7 +99,7 @@ export const SpawnTool: React.FC = () => {
           rotation: 0,
         })
         useScene.getState().createNode(spawn, currentLevelId)
-        useViewer.getState().setSelection({ selectedIds: [spawn.id] })
+        onPlaced?.(spawn.id)
       }
 
       sfxEmitter.emit('sfx:structure-build')
@@ -110,7 +114,7 @@ export const SpawnTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
     }
-  }, [currentLevelId])
+  }, [currentLevelId, onPlaced])
 
   if (!currentLevelId) return null
 

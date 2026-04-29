@@ -88,7 +88,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   return <>{cursor}</>
 }
 
-export const MoveTool: React.FC = () => {
+export const MoveTool: React.FC<{
+  onSpawnMoved?: (nodeId: SpawnNode['id']) => void
+}> = ({ onSpawnMoved }) => {
   const movingNode = useEditor((state) => state.movingNode)
 
   if (!movingNode) return null
@@ -102,7 +104,8 @@ export const MoveTool: React.FC = () => {
   if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
-  if (movingNode.type === 'spawn') return <MoveSpawnTool node={movingNode as SpawnNode} />
+  if (movingNode.type === 'spawn')
+    return <MoveSpawnTool node={movingNode as SpawnNode} onCommitted={onSpawnMoved} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
     return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
   return <MoveItemContent movingNode={movingNode as ItemNode} />

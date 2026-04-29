@@ -204,7 +204,6 @@ type EditorState = {
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
-  _levelIdBeforeFirstPerson: LevelNode['id'] | null
   setFirstPersonMode: (enabled: boolean) => void
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
@@ -637,46 +636,25 @@ const useEditor = create<EditorState>()(
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
       _viewModeBeforeFirstPerson: null as ViewMode | null,
-      _levelIdBeforeFirstPerson: null as LevelNode['id'] | null,
       setFirstPersonMode: (enabled) => {
         if (enabled) {
           const currentViewMode = get().viewMode
-          const currentLevelId = useViewer.getState().selection.levelId
-          useViewer.getState().setCameraMode('perspective')
-          useViewer.getState().setWallMode('up')
-          useViewer.getState().setWalkthroughMode(true)
           set({
             isFirstPersonMode: true,
             _viewModeBeforeFirstPerson: currentViewMode,
-            _levelIdBeforeFirstPerson: currentLevelId,
             viewMode: '3d',
             isFloorplanOpen: false,
             mode: 'select',
             tool: null,
             catalogCategory: null,
           })
-          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
           const prevMode = get()._viewModeBeforeFirstPerson
-          const prevLevelId = get()._levelIdBeforeFirstPerson
-          useViewer.getState().setWalkthroughMode(false)
           set({
             isFirstPersonMode: false,
             _viewModeBeforeFirstPerson: null,
-            _levelIdBeforeFirstPerson: null,
             ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
           })
-
-          if (prevLevelId) {
-            const prevLevelNode = useScene.getState().nodes[prevLevelId]
-            if (prevLevelNode?.type === 'level') {
-              useViewer.getState().setSelection({
-                levelId: prevLevelId,
-                zoneId: null,
-                selectedIds: [],
-              })
-            }
-          }
         }
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
