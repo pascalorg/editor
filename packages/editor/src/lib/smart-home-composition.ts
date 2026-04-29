@@ -571,6 +571,9 @@ export function mergeSmartHomeIncomingResourcesWithLocalDevices(
   const resourcesById = new Map<string, HomeAssistantResourceBinding>()
 
   for (const resource of incomingResources) {
+    if (excludedIds.has(resource.id) && isSmartHomeDeviceComponentResource(resource)) {
+      continue
+    }
     resourcesById.set(resource.id, cloneSmartHomeResourceBinding(resource))
   }
 

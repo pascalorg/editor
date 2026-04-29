@@ -11,6 +11,7 @@ import {
   getLegacySmartHomeRoomControlTileId,
   getSmartHomeRoomControlTileId,
   isSmartHomeBindingPresentationHidden,
+  mergeSmartHomeIncomingResourcesWithLocalDevices,
   normalizeSmartHomeRoomGroupsForBinding,
   repairHomeAssistantBindingResourcesFromGroups,
 } from './smart-home-composition'
@@ -235,5 +236,23 @@ describe('smart home composition', () => {
     })
 
     expect(isSmartHomeBindingPresentationHidden(normalized?.presentation)).toBe(true)
+  })
+
+  test('does not let HA refresh reintroduce user-excluded group devices', () => {
+    const fan = entityResource('fan.pascal_master_bedroom_fan', 'Master Fan')
+    const incomingResources = [masterGroup, ...lights, fan]
+    const existingResources = [masterGroup, ...lights, fan, tv]
+
+    const merged = mergeSmartHomeIncomingResourcesWithLocalDevices(
+      incomingResources,
+      existingResources,
+      [fan.id],
+    )
+
+    expect(merged.map((resource) => resource.id)).toEqual([
+      masterGroup.id,
+      ...lights.map((resource) => resource.id),
+      tv.id,
+    ])
   })
 })

@@ -786,25 +786,23 @@ export function HomeAssistantPanel() {
     }
 
     if (existingBindingNode) {
-      const excludedResourceIdsForMerge = nextNode.presentation
-        ? getSmartHomeExcludedResourceIds(nextNode.presentation)
-        : getSmartHomeExcludedResourceIds(existingBindingNode.presentation)
+      const existingBinding = toCollectionBinding(existingBindingNode)
+      const nextPresentation = nextNode.presentation
+      const mergedPresentation = mergeHomeAssistantPresentation(
+        existingBindingNode.presentation,
+        nextPresentation,
+      )
+      const excludedResourceIdsForMerge = getSmartHomeExcludedResourceIds(mergedPresentation)
       const mergedResources = mergeIncomingBindingResourcesWithLocalDevices(
         nextNode.resources,
         existingBindingNode.resources,
         excludedResourceIdsForMerge,
       )
-      const nextPresentation = nextNode.presentation
       const nextPrimaryResourceId =
         existingBindingNode.primaryResourceId &&
         mergedResources.some((resource) => resource.id === existingBindingNode.primaryResourceId)
           ? existingBindingNode.primaryResourceId
           : (nextNode.primaryResourceId ?? null)
-      const existingBinding = toCollectionBinding(existingBindingNode)
-      const mergedPresentation = mergeHomeAssistantPresentation(
-        existingBindingNode.presentation,
-        nextPresentation,
-      )
       const nextBinding = {
         aggregation: nextNode.aggregation,
         collectionId: nextNode.collectionId,
