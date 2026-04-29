@@ -43,20 +43,21 @@ completed: 2026-04-28
 - **Duration:** ~10 min
 - **Started:** 2026-04-28
 - **Completed:** 2026-04-28
-- **Tasks:** 1 of 2 complete (Task 2 is a human-verify checkpoint)
+- **Tasks:** 2 of 2 complete
 - **Files modified:** 1
 
 ## Accomplishments
 - Replaced all 5 `href="/apply"` with `href="/signup"` in `apps/editor/app/page.tsx`
 - /login links left untouched and verified correct
 - /apply route not removed — preserved for beta funnel
-- Pre-existing TypeScript errors confirmed as unrelated to this plan's changes
+- Human-verified responsive layout at 375px, 768px, 1280px — approved by user
+- All CTA links confirmed navigating to /signup; Sign In confirmed navigating to /login
+- No console errors during human verification
 
 ## Task Commits
 
 1. **Task 1: Standardize CTA destinations to /signup** - `be02249` (feat)
-
-**Plan metadata:** (pending final commit after human verification)
+2. **Task 2: Human verification of landing page responsiveness and CTA flows** - approved by user (no code commit — checkpoint task)
 
 ## Files Created/Modified
 - `apps/editor/app/page.tsx` - 5 CTA hrefs changed from /apply to /signup
@@ -78,7 +79,7 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 - Landing page CTAs correctly route to /signup — auth phase (02-auth) can implement /signup and /login routes with confidence that landing links are wired
-- Human verification (Task 2) still required: visit http://localhost:3000, confirm responsiveness at 375/768/1280px, confirm all CTA links navigate correctly
+- Human verification complete and approved — no blockers
 
 ---
 *Phase: 01-landing*
