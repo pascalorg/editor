@@ -1,7 +1,6 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
-import { isHomeAssistantBindingNode } from '../schema/nodes/home-assistant-binding'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -15,6 +14,14 @@ export type SceneGraph = {
 function extractIdPrefix(id: string): string {
   const underscoreIndex = id.indexOf('_')
   return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
+}
+
+function getCollectionAttachmentNodeCollectionId(node: AnyNode): CollectionId | null {
+  const collectionId = (node as { collectionId?: unknown }).collectionId
+  const resources = (node as { resources?: unknown }).resources
+  return typeof collectionId === 'string' && Array.isArray(resources)
+    ? (collectionId as CollectionId)
+    : null
 }
 
 /**
@@ -124,11 +131,13 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     }
 
     for (const node of Object.values(clonedNodes)) {
-      if (!isHomeAssistantBindingNode(node)) {
+      const collectionId = getCollectionAttachmentNodeCollectionId(node)
+      if (!collectionId) {
         continue
       }
 
-      node.collectionId = collectionIdMap.get(node.collectionId) ?? node.collectionId
+      ;(node as { collectionId: CollectionId }).collectionId =
+        collectionIdMap.get(collectionId) ?? collectionId
     }
   }
 
