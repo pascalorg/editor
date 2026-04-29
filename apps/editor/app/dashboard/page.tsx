@@ -2,21 +2,13 @@ import { getDashboardData } from './actions'
 import { ProjectCard } from './_components/ProjectCard'
 import { Plus, FolderKanban, Users, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import { CreateWorkspacePrompt } from './_components/CreateWorkspacePrompt'
 
 export default async function DashboardOverview() {
   const data = await getDashboardData()
 
   if (!data || data.organizations.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
-            <Building2 className="w-8 h-8 text-zinc-600" />
-          </div>
-          <p className="text-zinc-400 text-sm">No organization found.</p>
-        </div>
-      </div>
-    )
+    return <CreateWorkspacePrompt />
   }
 
   const org = data.organizations[0]!.organization
