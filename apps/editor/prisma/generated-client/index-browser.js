@@ -211,6 +211,15 @@ exports.Prisma.EarlyAccessApplicationScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.PasswordResetTokenScalarFieldEnum = {
+  id: 'id',
+  token: 'token',
+  email: 'email',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -254,7 +263,8 @@ exports.Prisma.ModelName = {
   ProjectMember: 'ProjectMember',
   MarketplaceAsset: 'MarketplaceAsset',
   ProjectClone: 'ProjectClone',
-  EarlyAccessApplication: 'EarlyAccessApplication'
+  EarlyAccessApplication: 'EarlyAccessApplication',
+  PasswordResetToken: 'PasswordResetToken'
 };
 
 /**

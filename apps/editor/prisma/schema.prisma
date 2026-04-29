@@ -192,7 +192,20 @@ model EarlyAccessApplication {
   useCase          String
   teamSize         Int
   status           OrgStatus @default(PENDING)
-  
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
 }
