@@ -65,11 +65,11 @@ Plans:
   3. User can navigate back to a previous step and their earlier selections are still present
   4. User who refreshes mid-onboarding is returned to the step they were on, not step 1
   5. User completes onboarding and lands on the dashboard (or editor if they created a first project)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Onboarding data model + server-side progress persistence
-- [ ] 03-02: Paginated onboarding UI — steps 1-4 with back/forward navigation
+- [ ] 03-01-PLAN.md — Schema additions (onboardingComplete, OnboardingProgress, OrganizationInviteToken) + JWT callback + middleware gate + signup redirects
+- [ ] 03-02-PLAN.md — 4-step onboarding UI (Role, Use Case, Team, First Project) + /invite/[token] route + remove WorkspaceSetupModal
 
 ---
 
