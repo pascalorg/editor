@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,7 +16,7 @@ const OAUTH_ERROR_MESSAGES: { [key: string]: string | undefined; Default: string
   Default: 'An error occurred during Google sign-in. Please try again.',
 }
 
-export default function AuthPage() {
+function AuthPageInner() {
   const [mode, setMode] = useState<Mode>('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -64,7 +64,7 @@ export default function AuthPage() {
       setError(mode === 'signin' ? 'Incorrect email or password.' : 'Account created but sign-in failed. Try signing in.')
       setLoading(false)
     } else if (res?.ok) {
-      router.push('/dashboard')
+      router.push(mode === 'signup' ? '/onboarding' : '/dashboard')
       router.refresh()
     }
   }
@@ -78,7 +78,7 @@ export default function AuthPage() {
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true)
-    await signIn('google', { callbackUrl: '/dashboard' })
+    await signIn('google', { callbackUrl: '/onboarding' })
     // NextAuth redirects — reset only on error (unmount handles the rest)
     setGoogleLoading(false)
   }
@@ -254,5 +254,13 @@ export default function AuthPage() {
         </p>
       </motion.div>
     </div>
+  )
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense>
+      <AuthPageInner />
+    </Suspense>
   )
 }
