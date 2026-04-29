@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 
 ## Current Position
 
-Phase: 3 of 7 (Onboarding) — IN PROGRESS
-Plan: 2 of 2 complete (awaiting human verification checkpoint)
-Status: 03-02 built — 4-step onboarding UI, invite route, JWT refresh on completion
-Last activity: 2026-04-29 — 03-02 tasks complete: OnboardingFlow, StepRole/UseCase/Team/Project, saveProgress/completeOnboarding actions, /invite/[token] route, WorkspaceSetupModal removed
+Phase: 4 of 7 (Dashboard) — IN PROGRESS
+Plan: 1 of 2 complete
+Status: 04-01 built — StarredProject schema, lastOpenedAt on Project, 5 server actions (rename/delete/star/unstar/updateLastOpened)
+Last activity: 2026-04-29 — 04-01 tasks complete: schema updated, Prisma client regenerated, getDashboardData returns starredProjectIds, 5 new server actions added
 
-Progress: [█████████░] 90%
+Progress: [██████████] 93%
 
 ## Performance Metrics
 
@@ -62,6 +62,8 @@ Recent decisions affecting current work:
 - createProject return type updated to { id: string } to enable /editor/[projectId] redirect from onboarding
 - StepTeam saves step=3 progress before invite redirect so user returns to Step 4 (First Project) after token consumption
 - WorkspaceSetupModal removed from dashboard layout — middleware from 03-01 guarantees only onboarded users reach /dashboard
+- session.user cast to { id?: string } in dashboard server actions — consistent with getFirstTeamId pattern; no next-auth.d.ts module augmentation needed
+- StarredProject migration deferred to deployment (no local DB); schema validated via bunx prisma validate; client regenerated against updated schema
 
 ### Pending Todos
 
@@ -74,5 +76,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: 03-02 checkpoint:human-verify — 4-step onboarding UI built, awaiting browser verification
-Resume file: Type "approved" after verifying 12-step browser walkthrough to complete Phase 3
+Stopped at: 04-01 complete — data layer done, ready for 04-02 (dashboard UI)
+Resume file: Run 04-02-PLAN.md next
