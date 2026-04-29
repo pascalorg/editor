@@ -15,8 +15,8 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
   createFenceOnCurrentLevel,
-  type FencePlanPoint,
   snapFenceDraftPoint,
+  type FencePlanPoint,
 } from './fence-drafting'
 
 const FENCE_PREVIEW_HEIGHT = 1.8

@@ -170,7 +170,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'wall',
     })
-      ? {
+        ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
           sourceTarget: 'wall',
@@ -190,7 +190,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'roof',
     })
-      ? {
+        ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
           sourceTarget: 'roof',
@@ -210,7 +210,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'stair',
     })
-      ? {
+        ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
           sourceTarget: 'stair',

@@ -1,11 +1,7 @@
 'use client'
 
 import type { Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
-import {
-  memo,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-} from 'react'
+import { memo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   buildSvgAnnularSectorPath,
   buildSvgArcPath,
@@ -68,7 +64,8 @@ function clamp(value: number, min: number, max: number) {
 
 function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
   const stairType = stair.stairType ?? 'straight'
-  const baseSweepAngle = stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
+  const baseSweepAngle =
+    stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
 
   if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
     return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)

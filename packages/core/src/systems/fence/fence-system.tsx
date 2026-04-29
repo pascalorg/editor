@@ -65,9 +65,7 @@ function createFenceCurveSpanParts(
   const parts: FencePart[] = []
   const frameCount = Math.max(
     1,
-    Math.ceil(
-      (getWallCurveLength(fence) * Math.max(1e-4, endT - startT)) / MIN_CURVE_SEGMENT_LENGTH,
-    ),
+    Math.ceil((getWallCurveLength(fence) * Math.max(1e-4, endT - startT)) / MIN_CURVE_SEGMENT_LENGTH),
   )
 
   let previous = getFencePointAt(fence, startT)
@@ -242,9 +240,7 @@ function generateFenceGeometry(fence: FenceNode) {
   const geometries = parts.map(createFencePartGeometry)
 
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
-  geometries.forEach((geometry) => {
-    geometry.dispose()
-  })
+  geometries.forEach((geometry) => geometry.dispose())
   const mergedUv = merged.getAttribute('uv')
   if (mergedUv) {
     merged.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(mergedUv.array), 2))

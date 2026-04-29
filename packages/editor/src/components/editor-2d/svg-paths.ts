@@ -100,7 +100,9 @@ export function buildSvgAnnularSectorPath(
 }
 
 export function formatSvgPolygonPoints(points: Point2D[]) {
-  return points.map((point) => `${toSvgX(point.x)},${toSvgY(point.y)}`).join(' ')
+  return points
+    .map((point) => `${toSvgX(point.x)},${toSvgY(point.y)}`)
+    .join(' ')
 }
 
 export function buildSvgArrowHeadPoints(point: Point2D, angle: number, size: number) {

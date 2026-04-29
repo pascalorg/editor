@@ -20,8 +20,8 @@ import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import {
-  Box3,
   BoxGeometry,
+  Box3,
   BufferGeometry,
   EdgesGeometry,
   Euler,
@@ -150,8 +150,16 @@ function getFallbackPreviewBounds(
 ): PreviewBounds {
   const dims = item ? getScaledDimensions(item) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
   return {
-    min: [-dims[0] / 2, 0, attachTo === 'wall-side' ? -dims[2] : -dims[2] / 2],
-    max: [dims[0] / 2, dims[1], attachTo === 'wall-side' ? 0 : dims[2] / 2],
+    min: [
+      -dims[0] / 2,
+      0,
+      attachTo === 'wall-side' ? -dims[2] : -dims[2] / 2,
+    ],
+    max: [
+      dims[0] / 2,
+      dims[1],
+      attachTo === 'wall-side' ? 0 : dims[2] / 2,
+    ],
     dimensions: dims,
     center: [0, dims[1] / 2, attachTo === 'wall-side' ? -dims[2] / 2 : 0],
   }
@@ -1074,7 +1082,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const fallbackBounds = getFallbackPreviewBounds(draft, asset, asset.attachTo)
     updatePreviewGeometry(
       draft
-        ? (getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null) ?? fallbackBounds)
+        ? (getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null) ??
+          fallbackBounds)
         : fallbackBounds,
     )
     updateDimensionGuides(fallbackBounds)
@@ -1224,11 +1233,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const basePlaneGeometry = new PlaneGeometry(dims[0], dims[2])
   basePlaneGeometry.rotateX(-Math.PI / 2) // Make it horizontal
   basePlaneGeometry.translate(0, 0.01, wallSideZOffset) // Slightly above ground to avoid z-fighting
-  const initialDimensionBounds = getFallbackPreviewBounds(
-    initialDraft,
-    config.asset!,
-    config.asset?.attachTo,
-  )
+  const initialDimensionBounds = getFallbackPreviewBounds(initialDraft, config.asset!, config.asset?.attachTo)
   const widthLabel = formatMeasurement(initialDimensionBounds.dimensions[0], unit)
   const depthLabel = formatMeasurement(initialDimensionBounds.dimensions[2], unit)
   const heightLabel = formatMeasurement(initialDimensionBounds.dimensions[1], unit)

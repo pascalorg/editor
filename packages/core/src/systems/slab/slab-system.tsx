@@ -199,7 +199,13 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
     uvs.push((x - bounds.min.x) / floorWidth, (z - bounds.min.y) / floorHeight)
   }
 
-  const pushWallVertex = (x: number, y: number, z: number, u: number, v: number) => {
+  const pushWallVertex = (
+    x: number,
+    y: number,
+    z: number,
+    u: number,
+    v: number,
+  ) => {
     positions.push(x, y, z)
     uvs.push(u, v)
   }

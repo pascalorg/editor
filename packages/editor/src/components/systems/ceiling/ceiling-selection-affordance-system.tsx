@@ -75,9 +75,7 @@ const CeilingSelectionAffordance = ({
   ceiling: CeilingNode
   levelId: string
 }) => {
-  const [levelObject, setLevelObject] = useState<Object3D | null>(
-    () => sceneRegistry.nodes.get(levelId) ?? null,
-  )
+  const [levelObject, setLevelObject] = useState<Object3D | null>(() => sceneRegistry.nodes.get(levelId) ?? null)
 
   const corners = useMemo(() => buildCornerBrackets(ceiling.polygon), [ceiling.polygon])
 
@@ -112,7 +110,11 @@ const CeilingSelectionAffordance = ({
   return createPortal(
     <group position={[0, (ceiling.height ?? 2.5) + BRACKET_Y_OFFSET, 0]}>
       {corners.map((corner, index) => (
-        <CornerBracket ceiling={ceiling} corner={corner} key={`${ceiling.id}-corner-${index}`} />
+        <CornerBracket
+          ceiling={ceiling}
+          corner={corner}
+          key={`${ceiling.id}-corner-${index}`}
+        />
       ))}
     </group>,
     levelObject,
@@ -208,7 +210,11 @@ const BracketLeg = ({
   ]
 
   return (
-    <mesh onClick={onClick} position={position} rotation={[0, angle, 0]}>
+    <mesh
+      onClick={onClick}
+      position={position}
+      rotation={[0, angle, 0]}
+    >
       <boxGeometry args={[length, BRACKET_HEIGHT, BRACKET_THICKNESS]} />
       <meshBasicMaterial color={color} depthWrite={false} opacity={opacity} transparent />
     </mesh>
@@ -228,11 +234,7 @@ function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketDat
 
     const incomingLength = Math.hypot(incomingVector[0], incomingVector[1])
     const outgoingLength = Math.hypot(outgoingVector[0], outgoingVector[1])
-    const cornerStrength =
-      1 -
-      Math.abs(
-        incomingDirection[0] * outgoingDirection[0] + incomingDirection[1] * outgoingDirection[1],
-      )
+    const cornerStrength = 1 - Math.abs(incomingDirection[0] * outgoingDirection[0] + incomingDirection[1] * outgoingDirection[1])
 
     return {
       corner,

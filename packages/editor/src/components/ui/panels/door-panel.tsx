@@ -85,27 +85,26 @@ export function DoorPanel() {
   }, [node, setMovingNode, setSelection])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
-    if (!node?.segments.length) return
+    const segments = node?.segments
+    if (!segments || segments.length < 2) return
 
-    const numSegs = node.segments.length
-    const totalH = node.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const numSegs = segments.length
+    const totalH = segments.reduce((sum, s) => sum + s.heightRatio, 0)
     if (totalH <= 0) return
 
-    const normH = node.segments.map((s) => s.heightRatio / totalH)
+    const normH = segments.map((s) => s.heightRatio / totalH)
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
     const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
-    const currentVal = normH[segIdx]
-    const neighborCurrentVal = normH[neighborIdx]
-    if (currentVal === undefined || neighborCurrentVal === undefined) return
+    if (segIdx < 0 || segIdx >= numSegs || neighborIdx < 0 || neighborIdx >= numSegs) return
 
-    const delta = clamped - currentVal
-    const neighborVal = Math.max(0.05, neighborCurrentVal - delta)
+    const delta = clamped - normH[segIdx]!
+    const neighborVal = Math.max(0.05, normH[neighborIdx]! - delta)
     const newRatios = normH.map((v, i) => {
       if (i === segIdx) return clamped
       if (i === neighborIdx) return neighborVal
       return v
     })
-    const updated = node.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
+    const updated = segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
     handleUpdate({ segments: updated })
   }
 

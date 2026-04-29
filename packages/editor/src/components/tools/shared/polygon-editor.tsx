@@ -420,7 +420,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                     mode: 'vertex',
                     vertexIndex: newVertexIndex,
                     initialPosition: [x!, z!],
-                    initialPolygon: polygon,
+                    initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
                     pointerId: e.pointerId,
                   })
                   setHoveredMidpoint(null)

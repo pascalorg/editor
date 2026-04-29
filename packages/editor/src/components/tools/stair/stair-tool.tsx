@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   emitter,
   type GridEvent,
   type LevelNode,
