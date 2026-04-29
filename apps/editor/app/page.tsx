@@ -63,7 +63,7 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link href="/login" className="hidden sm:block text-[13px] font-medium text-zinc-400 hover:text-white transition-colors px-3 py-1.5">Sign In</Link>
-            <GlassButton href="/apply" primary>Get Started Free</GlassButton>
+            <GlassButton href="/signup" primary>Get Started Free</GlassButton>
           </div>
         </div>
       </nav>
@@ -90,7 +90,7 @@ export default function LandingPage() {
             Archly is the collaborative 3D spatial platform built for architecture, real estate, and construction teams. Powered by WebGPU for native performance.
           </motion.p>
           <motion.div {...fade} transition={{ duration: 0.5, delay: 0.3 }} className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <GlassButton href="/apply" primary>
+            <GlassButton href="/signup" primary>
               Start Building Free <ArrowRight className="w-4 h-4" />
             </GlassButton>
             <GlassButton href="/playground">
@@ -322,7 +322,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/apply" className="inline-flex items-center gap-2 mt-8 text-indigo-400 font-medium text-sm hover:text-indigo-300 transition-colors group">
+              <Link href="/signup" className="inline-flex items-center gap-2 mt-8 text-indigo-400 font-medium text-sm hover:text-indigo-300 transition-colors group">
                 Get started <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
             </div>
@@ -366,7 +366,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/apply" className={`w-full py-3 rounded-xl font-semibold text-sm text-center transition-all ${plan.highlighted ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:opacity-90 shadow-lg shadow-indigo-500/20' : 'bg-white/[0.05] border border-white/10 text-white hover:bg-white/[0.08]'}`}>
+                <Link href="/signup" className={`w-full py-3 rounded-xl font-semibold text-sm text-center transition-all ${plan.highlighted ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:opacity-90 shadow-lg shadow-indigo-500/20' : 'bg-white/[0.05] border border-white/10 text-white hover:bg-white/[0.08]'}`}>
                   {plan.cta}
                 </Link>
               </motion.div>
@@ -384,7 +384,7 @@ export default function LandingPage() {
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
             <h2 className="relative text-4xl md:text-5xl font-bold mb-6 tracking-tight">Ready to build together?</h2>
             <p className="relative text-lg text-zinc-400 mb-10 max-w-xl mx-auto">Join hundreds of teams already designing the future with Archly. Free to start, no credit card required.</p>
-            <GlassButton href="/apply" primary>
+            <GlassButton href="/signup" primary>
               Get Started Free
             </GlassButton>
           </div>
