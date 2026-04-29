@@ -1,5 +1,11 @@
 import type { HomeAssistantImportedResource } from '../../../lib/home-assistant-collections'
-import { isGroupResource } from '../../../lib/home-assistant-collections'
+import {
+  compareGroupsBySpecificity,
+  getResourceEntityId,
+  isGroupResource,
+  orderDeviceGroupsBySharedMembers,
+  orderResourcesForNeighborGroups,
+} from '../../../lib/home-assistant-collections'
 
 export type SmartHomePanelSize = {
   height: number
@@ -30,6 +36,7 @@ export const DEVICE_GROUP_CHIP_HEIGHT = 34
 export const DEVICE_GROUP_CELL_WIDTH = 140
 export const DEVICE_GROUP_CELL_HEIGHT = 48
 export const DEVICE_GRID_MIN_COLUMNS = 3
+export const UNGROUPED_DEVICE_GROUP_KEY = '__ungrouped'
 const DEVICE_GRID_MAX_COLUMNS = 5
 export const DEVICE_SECTION_SCROLL_BOTTOM_SAFE_AREA = 28
 export const SMART_HOME_PANEL_DEFAULT_WIDTH = 400
@@ -150,6 +157,167 @@ export function getDeviceGridColumns(totalCells: number, availableColumns: numbe
 
     return columns > bestColumns ? columns : bestColumns
   }, candidates[0]!)
+}
+
+export function getDeviceCategoryGroups(resources: HomeAssistantImportedResource[]) {
+  const groupedResources = new Map<DeviceCategoryKey, HomeAssistantImportedResource[]>()
+
+  for (const resource of resources) {
+    const category = getDeviceCategoryKey(resource)
+    const categoryResources = groupedResources.get(category) ?? []
+    categoryResources.push(resource)
+    groupedResources.set(category, categoryResources)
+  }
+
+  return DEVICE_CATEGORY_ORDER.map((category) => ({
+    category,
+    resources: groupedResources.get(category) ?? [],
+  })).filter((group) => group.resources.length > 0)
+}
+
+export function getGroupColorById(groupImports: HomeAssistantImportedResource[]) {
+  const colorById = new Map<string, DeviceGroupColor>()
+  const sortedGroups = [...groupImports].sort((left, right) =>
+    left.label.localeCompare(right.label),
+  )
+
+  sortedGroups.forEach((group, index) => {
+    colorById.set(group.id, getDeviceGroupColor(index))
+  })
+
+  return colorById
+}
+
+export function getDeviceGroupMemberships(
+  deviceImports: HomeAssistantImportedResource[],
+  groupImports: HomeAssistantImportedResource[],
+) {
+  const devicesByEntityId = new Map<string, HomeAssistantImportedResource>()
+  const membershipsByDeviceId = new Map<string, HomeAssistantImportedResource[]>()
+
+  for (const device of deviceImports) {
+    const entityId = getResourceEntityId(device)
+    devicesByEntityId.set(entityId, device)
+    membershipsByDeviceId.set(device.id, [])
+  }
+
+  for (const group of groupImports) {
+    for (const memberEntityId of group.memberEntityIds ?? []) {
+      const device = devicesByEntityId.get(memberEntityId)
+      if (!device) {
+        continue
+      }
+
+      membershipsByDeviceId.get(device.id)?.push(group)
+    }
+  }
+
+  for (const memberships of membershipsByDeviceId.values()) {
+    memberships.sort(compareGroupsBySpecificity)
+  }
+
+  return membershipsByDeviceId
+}
+
+type GroupedDeviceImports = {
+  color: DeviceGroupColor
+  group: HomeAssistantImportedResource | null
+  resources: HomeAssistantImportedResource[]
+}
+
+export function getGroupedDeviceImports({
+  deviceGroupMemberships,
+  deviceImports,
+  groupColorById,
+  groupImports,
+}: {
+  deviceGroupMemberships: Map<string, HomeAssistantImportedResource[]>
+  deviceImports: HomeAssistantImportedResource[]
+  groupColorById: Map<string, DeviceGroupColor>
+  groupImports: HomeAssistantImportedResource[]
+}) {
+  const groupBuckets = new Map<string, GroupedDeviceImports>()
+
+  for (const group of groupImports) {
+    if ((group.memberEntityIds?.length ?? 0) === 0) {
+      continue
+    }
+
+    groupBuckets.set(group.id, {
+      color: groupColorById.get(group.id) ?? getDeviceGroupColor(groupBuckets.size),
+      group,
+      resources: [],
+    })
+  }
+
+  for (const resource of deviceImports) {
+    const memberships = deviceGroupMemberships.get(resource.id) ?? []
+    const primaryGroup = memberships[0] ?? null
+    const bucketKey = primaryGroup?.id ?? UNGROUPED_DEVICE_GROUP_KEY
+    const color =
+      (primaryGroup ? groupColorById.get(primaryGroup.id) : null) ??
+      ({
+        background: 'rgba(244,244,245,0.55)',
+        border: 'rgba(24,24,27,0.12)',
+        dot: '#71717a',
+      } satisfies DeviceGroupColor)
+
+    if (!groupBuckets.has(bucketKey)) {
+      groupBuckets.set(bucketKey, {
+        color,
+        group: primaryGroup,
+        resources: [],
+      })
+    }
+
+    groupBuckets.get(bucketKey)?.resources.push(resource)
+  }
+
+  const orderedGroups = orderDeviceGroupsBySharedMembers(Array.from(groupBuckets.values()))
+
+  return orderedGroups.map((deviceGroup, index, groups) => ({
+    ...deviceGroup,
+    resources: orderResourcesForNeighborGroups(
+      deviceGroup.resources,
+      groups[index - 1]?.group,
+      groups[index + 1]?.group,
+    ),
+  }))
+}
+
+export function getPackedDeviceLayout(
+  groupedDeviceImports: GroupedDeviceImports[],
+  maxAvailableDeviceGridColumns: number,
+) {
+  const totalCells = groupedDeviceImports.reduce(
+    (cellCount, deviceGroup) => cellCount + deviceGroup.resources.length + 1,
+    0,
+  )
+  const columns = getDeviceGridColumns(totalCells, maxAvailableDeviceGridColumns)
+  let cursor = 0
+
+  const groups = groupedDeviceImports.map((deviceGroup) => {
+    const cellCount = deviceGroup.resources.length + 1
+    const coordinates = Array.from({ length: cellCount }, (_, index) =>
+      getSnakeGridCoordinate(cursor + index, columns),
+    )
+    cursor += cellCount
+
+    return {
+      ...deviceGroup,
+      borderPath: getDeviceGroupBorderPath(coordinates),
+      coordinates,
+    }
+  })
+  const rows = Math.ceil(totalCells / columns)
+
+  return {
+    groups,
+    contentHeight: rows * DEVICE_GROUP_CELL_HEIGHT,
+    height: rows * DEVICE_GROUP_CELL_HEIGHT + DEVICE_SECTION_SCROLL_BOTTOM_SAFE_AREA,
+    rows,
+    width: columns * DEVICE_GROUP_CELL_WIDTH,
+  }
 }
 
 export function getDeviceGroupBorderPath(coordinates: Array<{ x: number; y: number }>) {

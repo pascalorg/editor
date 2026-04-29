@@ -56,12 +56,10 @@ import {
   bindResourceToCollectionBinding,
   buildHomeAssistantResourceCollection,
   buildCollectionBindingFromResource,
-  compareGroupsBySpecificity,
   createPascalGroupResource,
   getCollectionNameFromItems,
   getGroupMemberEntityIds,
   getNextPascalGroupLabel,
-  getResourceEntityId,
   getRoomGroupStem,
   getScenePillResource,
   getSelectedItems,
@@ -69,8 +67,6 @@ import {
   isGroupResource,
   isHiddenHomeAssistantGroupResourceId,
   isItemNode,
-  orderDeviceGroupsBySharedMembers,
-  orderResourcesForNeighborGroups,
   resolveExactCollectionForItems,
   toCollectionBinding,
   toResourceBinding,
@@ -106,24 +102,21 @@ import { cn } from '../../../lib/utils'
 import {
   clampSmartHomePanelSize,
   DEVICE_CATEGORY_LABELS,
-  DEVICE_CATEGORY_ORDER,
   DEVICE_GROUP_CELL_HEIGHT,
   DEVICE_GROUP_CELL_WIDTH,
   DEVICE_GROUP_CHIP_HEIGHT,
   DEVICE_GROUP_CHIP_WIDTH,
   DEVICE_GRID_MIN_COLUMNS,
-  DEVICE_SECTION_SCROLL_BOTTOM_SAFE_AREA,
-  type DeviceGroupColor,
   type DeviceCategoryKey,
-  getDeviceCategoryKey,
   getDeviceCategoryTone,
-  getDeviceGridColumns,
-  getDeviceGroupBorderPath,
-  getDeviceGroupColor,
+  getDeviceCategoryGroups,
+  getDeviceGroupMemberships,
+  getGroupColorById,
+  getGroupedDeviceImports,
+  getPackedDeviceLayout,
   getPlacementPillWidth,
   getResourceAccentClasses,
   getSmartHomeSectionOverflow,
-  getSnakeGridCoordinate,
   PLACEMENT_LINE_GAP,
   PLACEMENT_PILL_CLOSED_MIN_WIDTH,
   PLACEMENT_PILL_GAP,
@@ -134,6 +127,7 @@ import {
   SMART_HOME_PANEL_EXPANDED_MIN_HEIGHT,
   type SmartHomePanelResizeStart,
   type SmartHomePanelSize,
+  UNGROUPED_DEVICE_GROUP_KEY,
 } from './home-assistant-panel-layout'
 
 type ProviderId = 'home-assistant'
@@ -161,8 +155,6 @@ type DeviceGroupMembershipDot = {
   id: string
   label: string
 }
-
-const UNGROUPED_DEVICE_GROUP_KEY = '__ungrouped'
 
 type IconProps = {
   className?: string
@@ -447,21 +439,10 @@ export function HomeAssistantPanel() {
     () => imports.filter((resource) => isDeviceResource(resource)),
     [imports],
   )
-  const deviceCategoryGroups = useMemo(() => {
-    const groupedResources = new Map<DeviceCategoryKey, HomeAssistantImportedResource[]>()
-
-    for (const resource of deviceImports) {
-      const category = getDeviceCategoryKey(resource)
-      const categoryResources = groupedResources.get(category) ?? []
-      categoryResources.push(resource)
-      groupedResources.set(category, categoryResources)
-    }
-
-    return DEVICE_CATEGORY_ORDER.map((category) => ({
-      category,
-      resources: groupedResources.get(category) ?? [],
-    })).filter((group) => group.resources.length > 0)
-  }, [deviceImports])
+  const deviceCategoryGroups = useMemo(
+    () => getDeviceCategoryGroups(deviceImports),
+    [deviceImports],
+  )
   const groupImports = useMemo(() => {
     const resourcesById = new Map<string, HomeAssistantImportedResource>()
 
@@ -500,99 +481,21 @@ export function HomeAssistantPanel() {
 
     return Array.from(resourcesById.values())
   }, [collections, hiddenGroupResourceIds, homeAssistantBindings, imports])
-  const groupColorById = useMemo(() => {
-    const colorById = new Map<string, DeviceGroupColor>()
-    const sortedGroups = [...groupImports].sort((left, right) =>
-      left.label.localeCompare(right.label),
-    )
-
-    sortedGroups.forEach((group, index) => {
-      colorById.set(group.id, getDeviceGroupColor(index))
-    })
-
-    return colorById
-  }, [groupImports])
-
-  const deviceGroupMemberships = useMemo(() => {
-    const devicesByEntityId = new Map<string, HomeAssistantImportedResource>()
-    const membershipsByDeviceId = new Map<string, HomeAssistantImportedResource[]>()
-
-    for (const device of deviceImports) {
-      const entityId = getResourceEntityId(device)
-      devicesByEntityId.set(entityId, device)
-      membershipsByDeviceId.set(device.id, [])
-    }
-
-    for (const group of groupImports) {
-      for (const memberEntityId of group.memberEntityIds ?? []) {
-        const device = devicesByEntityId.get(memberEntityId)
-        if (!device) {
-          continue
-        }
-
-        membershipsByDeviceId.get(device.id)?.push(group)
-      }
-    }
-
-    for (const memberships of membershipsByDeviceId.values()) {
-      memberships.sort(compareGroupsBySpecificity)
-    }
-
-    return membershipsByDeviceId
-  }, [deviceImports, groupImports])
-
-  const groupedDeviceImports = useMemo(() => {
-    const groupBuckets = new Map<
-      string,
-      {
-        color: DeviceGroupColor
-        group: HomeAssistantImportedResource | null
-        resources: HomeAssistantImportedResource[]
-      }
-    >()
-
-    for (const group of groupImports) {
-      if ((group.memberEntityIds?.length ?? 0) === 0) {
-        continue
-      }
-
-      groupBuckets.set(group.id, {
-        color: groupColorById.get(group.id) ?? getDeviceGroupColor(groupBuckets.size),
-        group,
-        resources: [],
-      })
-    }
-
-    for (const resource of deviceImports) {
-      const memberships = deviceGroupMemberships.get(resource.id) ?? []
-      const primaryGroup = memberships[0] ?? null
-      const bucketKey = primaryGroup?.id ?? UNGROUPED_DEVICE_GROUP_KEY
-      const color =
-        (primaryGroup ? groupColorById.get(primaryGroup.id) : null) ??
-        ({ background: 'rgba(244,244,245,0.55)', border: 'rgba(24,24,27,0.12)', dot: '#71717a' } satisfies DeviceGroupColor)
-
-      if (!groupBuckets.has(bucketKey)) {
-        groupBuckets.set(bucketKey, {
-          color,
-          group: primaryGroup,
-          resources: [],
-        })
-      }
-
-      groupBuckets.get(bucketKey)?.resources.push(resource)
-    }
-
-    const orderedGroups = orderDeviceGroupsBySharedMembers(Array.from(groupBuckets.values()))
-
-    return orderedGroups.map((deviceGroup, index, groups) => ({
-      ...deviceGroup,
-      resources: orderResourcesForNeighborGroups(
-        deviceGroup.resources,
-        groups[index - 1]?.group,
-        groups[index + 1]?.group,
-      ),
-    }))
-  }, [deviceGroupMemberships, deviceImports, groupColorById, groupImports])
+  const groupColorById = useMemo(() => getGroupColorById(groupImports), [groupImports])
+  const deviceGroupMemberships = useMemo(
+    () => getDeviceGroupMemberships(deviceImports, groupImports),
+    [deviceImports, groupImports],
+  )
+  const groupedDeviceImports = useMemo(
+    () =>
+      getGroupedDeviceImports({
+        deviceGroupMemberships,
+        deviceImports,
+        groupColorById,
+        groupImports,
+      }),
+    [deviceGroupMemberships, deviceImports, groupColorById, groupImports],
+  )
 
   const maxAvailableDeviceGridColumns = Math.max(
     DEVICE_GRID_MIN_COLUMNS,
@@ -603,37 +506,10 @@ export function HomeAssistantPanel() {
       ) / DEVICE_GROUP_CELL_WIDTH,
     ),
   )
-  const packedDeviceLayout = useMemo(() => {
-    const totalCells = groupedDeviceImports.reduce(
-      (cellCount, deviceGroup) => cellCount + deviceGroup.resources.length + 1,
-      0,
-    )
-    const columns = getDeviceGridColumns(totalCells, maxAvailableDeviceGridColumns)
-    let cursor = 0
-
-    const groups = groupedDeviceImports.map((deviceGroup) => {
-      const cellCount = deviceGroup.resources.length + 1
-      const coordinates = Array.from({ length: cellCount }, (_, index) =>
-        getSnakeGridCoordinate(cursor + index, columns),
-      )
-      cursor += cellCount
-
-      return {
-        ...deviceGroup,
-        borderPath: getDeviceGroupBorderPath(coordinates),
-        coordinates,
-      }
-    })
-    const rows = Math.ceil(totalCells / columns)
-
-    return {
-      groups,
-      contentHeight: rows * DEVICE_GROUP_CELL_HEIGHT,
-      height: rows * DEVICE_GROUP_CELL_HEIGHT + DEVICE_SECTION_SCROLL_BOTTOM_SAFE_AREA,
-      rows,
-      width: columns * DEVICE_GROUP_CELL_WIDTH,
-    }
-  }, [groupedDeviceImports, maxAvailableDeviceGridColumns])
+  const packedDeviceLayout = useMemo(
+    () => getPackedDeviceLayout(groupedDeviceImports, maxAvailableDeviceGridColumns),
+    [groupedDeviceImports, maxAvailableDeviceGridColumns],
+  )
 
   const connectedProviderIds = useMemo(() => {
     return connectionState?.linked ? (['home-assistant'] satisfies ProviderId[]) : ([] as ProviderId[])
