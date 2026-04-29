@@ -86,6 +86,37 @@ describe('home assistant binding presentation helpers', () => {
     expect(merged?.rtsRoomControls?.groups?.[0]?.memberResourceIds).toEqual(['light.master_1'])
   })
 
+  test('ha-derived presentation updates do not overwrite user-managed pill composition', () => {
+    const merged = mergeHomeAssistantPresentation(
+      {
+        label: 'Master',
+        rtsRoomControls: {
+          excludedResourceIds: ['fan.master'],
+          groups: [
+            { memberResourceIds: ['light.master_1', 'light.master_2'] },
+            { memberResourceIds: ['media_player.master_tv'] },
+          ],
+          mode: 'user-managed',
+        },
+      },
+      {
+        label: 'Master Bedroom',
+        rtsRoomControls: {
+          groups: [{ memberResourceIds: ['light.master_1', 'light.master_2', 'fan.master'] }],
+          mode: 'ha-derived',
+        },
+      },
+    )
+
+    expect(merged?.label).toBe('Master Bedroom')
+    expect(merged?.rtsRoomControls?.mode).toBe('user-managed')
+    expect(merged?.rtsRoomControls?.excludedResourceIds).toEqual(['fan.master'])
+    expect(merged?.rtsRoomControls?.groups).toEqual([
+      { memberResourceIds: ['light.master_1', 'light.master_2'] },
+      { memberResourceIds: ['media_player.master_tv'] },
+    ])
+  })
+
   test('binding equality ignores undefined properties and object key order', () => {
     expect(
       homeAssistantBindingsAreEqual(

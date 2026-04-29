@@ -38,9 +38,11 @@ import {
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,
   cloneSmartHomeResourceBinding,
+  getDurableSmartHomeRoomControlTileGroups,
   getLegacySmartHomeRoomControlTileId,
   getSmartHomeBindingControlResources,
   getSmartHomeExcludedResourceIds,
+  getSmartHomeRoomControlMode,
   getSmartHomeRoomControlTileGroups,
   getSmartHomeRoomControlTileId,
   isSmartHomeBindingPresentationHidden,
@@ -67,7 +69,12 @@ function requestSceneImmediateSave() {
     return
   }
 
-  window.dispatchEvent(new Event(SCENE_IMMEDIATE_SAVE_EVENT))
+  const { collections, nodes, rootNodeIds } = useScene.getState()
+  window.dispatchEvent(
+    new CustomEvent(SCENE_IMMEDIATE_SAVE_EVENT, {
+      detail: { collections, nodes, rootNodeIds },
+    }),
+  )
 }
 
 const createCollectionFallbackControl = (label: string): Control => ({
@@ -568,6 +575,12 @@ const buildCollectionRoomControlTiles = (
       ? createCollectionFallbackControl('Run')
       : (selectedControl?.control ?? createCollectionFallbackControl('Toggle'))
     const controlIndex = selectedControl?.controlIndex ?? 0
+    const resourceTileId = itemResource
+      ? getSmartHomeRoomControlTileId(collection.id, itemResource.id)
+      : null
+    const legacyResourceTileId = itemResource
+      ? getLegacySmartHomeRoomControlTileId(collection.id, itemResource.id)
+      : null
 
     return {
       canDetachFromRoom: bindingHasGroupResource(binding),
@@ -588,6 +601,15 @@ const buildCollectionRoomControlTiles = (
         itemNode.asset.name?.trim() || collectionLabel || 'item',
       ),
       itemName: itemResource?.label ?? itemNode.asset.name?.trim() ?? collectionLabel ?? 'Item',
+      legacyIds: resourceTileId
+        ? [
+            resourceTileId,
+            `${resourceTileId}:${index}`,
+            ...(legacyResourceTileId && legacyResourceTileId !== resourceTileId
+              ? [legacyResourceTileId, `${legacyResourceTileId}:${index}`]
+              : []),
+          ]
+        : undefined,
       resourceId: itemResource?.id,
     }
   })
@@ -742,9 +764,13 @@ export function HomeAssistantInteractiveSystem({
             presentationGroups,
             defaultGroups,
           )
+          const controlGroups =
+            getSmartHomeRoomControlMode(binding?.presentation) === 'user-managed'
+              ? presentationGroups
+              : storedGroups
           return {
             anchorNodeIds: getCollectionAnchorNodeIds(collection, roomControls, sceneNodes),
-            controlGroups: buildRoomControlGroups(roomControls, storedGroups),
+            controlGroups: buildRoomControlGroups(roomControls, controlGroups),
             iconOnly,
             id: collection.id,
             roomName: getCollectionDisplayName(collection, homeAssistantBindings),
@@ -783,7 +809,17 @@ export function HomeAssistantInteractiveSystem({
 
   const applyRoomGroupingToCollection = useCallback(
     (collectionId: string, nextGroups: string[][]) => {
-      const normalizedGroups = normalizeRoomControlGroupList(nextGroups)
+      const controls =
+        roomOverlayNodes
+          .find((roomOverlayNode) => roomOverlayNode.id === collectionId)
+          ?.controlGroups.flatMap((group) => group.members) ?? []
+      const normalizedGroups = normalizeRoomControlGroupList(
+        getDurableSmartHomeRoomControlTileGroups({
+          collectionId,
+          controls,
+          groups: nextGroups,
+        }),
+      )
       const bindingNode = homeAssistantBindings[collectionId as CollectionId]
       if (!bindingNode) {
         return
@@ -803,7 +839,7 @@ export function HomeAssistantInteractiveSystem({
       } as Partial<AnyNode>)
       requestSceneImmediateSave()
     },
-    [homeAssistantBindings, updateNode],
+    [homeAssistantBindings, roomOverlayNodes, updateNode],
   )
 
   const copyDeviceResourceToGroup = useCallback(

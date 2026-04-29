@@ -103,15 +103,28 @@ export function useAutoSave({
       }, AUTOSAVE_DEBOUNCE_MS)
     }
 
-    async function executeSave() {
+    function readSceneGraphFromEvent(event: Event): SceneGraph | null {
+      if (!(event instanceof CustomEvent)) {
+        return null
+      }
+      const scene = event.detail as Partial<SceneGraph> | null | undefined
+      return scene?.nodes && scene.rootNodeIds ? (scene as SceneGraph) : null
+    }
+
+    async function executeSave(sceneOverride?: SceneGraph) {
       if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
         pendingSaveRef.current = true
         setSaveStatus('paused')
         return
       }
 
-      const { collections, nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { collections, nodes, rootNodeIds } as SceneGraph
+      const sceneGraph =
+        sceneOverride ??
+        ({
+          collections: useScene.getState().collections,
+          nodes: useScene.getState().nodes,
+          rootNodeIds: useScene.getState().rootNodeIds,
+        } as SceneGraph)
 
       isSavingRef.current = true
       pendingSaveRef.current = false
@@ -143,7 +156,8 @@ export function useAutoSave({
 
     executeSaveRef.current = executeSave
 
-    function flushImmediately() {
+    function flushImmediately(event: Event) {
+      const sceneOverride = readSceneGraphFromEvent(event) ?? undefined
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
         saveTimeoutRef.current = undefined
@@ -152,7 +166,7 @@ export function useAutoSave({
         pendingSaveRef.current = true
         return
       }
-      void executeSave()
+      void executeSave(sceneOverride)
     }
 
     const unsubscribe = useScene.subscribe((state) => {

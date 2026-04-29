@@ -293,7 +293,12 @@ function requestSceneImmediateSave() {
     return
   }
 
-  window.dispatchEvent(new Event(SCENE_IMMEDIATE_SAVE_EVENT))
+  const { collections, nodes, rootNodeIds } = useScene.getState()
+  window.dispatchEvent(
+    new CustomEvent(SCENE_IMMEDIATE_SAVE_EVENT, {
+      detail: { collections, nodes, rootNodeIds },
+    }),
+  )
 }
 
 function getStableHomeAssistantCollectionId(resourceId: string): CollectionId {

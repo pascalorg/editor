@@ -2144,6 +2144,9 @@ const RoomPanel = ({
               }
               return
             }
+            if (collapsedDirectControlMember && !collapsedDirectButtonDisabled) {
+              startDeviceIconDrag(collapsedDirectControlMember, event)
+            }
             handleHeaderPointerDown(event, 'open-edit', openHeaderKey)
           }}
           onPointerMove={(event) => handleHeaderPointerMove(event, openHeaderKey)}

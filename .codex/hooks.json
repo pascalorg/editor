@@ -1,5 +1,18 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|apply_patch|functions.apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\briss\\.codex\\worktrees\\ha-main-clean\\editor\\.codex\\hooks\\codex-ha-pill-render-check.ps1\" -Quiet",
+            "timeout": 90,
+            "statusMessage": "Verifying HA pill persistence in rendered browser"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -8,6 +21,16 @@
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\briss\\.codex\\worktrees\\ha-main-clean\\editor\\.codex\\hooks\\codex-diff-guard.ps1\"",
             "timeout": 30,
             "statusMessage": "Checking diff noise"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\briss\\.codex\\worktrees\\ha-main-clean\\editor\\.codex\\hooks\\codex-ha-pill-render-check.ps1\" -Quiet",
+            "timeout": 90,
+            "statusMessage": "Verifying HA pill persistence in rendered browser"
           }
         ]
       },

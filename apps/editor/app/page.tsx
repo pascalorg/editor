@@ -243,6 +243,17 @@ function writeStoredScene(scene: SceneGraph): void {
 
 function sanitizeLegacyScene(scene: SceneGraph): SceneGraph {
   const excludedNodeIds = new Set<string>()
+  const positionedHomeAssistantCollectionIds = new Set(
+    getHomeAssistantBindingNodes(scene.nodes as any)
+      .filter(
+        (bindingNode) =>
+          Boolean(
+            bindingNode.presentation?.rtsScreenPosition ||
+              bindingNode.presentation?.rtsWorldPosition,
+          ) && bindingNode.resources.some((resource) => resource.kind === 'entity'),
+      )
+      .map((bindingNode) => bindingNode.collectionId),
+  )
 
   for (const [nodeId, rawNode] of Object.entries(scene.nodes ?? {})) {
     if (!(isRecord(rawNode) && rawNode.type === 'item' && isRecord(rawNode.asset))) {
@@ -289,7 +300,10 @@ function sanitizeLegacyScene(scene: SceneGraph): SceneGraph {
     ? (Object.fromEntries(
         Object.entries(scene.collections).flatMap(([collectionId, collection]) => {
           const nextNodeIds = collection.nodeIds.filter((nodeId) => !excludedNodeIds.has(nodeId))
-          if (nextNodeIds.length === 0) {
+          if (
+            nextNodeIds.length === 0 &&
+            !positionedHomeAssistantCollectionIds.has(collectionId as CollectionId)
+          ) {
             return []
           }
 
@@ -464,6 +478,56 @@ function extractLegacyHomeAssistantBindings(scene: LegacySceneGraph): SceneGraph
     changed = true
   }
 
+  for (const [nodeId, rawNode] of Object.entries(nextNodes)) {
+    if (
+      !isRecord(rawNode) ||
+      rawNode.type === 'home-assistant-binding' ||
+      typeof rawNode.collectionId !== 'string' ||
+      !Array.isArray(rawNode.resources)
+    ) {
+      continue
+    }
+
+    const legacyPresentation = readLegacyHomeAssistantPresentation(rawNode.presentation)
+    const normalizedBinding = normalizeHomeAssistantCollectionBinding({
+      aggregation: typeof rawNode.aggregation === 'string' ? (rawNode.aggregation as any) : 'single',
+      collectionId: rawNode.collectionId as keyof HomeAssistantCollectionBindingMap,
+      presentation: legacyPresentation,
+      primaryResourceId: typeof rawNode.primaryResourceId === 'string' ? rawNode.primaryResourceId : null,
+      resources: rawNode.resources as HomeAssistantResourceBinding[],
+    })
+
+    if (!normalizedBinding || existingBindingCollections.has(normalizedBinding.collectionId)) {
+      continue
+    }
+
+    const bindingNode = createHomeAssistantBindingNode({
+      binding: normalizedBinding,
+      name:
+        typeof rawNode.name === 'string'
+          ? rawNode.name
+          : `${normalizedBinding.collectionId} Home Assistant binding`,
+    })
+
+    if (!bindingNode) {
+      continue
+    }
+
+    const restoredNodeId = nodeId as AnyNodeId
+    nextNodes[restoredNodeId] = {
+      ...bindingNode,
+      id: restoredNodeId,
+      metadata: isRecord(rawNode.metadata) ? rawNode.metadata : bindingNode.metadata,
+      parentId: typeof rawNode.parentId === 'string' ? (rawNode.parentId as AnyNodeId) : null,
+      visible: rawNode.visible !== false,
+    }
+    if (!nextRootNodeIds.includes(restoredNodeId)) {
+      nextRootNodeIds.push(restoredNodeId)
+    }
+    existingBindingCollections.add(normalizedBinding.collectionId)
+    changed = true
+  }
+
   for (const [collectionId, collection] of Object.entries(scene.collections ?? {})) {
     const legacyCollection = collection as Record<string, unknown>
     if (!isRecord(legacyCollection)) {
@@ -588,20 +652,32 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
     }
 
     const defaultGroups = [controlIds]
-    const sceneGroups = normalizeSmartHomeRoomGroupsForBinding({
+    const roomControlMode = getSmartHomeRoomControlMode(bindingWithRepairedResources.presentation)
+    const storedGroups = getSmartHomeRoomControlTileGroups({
+      collectionId,
+      presentation: bindingWithRepairedResources.presentation,
+    })
+    const authoredGroups = normalizeSmartHomeRoomGroupsForBinding({
       collectionId,
       resources: bindingWithRepairedResources.resources,
-      rawGroups: getSmartHomeRoomControlTileGroups({
-        collectionId,
-        presentation: bindingWithRepairedResources.presentation,
-      }),
+      rawGroups: storedGroups,
+    })
+    const derivedGroups = normalizeSmartHomeRoomGroupsForBinding({
+      collectionId,
+      resources: bindingWithRepairedResources.resources,
+      rawGroups: storedGroups,
       appendMissingControls: true,
     })
     const sceneHasCustomGroups =
-      sceneGroups.length > 0 &&
-      smartHomeRoomGroupsCoverControlIds(sceneGroups, controlIds) &&
-      !isDefaultSmartHomeRoomGroup(sceneGroups, controlIds)
-    const nextGroups = sceneHasCustomGroups ? sceneGroups : defaultGroups
+      derivedGroups.length > 0 &&
+      smartHomeRoomGroupsCoverControlIds(derivedGroups, controlIds) &&
+      !isDefaultSmartHomeRoomGroup(derivedGroups, controlIds)
+    const nextGroups =
+      roomControlMode === 'user-managed'
+        ? authoredGroups
+        : sceneHasCustomGroups
+          ? derivedGroups
+          : defaultGroups
 
     if (
       bindingWithRepairedResources !== bindingNode ||
@@ -612,21 +688,23 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
         }),
         nextGroups,
       )
-    ) {
-      nextNodes ??= { ...scene.nodes }
-      nextNodes[bindingNode.id] = {
-        ...bindingWithRepairedResources,
-        presentation: {
-          ...(bindingWithRepairedResources.presentation ?? {}),
+      ) {
+        nextNodes ??= { ...scene.nodes }
+        nextNodes[bindingNode.id] = {
+          ...bindingNode,
+          ...bindingWithRepairedResources,
+          presentation: {
+            ...(bindingWithRepairedResources.presentation ?? {}),
           rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
             collectionId,
             excludedResourceIds: getSmartHomeExcludedResourceIds(
               bindingWithRepairedResources.presentation,
             ),
             groups: nextGroups,
-            mode: sceneHasCustomGroups
-              ? 'user-managed'
-              : getSmartHomeRoomControlMode(bindingWithRepairedResources.presentation),
+            mode:
+              roomControlMode === 'user-managed' || sceneHasCustomGroups
+                ? 'user-managed'
+                : roomControlMode,
             resources: bindingWithRepairedResources.resources,
           }),
         },

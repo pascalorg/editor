@@ -7,6 +7,7 @@ import type {
 import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,
+  getDurableSmartHomeRoomControlTileGroups,
   getLegacySmartHomeRoomControlTileId,
   getSmartHomeRoomControlTileId,
   isSmartHomeBindingPresentationHidden,
@@ -190,6 +191,41 @@ describe('smart home composition', () => {
     expect(normalized?.presentation?.rtsRoomControls?.groups?.[0]).toEqual({
       memberResourceIds: [lights[0]!.id],
     })
+  })
+
+  test('canonicalizes UI control ids into durable HA resource tile ids', () => {
+    const uiGroups = [['collection_master:item-light-node:0', 'collection_master:item-fan-node:0']]
+    const groups = getDurableSmartHomeRoomControlTileGroups({
+      collectionId,
+      controls: [
+        {
+          id: 'collection_master:item-light-node:0',
+          resourceId: lights[0]!.id,
+        },
+        {
+          id: 'collection_master:item-fan-node:0',
+          legacyIds: ['legacy-fan-control'],
+          resourceId: 'fan.master',
+        },
+      ],
+      groups: uiGroups,
+    })
+
+    expect(groups).toEqual([
+      [
+        getSmartHomeRoomControlTileId(collectionId, lights[0]!.id),
+        getSmartHomeRoomControlTileId(collectionId, 'fan.master'),
+      ],
+    ])
+
+    const composition = buildSmartHomeRoomControlCompositionFromTileGroups({
+      collectionId,
+      groups,
+      mode: 'user-managed',
+      resources: [lights[0]!, entityResource('fan.master')],
+    })
+
+    expect(composition?.groups).toEqual([{ memberResourceIds: [lights[0]!.id, 'fan.master'] }])
   })
 
   test('marks hidden group presentation as durable scene state', () => {

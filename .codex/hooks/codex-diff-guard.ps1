@@ -86,12 +86,12 @@ function Find-DiffChurn {
 }
 
 try {
-  $inside = Invoke-GitLines -Arguments @("rev-parse", "--is-inside-work-tree")
+  $inside = @(Invoke-GitLines -Arguments @("rev-parse", "--is-inside-work-tree"))
   if ($inside.Count -eq 0 -or $inside[0] -notmatch "true") {
     exit 0
   }
 
-  $root = Invoke-GitLines -Arguments @("rev-parse", "--show-toplevel")
+  $root = @(Invoke-GitLines -Arguments @("rev-parse", "--show-toplevel"))
   if ($root.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($root[0])) {
     Set-Location -LiteralPath $root[0]
   }

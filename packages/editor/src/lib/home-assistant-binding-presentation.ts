@@ -30,6 +30,11 @@ export function mergeHomeAssistantPresentation(
     ...(current ?? {}),
   }
 
+  const currentRoomControls = current?.rtsRoomControls
+  const preserveUserManagedRoomControls =
+    currentRoomControls?.mode === 'user-managed' &&
+    incoming?.rtsRoomControls?.mode !== 'user-managed'
+
   if (incoming) {
     for (const [key, value] of Object.entries(incoming)) {
       if (value !== undefined) {
@@ -41,6 +46,12 @@ export function mergeHomeAssistantPresentation(
       delete merged.rtsExcludedResourceIds
       delete merged.rtsGroups
     }
+  }
+
+  if (preserveUserManagedRoomControls) {
+    merged.rtsRoomControls = currentRoomControls
+    delete merged.rtsExcludedResourceIds
+    delete merged.rtsGroups
   }
 
   return Object.keys(merged).length > 0 ? merged : undefined

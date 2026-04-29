@@ -11,6 +11,12 @@ type SmartHomeBindingPresentationWithLegacy = HomeAssistantCollectionBinding['pr
   rtsGroups?: string[][]
 }
 
+type SmartHomeRoomControlAlias = {
+  id: string
+  legacyIds?: readonly string[]
+  resourceId?: string | null
+}
+
 export function getSmartHomeRoomControlTileId(
   collectionId: CollectionId | string,
   resourceId: string,
@@ -137,6 +143,32 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
     ...(resourceGroups.length > 0 ? { groups: resourceGroups } : {}),
     ...(mode ? { mode } : {}),
   }
+}
+
+export function getDurableSmartHomeRoomControlTileGroups({
+  collectionId,
+  controls,
+  groups,
+}: {
+  collectionId: CollectionId | string
+  controls: readonly SmartHomeRoomControlAlias[]
+  groups: unknown
+}) {
+  const aliases = new Map<string, string>()
+
+  for (const control of controls) {
+    const durableId = control.resourceId
+      ? getSmartHomeRoomControlTileId(collectionId, control.resourceId)
+      : control.id
+    aliases.set(control.id, durableId)
+    for (const legacyId of control.legacyIds ?? []) {
+      aliases.set(legacyId, durableId)
+    }
+  }
+
+  return normalizeSmartHomeStringGroups(groups)
+    .map((group) => Array.from(new Set(group.map((memberId) => aliases.get(memberId) ?? memberId))))
+    .filter((group) => group.length > 0)
 }
 
 export function cloneSmartHomeResourceBinding(
