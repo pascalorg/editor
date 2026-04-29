@@ -1,3 +1,6 @@
+import type { HomeAssistantImportedResource } from '../../../lib/home-assistant-collections'
+import { isGroupResource } from '../../../lib/home-assistant-collections'
+
 export type SmartHomePanelSize = {
   height: number
   width: number
@@ -13,6 +16,8 @@ export type DeviceGroupColor = {
   border: string
   dot: string
 }
+
+export type DeviceCategoryKey = 'fan' | 'light' | 'media_player' | 'other'
 
 export const PLACEMENT_PILL_CLOSED_MIN_WIDTH = 56
 const PLACEMENT_PILL_CLOSED_MAX_WIDTH = 240
@@ -47,6 +52,67 @@ const DEVICE_GROUP_COLORS: DeviceGroupColor[] = [
   { background: '#efcece', border: '#d16f6f', dot: '#efcece' },
   { background: '#c8e8e1', border: '#62aaa0', dot: '#c8e8e1' },
 ]
+
+export const DEVICE_CATEGORY_ORDER: DeviceCategoryKey[] = ['light', 'fan', 'media_player', 'other']
+export const DEVICE_CATEGORY_LABELS: Record<DeviceCategoryKey, string> = {
+  fan: 'Fans',
+  light: 'Lights',
+  media_player: 'TVs',
+  other: 'Other',
+}
+
+export function getDeviceCategoryKey(
+  resource: HomeAssistantImportedResource,
+): DeviceCategoryKey {
+  const domain = resource.domain ?? resource.entityId?.split('.')[0] ?? resource.kind
+  if (domain === 'light' || domain === 'fan' || domain === 'media_player') {
+    return domain
+  }
+
+  return 'other'
+}
+
+export function getDeviceCategoryTone(category: DeviceCategoryKey) {
+  if (category === 'light') {
+    return 'bg-amber-100/80 text-amber-700'
+  }
+
+  if (category === 'fan') {
+    return 'bg-sky-100/80 text-sky-700'
+  }
+
+  if (category === 'media_player') {
+    return 'bg-violet-100/80 text-violet-700'
+  }
+
+  return 'bg-cyan-100/80 text-cyan-700'
+}
+
+export function getResourceAccentClasses(resource: HomeAssistantImportedResource) {
+  const domain = resource.domain ?? resource.entityId?.split('.')[0] ?? resource.kind
+
+  if (isGroupResource(resource)) {
+    return 'text-cyan-700'
+  }
+
+  if (domain === 'fan') {
+    return 'text-sky-300'
+  }
+
+  if (domain === 'media_player') {
+    return 'text-violet-300'
+  }
+
+  if (domain === 'light') {
+    return 'text-amber-300'
+  }
+
+  if (resource.kind === 'scene' || resource.kind === 'script' || resource.kind === 'automation') {
+    return 'text-fuchsia-300'
+  }
+
+  return 'text-cyan-300'
+}
 
 export function getDeviceGroupColor(index: number) {
   return DEVICE_GROUP_COLORS[index % DEVICE_GROUP_COLORS.length]!

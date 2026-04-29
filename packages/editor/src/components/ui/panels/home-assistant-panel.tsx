@@ -99,6 +99,8 @@ import { requestSceneImmediateSave } from '../../../lib/scene'
 import { cn } from '../../../lib/utils'
 import {
   clampSmartHomePanelSize,
+  DEVICE_CATEGORY_LABELS,
+  DEVICE_CATEGORY_ORDER,
   DEVICE_GROUP_CELL_HEIGHT,
   DEVICE_GROUP_CELL_WIDTH,
   DEVICE_GROUP_CHIP_HEIGHT,
@@ -106,10 +108,14 @@ import {
   DEVICE_GRID_MIN_COLUMNS,
   DEVICE_SECTION_SCROLL_BOTTOM_SAFE_AREA,
   type DeviceGroupColor,
+  type DeviceCategoryKey,
+  getDeviceCategoryKey,
+  getDeviceCategoryTone,
   getDeviceGridColumns,
   getDeviceGroupBorderPath,
   getDeviceGroupColor,
   getPlacementPillWidth,
+  getResourceAccentClasses,
   getSmartHomeSectionOverflow,
   getSnakeGridCoordinate,
   PLACEMENT_LINE_GAP,
@@ -133,7 +139,6 @@ type ActivePanel =
   | null
 
 type ImportSectionKey = 'actions' | 'devices' | 'groups'
-type DeviceCategoryKey = 'fan' | 'light' | 'media_player' | 'other'
 
 type ScreenPoint = {
   x: number
@@ -152,14 +157,6 @@ type DeviceGroupMembershipDot = {
 }
 
 const UNGROUPED_DEVICE_GROUP_KEY = '__ungrouped'
-
-const DEVICE_CATEGORY_ORDER: DeviceCategoryKey[] = ['light', 'fan', 'media_player', 'other']
-const DEVICE_CATEGORY_LABELS: Record<DeviceCategoryKey, string> = {
-  fan: 'Fans',
-  light: 'Lights',
-  media_player: 'TVs',
-  other: 'Other',
-}
 
 type IconProps = {
   className?: string
@@ -336,15 +333,6 @@ function getResourceTypeIcon(resource: HomeAssistantImportedResource) {
   return <Link2 className="h-4 w-4" />
 }
 
-function getDeviceCategoryKey(resource: HomeAssistantImportedResource): DeviceCategoryKey {
-  const domain = resource.domain ?? resource.entityId?.split('.')[0] ?? resource.kind
-  if (domain === 'light' || domain === 'fan' || domain === 'media_player') {
-    return domain
-  }
-
-  return 'other'
-}
-
 function getDeviceCategoryIcon(category: DeviceCategoryKey) {
   if (category === 'light') {
     return <Lightbulb className="h-4 w-4" />
@@ -359,48 +347,6 @@ function getDeviceCategoryIcon(category: DeviceCategoryKey) {
   }
 
   return <Link2 className="h-4 w-4" />
-}
-
-function getDeviceCategoryTone(category: DeviceCategoryKey) {
-  if (category === 'light') {
-    return 'bg-amber-100/80 text-amber-700'
-  }
-
-  if (category === 'fan') {
-    return 'bg-sky-100/80 text-sky-700'
-  }
-
-  if (category === 'media_player') {
-    return 'bg-violet-100/80 text-violet-700'
-  }
-
-  return 'bg-cyan-100/80 text-cyan-700'
-}
-
-function getResourceAccentClasses(resource: HomeAssistantImportedResource) {
-  const domain = resource.domain ?? resource.entityId?.split('.')[0] ?? resource.kind
-
-  if (isGroupResource(resource)) {
-    return 'text-cyan-700'
-  }
-
-  if (domain === 'fan') {
-    return 'text-sky-300'
-  }
-
-  if (domain === 'media_player') {
-    return 'text-violet-300'
-  }
-
-  if (domain === 'light') {
-    return 'text-amber-300'
-  }
-
-  if (resource.kind === 'scene' || resource.kind === 'script' || resource.kind === 'automation') {
-    return 'text-fuchsia-300'
-  }
-
-  return 'text-cyan-300'
 }
 
 export function HomeAssistantPanel() {
