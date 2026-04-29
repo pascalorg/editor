@@ -216,7 +216,7 @@ function generateStairSegmentGeometry(
   extrudedGeometry.applyMatrix4(matrix)
   extrudedGeometry.computeVertexNormals()
 
-  const geometry = extrudedGeometry.toNonIndexed() ?? extrudedGeometry
+  const geometry = extrudedGeometry.index ? extrudedGeometry.toNonIndexed() : extrudedGeometry
   if (geometry !== extrudedGeometry) {
     extrudedGeometry.dispose()
   }

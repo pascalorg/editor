@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type RoofNode,
+  type RoofSurfaceMaterialRole,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
@@ -14,6 +15,7 @@ import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { duplicateRoofSubtree } from '../../../lib/roof-duplication'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -73,44 +75,15 @@ export function RoofPanel() {
   )
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
+    if (!node) return
     sfxEmitter.emit('sfx:item-pick')
 
-    let duplicateInfo = structuredClone(node) as any
-    delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
-    // Offset slightly so it's visible
-    duplicateInfo.position = [
-      duplicateInfo.position[0] + 1,
-      duplicateInfo.position[1],
-      duplicateInfo.position[2] + 1,
-    ]
-
     try {
-      const duplicate = RoofNodeSchema.parse(duplicateInfo)
-      useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-
-      // Also duplicate all child segments
-      const nodesState = useScene.getState().nodes
-      const children = node.children || []
-
-      for (const childId of children) {
-        const childNode = nodesState[childId]
-        if (childNode && childNode.type === 'roof-segment') {
-          let childDuplicateInfo = structuredClone(childNode) as any
-          delete childDuplicateInfo.id
-          childDuplicateInfo.metadata = { ...childDuplicateInfo.metadata, isNew: true }
-          const childDuplicate = RoofSegmentNodeSchema.parse(childDuplicateInfo)
-          useScene.getState().createNode(childDuplicate, duplicate.id as AnyNodeId)
-        }
-      }
-
-      setSelection({ selectedIds: [] })
-      setMovingNode(duplicate)
+      duplicateRoofSubtree(node.id as AnyNodeId, { mode: 'move' })
     } catch (e) {
       console.error('Failed to duplicate roof', e)
     }
-  }, [node, setSelection, setMovingNode])
+  }, [node])
 
   const handleMove = useCallback(() => {
     if (node) {

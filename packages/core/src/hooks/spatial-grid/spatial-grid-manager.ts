@@ -1,5 +1,6 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions } from '../../schema'
+import useScene from '../../store/use-scene'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -49,6 +50,121 @@ function getItemFootprint(
     [x + (halfW * cos - halfD * sin), z + (halfW * sin + halfD * cos)],
     [x + (-halfW * cos - halfD * sin), z + (-halfW * sin + halfD * cos)],
   ]
+}
+
+type ItemLocalBounds = {
+  min: [number, number, number]
+  max: [number, number, number]
+}
+
+type ItemParentAabb = {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+  minZ: number
+  maxZ: number
+}
+
+function getFallbackItemLocalBounds(item: ItemNode): ItemLocalBounds {
+  const [width, height, depth] = getScaledDimensions(item)
+  const minZ = item.asset.attachTo === 'wall-side' ? -depth : -depth / 2
+  const maxZ = item.asset.attachTo === 'wall-side' ? 0 : depth / 2
+  return {
+    min: [-width / 2, 0, minZ],
+    max: [width / 2, height, maxZ],
+  }
+}
+
+function getItemLocalBounds(item: ItemNode): ItemLocalBounds {
+  const metadata =
+    typeof item.metadata === 'object' && item.metadata !== null && !Array.isArray(item.metadata)
+      ? (item.metadata as Record<string, unknown>)
+      : null
+  const rawBounds =
+    typeof metadata?.meshLocalBounds === 'object' &&
+    metadata.meshLocalBounds !== null &&
+    !Array.isArray(metadata.meshLocalBounds)
+      ? (metadata.meshLocalBounds as Record<string, unknown>)
+      : null
+  const min = rawBounds?.min
+  const max = rawBounds?.max
+
+  if (
+    Array.isArray(min) &&
+    min.length >= 3 &&
+    Array.isArray(max) &&
+    max.length >= 3 &&
+    typeof min[0] === 'number' &&
+    typeof min[1] === 'number' &&
+    typeof min[2] === 'number' &&
+    typeof max[0] === 'number' &&
+    typeof max[1] === 'number' &&
+    typeof max[2] === 'number'
+  ) {
+    return {
+      min: [min[0], min[1], min[2]],
+      max: [max[0], max[1], max[2]],
+    }
+  }
+
+  return getFallbackItemLocalBounds(item)
+}
+
+function getItemParentAabb(item: ItemNode): ItemParentAabb {
+  const bounds = getItemLocalBounds(item)
+  const corners: Array<[number, number, number]> = [
+    [bounds.min[0], bounds.min[1], bounds.min[2]],
+    [bounds.min[0], bounds.min[1], bounds.max[2]],
+    [bounds.min[0], bounds.max[1], bounds.min[2]],
+    [bounds.min[0], bounds.max[1], bounds.max[2]],
+    [bounds.max[0], bounds.min[1], bounds.min[2]],
+    [bounds.max[0], bounds.min[1], bounds.max[2]],
+    [bounds.max[0], bounds.max[1], bounds.min[2]],
+    [bounds.max[0], bounds.max[1], bounds.max[2]],
+  ]
+  const yRot = item.rotation[1] ?? 0
+  const cos = Math.cos(yRot)
+  const sin = Math.sin(yRot)
+
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+
+  for (const [cx, cy, cz] of corners) {
+    const rotatedX = cx * cos + cz * sin
+    const rotatedZ = -cx * sin + cz * cos
+    const worldX = rotatedX + item.position[0]
+    const worldY = cy + item.position[1]
+    const worldZ = rotatedZ + item.position[2]
+    minX = Math.min(minX, worldX)
+    minY = Math.min(minY, worldY)
+    minZ = Math.min(minZ, worldZ)
+    maxX = Math.max(maxX, worldX)
+    maxY = Math.max(maxY, worldY)
+    maxZ = Math.max(maxZ, worldZ)
+  }
+
+  return { minX, maxX, minY, maxY, minZ, maxZ }
+}
+
+function intervalsOverlap(minA: number, maxA: number, minB: number, maxB: number, epsilon = 1e-4) {
+  return minA < maxB - epsilon && maxA > minB + epsilon
+}
+
+function resolveNodeLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
+  if (node.type === 'level') return node.id
+
+  let current: AnyNode | undefined = node
+  while (current) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId] : undefined
+  }
+
+  return 'default'
 }
 
 /**
@@ -481,8 +597,39 @@ export class SpatialGridManager {
     rotation: [number, number, number],
     ignoreIds?: string[],
   ) {
-    const grid = this.getFloorGrid(levelId)
-    return grid.canPlace(position, dimensions, rotation, ignoreIds)
+    const nodes = useScene.getState().nodes
+    const ignoreSet = new Set(ignoreIds ?? [])
+    const [width, , depth] = dimensions
+    const yRot = rotation[1]
+    const cos = Math.abs(Math.cos(yRot))
+    const sin = Math.abs(Math.sin(yRot))
+    const rotatedW = width * cos + depth * sin
+    const rotatedD = width * sin + depth * cos
+    const draftBounds = {
+      minX: position[0] - rotatedW / 2,
+      maxX: position[0] + rotatedW / 2,
+      minZ: position[2] - rotatedD / 2,
+      maxZ: position[2] + rotatedD / 2,
+    }
+
+    const conflicts: string[] = []
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'item') continue
+      const item = node as ItemNode
+      if (item.asset.attachTo) continue
+      if (ignoreSet.has(item.id)) continue
+      if (resolveNodeLevelId(item, nodes) !== levelId) continue
+
+      const bounds = getItemParentAabb(item)
+      if (
+        intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
+        intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
+      ) {
+        conflicts.push(item.id)
+      }
+    }
+
+    return { valid: conflicts.length === 0, conflictIds: conflicts }
   }
 
   /**
@@ -514,7 +661,7 @@ export class SpatialGridManager {
     // Convert local X position to parametric t (0-1)
     const tCenter = localX / wallLength
     const [itemWidth, itemHeight] = dimensions
-    return this.getWallGrid(levelId).canPlaceOnWall(
+    const baseResult = this.getWallGrid(levelId).canPlaceOnWall(
       wallId,
       wallLength,
       wallHeight,
@@ -526,6 +673,44 @@ export class SpatialGridManager {
       side,
       ignoreIds,
     )
+
+    if (!baseResult.valid) return baseResult
+
+    const nodes = useScene.getState().nodes
+    const ignoreSet = new Set(ignoreIds ?? [])
+    const draftBounds = {
+      minX: localX - itemWidth / 2,
+      maxX: localX + itemWidth / 2,
+      minY: baseResult.adjustedY,
+      maxY: baseResult.adjustedY + itemHeight,
+    }
+
+    const conflicts: string[] = []
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'item') continue
+      const item = node as ItemNode
+      if (!(item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side')) continue
+      if (ignoreSet.has(item.id)) continue
+      if (item.parentId !== wallId) continue
+
+      if (attachType === 'wall-side' && item.asset.attachTo === 'wall-side' && side && item.side) {
+        if (side !== item.side) continue
+      }
+
+      const bounds = getItemParentAabb(item)
+      if (
+        intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
+        intervalsOverlap(draftBounds.minY, draftBounds.maxY, bounds.minY, bounds.maxY)
+      ) {
+        conflicts.push(item.id)
+      }
+    }
+
+    return {
+      ...baseResult,
+      valid: conflicts.length === 0,
+      conflictIds: conflicts,
+    }
   }
 
   getWallForItem(levelId: string, itemId: string): string | undefined {
@@ -692,8 +877,39 @@ export class SpatialGridManager {
       }
     }
 
-    // Check for overlaps with other ceiling items
-    return this.getCeilingGrid(ceilingId).canPlace(position, dimensions, rotation, ignoreIds)
+    const nodes = useScene.getState().nodes
+    const ignoreSet = new Set(ignoreIds ?? [])
+    const [width, , depth] = dimensions
+    const yRot = rotation[1]
+    const cos = Math.abs(Math.cos(yRot))
+    const sin = Math.abs(Math.sin(yRot))
+    const rotatedW = width * cos + depth * sin
+    const rotatedD = width * sin + depth * cos
+    const draftBounds = {
+      minX: position[0] - rotatedW / 2,
+      maxX: position[0] + rotatedW / 2,
+      minZ: position[2] - rotatedD / 2,
+      maxZ: position[2] + rotatedD / 2,
+    }
+
+    const conflicts: string[] = []
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'item') continue
+      const item = node as ItemNode
+      if (item.asset.attachTo !== 'ceiling') continue
+      if (ignoreSet.has(item.id)) continue
+      if (item.parentId !== ceilingId) continue
+
+      const bounds = getItemParentAabb(item)
+      if (
+        intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
+        intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
+      ) {
+        conflicts.push(item.id)
+      }
+    }
+
+    return { valid: conflicts.length === 0, conflictIds: conflicts }
   }
 
   clearLevel(levelId: string) {

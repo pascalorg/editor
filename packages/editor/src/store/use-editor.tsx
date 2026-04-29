@@ -210,6 +210,10 @@ type EditorState = {
   setAllowUndergroundCamera: (enabled: boolean) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
+  mobilePanelSheetHeight: number
+  setMobilePanelSheetHeight: (height: number) => void
+  isCaptureMode: boolean
+  setIsCaptureMode: (enabled: boolean) => void
   floorplanPaneRatio: number
   setFloorplanPaneRatio: (ratio: number) => void
 }
@@ -659,6 +663,10 @@ const useEditor = create<EditorState>()(
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
+      mobilePanelSheetHeight: 0,
+      setMobilePanelSheetHeight: (height) => set({ mobilePanelSheetHeight: height }),
+      isCaptureMode: false,
+      setIsCaptureMode: (enabled) => set({ isCaptureMode: enabled }),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
       setFloorplanPaneRatio: (ratio) =>
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
