@@ -626,7 +626,7 @@ function generateStairRailingGeometry(
   for (let index = 1; index < segmentRailPaths.length; index++) {
     const previousPath = segmentRailPaths[index - 1]
     const currentPath = segmentRailPaths[index]
-    if (!(previousPath && currentPath?.connectFromPrevious)) continue
+    if (!(previousPath && currentPath && currentPath.connectFromPrevious)) continue
     if (previousPath.segment.segmentType === 'landing') continue
 
     for (const sidePath of currentPath.sidePaths) {

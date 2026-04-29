@@ -51,7 +51,6 @@ function getCeilingMaterials(color = '#999999') {
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
-  const visible = node.visible && !node.autoFromWalls
 
   useRegistry(node.id, 'ceiling', ref)
   const handlers = useNodeEvents(node, 'ceiling')
@@ -70,7 +69,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   ])
 
   return (
-    <mesh material={materials.bottomMaterial} ref={ref} visible={visible}>
+    <mesh material={materials.bottomMaterial} ref={ref}>
       <boxGeometry args={[0, 0, 0]} />
       <mesh
         material={materials.topMaterial}

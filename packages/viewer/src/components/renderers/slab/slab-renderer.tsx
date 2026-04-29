@@ -47,7 +47,6 @@ function getSlabMaterial(
 
 export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const ref = useRef<Mesh>(null!)
-  const visible = node.visible && !node.autoFromWalls
 
   useRegistry(node.id, 'slab', ref)
 
@@ -74,7 +73,14 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   ])
 
   return (
-    <mesh castShadow receiveShadow ref={ref} {...handlers} material={material} visible={visible}>
+    <mesh
+      castShadow
+      receiveShadow
+      ref={ref}
+      {...handlers}
+      material={material}
+      visible={node.visible}
+    >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
   )
