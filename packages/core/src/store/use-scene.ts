@@ -11,8 +11,8 @@ import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { resetSceneHistoryPauseDepth } from './history-control'
 import * as nodeActions from './actions/node-actions'
+import { resetSceneHistoryPauseDepth } from './history-control'
 
 function getFiniteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -349,6 +349,67 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
   return patchedNodes as Record<string, AnyNode>
 }
 
+function getNodeChildIds(node: AnyNode): AnyNodeId[] {
+  if (!('children' in node) || !Array.isArray(node.children)) {
+    return []
+  }
+
+  return (node.children as unknown[])
+    .map((child) => {
+      if (typeof child === 'string') return child
+      if (child && typeof child === 'object' && 'id' in child && typeof child.id === 'string') {
+        return child.id
+      }
+      return null
+    })
+    .filter((id): id is AnyNodeId => typeof id === 'string')
+}
+
+function normalizeRootNodeIds(
+  nodes: Record<AnyNodeId, AnyNode>,
+  rootNodeIds: AnyNodeId[],
+): AnyNodeId[] {
+  const existingRootIds = rootNodeIds.filter((id) => Boolean(nodes[id]))
+  const siteRootIds = existingRootIds.filter((id) => nodes[id]?.type === 'site')
+
+  if (siteRootIds.length > 0) {
+    return siteRootIds
+  }
+
+  return existingRootIds.filter((id) => nodes[id]?.parentId === null)
+}
+
+function collectReachableNodeIds(
+  nodes: Record<AnyNodeId, AnyNode>,
+  rootNodeIds: AnyNodeId[],
+): Set<AnyNodeId> {
+  const reachable = new Set<AnyNodeId>()
+  const stack = [...rootNodeIds]
+  const childIdsByParentId = new Map<AnyNodeId, AnyNodeId[]>()
+
+  for (const node of Object.values(nodes)) {
+    if (!node.parentId) continue
+    const parentId = node.parentId as AnyNodeId
+    const children = childIdsByParentId.get(parentId) ?? []
+    children.push(node.id as AnyNodeId)
+    childIdsByParentId.set(parentId, children)
+  }
+
+  while (stack.length > 0) {
+    const id = stack.pop()
+    if (!id || reachable.has(id)) continue
+
+    const node = nodes[id]
+    if (!node) continue
+
+    reachable.add(id)
+    stack.push(...getNodeChildIds(node))
+    stack.push(...(childIdsByParentId.get(id) ?? []))
+  }
+
+  return reachable
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -450,9 +511,19 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
+        const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
+        const reachableNodeIds = collectReachableNodeIds(cleanedNodes, normalizedRootNodeIds)
+        if (normalizedRootNodeIds.length > 0) {
+          for (const node of Object.values(cleanedNodes)) {
+            if (reachableNodeIds.has(node.id as AnyNodeId)) continue
+            console.warn('[Scene] Removing unreachable node', node.id)
+            delete cleanedNodes[node.id]
+          }
+        }
+
         set({
           nodes: cleanedNodes,
-          rootNodeIds,
+          rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
         })

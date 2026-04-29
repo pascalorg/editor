@@ -401,6 +401,27 @@ describe('SceneBridge', () => {
   })
 
   describe('setScene / exportJSON / loadJSON', () => {
+    test('setScene prunes duplicated levels that were accidentally saved as roots', () => {
+      const level0 = LevelNode.parse({ level: 0, children: [] })
+      const building = BuildingNode.parse({ children: [level0.id] })
+      const site = SiteNode.parse({ children: [building] })
+      const orphanLevel = LevelNode.parse({ level: 1, children: [] })
+
+      bridge.setScene(
+        {
+          [site.id]: site,
+          [building.id]: building,
+          [level0.id]: level0,
+          [orphanLevel.id]: orphanLevel,
+        } as any,
+        [site.id, orphanLevel.id] as any,
+      )
+
+      expect(bridge.getRootNodeIds()).toEqual([site.id])
+      expect(bridge.getNode(orphanLevel.id)).toBeNull()
+      expect(bridge.findNodes({ type: 'level' }).map((node) => node.id)).toEqual([level0.id])
+    })
+
     test('exportJSON returns the scene shape', () => {
       const exp = bridge.exportJSON()
       expect(typeof exp.nodes).toBe('object')

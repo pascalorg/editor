@@ -1,4 +1,4 @@
-import { type AnyNodeId, type BuildingNode, LevelNode, useScene } from '@pascal-app/core'
+import { type BuildingNode, LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Building2, Plus } from 'lucide-react'
 import { memo, useState } from 'react'
@@ -12,7 +12,7 @@ import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface BuildingTreeNodeProps {
-  nodeId: AnyNodeId
+  nodeId: BuildingNode['id']
   depth: number
   isLast?: boolean
 }

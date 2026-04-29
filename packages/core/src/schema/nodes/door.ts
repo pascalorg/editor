@@ -77,7 +77,7 @@ export const DoorNode = BaseNode.extend({
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
   - segments: rows stacked top to bottom, each defining its own columnRatios
-  - type 'empty' = flush flat fill, 'panel' = raised/recessed panel, 'glass' = glazed
+  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
   - hingesSide/swingDirection: which way the door opens
   - doorCloser/panicBar: commercial and emergency hardware options
 `)

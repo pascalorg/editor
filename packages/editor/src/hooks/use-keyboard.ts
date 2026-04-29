@@ -12,8 +12,18 @@ export const markToolCancelConsumed = () => {
   _toolCancelConsumed = true
 }
 
-export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
+export const useKeyboard = ({
+  isVersionPreviewMode = false,
+  disabled = false,
+}: {
+  isVersionPreviewMode?: boolean
+  disabled?: boolean
+} = {}) => {
   useEffect(() => {
+    if (disabled) {
+      return
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -21,9 +31,6 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
       }
 
       if (e.key === 'Escape') {
-        // If in walkthrough mode, let WalkthroughControls handle ESC
-        if (useViewer.getState().walkthroughMode) return
-
         e.preventDefault()
         _toolCancelConsumed = false
         emitter.emit('tool:cancel')
@@ -220,7 +227,7 @@ export const useKeyboard = ({ isVersionPreviewMode = false } = {}) => {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isVersionPreviewMode])
+  }, [disabled, isVersionPreviewMode])
 
   return null
 }

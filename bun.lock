@@ -104,6 +104,7 @@
         "motion": "^12.34.3",
         "nanoid": "^5.1.6",
         "tailwind-merge": "^3.5.0",
+        "three-mesh-bvh": "^0.9.8",
         "zod": "^4.3.6",
         "zustand": "^5.0.11",
       },

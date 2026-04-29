@@ -1,6 +1,7 @@
 'use client'
 
 import useEditor from '../../../store/use-editor'
+import { SliderControl } from '../controls/slider-control'
 import { Input } from '../primitives/input'
 import { PanelSection } from '../controls/panel-section'
 import { PanelWrapper } from './panel-wrapper'
@@ -77,67 +78,41 @@ export function PaintPanel() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-                Roughness
-              </label>
-              <span className="font-mono text-muted-foreground text-xs">
-                {currentProps.roughness.toFixed(2)}
-              </span>
+          <div className="space-y-1">
+            <label className="block font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
+              Surface
+            </label>
+            <div className="space-y-1 rounded-lg border border-border/50 bg-background/40 p-2">
+              <SliderControl
+                label="Roughness"
+                max={1}
+                min={0}
+                onChange={(roughness) => updateCustomMaterial({ roughness })}
+                precision={2}
+                step={0.01}
+                value={currentProps.roughness}
+              />
+              <SliderControl
+                label="Metalness"
+                max={1}
+                min={0}
+                onChange={(metalness) => updateCustomMaterial({ metalness })}
+                precision={2}
+                step={0.01}
+                value={currentProps.metalness}
+              />
+              <SliderControl
+                label="Opacity"
+                max={1}
+                min={0}
+                onChange={(opacity) =>
+                  updateCustomMaterial({ opacity }, opacity < 1 || currentProps.transparent)
+                }
+                precision={2}
+                step={0.01}
+                value={currentProps.opacity}
+              />
             </div>
-            <input
-              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-              max={1}
-              min={0}
-              onChange={(e) => updateCustomMaterial({ roughness: Number.parseFloat(e.target.value) })}
-              step={0.01}
-              type="range"
-              value={currentProps.roughness}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-                Metalness
-              </label>
-              <span className="font-mono text-muted-foreground text-xs">
-                {currentProps.metalness.toFixed(2)}
-              </span>
-            </div>
-            <input
-              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-              max={1}
-              min={0}
-              onChange={(e) => updateCustomMaterial({ metalness: Number.parseFloat(e.target.value) })}
-              step={0.01}
-              type="range"
-              value={currentProps.metalness}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-                Opacity
-              </label>
-              <span className="font-mono text-muted-foreground text-xs">
-                {currentProps.opacity.toFixed(2)}
-              </span>
-            </div>
-            <input
-              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-accent"
-              max={1}
-              min={0}
-              onChange={(e) => {
-                const opacity = Number.parseFloat(e.target.value)
-                updateCustomMaterial({ opacity }, opacity < 1 || currentProps.transparent)
-              }}
-              step={0.01}
-              type="range"
-              value={currentProps.opacity}
-            />
           </div>
 
           <div className="space-y-2">

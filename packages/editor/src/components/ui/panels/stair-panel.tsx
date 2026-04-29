@@ -262,7 +262,7 @@ export function StairPanel() {
           />
 
           {(node.slabOpeningMode ?? 'none') === 'destination' ? (
-            <MetricControl
+            <SliderControl
               label="Opening Offset"
               max={0.5}
               min={0}
@@ -308,7 +308,7 @@ export function StairPanel() {
 
       {(node.stairType === 'curved' || node.stairType === 'spiral') && (
         <PanelSection title="Geometry">
-          <MetricControl
+          <SliderControl
             label="Width"
             max={10}
             min={0.4}
@@ -318,7 +318,7 @@ export function StairPanel() {
             unit="m"
             value={Math.round((node.width ?? 1) * 100) / 100}
           />
-          <MetricControl
+          <SliderControl
             label="Rise"
             max={10}
             min={0.2}
@@ -328,7 +328,7 @@ export function StairPanel() {
             unit="m"
             value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
           />
-          <MetricControl
+          <SliderControl
             label="Steps"
             max={32}
             min={2}
@@ -346,7 +346,7 @@ export function StairPanel() {
             />
           )}
           {(node.stairType === 'spiral' || !(node.fillToFloor ?? true)) && (
-            <MetricControl
+            <SliderControl
               label="Thickness"
               max={1}
               min={0.02}
@@ -357,7 +357,7 @@ export function StairPanel() {
               value={Math.round((node.thickness ?? 0.25) * 100) / 100}
             />
           )}
-          <MetricControl
+          <SliderControl
             label="Inner Radius"
             max={10}
             min={node.stairType === 'spiral' ? 0.05 : 0.2}
@@ -385,7 +385,7 @@ export function StairPanel() {
                 value={node.topLandingMode ?? 'none'}
               />
               {(node.topLandingMode ?? 'none') === 'integrated' && (
-                <MetricControl
+                <SliderControl
                   label="Top Landing"
                   max={5}
                   min={0.3}
