@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 2 of 7 (Authentication) — IN PROGRESS
-Plan: 1 of N complete
-Status: 02-01 complete — Google OAuth + NEXTAUTH_SECRET fix shipped; ready for 02-02
-Last activity: 2026-04-28 — 02-01 complete: GoogleProvider + signIn upsert, env rename, Google button on login page
+Plan: 2 of N complete
+Status: 02-02 complete — Password reset flow shipped (AUTH-03); Phase 02 authentication complete
+Last activity: 2026-04-28 — 02-02 complete: PasswordResetToken model, forgot-password + reset-password routes and pages, forgot-password link on login
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -53,6 +53,8 @@ Recent decisions affecting current work:
 - No @auth/prisma-adapter — manual signIn callback upsert preserves JWT session strategy; email as unique key prevents duplicate users
 - allowDangerousEmailAccountLinking: true on GoogleProvider — safe for Google (verifies email); enables credential-user account linking
 - BETTER_AUTH_SECRET renamed to NEXTAUTH_SECRET (was causing silent JWT signing failures)
+- v1 password reset returns resetUrl in API response (no email provider); MUST be replaced with transactional email in v2
+- Token stored as raw 64-char hex — acceptable for v1; v2 hardening: store SHA-256 of token instead
 
 ### Pending Todos
 
@@ -65,5 +67,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-28
-Stopped at: Phase 2 Plan 01 complete — GoogleProvider + signIn upsert + env rename + Google button on login page
-Resume file: Begin 02-02
+Stopped at: Phase 2 Plan 02 complete — PasswordResetToken model, forgot/reset-password routes + pages, login page link
+Resume file: Begin next phase or plan
