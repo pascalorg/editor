@@ -30,11 +30,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Visitor lands on the page and sees a clear product headline, feature highlights, and a call-to-action button within the viewport
   2. Visitor can click "Sign Up" or "Log In" from the landing page and reach the correct auth form
   3. Sharing the landing URL on Slack/Twitter produces a populated preview card (OG image + title + description)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Landing page UI — hero, feature highlights, CTAs, responsive layout
-- [ ] 01-02: SEO + Open Graph meta tags and OG image generation
+- [ ] 01-01-PLAN.md — Audit & polish landing UI; standardize CTAs to /signup; verify responsive
+- [ ] 01-02-PLAN.md — Add app/opengraph-image.tsx and twitter-image.tsx via next/og ImageResponse
 
 ---
 
