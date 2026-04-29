@@ -80,14 +80,13 @@ export type {
 } from './nodes/item'
 export { getScaledDimensions, ItemNode } from './nodes/item'
 export { LevelNode } from './nodes/level'
-export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
+export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
 export { ScanNode } from './nodes/scan'
 // Nodes
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
-export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {
   getEffectiveStairSurfaceMaterial,
   StairNode,
@@ -96,6 +95,7 @@ export {
   StairTopLandingMode,
   StairType,
 } from './nodes/stair'
+export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
