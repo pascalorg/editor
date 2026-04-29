@@ -1,123 +1,179 @@
+import { getServerSession } from 'next-auth/next'
+import { redirect } from 'next/navigation'
+import { authOptions } from '@/lib/auth'
 import { getDashboardData } from './actions'
 import { ProjectCard } from './_components/ProjectCard'
-import { Plus, FolderKanban, Users, Building2 } from 'lucide-react'
-import Link from 'next/link'
 import { CreateWorkspacePrompt } from './_components/CreateWorkspacePrompt'
+import { NewProjectCard } from './_components/NewProjectCard'
+import { Plus, Search } from 'lucide-react'
+import Link from 'next/link'
+
+function getGreeting(name: string | null | undefined) {
+  const h = new Date().getHours()
+  const time = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
+  return `Good ${time}, ${name?.split(' ')[0] ?? 'there'}.`
+}
 
 export default async function DashboardOverview() {
-  const data = await getDashboardData()
+  const session = await getServerSession(authOptions)
+  if (!session?.user) redirect('/login')
 
-  if (!data || data.organizations.length === 0) {
-    return <CreateWorkspacePrompt />
-  }
+  const data = await getDashboardData()
+  if (!data || data.organizations.length === 0) return <CreateWorkspacePrompt />
 
   const org = data.organizations[0]!.organization
-  const totalTeams = org.teams.length
-  const totalProjects = org.teams.reduce((acc, t) => acc + t.projects.length, 0)
-  const totalMembers = org.members.length
-
   const allProjects = org.teams.flatMap((team) =>
-    team.projects.map((proj) => ({ ...proj, teamName: team.name }))
+    team.projects.map((proj) => ({
+      ...proj,
+      teamName: team.name,
+      members: team.members,
+    }))
   )
+
+  const starredIds = new Set(data.starredProjectIds ?? [])
 
   const recentProjects = [...allProjects]
     .sort((a, b) => {
-      const aTime = (a.lastOpenedAt ?? a.updatedAt).getTime();
-      const bTime = (b.lastOpenedAt ?? b.updatedAt).getTime();
-      return bTime - aTime;
+      const aTime = ((a as { lastOpenedAt?: Date | null }).lastOpenedAt ?? a.updatedAt).getTime()
+      const bTime = ((b as { lastOpenedAt?: Date | null }).lastOpenedAt ?? b.updatedAt).getTime()
+      return bTime - aTime
     })
-    .slice(0, 6) // DASH-02: limit to 6
+    .slice(0, 6)
 
-  const starredIds = new Set(data.starredProjectIds ?? [])
-  const starredProjects = allProjects.filter((p) => starredIds.has(p.id))
+  const greeting = getGreeting(session.user.name)
+
+  // Recent activity (last 3 modified projects as "live now" events)
+  const liveActivity = [...allProjects]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 3)
 
   return (
-    <div className="p-8 max-w-[1400px]">
-      {/* Header */}
-      <header className="mb-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{org.name}</h1>
-            <p className="text-zinc-500 text-sm mt-0.5">Your workspace overview</p>
-          </div>
+    <div className="min-h-screen">
+      {/* Top bar */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-8 py-4 border-b border-white/[0.05] bg-[#0A0A0A]/80 backdrop-blur-xl">
+        <div className="text-[11px] text-zinc-600 uppercase tracking-widest font-medium">
+          {org.name} / <span className="text-zinc-500">Workspace</span>
+        </div>
+        <div className="flex items-center gap-3">
           <Link
             href="/dashboard/projects"
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-sm font-semibold rounded-xl hover:bg-indigo-500/20 transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:text-white hover:border-white/[0.14] transition-all text-[13px]"
           >
-            <Plus className="w-4 h-4" /> New Project
+            <Search className="w-3.5 h-3.5" />
+            Search
+          </Link>
+          <Link
+            href="/dashboard/projects"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 text-white text-[13px] font-semibold rounded-lg transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New project
           </Link>
         </div>
       </header>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-10">
-        <StatCard label="Teams" value={totalTeams} icon={<Building2 className="w-4 h-4 text-indigo-400" />} />
-        <StatCard label="Projects" value={totalProjects} icon={<FolderKanban className="w-4 h-4 text-violet-400" />} />
-        <StatCard label="Members" value={totalMembers} icon={<Users className="w-4 h-4 text-emerald-400" />} />
-      </div>
-
-      {/* Starred projects */}
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Starred</h2>
+      <div className="px-8 pt-10 pb-16 max-w-[1400px]">
+        {/* Greeting */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold tracking-tight text-white mb-1">
+            {greeting.replace('.', '')}<span className="text-indigo-400">.</span>
+          </h1>
+          <p className="text-zinc-500 text-sm">
+            {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
+            {liveActivity.length > 0 && ` · ${liveActivity.length} with activity today`}
+          </p>
         </div>
-        {starredProjects.length === 0 ? (
-          <p className="text-zinc-500 text-sm">Star a project to find it here quickly.</p>
-        ) : (
-          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
-            {starredProjects.map((project) => (
-              <div key={project.id} className="break-inside-avoid">
-                <ProjectCard project={project} />
-              </div>
-            ))}
+
+        {/* Live Now banner */}
+        {liveActivity.length > 0 && (
+          <div className="mb-8 rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.05]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] text-zinc-500 uppercase tracking-widest font-semibold">Live now</span>
+              <span className="ml-auto text-[11px] text-zinc-600">
+                Updated {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <div className="flex divide-x divide-white/[0.05]">
+              {liveActivity.map((p) => {
+                const memberUser = org.members[0]?.user
+                const initials = memberUser?.name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() ?? 'AN'
+                return (
+                  <Link key={p.id} href={`/editor/${p.id}`} className="flex-1 flex items-start gap-3 px-5 py-4 hover:bg-white/[0.02] transition-colors min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] text-zinc-400 truncate">
+                        <span className="text-white font-medium">{memberUser?.name ?? session.user?.name ?? 'You'}</span>
+                        {' '}edited{' '}
+                        <span className="text-white font-medium">{p.name}</span>
+                      </p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">
+                        {timeAgo(p.updatedAt)}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
           </div>
         )}
-      </section>
 
-      {/* Recent projects masonry grid */}
-      <section>
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Recent Projects</h2>
-          <Link href="/dashboard/projects" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
-            View all →
-          </Link>
+        {/* Filter tabs + view toggle */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+            {['All', 'Recent', 'Starred'].map((tab) => (
+              <Link
+                key={tab}
+                href={tab === 'All' ? '/dashboard' : `/dashboard/projects?filter=${tab.toLowerCase()}`}
+                className="px-3 py-1 rounded-lg text-[13px] font-medium transition-all text-zinc-500 hover:text-white first:bg-white/[0.07] first:text-white"
+              >
+                {tab}
+              </Link>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <button className="p-1.5 rounded-lg bg-white/[0.07] text-white">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/><rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/><rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.8"/></svg>
+            </button>
+            <button className="p-1.5 rounded-lg text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04] transition-all">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="12" width="14" height="2" rx="1" fill="currentColor"/></svg>
+            </button>
+          </div>
         </div>
 
-        {recentProjects.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/[0.08] py-20 flex flex-col items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <FolderKanban className="w-6 h-6 text-zinc-600" />
-            </div>
-            <div className="text-center">
-              <p className="text-zinc-400 font-medium text-sm">No projects yet</p>
-              <p className="text-zinc-600 text-xs mt-1">Create your first project to get started</p>
-            </div>
-            <Link href="/dashboard/projects" className="px-4 py-2 bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-sm font-semibold rounded-xl hover:bg-indigo-500/20 transition-all">
-              Create Project
+        {/* Project grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <NewProjectCard />
+          {recentProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              starred={starredIds.has(project.id)}
+            />
+          ))}
+        </div>
+
+        {allProjects.length > 6 && (
+          <div className="mt-6 text-center">
+            <Link
+              href="/dashboard/projects"
+              className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              View all {allProjects.length} projects →
             </Link>
           </div>
-        ) : (
-          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
-            {recentProjects.map((project) => (
-              <div key={project.id} className="break-inside-avoid">
-                <ProjectCard project={project} />
-              </div>
-            ))}
-          </div>
         )}
-      </section>
+      </div>
     </div>
   )
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 hover:border-white/[0.10] transition-all">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="p-1.5 bg-white/[0.05] rounded-lg">{icon}</div>
-        <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</span>
-      </div>
-      <span className="text-3xl font-bold">{value}</span>
-    </div>
-  )
+function timeAgo(date: Date | string): string {
+  const diff = (Date.now() - new Date(date).getTime()) / 1000
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
 }

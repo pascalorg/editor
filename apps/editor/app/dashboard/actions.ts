@@ -19,7 +19,7 @@ export async function getDashboardData() {
               teams: {
                 include: {
                   projects: true,
-                  members: true,
+                  members: { include: { user: { select: { id: true, name: true, image: true } } } },
                 },
               },
               members: {
