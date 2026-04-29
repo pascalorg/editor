@@ -2,10 +2,13 @@
 
 import { useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
-import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
+import {
+  SCENE_IMMEDIATE_SAVE_EVENT,
+  type SceneGraph,
+  saveSceneToLocalStorage,
+} from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
-const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 

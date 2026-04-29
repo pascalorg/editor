@@ -36,9 +36,8 @@ import {
   getSmartHomeRoomControlTileId,
   isSmartHomeDeviceComponentResource,
 } from '../../lib/smart-home-composition'
+import { requestSceneImmediateSave } from '../../lib/scene'
 import useEditor from '../../store/use-editor'
-
-const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
 
 export type HomeAssistantDeviceActionDispatch = {
   binding: HomeAssistantCollectionBinding
@@ -48,19 +47,6 @@ export type HomeAssistantDeviceActionDispatch = {
 
 type HomeAssistantInteractiveSystemProps = {
   onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
-}
-
-function requestSceneImmediateSave() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const { collections, nodes, rootNodeIds } = useScene.getState()
-  window.dispatchEvent(
-    new CustomEvent(SCENE_IMMEDIATE_SAVE_EVENT, {
-      detail: { collections, nodes, rootNodeIds },
-    }),
-  )
 }
 
 export function HomeAssistantInteractiveSystem({

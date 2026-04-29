@@ -95,6 +95,7 @@ import {
   type HomeAssistantGroundPoint,
   type HomeAssistantPlacementPreview,
 } from '../../../lib/home-assistant-placement-ground'
+import { requestSceneImmediateSave } from '../../../lib/scene'
 import { cn } from '../../../lib/utils'
 import {
   clampSmartHomePanelSize,
@@ -138,8 +139,6 @@ type ScreenPoint = {
   x: number
   y: number
 }
-
-const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
 
 type PlacementAnchor = {
   screenPosition?: ScreenPoint
@@ -276,19 +275,6 @@ function toCollectionBinding(bindingNode: ReturnType<typeof getHomeAssistantBind
     primaryResourceId: bindingNode.primaryResourceId ?? null,
     resources: bindingNode.resources,
   } satisfies HomeAssistantCollectionBinding
-}
-
-function requestSceneImmediateSave() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const { collections, nodes, rootNodeIds } = useScene.getState()
-  window.dispatchEvent(
-    new CustomEvent(SCENE_IMMEDIATE_SAVE_EVENT, {
-      detail: { collections, nodes, rootNodeIds },
-    }),
-  )
 }
 
 function getStableHomeAssistantCollectionId(resourceId: string): CollectionId {
