@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Building2, ArrowRight } from 'lucide-react'
-import { createWorkspace } from '../../../onboarding/actions'
+import { createWorkspace } from '../../onboarding/actions'
 
 export function CreateWorkspacePrompt() {
   const [name, setName] = useState('')
