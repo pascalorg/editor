@@ -7,6 +7,7 @@ export {
   type Collection,
   type CollectionId,
   generateCollectionId,
+  getCollectionAttachmentNodeCollectionId,
   normalizeCollection,
 } from './collections'
 export type {

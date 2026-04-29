@@ -5,7 +5,11 @@ import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
-import { generateCollectionId, normalizeCollection } from '../schema/collections'
+import {
+  generateCollectionId,
+  getCollectionAttachmentNodeCollectionId,
+  normalizeCollection,
+} from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -402,26 +406,10 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
 }
 
-function getCollectionAttachmentNodeCollectionId(node: AnyNode): CollectionId | null {
-  const collectionId = (node as { collectionId?: unknown }).collectionId
-  return typeof collectionId === 'string' ? (collectionId as CollectionId) : null
-}
-
-function isCollectionAttachmentNode(node: AnyNode) {
-  return (
-    getCollectionAttachmentNodeCollectionId(node) !== null &&
-    Array.isArray((node as { resources?: unknown }).resources)
-  )
-}
-
 function getCollectionIdsReferencedByAttachmentNodes(nodes: Record<AnyNodeId, AnyNode>) {
   const referencedCollectionIds = new Set<CollectionId>()
 
   for (const node of Object.values(nodes)) {
-    if (!isCollectionAttachmentNode(node)) {
-      continue
-    }
-
     const collectionId = getCollectionAttachmentNodeCollectionId(node)
     if (collectionId) {
       referencedCollectionIds.add(collectionId)
@@ -492,13 +480,13 @@ function normalizeCollectionAttachmentNodes(
   let changed = false
 
   for (const node of Object.values(nodes)) {
-    if (!isCollectionAttachmentNode(node)) {
+    const collectionId = getCollectionAttachmentNodeCollectionId(node)
+    if (!collectionId) {
       continue
     }
 
-    const collectionId = getCollectionAttachmentNodeCollectionId(node)
     const resources = (node as { resources?: unknown[] }).resources ?? []
-    const hasCollection = Boolean(collectionId && collections[collectionId])
+    const hasCollection = Boolean(collections[collectionId])
     const hasResources = resources.length > 0
 
     if (!(hasCollection && hasResources)) {
