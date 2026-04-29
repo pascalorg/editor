@@ -47,11 +47,11 @@ Plans:
   2. Existing user can sign in with their Google account via OAuth without creating a separate password
   3. User who forgot their password receives a reset link by email and can set a new password
   4. Signed-in user refreshes the page or reopens the tab and remains authenticated without re-entering credentials
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Google OAuth provider added to NextAuth + sign-in UI update
-- [ ] 02-02: Password reset flow — email delivery, token validation, reset form
+- [ ] 02-01-PLAN.md — Google OAuth provider with signIn upsert callback (no Prisma adapter); Continue with Google buttons on /login & /signup; verifies AUTH-04
+- [ ] 02-02-PLAN.md — Password reset flow: PasswordResetToken model, forgot-password & reset-password API routes and pages (v1: URL shown in UI, no email)
 
 ---
 
