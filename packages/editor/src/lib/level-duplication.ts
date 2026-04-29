@@ -7,7 +7,7 @@ export type LevelDuplicatePreset =
   | 'structure-materials'
   | 'structure-furniture'
 
-const REFERENCE_NODE_TYPES = new Set<AnyNode['type']>(['scan', 'guide'])
+const NON_DUPLICABLE_NODE_TYPES = new Set<AnyNode['type']>(['scan', 'guide', 'spawn'])
 const STRUCTURAL_NODE_TYPES = new Set<AnyNode['type']>([
   'level',
   'wall',
@@ -24,8 +24,9 @@ const STRUCTURAL_NODE_TYPES = new Set<AnyNode['type']>([
 ])
 
 function shouldKeepNode(node: AnyNode, preset: LevelDuplicatePreset) {
+  if (NON_DUPLICABLE_NODE_TYPES.has(node.type)) return false
   if (preset === 'everything') return true
-  if (preset === 'structure-furniture') return !REFERENCE_NODE_TYPES.has(node.type)
+  if (preset === 'structure-furniture') return true
   if (preset === 'structure' || preset === 'structure-materials') {
     return STRUCTURAL_NODE_TYPES.has(node.type)
   }
