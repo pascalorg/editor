@@ -61,7 +61,7 @@ export async function createTeam(organizationId: string, name: string, descripti
   return { success: true, team };
 }
 
-export async function createProject(teamId: string, name: string, description: string) {
+export async function createProject(teamId: string, name: string, description: string): Promise<{ id: string; success: boolean }> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) throw new Error("Unauthorized");
 
@@ -75,7 +75,22 @@ export async function createProject(teamId: string, name: string, description: s
 
   revalidatePath("/dashboard/projects");
   revalidatePath("/dashboard");
-  return { success: true, project };
+  return { id: project.id, success: true };
+}
+
+export async function getFirstTeamId(): Promise<string | null> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return null
+  const userId = (session.user as { id: string }).id
+  const member = await prisma.organizationMember.findFirst({
+    where: { userId },
+    include: {
+      organization: {
+        include: { teams: { take: 1 } },
+      },
+    },
+  })
+  return member?.organization.teams[0]?.id ?? null
 }
 
 export async function inviteMember(organizationId: string, email: string, name: string) {
