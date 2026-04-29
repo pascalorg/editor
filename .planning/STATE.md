@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** Make discovering, organizing, and sharing 3D spaces as fluid as Figma makes 2D design
-**Current focus:** Phase 2 — Authentication
+**Current focus:** Phase 3 — Onboarding
 
 ## Current Position
 
-Phase: 2 of 7 (Authentication) — IN PROGRESS
-Plan: 2 of N complete
-Status: 02-02 complete — Password reset flow shipped (AUTH-03); Phase 02 authentication complete
-Last activity: 2026-04-28 — 02-02 complete: PasswordResetToken model, forgot-password + reset-password routes and pages, forgot-password link on login
+Phase: 3 of 7 (Onboarding) — IN PROGRESS
+Plan: 1 of 2 complete
+Status: 03-01 complete — Onboarding schema + middleware + JWT routing foundation
+Last activity: 2026-04-29 — 03-01 complete: OnboardingProgress + OrganizationInviteToken models, Edge middleware route gate, JWT onboardingComplete field, signup routes to /onboarding
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - BETTER_AUTH_SECRET renamed to NEXTAUTH_SECRET (was causing silent JWT signing failures)
 - v1 password reset returns resetUrl in API response (no email provider); MUST be replaced with transactional email in v2
 - Token stored as raw 64-char hex — acceptable for v1; v2 hardening: store SHA-256 of token instead
+- Middleware reads onboardingComplete from JWT only (getToken) — never Prisma; Edge Runtime compatibility
+- trigger=update in jwt callback enables client to force JWT refresh after onboarding completion via useSession().update()
+- Google OAuth callbackUrl set to /onboarding; middleware redirects to /dashboard for returning users with onboardingComplete=true
 
 ### Pending Todos
 
@@ -66,6 +69,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-28
-Stopped at: Phase 2 Plan 02 complete — PasswordResetToken model, forgot/reset-password routes + pages, login page link
-Resume file: Begin next phase or plan
+Last session: 2026-04-29
+Stopped at: Completed 03-01-PLAN.md — Onboarding schema, middleware, JWT, signup redirect
+Resume file: Begin 03-02 (onboarding UI step components)
