@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type CollectionId,
   type ControlValue,
+  HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT,
   type ItemNode,
   sceneRegistry,
   useInteractive,
@@ -86,7 +87,6 @@ const PANEL_MAX_COLUMNS = 8
 const PANEL_PREFERRED_MAX_ROWS = 3
 const LINE_GAP = 4
 const LINE_END_MARGIN = 12
-const ROOM_CONTROL_PILL_WORLD_HEIGHT = 3.5
 const OFFSCREEN_MARGIN = 64
 const POSITIONED_SCREEN_STICK_HEIGHT = 72
 const WORLD_POSITIONED_LINE_VISIBLE_RATIO = 0.5
@@ -843,7 +843,7 @@ export const RoomControlOverlay = ({
       if (roomOverlayNode.worldPosition) {
         _anchor.set(
           roomOverlayNode.worldPosition.x,
-          roomOverlayNode.worldPosition.y + ROOM_CONTROL_PILL_WORLD_HEIGHT,
+          roomOverlayNode.worldPosition.y + HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT,
           roomOverlayNode.worldPosition.z,
         )
         _groundProjected
