@@ -26,6 +26,8 @@ model User {
   publishedAssets  MarketplaceAsset[]
   clonedProjects   ProjectClone[]
 
+  starredProjects  StarredProject[]
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -140,11 +142,13 @@ model Project {
   thumbnailUrl String?
   stateUrl     String?
   isPublic     Boolean  @default(false)
+  lastOpenedAt DateTime?
 
   team             Team              @relation(fields: [teamId], references: [id])
   members          ProjectMember[]
   publishedAsset   MarketplaceAsset?
   clonedFrom       ProjectClone?     @relation("ClonedProject")
+  starredBy        StarredProject[]
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -238,4 +242,14 @@ model PasswordResetToken {
 
   @@index([email])
   @@index([token])
+}
+
+model StarredProject {
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@id([userId, projectId])
+  @@index([userId])
 }
