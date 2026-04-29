@@ -29,8 +29,15 @@ export default async function DashboardOverview() {
   )
 
   const recentProjects = [...allProjects]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 9)
+    .sort((a, b) => {
+      const aTime = (a.lastOpenedAt ?? a.updatedAt).getTime();
+      const bTime = (b.lastOpenedAt ?? b.updatedAt).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 6) // DASH-02: limit to 6
+
+  const starredIds = new Set(data.starredProjectIds ?? [])
+  const starredProjects = allProjects.filter((p) => starredIds.has(p.id))
 
   return (
     <div className="p-8 max-w-[1400px]">
@@ -56,6 +63,24 @@ export default async function DashboardOverview() {
         <StatCard label="Projects" value={totalProjects} icon={<FolderKanban className="w-4 h-4 text-violet-400" />} />
         <StatCard label="Members" value={totalMembers} icon={<Users className="w-4 h-4 text-emerald-400" />} />
       </div>
+
+      {/* Starred projects */}
+      <section className="mb-10">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Starred</h2>
+        </div>
+        {starredProjects.length === 0 ? (
+          <p className="text-zinc-500 text-sm">Star a project to find it here quickly.</p>
+        ) : (
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
+            {starredProjects.map((project) => (
+              <div key={project.id} className="break-inside-avoid">
+                <ProjectCard project={project} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Recent projects masonry grid */}
       <section>
