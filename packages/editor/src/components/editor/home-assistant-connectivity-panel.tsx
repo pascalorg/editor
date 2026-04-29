@@ -213,6 +213,8 @@ export function HomeAssistantConnectivityPanel({
   )
 
   useEffect(() => {
+    // The retry button updates this revision to refetch even when the link is unchanged.
+    void reloadToken
     let cancelled = false
 
     async function loadDevice() {
