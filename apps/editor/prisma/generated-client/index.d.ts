@@ -78,6 +78,11 @@ export type EarlyAccessApplication = $Result.DefaultSelection<Prisma.$EarlyAcces
  * 
  */
 export type PasswordResetToken = $Result.DefaultSelection<Prisma.$PasswordResetTokenPayload>
+/**
+ * Model StarredProject
+ * 
+ */
+export type StarredProject = $Result.DefaultSelection<Prisma.$StarredProjectPayload>
 
 /**
  * Enums
@@ -375,6 +380,16 @@ export class PrismaClient<
     * ```
     */
   get passwordResetToken(): Prisma.PasswordResetTokenDelegate<ExtArgs>;
+
+  /**
+   * `prisma.starredProject`: Exposes CRUD operations for the **StarredProject** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more StarredProjects
+    * const starredProjects = await prisma.starredProject.findMany()
+    * ```
+    */
+  get starredProject(): Prisma.StarredProjectDelegate<ExtArgs>;
 }
 
 export namespace Prisma {
@@ -857,7 +872,8 @@ export namespace Prisma {
     MarketplaceAsset: 'MarketplaceAsset',
     ProjectClone: 'ProjectClone',
     EarlyAccessApplication: 'EarlyAccessApplication',
-    PasswordResetToken: 'PasswordResetToken'
+    PasswordResetToken: 'PasswordResetToken',
+    StarredProject: 'StarredProject'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -874,7 +890,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     meta: {
-      modelProps: 'user' | 'onboardingProgress' | 'organization' | 'organizationMember' | 'organizationInviteToken' | 'team' | 'teamMember' | 'project' | 'projectMember' | 'marketplaceAsset' | 'projectClone' | 'earlyAccessApplication' | 'passwordResetToken'
+      modelProps: 'user' | 'onboardingProgress' | 'organization' | 'organizationMember' | 'organizationInviteToken' | 'team' | 'teamMember' | 'project' | 'projectMember' | 'marketplaceAsset' | 'projectClone' | 'earlyAccessApplication' | 'passwordResetToken' | 'starredProject'
       txIsolationLevel: Prisma.TransactionIsolationLevel
     },
     model: {
@@ -1736,6 +1752,72 @@ export namespace Prisma {
           }
         }
       }
+      StarredProject: {
+        payload: Prisma.$StarredProjectPayload<ExtArgs>
+        fields: Prisma.StarredProjectFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.StarredProjectFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.StarredProjectFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>
+          }
+          findFirst: {
+            args: Prisma.StarredProjectFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.StarredProjectFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>
+          }
+          findMany: {
+            args: Prisma.StarredProjectFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>[]
+          }
+          create: {
+            args: Prisma.StarredProjectCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>
+          }
+          createMany: {
+            args: Prisma.StarredProjectCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          delete: {
+            args: Prisma.StarredProjectDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>
+          }
+          update: {
+            args: Prisma.StarredProjectUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>
+          }
+          deleteMany: {
+            args: Prisma.StarredProjectDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.StarredProjectUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.StarredProjectUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StarredProjectPayload>
+          }
+          aggregate: {
+            args: Prisma.StarredProjectAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateStarredProject>
+          }
+          groupBy: {
+            args: Prisma.StarredProjectGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<StarredProjectGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.StarredProjectCountArgs<ExtArgs>,
+            result: $Utils.Optional<StarredProjectCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -1900,6 +1982,7 @@ export namespace Prisma {
     projectMemberships: number
     publishedAssets: number
     clonedProjects: number
+    starredProjects: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -1908,6 +1991,7 @@ export namespace Prisma {
     projectMemberships?: boolean | UserCountOutputTypeCountProjectMembershipsArgs
     publishedAssets?: boolean | UserCountOutputTypeCountPublishedAssetsArgs
     clonedProjects?: boolean | UserCountOutputTypeCountClonedProjectsArgs
+    starredProjects?: boolean | UserCountOutputTypeCountStarredProjectsArgs
   }
 
   // Custom InputTypes
@@ -1960,6 +2044,14 @@ export namespace Prisma {
    */
   export type UserCountOutputTypeCountClonedProjectsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ProjectCloneWhereInput
+  }
+
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountStarredProjectsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: StarredProjectWhereInput
   }
 
 
@@ -2068,10 +2160,12 @@ export namespace Prisma {
 
   export type ProjectCountOutputType = {
     members: number
+    starredBy: number
   }
 
   export type ProjectCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     members?: boolean | ProjectCountOutputTypeCountMembersArgs
+    starredBy?: boolean | ProjectCountOutputTypeCountStarredByArgs
   }
 
   // Custom InputTypes
@@ -2092,6 +2186,14 @@ export namespace Prisma {
    */
   export type ProjectCountOutputTypeCountMembersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ProjectMemberWhereInput
+  }
+
+
+  /**
+   * ProjectCountOutputType without action
+   */
+  export type ProjectCountOutputTypeCountStarredByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: StarredProjectWhereInput
   }
 
 
@@ -2344,6 +2446,7 @@ export namespace Prisma {
     projectMemberships?: boolean | User$projectMembershipsArgs<ExtArgs>
     publishedAssets?: boolean | User$publishedAssetsArgs<ExtArgs>
     clonedProjects?: boolean | User$clonedProjectsArgs<ExtArgs>
+    starredProjects?: boolean | User$starredProjectsArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -2367,6 +2470,7 @@ export namespace Prisma {
     projectMemberships?: boolean | User$projectMembershipsArgs<ExtArgs>
     publishedAssets?: boolean | User$publishedAssetsArgs<ExtArgs>
     clonedProjects?: boolean | User$clonedProjectsArgs<ExtArgs>
+    starredProjects?: boolean | User$starredProjectsArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -2380,6 +2484,7 @@ export namespace Prisma {
       projectMemberships: Prisma.$ProjectMemberPayload<ExtArgs>[]
       publishedAssets: Prisma.$MarketplaceAssetPayload<ExtArgs>[]
       clonedProjects: Prisma.$ProjectClonePayload<ExtArgs>[]
+      starredProjects: Prisma.$StarredProjectPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -2768,6 +2873,8 @@ export namespace Prisma {
     publishedAssets<T extends User$publishedAssetsArgs<ExtArgs> = {}>(args?: Subset<T, User$publishedAssetsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MarketplaceAssetPayload<ExtArgs>, T, 'findMany'> | Null>;
 
     clonedProjects<T extends User$clonedProjectsArgs<ExtArgs> = {}>(args?: Subset<T, User$clonedProjectsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findMany'> | Null>;
+
+    starredProjects<T extends User$starredProjectsArgs<ExtArgs> = {}>(args?: Subset<T, User$starredProjectsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findMany'> | Null>;
 
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -3236,6 +3343,27 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: ProjectCloneScalarFieldEnum | ProjectCloneScalarFieldEnum[]
+  }
+
+
+  /**
+   * User.starredProjects
+   */
+  export type User$starredProjectsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    where?: StarredProjectWhereInput
+    orderBy?: StarredProjectOrderByWithRelationInput | StarredProjectOrderByWithRelationInput[]
+    cursor?: StarredProjectWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: StarredProjectScalarFieldEnum | StarredProjectScalarFieldEnum[]
   }
 
 
@@ -9049,6 +9177,7 @@ export namespace Prisma {
     thumbnailUrl: string | null
     stateUrl: string | null
     isPublic: boolean | null
+    lastOpenedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -9061,6 +9190,7 @@ export namespace Prisma {
     thumbnailUrl: string | null
     stateUrl: string | null
     isPublic: boolean | null
+    lastOpenedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -9073,6 +9203,7 @@ export namespace Prisma {
     thumbnailUrl: number
     stateUrl: number
     isPublic: number
+    lastOpenedAt: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -9087,6 +9218,7 @@ export namespace Prisma {
     thumbnailUrl?: true
     stateUrl?: true
     isPublic?: true
+    lastOpenedAt?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -9099,6 +9231,7 @@ export namespace Prisma {
     thumbnailUrl?: true
     stateUrl?: true
     isPublic?: true
+    lastOpenedAt?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -9111,6 +9244,7 @@ export namespace Prisma {
     thumbnailUrl?: true
     stateUrl?: true
     isPublic?: true
+    lastOpenedAt?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -9196,6 +9330,7 @@ export namespace Prisma {
     thumbnailUrl: string | null
     stateUrl: string | null
     isPublic: boolean
+    lastOpenedAt: Date | null
     createdAt: Date
     updatedAt: Date
     _count: ProjectCountAggregateOutputType | null
@@ -9225,12 +9360,14 @@ export namespace Prisma {
     thumbnailUrl?: boolean
     stateUrl?: boolean
     isPublic?: boolean
+    lastOpenedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     team?: boolean | TeamDefaultArgs<ExtArgs>
     members?: boolean | Project$membersArgs<ExtArgs>
     publishedAsset?: boolean | Project$publishedAssetArgs<ExtArgs>
     clonedFrom?: boolean | Project$clonedFromArgs<ExtArgs>
+    starredBy?: boolean | Project$starredByArgs<ExtArgs>
     _count?: boolean | ProjectCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["project"]>
 
@@ -9242,6 +9379,7 @@ export namespace Prisma {
     thumbnailUrl?: boolean
     stateUrl?: boolean
     isPublic?: boolean
+    lastOpenedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
@@ -9251,6 +9389,7 @@ export namespace Prisma {
     members?: boolean | Project$membersArgs<ExtArgs>
     publishedAsset?: boolean | Project$publishedAssetArgs<ExtArgs>
     clonedFrom?: boolean | Project$clonedFromArgs<ExtArgs>
+    starredBy?: boolean | Project$starredByArgs<ExtArgs>
     _count?: boolean | ProjectCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -9262,6 +9401,7 @@ export namespace Prisma {
       members: Prisma.$ProjectMemberPayload<ExtArgs>[]
       publishedAsset: Prisma.$MarketplaceAssetPayload<ExtArgs> | null
       clonedFrom: Prisma.$ProjectClonePayload<ExtArgs> | null
+      starredBy: Prisma.$StarredProjectPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -9271,6 +9411,7 @@ export namespace Prisma {
       thumbnailUrl: string | null
       stateUrl: string | null
       isPublic: boolean
+      lastOpenedAt: Date | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["project"]>
@@ -9646,6 +9787,8 @@ export namespace Prisma {
 
     clonedFrom<T extends Project$clonedFromArgs<ExtArgs> = {}>(args?: Subset<T, Project$clonedFromArgs<ExtArgs>>): Prisma__ProjectCloneClient<$Result.GetResult<Prisma.$ProjectClonePayload<ExtArgs>, T, 'findUniqueOrThrow'> | null, null, ExtArgs>;
 
+    starredBy<T extends Project$starredByArgs<ExtArgs> = {}>(args?: Subset<T, Project$starredByArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findMany'> | Null>;
+
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -9681,6 +9824,7 @@ export namespace Prisma {
     readonly thumbnailUrl: FieldRef<"Project", 'String'>
     readonly stateUrl: FieldRef<"Project", 'String'>
     readonly isPublic: FieldRef<"Project", 'Boolean'>
+    readonly lastOpenedAt: FieldRef<"Project", 'DateTime'>
     readonly createdAt: FieldRef<"Project", 'DateTime'>
     readonly updatedAt: FieldRef<"Project", 'DateTime'>
   }
@@ -10044,6 +10188,27 @@ export namespace Prisma {
      */
     include?: ProjectCloneInclude<ExtArgs> | null
     where?: ProjectCloneWhereInput
+  }
+
+
+  /**
+   * Project.starredBy
+   */
+  export type Project$starredByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    where?: StarredProjectWhereInput
+    orderBy?: StarredProjectOrderByWithRelationInput | StarredProjectOrderByWithRelationInput[]
+    cursor?: StarredProjectWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: StarredProjectScalarFieldEnum | StarredProjectScalarFieldEnum[]
   }
 
 
@@ -14802,6 +14967,907 @@ export namespace Prisma {
 
 
   /**
+   * Model StarredProject
+   */
+
+  export type AggregateStarredProject = {
+    _count: StarredProjectCountAggregateOutputType | null
+    _min: StarredProjectMinAggregateOutputType | null
+    _max: StarredProjectMaxAggregateOutputType | null
+  }
+
+  export type StarredProjectMinAggregateOutputType = {
+    userId: string | null
+    projectId: string | null
+    createdAt: Date | null
+  }
+
+  export type StarredProjectMaxAggregateOutputType = {
+    userId: string | null
+    projectId: string | null
+    createdAt: Date | null
+  }
+
+  export type StarredProjectCountAggregateOutputType = {
+    userId: number
+    projectId: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type StarredProjectMinAggregateInputType = {
+    userId?: true
+    projectId?: true
+    createdAt?: true
+  }
+
+  export type StarredProjectMaxAggregateInputType = {
+    userId?: true
+    projectId?: true
+    createdAt?: true
+  }
+
+  export type StarredProjectCountAggregateInputType = {
+    userId?: true
+    projectId?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type StarredProjectAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which StarredProject to aggregate.
+     */
+    where?: StarredProjectWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StarredProjects to fetch.
+     */
+    orderBy?: StarredProjectOrderByWithRelationInput | StarredProjectOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: StarredProjectWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StarredProjects from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StarredProjects.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned StarredProjects
+    **/
+    _count?: true | StarredProjectCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: StarredProjectMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: StarredProjectMaxAggregateInputType
+  }
+
+  export type GetStarredProjectAggregateType<T extends StarredProjectAggregateArgs> = {
+        [P in keyof T & keyof AggregateStarredProject]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateStarredProject[P]>
+      : GetScalarType<T[P], AggregateStarredProject[P]>
+  }
+
+
+
+
+  export type StarredProjectGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: StarredProjectWhereInput
+    orderBy?: StarredProjectOrderByWithAggregationInput | StarredProjectOrderByWithAggregationInput[]
+    by: StarredProjectScalarFieldEnum[] | StarredProjectScalarFieldEnum
+    having?: StarredProjectScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: StarredProjectCountAggregateInputType | true
+    _min?: StarredProjectMinAggregateInputType
+    _max?: StarredProjectMaxAggregateInputType
+  }
+
+  export type StarredProjectGroupByOutputType = {
+    userId: string
+    projectId: string
+    createdAt: Date
+    _count: StarredProjectCountAggregateOutputType | null
+    _min: StarredProjectMinAggregateOutputType | null
+    _max: StarredProjectMaxAggregateOutputType | null
+  }
+
+  type GetStarredProjectGroupByPayload<T extends StarredProjectGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<StarredProjectGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof StarredProjectGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], StarredProjectGroupByOutputType[P]>
+            : GetScalarType<T[P], StarredProjectGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type StarredProjectSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    userId?: boolean
+    projectId?: boolean
+    createdAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    project?: boolean | ProjectDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["starredProject"]>
+
+  export type StarredProjectSelectScalar = {
+    userId?: boolean
+    projectId?: boolean
+    createdAt?: boolean
+  }
+
+  export type StarredProjectInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    project?: boolean | ProjectDefaultArgs<ExtArgs>
+  }
+
+
+  export type $StarredProjectPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "StarredProject"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+      project: Prisma.$ProjectPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      userId: string
+      projectId: string
+      createdAt: Date
+    }, ExtArgs["result"]["starredProject"]>
+    composites: {}
+  }
+
+
+  type StarredProjectGetPayload<S extends boolean | null | undefined | StarredProjectDefaultArgs> = $Result.GetResult<Prisma.$StarredProjectPayload, S>
+
+  type StarredProjectCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<StarredProjectFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: StarredProjectCountAggregateInputType | true
+    }
+
+  export interface StarredProjectDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['StarredProject'], meta: { name: 'StarredProject' } }
+    /**
+     * Find zero or one StarredProject that matches the filter.
+     * @param {StarredProjectFindUniqueArgs} args - Arguments to find a StarredProject
+     * @example
+     * // Get one StarredProject
+     * const starredProject = await prisma.starredProject.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends StarredProjectFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, StarredProjectFindUniqueArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one StarredProject that matches the filter or throw an error  with `error.code='P2025'` 
+     *     if no matches were found.
+     * @param {StarredProjectFindUniqueOrThrowArgs} args - Arguments to find a StarredProject
+     * @example
+     * // Get one StarredProject
+     * const starredProject = await prisma.starredProject.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends StarredProjectFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, StarredProjectFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first StarredProject that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectFindFirstArgs} args - Arguments to find a StarredProject
+     * @example
+     * // Get one StarredProject
+     * const starredProject = await prisma.starredProject.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends StarredProjectFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, StarredProjectFindFirstArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first StarredProject that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectFindFirstOrThrowArgs} args - Arguments to find a StarredProject
+     * @example
+     * // Get one StarredProject
+     * const starredProject = await prisma.starredProject.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends StarredProjectFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, StarredProjectFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more StarredProjects that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all StarredProjects
+     * const starredProjects = await prisma.starredProject.findMany()
+     * 
+     * // Get first 10 StarredProjects
+     * const starredProjects = await prisma.starredProject.findMany({ take: 10 })
+     * 
+     * // Only select the `userId`
+     * const starredProjectWithUserIdOnly = await prisma.starredProject.findMany({ select: { userId: true } })
+     * 
+    **/
+    findMany<T extends StarredProjectFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, StarredProjectFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a StarredProject.
+     * @param {StarredProjectCreateArgs} args - Arguments to create a StarredProject.
+     * @example
+     * // Create one StarredProject
+     * const StarredProject = await prisma.starredProject.create({
+     *   data: {
+     *     // ... data to create a StarredProject
+     *   }
+     * })
+     * 
+    **/
+    create<T extends StarredProjectCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, StarredProjectCreateArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many StarredProjects.
+     *     @param {StarredProjectCreateManyArgs} args - Arguments to create many StarredProjects.
+     *     @example
+     *     // Create many StarredProjects
+     *     const starredProject = await prisma.starredProject.createMany({
+     *       data: {
+     *         // ... provide data here
+     *       }
+     *     })
+     *     
+    **/
+    createMany<T extends StarredProjectCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, StarredProjectCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a StarredProject.
+     * @param {StarredProjectDeleteArgs} args - Arguments to delete one StarredProject.
+     * @example
+     * // Delete one StarredProject
+     * const StarredProject = await prisma.starredProject.delete({
+     *   where: {
+     *     // ... filter to delete one StarredProject
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends StarredProjectDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, StarredProjectDeleteArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one StarredProject.
+     * @param {StarredProjectUpdateArgs} args - Arguments to update one StarredProject.
+     * @example
+     * // Update one StarredProject
+     * const starredProject = await prisma.starredProject.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends StarredProjectUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, StarredProjectUpdateArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more StarredProjects.
+     * @param {StarredProjectDeleteManyArgs} args - Arguments to filter StarredProjects to delete.
+     * @example
+     * // Delete a few StarredProjects
+     * const { count } = await prisma.starredProject.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends StarredProjectDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, StarredProjectDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more StarredProjects.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many StarredProjects
+     * const starredProject = await prisma.starredProject.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends StarredProjectUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, StarredProjectUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one StarredProject.
+     * @param {StarredProjectUpsertArgs} args - Arguments to update or create a StarredProject.
+     * @example
+     * // Update or create a StarredProject
+     * const starredProject = await prisma.starredProject.upsert({
+     *   create: {
+     *     // ... data to create a StarredProject
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the StarredProject we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends StarredProjectUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, StarredProjectUpsertArgs<ExtArgs>>
+    ): Prisma__StarredProjectClient<$Result.GetResult<Prisma.$StarredProjectPayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of StarredProjects.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectCountArgs} args - Arguments to filter StarredProjects to count.
+     * @example
+     * // Count the number of StarredProjects
+     * const count = await prisma.starredProject.count({
+     *   where: {
+     *     // ... the filter for the StarredProjects we want to count
+     *   }
+     * })
+    **/
+    count<T extends StarredProjectCountArgs>(
+      args?: Subset<T, StarredProjectCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], StarredProjectCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a StarredProject.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends StarredProjectAggregateArgs>(args: Subset<T, StarredProjectAggregateArgs>): Prisma.PrismaPromise<GetStarredProjectAggregateType<T>>
+
+    /**
+     * Group by StarredProject.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StarredProjectGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends StarredProjectGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: StarredProjectGroupByArgs['orderBy'] }
+        : { orderBy?: StarredProjectGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, StarredProjectGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetStarredProjectGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the StarredProject model
+   */
+  readonly fields: StarredProjectFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for StarredProject.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__StarredProjectClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    project<T extends ProjectDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProjectDefaultArgs<ExtArgs>>): Prisma__ProjectClient<$Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the StarredProject model
+   */ 
+  interface StarredProjectFieldRefs {
+    readonly userId: FieldRef<"StarredProject", 'String'>
+    readonly projectId: FieldRef<"StarredProject", 'String'>
+    readonly createdAt: FieldRef<"StarredProject", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+
+  /**
+   * StarredProject findUnique
+   */
+  export type StarredProjectFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * Filter, which StarredProject to fetch.
+     */
+    where: StarredProjectWhereUniqueInput
+  }
+
+
+  /**
+   * StarredProject findUniqueOrThrow
+   */
+  export type StarredProjectFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * Filter, which StarredProject to fetch.
+     */
+    where: StarredProjectWhereUniqueInput
+  }
+
+
+  /**
+   * StarredProject findFirst
+   */
+  export type StarredProjectFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * Filter, which StarredProject to fetch.
+     */
+    where?: StarredProjectWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StarredProjects to fetch.
+     */
+    orderBy?: StarredProjectOrderByWithRelationInput | StarredProjectOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for StarredProjects.
+     */
+    cursor?: StarredProjectWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StarredProjects from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StarredProjects.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of StarredProjects.
+     */
+    distinct?: StarredProjectScalarFieldEnum | StarredProjectScalarFieldEnum[]
+  }
+
+
+  /**
+   * StarredProject findFirstOrThrow
+   */
+  export type StarredProjectFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * Filter, which StarredProject to fetch.
+     */
+    where?: StarredProjectWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StarredProjects to fetch.
+     */
+    orderBy?: StarredProjectOrderByWithRelationInput | StarredProjectOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for StarredProjects.
+     */
+    cursor?: StarredProjectWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StarredProjects from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StarredProjects.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of StarredProjects.
+     */
+    distinct?: StarredProjectScalarFieldEnum | StarredProjectScalarFieldEnum[]
+  }
+
+
+  /**
+   * StarredProject findMany
+   */
+  export type StarredProjectFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * Filter, which StarredProjects to fetch.
+     */
+    where?: StarredProjectWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StarredProjects to fetch.
+     */
+    orderBy?: StarredProjectOrderByWithRelationInput | StarredProjectOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing StarredProjects.
+     */
+    cursor?: StarredProjectWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StarredProjects from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StarredProjects.
+     */
+    skip?: number
+    distinct?: StarredProjectScalarFieldEnum | StarredProjectScalarFieldEnum[]
+  }
+
+
+  /**
+   * StarredProject create
+   */
+  export type StarredProjectCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * The data needed to create a StarredProject.
+     */
+    data: XOR<StarredProjectCreateInput, StarredProjectUncheckedCreateInput>
+  }
+
+
+  /**
+   * StarredProject createMany
+   */
+  export type StarredProjectCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many StarredProjects.
+     */
+    data: StarredProjectCreateManyInput | StarredProjectCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+
+  /**
+   * StarredProject update
+   */
+  export type StarredProjectUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * The data needed to update a StarredProject.
+     */
+    data: XOR<StarredProjectUpdateInput, StarredProjectUncheckedUpdateInput>
+    /**
+     * Choose, which StarredProject to update.
+     */
+    where: StarredProjectWhereUniqueInput
+  }
+
+
+  /**
+   * StarredProject updateMany
+   */
+  export type StarredProjectUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update StarredProjects.
+     */
+    data: XOR<StarredProjectUpdateManyMutationInput, StarredProjectUncheckedUpdateManyInput>
+    /**
+     * Filter which StarredProjects to update
+     */
+    where?: StarredProjectWhereInput
+  }
+
+
+  /**
+   * StarredProject upsert
+   */
+  export type StarredProjectUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * The filter to search for the StarredProject to update in case it exists.
+     */
+    where: StarredProjectWhereUniqueInput
+    /**
+     * In case the StarredProject found by the `where` argument doesn't exist, create a new StarredProject with this data.
+     */
+    create: XOR<StarredProjectCreateInput, StarredProjectUncheckedCreateInput>
+    /**
+     * In case the StarredProject was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<StarredProjectUpdateInput, StarredProjectUncheckedUpdateInput>
+  }
+
+
+  /**
+   * StarredProject delete
+   */
+  export type StarredProjectDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+    /**
+     * Filter which StarredProject to delete.
+     */
+    where: StarredProjectWhereUniqueInput
+  }
+
+
+  /**
+   * StarredProject deleteMany
+   */
+  export type StarredProjectDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which StarredProjects to delete
+     */
+    where?: StarredProjectWhereInput
+  }
+
+
+  /**
+   * StarredProject without action
+   */
+  export type StarredProjectDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StarredProject
+     */
+    select?: StarredProjectSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: StarredProjectInclude<ExtArgs> | null
+  }
+
+
+
+  /**
    * Enums
    */
 
@@ -14914,6 +15980,7 @@ export namespace Prisma {
     thumbnailUrl: 'thumbnailUrl',
     stateUrl: 'stateUrl',
     isPublic: 'isPublic',
+    lastOpenedAt: 'lastOpenedAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -14986,6 +16053,15 @@ export namespace Prisma {
   };
 
   export type PasswordResetTokenScalarFieldEnum = (typeof PasswordResetTokenScalarFieldEnum)[keyof typeof PasswordResetTokenScalarFieldEnum]
+
+
+  export const StarredProjectScalarFieldEnum: {
+    userId: 'userId',
+    projectId: 'projectId',
+    createdAt: 'createdAt'
+  };
+
+  export type StarredProjectScalarFieldEnum = (typeof StarredProjectScalarFieldEnum)[keyof typeof StarredProjectScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -15168,6 +16244,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberListRelationFilter
     publishedAssets?: MarketplaceAssetListRelationFilter
     clonedProjects?: ProjectCloneListRelationFilter
+    starredProjects?: StarredProjectListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -15187,6 +16264,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberOrderByRelationAggregateInput
     publishedAssets?: MarketplaceAssetOrderByRelationAggregateInput
     clonedProjects?: ProjectCloneOrderByRelationAggregateInput
+    starredProjects?: StarredProjectOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -15209,6 +16287,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberListRelationFilter
     publishedAssets?: MarketplaceAssetListRelationFilter
     clonedProjects?: ProjectCloneListRelationFilter
+    starredProjects?: StarredProjectListRelationFilter
   }, "id" | "email">
 
   export type UserOrderByWithAggregationInput = {
@@ -15651,12 +16730,14 @@ export namespace Prisma {
     thumbnailUrl?: StringNullableFilter<"Project"> | string | null
     stateUrl?: StringNullableFilter<"Project"> | string | null
     isPublic?: BoolFilter<"Project"> | boolean
+    lastOpenedAt?: DateTimeNullableFilter<"Project"> | Date | string | null
     createdAt?: DateTimeFilter<"Project"> | Date | string
     updatedAt?: DateTimeFilter<"Project"> | Date | string
     team?: XOR<TeamRelationFilter, TeamWhereInput>
     members?: ProjectMemberListRelationFilter
     publishedAsset?: XOR<MarketplaceAssetNullableRelationFilter, MarketplaceAssetWhereInput> | null
     clonedFrom?: XOR<ProjectCloneNullableRelationFilter, ProjectCloneWhereInput> | null
+    starredBy?: StarredProjectListRelationFilter
   }
 
   export type ProjectOrderByWithRelationInput = {
@@ -15667,12 +16748,14 @@ export namespace Prisma {
     thumbnailUrl?: SortOrderInput | SortOrder
     stateUrl?: SortOrderInput | SortOrder
     isPublic?: SortOrder
+    lastOpenedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     team?: TeamOrderByWithRelationInput
     members?: ProjectMemberOrderByRelationAggregateInput
     publishedAsset?: MarketplaceAssetOrderByWithRelationInput
     clonedFrom?: ProjectCloneOrderByWithRelationInput
+    starredBy?: StarredProjectOrderByRelationAggregateInput
   }
 
   export type ProjectWhereUniqueInput = Prisma.AtLeast<{
@@ -15686,12 +16769,14 @@ export namespace Prisma {
     thumbnailUrl?: StringNullableFilter<"Project"> | string | null
     stateUrl?: StringNullableFilter<"Project"> | string | null
     isPublic?: BoolFilter<"Project"> | boolean
+    lastOpenedAt?: DateTimeNullableFilter<"Project"> | Date | string | null
     createdAt?: DateTimeFilter<"Project"> | Date | string
     updatedAt?: DateTimeFilter<"Project"> | Date | string
     team?: XOR<TeamRelationFilter, TeamWhereInput>
     members?: ProjectMemberListRelationFilter
     publishedAsset?: XOR<MarketplaceAssetNullableRelationFilter, MarketplaceAssetWhereInput> | null
     clonedFrom?: XOR<ProjectCloneNullableRelationFilter, ProjectCloneWhereInput> | null
+    starredBy?: StarredProjectListRelationFilter
   }, "id">
 
   export type ProjectOrderByWithAggregationInput = {
@@ -15702,6 +16787,7 @@ export namespace Prisma {
     thumbnailUrl?: SortOrderInput | SortOrder
     stateUrl?: SortOrderInput | SortOrder
     isPublic?: SortOrder
+    lastOpenedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: ProjectCountOrderByAggregateInput
@@ -15720,6 +16806,7 @@ export namespace Prisma {
     thumbnailUrl?: StringNullableWithAggregatesFilter<"Project"> | string | null
     stateUrl?: StringNullableWithAggregatesFilter<"Project"> | string | null
     isPublic?: BoolWithAggregatesFilter<"Project"> | boolean
+    lastOpenedAt?: DateTimeNullableWithAggregatesFilter<"Project"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Project"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Project"> | Date | string
   }
@@ -16073,6 +17160,55 @@ export namespace Prisma {
     createdAt?: DateTimeWithAggregatesFilter<"PasswordResetToken"> | Date | string
   }
 
+  export type StarredProjectWhereInput = {
+    AND?: StarredProjectWhereInput | StarredProjectWhereInput[]
+    OR?: StarredProjectWhereInput[]
+    NOT?: StarredProjectWhereInput | StarredProjectWhereInput[]
+    userId?: StringFilter<"StarredProject"> | string
+    projectId?: StringFilter<"StarredProject"> | string
+    createdAt?: DateTimeFilter<"StarredProject"> | Date | string
+    user?: XOR<UserRelationFilter, UserWhereInput>
+    project?: XOR<ProjectRelationFilter, ProjectWhereInput>
+  }
+
+  export type StarredProjectOrderByWithRelationInput = {
+    userId?: SortOrder
+    projectId?: SortOrder
+    createdAt?: SortOrder
+    user?: UserOrderByWithRelationInput
+    project?: ProjectOrderByWithRelationInput
+  }
+
+  export type StarredProjectWhereUniqueInput = Prisma.AtLeast<{
+    userId_projectId?: StarredProjectUserIdProjectIdCompoundUniqueInput
+    AND?: StarredProjectWhereInput | StarredProjectWhereInput[]
+    OR?: StarredProjectWhereInput[]
+    NOT?: StarredProjectWhereInput | StarredProjectWhereInput[]
+    userId?: StringFilter<"StarredProject"> | string
+    projectId?: StringFilter<"StarredProject"> | string
+    createdAt?: DateTimeFilter<"StarredProject"> | Date | string
+    user?: XOR<UserRelationFilter, UserWhereInput>
+    project?: XOR<ProjectRelationFilter, ProjectWhereInput>
+  }, "userId_projectId">
+
+  export type StarredProjectOrderByWithAggregationInput = {
+    userId?: SortOrder
+    projectId?: SortOrder
+    createdAt?: SortOrder
+    _count?: StarredProjectCountOrderByAggregateInput
+    _max?: StarredProjectMaxOrderByAggregateInput
+    _min?: StarredProjectMinOrderByAggregateInput
+  }
+
+  export type StarredProjectScalarWhereWithAggregatesInput = {
+    AND?: StarredProjectScalarWhereWithAggregatesInput | StarredProjectScalarWhereWithAggregatesInput[]
+    OR?: StarredProjectScalarWhereWithAggregatesInput[]
+    NOT?: StarredProjectScalarWhereWithAggregatesInput | StarredProjectScalarWhereWithAggregatesInput[]
+    userId?: StringWithAggregatesFilter<"StarredProject"> | string
+    projectId?: StringWithAggregatesFilter<"StarredProject"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"StarredProject"> | Date | string
+  }
+
   export type UserCreateInput = {
     id?: string
     name?: string | null
@@ -16090,6 +17226,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -16109,6 +17246,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserUpdateInput = {
@@ -16128,6 +17266,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -16147,6 +17286,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -16607,12 +17747,14 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     team: TeamCreateNestedOneWithoutProjectsInput
     members?: ProjectMemberCreateNestedManyWithoutProjectInput
     publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
     clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectUncheckedCreateInput = {
@@ -16623,11 +17765,13 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
     publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
     clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectUncheckedCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectUpdateInput = {
@@ -16637,12 +17781,14 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
     members?: ProjectMemberUpdateManyWithoutProjectNestedInput
     publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateInput = {
@@ -16653,11 +17799,13 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
     publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUncheckedUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectCreateManyInput = {
@@ -16668,6 +17816,7 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -16679,6 +17828,7 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -16691,6 +17841,7 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -17056,6 +18207,46 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type StarredProjectCreateInput = {
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutStarredProjectsInput
+    project: ProjectCreateNestedOneWithoutStarredByInput
+  }
+
+  export type StarredProjectUncheckedCreateInput = {
+    userId: string
+    projectId: string
+    createdAt?: Date | string
+  }
+
+  export type StarredProjectUpdateInput = {
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutStarredProjectsNestedInput
+    project?: ProjectUpdateOneRequiredWithoutStarredByNestedInput
+  }
+
+  export type StarredProjectUncheckedUpdateInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StarredProjectCreateManyInput = {
+    userId: string
+    projectId: string
+    createdAt?: Date | string
+  }
+
+  export type StarredProjectUpdateManyMutationInput = {
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StarredProjectUncheckedUpdateManyInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    projectId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -17148,6 +18339,12 @@ export namespace Prisma {
     none?: ProjectCloneWhereInput
   }
 
+  export type StarredProjectListRelationFilter = {
+    every?: StarredProjectWhereInput
+    some?: StarredProjectWhereInput
+    none?: StarredProjectWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -17170,6 +18367,10 @@ export namespace Prisma {
   }
 
   export type ProjectCloneOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type StarredProjectOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -17642,6 +18843,7 @@ export namespace Prisma {
     thumbnailUrl?: SortOrder
     stateUrl?: SortOrder
     isPublic?: SortOrder
+    lastOpenedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -17654,6 +18856,7 @@ export namespace Prisma {
     thumbnailUrl?: SortOrder
     stateUrl?: SortOrder
     isPublic?: SortOrder
+    lastOpenedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -17666,6 +18869,7 @@ export namespace Prisma {
     thumbnailUrl?: SortOrder
     stateUrl?: SortOrder
     isPublic?: SortOrder
+    lastOpenedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -17880,6 +19084,29 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
+  export type StarredProjectUserIdProjectIdCompoundUniqueInput = {
+    userId: string
+    projectId: string
+  }
+
+  export type StarredProjectCountOrderByAggregateInput = {
+    userId?: SortOrder
+    projectId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type StarredProjectMaxOrderByAggregateInput = {
+    userId?: SortOrder
+    projectId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type StarredProjectMinOrderByAggregateInput = {
+    userId?: SortOrder
+    projectId?: SortOrder
+    createdAt?: SortOrder
+  }
+
   export type OnboardingProgressCreateNestedOneWithoutUserInput = {
     create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
     connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
@@ -17921,6 +19148,13 @@ export namespace Prisma {
     connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
   }
 
+  export type StarredProjectCreateNestedManyWithoutUserInput = {
+    create?: XOR<StarredProjectCreateWithoutUserInput, StarredProjectUncheckedCreateWithoutUserInput> | StarredProjectCreateWithoutUserInput[] | StarredProjectUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutUserInput | StarredProjectCreateOrConnectWithoutUserInput[]
+    createMany?: StarredProjectCreateManyUserInputEnvelope
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+  }
+
   export type OnboardingProgressUncheckedCreateNestedOneWithoutUserInput = {
     create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
     connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
@@ -17960,6 +19194,13 @@ export namespace Prisma {
     connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedByInput | ProjectCloneCreateOrConnectWithoutClonedByInput[]
     createMany?: ProjectCloneCreateManyClonedByInputEnvelope
     connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+  }
+
+  export type StarredProjectUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<StarredProjectCreateWithoutUserInput, StarredProjectUncheckedCreateWithoutUserInput> | StarredProjectCreateWithoutUserInput[] | StarredProjectUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutUserInput | StarredProjectCreateOrConnectWithoutUserInput[]
+    createMany?: StarredProjectCreateManyUserInputEnvelope
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -18062,6 +19303,20 @@ export namespace Prisma {
     deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
   }
 
+  export type StarredProjectUpdateManyWithoutUserNestedInput = {
+    create?: XOR<StarredProjectCreateWithoutUserInput, StarredProjectUncheckedCreateWithoutUserInput> | StarredProjectCreateWithoutUserInput[] | StarredProjectUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutUserInput | StarredProjectCreateOrConnectWithoutUserInput[]
+    upsert?: StarredProjectUpsertWithWhereUniqueWithoutUserInput | StarredProjectUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: StarredProjectCreateManyUserInputEnvelope
+    set?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    disconnect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    delete?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    update?: StarredProjectUpdateWithWhereUniqueWithoutUserInput | StarredProjectUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: StarredProjectUpdateManyWithWhereWithoutUserInput | StarredProjectUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: StarredProjectScalarWhereInput | StarredProjectScalarWhereInput[]
+  }
+
   export type OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput = {
     create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
     connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
@@ -18140,6 +19395,20 @@ export namespace Prisma {
     update?: ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput | ProjectCloneUpdateWithWhereUniqueWithoutClonedByInput[]
     updateMany?: ProjectCloneUpdateManyWithWhereWithoutClonedByInput | ProjectCloneUpdateManyWithWhereWithoutClonedByInput[]
     deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
+  }
+
+  export type StarredProjectUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<StarredProjectCreateWithoutUserInput, StarredProjectUncheckedCreateWithoutUserInput> | StarredProjectCreateWithoutUserInput[] | StarredProjectUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutUserInput | StarredProjectCreateOrConnectWithoutUserInput[]
+    upsert?: StarredProjectUpsertWithWhereUniqueWithoutUserInput | StarredProjectUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: StarredProjectCreateManyUserInputEnvelope
+    set?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    disconnect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    delete?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    update?: StarredProjectUpdateWithWhereUniqueWithoutUserInput | StarredProjectUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: StarredProjectUpdateManyWithWhereWithoutUserInput | StarredProjectUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: StarredProjectScalarWhereInput | StarredProjectScalarWhereInput[]
   }
 
   export type UserCreateNestedOneWithoutOnboardingProgressInput = {
@@ -18491,6 +19760,13 @@ export namespace Prisma {
     connect?: ProjectCloneWhereUniqueInput
   }
 
+  export type StarredProjectCreateNestedManyWithoutProjectInput = {
+    create?: XOR<StarredProjectCreateWithoutProjectInput, StarredProjectUncheckedCreateWithoutProjectInput> | StarredProjectCreateWithoutProjectInput[] | StarredProjectUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutProjectInput | StarredProjectCreateOrConnectWithoutProjectInput[]
+    createMany?: StarredProjectCreateManyProjectInputEnvelope
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+  }
+
   export type ProjectMemberUncheckedCreateNestedManyWithoutProjectInput = {
     create?: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput> | ProjectMemberCreateWithoutProjectInput[] | ProjectMemberUncheckedCreateWithoutProjectInput[]
     connectOrCreate?: ProjectMemberCreateOrConnectWithoutProjectInput | ProjectMemberCreateOrConnectWithoutProjectInput[]
@@ -18508,6 +19784,13 @@ export namespace Prisma {
     create?: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
     connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedProjectInput
     connect?: ProjectCloneWhereUniqueInput
+  }
+
+  export type StarredProjectUncheckedCreateNestedManyWithoutProjectInput = {
+    create?: XOR<StarredProjectCreateWithoutProjectInput, StarredProjectUncheckedCreateWithoutProjectInput> | StarredProjectCreateWithoutProjectInput[] | StarredProjectUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutProjectInput | StarredProjectCreateOrConnectWithoutProjectInput[]
+    createMany?: StarredProjectCreateManyProjectInputEnvelope
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
   }
 
   export type TeamUpdateOneRequiredWithoutProjectsNestedInput = {
@@ -18552,6 +19835,20 @@ export namespace Prisma {
     update?: XOR<XOR<ProjectCloneUpdateToOneWithWhereWithoutClonedProjectInput, ProjectCloneUpdateWithoutClonedProjectInput>, ProjectCloneUncheckedUpdateWithoutClonedProjectInput>
   }
 
+  export type StarredProjectUpdateManyWithoutProjectNestedInput = {
+    create?: XOR<StarredProjectCreateWithoutProjectInput, StarredProjectUncheckedCreateWithoutProjectInput> | StarredProjectCreateWithoutProjectInput[] | StarredProjectUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutProjectInput | StarredProjectCreateOrConnectWithoutProjectInput[]
+    upsert?: StarredProjectUpsertWithWhereUniqueWithoutProjectInput | StarredProjectUpsertWithWhereUniqueWithoutProjectInput[]
+    createMany?: StarredProjectCreateManyProjectInputEnvelope
+    set?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    disconnect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    delete?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    update?: StarredProjectUpdateWithWhereUniqueWithoutProjectInput | StarredProjectUpdateWithWhereUniqueWithoutProjectInput[]
+    updateMany?: StarredProjectUpdateManyWithWhereWithoutProjectInput | StarredProjectUpdateManyWithWhereWithoutProjectInput[]
+    deleteMany?: StarredProjectScalarWhereInput | StarredProjectScalarWhereInput[]
+  }
+
   export type ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput = {
     create?: XOR<ProjectMemberCreateWithoutProjectInput, ProjectMemberUncheckedCreateWithoutProjectInput> | ProjectMemberCreateWithoutProjectInput[] | ProjectMemberUncheckedCreateWithoutProjectInput[]
     connectOrCreate?: ProjectMemberCreateOrConnectWithoutProjectInput | ProjectMemberCreateOrConnectWithoutProjectInput[]
@@ -18584,6 +19881,20 @@ export namespace Prisma {
     delete?: ProjectCloneWhereInput | boolean
     connect?: ProjectCloneWhereUniqueInput
     update?: XOR<XOR<ProjectCloneUpdateToOneWithWhereWithoutClonedProjectInput, ProjectCloneUpdateWithoutClonedProjectInput>, ProjectCloneUncheckedUpdateWithoutClonedProjectInput>
+  }
+
+  export type StarredProjectUncheckedUpdateManyWithoutProjectNestedInput = {
+    create?: XOR<StarredProjectCreateWithoutProjectInput, StarredProjectUncheckedCreateWithoutProjectInput> | StarredProjectCreateWithoutProjectInput[] | StarredProjectUncheckedCreateWithoutProjectInput[]
+    connectOrCreate?: StarredProjectCreateOrConnectWithoutProjectInput | StarredProjectCreateOrConnectWithoutProjectInput[]
+    upsert?: StarredProjectUpsertWithWhereUniqueWithoutProjectInput | StarredProjectUpsertWithWhereUniqueWithoutProjectInput[]
+    createMany?: StarredProjectCreateManyProjectInputEnvelope
+    set?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    disconnect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    delete?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    connect?: StarredProjectWhereUniqueInput | StarredProjectWhereUniqueInput[]
+    update?: StarredProjectUpdateWithWhereUniqueWithoutProjectInput | StarredProjectUpdateWithWhereUniqueWithoutProjectInput[]
+    updateMany?: StarredProjectUpdateManyWithWhereWithoutProjectInput | StarredProjectUpdateManyWithWhereWithoutProjectInput[]
+    deleteMany?: StarredProjectScalarWhereInput | StarredProjectScalarWhereInput[]
   }
 
   export type ProjectCreateNestedOneWithoutMembersInput = {
@@ -18737,6 +20048,34 @@ export namespace Prisma {
     upsert?: UserUpsertWithoutClonedProjectsInput
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutClonedProjectsInput, UserUpdateWithoutClonedProjectsInput>, UserUncheckedUpdateWithoutClonedProjectsInput>
+  }
+
+  export type UserCreateNestedOneWithoutStarredProjectsInput = {
+    create?: XOR<UserCreateWithoutStarredProjectsInput, UserUncheckedCreateWithoutStarredProjectsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutStarredProjectsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type ProjectCreateNestedOneWithoutStarredByInput = {
+    create?: XOR<ProjectCreateWithoutStarredByInput, ProjectUncheckedCreateWithoutStarredByInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutStarredByInput
+    connect?: ProjectWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutStarredProjectsNestedInput = {
+    create?: XOR<UserCreateWithoutStarredProjectsInput, UserUncheckedCreateWithoutStarredProjectsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutStarredProjectsInput
+    upsert?: UserUpsertWithoutStarredProjectsInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutStarredProjectsInput, UserUpdateWithoutStarredProjectsInput>, UserUncheckedUpdateWithoutStarredProjectsInput>
+  }
+
+  export type ProjectUpdateOneRequiredWithoutStarredByNestedInput = {
+    create?: XOR<ProjectCreateWithoutStarredByInput, ProjectUncheckedCreateWithoutStarredByInput>
+    connectOrCreate?: ProjectCreateOrConnectWithoutStarredByInput
+    upsert?: ProjectUpsertWithoutStarredByInput
+    connect?: ProjectWhereUniqueInput
+    update?: XOR<XOR<ProjectUpdateToOneWithWhereWithoutStarredByInput, ProjectUpdateWithoutStarredByInput>, ProjectUncheckedUpdateWithoutStarredByInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -19143,6 +20482,26 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type StarredProjectCreateWithoutUserInput = {
+    createdAt?: Date | string
+    project: ProjectCreateNestedOneWithoutStarredByInput
+  }
+
+  export type StarredProjectUncheckedCreateWithoutUserInput = {
+    projectId: string
+    createdAt?: Date | string
+  }
+
+  export type StarredProjectCreateOrConnectWithoutUserInput = {
+    where: StarredProjectWhereUniqueInput
+    create: XOR<StarredProjectCreateWithoutUserInput, StarredProjectUncheckedCreateWithoutUserInput>
+  }
+
+  export type StarredProjectCreateManyUserInputEnvelope = {
+    data: StarredProjectCreateManyUserInput | StarredProjectCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
   export type OnboardingProgressUpsertWithoutUserInput = {
     update: XOR<OnboardingProgressUpdateWithoutUserInput, OnboardingProgressUncheckedUpdateWithoutUserInput>
     create: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
@@ -19312,6 +20671,31 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"ProjectClone"> | Date | string
   }
 
+  export type StarredProjectUpsertWithWhereUniqueWithoutUserInput = {
+    where: StarredProjectWhereUniqueInput
+    update: XOR<StarredProjectUpdateWithoutUserInput, StarredProjectUncheckedUpdateWithoutUserInput>
+    create: XOR<StarredProjectCreateWithoutUserInput, StarredProjectUncheckedCreateWithoutUserInput>
+  }
+
+  export type StarredProjectUpdateWithWhereUniqueWithoutUserInput = {
+    where: StarredProjectWhereUniqueInput
+    data: XOR<StarredProjectUpdateWithoutUserInput, StarredProjectUncheckedUpdateWithoutUserInput>
+  }
+
+  export type StarredProjectUpdateManyWithWhereWithoutUserInput = {
+    where: StarredProjectScalarWhereInput
+    data: XOR<StarredProjectUpdateManyMutationInput, StarredProjectUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type StarredProjectScalarWhereInput = {
+    AND?: StarredProjectScalarWhereInput | StarredProjectScalarWhereInput[]
+    OR?: StarredProjectScalarWhereInput[]
+    NOT?: StarredProjectScalarWhereInput | StarredProjectScalarWhereInput[]
+    userId?: StringFilter<"StarredProject"> | string
+    projectId?: StringFilter<"StarredProject"> | string
+    createdAt?: DateTimeFilter<"StarredProject"> | Date | string
+  }
+
   export type UserCreateWithoutOnboardingProgressInput = {
     id?: string
     name?: string | null
@@ -19328,6 +20712,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutOnboardingProgressInput = {
@@ -19346,6 +20731,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutOnboardingProgressInput = {
@@ -19380,6 +20766,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutOnboardingProgressInput = {
@@ -19398,6 +20785,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type OrganizationMemberCreateWithoutOrganizationInput = {
@@ -19607,6 +20995,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutOrganizationsInput = {
@@ -19625,6 +21014,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutOrganizationsInput = {
@@ -19696,6 +21086,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutOrganizationsInput = {
@@ -19714,6 +21105,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type OrganizationCreateWithoutInviteTokensInput = {
@@ -19846,11 +21238,13 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: ProjectMemberCreateNestedManyWithoutProjectInput
     publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
     clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectUncheckedCreateWithoutTeamInput = {
@@ -19860,11 +21254,13 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
     publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
     clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectUncheckedCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectCreateOrConnectWithoutTeamInput = {
@@ -19957,6 +21353,7 @@ export namespace Prisma {
     thumbnailUrl?: StringNullableFilter<"Project"> | string | null
     stateUrl?: StringNullableFilter<"Project"> | string | null
     isPublic?: BoolFilter<"Project"> | boolean
+    lastOpenedAt?: DateTimeNullableFilter<"Project"> | Date | string | null
     createdAt?: DateTimeFilter<"Project"> | Date | string
     updatedAt?: DateTimeFilter<"Project"> | Date | string
   }
@@ -20002,6 +21399,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutTeamMembershipsInput = {
@@ -20020,6 +21418,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutTeamMembershipsInput = {
@@ -20085,6 +21484,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutTeamMembershipsInput = {
@@ -20103,6 +21503,7 @@ export namespace Prisma {
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type TeamCreateWithoutProjectsInput = {
@@ -20204,6 +21605,26 @@ export namespace Prisma {
   export type ProjectCloneCreateOrConnectWithoutClonedProjectInput = {
     where: ProjectCloneWhereUniqueInput
     create: XOR<ProjectCloneCreateWithoutClonedProjectInput, ProjectCloneUncheckedCreateWithoutClonedProjectInput>
+  }
+
+  export type StarredProjectCreateWithoutProjectInput = {
+    createdAt?: Date | string
+    user: UserCreateNestedOneWithoutStarredProjectsInput
+  }
+
+  export type StarredProjectUncheckedCreateWithoutProjectInput = {
+    userId: string
+    createdAt?: Date | string
+  }
+
+  export type StarredProjectCreateOrConnectWithoutProjectInput = {
+    where: StarredProjectWhereUniqueInput
+    create: XOR<StarredProjectCreateWithoutProjectInput, StarredProjectUncheckedCreateWithoutProjectInput>
+  }
+
+  export type StarredProjectCreateManyProjectInputEnvelope = {
+    data: StarredProjectCreateManyProjectInput | StarredProjectCreateManyProjectInput[]
+    skipDuplicates?: boolean
   }
 
   export type TeamUpsertWithoutProjectsInput = {
@@ -20317,6 +21738,22 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type StarredProjectUpsertWithWhereUniqueWithoutProjectInput = {
+    where: StarredProjectWhereUniqueInput
+    update: XOR<StarredProjectUpdateWithoutProjectInput, StarredProjectUncheckedUpdateWithoutProjectInput>
+    create: XOR<StarredProjectCreateWithoutProjectInput, StarredProjectUncheckedCreateWithoutProjectInput>
+  }
+
+  export type StarredProjectUpdateWithWhereUniqueWithoutProjectInput = {
+    where: StarredProjectWhereUniqueInput
+    data: XOR<StarredProjectUpdateWithoutProjectInput, StarredProjectUncheckedUpdateWithoutProjectInput>
+  }
+
+  export type StarredProjectUpdateManyWithWhereWithoutProjectInput = {
+    where: StarredProjectScalarWhereInput
+    data: XOR<StarredProjectUpdateManyMutationInput, StarredProjectUncheckedUpdateManyWithoutProjectInput>
+  }
+
   export type ProjectCreateWithoutMembersInput = {
     id?: string
     name: string
@@ -20324,11 +21761,13 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     team: TeamCreateNestedOneWithoutProjectsInput
     publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
     clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectUncheckedCreateWithoutMembersInput = {
@@ -20339,10 +21778,12 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
     clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectUncheckedCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectCreateOrConnectWithoutMembersInput = {
@@ -20366,6 +21807,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutProjectMembershipsInput = {
@@ -20384,6 +21826,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
     clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutProjectMembershipsInput = {
@@ -20409,11 +21852,13 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
     publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateWithoutMembersInput = {
@@ -20424,10 +21869,12 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUncheckedUpdateManyWithoutProjectNestedInput
   }
 
   export type UserUpsertWithoutProjectMembershipsInput = {
@@ -20457,6 +21904,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutProjectMembershipsInput = {
@@ -20475,6 +21923,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ProjectCreateWithoutPublishedAssetInput = {
@@ -20484,11 +21933,13 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     team: TeamCreateNestedOneWithoutProjectsInput
     members?: ProjectMemberCreateNestedManyWithoutProjectInput
     clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectUncheckedCreateWithoutPublishedAssetInput = {
@@ -20499,10 +21950,12 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
     clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+    starredBy?: StarredProjectUncheckedCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectCreateOrConnectWithoutPublishedAssetInput = {
@@ -20526,6 +21979,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutPublishedAssetsInput = {
@@ -20544,6 +21998,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutPublishedAssetsInput = {
@@ -20593,11 +22048,13 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
     members?: ProjectMemberUpdateManyWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateWithoutPublishedAssetInput = {
@@ -20608,10 +22065,12 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUncheckedUpdateManyWithoutProjectNestedInput
   }
 
   export type UserUpsertWithoutPublishedAssetsInput = {
@@ -20641,6 +22100,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutPublishedAssetsInput = {
@@ -20659,6 +22119,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
   }
 
   export type ProjectCloneUpsertWithWhereUniqueWithoutAssetInput = {
@@ -20717,11 +22178,13 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     team: TeamCreateNestedOneWithoutProjectsInput
     members?: ProjectMemberCreateNestedManyWithoutProjectInput
     publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
+    starredBy?: StarredProjectCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectUncheckedCreateWithoutClonedFromInput = {
@@ -20732,10 +22195,12 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
     publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
+    starredBy?: StarredProjectUncheckedCreateNestedManyWithoutProjectInput
   }
 
   export type ProjectCreateOrConnectWithoutClonedFromInput = {
@@ -20759,6 +22224,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    starredProjects?: StarredProjectCreateNestedManyWithoutUserInput
   }
 
   export type UserUncheckedCreateWithoutClonedProjectsInput = {
@@ -20777,6 +22243,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    starredProjects?: StarredProjectUncheckedCreateNestedManyWithoutUserInput
   }
 
   export type UserCreateOrConnectWithoutClonedProjectsInput = {
@@ -20841,11 +22308,13 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
     members?: ProjectMemberUpdateManyWithoutProjectNestedInput
     publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
+    starredBy?: StarredProjectUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateWithoutClonedFromInput = {
@@ -20856,10 +22325,12 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
     publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
+    starredBy?: StarredProjectUncheckedUpdateManyWithoutProjectNestedInput
   }
 
   export type UserUpsertWithoutClonedProjectsInput = {
@@ -20889,6 +22360,7 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    starredProjects?: StarredProjectUpdateManyWithoutUserNestedInput
   }
 
   export type UserUncheckedUpdateWithoutClonedProjectsInput = {
@@ -20907,6 +22379,179 @@ export namespace Prisma {
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    starredProjects?: StarredProjectUncheckedUpdateManyWithoutUserNestedInput
+  }
+
+  export type UserCreateWithoutStarredProjectsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    onboardingComplete?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
+    organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserUncheckedCreateWithoutStarredProjectsInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    onboardingComplete?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
+    organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserCreateOrConnectWithoutStarredProjectsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutStarredProjectsInput, UserUncheckedCreateWithoutStarredProjectsInput>
+  }
+
+  export type ProjectCreateWithoutStarredByInput = {
+    id?: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    lastOpenedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    team: TeamCreateNestedOneWithoutProjectsInput
+    members?: ProjectMemberCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneCreateNestedOneWithoutClonedProjectInput
+  }
+
+  export type ProjectUncheckedCreateWithoutStarredByInput = {
+    id?: string
+    teamId: string
+    name: string
+    description?: string | null
+    thumbnailUrl?: string | null
+    stateUrl?: string | null
+    isPublic?: boolean
+    lastOpenedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    members?: ProjectMemberUncheckedCreateNestedManyWithoutProjectInput
+    publishedAsset?: MarketplaceAssetUncheckedCreateNestedOneWithoutProjectInput
+    clonedFrom?: ProjectCloneUncheckedCreateNestedOneWithoutClonedProjectInput
+  }
+
+  export type ProjectCreateOrConnectWithoutStarredByInput = {
+    where: ProjectWhereUniqueInput
+    create: XOR<ProjectCreateWithoutStarredByInput, ProjectUncheckedCreateWithoutStarredByInput>
+  }
+
+  export type UserUpsertWithoutStarredProjectsInput = {
+    update: XOR<UserUpdateWithoutStarredProjectsInput, UserUncheckedUpdateWithoutStarredProjectsInput>
+    create: XOR<UserCreateWithoutStarredProjectsInput, UserUncheckedCreateWithoutStarredProjectsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutStarredProjectsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutStarredProjectsInput, UserUncheckedUpdateWithoutStarredProjectsInput>
+  }
+
+  export type UserUpdateWithoutStarredProjectsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
+    organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutStarredProjectsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
+    organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type ProjectUpsertWithoutStarredByInput = {
+    update: XOR<ProjectUpdateWithoutStarredByInput, ProjectUncheckedUpdateWithoutStarredByInput>
+    create: XOR<ProjectCreateWithoutStarredByInput, ProjectUncheckedCreateWithoutStarredByInput>
+    where?: ProjectWhereInput
+  }
+
+  export type ProjectUpdateToOneWithWhereWithoutStarredByInput = {
+    where?: ProjectWhereInput
+    data: XOR<ProjectUpdateWithoutStarredByInput, ProjectUncheckedUpdateWithoutStarredByInput>
+  }
+
+  export type ProjectUpdateWithoutStarredByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    team?: TeamUpdateOneRequiredWithoutProjectsNestedInput
+    members?: ProjectMemberUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+  }
+
+  export type ProjectUncheckedUpdateWithoutStarredByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    teamId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
+    publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
+    clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
   }
 
   export type OrganizationMemberCreateManyUserInput = {
@@ -20948,6 +22593,11 @@ export namespace Prisma {
     id?: string
     sourceAssetId: string
     clonedProjectId: string
+    createdAt?: Date | string
+  }
+
+  export type StarredProjectCreateManyUserInput = {
+    projectId: string
     createdAt?: Date | string
   }
 
@@ -21079,6 +22729,21 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type StarredProjectUpdateWithoutUserInput = {
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    project?: ProjectUpdateOneRequiredWithoutStarredByNestedInput
+  }
+
+  export type StarredProjectUncheckedUpdateWithoutUserInput = {
+    projectId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StarredProjectUncheckedUpdateManyWithoutUserInput = {
+    projectId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type OrganizationMemberCreateManyOrganizationInput = {
     id?: string
     userId: string
@@ -21201,6 +22866,7 @@ export namespace Prisma {
     thumbnailUrl?: string | null
     stateUrl?: string | null
     isPublic?: boolean
+    lastOpenedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -21233,11 +22899,13 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: ProjectMemberUpdateManyWithoutProjectNestedInput
     publishedAsset?: MarketplaceAssetUpdateOneWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateWithoutTeamInput = {
@@ -21247,11 +22915,13 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: ProjectMemberUncheckedUpdateManyWithoutProjectNestedInput
     publishedAsset?: MarketplaceAssetUncheckedUpdateOneWithoutProjectNestedInput
     clonedFrom?: ProjectCloneUncheckedUpdateOneWithoutClonedProjectNestedInput
+    starredBy?: StarredProjectUncheckedUpdateManyWithoutProjectNestedInput
   }
 
   export type ProjectUncheckedUpdateManyWithoutTeamInput = {
@@ -21261,6 +22931,7 @@ export namespace Prisma {
     thumbnailUrl?: NullableStringFieldUpdateOperationsInput | string | null
     stateUrl?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
+    lastOpenedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -21269,6 +22940,11 @@ export namespace Prisma {
     id?: string
     userId: string
     role?: $Enums.ProjectRole
+    createdAt?: Date | string
+  }
+
+  export type StarredProjectCreateManyProjectInput = {
+    userId: string
     createdAt?: Date | string
   }
 
@@ -21290,6 +22966,21 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     userId?: StringFieldUpdateOperationsInput | string
     role?: EnumProjectRoleFieldUpdateOperationsInput | $Enums.ProjectRole
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StarredProjectUpdateWithoutProjectInput = {
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutStarredProjectsNestedInput
+  }
+
+  export type StarredProjectUncheckedUpdateWithoutProjectInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StarredProjectUncheckedUpdateManyWithoutProjectInput = {
+    userId?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -21398,6 +23089,10 @@ export namespace Prisma {
      * @deprecated Use PasswordResetTokenDefaultArgs instead
      */
     export type PasswordResetTokenArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = PasswordResetTokenDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use StarredProjectDefaultArgs instead
+     */
+    export type StarredProjectArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = StarredProjectDefaultArgs<ExtArgs>
 
   /**
    * Batch Payload for updateMany & deleteMany & createMany

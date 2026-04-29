@@ -185,6 +185,7 @@ exports.Prisma.ProjectScalarFieldEnum = {
   thumbnailUrl: 'thumbnailUrl',
   stateUrl: 'stateUrl',
   isPublic: 'isPublic',
+  lastOpenedAt: 'lastOpenedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -238,6 +239,12 @@ exports.Prisma.PasswordResetTokenScalarFieldEnum = {
   email: 'email',
   expiresAt: 'expiresAt',
   usedAt: 'usedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.StarredProjectScalarFieldEnum = {
+  userId: 'userId',
+  projectId: 'projectId',
   createdAt: 'createdAt'
 };
 
@@ -297,7 +304,8 @@ exports.Prisma.ModelName = {
   MarketplaceAsset: 'MarketplaceAsset',
   ProjectClone: 'ProjectClone',
   EarlyAccessApplication: 'EarlyAccessApplication',
-  PasswordResetToken: 'PasswordResetToken'
+  PasswordResetToken: 'PasswordResetToken',
+  StarredProject: 'StarredProject'
 };
 
 /**

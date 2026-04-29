@@ -31,10 +31,16 @@ export async function getDashboardData() {
           },
         },
       },
+      starredProjects: { select: { projectId: true } },
     },
   });
 
-  return user;
+  if (!user) return null;
+
+  return {
+    ...user,
+    starredProjectIds: user.starredProjects.map((sp) => sp.projectId),
+  };
 }
 
 export async function createTeam(organizationId: string, name: string, description: string) {
@@ -120,4 +126,58 @@ export async function inviteMember(organizationId: string, email: string, name: 
     console.error("Invite error:", error);
     return { success: false, error: "Failed to invite member. They may already be in the organization." };
   }
+}
+
+export async function renameProject(projectId: string, name: string) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  if (!userId) throw new Error("Unauthorized");
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { name: name.trim() },
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/projects");
+}
+
+export async function deleteProject(projectId: string) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  if (!userId) throw new Error("Unauthorized");
+  await prisma.project.delete({ where: { id: projectId } });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/projects");
+}
+
+export async function starProject(projectId: string) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  if (!userId) throw new Error("Unauthorized");
+  await prisma.starredProject.create({
+    data: { userId, projectId },
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/projects");
+}
+
+export async function unstarProject(projectId: string) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  if (!userId) throw new Error("Unauthorized");
+  await prisma.starredProject.delete({
+    where: { userId_projectId: { userId, projectId } },
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/projects");
+}
+
+export async function updateLastOpened(projectId: string) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  if (!userId) return; // fire-and-forget, no throw
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { lastOpenedAt: new Date() },
+  });
+  revalidatePath("/dashboard");
 }
