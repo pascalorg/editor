@@ -30,10 +30,12 @@ import {
   normalizeRoomControlGroupList,
   type RoomControlChange,
   type RoomControlChangeSource,
-  RoomControlOverlay,
   type RoomControlTile,
   type RoomOverlayNode,
   selectRoomControlGroupSource,
+} from '../../features/home-assistant/room-overlay/room-control-model'
+import {
+  RoomControlOverlay,
 } from '../../features/home-assistant/room-overlay/room-control-overlay'
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,

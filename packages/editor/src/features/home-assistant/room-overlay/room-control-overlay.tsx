@@ -24,6 +24,32 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { type Object3D, Vector3 } from 'three'
+import {
+  canMergeControlGroups,
+  canMergeControlMemberIntoGroup,
+  type RoomControlGroup,
+  type RoomControlIntensityTile,
+  type RoomControlLookupEntry,
+  type RoomControlOverlayProps,
+  type RoomControlTile,
+  type RoomOverlayNode,
+} from './room-control-model'
+
+export {
+  buildRoomControlGroups,
+  normalizeRoomControlGroupList,
+  selectRoomControlGroupSource,
+} from './room-control-model'
+export type {
+  RoomControlChange,
+  RoomControlChangeSource,
+  RoomControlGroup,
+  RoomControlGroupKind,
+  RoomControlIntensityTile,
+  RoomControlOverlayProps,
+  RoomControlTile,
+  RoomOverlayNode,
+} from './room-control-model'
 
 const PANEL_CLOSED_MIN_WIDTH = 56
 const PANEL_CLOSED_MAX_WIDTH = 240
@@ -404,30 +430,6 @@ const editModeAnimationCss = `
 }
 `
 
-export type RoomControlTile = {
-  canDetachFromRoom?: boolean
-  collectionId: CollectionId
-  collectionLabel: string
-  control: Control
-  controlIndex: number
-  directActionMode?: 'toggle' | 'trigger' | null
-  disabled?: boolean
-  id: string
-  intensityControl: Extract<Control, { kind: 'slider' }> | null
-  intensityControlIndex: number | null
-  itemId: AnyNodeId
-  itemKind: string
-  itemName: string
-  legacyIds?: string[]
-  linkedItemId?: AnyNodeId
-  resourceId?: string
-}
-
-export type RoomControlIntensityTile = RoomControlTile & {
-  intensityControl: Extract<Control, { kind: 'slider' }>
-  intensityControlIndex: number
-}
-
 type GroupIntensitySegment = {
   itemKind: string
   key: string
@@ -440,33 +442,11 @@ type GroupVisualSegment = {
   itemKind: string
 }
 
-export type RoomControlGroupKind = 'toggle' | 'numeric' | 'mixed'
-
-export type RoomControlGroup = {
-  collectionId?: CollectionId
-  controlKind: RoomControlGroupKind
-  displayName?: string
-  id: string
-  itemIds: AnyNodeId[]
-  members: RoomControlTile[]
-}
-
 type PanelBodyMetrics = {
   bodyHeight: number
   bodyWidth: number
   columns: number
   rows: number
-}
-
-export type RoomOverlayNode = {
-  anchorNodeIds: AnyNodeId[]
-  controlGroups: RoomControlGroup[]
-  id: string
-  iconOnly?: boolean
-  roomName: string
-  screenPosition?: { x: number; y: number }
-  totalSlotCount: number
-  worldPosition?: { x: number; y: number; z: number }
 }
 
 type OverlayLayout = {
@@ -541,30 +521,6 @@ type PendingLongPressState = {
 type ExpandedGroupMemberLayout = {
   buttonSize: number
   columns: number
-}
-
-type RoomControlLookupEntry = {
-  member: RoomControlTile
-  source: 'primary' | 'intensity'
-}
-
-export type RoomControlChangeSource = RoomControlLookupEntry['source']
-
-export type RoomControlChange = {
-  member: RoomControlTile
-  nextValue: ControlValue
-  source: RoomControlChangeSource
-}
-
-export type RoomControlOverlayProps = {
-  onApplyRoomGrouping?: (roomId: string, nextGroups: string[][]) => void
-  onCopyRoomControlToRoom?: (
-    sourceCollectionId: CollectionId,
-    targetCollectionId: CollectionId,
-  ) => void
-  onRemoveRoomControlFromRoom?: (member: RoomControlTile) => void
-  onRoomControlChange?: (payload: RoomControlChange) => void
-  roomOverlayNodes?: RoomOverlayNode[]
 }
 
 const projectToViewportOrigin = () => [0, 0] as [number, number]
@@ -3290,161 +3246,6 @@ const getDeviceDropTargetCollectionId = (
   return targetCollectionId && targetCollectionId !== sourceCollectionId ? targetCollectionId : null
 }
 
-export const normalizeRoomControlGroupList = (groups: unknown) =>
-  Array.isArray(groups)
-    ? groups
-        .filter(Array.isArray)
-        .map((group) =>
-          group.filter((memberId): memberId is string => typeof memberId === 'string'),
-        )
-        .filter((group) => group.length > 0)
-    : []
-
-export const selectRoomControlGroupSource = (
-  controls: RoomControlTile[],
-  presentationGroups: string[][],
-  defaultGroups: string[][],
-) => {
-  if (
-    presentationGroups.length > 0 &&
-    roomControlGroupsCoverControls(presentationGroups, controls)
-  ) {
-    return presentationGroups
-  }
-
-  return defaultGroups
-}
-
-const roomControlGroupsCoverControls = (groups: string[][], controls: RoomControlTile[]) => {
-  if (controls.length === 0 || groups.length === 0) {
-    return false
-  }
-
-  const groupIds = new Set(groups.flat())
-  return controls.every(
-    (control) =>
-      groupIds.has(control.id) || (control.legacyIds ?? []).some((id) => groupIds.has(id)),
-  )
-}
-
-export const buildRoomControlGroups = (
-  controls: RoomControlTile[],
-  storedGroups: string[][],
-): RoomControlGroup[] => {
-  const controlById = new Map<string, RoomControlTile>()
-  for (const control of controls) {
-    controlById.set(control.id, control)
-    for (const legacyId of control.legacyIds ?? []) {
-      controlById.set(legacyId, control)
-    }
-  }
-  const assignedControlIds = new Set<string>()
-  const groups: RoomControlGroup[] = []
-
-  for (const storedGroup of storedGroups) {
-    const members = storedGroup
-      .map((controlId) => controlById.get(controlId))
-      .filter((member): member is RoomControlTile => Boolean(member))
-    const compatibleMemberGroups = splitRoomControlMembersByKind(members)
-
-    for (const compatibleMembers of compatibleMemberGroups) {
-      if (compatibleMembers.length === 0) {
-        continue
-      }
-      for (const member of compatibleMembers) {
-        assignedControlIds.add(member.id)
-      }
-      groups.push(createRoomControlGroup(compatibleMembers))
-    }
-  }
-
-  for (const control of controls) {
-    if (assignedControlIds.has(control.id)) {
-      continue
-    }
-    groups.push(createRoomControlGroup([control]))
-  }
-
-  return groups
-}
-
-const isSliderControl = (control: Control): control is Extract<Control, { kind: 'slider' }> =>
-  control.kind === 'slider'
-
-const getPrimaryRoomControl = (controls: Control[]) => {
-  if (controls.length === 0) {
-    return null
-  }
-
-  const preferredIndex = controls.findIndex((control) => control.kind === 'toggle')
-  const controlIndex = preferredIndex >= 0 ? preferredIndex : 0
-  const control = controls[controlIndex]
-  const intensityControlIndex = controls.findIndex(
-    (candidate, index) =>
-      isSliderControl(candidate) && (control?.kind === 'toggle' || index === controlIndex),
-  )
-  const intensityControl =
-    intensityControlIndex >= 0
-      ? (controls[intensityControlIndex] as Extract<Control, { kind: 'slider' }>)
-      : null
-
-  return control
-    ? {
-        control,
-        controlIndex,
-        intensityControl,
-        intensityControlIndex: intensityControlIndex >= 0 ? intensityControlIndex : null,
-      }
-    : null
-}
-
-const getRoomControlKind = (control: Control): RoomControlGroupKind =>
-  control.kind === 'toggle' ? 'toggle' : 'numeric'
-
-const getRoomControlGroupKind = (members: RoomControlTile[]): RoomControlGroupKind => {
-  return getRoomControlKind(members[0]?.control ?? { kind: 'toggle' })
-}
-
-const splitRoomControlMembersByKind = (members: RoomControlTile[]) => {
-  const toggleMembers: RoomControlTile[] = []
-  const numericMembers: RoomControlTile[] = []
-
-  for (const member of members) {
-    if (getRoomControlKind(member.control) === 'toggle') {
-      toggleMembers.push(member)
-    } else {
-      numericMembers.push(member)
-    }
-  }
-
-  return [toggleMembers, numericMembers].filter((group) => group.length > 0)
-}
-
-const getRoomControlGroupId = (members: RoomControlTile[]) =>
-  members.map((member) => member.id).join('|')
-
-const createRoomControlGroup = (members: RoomControlTile[]): RoomControlGroup => {
-  const collectionIds = Array.from(new Set(members.map((member) => member.collectionId)))
-  const singleCollectionId = collectionIds.length === 1 ? collectionIds[0] : undefined
-  const collectionLabel =
-    singleCollectionId && members.length > 0 ? members[0]?.collectionLabel : undefined
-
-  return {
-    collectionId: singleCollectionId,
-    controlKind: getRoomControlGroupKind(members),
-    displayName: collectionLabel,
-    id: getRoomControlGroupId(members),
-    itemIds: Array.from(new Set(members.map((member) => member.linkedItemId ?? member.itemId))),
-    members,
-  }
-}
-
-const canMergeControlGroups = (source: RoomControlGroup, target: RoomControlGroup) =>
-  source.id !== target.id && source.controlKind === target.controlKind
-
-const canMergeControlMemberIntoGroup = (member: RoomControlTile, target: RoomControlGroup) =>
-  getRoomControlKind(member.control) === target.controlKind
-
 const getGroupItemKind = (group: RoomControlGroup) => {
   const itemKinds = Array.from(new Set(group.members.map((member) => member.itemKind)))
   return itemKinds.length === 1 ? (itemKinds[0] ?? 'item') : 'group'
@@ -3486,11 +3287,6 @@ const getGroupVisualSegments = (group: RoomControlGroup): GroupVisualSegment[] =
   }))
 }
 
-const getGroupBadgeText = (group: RoomControlGroup) => {
-  const itemKind = getGroupItemKind(group)
-  return itemKind === 'group' ? 'GR' : getItemBadgeText(itemKind)
-}
-
 const getGroupTooltip = (group: RoomControlGroup) =>
   group.members.length === 1
     ? `${group.members[0]?.itemName ?? 'Item'}: ${getControlLabel(group.members[0]?.control ?? { kind: 'toggle' })}`
@@ -3517,9 +3313,6 @@ const getGroupSubtitle = (group: RoomControlGroup) => {
   }
   return `${names.slice(0, 2).join(', ')} + ${names.length - 2} more`
 }
-
-const getGroupMemberCountLabel = (group: RoomControlGroup) =>
-  group.members.length === 1 ? 'Single' : `${group.members.length} linked`
 
 const getGroupAccessibleLabel = (group: RoomControlGroup) => {
   if (group.displayName) {
@@ -4020,72 +3813,6 @@ const formatControlValue = (
     Math.abs(value - Math.round(value)) < 0.001 ? `${Math.round(value)}` : value.toFixed(1)
   const unit = control.unit ? ` ${control.unit}` : ''
   return `${rounded}${unit}`
-}
-
-const IGNORED_LABEL_TOKENS = new Set([
-  'ceiling',
-  'corner',
-  'double',
-  'floor',
-  'left',
-  'main',
-  'right',
-  'small',
-  'smart',
-  'tall',
-  'upper',
-  'wall',
-])
-
-const getOverlayItemKind = (itemName: string) => {
-  const normalized = itemName.trim().toLowerCase()
-
-  if (/\b(light|lamp|lantern|pendant|sconce|spotlight)\b/.test(normalized)) {
-    return 'light'
-  }
-  if (/\bfan\b/.test(normalized)) {
-    return 'fan'
-  }
-  if (/\bswitch\b/.test(normalized)) {
-    return 'switch'
-  }
-  if (/\boutlet\b/.test(normalized)) {
-    return 'outlet'
-  }
-  if (/\bshade\b/.test(normalized)) {
-    return 'shade'
-  }
-  if (/\bblind\b/.test(normalized)) {
-    return 'blind'
-  }
-  if (/\bcurtain\b/.test(normalized)) {
-    return 'curtain'
-  }
-  if (/\bdoor\b/.test(normalized)) {
-    return 'door'
-  }
-  if (/\bwindow\b/.test(normalized)) {
-    return 'window'
-  }
-  if (/\bfireplace\b/.test(normalized)) {
-    return 'fireplace'
-  }
-  if (/\b(speaker|audio)\b/.test(normalized)) {
-    return 'speaker'
-  }
-  if (/\b(tv|television)\b/.test(normalized)) {
-    return 'tv'
-  }
-
-  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean)
-  for (let index = tokens.length - 1; index >= 0; index -= 1) {
-    const token = tokens[index]
-    if (token && !IGNORED_LABEL_TOKENS.has(token) && !/^\d+$/.test(token)) {
-      return token
-    }
-  }
-
-  return 'item'
 }
 
 const getItemBadgeText = (itemKind: string) => {
