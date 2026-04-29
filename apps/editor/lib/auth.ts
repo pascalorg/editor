@@ -65,9 +65,23 @@ export const authOptions: NextAuthOptions = {
       }
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
+        // On first sign-in, fetch onboardingComplete from DB
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id as string },
+          select: { onboardingComplete: true },
+        });
+        token.onboardingComplete = dbUser?.onboardingComplete ?? false;
+      }
+      // Allow forced JWT refresh from client via useSession().update()
+      if (trigger === 'update') {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { onboardingComplete: true },
+        });
+        token.onboardingComplete = dbUser?.onboardingComplete ?? false;
       }
       return token;
     },
