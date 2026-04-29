@@ -90,3 +90,36 @@ export async function provisionWorkspace(formData: FormData) {
 
   redirect('/dashboard')
 }
+
+export async function saveProgress(
+  step: number,
+  selections: Record<string, string>,
+): Promise<{ success: boolean }> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return { success: false }
+  const userId = (session.user as { id: string }).id
+  await prisma.onboardingProgress.upsert({
+    where: { userId },
+    update: { currentStep: step, selections },
+    create: { userId, currentStep: step, selections },
+  })
+  return { success: true }
+}
+
+export async function completeOnboarding(): Promise<{ success: boolean }> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return { success: false }
+  const userId = (session.user as { id: string }).id
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { onboardingComplete: true },
+    }),
+    prisma.onboardingProgress.upsert({
+      where: { userId },
+      update: { completedAt: new Date() },
+      create: { userId, currentStep: 4, completedAt: new Date(), selections: {} },
+    }),
+  ])
+  return { success: true }
+}
