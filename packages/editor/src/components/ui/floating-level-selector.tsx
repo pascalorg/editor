@@ -293,13 +293,21 @@ export function FloatingLevelSelector() {
 
   const handleDuplicateLevel = useCallback(
     (level: LevelNode, preset: LevelDuplicatePreset = 'everything') => {
-      const { createOps, newLevelId } = buildLevelDuplicateCreateOps({
+      const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
         nodes: useScene.getState().nodes,
         level,
         levels,
         preset,
       })
 
+      if (shiftedLevels.length > 0) {
+        updateNodes(
+          shiftedLevels.map((shiftedLevel) => ({
+            id: shiftedLevel.id as AnyNodeId,
+            data: { level: shiftedLevel.level } as Partial<AnyNode>,
+          })),
+        )
+      }
       createNodes(createOps)
 
       setSelection({
@@ -307,7 +315,7 @@ export function FloatingLevelSelector() {
         levelId: newLevelId as LevelNode['id'],
       })
     },
-    [createNodes, levels, resolvedBuildingId, setSelection],
+    [createNodes, levels, resolvedBuildingId, setSelection, updateNodes],
   )
 
   if (levels.length === 0) return null

@@ -587,10 +587,19 @@ const LevelItem = memo(function LevelItem({
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const createNodes = useScene((s) => s.createNodes)
+  const updateNodes = useScene((s) => s.updateNodes)
   const itemRef = useRef<HTMLDivElement>(null)
   const isSelected = selectedLevelId === level.id
   const canDeleteLevel = level.level !== 0
   const [isExpanded, setIsExpanded] = useState(isSelected)
+  const buildingId =
+    typeof level.parentId === 'string' && level.parentId.startsWith('building_')
+      ? (level.parentId as BuildingNode['id'])
+      : undefined
+
+  const selectLevel = (levelId: LevelNode['id']) => {
+    setSelection(buildingId ? { buildingId, levelId } : { levelId })
+  }
 
   useEffect(() => {
     setIsExpanded(isSelected)
@@ -603,7 +612,7 @@ const LevelItem = memo(function LevelItem({
   }, [isSelected])
 
   const handleSelect = () => {
-    setSelection({ levelId: level.id })
+    selectLevel(level.id)
   }
 
   const handleDoubleClick = () => {
@@ -611,15 +620,23 @@ const LevelItem = memo(function LevelItem({
   }
 
   const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
-    const { createOps, newLevelId } = buildLevelDuplicateCreateOps({
+    const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
       nodes: useScene.getState().nodes,
       level,
       levels,
       preset,
     })
 
+    if (shiftedLevels.length > 0) {
+      updateNodes(
+        shiftedLevels.map((shiftedLevel) => ({
+          id: shiftedLevel.id as AnyNodeId,
+          data: { level: shiftedLevel.level } as Partial<AnyNode>,
+        })),
+      )
+    }
     createNodes(createOps)
-    setSelection({ levelId: newLevelId })
+    selectLevel(newLevelId as LevelNode['id'])
     setDuplicateDialogOpen(false)
   }
 
@@ -664,7 +681,7 @@ const LevelItem = memo(function LevelItem({
               if (isSelected) {
                 setIsExpanded(!isExpanded)
               } else {
-                setSelection({ levelId: level.id })
+                selectLevel(level.id)
               }
             }}
           >
@@ -869,7 +886,7 @@ const LevelsSection = memo(function LevelsSection({
       parentId: building.id,
     })
     createNode(newLevel, building.id)
-    setSelection({ levelId: newLevel.id })
+    setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
 
   return (

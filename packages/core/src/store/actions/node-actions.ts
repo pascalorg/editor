@@ -238,27 +238,29 @@ export const createNodesAction = (
     const nextRootIds = [...state.rootNodeIds]
 
     for (const { node, parentId } of ops) {
+      const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
+
       // 1. Assign parentId to the child (Safe because BaseNode has parentId)
       const newNode = {
         ...node,
-        parentId: parentId ?? null,
+        parentId: effectiveParentId,
       }
 
       nextNodes[newNode.id] = newNode
 
       // 2. Update the Parent's children list
-      if (parentId && nextNodes[parentId]) {
-        const parent = nextNodes[parentId]
+      if (effectiveParentId && nextNodes[effectiveParentId]) {
+        const parent = nextNodes[effectiveParentId]
 
         // Type Guard: Check if the parent node is a container that supports children
         if ('children' in parent && Array.isArray(parent.children)) {
-          nextNodes[parentId] = {
+          nextNodes[effectiveParentId] = {
             ...parent,
             // Use Set to prevent duplicate IDs if createNode is called twice
             children: Array.from(new Set([...parent.children, newNode.id])) as any, // We don't verify child types here
           }
         }
-      } else if (!parentId) {
+      } else if (!effectiveParentId) {
         // 3. Handle Root nodes
         if (!nextRootIds.includes(newNode.id)) {
           nextRootIds.push(newNode.id)
