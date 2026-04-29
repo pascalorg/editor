@@ -57,7 +57,7 @@ Tech stack: Next.js 16 App Router, React 19, TypeScript, Tailwind 4, Radix UI, F
 - **DB**: Prisma schema changes need migrations — existing Org/Team/Project models are stable
 - **Editor**: Editor package is out of scope — no changes to `packages/core`, `packages/editor`, `packages/viewer`
 - **Collab**: Socket.io server handles editor sessions only — dashboard/marketplace are standard HTTP
-
+ 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
@@ -66,6 +66,7 @@ Tech stack: Next.js 16 App Router, React 19, TypeScript, Tailwind 4, Radix UI, F
 | Figma Community "duplicate" model for marketplace | Familiar UX; preserves original, gives user a copy in their workspace | — Pending |
 | Dribbble-style profile over separate portfolio app | Keeps platform self-contained; designers stay within ecosystem | — Pending |
 | Free-only marketplace for v1 | Reduces complexity; validate demand before adding monetization | — Pending |
+| URL-based team invites for v1 (no email) | Resend not configured; generate shareable invite token URL instead of sending email | — Pending |
 
 ---
 *Last updated: 2026-04-28 after initialization*

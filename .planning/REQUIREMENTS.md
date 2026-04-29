@@ -43,7 +43,7 @@
 
 - [ ] **TEAM-01**: User can create a new teamspace (organization) with a name and optional avatar
 - [ ] **TEAM-02**: Team owner can invite members via email, assigning a role: Editor / Commenter / Viewer
-- [ ] **TEAM-03**: Invited user receives an email invitation and can accept or decline
+- [ ] **TEAM-03**: Invited user can accept via a shareable invite URL (no email — link is copied and shared manually)
 - [ ] **TEAM-04**: Team owner and admins can change a member's role or remove them from the team
 - [ ] **TEAM-05**: Team has a shared projects view showing all projects within the teamspace
 - [ ] **TEAM-06**: User can belong to multiple teams and switch between them from the sidebar
