@@ -115,6 +115,16 @@ exports.Prisma.UserScalarFieldEnum = {
   image: 'image',
   password: 'password',
   bio: 'bio',
+  onboardingComplete: 'onboardingComplete',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.OnboardingProgressScalarFieldEnum = {
+  userId: 'userId',
+  currentStep: 'currentStep',
+  selections: 'selections',
+  completedAt: 'completedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -137,6 +147,17 @@ exports.Prisma.OrganizationMemberScalarFieldEnum = {
   role: 'role',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.OrganizationInviteTokenScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  token: 'token',
+  createdByUserId: 'createdByUserId',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  usedByUserId: 'usedByUserId',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.TeamScalarFieldEnum = {
@@ -225,6 +246,10 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
+exports.Prisma.JsonNullValueInput = {
+  JsonNull: Prisma.JsonNull
+};
+
 exports.Prisma.QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
@@ -233,6 +258,12 @@ exports.Prisma.QueryMode = {
 exports.Prisma.NullsOrder = {
   first: 'first',
   last: 'last'
+};
+
+exports.Prisma.JsonNullValueFilter = {
+  DbNull: Prisma.DbNull,
+  JsonNull: Prisma.JsonNull,
+  AnyNull: Prisma.AnyNull
 };
 exports.OrgStatus = exports.$Enums.OrgStatus = {
   PENDING: 'PENDING',
@@ -255,8 +286,10 @@ exports.ProjectRole = exports.$Enums.ProjectRole = {
 
 exports.Prisma.ModelName = {
   User: 'User',
+  OnboardingProgress: 'OnboardingProgress',
   Organization: 'Organization',
   OrganizationMember: 'OrganizationMember',
+  OrganizationInviteToken: 'OrganizationInviteToken',
   Team: 'Team',
   TeamMember: 'TeamMember',
   Project: 'Project',

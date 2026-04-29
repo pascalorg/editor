@@ -17,6 +17,8 @@ model User {
   image         String?
   password      String?
   bio           String?
+  onboardingComplete  Boolean            @default(false)
+  onboardingProgress  OnboardingProgress?
 
   organizations    OrganizationMember[]
   teamMemberships  TeamMember[]
@@ -26,6 +28,17 @@ model User {
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+model OnboardingProgress {
+  userId      String    @id
+  currentStep Int       @default(0)
+  selections  Json      @default("{}")
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Organization {
@@ -38,7 +51,8 @@ model Organization {
   
   members     OrganizationMember[]
   teams       Team[]
-  
+  inviteTokens OrganizationInviteToken[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -70,6 +84,22 @@ enum OrgRole {
   OWNER
   ADMIN
   MEMBER
+}
+
+model OrganizationInviteToken {
+  id              String    @id @default(cuid())
+  organizationId  String
+  token           String    @unique @default(cuid())
+  createdByUserId String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  usedByUserId    String?
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt       DateTime  @default(now())
+
+  @@index([token])
 }
 
 model Team {

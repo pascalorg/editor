@@ -19,6 +19,11 @@ export type PrismaPromise<T> = $Public.PrismaPromise<T>
  */
 export type User = $Result.DefaultSelection<Prisma.$UserPayload>
 /**
+ * Model OnboardingProgress
+ * 
+ */
+export type OnboardingProgress = $Result.DefaultSelection<Prisma.$OnboardingProgressPayload>
+/**
  * Model Organization
  * 
  */
@@ -28,6 +33,11 @@ export type Organization = $Result.DefaultSelection<Prisma.$OrganizationPayload>
  * 
  */
 export type OrganizationMember = $Result.DefaultSelection<Prisma.$OrganizationMemberPayload>
+/**
+ * Model OrganizationInviteToken
+ * 
+ */
+export type OrganizationInviteToken = $Result.DefaultSelection<Prisma.$OrganizationInviteTokenPayload>
 /**
  * Model Team
  * 
@@ -247,6 +257,16 @@ export class PrismaClient<
   get user(): Prisma.UserDelegate<ExtArgs>;
 
   /**
+   * `prisma.onboardingProgress`: Exposes CRUD operations for the **OnboardingProgress** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more OnboardingProgresses
+    * const onboardingProgresses = await prisma.onboardingProgress.findMany()
+    * ```
+    */
+  get onboardingProgress(): Prisma.OnboardingProgressDelegate<ExtArgs>;
+
+  /**
    * `prisma.organization`: Exposes CRUD operations for the **Organization** model.
     * Example usage:
     * ```ts
@@ -265,6 +285,16 @@ export class PrismaClient<
     * ```
     */
   get organizationMember(): Prisma.OrganizationMemberDelegate<ExtArgs>;
+
+  /**
+   * `prisma.organizationInviteToken`: Exposes CRUD operations for the **OrganizationInviteToken** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more OrganizationInviteTokens
+    * const organizationInviteTokens = await prisma.organizationInviteToken.findMany()
+    * ```
+    */
+  get organizationInviteToken(): Prisma.OrganizationInviteTokenDelegate<ExtArgs>;
 
   /**
    * `prisma.team`: Exposes CRUD operations for the **Team** model.
@@ -816,8 +846,10 @@ export namespace Prisma {
 
   export const ModelName: {
     User: 'User',
+    OnboardingProgress: 'OnboardingProgress',
     Organization: 'Organization',
     OrganizationMember: 'OrganizationMember',
+    OrganizationInviteToken: 'OrganizationInviteToken',
     Team: 'Team',
     TeamMember: 'TeamMember',
     Project: 'Project',
@@ -842,7 +874,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     meta: {
-      modelProps: 'user' | 'organization' | 'organizationMember' | 'team' | 'teamMember' | 'project' | 'projectMember' | 'marketplaceAsset' | 'projectClone' | 'earlyAccessApplication' | 'passwordResetToken'
+      modelProps: 'user' | 'onboardingProgress' | 'organization' | 'organizationMember' | 'organizationInviteToken' | 'team' | 'teamMember' | 'project' | 'projectMember' | 'marketplaceAsset' | 'projectClone' | 'earlyAccessApplication' | 'passwordResetToken'
       txIsolationLevel: Prisma.TransactionIsolationLevel
     },
     model: {
@@ -909,6 +941,72 @@ export namespace Prisma {
           count: {
             args: Prisma.UserCountArgs<ExtArgs>,
             result: $Utils.Optional<UserCountAggregateOutputType> | number
+          }
+        }
+      }
+      OnboardingProgress: {
+        payload: Prisma.$OnboardingProgressPayload<ExtArgs>
+        fields: Prisma.OnboardingProgressFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.OnboardingProgressFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.OnboardingProgressFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>
+          }
+          findFirst: {
+            args: Prisma.OnboardingProgressFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.OnboardingProgressFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>
+          }
+          findMany: {
+            args: Prisma.OnboardingProgressFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>[]
+          }
+          create: {
+            args: Prisma.OnboardingProgressCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>
+          }
+          createMany: {
+            args: Prisma.OnboardingProgressCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          delete: {
+            args: Prisma.OnboardingProgressDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>
+          }
+          update: {
+            args: Prisma.OnboardingProgressUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>
+          }
+          deleteMany: {
+            args: Prisma.OnboardingProgressDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.OnboardingProgressUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.OnboardingProgressUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OnboardingProgressPayload>
+          }
+          aggregate: {
+            args: Prisma.OnboardingProgressAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateOnboardingProgress>
+          }
+          groupBy: {
+            args: Prisma.OnboardingProgressGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<OnboardingProgressGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.OnboardingProgressCountArgs<ExtArgs>,
+            result: $Utils.Optional<OnboardingProgressCountAggregateOutputType> | number
           }
         }
       }
@@ -1041,6 +1139,72 @@ export namespace Prisma {
           count: {
             args: Prisma.OrganizationMemberCountArgs<ExtArgs>,
             result: $Utils.Optional<OrganizationMemberCountAggregateOutputType> | number
+          }
+        }
+      }
+      OrganizationInviteToken: {
+        payload: Prisma.$OrganizationInviteTokenPayload<ExtArgs>
+        fields: Prisma.OrganizationInviteTokenFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.OrganizationInviteTokenFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.OrganizationInviteTokenFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>
+          }
+          findFirst: {
+            args: Prisma.OrganizationInviteTokenFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.OrganizationInviteTokenFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>
+          }
+          findMany: {
+            args: Prisma.OrganizationInviteTokenFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>[]
+          }
+          create: {
+            args: Prisma.OrganizationInviteTokenCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>
+          }
+          createMany: {
+            args: Prisma.OrganizationInviteTokenCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          delete: {
+            args: Prisma.OrganizationInviteTokenDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>
+          }
+          update: {
+            args: Prisma.OrganizationInviteTokenUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>
+          }
+          deleteMany: {
+            args: Prisma.OrganizationInviteTokenDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.OrganizationInviteTokenUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.OrganizationInviteTokenUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$OrganizationInviteTokenPayload>
+          }
+          aggregate: {
+            args: Prisma.OrganizationInviteTokenAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateOrganizationInviteToken>
+          }
+          groupBy: {
+            args: Prisma.OrganizationInviteTokenGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<OrganizationInviteTokenGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.OrganizationInviteTokenCountArgs<ExtArgs>,
+            result: $Utils.Optional<OrganizationInviteTokenCountAggregateOutputType> | number
           }
         }
       }
@@ -1807,11 +1971,13 @@ export namespace Prisma {
   export type OrganizationCountOutputType = {
     members: number
     teams: number
+    inviteTokens: number
   }
 
   export type OrganizationCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     members?: boolean | OrganizationCountOutputTypeCountMembersArgs
     teams?: boolean | OrganizationCountOutputTypeCountTeamsArgs
+    inviteTokens?: boolean | OrganizationCountOutputTypeCountInviteTokensArgs
   }
 
   // Custom InputTypes
@@ -1840,6 +2006,14 @@ export namespace Prisma {
    */
   export type OrganizationCountOutputTypeCountTeamsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: TeamWhereInput
+  }
+
+
+  /**
+   * OrganizationCountOutputType without action
+   */
+  export type OrganizationCountOutputTypeCountInviteTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OrganizationInviteTokenWhereInput
   }
 
 
@@ -1978,6 +2152,7 @@ export namespace Prisma {
     image: string | null
     password: string | null
     bio: string | null
+    onboardingComplete: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1990,6 +2165,7 @@ export namespace Prisma {
     image: string | null
     password: string | null
     bio: string | null
+    onboardingComplete: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -2002,6 +2178,7 @@ export namespace Prisma {
     image: number
     password: number
     bio: number
+    onboardingComplete: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -2016,6 +2193,7 @@ export namespace Prisma {
     image?: true
     password?: true
     bio?: true
+    onboardingComplete?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -2028,6 +2206,7 @@ export namespace Prisma {
     image?: true
     password?: true
     bio?: true
+    onboardingComplete?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -2040,6 +2219,7 @@ export namespace Prisma {
     image?: true
     password?: true
     bio?: true
+    onboardingComplete?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -2125,6 +2305,7 @@ export namespace Prisma {
     image: string | null
     password: string | null
     bio: string | null
+    onboardingComplete: boolean
     createdAt: Date
     updatedAt: Date
     _count: UserCountAggregateOutputType | null
@@ -2154,8 +2335,10 @@ export namespace Prisma {
     image?: boolean
     password?: boolean
     bio?: boolean
+    onboardingComplete?: boolean
     createdAt?: boolean
     updatedAt?: boolean
+    onboardingProgress?: boolean | User$onboardingProgressArgs<ExtArgs>
     organizations?: boolean | User$organizationsArgs<ExtArgs>
     teamMemberships?: boolean | User$teamMembershipsArgs<ExtArgs>
     projectMemberships?: boolean | User$projectMembershipsArgs<ExtArgs>
@@ -2172,11 +2355,13 @@ export namespace Prisma {
     image?: boolean
     password?: boolean
     bio?: boolean
+    onboardingComplete?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    onboardingProgress?: boolean | User$onboardingProgressArgs<ExtArgs>
     organizations?: boolean | User$organizationsArgs<ExtArgs>
     teamMemberships?: boolean | User$teamMembershipsArgs<ExtArgs>
     projectMemberships?: boolean | User$projectMembershipsArgs<ExtArgs>
@@ -2189,6 +2374,7 @@ export namespace Prisma {
   export type $UserPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "User"
     objects: {
+      onboardingProgress: Prisma.$OnboardingProgressPayload<ExtArgs> | null
       organizations: Prisma.$OrganizationMemberPayload<ExtArgs>[]
       teamMemberships: Prisma.$TeamMemberPayload<ExtArgs>[]
       projectMemberships: Prisma.$ProjectMemberPayload<ExtArgs>[]
@@ -2203,6 +2389,7 @@ export namespace Prisma {
       image: string | null
       password: string | null
       bio: string | null
+      onboardingComplete: boolean
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["user"]>
@@ -2570,6 +2757,8 @@ export namespace Prisma {
   export interface Prisma__UserClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: 'PrismaPromise';
 
+    onboardingProgress<T extends User$onboardingProgressArgs<ExtArgs> = {}>(args?: Subset<T, User$onboardingProgressArgs<ExtArgs>>): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'findUniqueOrThrow'> | null, null, ExtArgs>;
+
     organizations<T extends User$organizationsArgs<ExtArgs> = {}>(args?: Subset<T, User$organizationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationMemberPayload<ExtArgs>, T, 'findMany'> | Null>;
 
     teamMemberships<T extends User$teamMembershipsArgs<ExtArgs> = {}>(args?: Subset<T, User$teamMembershipsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TeamMemberPayload<ExtArgs>, T, 'findMany'> | Null>;
@@ -2615,6 +2804,7 @@ export namespace Prisma {
     readonly image: FieldRef<"User", 'String'>
     readonly password: FieldRef<"User", 'String'>
     readonly bio: FieldRef<"User", 'String'>
+    readonly onboardingComplete: FieldRef<"User", 'Boolean'>
     readonly createdAt: FieldRef<"User", 'DateTime'>
     readonly updatedAt: FieldRef<"User", 'DateTime'>
   }
@@ -2929,6 +3119,22 @@ export namespace Prisma {
 
 
   /**
+   * User.onboardingProgress
+   */
+  export type User$onboardingProgressArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    where?: OnboardingProgressWhereInput
+  }
+
+
+  /**
    * User.organizations
    */
   export type User$organizationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -3045,6 +3251,965 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well.
      */
     include?: UserInclude<ExtArgs> | null
+  }
+
+
+
+  /**
+   * Model OnboardingProgress
+   */
+
+  export type AggregateOnboardingProgress = {
+    _count: OnboardingProgressCountAggregateOutputType | null
+    _avg: OnboardingProgressAvgAggregateOutputType | null
+    _sum: OnboardingProgressSumAggregateOutputType | null
+    _min: OnboardingProgressMinAggregateOutputType | null
+    _max: OnboardingProgressMaxAggregateOutputType | null
+  }
+
+  export type OnboardingProgressAvgAggregateOutputType = {
+    currentStep: number | null
+  }
+
+  export type OnboardingProgressSumAggregateOutputType = {
+    currentStep: number | null
+  }
+
+  export type OnboardingProgressMinAggregateOutputType = {
+    userId: string | null
+    currentStep: number | null
+    completedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type OnboardingProgressMaxAggregateOutputType = {
+    userId: string | null
+    currentStep: number | null
+    completedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type OnboardingProgressCountAggregateOutputType = {
+    userId: number
+    currentStep: number
+    selections: number
+    completedAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type OnboardingProgressAvgAggregateInputType = {
+    currentStep?: true
+  }
+
+  export type OnboardingProgressSumAggregateInputType = {
+    currentStep?: true
+  }
+
+  export type OnboardingProgressMinAggregateInputType = {
+    userId?: true
+    currentStep?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type OnboardingProgressMaxAggregateInputType = {
+    userId?: true
+    currentStep?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type OnboardingProgressCountAggregateInputType = {
+    userId?: true
+    currentStep?: true
+    selections?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type OnboardingProgressAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which OnboardingProgress to aggregate.
+     */
+    where?: OnboardingProgressWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OnboardingProgresses to fetch.
+     */
+    orderBy?: OnboardingProgressOrderByWithRelationInput | OnboardingProgressOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: OnboardingProgressWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OnboardingProgresses from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OnboardingProgresses.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned OnboardingProgresses
+    **/
+    _count?: true | OnboardingProgressCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: OnboardingProgressAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: OnboardingProgressSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: OnboardingProgressMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: OnboardingProgressMaxAggregateInputType
+  }
+
+  export type GetOnboardingProgressAggregateType<T extends OnboardingProgressAggregateArgs> = {
+        [P in keyof T & keyof AggregateOnboardingProgress]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateOnboardingProgress[P]>
+      : GetScalarType<T[P], AggregateOnboardingProgress[P]>
+  }
+
+
+
+
+  export type OnboardingProgressGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OnboardingProgressWhereInput
+    orderBy?: OnboardingProgressOrderByWithAggregationInput | OnboardingProgressOrderByWithAggregationInput[]
+    by: OnboardingProgressScalarFieldEnum[] | OnboardingProgressScalarFieldEnum
+    having?: OnboardingProgressScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: OnboardingProgressCountAggregateInputType | true
+    _avg?: OnboardingProgressAvgAggregateInputType
+    _sum?: OnboardingProgressSumAggregateInputType
+    _min?: OnboardingProgressMinAggregateInputType
+    _max?: OnboardingProgressMaxAggregateInputType
+  }
+
+  export type OnboardingProgressGroupByOutputType = {
+    userId: string
+    currentStep: number
+    selections: JsonValue
+    completedAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: OnboardingProgressCountAggregateOutputType | null
+    _avg: OnboardingProgressAvgAggregateOutputType | null
+    _sum: OnboardingProgressSumAggregateOutputType | null
+    _min: OnboardingProgressMinAggregateOutputType | null
+    _max: OnboardingProgressMaxAggregateOutputType | null
+  }
+
+  type GetOnboardingProgressGroupByPayload<T extends OnboardingProgressGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<OnboardingProgressGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof OnboardingProgressGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], OnboardingProgressGroupByOutputType[P]>
+            : GetScalarType<T[P], OnboardingProgressGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type OnboardingProgressSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    userId?: boolean
+    currentStep?: boolean
+    selections?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["onboardingProgress"]>
+
+  export type OnboardingProgressSelectScalar = {
+    userId?: boolean
+    currentStep?: boolean
+    selections?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type OnboardingProgressInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+  }
+
+
+  export type $OnboardingProgressPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "OnboardingProgress"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      userId: string
+      currentStep: number
+      selections: Prisma.JsonValue
+      completedAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["onboardingProgress"]>
+    composites: {}
+  }
+
+
+  type OnboardingProgressGetPayload<S extends boolean | null | undefined | OnboardingProgressDefaultArgs> = $Result.GetResult<Prisma.$OnboardingProgressPayload, S>
+
+  type OnboardingProgressCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<OnboardingProgressFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: OnboardingProgressCountAggregateInputType | true
+    }
+
+  export interface OnboardingProgressDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['OnboardingProgress'], meta: { name: 'OnboardingProgress' } }
+    /**
+     * Find zero or one OnboardingProgress that matches the filter.
+     * @param {OnboardingProgressFindUniqueArgs} args - Arguments to find a OnboardingProgress
+     * @example
+     * // Get one OnboardingProgress
+     * const onboardingProgress = await prisma.onboardingProgress.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends OnboardingProgressFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, OnboardingProgressFindUniqueArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one OnboardingProgress that matches the filter or throw an error  with `error.code='P2025'` 
+     *     if no matches were found.
+     * @param {OnboardingProgressFindUniqueOrThrowArgs} args - Arguments to find a OnboardingProgress
+     * @example
+     * // Get one OnboardingProgress
+     * const onboardingProgress = await prisma.onboardingProgress.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends OnboardingProgressFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, OnboardingProgressFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first OnboardingProgress that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressFindFirstArgs} args - Arguments to find a OnboardingProgress
+     * @example
+     * // Get one OnboardingProgress
+     * const onboardingProgress = await prisma.onboardingProgress.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends OnboardingProgressFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, OnboardingProgressFindFirstArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first OnboardingProgress that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressFindFirstOrThrowArgs} args - Arguments to find a OnboardingProgress
+     * @example
+     * // Get one OnboardingProgress
+     * const onboardingProgress = await prisma.onboardingProgress.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends OnboardingProgressFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, OnboardingProgressFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more OnboardingProgresses that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all OnboardingProgresses
+     * const onboardingProgresses = await prisma.onboardingProgress.findMany()
+     * 
+     * // Get first 10 OnboardingProgresses
+     * const onboardingProgresses = await prisma.onboardingProgress.findMany({ take: 10 })
+     * 
+     * // Only select the `userId`
+     * const onboardingProgressWithUserIdOnly = await prisma.onboardingProgress.findMany({ select: { userId: true } })
+     * 
+    **/
+    findMany<T extends OnboardingProgressFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, OnboardingProgressFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a OnboardingProgress.
+     * @param {OnboardingProgressCreateArgs} args - Arguments to create a OnboardingProgress.
+     * @example
+     * // Create one OnboardingProgress
+     * const OnboardingProgress = await prisma.onboardingProgress.create({
+     *   data: {
+     *     // ... data to create a OnboardingProgress
+     *   }
+     * })
+     * 
+    **/
+    create<T extends OnboardingProgressCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, OnboardingProgressCreateArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many OnboardingProgresses.
+     *     @param {OnboardingProgressCreateManyArgs} args - Arguments to create many OnboardingProgresses.
+     *     @example
+     *     // Create many OnboardingProgresses
+     *     const onboardingProgress = await prisma.onboardingProgress.createMany({
+     *       data: {
+     *         // ... provide data here
+     *       }
+     *     })
+     *     
+    **/
+    createMany<T extends OnboardingProgressCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, OnboardingProgressCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a OnboardingProgress.
+     * @param {OnboardingProgressDeleteArgs} args - Arguments to delete one OnboardingProgress.
+     * @example
+     * // Delete one OnboardingProgress
+     * const OnboardingProgress = await prisma.onboardingProgress.delete({
+     *   where: {
+     *     // ... filter to delete one OnboardingProgress
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends OnboardingProgressDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, OnboardingProgressDeleteArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one OnboardingProgress.
+     * @param {OnboardingProgressUpdateArgs} args - Arguments to update one OnboardingProgress.
+     * @example
+     * // Update one OnboardingProgress
+     * const onboardingProgress = await prisma.onboardingProgress.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends OnboardingProgressUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, OnboardingProgressUpdateArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more OnboardingProgresses.
+     * @param {OnboardingProgressDeleteManyArgs} args - Arguments to filter OnboardingProgresses to delete.
+     * @example
+     * // Delete a few OnboardingProgresses
+     * const { count } = await prisma.onboardingProgress.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends OnboardingProgressDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, OnboardingProgressDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more OnboardingProgresses.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many OnboardingProgresses
+     * const onboardingProgress = await prisma.onboardingProgress.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends OnboardingProgressUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, OnboardingProgressUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one OnboardingProgress.
+     * @param {OnboardingProgressUpsertArgs} args - Arguments to update or create a OnboardingProgress.
+     * @example
+     * // Update or create a OnboardingProgress
+     * const onboardingProgress = await prisma.onboardingProgress.upsert({
+     *   create: {
+     *     // ... data to create a OnboardingProgress
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the OnboardingProgress we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends OnboardingProgressUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, OnboardingProgressUpsertArgs<ExtArgs>>
+    ): Prisma__OnboardingProgressClient<$Result.GetResult<Prisma.$OnboardingProgressPayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of OnboardingProgresses.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressCountArgs} args - Arguments to filter OnboardingProgresses to count.
+     * @example
+     * // Count the number of OnboardingProgresses
+     * const count = await prisma.onboardingProgress.count({
+     *   where: {
+     *     // ... the filter for the OnboardingProgresses we want to count
+     *   }
+     * })
+    **/
+    count<T extends OnboardingProgressCountArgs>(
+      args?: Subset<T, OnboardingProgressCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], OnboardingProgressCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a OnboardingProgress.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends OnboardingProgressAggregateArgs>(args: Subset<T, OnboardingProgressAggregateArgs>): Prisma.PrismaPromise<GetOnboardingProgressAggregateType<T>>
+
+    /**
+     * Group by OnboardingProgress.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OnboardingProgressGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends OnboardingProgressGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: OnboardingProgressGroupByArgs['orderBy'] }
+        : { orderBy?: OnboardingProgressGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, OnboardingProgressGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetOnboardingProgressGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the OnboardingProgress model
+   */
+  readonly fields: OnboardingProgressFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for OnboardingProgress.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__OnboardingProgressClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the OnboardingProgress model
+   */ 
+  interface OnboardingProgressFieldRefs {
+    readonly userId: FieldRef<"OnboardingProgress", 'String'>
+    readonly currentStep: FieldRef<"OnboardingProgress", 'Int'>
+    readonly selections: FieldRef<"OnboardingProgress", 'Json'>
+    readonly completedAt: FieldRef<"OnboardingProgress", 'DateTime'>
+    readonly createdAt: FieldRef<"OnboardingProgress", 'DateTime'>
+    readonly updatedAt: FieldRef<"OnboardingProgress", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+
+  /**
+   * OnboardingProgress findUnique
+   */
+  export type OnboardingProgressFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * Filter, which OnboardingProgress to fetch.
+     */
+    where: OnboardingProgressWhereUniqueInput
+  }
+
+
+  /**
+   * OnboardingProgress findUniqueOrThrow
+   */
+  export type OnboardingProgressFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * Filter, which OnboardingProgress to fetch.
+     */
+    where: OnboardingProgressWhereUniqueInput
+  }
+
+
+  /**
+   * OnboardingProgress findFirst
+   */
+  export type OnboardingProgressFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * Filter, which OnboardingProgress to fetch.
+     */
+    where?: OnboardingProgressWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OnboardingProgresses to fetch.
+     */
+    orderBy?: OnboardingProgressOrderByWithRelationInput | OnboardingProgressOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for OnboardingProgresses.
+     */
+    cursor?: OnboardingProgressWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OnboardingProgresses from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OnboardingProgresses.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OnboardingProgresses.
+     */
+    distinct?: OnboardingProgressScalarFieldEnum | OnboardingProgressScalarFieldEnum[]
+  }
+
+
+  /**
+   * OnboardingProgress findFirstOrThrow
+   */
+  export type OnboardingProgressFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * Filter, which OnboardingProgress to fetch.
+     */
+    where?: OnboardingProgressWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OnboardingProgresses to fetch.
+     */
+    orderBy?: OnboardingProgressOrderByWithRelationInput | OnboardingProgressOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for OnboardingProgresses.
+     */
+    cursor?: OnboardingProgressWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OnboardingProgresses from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OnboardingProgresses.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OnboardingProgresses.
+     */
+    distinct?: OnboardingProgressScalarFieldEnum | OnboardingProgressScalarFieldEnum[]
+  }
+
+
+  /**
+   * OnboardingProgress findMany
+   */
+  export type OnboardingProgressFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * Filter, which OnboardingProgresses to fetch.
+     */
+    where?: OnboardingProgressWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OnboardingProgresses to fetch.
+     */
+    orderBy?: OnboardingProgressOrderByWithRelationInput | OnboardingProgressOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing OnboardingProgresses.
+     */
+    cursor?: OnboardingProgressWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OnboardingProgresses from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OnboardingProgresses.
+     */
+    skip?: number
+    distinct?: OnboardingProgressScalarFieldEnum | OnboardingProgressScalarFieldEnum[]
+  }
+
+
+  /**
+   * OnboardingProgress create
+   */
+  export type OnboardingProgressCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * The data needed to create a OnboardingProgress.
+     */
+    data: XOR<OnboardingProgressCreateInput, OnboardingProgressUncheckedCreateInput>
+  }
+
+
+  /**
+   * OnboardingProgress createMany
+   */
+  export type OnboardingProgressCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many OnboardingProgresses.
+     */
+    data: OnboardingProgressCreateManyInput | OnboardingProgressCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+
+  /**
+   * OnboardingProgress update
+   */
+  export type OnboardingProgressUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * The data needed to update a OnboardingProgress.
+     */
+    data: XOR<OnboardingProgressUpdateInput, OnboardingProgressUncheckedUpdateInput>
+    /**
+     * Choose, which OnboardingProgress to update.
+     */
+    where: OnboardingProgressWhereUniqueInput
+  }
+
+
+  /**
+   * OnboardingProgress updateMany
+   */
+  export type OnboardingProgressUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update OnboardingProgresses.
+     */
+    data: XOR<OnboardingProgressUpdateManyMutationInput, OnboardingProgressUncheckedUpdateManyInput>
+    /**
+     * Filter which OnboardingProgresses to update
+     */
+    where?: OnboardingProgressWhereInput
+  }
+
+
+  /**
+   * OnboardingProgress upsert
+   */
+  export type OnboardingProgressUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * The filter to search for the OnboardingProgress to update in case it exists.
+     */
+    where: OnboardingProgressWhereUniqueInput
+    /**
+     * In case the OnboardingProgress found by the `where` argument doesn't exist, create a new OnboardingProgress with this data.
+     */
+    create: XOR<OnboardingProgressCreateInput, OnboardingProgressUncheckedCreateInput>
+    /**
+     * In case the OnboardingProgress was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<OnboardingProgressUpdateInput, OnboardingProgressUncheckedUpdateInput>
+  }
+
+
+  /**
+   * OnboardingProgress delete
+   */
+  export type OnboardingProgressDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
+    /**
+     * Filter which OnboardingProgress to delete.
+     */
+    where: OnboardingProgressWhereUniqueInput
+  }
+
+
+  /**
+   * OnboardingProgress deleteMany
+   */
+  export type OnboardingProgressDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which OnboardingProgresses to delete
+     */
+    where?: OnboardingProgressWhereInput
+  }
+
+
+  /**
+   * OnboardingProgress without action
+   */
+  export type OnboardingProgressDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OnboardingProgress
+     */
+    select?: OnboardingProgressSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OnboardingProgressInclude<ExtArgs> | null
   }
 
 
@@ -3239,6 +4404,7 @@ export namespace Prisma {
     updatedAt?: boolean
     members?: boolean | Organization$membersArgs<ExtArgs>
     teams?: boolean | Organization$teamsArgs<ExtArgs>
+    inviteTokens?: boolean | Organization$inviteTokensArgs<ExtArgs>
     _count?: boolean | OrganizationCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["organization"]>
 
@@ -3256,6 +4422,7 @@ export namespace Prisma {
   export type OrganizationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     members?: boolean | Organization$membersArgs<ExtArgs>
     teams?: boolean | Organization$teamsArgs<ExtArgs>
+    inviteTokens?: boolean | Organization$inviteTokensArgs<ExtArgs>
     _count?: boolean | OrganizationCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -3265,6 +4432,7 @@ export namespace Prisma {
     objects: {
       members: Prisma.$OrganizationMemberPayload<ExtArgs>[]
       teams: Prisma.$TeamPayload<ExtArgs>[]
+      inviteTokens: Prisma.$OrganizationInviteTokenPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -3643,6 +4811,8 @@ export namespace Prisma {
     members<T extends Organization$membersArgs<ExtArgs> = {}>(args?: Subset<T, Organization$membersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationMemberPayload<ExtArgs>, T, 'findMany'> | Null>;
 
     teams<T extends Organization$teamsArgs<ExtArgs> = {}>(args?: Subset<T, Organization$teamsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TeamPayload<ExtArgs>, T, 'findMany'> | Null>;
+
+    inviteTokens<T extends Organization$inviteTokensArgs<ExtArgs> = {}>(args?: Subset<T, Organization$inviteTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'findMany'> | Null>;
 
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -4030,6 +5200,27 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: TeamScalarFieldEnum | TeamScalarFieldEnum[]
+  }
+
+
+  /**
+   * Organization.inviteTokens
+   */
+  export type Organization$inviteTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    where?: OrganizationInviteTokenWhereInput
+    orderBy?: OrganizationInviteTokenOrderByWithRelationInput | OrganizationInviteTokenOrderByWithRelationInput[]
+    cursor?: OrganizationInviteTokenWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: OrganizationInviteTokenScalarFieldEnum | OrganizationInviteTokenScalarFieldEnum[]
   }
 
 
@@ -4979,6 +6170,957 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well.
      */
     include?: OrganizationMemberInclude<ExtArgs> | null
+  }
+
+
+
+  /**
+   * Model OrganizationInviteToken
+   */
+
+  export type AggregateOrganizationInviteToken = {
+    _count: OrganizationInviteTokenCountAggregateOutputType | null
+    _min: OrganizationInviteTokenMinAggregateOutputType | null
+    _max: OrganizationInviteTokenMaxAggregateOutputType | null
+  }
+
+  export type OrganizationInviteTokenMinAggregateOutputType = {
+    id: string | null
+    organizationId: string | null
+    token: string | null
+    createdByUserId: string | null
+    expiresAt: Date | null
+    usedAt: Date | null
+    usedByUserId: string | null
+    createdAt: Date | null
+  }
+
+  export type OrganizationInviteTokenMaxAggregateOutputType = {
+    id: string | null
+    organizationId: string | null
+    token: string | null
+    createdByUserId: string | null
+    expiresAt: Date | null
+    usedAt: Date | null
+    usedByUserId: string | null
+    createdAt: Date | null
+  }
+
+  export type OrganizationInviteTokenCountAggregateOutputType = {
+    id: number
+    organizationId: number
+    token: number
+    createdByUserId: number
+    expiresAt: number
+    usedAt: number
+    usedByUserId: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type OrganizationInviteTokenMinAggregateInputType = {
+    id?: true
+    organizationId?: true
+    token?: true
+    createdByUserId?: true
+    expiresAt?: true
+    usedAt?: true
+    usedByUserId?: true
+    createdAt?: true
+  }
+
+  export type OrganizationInviteTokenMaxAggregateInputType = {
+    id?: true
+    organizationId?: true
+    token?: true
+    createdByUserId?: true
+    expiresAt?: true
+    usedAt?: true
+    usedByUserId?: true
+    createdAt?: true
+  }
+
+  export type OrganizationInviteTokenCountAggregateInputType = {
+    id?: true
+    organizationId?: true
+    token?: true
+    createdByUserId?: true
+    expiresAt?: true
+    usedAt?: true
+    usedByUserId?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type OrganizationInviteTokenAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which OrganizationInviteToken to aggregate.
+     */
+    where?: OrganizationInviteTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrganizationInviteTokens to fetch.
+     */
+    orderBy?: OrganizationInviteTokenOrderByWithRelationInput | OrganizationInviteTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: OrganizationInviteTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrganizationInviteTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrganizationInviteTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned OrganizationInviteTokens
+    **/
+    _count?: true | OrganizationInviteTokenCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: OrganizationInviteTokenMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: OrganizationInviteTokenMaxAggregateInputType
+  }
+
+  export type GetOrganizationInviteTokenAggregateType<T extends OrganizationInviteTokenAggregateArgs> = {
+        [P in keyof T & keyof AggregateOrganizationInviteToken]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateOrganizationInviteToken[P]>
+      : GetScalarType<T[P], AggregateOrganizationInviteToken[P]>
+  }
+
+
+
+
+  export type OrganizationInviteTokenGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OrganizationInviteTokenWhereInput
+    orderBy?: OrganizationInviteTokenOrderByWithAggregationInput | OrganizationInviteTokenOrderByWithAggregationInput[]
+    by: OrganizationInviteTokenScalarFieldEnum[] | OrganizationInviteTokenScalarFieldEnum
+    having?: OrganizationInviteTokenScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: OrganizationInviteTokenCountAggregateInputType | true
+    _min?: OrganizationInviteTokenMinAggregateInputType
+    _max?: OrganizationInviteTokenMaxAggregateInputType
+  }
+
+  export type OrganizationInviteTokenGroupByOutputType = {
+    id: string
+    organizationId: string
+    token: string
+    createdByUserId: string
+    expiresAt: Date
+    usedAt: Date | null
+    usedByUserId: string | null
+    createdAt: Date
+    _count: OrganizationInviteTokenCountAggregateOutputType | null
+    _min: OrganizationInviteTokenMinAggregateOutputType | null
+    _max: OrganizationInviteTokenMaxAggregateOutputType | null
+  }
+
+  type GetOrganizationInviteTokenGroupByPayload<T extends OrganizationInviteTokenGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<OrganizationInviteTokenGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof OrganizationInviteTokenGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], OrganizationInviteTokenGroupByOutputType[P]>
+            : GetScalarType<T[P], OrganizationInviteTokenGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type OrganizationInviteTokenSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    organizationId?: boolean
+    token?: boolean
+    createdByUserId?: boolean
+    expiresAt?: boolean
+    usedAt?: boolean
+    usedByUserId?: boolean
+    createdAt?: boolean
+    organization?: boolean | OrganizationDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["organizationInviteToken"]>
+
+  export type OrganizationInviteTokenSelectScalar = {
+    id?: boolean
+    organizationId?: boolean
+    token?: boolean
+    createdByUserId?: boolean
+    expiresAt?: boolean
+    usedAt?: boolean
+    usedByUserId?: boolean
+    createdAt?: boolean
+  }
+
+  export type OrganizationInviteTokenInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    organization?: boolean | OrganizationDefaultArgs<ExtArgs>
+  }
+
+
+  export type $OrganizationInviteTokenPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "OrganizationInviteToken"
+    objects: {
+      organization: Prisma.$OrganizationPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      organizationId: string
+      token: string
+      createdByUserId: string
+      expiresAt: Date
+      usedAt: Date | null
+      usedByUserId: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["organizationInviteToken"]>
+    composites: {}
+  }
+
+
+  type OrganizationInviteTokenGetPayload<S extends boolean | null | undefined | OrganizationInviteTokenDefaultArgs> = $Result.GetResult<Prisma.$OrganizationInviteTokenPayload, S>
+
+  type OrganizationInviteTokenCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<OrganizationInviteTokenFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: OrganizationInviteTokenCountAggregateInputType | true
+    }
+
+  export interface OrganizationInviteTokenDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['OrganizationInviteToken'], meta: { name: 'OrganizationInviteToken' } }
+    /**
+     * Find zero or one OrganizationInviteToken that matches the filter.
+     * @param {OrganizationInviteTokenFindUniqueArgs} args - Arguments to find a OrganizationInviteToken
+     * @example
+     * // Get one OrganizationInviteToken
+     * const organizationInviteToken = await prisma.organizationInviteToken.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends OrganizationInviteTokenFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, OrganizationInviteTokenFindUniqueArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one OrganizationInviteToken that matches the filter or throw an error  with `error.code='P2025'` 
+     *     if no matches were found.
+     * @param {OrganizationInviteTokenFindUniqueOrThrowArgs} args - Arguments to find a OrganizationInviteToken
+     * @example
+     * // Get one OrganizationInviteToken
+     * const organizationInviteToken = await prisma.organizationInviteToken.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends OrganizationInviteTokenFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, OrganizationInviteTokenFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first OrganizationInviteToken that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenFindFirstArgs} args - Arguments to find a OrganizationInviteToken
+     * @example
+     * // Get one OrganizationInviteToken
+     * const organizationInviteToken = await prisma.organizationInviteToken.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends OrganizationInviteTokenFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, OrganizationInviteTokenFindFirstArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first OrganizationInviteToken that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenFindFirstOrThrowArgs} args - Arguments to find a OrganizationInviteToken
+     * @example
+     * // Get one OrganizationInviteToken
+     * const organizationInviteToken = await prisma.organizationInviteToken.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends OrganizationInviteTokenFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, OrganizationInviteTokenFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more OrganizationInviteTokens that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all OrganizationInviteTokens
+     * const organizationInviteTokens = await prisma.organizationInviteToken.findMany()
+     * 
+     * // Get first 10 OrganizationInviteTokens
+     * const organizationInviteTokens = await prisma.organizationInviteToken.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const organizationInviteTokenWithIdOnly = await prisma.organizationInviteToken.findMany({ select: { id: true } })
+     * 
+    **/
+    findMany<T extends OrganizationInviteTokenFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, OrganizationInviteTokenFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a OrganizationInviteToken.
+     * @param {OrganizationInviteTokenCreateArgs} args - Arguments to create a OrganizationInviteToken.
+     * @example
+     * // Create one OrganizationInviteToken
+     * const OrganizationInviteToken = await prisma.organizationInviteToken.create({
+     *   data: {
+     *     // ... data to create a OrganizationInviteToken
+     *   }
+     * })
+     * 
+    **/
+    create<T extends OrganizationInviteTokenCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, OrganizationInviteTokenCreateArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many OrganizationInviteTokens.
+     *     @param {OrganizationInviteTokenCreateManyArgs} args - Arguments to create many OrganizationInviteTokens.
+     *     @example
+     *     // Create many OrganizationInviteTokens
+     *     const organizationInviteToken = await prisma.organizationInviteToken.createMany({
+     *       data: {
+     *         // ... provide data here
+     *       }
+     *     })
+     *     
+    **/
+    createMany<T extends OrganizationInviteTokenCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, OrganizationInviteTokenCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a OrganizationInviteToken.
+     * @param {OrganizationInviteTokenDeleteArgs} args - Arguments to delete one OrganizationInviteToken.
+     * @example
+     * // Delete one OrganizationInviteToken
+     * const OrganizationInviteToken = await prisma.organizationInviteToken.delete({
+     *   where: {
+     *     // ... filter to delete one OrganizationInviteToken
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends OrganizationInviteTokenDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, OrganizationInviteTokenDeleteArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one OrganizationInviteToken.
+     * @param {OrganizationInviteTokenUpdateArgs} args - Arguments to update one OrganizationInviteToken.
+     * @example
+     * // Update one OrganizationInviteToken
+     * const organizationInviteToken = await prisma.organizationInviteToken.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends OrganizationInviteTokenUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, OrganizationInviteTokenUpdateArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more OrganizationInviteTokens.
+     * @param {OrganizationInviteTokenDeleteManyArgs} args - Arguments to filter OrganizationInviteTokens to delete.
+     * @example
+     * // Delete a few OrganizationInviteTokens
+     * const { count } = await prisma.organizationInviteToken.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends OrganizationInviteTokenDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, OrganizationInviteTokenDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more OrganizationInviteTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many OrganizationInviteTokens
+     * const organizationInviteToken = await prisma.organizationInviteToken.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends OrganizationInviteTokenUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, OrganizationInviteTokenUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one OrganizationInviteToken.
+     * @param {OrganizationInviteTokenUpsertArgs} args - Arguments to update or create a OrganizationInviteToken.
+     * @example
+     * // Update or create a OrganizationInviteToken
+     * const organizationInviteToken = await prisma.organizationInviteToken.upsert({
+     *   create: {
+     *     // ... data to create a OrganizationInviteToken
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the OrganizationInviteToken we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends OrganizationInviteTokenUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, OrganizationInviteTokenUpsertArgs<ExtArgs>>
+    ): Prisma__OrganizationInviteTokenClient<$Result.GetResult<Prisma.$OrganizationInviteTokenPayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of OrganizationInviteTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenCountArgs} args - Arguments to filter OrganizationInviteTokens to count.
+     * @example
+     * // Count the number of OrganizationInviteTokens
+     * const count = await prisma.organizationInviteToken.count({
+     *   where: {
+     *     // ... the filter for the OrganizationInviteTokens we want to count
+     *   }
+     * })
+    **/
+    count<T extends OrganizationInviteTokenCountArgs>(
+      args?: Subset<T, OrganizationInviteTokenCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], OrganizationInviteTokenCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a OrganizationInviteToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends OrganizationInviteTokenAggregateArgs>(args: Subset<T, OrganizationInviteTokenAggregateArgs>): Prisma.PrismaPromise<GetOrganizationInviteTokenAggregateType<T>>
+
+    /**
+     * Group by OrganizationInviteToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrganizationInviteTokenGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends OrganizationInviteTokenGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: OrganizationInviteTokenGroupByArgs['orderBy'] }
+        : { orderBy?: OrganizationInviteTokenGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, OrganizationInviteTokenGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetOrganizationInviteTokenGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the OrganizationInviteToken model
+   */
+  readonly fields: OrganizationInviteTokenFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for OrganizationInviteToken.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__OrganizationInviteTokenClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    organization<T extends OrganizationDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrganizationDefaultArgs<ExtArgs>>): Prisma__OrganizationClient<$Result.GetResult<Prisma.$OrganizationPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the OrganizationInviteToken model
+   */ 
+  interface OrganizationInviteTokenFieldRefs {
+    readonly id: FieldRef<"OrganizationInviteToken", 'String'>
+    readonly organizationId: FieldRef<"OrganizationInviteToken", 'String'>
+    readonly token: FieldRef<"OrganizationInviteToken", 'String'>
+    readonly createdByUserId: FieldRef<"OrganizationInviteToken", 'String'>
+    readonly expiresAt: FieldRef<"OrganizationInviteToken", 'DateTime'>
+    readonly usedAt: FieldRef<"OrganizationInviteToken", 'DateTime'>
+    readonly usedByUserId: FieldRef<"OrganizationInviteToken", 'String'>
+    readonly createdAt: FieldRef<"OrganizationInviteToken", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+
+  /**
+   * OrganizationInviteToken findUnique
+   */
+  export type OrganizationInviteTokenFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which OrganizationInviteToken to fetch.
+     */
+    where: OrganizationInviteTokenWhereUniqueInput
+  }
+
+
+  /**
+   * OrganizationInviteToken findUniqueOrThrow
+   */
+  export type OrganizationInviteTokenFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which OrganizationInviteToken to fetch.
+     */
+    where: OrganizationInviteTokenWhereUniqueInput
+  }
+
+
+  /**
+   * OrganizationInviteToken findFirst
+   */
+  export type OrganizationInviteTokenFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which OrganizationInviteToken to fetch.
+     */
+    where?: OrganizationInviteTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrganizationInviteTokens to fetch.
+     */
+    orderBy?: OrganizationInviteTokenOrderByWithRelationInput | OrganizationInviteTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for OrganizationInviteTokens.
+     */
+    cursor?: OrganizationInviteTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrganizationInviteTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrganizationInviteTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OrganizationInviteTokens.
+     */
+    distinct?: OrganizationInviteTokenScalarFieldEnum | OrganizationInviteTokenScalarFieldEnum[]
+  }
+
+
+  /**
+   * OrganizationInviteToken findFirstOrThrow
+   */
+  export type OrganizationInviteTokenFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which OrganizationInviteToken to fetch.
+     */
+    where?: OrganizationInviteTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrganizationInviteTokens to fetch.
+     */
+    orderBy?: OrganizationInviteTokenOrderByWithRelationInput | OrganizationInviteTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for OrganizationInviteTokens.
+     */
+    cursor?: OrganizationInviteTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrganizationInviteTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrganizationInviteTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OrganizationInviteTokens.
+     */
+    distinct?: OrganizationInviteTokenScalarFieldEnum | OrganizationInviteTokenScalarFieldEnum[]
+  }
+
+
+  /**
+   * OrganizationInviteToken findMany
+   */
+  export type OrganizationInviteTokenFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which OrganizationInviteTokens to fetch.
+     */
+    where?: OrganizationInviteTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrganizationInviteTokens to fetch.
+     */
+    orderBy?: OrganizationInviteTokenOrderByWithRelationInput | OrganizationInviteTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing OrganizationInviteTokens.
+     */
+    cursor?: OrganizationInviteTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrganizationInviteTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrganizationInviteTokens.
+     */
+    skip?: number
+    distinct?: OrganizationInviteTokenScalarFieldEnum | OrganizationInviteTokenScalarFieldEnum[]
+  }
+
+
+  /**
+   * OrganizationInviteToken create
+   */
+  export type OrganizationInviteTokenCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to create a OrganizationInviteToken.
+     */
+    data: XOR<OrganizationInviteTokenCreateInput, OrganizationInviteTokenUncheckedCreateInput>
+  }
+
+
+  /**
+   * OrganizationInviteToken createMany
+   */
+  export type OrganizationInviteTokenCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many OrganizationInviteTokens.
+     */
+    data: OrganizationInviteTokenCreateManyInput | OrganizationInviteTokenCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+
+  /**
+   * OrganizationInviteToken update
+   */
+  export type OrganizationInviteTokenUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to update a OrganizationInviteToken.
+     */
+    data: XOR<OrganizationInviteTokenUpdateInput, OrganizationInviteTokenUncheckedUpdateInput>
+    /**
+     * Choose, which OrganizationInviteToken to update.
+     */
+    where: OrganizationInviteTokenWhereUniqueInput
+  }
+
+
+  /**
+   * OrganizationInviteToken updateMany
+   */
+  export type OrganizationInviteTokenUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update OrganizationInviteTokens.
+     */
+    data: XOR<OrganizationInviteTokenUpdateManyMutationInput, OrganizationInviteTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which OrganizationInviteTokens to update
+     */
+    where?: OrganizationInviteTokenWhereInput
+  }
+
+
+  /**
+   * OrganizationInviteToken upsert
+   */
+  export type OrganizationInviteTokenUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * The filter to search for the OrganizationInviteToken to update in case it exists.
+     */
+    where: OrganizationInviteTokenWhereUniqueInput
+    /**
+     * In case the OrganizationInviteToken found by the `where` argument doesn't exist, create a new OrganizationInviteToken with this data.
+     */
+    create: XOR<OrganizationInviteTokenCreateInput, OrganizationInviteTokenUncheckedCreateInput>
+    /**
+     * In case the OrganizationInviteToken was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<OrganizationInviteTokenUpdateInput, OrganizationInviteTokenUncheckedUpdateInput>
+  }
+
+
+  /**
+   * OrganizationInviteToken delete
+   */
+  export type OrganizationInviteTokenDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
+    /**
+     * Filter which OrganizationInviteToken to delete.
+     */
+    where: OrganizationInviteTokenWhereUniqueInput
+  }
+
+
+  /**
+   * OrganizationInviteToken deleteMany
+   */
+  export type OrganizationInviteTokenDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which OrganizationInviteTokens to delete
+     */
+    where?: OrganizationInviteTokenWhereInput
+  }
+
+
+  /**
+   * OrganizationInviteToken without action
+   */
+  export type OrganizationInviteTokenDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrganizationInviteToken
+     */
+    select?: OrganizationInviteTokenSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well.
+     */
+    include?: OrganizationInviteTokenInclude<ExtArgs> | null
   }
 
 
@@ -12681,11 +14823,24 @@ export namespace Prisma {
     image: 'image',
     password: 'password',
     bio: 'bio',
+    onboardingComplete: 'onboardingComplete',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
 
   export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
+
+
+  export const OnboardingProgressScalarFieldEnum: {
+    userId: 'userId',
+    currentStep: 'currentStep',
+    selections: 'selections',
+    completedAt: 'completedAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type OnboardingProgressScalarFieldEnum = (typeof OnboardingProgressScalarFieldEnum)[keyof typeof OnboardingProgressScalarFieldEnum]
 
 
   export const OrganizationScalarFieldEnum: {
@@ -12712,6 +14867,20 @@ export namespace Prisma {
   };
 
   export type OrganizationMemberScalarFieldEnum = (typeof OrganizationMemberScalarFieldEnum)[keyof typeof OrganizationMemberScalarFieldEnum]
+
+
+  export const OrganizationInviteTokenScalarFieldEnum: {
+    id: 'id',
+    organizationId: 'organizationId',
+    token: 'token',
+    createdByUserId: 'createdByUserId',
+    expiresAt: 'expiresAt',
+    usedAt: 'usedAt',
+    usedByUserId: 'usedByUserId',
+    createdAt: 'createdAt'
+  };
+
+  export type OrganizationInviteTokenScalarFieldEnum = (typeof OrganizationInviteTokenScalarFieldEnum)[keyof typeof OrganizationInviteTokenScalarFieldEnum]
 
 
   export const TeamScalarFieldEnum: {
@@ -12827,6 +14996,13 @@ export namespace Prisma {
   export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+  export const JsonNullValueInput: {
+    JsonNull: typeof JsonNull
+  };
+
+  export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
   export const QueryMode: {
     default: 'default',
     insensitive: 'insensitive'
@@ -12841,6 +15017,15 @@ export namespace Prisma {
   };
 
   export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+  export const JsonNullValueFilter: {
+    DbNull: typeof DbNull,
+    JsonNull: typeof JsonNull,
+    AnyNull: typeof AnyNull
+  };
+
+  export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 
 
   /**
@@ -12877,6 +15062,34 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Boolean'
+   */
+  export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+  /**
+   * Reference to a field of type 'Int'
+   */
+  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+  /**
+   * Reference to a field of type 'Int[]'
+   */
+  export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'Json'
+   */
+  export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+  /**
    * Reference to a field of type 'OrgStatus'
    */
   export type EnumOrgStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OrgStatus'>
@@ -12905,13 +15118,6 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'Boolean'
-   */
-  export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
-    
-
-
-  /**
    * Reference to a field of type 'ProjectRole'
    */
   export type EnumProjectRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectRole'>
@@ -12922,20 +15128,6 @@ export namespace Prisma {
    * Reference to a field of type 'ProjectRole[]'
    */
   export type ListEnumProjectRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProjectRole[]'>
-    
-
-
-  /**
-   * Reference to a field of type 'Int'
-   */
-  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
-    
-
-
-  /**
-   * Reference to a field of type 'Int[]'
-   */
-  export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
     
 
 
@@ -12967,8 +15159,10 @@ export namespace Prisma {
     image?: StringNullableFilter<"User"> | string | null
     password?: StringNullableFilter<"User"> | string | null
     bio?: StringNullableFilter<"User"> | string | null
+    onboardingComplete?: BoolFilter<"User"> | boolean
     createdAt?: DateTimeFilter<"User"> | Date | string
     updatedAt?: DateTimeFilter<"User"> | Date | string
+    onboardingProgress?: XOR<OnboardingProgressNullableRelationFilter, OnboardingProgressWhereInput> | null
     organizations?: OrganizationMemberListRelationFilter
     teamMemberships?: TeamMemberListRelationFilter
     projectMemberships?: ProjectMemberListRelationFilter
@@ -12984,8 +15178,10 @@ export namespace Prisma {
     image?: SortOrderInput | SortOrder
     password?: SortOrderInput | SortOrder
     bio?: SortOrderInput | SortOrder
+    onboardingComplete?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    onboardingProgress?: OnboardingProgressOrderByWithRelationInput
     organizations?: OrganizationMemberOrderByRelationAggregateInput
     teamMemberships?: TeamMemberOrderByRelationAggregateInput
     projectMemberships?: ProjectMemberOrderByRelationAggregateInput
@@ -13004,8 +15200,10 @@ export namespace Prisma {
     image?: StringNullableFilter<"User"> | string | null
     password?: StringNullableFilter<"User"> | string | null
     bio?: StringNullableFilter<"User"> | string | null
+    onboardingComplete?: BoolFilter<"User"> | boolean
     createdAt?: DateTimeFilter<"User"> | Date | string
     updatedAt?: DateTimeFilter<"User"> | Date | string
+    onboardingProgress?: XOR<OnboardingProgressNullableRelationFilter, OnboardingProgressWhereInput> | null
     organizations?: OrganizationMemberListRelationFilter
     teamMemberships?: TeamMemberListRelationFilter
     projectMemberships?: ProjectMemberListRelationFilter
@@ -13021,6 +15219,7 @@ export namespace Prisma {
     image?: SortOrderInput | SortOrder
     password?: SortOrderInput | SortOrder
     bio?: SortOrderInput | SortOrder
+    onboardingComplete?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: UserCountOrderByAggregateInput
@@ -13039,8 +15238,71 @@ export namespace Prisma {
     image?: StringNullableWithAggregatesFilter<"User"> | string | null
     password?: StringNullableWithAggregatesFilter<"User"> | string | null
     bio?: StringNullableWithAggregatesFilter<"User"> | string | null
+    onboardingComplete?: BoolWithAggregatesFilter<"User"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
+  }
+
+  export type OnboardingProgressWhereInput = {
+    AND?: OnboardingProgressWhereInput | OnboardingProgressWhereInput[]
+    OR?: OnboardingProgressWhereInput[]
+    NOT?: OnboardingProgressWhereInput | OnboardingProgressWhereInput[]
+    userId?: StringFilter<"OnboardingProgress"> | string
+    currentStep?: IntFilter<"OnboardingProgress"> | number
+    selections?: JsonFilter<"OnboardingProgress">
+    completedAt?: DateTimeNullableFilter<"OnboardingProgress"> | Date | string | null
+    createdAt?: DateTimeFilter<"OnboardingProgress"> | Date | string
+    updatedAt?: DateTimeFilter<"OnboardingProgress"> | Date | string
+    user?: XOR<UserRelationFilter, UserWhereInput>
+  }
+
+  export type OnboardingProgressOrderByWithRelationInput = {
+    userId?: SortOrder
+    currentStep?: SortOrder
+    selections?: SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    user?: UserOrderByWithRelationInput
+  }
+
+  export type OnboardingProgressWhereUniqueInput = Prisma.AtLeast<{
+    userId?: string
+    AND?: OnboardingProgressWhereInput | OnboardingProgressWhereInput[]
+    OR?: OnboardingProgressWhereInput[]
+    NOT?: OnboardingProgressWhereInput | OnboardingProgressWhereInput[]
+    currentStep?: IntFilter<"OnboardingProgress"> | number
+    selections?: JsonFilter<"OnboardingProgress">
+    completedAt?: DateTimeNullableFilter<"OnboardingProgress"> | Date | string | null
+    createdAt?: DateTimeFilter<"OnboardingProgress"> | Date | string
+    updatedAt?: DateTimeFilter<"OnboardingProgress"> | Date | string
+    user?: XOR<UserRelationFilter, UserWhereInput>
+  }, "userId">
+
+  export type OnboardingProgressOrderByWithAggregationInput = {
+    userId?: SortOrder
+    currentStep?: SortOrder
+    selections?: SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: OnboardingProgressCountOrderByAggregateInput
+    _avg?: OnboardingProgressAvgOrderByAggregateInput
+    _max?: OnboardingProgressMaxOrderByAggregateInput
+    _min?: OnboardingProgressMinOrderByAggregateInput
+    _sum?: OnboardingProgressSumOrderByAggregateInput
+  }
+
+  export type OnboardingProgressScalarWhereWithAggregatesInput = {
+    AND?: OnboardingProgressScalarWhereWithAggregatesInput | OnboardingProgressScalarWhereWithAggregatesInput[]
+    OR?: OnboardingProgressScalarWhereWithAggregatesInput[]
+    NOT?: OnboardingProgressScalarWhereWithAggregatesInput | OnboardingProgressScalarWhereWithAggregatesInput[]
+    userId?: StringWithAggregatesFilter<"OnboardingProgress"> | string
+    currentStep?: IntWithAggregatesFilter<"OnboardingProgress"> | number
+    selections?: JsonWithAggregatesFilter<"OnboardingProgress">
+    completedAt?: DateTimeNullableWithAggregatesFilter<"OnboardingProgress"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"OnboardingProgress"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"OnboardingProgress"> | Date | string
   }
 
   export type OrganizationWhereInput = {
@@ -13057,6 +15319,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Organization"> | Date | string
     members?: OrganizationMemberListRelationFilter
     teams?: TeamListRelationFilter
+    inviteTokens?: OrganizationInviteTokenListRelationFilter
   }
 
   export type OrganizationOrderByWithRelationInput = {
@@ -13070,6 +15333,7 @@ export namespace Prisma {
     updatedAt?: SortOrder
     members?: OrganizationMemberOrderByRelationAggregateInput
     teams?: TeamOrderByRelationAggregateInput
+    inviteTokens?: OrganizationInviteTokenOrderByRelationAggregateInput
   }
 
   export type OrganizationWhereUniqueInput = Prisma.AtLeast<{
@@ -13086,6 +15350,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Organization"> | Date | string
     members?: OrganizationMemberListRelationFilter
     teams?: TeamListRelationFilter
+    inviteTokens?: OrganizationInviteTokenListRelationFilter
   }, "id" | "slug" | "domain">
 
   export type OrganizationOrderByWithAggregationInput = {
@@ -13178,6 +15443,76 @@ export namespace Prisma {
     role?: EnumOrgRoleWithAggregatesFilter<"OrganizationMember"> | $Enums.OrgRole
     createdAt?: DateTimeWithAggregatesFilter<"OrganizationMember"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"OrganizationMember"> | Date | string
+  }
+
+  export type OrganizationInviteTokenWhereInput = {
+    AND?: OrganizationInviteTokenWhereInput | OrganizationInviteTokenWhereInput[]
+    OR?: OrganizationInviteTokenWhereInput[]
+    NOT?: OrganizationInviteTokenWhereInput | OrganizationInviteTokenWhereInput[]
+    id?: StringFilter<"OrganizationInviteToken"> | string
+    organizationId?: StringFilter<"OrganizationInviteToken"> | string
+    token?: StringFilter<"OrganizationInviteToken"> | string
+    createdByUserId?: StringFilter<"OrganizationInviteToken"> | string
+    expiresAt?: DateTimeFilter<"OrganizationInviteToken"> | Date | string
+    usedAt?: DateTimeNullableFilter<"OrganizationInviteToken"> | Date | string | null
+    usedByUserId?: StringNullableFilter<"OrganizationInviteToken"> | string | null
+    createdAt?: DateTimeFilter<"OrganizationInviteToken"> | Date | string
+    organization?: XOR<OrganizationRelationFilter, OrganizationWhereInput>
+  }
+
+  export type OrganizationInviteTokenOrderByWithRelationInput = {
+    id?: SortOrder
+    organizationId?: SortOrder
+    token?: SortOrder
+    createdByUserId?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrderInput | SortOrder
+    usedByUserId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    organization?: OrganizationOrderByWithRelationInput
+  }
+
+  export type OrganizationInviteTokenWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    token?: string
+    AND?: OrganizationInviteTokenWhereInput | OrganizationInviteTokenWhereInput[]
+    OR?: OrganizationInviteTokenWhereInput[]
+    NOT?: OrganizationInviteTokenWhereInput | OrganizationInviteTokenWhereInput[]
+    organizationId?: StringFilter<"OrganizationInviteToken"> | string
+    createdByUserId?: StringFilter<"OrganizationInviteToken"> | string
+    expiresAt?: DateTimeFilter<"OrganizationInviteToken"> | Date | string
+    usedAt?: DateTimeNullableFilter<"OrganizationInviteToken"> | Date | string | null
+    usedByUserId?: StringNullableFilter<"OrganizationInviteToken"> | string | null
+    createdAt?: DateTimeFilter<"OrganizationInviteToken"> | Date | string
+    organization?: XOR<OrganizationRelationFilter, OrganizationWhereInput>
+  }, "id" | "token">
+
+  export type OrganizationInviteTokenOrderByWithAggregationInput = {
+    id?: SortOrder
+    organizationId?: SortOrder
+    token?: SortOrder
+    createdByUserId?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrderInput | SortOrder
+    usedByUserId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: OrganizationInviteTokenCountOrderByAggregateInput
+    _max?: OrganizationInviteTokenMaxOrderByAggregateInput
+    _min?: OrganizationInviteTokenMinOrderByAggregateInput
+  }
+
+  export type OrganizationInviteTokenScalarWhereWithAggregatesInput = {
+    AND?: OrganizationInviteTokenScalarWhereWithAggregatesInput | OrganizationInviteTokenScalarWhereWithAggregatesInput[]
+    OR?: OrganizationInviteTokenScalarWhereWithAggregatesInput[]
+    NOT?: OrganizationInviteTokenScalarWhereWithAggregatesInput | OrganizationInviteTokenScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"OrganizationInviteToken"> | string
+    organizationId?: StringWithAggregatesFilter<"OrganizationInviteToken"> | string
+    token?: StringWithAggregatesFilter<"OrganizationInviteToken"> | string
+    createdByUserId?: StringWithAggregatesFilter<"OrganizationInviteToken"> | string
+    expiresAt?: DateTimeWithAggregatesFilter<"OrganizationInviteToken"> | Date | string
+    usedAt?: DateTimeNullableWithAggregatesFilter<"OrganizationInviteToken"> | Date | string | null
+    usedByUserId?: StringNullableWithAggregatesFilter<"OrganizationInviteToken"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"OrganizationInviteToken"> | Date | string
   }
 
   export type TeamWhereInput = {
@@ -13746,8 +16081,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
@@ -13763,8 +16100,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
@@ -13780,8 +16119,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
@@ -13797,8 +16138,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
@@ -13814,6 +16157,7 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -13826,6 +16170,7 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -13838,6 +16183,69 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OnboardingProgressCreateInput = {
+    currentStep?: number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    user: UserCreateNestedOneWithoutOnboardingProgressInput
+  }
+
+  export type OnboardingProgressUncheckedCreateInput = {
+    userId: string
+    currentStep?: number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type OnboardingProgressUpdateInput = {
+    currentStep?: IntFieldUpdateOperationsInput | number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    user?: UserUpdateOneRequiredWithoutOnboardingProgressNestedInput
+  }
+
+  export type OnboardingProgressUncheckedUpdateInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    currentStep?: IntFieldUpdateOperationsInput | number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OnboardingProgressCreateManyInput = {
+    userId: string
+    currentStep?: number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type OnboardingProgressUpdateManyMutationInput = {
+    currentStep?: IntFieldUpdateOperationsInput | number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OnboardingProgressUncheckedUpdateManyInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    currentStep?: IntFieldUpdateOperationsInput | number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -13853,6 +16261,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     members?: OrganizationMemberCreateNestedManyWithoutOrganizationInput
     teams?: TeamCreateNestedManyWithoutOrganizationInput
+    inviteTokens?: OrganizationInviteTokenCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateInput = {
@@ -13866,6 +16275,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     members?: OrganizationMemberUncheckedCreateNestedManyWithoutOrganizationInput
     teams?: TeamUncheckedCreateNestedManyWithoutOrganizationInput
+    inviteTokens?: OrganizationInviteTokenUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUpdateInput = {
@@ -13879,6 +16289,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: OrganizationMemberUpdateManyWithoutOrganizationNestedInput
     teams?: TeamUpdateManyWithoutOrganizationNestedInput
+    inviteTokens?: OrganizationInviteTokenUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateInput = {
@@ -13892,6 +16303,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: OrganizationMemberUncheckedUpdateManyWithoutOrganizationNestedInput
     teams?: TeamUncheckedUpdateManyWithoutOrganizationNestedInput
+    inviteTokens?: OrganizationInviteTokenUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationCreateManyInput = {
@@ -13986,6 +16398,82 @@ export namespace Prisma {
     role?: EnumOrgRoleFieldUpdateOperationsInput | $Enums.OrgRole
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrganizationInviteTokenCreateInput = {
+    id?: string
+    token?: string
+    createdByUserId: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    usedByUserId?: string | null
+    createdAt?: Date | string
+    organization: OrganizationCreateNestedOneWithoutInviteTokensInput
+  }
+
+  export type OrganizationInviteTokenUncheckedCreateInput = {
+    id?: string
+    organizationId: string
+    token?: string
+    createdByUserId: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    usedByUserId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type OrganizationInviteTokenUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organization?: OrganizationUpdateOneRequiredWithoutInviteTokensNestedInput
+  }
+
+  export type OrganizationInviteTokenUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    organizationId?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrganizationInviteTokenCreateManyInput = {
+    id?: string
+    organizationId: string
+    token?: string
+    createdByUserId: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    usedByUserId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type OrganizationInviteTokenUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrganizationInviteTokenUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    organizationId?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type TeamCreateInput = {
@@ -14609,6 +17097,11 @@ export namespace Prisma {
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
 
+  export type BoolFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -14618,6 +17111,11 @@ export namespace Prisma {
     gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     not?: NestedDateTimeFilter<$PrismaModel> | Date | string
+  }
+
+  export type OnboardingProgressNullableRelationFilter = {
+    is?: OnboardingProgressWhereInput | null
+    isNot?: OnboardingProgressWhereInput | null
   }
 
   export type OrganizationMemberListRelationFilter = {
@@ -14683,6 +17181,7 @@ export namespace Prisma {
     image?: SortOrder
     password?: SortOrder
     bio?: SortOrder
+    onboardingComplete?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -14695,6 +17194,7 @@ export namespace Prisma {
     image?: SortOrder
     password?: SortOrder
     bio?: SortOrder
+    onboardingComplete?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -14707,6 +17207,7 @@ export namespace Prisma {
     image?: SortOrder
     password?: SortOrder
     bio?: SortOrder
+    onboardingComplete?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -14761,6 +17262,14 @@ export namespace Prisma {
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
+  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedBoolFilter<$PrismaModel>
+    _max?: NestedBoolFilter<$PrismaModel>
+  }
+
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -14773,6 +17282,118 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedDateTimeFilter<$PrismaModel>
     _max?: NestedDateTimeFilter<$PrismaModel>
+  }
+
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+  export type JsonFilter<$PrismaModel = never> = 
+    | PatchUndefined<
+        Either<Required<JsonFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<JsonFilterBase<$PrismaModel>>, 'path'>>
+
+  export type JsonFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string[]
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
+
+  export type UserRelationFilter = {
+    is?: UserWhereInput
+    isNot?: UserWhereInput
+  }
+
+  export type OnboardingProgressCountOrderByAggregateInput = {
+    userId?: SortOrder
+    currentStep?: SortOrder
+    selections?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type OnboardingProgressAvgOrderByAggregateInput = {
+    currentStep?: SortOrder
+  }
+
+  export type OnboardingProgressMaxOrderByAggregateInput = {
+    userId?: SortOrder
+    currentStep?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type OnboardingProgressMinOrderByAggregateInput = {
+    userId?: SortOrder
+    currentStep?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type OnboardingProgressSumOrderByAggregateInput = {
+    currentStep?: SortOrder
+  }
+
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+  export type JsonWithAggregatesFilter<$PrismaModel = never> = 
+    | PatchUndefined<
+        Either<Required<JsonWithAggregatesFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonWithAggregatesFilterBase<$PrismaModel>>, 'path'>>,
+        Required<JsonWithAggregatesFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<JsonWithAggregatesFilterBase<$PrismaModel>>, 'path'>>
+
+  export type JsonWithAggregatesFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string[]
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedJsonFilter<$PrismaModel>
+    _max?: NestedJsonFilter<$PrismaModel>
   }
 
   export type EnumOrgStatusFilter<$PrismaModel = never> = {
@@ -14788,7 +17409,17 @@ export namespace Prisma {
     none?: TeamWhereInput
   }
 
+  export type OrganizationInviteTokenListRelationFilter = {
+    every?: OrganizationInviteTokenWhereInput
+    some?: OrganizationInviteTokenWhereInput
+    none?: OrganizationInviteTokenWhereInput
+  }
+
   export type TeamOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type OrganizationInviteTokenOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -14847,11 +17478,6 @@ export namespace Prisma {
     isNot?: OrganizationWhereInput
   }
 
-  export type UserRelationFilter = {
-    is?: UserWhereInput
-    isNot?: UserWhereInput
-  }
-
   export type OrganizationMemberOrganizationIdUserIdCompoundUniqueInput = {
     organizationId: string
     userId: string
@@ -14892,6 +17518,39 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumOrgRoleFilter<$PrismaModel>
     _max?: NestedEnumOrgRoleFilter<$PrismaModel>
+  }
+
+  export type OrganizationInviteTokenCountOrderByAggregateInput = {
+    id?: SortOrder
+    organizationId?: SortOrder
+    token?: SortOrder
+    createdByUserId?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrder
+    usedByUserId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type OrganizationInviteTokenMaxOrderByAggregateInput = {
+    id?: SortOrder
+    organizationId?: SortOrder
+    token?: SortOrder
+    createdByUserId?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrder
+    usedByUserId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type OrganizationInviteTokenMinOrderByAggregateInput = {
+    id?: SortOrder
+    organizationId?: SortOrder
+    token?: SortOrder
+    createdByUserId?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrder
+    usedByUserId?: SortOrder
+    createdAt?: SortOrder
   }
 
   export type ProjectListRelationFilter = {
@@ -14965,11 +17624,6 @@ export namespace Prisma {
     updatedAt?: SortOrder
   }
 
-  export type BoolFilter<$PrismaModel = never> = {
-    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolFilter<$PrismaModel> | boolean
-  }
-
   export type MarketplaceAssetNullableRelationFilter = {
     is?: MarketplaceAssetWhereInput | null
     isNot?: MarketplaceAssetWhereInput | null
@@ -15014,14 +17668,6 @@ export namespace Prisma {
     isPublic?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
-  }
-
-  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedBoolFilter<$PrismaModel>
-    _max?: NestedBoolFilter<$PrismaModel>
   }
 
   export type EnumProjectRoleFilter<$PrismaModel = never> = {
@@ -15083,17 +17729,6 @@ export namespace Prisma {
     isEmpty?: boolean
   }
 
-  export type IntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type MarketplaceAssetCountOrderByAggregateInput = {
     id?: SortOrder
     projectId?: SortOrder
@@ -15140,22 +17775,6 @@ export namespace Prisma {
 
   export type MarketplaceAssetSumOrderByAggregateInput = {
     cloneCount?: SortOrder
-  }
-
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type MarketplaceAssetRelationFilter = {
@@ -15261,6 +17880,12 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
+  export type OnboardingProgressCreateNestedOneWithoutUserInput = {
+    create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
+    connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
+    connect?: OnboardingProgressWhereUniqueInput
+  }
+
   export type OrganizationMemberCreateNestedManyWithoutUserInput = {
     create?: XOR<OrganizationMemberCreateWithoutUserInput, OrganizationMemberUncheckedCreateWithoutUserInput> | OrganizationMemberCreateWithoutUserInput[] | OrganizationMemberUncheckedCreateWithoutUserInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutUserInput | OrganizationMemberCreateOrConnectWithoutUserInput[]
@@ -15294,6 +17919,12 @@ export namespace Prisma {
     connectOrCreate?: ProjectCloneCreateOrConnectWithoutClonedByInput | ProjectCloneCreateOrConnectWithoutClonedByInput[]
     createMany?: ProjectCloneCreateManyClonedByInputEnvelope
     connect?: ProjectCloneWhereUniqueInput | ProjectCloneWhereUniqueInput[]
+  }
+
+  export type OnboardingProgressUncheckedCreateNestedOneWithoutUserInput = {
+    create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
+    connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
+    connect?: OnboardingProgressWhereUniqueInput
   }
 
   export type OrganizationMemberUncheckedCreateNestedManyWithoutUserInput = {
@@ -15343,8 +17974,22 @@ export namespace Prisma {
     set?: Date | string | null
   }
 
+  export type BoolFieldUpdateOperationsInput = {
+    set?: boolean
+  }
+
   export type DateTimeFieldUpdateOperationsInput = {
     set?: Date | string
+  }
+
+  export type OnboardingProgressUpdateOneWithoutUserNestedInput = {
+    create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
+    connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
+    upsert?: OnboardingProgressUpsertWithoutUserInput
+    disconnect?: OnboardingProgressWhereInput | boolean
+    delete?: OnboardingProgressWhereInput | boolean
+    connect?: OnboardingProgressWhereUniqueInput
+    update?: XOR<XOR<OnboardingProgressUpdateToOneWithWhereWithoutUserInput, OnboardingProgressUpdateWithoutUserInput>, OnboardingProgressUncheckedUpdateWithoutUserInput>
   }
 
   export type OrganizationMemberUpdateManyWithoutUserNestedInput = {
@@ -15417,6 +18062,16 @@ export namespace Prisma {
     deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
   }
 
+  export type OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput = {
+    create?: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
+    connectOrCreate?: OnboardingProgressCreateOrConnectWithoutUserInput
+    upsert?: OnboardingProgressUpsertWithoutUserInput
+    disconnect?: OnboardingProgressWhereInput | boolean
+    delete?: OnboardingProgressWhereInput | boolean
+    connect?: OnboardingProgressWhereUniqueInput
+    update?: XOR<XOR<OnboardingProgressUpdateToOneWithWhereWithoutUserInput, OnboardingProgressUpdateWithoutUserInput>, OnboardingProgressUncheckedUpdateWithoutUserInput>
+  }
+
   export type OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<OrganizationMemberCreateWithoutUserInput, OrganizationMemberUncheckedCreateWithoutUserInput> | OrganizationMemberCreateWithoutUserInput[] | OrganizationMemberUncheckedCreateWithoutUserInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutUserInput | OrganizationMemberCreateOrConnectWithoutUserInput[]
@@ -15487,6 +18142,28 @@ export namespace Prisma {
     deleteMany?: ProjectCloneScalarWhereInput | ProjectCloneScalarWhereInput[]
   }
 
+  export type UserCreateNestedOneWithoutOnboardingProgressInput = {
+    create?: XOR<UserCreateWithoutOnboardingProgressInput, UserUncheckedCreateWithoutOnboardingProgressInput>
+    connectOrCreate?: UserCreateOrConnectWithoutOnboardingProgressInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
+  }
+
+  export type UserUpdateOneRequiredWithoutOnboardingProgressNestedInput = {
+    create?: XOR<UserCreateWithoutOnboardingProgressInput, UserUncheckedCreateWithoutOnboardingProgressInput>
+    connectOrCreate?: UserCreateOrConnectWithoutOnboardingProgressInput
+    upsert?: UserUpsertWithoutOnboardingProgressInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutOnboardingProgressInput, UserUpdateWithoutOnboardingProgressInput>, UserUncheckedUpdateWithoutOnboardingProgressInput>
+  }
+
   export type OrganizationMemberCreateNestedManyWithoutOrganizationInput = {
     create?: XOR<OrganizationMemberCreateWithoutOrganizationInput, OrganizationMemberUncheckedCreateWithoutOrganizationInput> | OrganizationMemberCreateWithoutOrganizationInput[] | OrganizationMemberUncheckedCreateWithoutOrganizationInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutOrganizationInput | OrganizationMemberCreateOrConnectWithoutOrganizationInput[]
@@ -15501,6 +18178,13 @@ export namespace Prisma {
     connect?: TeamWhereUniqueInput | TeamWhereUniqueInput[]
   }
 
+  export type OrganizationInviteTokenCreateNestedManyWithoutOrganizationInput = {
+    create?: XOR<OrganizationInviteTokenCreateWithoutOrganizationInput, OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput> | OrganizationInviteTokenCreateWithoutOrganizationInput[] | OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput | OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput[]
+    createMany?: OrganizationInviteTokenCreateManyOrganizationInputEnvelope
+    connect?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+  }
+
   export type OrganizationMemberUncheckedCreateNestedManyWithoutOrganizationInput = {
     create?: XOR<OrganizationMemberCreateWithoutOrganizationInput, OrganizationMemberUncheckedCreateWithoutOrganizationInput> | OrganizationMemberCreateWithoutOrganizationInput[] | OrganizationMemberUncheckedCreateWithoutOrganizationInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutOrganizationInput | OrganizationMemberCreateOrConnectWithoutOrganizationInput[]
@@ -15513,6 +18197,13 @@ export namespace Prisma {
     connectOrCreate?: TeamCreateOrConnectWithoutOrganizationInput | TeamCreateOrConnectWithoutOrganizationInput[]
     createMany?: TeamCreateManyOrganizationInputEnvelope
     connect?: TeamWhereUniqueInput | TeamWhereUniqueInput[]
+  }
+
+  export type OrganizationInviteTokenUncheckedCreateNestedManyWithoutOrganizationInput = {
+    create?: XOR<OrganizationInviteTokenCreateWithoutOrganizationInput, OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput> | OrganizationInviteTokenCreateWithoutOrganizationInput[] | OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput | OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput[]
+    createMany?: OrganizationInviteTokenCreateManyOrganizationInputEnvelope
+    connect?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
   }
 
   export type EnumOrgStatusFieldUpdateOperationsInput = {
@@ -15547,6 +18238,20 @@ export namespace Prisma {
     deleteMany?: TeamScalarWhereInput | TeamScalarWhereInput[]
   }
 
+  export type OrganizationInviteTokenUpdateManyWithoutOrganizationNestedInput = {
+    create?: XOR<OrganizationInviteTokenCreateWithoutOrganizationInput, OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput> | OrganizationInviteTokenCreateWithoutOrganizationInput[] | OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput | OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput[]
+    upsert?: OrganizationInviteTokenUpsertWithWhereUniqueWithoutOrganizationInput | OrganizationInviteTokenUpsertWithWhereUniqueWithoutOrganizationInput[]
+    createMany?: OrganizationInviteTokenCreateManyOrganizationInputEnvelope
+    set?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    disconnect?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    delete?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    connect?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    update?: OrganizationInviteTokenUpdateWithWhereUniqueWithoutOrganizationInput | OrganizationInviteTokenUpdateWithWhereUniqueWithoutOrganizationInput[]
+    updateMany?: OrganizationInviteTokenUpdateManyWithWhereWithoutOrganizationInput | OrganizationInviteTokenUpdateManyWithWhereWithoutOrganizationInput[]
+    deleteMany?: OrganizationInviteTokenScalarWhereInput | OrganizationInviteTokenScalarWhereInput[]
+  }
+
   export type OrganizationMemberUncheckedUpdateManyWithoutOrganizationNestedInput = {
     create?: XOR<OrganizationMemberCreateWithoutOrganizationInput, OrganizationMemberUncheckedCreateWithoutOrganizationInput> | OrganizationMemberCreateWithoutOrganizationInput[] | OrganizationMemberUncheckedCreateWithoutOrganizationInput[]
     connectOrCreate?: OrganizationMemberCreateOrConnectWithoutOrganizationInput | OrganizationMemberCreateOrConnectWithoutOrganizationInput[]
@@ -15573,6 +18278,20 @@ export namespace Prisma {
     update?: TeamUpdateWithWhereUniqueWithoutOrganizationInput | TeamUpdateWithWhereUniqueWithoutOrganizationInput[]
     updateMany?: TeamUpdateManyWithWhereWithoutOrganizationInput | TeamUpdateManyWithWhereWithoutOrganizationInput[]
     deleteMany?: TeamScalarWhereInput | TeamScalarWhereInput[]
+  }
+
+  export type OrganizationInviteTokenUncheckedUpdateManyWithoutOrganizationNestedInput = {
+    create?: XOR<OrganizationInviteTokenCreateWithoutOrganizationInput, OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput> | OrganizationInviteTokenCreateWithoutOrganizationInput[] | OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput[]
+    connectOrCreate?: OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput | OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput[]
+    upsert?: OrganizationInviteTokenUpsertWithWhereUniqueWithoutOrganizationInput | OrganizationInviteTokenUpsertWithWhereUniqueWithoutOrganizationInput[]
+    createMany?: OrganizationInviteTokenCreateManyOrganizationInputEnvelope
+    set?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    disconnect?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    delete?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    connect?: OrganizationInviteTokenWhereUniqueInput | OrganizationInviteTokenWhereUniqueInput[]
+    update?: OrganizationInviteTokenUpdateWithWhereUniqueWithoutOrganizationInput | OrganizationInviteTokenUpdateWithWhereUniqueWithoutOrganizationInput[]
+    updateMany?: OrganizationInviteTokenUpdateManyWithWhereWithoutOrganizationInput | OrganizationInviteTokenUpdateManyWithWhereWithoutOrganizationInput[]
+    deleteMany?: OrganizationInviteTokenScalarWhereInput | OrganizationInviteTokenScalarWhereInput[]
   }
 
   export type OrganizationCreateNestedOneWithoutMembersInput = {
@@ -15605,6 +18324,20 @@ export namespace Prisma {
     upsert?: UserUpsertWithoutOrganizationsInput
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutOrganizationsInput, UserUpdateWithoutOrganizationsInput>, UserUncheckedUpdateWithoutOrganizationsInput>
+  }
+
+  export type OrganizationCreateNestedOneWithoutInviteTokensInput = {
+    create?: XOR<OrganizationCreateWithoutInviteTokensInput, OrganizationUncheckedCreateWithoutInviteTokensInput>
+    connectOrCreate?: OrganizationCreateOrConnectWithoutInviteTokensInput
+    connect?: OrganizationWhereUniqueInput
+  }
+
+  export type OrganizationUpdateOneRequiredWithoutInviteTokensNestedInput = {
+    create?: XOR<OrganizationCreateWithoutInviteTokensInput, OrganizationUncheckedCreateWithoutInviteTokensInput>
+    connectOrCreate?: OrganizationCreateOrConnectWithoutInviteTokensInput
+    upsert?: OrganizationUpsertWithoutInviteTokensInput
+    connect?: OrganizationWhereUniqueInput
+    update?: XOR<XOR<OrganizationUpdateToOneWithWhereWithoutInviteTokensInput, OrganizationUpdateWithoutInviteTokensInput>, OrganizationUncheckedUpdateWithoutInviteTokensInput>
   }
 
   export type OrganizationCreateNestedOneWithoutTeamsInput = {
@@ -15777,10 +18510,6 @@ export namespace Prisma {
     connect?: ProjectCloneWhereUniqueInput
   }
 
-  export type BoolFieldUpdateOperationsInput = {
-    set?: boolean
-  }
-
   export type TeamUpdateOneRequiredWithoutProjectsNestedInput = {
     create?: XOR<TeamCreateWithoutProjectsInput, TeamUncheckedCreateWithoutProjectsInput>
     connectOrCreate?: TeamCreateOrConnectWithoutProjectsInput
@@ -15924,14 +18653,6 @@ export namespace Prisma {
     push?: string | string[]
   }
 
-  export type IntFieldUpdateOperationsInput = {
-    set?: number
-    increment?: number
-    decrement?: number
-    multiply?: number
-    divide?: number
-  }
-
   export type ProjectUpdateOneRequiredWithoutPublishedAssetNestedInput = {
     create?: XOR<ProjectCreateWithoutPublishedAssetInput, ProjectUncheckedCreateWithoutPublishedAssetInput>
     connectOrCreate?: ProjectCreateOrConnectWithoutPublishedAssetInput
@@ -16057,6 +18778,11 @@ export namespace Prisma {
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
 
+  export type NestedBoolFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
   export type NestedDateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -16138,6 +18864,14 @@ export namespace Prisma {
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
+  export type NestedBoolWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedBoolFilter<$PrismaModel>
+    _max?: NestedBoolFilter<$PrismaModel>
+  }
+
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -16150,6 +18884,55 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedDateTimeFilter<$PrismaModel>
     _max?: NestedDateTimeFilter<$PrismaModel>
+  }
+
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
+  export type NestedFloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
+  }
+  export type NestedJsonFilter<$PrismaModel = never> = 
+    | PatchUndefined<
+        Either<Required<NestedJsonFilterBase<$PrismaModel>>, Exclude<keyof Required<NestedJsonFilterBase<$PrismaModel>>, 'path'>>,
+        Required<NestedJsonFilterBase<$PrismaModel>>
+      >
+    | OptionalFlat<Omit<Required<NestedJsonFilterBase<$PrismaModel>>, 'path'>>
+
+  export type NestedJsonFilterBase<$PrismaModel = never> = {
+    equals?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+    path?: string[]
+    string_contains?: string | StringFieldRefInput<$PrismaModel>
+    string_starts_with?: string | StringFieldRefInput<$PrismaModel>
+    string_ends_with?: string | StringFieldRefInput<$PrismaModel>
+    array_contains?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_starts_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    array_ends_with?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | null
+    lt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    lte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
+    not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
   export type NestedEnumOrgStatusFilter<$PrismaModel = never> = {
@@ -16186,19 +18969,6 @@ export namespace Prisma {
     _max?: NestedEnumOrgRoleFilter<$PrismaModel>
   }
 
-  export type NestedBoolFilter<$PrismaModel = never> = {
-    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolFilter<$PrismaModel> | boolean
-  }
-
-  export type NestedBoolWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedBoolFilter<$PrismaModel>
-    _max?: NestedBoolFilter<$PrismaModel>
-  }
-
   export type NestedEnumProjectRoleFilter<$PrismaModel = never> = {
     equals?: $Enums.ProjectRole | EnumProjectRoleFieldRefInput<$PrismaModel>
     in?: $Enums.ProjectRole[] | ListEnumProjectRoleFieldRefInput<$PrismaModel>
@@ -16216,31 +18986,25 @@ export namespace Prisma {
     _max?: NestedEnumProjectRoleFilter<$PrismaModel>
   }
 
-  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
+  export type OnboardingProgressCreateWithoutUserInput = {
+    currentStep?: number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
-  export type NestedFloatFilter<$PrismaModel = never> = {
-    equals?: number | FloatFieldRefInput<$PrismaModel>
-    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    lt?: number | FloatFieldRefInput<$PrismaModel>
-    lte?: number | FloatFieldRefInput<$PrismaModel>
-    gt?: number | FloatFieldRefInput<$PrismaModel>
-    gte?: number | FloatFieldRefInput<$PrismaModel>
-    not?: NestedFloatFilter<$PrismaModel> | number
+  export type OnboardingProgressUncheckedCreateWithoutUserInput = {
+    currentStep?: number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type OnboardingProgressCreateOrConnectWithoutUserInput = {
+    where: OnboardingProgressWhereUniqueInput
+    create: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
   }
 
   export type OrganizationMemberCreateWithoutUserInput = {
@@ -16377,6 +19141,33 @@ export namespace Prisma {
   export type ProjectCloneCreateManyClonedByInputEnvelope = {
     data: ProjectCloneCreateManyClonedByInput | ProjectCloneCreateManyClonedByInput[]
     skipDuplicates?: boolean
+  }
+
+  export type OnboardingProgressUpsertWithoutUserInput = {
+    update: XOR<OnboardingProgressUpdateWithoutUserInput, OnboardingProgressUncheckedUpdateWithoutUserInput>
+    create: XOR<OnboardingProgressCreateWithoutUserInput, OnboardingProgressUncheckedCreateWithoutUserInput>
+    where?: OnboardingProgressWhereInput
+  }
+
+  export type OnboardingProgressUpdateToOneWithWhereWithoutUserInput = {
+    where?: OnboardingProgressWhereInput
+    data: XOR<OnboardingProgressUpdateWithoutUserInput, OnboardingProgressUncheckedUpdateWithoutUserInput>
+  }
+
+  export type OnboardingProgressUpdateWithoutUserInput = {
+    currentStep?: IntFieldUpdateOperationsInput | number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OnboardingProgressUncheckedUpdateWithoutUserInput = {
+    currentStep?: IntFieldUpdateOperationsInput | number
+    selections?: JsonNullValueInput | InputJsonValue
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type OrganizationMemberUpsertWithWhereUniqueWithoutUserInput = {
@@ -16521,6 +19312,94 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"ProjectClone"> | Date | string
   }
 
+  export type UserCreateWithoutOnboardingProgressInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    onboardingComplete?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserUncheckedCreateWithoutOnboardingProgressInput = {
+    id?: string
+    name?: string | null
+    email?: string | null
+    emailVerified?: Date | string | null
+    image?: string | null
+    password?: string | null
+    bio?: string | null
+    onboardingComplete?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
+    teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
+    projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
+    publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
+    clonedProjects?: ProjectCloneUncheckedCreateNestedManyWithoutClonedByInput
+  }
+
+  export type UserCreateOrConnectWithoutOnboardingProgressInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutOnboardingProgressInput, UserUncheckedCreateWithoutOnboardingProgressInput>
+  }
+
+  export type UserUpsertWithoutOnboardingProgressInput = {
+    update: XOR<UserUpdateWithoutOnboardingProgressInput, UserUncheckedUpdateWithoutOnboardingProgressInput>
+    create: XOR<UserCreateWithoutOnboardingProgressInput, UserUncheckedCreateWithoutOnboardingProgressInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutOnboardingProgressInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutOnboardingProgressInput, UserUncheckedUpdateWithoutOnboardingProgressInput>
+  }
+
+  export type UserUpdateWithoutOnboardingProgressInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutOnboardingProgressInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    image?: NullableStringFieldUpdateOperationsInput | string | null
+    password?: NullableStringFieldUpdateOperationsInput | string | null
+    bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
+    teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
+    projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
+    publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
+    clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+  }
+
   export type OrganizationMemberCreateWithoutOrganizationInput = {
     id?: string
     role?: $Enums.OrgRole
@@ -16577,6 +19456,36 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type OrganizationInviteTokenCreateWithoutOrganizationInput = {
+    id?: string
+    token?: string
+    createdByUserId: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    usedByUserId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput = {
+    id?: string
+    token?: string
+    createdByUserId: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    usedByUserId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type OrganizationInviteTokenCreateOrConnectWithoutOrganizationInput = {
+    where: OrganizationInviteTokenWhereUniqueInput
+    create: XOR<OrganizationInviteTokenCreateWithoutOrganizationInput, OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput>
+  }
+
+  export type OrganizationInviteTokenCreateManyOrganizationInputEnvelope = {
+    data: OrganizationInviteTokenCreateManyOrganizationInput | OrganizationInviteTokenCreateManyOrganizationInput[]
+    skipDuplicates?: boolean
+  }
+
   export type OrganizationMemberUpsertWithWhereUniqueWithoutOrganizationInput = {
     where: OrganizationMemberWhereUniqueInput
     update: XOR<OrganizationMemberUpdateWithoutOrganizationInput, OrganizationMemberUncheckedUpdateWithoutOrganizationInput>
@@ -16621,6 +19530,36 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Team"> | Date | string
   }
 
+  export type OrganizationInviteTokenUpsertWithWhereUniqueWithoutOrganizationInput = {
+    where: OrganizationInviteTokenWhereUniqueInput
+    update: XOR<OrganizationInviteTokenUpdateWithoutOrganizationInput, OrganizationInviteTokenUncheckedUpdateWithoutOrganizationInput>
+    create: XOR<OrganizationInviteTokenCreateWithoutOrganizationInput, OrganizationInviteTokenUncheckedCreateWithoutOrganizationInput>
+  }
+
+  export type OrganizationInviteTokenUpdateWithWhereUniqueWithoutOrganizationInput = {
+    where: OrganizationInviteTokenWhereUniqueInput
+    data: XOR<OrganizationInviteTokenUpdateWithoutOrganizationInput, OrganizationInviteTokenUncheckedUpdateWithoutOrganizationInput>
+  }
+
+  export type OrganizationInviteTokenUpdateManyWithWhereWithoutOrganizationInput = {
+    where: OrganizationInviteTokenScalarWhereInput
+    data: XOR<OrganizationInviteTokenUpdateManyMutationInput, OrganizationInviteTokenUncheckedUpdateManyWithoutOrganizationInput>
+  }
+
+  export type OrganizationInviteTokenScalarWhereInput = {
+    AND?: OrganizationInviteTokenScalarWhereInput | OrganizationInviteTokenScalarWhereInput[]
+    OR?: OrganizationInviteTokenScalarWhereInput[]
+    NOT?: OrganizationInviteTokenScalarWhereInput | OrganizationInviteTokenScalarWhereInput[]
+    id?: StringFilter<"OrganizationInviteToken"> | string
+    organizationId?: StringFilter<"OrganizationInviteToken"> | string
+    token?: StringFilter<"OrganizationInviteToken"> | string
+    createdByUserId?: StringFilter<"OrganizationInviteToken"> | string
+    expiresAt?: DateTimeFilter<"OrganizationInviteToken"> | Date | string
+    usedAt?: DateTimeNullableFilter<"OrganizationInviteToken"> | Date | string | null
+    usedByUserId?: StringNullableFilter<"OrganizationInviteToken"> | string | null
+    createdAt?: DateTimeFilter<"OrganizationInviteToken"> | Date | string
+  }
+
   export type OrganizationCreateWithoutMembersInput = {
     id?: string
     name: string
@@ -16631,6 +19570,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     teams?: TeamCreateNestedManyWithoutOrganizationInput
+    inviteTokens?: OrganizationInviteTokenCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateWithoutMembersInput = {
@@ -16643,6 +19583,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     teams?: TeamUncheckedCreateNestedManyWithoutOrganizationInput
+    inviteTokens?: OrganizationInviteTokenUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationCreateOrConnectWithoutMembersInput = {
@@ -16658,8 +19599,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
@@ -16674,8 +19617,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
@@ -16708,6 +19653,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     teams?: TeamUpdateManyWithoutOrganizationNestedInput
+    inviteTokens?: OrganizationInviteTokenUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutMembersInput = {
@@ -16720,6 +19666,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     teams?: TeamUncheckedUpdateManyWithoutOrganizationNestedInput
+    inviteTokens?: OrganizationInviteTokenUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type UserUpsertWithoutOrganizationsInput = {
@@ -16741,8 +19688,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
@@ -16757,12 +19706,82 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
     clonedProjects?: ProjectCloneUncheckedUpdateManyWithoutClonedByNestedInput
+  }
+
+  export type OrganizationCreateWithoutInviteTokensInput = {
+    id?: string
+    name: string
+    slug: string
+    domain?: string | null
+    logoUrl?: string | null
+    status?: $Enums.OrgStatus
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    members?: OrganizationMemberCreateNestedManyWithoutOrganizationInput
+    teams?: TeamCreateNestedManyWithoutOrganizationInput
+  }
+
+  export type OrganizationUncheckedCreateWithoutInviteTokensInput = {
+    id?: string
+    name: string
+    slug: string
+    domain?: string | null
+    logoUrl?: string | null
+    status?: $Enums.OrgStatus
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    members?: OrganizationMemberUncheckedCreateNestedManyWithoutOrganizationInput
+    teams?: TeamUncheckedCreateNestedManyWithoutOrganizationInput
+  }
+
+  export type OrganizationCreateOrConnectWithoutInviteTokensInput = {
+    where: OrganizationWhereUniqueInput
+    create: XOR<OrganizationCreateWithoutInviteTokensInput, OrganizationUncheckedCreateWithoutInviteTokensInput>
+  }
+
+  export type OrganizationUpsertWithoutInviteTokensInput = {
+    update: XOR<OrganizationUpdateWithoutInviteTokensInput, OrganizationUncheckedUpdateWithoutInviteTokensInput>
+    create: XOR<OrganizationCreateWithoutInviteTokensInput, OrganizationUncheckedCreateWithoutInviteTokensInput>
+    where?: OrganizationWhereInput
+  }
+
+  export type OrganizationUpdateToOneWithWhereWithoutInviteTokensInput = {
+    where?: OrganizationWhereInput
+    data: XOR<OrganizationUpdateWithoutInviteTokensInput, OrganizationUncheckedUpdateWithoutInviteTokensInput>
+  }
+
+  export type OrganizationUpdateWithoutInviteTokensInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
+    logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: OrganizationMemberUpdateManyWithoutOrganizationNestedInput
+    teams?: TeamUpdateManyWithoutOrganizationNestedInput
+  }
+
+  export type OrganizationUncheckedUpdateWithoutInviteTokensInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    domain?: NullableStringFieldUpdateOperationsInput | string | null
+    logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumOrgStatusFieldUpdateOperationsInput | $Enums.OrgStatus
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    members?: OrganizationMemberUncheckedUpdateManyWithoutOrganizationNestedInput
+    teams?: TeamUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationCreateWithoutTeamsInput = {
@@ -16775,6 +19794,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: OrganizationMemberCreateNestedManyWithoutOrganizationInput
+    inviteTokens?: OrganizationInviteTokenCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationUncheckedCreateWithoutTeamsInput = {
@@ -16787,6 +19807,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     members?: OrganizationMemberUncheckedCreateNestedManyWithoutOrganizationInput
+    inviteTokens?: OrganizationInviteTokenUncheckedCreateNestedManyWithoutOrganizationInput
   }
 
   export type OrganizationCreateOrConnectWithoutTeamsInput = {
@@ -16877,6 +19898,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: OrganizationMemberUpdateManyWithoutOrganizationNestedInput
+    inviteTokens?: OrganizationInviteTokenUpdateManyWithoutOrganizationNestedInput
   }
 
   export type OrganizationUncheckedUpdateWithoutTeamsInput = {
@@ -16889,6 +19911,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     members?: OrganizationMemberUncheckedUpdateManyWithoutOrganizationNestedInput
+    inviteTokens?: OrganizationInviteTokenUncheckedUpdateManyWithoutOrganizationNestedInput
   }
 
   export type TeamMemberUpsertWithWhereUniqueWithoutTeamInput = {
@@ -16971,8 +19994,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
@@ -16987,8 +20012,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
@@ -17050,8 +20077,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
@@ -17066,8 +20095,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
@@ -17327,8 +20358,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetCreateNestedManyWithoutAuthorInput
@@ -17343,8 +20376,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     publishedAssets?: MarketplaceAssetUncheckedCreateNestedManyWithoutAuthorInput
@@ -17414,8 +20449,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUpdateManyWithoutAuthorNestedInput
@@ -17430,8 +20467,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     publishedAssets?: MarketplaceAssetUncheckedUpdateManyWithoutAuthorNestedInput
@@ -17479,8 +20518,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
@@ -17495,8 +20536,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
@@ -17590,8 +20633,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
@@ -17606,8 +20651,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
@@ -17704,8 +20751,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberCreateNestedManyWithoutUserInput
@@ -17720,8 +20769,10 @@ export namespace Prisma {
     image?: string | null
     password?: string | null
     bio?: string | null
+    onboardingComplete?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
+    onboardingProgress?: OnboardingProgressUncheckedCreateNestedOneWithoutUserInput
     organizations?: OrganizationMemberUncheckedCreateNestedManyWithoutUserInput
     teamMemberships?: TeamMemberUncheckedCreateNestedManyWithoutUserInput
     projectMemberships?: ProjectMemberUncheckedCreateNestedManyWithoutUserInput
@@ -17830,8 +20881,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUpdateManyWithoutUserNestedInput
@@ -17846,8 +20899,10 @@ export namespace Prisma {
     image?: NullableStringFieldUpdateOperationsInput | string | null
     password?: NullableStringFieldUpdateOperationsInput | string | null
     bio?: NullableStringFieldUpdateOperationsInput | string | null
+    onboardingComplete?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    onboardingProgress?: OnboardingProgressUncheckedUpdateOneWithoutUserNestedInput
     organizations?: OrganizationMemberUncheckedUpdateManyWithoutUserNestedInput
     teamMemberships?: TeamMemberUncheckedUpdateManyWithoutUserNestedInput
     projectMemberships?: ProjectMemberUncheckedUpdateManyWithoutUserNestedInput
@@ -18040,6 +21095,16 @@ export namespace Prisma {
     updatedAt?: Date | string
   }
 
+  export type OrganizationInviteTokenCreateManyOrganizationInput = {
+    id?: string
+    token?: string
+    createdByUserId: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    usedByUserId?: string | null
+    createdAt?: Date | string
+  }
+
   export type OrganizationMemberUpdateWithoutOrganizationInput = {
     id?: StringFieldUpdateOperationsInput | string
     role?: EnumOrgRoleFieldUpdateOperationsInput | $Enums.OrgRole
@@ -18090,6 +21155,36 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrganizationInviteTokenUpdateWithoutOrganizationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrganizationInviteTokenUncheckedUpdateWithoutOrganizationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrganizationInviteTokenUncheckedUpdateManyWithoutOrganizationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    token?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    usedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type TeamMemberCreateManyTeamInput = {
@@ -18256,6 +21351,10 @@ export namespace Prisma {
      */
     export type UserArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = UserDefaultArgs<ExtArgs>
     /**
+     * @deprecated Use OnboardingProgressDefaultArgs instead
+     */
+    export type OnboardingProgressArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = OnboardingProgressDefaultArgs<ExtArgs>
+    /**
      * @deprecated Use OrganizationDefaultArgs instead
      */
     export type OrganizationArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = OrganizationDefaultArgs<ExtArgs>
@@ -18263,6 +21362,10 @@ export namespace Prisma {
      * @deprecated Use OrganizationMemberDefaultArgs instead
      */
     export type OrganizationMemberArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = OrganizationMemberDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use OrganizationInviteTokenDefaultArgs instead
+     */
+    export type OrganizationInviteTokenArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = OrganizationInviteTokenDefaultArgs<ExtArgs>
     /**
      * @deprecated Use TeamDefaultArgs instead
      */
