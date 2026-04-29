@@ -6,7 +6,6 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId, normalizeCollection } from '../schema/collections'
-import { getHomeAssistantBindingNodes } from '../schema/nodes/home-assistant-binding'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -403,21 +402,40 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
 }
 
+function getCollectionAttachmentNodeCollectionId(node: AnyNode): CollectionId | null {
+  const collectionId = (node as { collectionId?: unknown }).collectionId
+  return typeof collectionId === 'string' ? (collectionId as CollectionId) : null
+}
+
+function isCollectionAttachmentNode(node: AnyNode) {
+  return (
+    getCollectionAttachmentNodeCollectionId(node) !== null &&
+    Array.isArray((node as { resources?: unknown }).resources)
+  )
+}
+
+function getCollectionIdsReferencedByAttachmentNodes(nodes: Record<AnyNodeId, AnyNode>) {
+  const referencedCollectionIds = new Set<CollectionId>()
+
+  for (const node of Object.values(nodes)) {
+    if (!isCollectionAttachmentNode(node)) {
+      continue
+    }
+
+    const collectionId = getCollectionAttachmentNodeCollectionId(node)
+    if (collectionId) {
+      referencedCollectionIds.add(collectionId)
+    }
+  }
+
+  return referencedCollectionIds
+}
+
 function normalizeCollectionsRecord(
   collections: Record<CollectionId, Collection> | undefined,
   nodes: Record<AnyNodeId, AnyNode>,
 ) {
-  const positionedHomeAssistantCollectionIds = new Set(
-    getHomeAssistantBindingNodes(nodes)
-      .filter(
-        (bindingNode) =>
-          Boolean(
-            bindingNode.presentation?.rtsScreenPosition ||
-              bindingNode.presentation?.rtsWorldPosition,
-          ) && bindingNode.resources.some((resource) => resource.kind === 'entity'),
-      )
-      .map((bindingNode) => bindingNode.collectionId),
-  )
+  const referencedCollectionIds = getCollectionIdsReferencedByAttachmentNodes(nodes)
 
   const normalizedCollections = Object.fromEntries(
     Object.entries(collections ?? {}).flatMap(([id, collection]) => {
@@ -427,7 +445,7 @@ function normalizeCollectionsRecord(
 
       if (
         normalizedNodeIds.length === 0 &&
-        !positionedHomeAssistantCollectionIds.has(id as CollectionId)
+        !referencedCollectionIds.has(id as CollectionId)
       ) {
         return []
       }
@@ -464,7 +482,7 @@ function normalizeCollectionsRecord(
   return normalizedCollections
 }
 
-function normalizeHomeAssistantBindingNodes(
+function normalizeCollectionAttachmentNodes(
   nodes: Record<AnyNodeId, AnyNode>,
   collections: Record<CollectionId, Collection>,
   rootNodeIds: AnyNodeId[],
@@ -473,13 +491,19 @@ function normalizeHomeAssistantBindingNodes(
   const nextRootNodeIds = [...rootNodeIds]
   let changed = false
 
-  for (const bindingNode of getHomeAssistantBindingNodes(nodes)) {
-    const hasCollection = Boolean(collections[bindingNode.collectionId])
-    const hasResources = bindingNode.resources.length > 0
+  for (const node of Object.values(nodes)) {
+    if (!isCollectionAttachmentNode(node)) {
+      continue
+    }
+
+    const collectionId = getCollectionAttachmentNodeCollectionId(node)
+    const resources = (node as { resources?: unknown[] }).resources ?? []
+    const hasCollection = Boolean(collectionId && collections[collectionId])
+    const hasResources = resources.length > 0
 
     if (!(hasCollection && hasResources)) {
-      delete nextNodes[bindingNode.id]
-      const rootIndex = nextRootNodeIds.indexOf(bindingNode.id)
+      delete nextNodes[node.id]
+      const rootIndex = nextRootNodeIds.indexOf(node.id)
       if (rootIndex >= 0) {
         nextRootNodeIds.splice(rootIndex, 1)
       }
@@ -487,8 +511,8 @@ function normalizeHomeAssistantBindingNodes(
       continue
     }
 
-    if (!nextRootNodeIds.includes(bindingNode.id)) {
-      nextRootNodeIds.push(bindingNode.id)
+    if (!nextRootNodeIds.includes(node.id)) {
+      nextRootNodeIds.push(node.id)
       changed = true
     }
   }
@@ -549,7 +573,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         }
 
         const normalizedCollections = normalizeCollectionsRecord(collections, cleanedNodes)
-        const normalizedScene = normalizeHomeAssistantBindingNodes(
+        const normalizedScene = normalizeCollectionAttachmentNodes(
           cleanedNodes,
           normalizedCollections,
           rootNodeIds,
@@ -663,13 +687,13 @@ const useScene: UseSceneStore = create<SceneState>()(
             } as AnyNode
           }
 
-          for (const bindingNode of getHomeAssistantBindingNodes(nextNodes)) {
-            if (bindingNode.collectionId !== id) {
+          for (const node of Object.values(nextNodes)) {
+            if (getCollectionAttachmentNodeCollectionId(node) !== id) {
               continue
             }
 
-            delete nextNodes[bindingNode.id]
-            nextRootIds = nextRootIds.filter((rootId) => rootId !== bindingNode.id)
+            delete nextNodes[node.id]
+            nextRootIds = nextRootIds.filter((rootId) => rootId !== node.id)
           }
 
           return { collections: nextCollections, nodes: nextNodes, rootNodeIds: nextRootIds }

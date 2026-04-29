@@ -23,6 +23,14 @@ export type HomeAssistantBindingAggregation =
   | 'single'
   | 'trigger_only'
 
+const HOME_ASSISTANT_BINDING_AGGREGATIONS = [
+  'all',
+  'any_on',
+  'primary',
+  'single',
+  'trigger_only',
+] as const satisfies HomeAssistantBindingAggregation[]
+
 const homeAssistantActionFieldSchema = z.object({
   defaultValue: z.unknown().optional(),
   key: z.string(),
@@ -102,13 +110,7 @@ const homeAssistantBindingPresentationSchema = z.object({
 })
 
 const homeAssistantCollectionBindingSchema = z.object({
-  aggregation: z.enum([
-    'all',
-    'any_on',
-    'primary',
-    'single',
-    'trigger_only',
-  ] satisfies HomeAssistantBindingAggregation[]),
+  aggregation: z.enum(HOME_ASSISTANT_BINDING_AGGREGATIONS),
   collectionId: z.custom<CollectionId>(),
   presentation: homeAssistantBindingPresentationSchema.optional(),
   primaryResourceId: z.string().nullable().optional(),
@@ -141,22 +143,10 @@ type LegacyHomeAssistantBindingPresentation = HomeAssistantBindingPresentation &
   rtsRoomControls?: LegacyHomeAssistantRoomControlComposition
 }
 
-type LegacyHomeAssistantCollectionBinding = Omit<HomeAssistantCollectionBinding, 'presentation'> & {
-  presentation?: LegacyHomeAssistantBindingPresentation
-}
-
 export const HomeAssistantBindingNode = BaseNode.extend({
   id: objectId('ha-binding'),
   type: nodeType('home-assistant-binding'),
-  aggregation: z
-    .enum([
-      'all',
-      'any_on',
-      'primary',
-      'single',
-      'trigger_only',
-    ] satisfies HomeAssistantBindingAggregation[])
-    .default('single'),
+  aggregation: z.enum(HOME_ASSISTANT_BINDING_AGGREGATIONS).default('single'),
   collectionId: z.custom<CollectionId>(),
   presentation: homeAssistantBindingPresentationSchema.optional(),
   primaryResourceId: z.string().nullable().optional(),
@@ -270,6 +260,11 @@ const normalizeResource = (
 
 const clampUnit = (value: number) => Math.max(0, Math.min(1, value))
 
+const normalizeAggregation = (value: unknown): HomeAssistantBindingAggregation =>
+  HOME_ASSISTANT_BINDING_AGGREGATIONS.includes(value as HomeAssistantBindingAggregation)
+    ? (value as HomeAssistantBindingAggregation)
+    : 'single'
+
 const normalizeStringGroups = (groups: unknown) =>
   Array.isArray(groups)
     ? groups
@@ -364,7 +359,7 @@ const normalizeRoomControlComposition = ({
 }
 
 export const normalizeHomeAssistantCollectionBinding = (
-  binding: HomeAssistantCollectionBinding | LegacyHomeAssistantCollectionBinding,
+  binding: HomeAssistantCollectionBinding | Record<string, unknown>,
 ): HomeAssistantCollectionBinding | null => {
   if (!(binding && typeof binding === 'object')) {
     return null
@@ -386,53 +381,52 @@ export const normalizeHomeAssistantCollectionBinding = (
     return null
   }
 
+  const presentation =
+    binding.presentation &&
+    typeof binding.presentation === 'object' &&
+    !Array.isArray(binding.presentation)
+      ? (binding.presentation as LegacyHomeAssistantBindingPresentation)
+      : undefined
+
   return {
-    aggregation: binding.aggregation ?? 'single',
+    aggregation: normalizeAggregation(binding.aggregation),
     collectionId,
-    presentation:
-      binding.presentation &&
-      typeof binding.presentation === 'object' &&
-      !Array.isArray(binding.presentation)
-        ? {
-            icon:
-              typeof binding.presentation.icon === 'string' ? binding.presentation.icon : undefined,
-            label:
-              typeof binding.presentation.label === 'string'
-                ? binding.presentation.label
-                : undefined,
-            rtsHidden:
-              binding.presentation.rtsHidden === true ? binding.presentation.rtsHidden : undefined,
-            rtsRoomControls: normalizeRoomControlComposition({
-              collectionId,
-              presentation: binding.presentation,
-              resources: normalizedResources,
-            }),
-            rtsOrder:
-              typeof binding.presentation.rtsOrder === 'number'
-                ? binding.presentation.rtsOrder
-                : undefined,
-            rtsScreenPosition:
-              binding.presentation.rtsScreenPosition &&
-              typeof binding.presentation.rtsScreenPosition.x === 'number' &&
-              typeof binding.presentation.rtsScreenPosition.y === 'number'
-                ? {
-                    x: clampUnit(binding.presentation.rtsScreenPosition.x),
-                    y: clampUnit(binding.presentation.rtsScreenPosition.y),
-                  }
-                : undefined,
-            rtsWorldPosition:
-              binding.presentation.rtsWorldPosition &&
-              typeof binding.presentation.rtsWorldPosition.x === 'number' &&
-              typeof binding.presentation.rtsWorldPosition.y === 'number' &&
-              typeof binding.presentation.rtsWorldPosition.z === 'number'
-                ? {
-                    x: binding.presentation.rtsWorldPosition.x,
-                    y: binding.presentation.rtsWorldPosition.y,
-                    z: binding.presentation.rtsWorldPosition.z,
-                  }
-                : undefined,
-          }
-        : undefined,
+    presentation: presentation
+      ? {
+          icon: typeof presentation.icon === 'string' ? presentation.icon : undefined,
+          label: typeof presentation.label === 'string' ? presentation.label : undefined,
+          rtsHidden: presentation.rtsHidden === true ? presentation.rtsHidden : undefined,
+          rtsRoomControls: normalizeRoomControlComposition({
+            collectionId,
+            presentation,
+            resources: normalizedResources,
+          }),
+          rtsOrder:
+            typeof presentation.rtsOrder === 'number'
+              ? presentation.rtsOrder
+              : undefined,
+          rtsScreenPosition:
+            presentation.rtsScreenPosition &&
+            typeof presentation.rtsScreenPosition.x === 'number' &&
+            typeof presentation.rtsScreenPosition.y === 'number'
+              ? {
+                  x: clampUnit(presentation.rtsScreenPosition.x),
+                  y: clampUnit(presentation.rtsScreenPosition.y),
+                }
+              : undefined,
+          rtsWorldPosition:
+            presentation.rtsWorldPosition &&
+            typeof presentation.rtsWorldPosition.x === 'number' &&
+            typeof presentation.rtsWorldPosition.y === 'number' &&
+            typeof presentation.rtsWorldPosition.z === 'number'
+              ? {
+                  x: presentation.rtsWorldPosition.x,
+                  y: presentation.rtsWorldPosition.y,
+                  z: presentation.rtsWorldPosition.z,
+                }
+              : undefined,
+        }
+      : undefined,
     primaryResourceId:
       typeof binding.primaryResourceId === 'string'
         ? binding.primaryResourceId
