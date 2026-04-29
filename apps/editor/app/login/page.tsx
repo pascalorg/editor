@@ -27,10 +27,15 @@ export default function AuthPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const [resetSuccess, setResetSuccess] = useState(false)
+
   useEffect(() => {
     const oauthError = searchParams.get('error')
     if (oauthError) {
       setError(OAUTH_ERROR_MESSAGES[oauthError] ?? OAUTH_ERROR_MESSAGES['Default'])
+    }
+    if (searchParams.get('reset') === 'success') {
+      setResetSuccess(true)
     }
   }, [searchParams])
 
@@ -133,6 +138,12 @@ export default function AuthPage() {
             </motion.div>
           </AnimatePresence>
 
+          {resetSuccess && (
+            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 text-green-400 text-xs rounded-xl">
+              Password updated. Sign in with your new password.
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -182,6 +193,14 @@ export default function AuthPage() {
               minLength={mode === 'signup' ? 8 : undefined}
               className="w-full bg-white/[0.04] border border-white/[0.08] text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500/40 transition-all placeholder:text-zinc-600"
             />
+
+            {mode === 'signin' && (
+              <div className="flex justify-end">
+                <Link href="/forgot-password" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             <button
               type="submit"
