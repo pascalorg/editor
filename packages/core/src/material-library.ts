@@ -1,4 +1,6 @@
-import type { MaterialPresetPayload } from './schema/material'
+import {
+  type MaterialPresetPayload,
+} from './schema/material'
 
 export type MaterialCatalogItem = {
   id: string

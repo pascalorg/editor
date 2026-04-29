@@ -36,5 +36,4 @@ const useGLTFKTX2 = (path: string): ReturnType<typeof useGLTF> => {
     loader.setMeshoptDecoder(MeshoptDecoder)
   })
 }
-
 export { useGLTFKTX2 }

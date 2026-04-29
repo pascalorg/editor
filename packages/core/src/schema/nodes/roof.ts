@@ -54,8 +54,7 @@ export function getEffectiveRoofSurfaceMaterial(
     if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
       return {
         material: node.topMaterial,
-        materialPreset:
-          typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
+        materialPreset: typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
       }
     }
   }

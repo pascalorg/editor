@@ -2,11 +2,11 @@
 
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import type * as THREE from 'three'
 import type { Scene } from 'three'
+import * as THREE from 'three'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import useViewer from '../../store/use-viewer'
 
 const EDITOR_LAYER = 1 // same constant used across the editor
@@ -50,17 +50,14 @@ export const ExportSystem = () => {
             exportRoot,
             (output) => resolve(output as ArrayBuffer),
             (err) => reject(err),
-            { binary: true },
+            { binary: true }
           )
         })
         downloadBlob(new Blob([result], { type: 'model/gltf-binary' }), `${filename}.glb`)
       } else if (format === 'stl') {
         const exporter = new STLExporter()
         const result = exporter.parse(exportRoot, { binary: true }) as DataView
-        downloadBlob(
-          new Blob([result.buffer as ArrayBuffer], { type: 'model/stl' }),
-          `${filename}.stl`,
-        )
+        downloadBlob(new Blob([result.buffer as ArrayBuffer], { type: 'model/stl' }), `${filename}.stl`)
       } else if (format === 'obj') {
         const exporter = new OBJExporter()
         const result = exporter.parse(exportRoot)
