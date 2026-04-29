@@ -22,10 +22,10 @@ const NAV = [
 
 export function DashboardSidebar({ orgs, user }: { orgs: Org[]; user: User }) {
   const pathname = usePathname()
-  const [activeOrg, setActiveOrg] = useState(orgs[0]!)
+  const [activeOrg, setActiveOrg] = useState<Org | null>(orgs[0] ?? null)
   const [orgMenuOpen, setOrgMenuOpen] = useState(false)
 
-  const initial = (activeOrg.name[0] ?? 'A').toUpperCase()
+  const initial = (activeOrg?.name[0] ?? user.name?.[0] ?? 'U').toUpperCase()
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 z-40 flex flex-col border-r border-white/[0.06] bg-white/[0.03] backdrop-blur-2xl">
@@ -34,6 +34,7 @@ export function DashboardSidebar({ orgs, user }: { orgs: Org[]; user: User }) {
 
       {/* Org Switcher */}
       <div className="p-4 border-b border-white/[0.06]">
+        {activeOrg ? (
         <button
           onClick={() => setOrgMenuOpen((o) => !o)}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.05] transition-all group"
@@ -51,6 +52,17 @@ export function DashboardSidebar({ orgs, user }: { orgs: Org[]; user: User }) {
           </div>
           <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${orgMenuOpen ? 'rotate-180' : ''}`} />
         </button>
+        ) : (
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center text-xs font-bold text-zinc-400 flex-shrink-0">
+            {initial}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-zinc-300">Personal</div>
+            <div className="text-[11px] text-zinc-600">No team yet</div>
+          </div>
+        </div>
+        )}
 
         {orgMenuOpen && orgs.length > 1 && (
           <div className="mt-1 rounded-xl border border-white/[0.08] bg-[#111]/90 backdrop-blur-xl overflow-hidden shadow-2xl">
@@ -64,7 +76,7 @@ export function DashboardSidebar({ orgs, user }: { orgs: Org[]; user: User }) {
                   {(org.name[0] ?? 'A').toUpperCase()}
                 </div>
                 <span className="text-sm font-medium truncate flex-1 text-left">{org.name}</span>
-                {org.id === activeOrg.id && <Check className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />}
+                {org.id === activeOrg?.id && <Check className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />}
               </button>
             ))}
           </div>
