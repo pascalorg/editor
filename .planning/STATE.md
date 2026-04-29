@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 3 of 7 (Onboarding) — IN PROGRESS
-Plan: 1 of 2 complete
-Status: 03-01 complete — Onboarding schema + middleware + JWT routing foundation
-Last activity: 2026-04-29 — 03-01 complete: OnboardingProgress + OrganizationInviteToken models, Edge middleware route gate, JWT onboardingComplete field, signup routes to /onboarding
+Plan: 2 of 2 complete (awaiting human verification checkpoint)
+Status: 03-02 built — 4-step onboarding UI, invite route, JWT refresh on completion
+Last activity: 2026-04-29 — 03-02 tasks complete: OnboardingFlow, StepRole/UseCase/Team/Project, saveProgress/completeOnboarding actions, /invite/[token] route, WorkspaceSetupModal removed
 
-Progress: [█████░░░░░] 50%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -58,6 +58,10 @@ Recent decisions affecting current work:
 - Middleware reads onboardingComplete from JWT only (getToken) — never Prisma; Edge Runtime compatibility
 - trigger=update in jwt callback enables client to force JWT refresh after onboarding completion via useSession().update()
 - Google OAuth callbackUrl set to /onboarding; middleware redirects to /dashboard for returning users with onboardingComplete=true
+- Role/useCase stored in OnboardingProgress.selections JSON — NOT added as User.role field (defers migration to future phase)
+- createProject return type updated to { id: string } to enable /editor/[projectId] redirect from onboarding
+- StepTeam saves step=3 progress before invite redirect so user returns to Step 4 (First Project) after token consumption
+- WorkspaceSetupModal removed from dashboard layout — middleware from 03-01 guarantees only onboarded users reach /dashboard
 
 ### Pending Todos
 
@@ -70,5 +74,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-29
-Stopped at: Completed 03-01-PLAN.md — Onboarding schema, middleware, JWT, signup redirect
-Resume file: Begin 03-02 (onboarding UI step components)
+Stopped at: 03-02 checkpoint:human-verify — 4-step onboarding UI built, awaiting browser verification
+Resume file: Type "approved" after verifying 12-step browser walkthrough to complete Phase 3
