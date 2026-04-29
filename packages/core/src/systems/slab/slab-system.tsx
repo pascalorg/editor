@@ -63,7 +63,7 @@ const SLAB_OUTSET = 0.05
 const AUTO_SLAB_INSET = 0.02
 const AUTO_SLAB_SIMPLIFY_TOLERANCE = 0.08
 
-function getRenderableSlabPolygon(slabNode: SlabNode): Array<[number, number]> {
+export function getRenderableSlabPolygon(slabNode: SlabNode): Array<[number, number]> {
   return slabNode.autoFromWalls
     ? simplifyClosedPolygon(
         insetPolygonFromCentroid(slabNode.polygon, AUTO_SLAB_INSET),
@@ -199,13 +199,7 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
     uvs.push((x - bounds.min.x) / floorWidth, (z - bounds.min.y) / floorHeight)
   }
 
-  const pushWallVertex = (
-    x: number,
-    y: number,
-    z: number,
-    u: number,
-    v: number,
-  ) => {
+  const pushWallVertex = (x: number, y: number, z: number, u: number, v: number) => {
     positions.push(x, y, z)
     uvs.push(u, v)
   }

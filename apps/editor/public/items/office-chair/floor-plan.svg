@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Office chair floor plan">
+  <g fill="#ffffff" stroke="#3f3f3f" stroke-linecap="round" stroke-linejoin="round" stroke-width="3" transform="rotate(180 128 128)">
+    <path d="M78 72c0-9 100-9 100 0v11c-27-7-73-7-100 0z"/>
+    <path d="M89 88c22-9 56-9 78 0"/>
+    <path d="M78 106c10-16 90-16 100 0l7 62c-4 19-15 31-57 31s-53-12-57-31z"/>
+    <path d="M54 110c-9 0-15 7-15 17v38c0 10 6 17 15 17h7l6-72z"/>
+    <path d="M202 110c9 0 15 7 15 17v38c0 10-6 17-15 17h-7l-6-72z"/>
+  </g>
+</svg>

@@ -2,7 +2,18 @@
 
 import { Icon as IconifyIcon } from '@iconify/react'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun } from 'lucide-react'
+import {
+  Check,
+  ChevronsLeft,
+  ChevronsRight,
+  Columns2,
+  Eye,
+  EyeOff,
+  Footprints,
+  Grid2X2,
+  Moon,
+  Sun,
+} from 'lucide-react'
 import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -271,6 +282,35 @@ function GridSnapToggle() {
   )
 }
 
+function GridVisibilityToggle() {
+  const showGrid = useViewer((s) => s.showGrid)
+  const setShowGrid = useViewer((s) => s.setShowGrid)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          aria-label={`Grid: ${showGrid ? 'Visible' : 'Hidden'}`}
+          aria-pressed={showGrid}
+          className={cn(
+            TOOLBAR_BTN,
+            'w-auto gap-1.5 px-2.5',
+            showGrid
+              ? 'bg-white/10 text-foreground/90'
+              : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
+          )}
+          onClick={() => setShowGrid(!showGrid)}
+          type="button"
+        >
+          <Grid2X2 className="h-3.5 w-3.5" />
+          {showGrid ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Grid: {showGrid ? 'Visible' : 'Hidden'}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 // ── Wall mode toggle ────────────────────────────────────────────────────────
 
 const wallModeOrder = ['cutaway', 'up', 'down'] as const
@@ -383,6 +423,7 @@ export function ViewerToolbarRight() {
       <LevelModeToggle />
       <WallModeToggle />
       <GridSnapToggle />
+      <GridVisibilityToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
       <ThemeToggle />

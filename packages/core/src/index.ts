@@ -46,23 +46,23 @@ export {
   LIBRARY_MATERIAL_REF_PREFIX,
   MATERIAL_CATALOG,
   MATERIAL_CATEGORIES,
-  type MaterialCategory,
   type MaterialCatalogItem,
+  type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
 export { baseMaterial, glassMaterial } from './materials'
 export * from './schema'
-export {
-  type ControlValue,
-  type ItemInteractiveState,
-  useInteractive,
-} from './store/use-interactive'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
+export {
+  type ControlValue,
+  type ItemInteractiveState,
+  useInteractive,
+} from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
@@ -70,7 +70,7 @@ export { DoorSystem } from './systems/door/door-system'
 export { FenceSystem } from './systems/fence/fence-system'
 export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
-export { SlabSystem } from './systems/slab/slab-system'
+export { getRenderableSlabPolygon, SlabSystem } from './systems/slab/slab-system'
 export { StairSystem } from './systems/stair/stair-system'
 export {
   getClampedWallCurveOffset,

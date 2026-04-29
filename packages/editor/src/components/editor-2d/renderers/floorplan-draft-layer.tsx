@@ -18,7 +18,10 @@ type FloorplanDraftLayerProps = {
   draftAnchorPoints: Array<{ x: number; y: number; isPrimary: boolean }>
   draftFill: string
   draftStroke: string
+  polygonDraftStroke?: string
+  polygonDraftStrokeWidth?: string
   anchorFill: string
+  unitsPerPixel: number
 }
 
 export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
@@ -30,8 +33,15 @@ export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
   draftAnchorPoints,
   draftFill,
   draftStroke,
+  polygonDraftStroke,
+  polygonDraftStrokeWidth = '0.08',
   anchorFill,
+  unitsPerPixel,
 }: FloorplanDraftLayerProps) {
+  const primaryAnchorRadius = 6 * unitsPerPixel
+  const secondaryAnchorRadius = 5 * unitsPerPixel
+  const activePolygonDraftStroke = polygonDraftStroke ?? draftStroke
+
   return (
     <>
       {draftPolygonPoints && (
@@ -69,21 +79,21 @@ export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
         <polyline
           fill="none"
           points={polygonDraftPolylinePoints}
-          stroke={draftStroke}
+          stroke={activePolygonDraftStroke}
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="0.08"
+          strokeWidth={polygonDraftStrokeWidth}
           vectorEffect="non-scaling-stroke"
         />
       )}
 
       {polygonDraftClosingSegment && (
         <line
-          stroke={draftStroke}
+          stroke={activePolygonDraftStroke}
           strokeDasharray="0.16 0.1"
           strokeLinecap="round"
           strokeOpacity={0.75}
-          strokeWidth="0.05"
+          strokeWidth={polygonDraftStrokeWidth}
           vectorEffect="non-scaling-stroke"
           x1={polygonDraftClosingSegment.x1}
           x2={polygonDraftClosingSegment.x2}
@@ -100,7 +110,7 @@ export const FloorplanDraftLayer = memo(function FloorplanDraftLayer({
           fillOpacity={0.95}
           key={`polygon-draft-${index}`}
           pointerEvents="none"
-          r={point.isPrimary ? 0.12 : 0.1}
+          r={point.isPrimary ? primaryAnchorRadius : secondaryAnchorRadius}
           vectorEffect="non-scaling-stroke"
         />
       ))}

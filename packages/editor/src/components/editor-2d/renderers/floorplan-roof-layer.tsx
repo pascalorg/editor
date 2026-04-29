@@ -1,7 +1,7 @@
 'use client'
 
-import { memo } from 'react'
 import type { Point2D, RoofNode, RoofSegmentNode } from '@pascal-app/core'
+import { memo } from 'react'
 import { toSvgX, toSvgY } from '../svg-paths'
 
 type FloorplanLineSegment = {
@@ -20,14 +20,27 @@ type FloorplanRoofEntry = {
   segments: FloorplanRoofSegmentEntry[]
 }
 
+type FloorplanRoofPalette = {
+  roofFill: string
+  roofActiveFill: string
+  roofSelectedFill: string
+  roofStroke: string
+  roofActiveStroke: string
+  roofSelectedStroke: string
+  roofRidgeStroke: string
+  roofSelectedRidgeStroke: string
+}
+
 type FloorplanRoofLayerProps = {
   highlightedIdSet: ReadonlySet<string>
+  palette: FloorplanRoofPalette
   roofEntries: FloorplanRoofEntry[]
   selectedIdSet: ReadonlySet<string>
 }
 
 export const FloorplanRoofLayer = memo(function FloorplanRoofLayer({
   highlightedIdSet,
+  palette,
   roofEntries,
   selectedIdSet,
 }: FloorplanRoofLayerProps) {
@@ -59,18 +72,18 @@ export const FloorplanRoofLayer = memo(function FloorplanRoofLayer({
                   <polygon
                     fill={
                       isSegmentActive
-                        ? 'rgba(14, 165, 233, 0.2)'
+                        ? palette.roofSelectedFill
                         : isRoofActive
-                          ? 'rgba(14, 165, 233, 0.14)'
-                          : 'rgba(14, 165, 233, 0.08)'
+                          ? palette.roofActiveFill
+                          : palette.roofFill
                     }
                     points={points}
                     stroke={
                       isSegmentActive
-                        ? '#0369a1'
+                        ? palette.roofSelectedStroke
                         : isRoofActive
-                          ? '#0ea5e9'
-                          : 'rgba(14, 165, 233, 0.65)'
+                          ? palette.roofActiveStroke
+                          : palette.roofStroke
                     }
                     strokeWidth={isSegmentActive ? '2.25' : isRoofActive ? '1.75' : '1.1'}
                     vectorEffect="non-scaling-stroke"
@@ -78,7 +91,9 @@ export const FloorplanRoofLayer = memo(function FloorplanRoofLayer({
                   {ridgeLine ? (
                     <line
                       fill="none"
-                      stroke={isSegmentActive ? '#0f172a' : 'rgba(3, 105, 161, 0.75)'}
+                      stroke={
+                        isSegmentActive ? palette.roofSelectedRidgeStroke : palette.roofRidgeStroke
+                      }
                       strokeWidth={isSegmentActive ? '2' : '1.4'}
                       vectorEffect="non-scaling-stroke"
                       x1={toSvgX(ridgeLine.start.x)}
