@@ -5,12 +5,6 @@ import { Color, Shape } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import useViewer from '../../../store/use-viewer'
 
-// Mirrors the current first-person controller capsule in the editor package:
-// colliderCapsuleArgs={[0.25, 0.8, 4, 8]} with the controller center 0.8m above the floor.
-const PLAYER_CAPSULE_RADIUS = 0.25
-const PLAYER_CAPSULE_LENGTH = 0.8
-const PLAYER_CAPSULE_CENTER_Y = 0.8
-
 const SPAWN_COLOR = new Color('#22c55e')
 
 export const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
@@ -55,26 +49,20 @@ export const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
         <meshStandardMaterial {...materialProps} />
       </mesh>
 
-      <mesh
-        position={[0, 0.1, -0.52]}
-        rotation={[-Math.PI / 2, 0, ( Math.PI) / 180]}
-        {...handlers}
-      >
+      <mesh position={[0, 0.1, -0.52]} rotation={[-Math.PI / 2, 0, 0]} {...handlers}>
         <shapeGeometry args={[arrowShape]} />
         <meshStandardMaterial {...materialProps} />
       </mesh>
 
-      <group position={[0, 0.09, 0]}>
-        <mesh position={[0, 0.48, 0]} {...handlers}>
-          <boxGeometry args={[0.4, 0.82, 0.28]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
+      <mesh position={[0, 0.36, 0]} {...handlers}>
+        <cylinderGeometry args={[0.08, 0.08, 0.54, 24]} />
+        <meshStandardMaterial {...materialProps} />
+      </mesh>
 
-        <mesh position={[0, 1.08, 0]} {...handlers}>
-          <boxGeometry args={[0.24, 0.24, 0.24]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      </group>
+      <mesh position={[0, 0.68, 0]} {...handlers}>
+        <sphereGeometry args={[0.16, 24, 16]} />
+        <meshStandardMaterial {...materialProps} />
+      </mesh>
     </group>
   )
 }
