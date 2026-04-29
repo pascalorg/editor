@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-28)
 ## Current Position
 
 Phase: 1 of 7 (Landing)
-Plan: 1 of 2 in current phase (awaiting human verification checkpoint)
-Status: Checkpoint — human verify required
-Last activity: 2026-04-28 — Plan 01-01 Task 1 complete, Task 2 checkpoint reached
+Plan: 2 of 2 in current phase (checkpoint pending — Task 3 human-verify OG image)
+Status: Checkpoint — awaiting human verification of OG/Twitter card image output
+Last activity: 2026-04-28 — Executed 01-02 OG image generation (Tasks 1+2 done, Task 3 awaiting)
 
-Progress: [█░░░░░░░░░] 7%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
@@ -48,6 +48,8 @@ Recent decisions affecting current work:
 - Free-only marketplace for v1 (validate demand before monetization)
 - All 5 public CTA links canonically use /signup (not /apply); /apply preserved for beta funnel
 - Enterprise "Contact Sales" tier also routes through /signup for unified auth entry
+- OG image uses next/og (bundled Next.js 16) — no @vercel/og install; Satori requires all styles inline
+- twitter-image.tsx is a self-contained copy of opengraph-image (no cross-import; Next.js file convention)
 
 ### Pending Todos
 
