@@ -11,10 +11,10 @@ import {
   type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
-  type SpawnNode,
   type RoofSurfaceMaterialRole,
   type SlabNode,
   type Space,
+  type SpawnNode,
   type StairNode,
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
@@ -115,6 +115,11 @@ type MaterialPaintSelectionSnapshot = {
   activePaintMaterial: ActivePaintMaterial | null
 }
 
+export type GuideUiState = {
+  locked?: boolean
+  scaleReferenceVisible?: boolean
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -181,6 +186,10 @@ type EditorState = {
   setPaintPanelOpen: (open: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  guideUi: Record<string, GuideUiState>
+  setGuideLocked: (guideId: string, locked: boolean) => void
+  setGuideScaleReferenceVisible: (guideId: string, visible: boolean) => void
+  clearGuideUi: (guideId: string) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -632,6 +641,36 @@ const useEditor = create<EditorState>()(
       setPaintPanelOpen: (open) => set({ isPaintPanelOpen: open }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      guideUi: {},
+      setGuideLocked: (guideId, locked) =>
+        set((state) => ({
+          guideUi: {
+            ...state.guideUi,
+            [guideId]: {
+              ...state.guideUi[guideId],
+              locked,
+            },
+          },
+        })),
+      setGuideScaleReferenceVisible: (guideId, visible) =>
+        set((state) => ({
+          guideUi: {
+            ...state.guideUi,
+            [guideId]: {
+              ...state.guideUi[guideId],
+              scaleReferenceVisible: visible,
+            },
+          },
+        })),
+      clearGuideUi: (guideId) =>
+        set((state) => {
+          if (!state.guideUi[guideId]) {
+            return state
+          }
+          const guideUi = { ...state.guideUi }
+          delete guideUi[guideId]
+          return { guideUi }
+        }),
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,

@@ -55,6 +55,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useShallow } from 'zustand/react/shallow'
 import {
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
@@ -67,6 +68,7 @@ import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { cn } from '../../lib/utils'
+import type { GuideUiState } from '../../store/use-editor'
 import useEditor from '../../store/use-editor'
 import { FloorplanActionMenuLayer as Editor2dFloorplanActionMenuLayer } from '../editor-2d/floorplan-action-menu-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
@@ -3267,6 +3269,7 @@ const FloorplanGridLayer = memo(function FloorplanGridLayer({
 })
 
 const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
+  guideUi,
   guides,
   isInteractive,
   selectedGuideId,
@@ -3275,6 +3278,7 @@ const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
   onGuideSelect,
   onGuideTranslateStart,
 }: {
+  guideUi: Record<string, GuideUiState>
   guides: GuideNode[]
   isInteractive: boolean
   selectedGuideId: GuideNode['id'] | null
@@ -3303,7 +3307,7 @@ const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
             activeGuideInteractionGuideId === guide.id ? activeGuideInteractionMode : null
           }
           guide={guide}
-          isInteractive={isInteractive && guide.locked !== true}
+          isInteractive={isInteractive && guideUi[guide.id]?.locked !== true}
           isSelected={selectedGuideId === guide.id}
           key={guide.id}
           onGuideSelect={onGuideSelect}
@@ -3405,21 +3409,24 @@ function FloorplanReferenceScaleLine({
 
 function FloorplanReferenceScaleLayer({
   draft,
+  guideUi,
   guides,
   palette,
   unit,
   unitsPerPixel,
 }: {
   draft: ReferenceScaleDraft | null
+  guideUi: Record<string, GuideUiState>
   guides: GuideNode[]
   palette: FloorplanPalette
   unit: 'metric' | 'imperial'
   unitsPerPixel: number
 }) {
   const visibleReferences = guides
+    .filter((guide) => guideUi[guide.id]?.scaleReferenceVisible !== false)
     .map((guide) => guide.scaleReference)
     .filter((reference): reference is NonNullable<GuideNode['scaleReference']> =>
-      Boolean(reference && reference.visible !== false),
+      Boolean(reference),
     )
 
   return (
@@ -6170,7 +6177,10 @@ export function FloorplanPanel() {
   const showReferenceFloor = useEditor((s) => s.showReferenceFloor)
   const referenceFloorOffset = useEditor((s) => s.referenceFloorOffset)
   const referenceFloorOpacity = useEditor((s) => s.referenceFloorOpacity)
-  const sceneNodes = useScene((state) => state.nodes)
+  const guideUi = useEditor((s) => s.guideUi)
+  const setGuideLocked = useEditor((s) => s.setGuideLocked)
+  const setGuideScaleReferenceVisible = useEditor((s) => s.setGuideScaleReferenceVisible)
+  const clearGuideUi = useEditor((s) => s.clearGuideUi)
   const [floorplanMarqueeState, setFloorplanMarqueeState] = useState<FloorplanMarqueeState | null>(
     null,
   )
@@ -6775,24 +6785,33 @@ export function FloorplanPanel() {
 
     return lowerLevels[referenceFloorOffset - 1] ?? lowerLevels[0] ?? null
   }, [floorplanLevels, levelNode, referenceFloorOffset, showReferenceFloor])
+  const referenceFloorDescendants = useScene(
+    useShallow((state) => {
+      if (!referenceFloorLevel) {
+        return [] as AnyNode[]
+      }
+
+      return collectLevelDescendants(
+        referenceFloorLevel,
+        state.nodes as Record<string, AnyNode>,
+      ).filter((node) => node.visible !== false)
+    }),
+  )
   const referenceFloorData = useMemo<ReferenceFloorData | null>(() => {
     if (!referenceFloorLevel) {
       return null
     }
 
-    const children = referenceFloorLevel.children
-      .map((childId) => sceneNodes[childId])
-      .filter((node): node is AnyNode => Boolean(node && node.visible !== false))
+    const children = referenceFloorDescendants.filter(
+      (node) => node.parentId === referenceFloorLevel.id,
+    )
     const referenceWalls = children.filter((node): node is WallNode => node.type === 'wall')
     const referenceFences = children.filter((node): node is FenceNode => node.type === 'fence')
     const referenceSlabs = children.filter((node): node is SlabNode => node.type === 'slab')
     const referenceCeilings = children.filter(
       (node): node is CeilingNode => node.type === 'ceiling',
     )
-    const referenceDescendants = collectLevelDescendants(
-      referenceFloorLevel,
-      sceneNodes as Record<string, AnyNode>,
-    ).filter((node) => node.visible !== false)
+    const referenceDescendants = referenceFloorDescendants
     const referenceDescendantById = new Map(referenceDescendants.map((node) => [node.id, node]))
 
     const referenceFloorplanWalls = referenceWalls.map(getFloorplanWall)
@@ -6931,7 +6950,7 @@ export function FloorplanPanel() {
       slabPolygons,
       wallPolygons,
     }
-  }, [referenceFloorLevel, sceneNodes])
+  }, [referenceFloorDescendants, referenceFloorLevel])
   const hasPendingItemMeshFootprints = floorplanItemEntries.some((entry) => !entry.usesRealMesh)
   const floorplanStairEntries = useMemo(
     () =>
@@ -8729,13 +8748,14 @@ export function FloorplanPanel() {
 
       setReferenceScaleDraft((current) => (current?.guideId === payload.guideId ? null : current))
       setPendingReferenceScale((current) => (current?.guideId === payload.guideId ? null : current))
+      clearGuideUi(payload.guideId)
     }
 
     emitter.on('guide:deleted', handleDeleted)
     return () => {
       emitter.off('guide:deleted', handleDeleted)
     }
-  }, [])
+  }, [clearGuideUi])
 
   const handleReferenceScaleConfirm = useCallback(() => {
     if (!pendingReferenceScale) {
@@ -8784,7 +8804,6 @@ export function FloorplanPanel() {
     updateNode(
       pendingReferenceScale.guideId as AnyNodeId,
       {
-        locked: true,
         position: nextGuidePosition,
         scale: nextGuideScale,
         scaleReference: {
@@ -8794,10 +8813,11 @@ export function FloorplanPanel() {
           measuredLengthUnits: scaledMeasuredLengthUnits,
           metersPerUnit,
           label: formatReferenceScaleLabel(displayLength, referenceScaleUnit),
-          visible: true,
         },
       } as Partial<GuideNode>,
     )
+    setGuideLocked(pendingReferenceScale.guideId, true)
+    setGuideScaleReferenceVisible(pendingReferenceScale.guideId, true)
     setSelectedReferenceId(pendingReferenceScale.guideId)
     setPendingReferenceScale(null)
   }, [
@@ -8805,6 +8825,8 @@ export function FloorplanPanel() {
     pendingReferenceScale,
     referenceScaleUnit,
     referenceScaleValue,
+    setGuideLocked,
+    setGuideScaleReferenceVisible,
     setSelectedReferenceId,
     updateNode,
   ])
@@ -11703,7 +11725,7 @@ export function FloorplanPanel() {
       corner: GuideCorner,
       event: ReactPointerEvent<SVGCircleElement>,
     ) => {
-      if (event.button !== 0 || !canInteractWithGuides || guide.locked === true) {
+      if (event.button !== 0 || !canInteractWithGuides || guideUi[guide.id]?.locked === true) {
         return
       }
 
@@ -11762,7 +11784,7 @@ export function FloorplanPanel() {
       guideTransformDraftRef.current = nextDraft
       setGuideTransformDraft(nextDraft)
     },
-    [canInteractWithGuides, handleGuideSelect, theme],
+    [canInteractWithGuides, guideUi, handleGuideSelect, theme],
   )
   const handleGuideTranslateStart = useCallback(
     (guide: GuideNode, event: ReactPointerEvent<SVGRectElement>) => {
@@ -11770,7 +11792,7 @@ export function FloorplanPanel() {
         event.button !== 0 ||
         !canInteractWithGuides ||
         selectedGuideId !== guide.id ||
-        guide.locked === true
+        guideUi[guide.id]?.locked === true
       ) {
         return
       }
@@ -11812,7 +11834,7 @@ export function FloorplanPanel() {
       guideTransformDraftRef.current = nextDraft
       setGuideTransformDraft(nextDraft)
     },
-    [canInteractWithGuides, getSvgPointFromClientPoint, selectedGuideId],
+    [canInteractWithGuides, getSvgPointFromClientPoint, guideUi, selectedGuideId],
   )
 
   const handleOpeningSelect = useCallback(
@@ -14183,6 +14205,7 @@ export function FloorplanPanel() {
               <FloorplanGuideLayer
                 activeGuideInteractionGuideId={activeGuideInteractionGuideId}
                 activeGuideInteractionMode={activeGuideInteractionMode}
+                guideUi={guideUi}
                 guides={displayGuides}
                 isInteractive={canInteractWithGuides}
                 onGuideSelect={handleGuideSelect}
@@ -14293,6 +14316,7 @@ export function FloorplanPanel() {
 
               <FloorplanReferenceScaleLayer
                 draft={referenceScaleDraft}
+                guideUi={guideUi}
                 guides={displayGuides}
                 palette={palette}
                 unit={unit}
@@ -14545,7 +14569,7 @@ export function FloorplanPanel() {
                   onCornerHoverChange={setHoveredGuideCorner}
                   onCornerPointerDown={handleGuideCornerPointerDown}
                   rotationModifierPressed={rotationModifierPressed}
-                  showHandles={canInteractWithGuides && selectedGuide.locked !== true}
+                  showHandles={canInteractWithGuides && guideUi[selectedGuide.id]?.locked !== true}
                 />
               )}
 

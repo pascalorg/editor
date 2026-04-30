@@ -20,18 +20,22 @@ import { PanelWrapper } from './panel-wrapper'
 
 type ReferenceNode = ScanNode | GuideNode
 
-function getScaleStatus(guide: GuideNode) {
+function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean) {
   const reference = guide.scaleReference
   if (!reference) {
     return 'Uncalibrated'
   }
 
-  return `${reference.visible === false ? 'Scaled (hidden)' : 'Scaled'} · ${reference.label}`
+  return `${scaleReferenceVisible ? 'Scaled' : 'Scaled (hidden)'} · ${reference.label}`
 }
 
 export function ReferencePanel() {
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
+  const guideUi = useEditor((s) => (selectedReferenceId ? s.guideUi[selectedReferenceId] : undefined))
+  const setGuideLocked = useEditor((s) => s.setGuideLocked)
+  const setGuideScaleReferenceVisible = useEditor((s) => s.setGuideScaleReferenceVisible)
+  const clearGuideUi = useEditor((s) => s.clearGuideUi)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const replaceInputRef = useRef<HTMLInputElement>(null)
@@ -78,13 +82,14 @@ export function ReferencePanel() {
           url: assetUrl,
           scaleReference: null,
         } as Partial<GuideNode>)
+        setGuideScaleReferenceVisible(selectedReferenceId, true)
       } catch {
         setReplaceError('Could not replace that image.')
       } finally {
         setIsReplacing(false)
       }
     },
-    [node?.type, selectedReferenceId, updateNode],
+    [node?.type, selectedReferenceId, setGuideScaleReferenceVisible, updateNode],
   )
 
   const handleDeleteGuide = useCallback(() => {
@@ -94,8 +99,9 @@ export function ReferencePanel() {
 
     deleteNode(selectedReferenceId as AnyNode['id'])
     emitter.emit('guide:deleted', { guideId: selectedReferenceId as GuideNode['id'] })
+    clearGuideUi(selectedReferenceId)
     setSelectedReferenceId(null)
-  }, [deleteNode, node?.type, selectedReferenceId, setSelectedReferenceId])
+  }, [clearGuideUi, deleteNode, node?.type, selectedReferenceId, setSelectedReferenceId])
 
   const handleStartScale = useCallback(() => {
     if (node?.type !== 'guide') {
@@ -130,7 +136,9 @@ export function ReferencePanel() {
   if (!node || (node.type !== 'scan' && node.type !== 'guide')) return null
 
   const isScan = node.type === 'scan'
-  const scaleStatus = !isScan ? getScaleStatus(node) : null
+  const guideLocked = !isScan && guideUi?.locked === true
+  const scaleReferenceVisible = !isScan && guideUi?.scaleReferenceVisible !== false
+  const scaleStatus = !isScan ? getScaleStatus(node, scaleReferenceVisible) : null
 
   return (
     <PanelWrapper
@@ -184,14 +192,14 @@ export function ReferencePanel() {
               />
               <ActionButton
                 icon={
-                  node.locked ? (
+                  guideLocked ? (
                     <Lock className="h-3.5 w-3.5" />
                   ) : (
                     <Unlock className="h-3.5 w-3.5" />
                   )
                 }
-                label={node.locked ? 'Unlock' : 'Lock'}
-                onClick={() => handleUpdate({ locked: node.locked !== true } as Partial<GuideNode>)}
+                label={guideLocked ? 'Unlock' : 'Lock'}
+                onClick={() => setGuideLocked(node.id, !guideLocked)}
               />
             </ActionGroup>
 
@@ -224,16 +232,11 @@ export function ReferencePanel() {
 
             <ActionGroup>
               <ActionButton
-                label={node.scaleReference?.visible === false ? 'Show Scale' : 'Hide Scale'}
+                label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
                 disabled={!node.scaleReference}
                 onClick={() => {
                   if (!node.scaleReference) return
-                  handleUpdate({
-                    scaleReference: {
-                      ...node.scaleReference,
-                      visible: node.scaleReference.visible === false,
-                    },
-                  } as Partial<GuideNode>)
+                  setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)
                 }}
               />
               <ActionButton

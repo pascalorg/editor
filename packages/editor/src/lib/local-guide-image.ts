@@ -34,8 +34,6 @@ export async function createLocalGuideImage({
     rotation: [0, 0, 0],
     scale: 1,
     opacity: 50,
-    locked: false,
-    showIn3d: false,
     scaleReference: null,
   })
 

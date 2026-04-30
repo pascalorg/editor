@@ -33,6 +33,7 @@ export {
 } from './hooks/spatial-grid/spatial-grid-sync'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
   detectSpacesForLevel,
   initSpaceDetectionSync,
@@ -71,7 +72,7 @@ export { DoorSystem } from './systems/door/door-system'
 export { FenceSystem } from './systems/fence/fence-system'
 export { ItemSystem } from './systems/item/item-system'
 export { RoofSystem } from './systems/roof/roof-system'
-export { getRenderableSlabPolygon, SlabSystem } from './systems/slab/slab-system'
+export { SlabSystem } from './systems/slab/slab-system'
 export { StairSystem } from './systems/stair/stair-system'
 export {
   getClampedWallCurveOffset,
