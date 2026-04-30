@@ -2375,7 +2375,7 @@ export function HomeAssistantPanel() {
                                   className={cn(
                                     'rounded-xl bg-white/42',
                                     isCategoryOpen
-                                      ? 'flex min-h-0 flex-1 basis-0 flex-col overflow-hidden'
+                                      ? 'flex min-h-0 shrink-0 flex-col overflow-hidden'
                                       : 'shrink-0 overflow-hidden',
                                   )}
                                   key={category}
@@ -2403,7 +2403,7 @@ export function HomeAssistantPanel() {
 
                                   {isCategoryOpen && (
                                     <div
-                                      className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,112px)] gap-1.5 overflow-y-auto overscroll-contain border-black/6 border-t bg-white/28 px-2 py-2 [scrollbar-gutter:stable]"
+                                      className="grid min-h-0 grid-cols-[repeat(auto-fill,112px)] content-start gap-1.5 overflow-y-auto overscroll-contain border-black/6 border-t bg-white/28 px-2 py-2 [scrollbar-gutter:stable]"
                                       data-smart-home-scroll-body
                                     >
                                       {resources.map((resource) =>
