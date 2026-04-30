@@ -381,8 +381,8 @@ export function HomeAssistantPanel() {
   const [positioningPreview, setPositioningPreview] =
     useState<HomeAssistantPlacementPreview | null>(null)
   const [deviceSectionWidth, setDeviceSectionWidth] = useState(0)
-  const hasOpenImportSection = openSections.devices || openSections.groups
-  const smartHomePanelMinHeight = hasOpenImportSection
+  const hasOpenFlexibleImportSection = openSections.devices
+  const smartHomePanelMinHeight = hasOpenFlexibleImportSection
     ? SMART_HOME_PANEL_EXPANDED_MIN_HEIGHT
     : SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT
   const smartHomePanelRef = useRef<HTMLElement | null>(null)
@@ -567,7 +567,7 @@ export function HomeAssistantPanel() {
     }
 
     const animationFrame = window.requestAnimationFrame(() => {
-      if (!hasOpenImportSection) {
+      if (!hasOpenFlexibleImportSection) {
         setPanelSize((currentValue) => {
           const nextValue = clampSmartHomePanelSize(
             {
@@ -629,7 +629,7 @@ export function HomeAssistantPanel() {
     deviceCategoryGroups.length,
     deviceImports.length,
     groupImports.length,
-    hasOpenImportSection,
+    hasOpenFlexibleImportSection,
     isSmartHomePanelOpen,
     openDeviceCategories.fan,
     openDeviceCategories.light,
@@ -1761,6 +1761,7 @@ export function HomeAssistantPanel() {
   const clampedPanelSize = clampSmartHomePanelSize(panelSize, smartHomePanelMinHeight)
   const panelWidthStyle = `min(${clampedPanelSize.width}px, calc(100vw - 2rem))`
   const panelHeightStyle = `min(${clampedPanelSize.height}px, calc(100vh - 5rem))`
+  const panelUsesFixedHeight = activePanel?.kind === 'config' && hasOpenFlexibleImportSection
   const placementPillWidth = positioningResource
     ? getPlacementPillWidth(positioningResource.label)
     : PLACEMENT_PILL_CLOSED_MIN_WIDTH
@@ -2076,7 +2077,7 @@ export function HomeAssistantPanel() {
           className="pointer-events-auto relative flex max-h-[calc(100vh-5rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/8 bg-[rgba(226,228,232,0.97)] p-3 text-zinc-900 shadow-[0_18px_50px_rgba(0,0,0,0.16)] backdrop-blur-xl"
           ref={smartHomePanelRef}
           style={{
-            height: activePanel.kind === 'config' ? panelHeightStyle : undefined,
+            height: panelUsesFixedHeight ? panelHeightStyle : undefined,
             width: panelWidthStyle,
           }}
         >
@@ -2259,13 +2260,13 @@ export function HomeAssistantPanel() {
             <div
               className={cn(
                 'mt-3 min-h-0',
-                hasOpenImportSection ? 'flex-1 overflow-hidden' : 'shrink-0',
+                hasOpenFlexibleImportSection ? 'flex-1 overflow-hidden' : 'shrink-0',
               )}
             >
               <div
                 className={cn(
                   'flex min-h-0 flex-col gap-2 overflow-hidden pr-1',
-                  hasOpenImportSection ? 'h-full max-h-full' : '',
+                  hasOpenFlexibleImportSection ? 'h-full max-h-full' : '',
                 )}
                 ref={configContentRef}
               >
@@ -2283,7 +2284,12 @@ export function HomeAssistantPanel() {
                       className={cn(
                         'rounded-xl bg-[rgba(228,231,236,0.94)] transition',
                         isOpen
-                          ? 'flex min-h-0 flex-1 basis-0 flex-col overflow-hidden shadow-[0_10px_24px_rgba(0,0,0,0.14)]'
+                          ? cn(
+                              'flex min-h-0 flex-col overflow-hidden shadow-[0_10px_24px_rgba(0,0,0,0.14)]',
+                              section.key === 'devices'
+                                ? 'flex-1 basis-0'
+                                : 'shrink-0',
+                            )
                           : 'shrink-0 overflow-hidden',
                       )}
                       key={section.key}
@@ -2349,9 +2355,9 @@ export function HomeAssistantPanel() {
                       {isOpen && (
                         <div
                           className={cn(
-                            'min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-black/6 px-3 py-2.5 pr-1 [scrollbar-gutter:stable]',
+                            'min-h-0 overflow-y-auto overscroll-contain border-t border-black/6 px-3 py-2.5 pr-1 [scrollbar-gutter:stable]',
                             section.key === 'devices'
-                              ? 'flex flex-col gap-1.5'
+                              ? 'flex flex-1 flex-col gap-1.5'
                               : section.key === 'groups'
                                 ? 'grid content-start grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5'
                                 : 'grid content-start gap-1.5 grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]',
