@@ -9,12 +9,17 @@ import { SlabHelper } from './slab-helper'
 import { WallHelper } from './wall-helper'
 
 export function HelperManager() {
+  const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const movingNode = useEditor((state) => state.movingNode)
 
   if (movingNode) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />
     return <ItemHelper showEsc />
+  }
+
+  if (mode === 'material-paint') {
+    return null
   }
 
   // Show appropriate helper based on current tool

@@ -21,6 +21,7 @@ import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
 import { SlabHoleEditor } from './slab/slab-hole-editor'
 import { SlabTool } from './slab/slab-tool'
+import { SpawnTool } from './spawn/spawn-tool'
 import { StairTool } from './stair/stair-tool'
 import { CurveWallTool } from './wall/curve-wall-tool'
 import { MoveWallEndpointTool } from './wall/move-wall-endpoint-tool'
@@ -61,8 +62,10 @@ export const ToolManager: React.FC = () => {
   const curvingFence = useEditor((state) => state.curvingFence)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
 
   // Building transform for the local group — all building-relative tools live inside this group
@@ -123,12 +126,15 @@ export const ToolManager: React.FC = () => {
   const showBuildTool = mode === 'build' && tool !== null
 
   const BuildToolComponent = showBuildTool ? tools[phase]?.[tool] : null
+  const handleSpawnSelected = (nodeId: `spawn_${string}`) => {
+    setSelection({ selectedIds: [nodeId] })
+  }
 
   return (
     <>
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
-      {movingNode?.type === 'building' && <MoveTool />}
+      {movingNode?.type === 'building' && <MoveTool onSpawnMoved={handleSpawnSelected} />}
 
       {/* Building-local group: all other tools are relative to the selected building.
           Cursor visuals set positions in building-local space; this group applies the
@@ -152,7 +158,12 @@ export const ToolManager: React.FC = () => {
         {movingFenceEndpoint && <MoveFenceEndpointTool target={movingFenceEndpoint} />}
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {curvingFence && <CurveFenceTool node={curvingFence} />}
-        {movingNode && movingNode.type !== 'building' && <MoveTool />}
+        {movingNode && movingNode.type !== 'building' && (
+          <MoveTool onSpawnMoved={handleSpawnSelected} />
+        )}
+        {!movingNode && showBuildTool && tool === 'spawn' && (
+          <SpawnTool currentLevelId={selectedLevelId} onPlaced={handleSpawnSelected} />
+        )}
         {!movingNode && BuildToolComponent && <BuildToolComponent />}
       </group>
     </>

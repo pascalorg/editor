@@ -44,7 +44,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       depth={depth}
       expanded={false}
       hasChildren={false}
-      icon={<ColorDot color={color} onChange={(c) => updateNode(nodeId, { color: c })} />}
+      icon={<ColorDot color={color ?? '#3b82f6'} onChange={(c) => updateNode(nodeId, { color: c })} />}
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
@@ -81,7 +81,6 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
     const current = polygon[i]
     const next = polygon[j]
     if (!(current && next)) continue
-
     area += current[0] * next[1]
     area -= next[0] * current[1]
   }

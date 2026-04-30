@@ -8,11 +8,16 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { MoreVertical, Plus, Trash2 } from 'lucide-react'
+import { Copy, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  buildLevelDuplicateCreateOps,
+  type LevelDuplicatePreset,
+} from '../../lib/level-duplication'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { cn } from '../../lib/utils'
+import { LevelDuplicateDialog } from './level-duplicate-dialog'
 import {
   Dialog,
   DialogContent,
@@ -92,13 +97,16 @@ function LevelRow({
   level,
   isSelected,
   onSelect,
+  onDuplicate,
   onRequestDelete,
 }: {
   level: LevelNode
   isSelected: boolean
   onSelect: () => void
+  onDuplicate: (preset?: LevelDuplicatePreset) => void
   onRequestDelete: () => void
 }) {
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
   return (
@@ -142,7 +150,29 @@ function LevelRow({
                 <MoreVertical className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-36 p-1" side="right" sideOffset={8}>
+            <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDuplicate()
+                }}
+                type="button"
+              >
+                <Copy className="h-3 w-3" />
+                Duplicate level
+              </button>
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDuplicateDialogOpen(true)
+                }}
+                type="button"
+              >
+                <Copy className="h-3 w-3" />
+                Duplicate with options...
+              </button>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-red-400"
                 onClick={(e) => {
@@ -158,6 +188,15 @@ function LevelRow({
           </Popover>
         </div>
       )}
+      <LevelDuplicateDialog
+        level={level}
+        onConfirm={(preset) => {
+          onDuplicate(preset)
+          setDuplicateDialogOpen(false)
+        }}
+        onOpenChange={setDuplicateDialogOpen}
+        open={duplicateDialogOpen}
+      />
     </div>
   )
 }
@@ -169,6 +208,7 @@ export function FloatingLevelSelector() {
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
   const createNode = useScene((s) => s.createNode)
+  const createNodes = useScene((s) => s.createNodes)
   const updateNodes = useScene((s) => s.updateNodes)
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
@@ -251,6 +291,33 @@ export function FloatingLevelSelector() {
     setDeletingLevel(null)
   }, [deletingLevel])
 
+  const handleDuplicateLevel = useCallback(
+    (level: LevelNode, preset: LevelDuplicatePreset = 'everything') => {
+      const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
+        nodes: useScene.getState().nodes,
+        level,
+        levels,
+        preset,
+      })
+
+      if (shiftedLevels.length > 0) {
+        updateNodes(
+          shiftedLevels.map((shiftedLevel) => ({
+            id: shiftedLevel.id as AnyNodeId,
+            data: { level: shiftedLevel.level } as Partial<AnyNode>,
+          })),
+        )
+      }
+      createNodes(createOps)
+
+      setSelection({
+        buildingId: resolvedBuildingId ?? undefined,
+        levelId: newLevelId as LevelNode['id'],
+      })
+    },
+    [createNodes, levels, resolvedBuildingId, setSelection, updateNodes],
+  )
+
   if (levels.length === 0) return null
 
   const reversedLevels = [...levels].reverse()
@@ -294,6 +361,7 @@ export function FloatingLevelSelector() {
                   <LevelRow
                     isSelected={isSelected}
                     level={level}
+                    onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                     onRequestDelete={() => setDeletingLevel(level)}
                     onSelect={() =>
                       setSelection(

@@ -62,6 +62,7 @@ import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
 import { SlabTreeNode } from './slab-tree-node'
+import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
 import { WallTreeNode } from './wall-tree-node'
 import { WindowTreeNode } from './window-tree-node'
@@ -96,6 +97,8 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
       ) : null
     case 'slab':
       return <SlabTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
+    case 'spawn':
+      return <SpawnTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `spawn_${string}`} />
     case 'wall':
       return <WallTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'fence':

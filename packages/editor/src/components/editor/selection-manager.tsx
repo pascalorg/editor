@@ -73,6 +73,7 @@ type SelectableNodeType =
   | 'roof-segment'
   | 'stair'
   | 'stair-segment'
+  | 'spawn'
   | 'window'
   | 'door'
 
@@ -565,6 +566,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'roof-segment',
       'stair',
       'stair-segment',
+      'spawn',
       'window',
       'door',
     ],
@@ -615,7 +617,8 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         node.type === 'roof' ||
         node.type === 'roof-segment' ||
         node.type === 'stair' ||
-        node.type === 'stair-segment'
+        node.type === 'stair-segment' ||
+        node.type === 'spawn'
       )
         return true
       if (node.type === 'item') {
@@ -678,6 +681,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'roof-segment' ||
     node.type === 'stair' ||
     node.type === 'stair-segment' ||
+    node.type === 'spawn' ||
     node.type === 'window' ||
     node.type === 'door'
   ) {
@@ -994,6 +998,7 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
+      'spawn',
       'window',
       'door',
       'zone',
@@ -1180,6 +1185,7 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
+      'spawn',
       'window',
       'door',
     ]
@@ -1311,6 +1317,7 @@ export const SelectionManager = () => {
         node.type === 'roof-segment' ||
         node.type === 'stair' ||
         node.type === 'stair-segment' ||
+        node.type === 'spawn' ||
         node.type === 'window' ||
         node.type === 'door'
       ) {
@@ -1363,6 +1370,7 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
+      'spawn',
       'window',
       'door',
       'zone',

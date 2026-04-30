@@ -11,6 +11,7 @@ import {
   type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
+  type SpawnNode,
   type RoofSurfaceMaterialRole,
   type SlabNode,
   type Space,
@@ -62,6 +63,7 @@ export type StructureTool =
   | 'stair'
   | 'item'
   | 'zone'
+  | 'spawn'
   | 'window'
   | 'door'
 
@@ -139,6 +141,7 @@ type EditorState = {
     | WallNode
     | RoofNode
     | RoofSegmentNode
+    | SpawnNode
     | StairNode
     | StairSegmentNode
     | BuildingNode
@@ -154,6 +157,7 @@ type EditorState = {
       | WallNode
       | RoofNode
       | RoofSegmentNode
+      | SpawnNode
       | StairNode
       | StairSegmentNode
       | BuildingNode
@@ -688,8 +692,6 @@ const useEditor = create<EditorState>()(
       setFirstPersonMode: (enabled) => {
         if (enabled) {
           const currentViewMode = get().viewMode
-          useViewer.getState().setCameraMode('perspective')
-          useViewer.getState().setWallMode('up')
           set({
             isFirstPersonMode: true,
             _viewModeBeforeFirstPerson: currentViewMode,
@@ -699,7 +701,6 @@ const useEditor = create<EditorState>()(
             tool: null,
             catalogCategory: null,
           })
-          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
           const prevMode = get()._viewModeBeforeFirstPerson
           set({

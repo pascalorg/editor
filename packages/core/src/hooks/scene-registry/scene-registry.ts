@@ -18,6 +18,7 @@ export const sceneRegistry = {
     fence: new Set<string>(),
     item: new Set<string>(),
     slab: new Set<string>(),
+    spawn: new Set<string>(),
     zone: new Set<string>(),
     roof: new Set<string>(),
     'roof-segment': new Set<string>(),
