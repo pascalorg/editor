@@ -42,7 +42,7 @@ import {
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Command } from 'lucide-react'
+import { Command, Ruler } from 'lucide-react'
 import {
   memo,
   type MouseEvent as ReactMouseEvent,
@@ -204,6 +204,9 @@ const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_X = 92
 const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_Y = 48
 const FLOORPLAN_GUIDE_ROTATION_SNAP_DEGREES = 45
 const FLOORPLAN_GUIDE_ROTATION_FINE_SNAP_DEGREES = 1
+const FLOORPLAN_TRACE_SURFACE_FILL_OPACITY = 0.08
+const FLOORPLAN_TRACE_STRUCTURE_FILL_OPACITY = 0.22
+const FLOORPLAN_TRACE_STRUCTURE_SELECTED_FILL_OPACITY = 0.34
 const FLOORPLAN_SITE_COLOR = '#10b981'
 const FLOORPLAN_NODE_FOOTPRINT_STROKE_WIDTH = FLOORPLAN_OPENING_STROKE_WIDTH / 2
 const FLOORPLAN_NODE_FOOTPRINT_CROSS_STROKE_WIDTH = FLOORPLAN_NODE_FOOTPRINT_STROKE_WIDTH * 0.7
@@ -334,6 +337,21 @@ type GuideTransformDraft = {
   position: WallPlanPoint
   scale: number
   rotation: number
+}
+
+type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
+
+type ReferenceScaleDraft = {
+  guideId: GuideNode['id']
+  start: WallPlanPoint | null
+  cursor: WallPlanPoint | null
+}
+
+type PendingReferenceScale = {
+  guideId: GuideNode['id']
+  start: WallPlanPoint
+  end: WallPlanPoint
+  measuredLengthUnits: number
 }
 
 type GuideHandleHintAnchor = {
@@ -882,6 +900,14 @@ function getGuideRotateCursor(isDarkMode: boolean) {
   return buildCursorUrl(svgMarkup, 12, 12, 'pointer')
 }
 
+function getGuideSvgRotation(rotationY: number) {
+  return normalizeAngle(Math.PI - rotationY)
+}
+
+function getGuideSceneRotationFromSvgRotation(rotationSvg: number) {
+  return normalizeAngle(Math.PI - rotationSvg)
+}
+
 function buildGuideTranslateDraft(
   interaction: GuideInteractionState,
   pointerSvg: SvgPoint,
@@ -895,7 +921,7 @@ function buildGuideTranslateDraft(
     guideId: interaction.guideId,
     position: toPlanPointFromSvgPoint(centerSvg),
     scale: interaction.scale,
-    rotation: normalizeAngle(-interaction.rotationSvg),
+    rotation: getGuideSceneRotationFromSvgRotation(interaction.rotationSvg),
   }
 }
 
@@ -944,6 +970,56 @@ function doesGuideMatchDraft(guide: GuideNode, draft: GuideTransformDraft, epsil
   )
 }
 
+function transformGuideReferencePoint(
+  point: WallPlanPoint,
+  guide: GuideNode,
+  draft: GuideTransformDraft,
+): WallPlanPoint {
+  const oldCenterSvg = getGuideCenterSvgPoint(guide)
+  const newCenterSvg: SvgPoint = {
+    x: toSvgX(draft.position[0]),
+    y: toSvgY(draft.position[1]),
+  }
+  const oldRotationSvg = getGuideSvgRotation(guide.rotation[1])
+  const newRotationSvg = getGuideSvgRotation(draft.rotation)
+  const oldScale = guide.scale > 0 ? guide.scale : 1
+  const newScale = draft.scale > 0 ? draft.scale : oldScale
+  const pointSvg = toSvgPlanPoint(point)
+  const localUnrotated = rotateVector(subtractSvgPoints(pointSvg, oldCenterSvg), -oldRotationSvg)
+  const localScaled: WallPlanPoint = [
+    (localUnrotated[0] / oldScale) * newScale,
+    (localUnrotated[1] / oldScale) * newScale,
+  ]
+  const nextSvg = addVectorToSvgPoint(newCenterSvg, rotateVector(localScaled, newRotationSvg))
+
+  return toPlanPointFromSvgPoint(nextSvg)
+}
+
+function transformGuideScaleReference(
+  guide: GuideNode,
+  draft: GuideTransformDraft,
+): GuideNode['scaleReference'] {
+  const reference = guide.scaleReference
+  if (!reference) {
+    return reference
+  }
+
+  const start = transformGuideReferencePoint(reference.start, guide, draft)
+  const end = transformGuideReferencePoint(reference.end, guide, draft)
+  const measuredLengthUnits = Math.hypot(end[0] - start[0], end[1] - start[1])
+
+  return {
+    ...reference,
+    start,
+    end,
+    measuredLengthUnits,
+    metersPerUnit:
+      measuredLengthUnits > 0
+        ? reference.realLengthMeters / measuredLengthUnits
+        : reference.metersPerUnit,
+  }
+}
+
 function buildGuideResizeDraft(
   interaction: GuideInteractionState,
   pointerSvg: SvgPoint,
@@ -971,7 +1047,7 @@ function buildGuideResizeDraft(
     guideId: interaction.guideId,
     position: toPlanPointFromSvgPoint(centerSvg),
     scale: width / FLOORPLAN_GUIDE_BASE_WIDTH,
-    rotation: normalizeAngle(-interaction.rotationSvg),
+    rotation: getGuideSceneRotationFromSvgRotation(interaction.rotationSvg),
   }
 }
 
@@ -987,7 +1063,7 @@ function buildGuideRotationDraft(
       guideId: interaction.guideId,
       position: toPlanPointFromSvgPoint(interaction.centerSvg),
       scale: interaction.scale,
-      rotation: normalizeAngle(-interaction.rotationSvg),
+      rotation: getGuideSceneRotationFromSvgRotation(interaction.rotationSvg),
     }
   }
 
@@ -1004,7 +1080,7 @@ function buildGuideRotationDraft(
     guideId: interaction.guideId,
     position: toPlanPointFromSvgPoint(interaction.centerSvg),
     scale: interaction.scale,
-    rotation: normalizeAngle(-snappedRotationSvg),
+    rotation: getGuideSceneRotationFromSvgRotation(snappedRotationSvg),
   }
 }
 
@@ -1983,15 +2059,54 @@ function getFloorplanWall(wall: WallNode): WallNode {
   }
 }
 
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
+function formatMeasurement(
+  value: number,
+  unit: 'metric' | 'imperial',
+  metersPerUnit: number | null = null,
+) {
+  const measuredValue = metersPerUnit && metersPerUnit > 0 ? value * metersPerUnit : value
   if (unit === 'imperial') {
-    const feet = value * 3.280_84
+    const feet = measuredValue * 3.280_84
     const wholeFeet = Math.floor(feet)
     const inches = Math.round((feet - wholeFeet) * 12)
     if (inches === 12) return `${wholeFeet + 1}'0"`
     return `${wholeFeet}'${inches}"`
   }
-  return `${Number.parseFloat(value.toFixed(2))}m`
+  return `${Number.parseFloat(measuredValue.toFixed(2))}m`
+}
+
+function formatNumber(value: number, fractionDigits = 2) {
+  return Number.parseFloat(value.toFixed(fractionDigits)).toString()
+}
+
+function convertReferenceLengthToMeters(value: number, unit: ReferenceScaleUnit) {
+  switch (unit) {
+    case 'centimeters':
+      return value / 100
+    case 'feet':
+      return value * 0.3048
+    case 'inches':
+      return value * 0.0254
+    default:
+      return value
+  }
+}
+
+function getReferenceScaleUnitLabel(unit: ReferenceScaleUnit) {
+  switch (unit) {
+    case 'centimeters':
+      return 'cm'
+    case 'feet':
+      return 'ft'
+    case 'inches':
+      return 'in'
+    default:
+      return 'm'
+  }
+}
+
+function formatReferenceScaleLabel(value: number, unit: ReferenceScaleUnit) {
+  return `${formatNumber(value)} ${getReferenceScaleUnitLabel(unit)}`
 }
 
 function getPolygonAreaAndCentroid(polygon: Point2D[]) {
@@ -2029,9 +2144,16 @@ function getSlabArea(polygon: Point2D[], holes: Point2D[][]) {
   return { area: Math.max(0, totalArea), centroid: outer.centroid }
 }
 
-function formatArea(areaSqM: number, unit: 'metric' | 'imperial') {
+function formatArea(
+  areaSqM: number,
+  unit: 'metric' | 'imperial',
+  metersPerUnit: number | null = null,
+) {
+  const scaledAreaSqM =
+    metersPerUnit && metersPerUnit > 0 ? areaSqM * metersPerUnit * metersPerUnit : areaSqM
+
   if (unit === 'imperial') {
-    const areaSqFt = areaSqM * 10.763_910_4
+    const areaSqFt = scaledAreaSqM * 10.763_910_4
     return (
       <>
         {Math.round(areaSqFt).toLocaleString()}
@@ -2044,7 +2166,7 @@ function formatArea(areaSqM: number, unit: 'metric' | 'imperial') {
   }
   return (
     <>
-      {Number.parseFloat(areaSqM.toFixed(1))}
+      {Number.parseFloat(scaledAreaSqM.toFixed(1))}
       <tspan dx="0.12em">m</tspan>
       <tspan baselineShift="super" fontSize="0.75em">
         2
@@ -2058,6 +2180,7 @@ function getWallMeasurementOverlay(
   centerX: number,
   centerZ: number,
   unit: 'metric' | 'imperial',
+  metersPerUnit: number | null = null,
 ): LinearMeasurementOverlay | null {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
@@ -2076,7 +2199,7 @@ function getWallMeasurementOverlay(
   const dot = cx * nx + cz * nz
   const outX = dot >= 0 ? nx : -nx
   const outZ = dot >= 0 ? nz : -nz
-  const label = formatMeasurement(length, unit)
+  const label = formatMeasurement(length, unit, metersPerUnit)
   const dimensionLine = {
     x1: toSvgX(wall.start[0] + outX * FLOORPLAN_MEASUREMENT_OFFSET),
     y1: toSvgY(wall.start[1] + outZ * FLOORPLAN_MEASUREMENT_OFFSET),
@@ -2420,6 +2543,7 @@ function getSelectedWallMeasurementOverlays(
   selectedWallEntry: WallPolygonEntry,
   wallPolygons: WallPolygonEntry[],
   unit: 'metric' | 'imperial',
+  metersPerUnit: number | null = null,
 ): LinearMeasurementOverlay[] {
   const { wall } = selectedWallEntry
 
@@ -2438,7 +2562,7 @@ function getSelectedWallMeasurementOverlays(
 
     const centerX = minX === Number.POSITIVE_INFINITY ? 0 : (minX + maxX) / 2
     const centerY = minY === Number.POSITIVE_INFINITY ? 0 : (minY + maxY) / 2
-    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit)
+    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit, metersPerUnit)
     return overlay ? [overlay] : []
   }
 
@@ -2458,7 +2582,7 @@ function getSelectedWallMeasurementOverlays(
 
     const centerX = minX === Number.POSITIVE_INFINITY ? 0 : (minX + maxX) / 2
     const centerY = minY === Number.POSITIVE_INFINITY ? 0 : (minY + maxY) / 2
-    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit)
+    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit, metersPerUnit)
     return overlay ? [overlay] : []
   }
 
@@ -2478,7 +2602,7 @@ function getSelectedWallMeasurementOverlays(
       `${wall.id}:outer-face`,
       outerFace.start,
       outerFace.end,
-      formatMeasurement(outerLength, unit),
+      formatMeasurement(outerLength, unit, metersPerUnit),
       {
         offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
         offsetVector: outwardNormal,
@@ -2500,7 +2624,7 @@ function getSelectedWallMeasurementOverlays(
       `${wall.id}:inner-face`,
       innerFace.start,
       innerFace.end,
-      formatMeasurement(innerLength, unit),
+      formatMeasurement(innerLength, unit, metersPerUnit),
       {
         offsetDistance: FLOORPLAN_WALL_INNER_MEASUREMENT_OFFSET,
         offsetVector: inwardNormal,
@@ -2549,7 +2673,11 @@ function getItemDimensionMeasurementOverlays(
     itemEntry.item.scale[2] * itemEntry.item.asset.dimensions[2],
     unit,
   )
-  const buildSideOverlay = (id: string, start: Point2D, end: Point2D) => {
+  const buildSideOverlay = (
+    id: string,
+    start: Point2D,
+    end: Point2D,
+  ): LinearMeasurementOverlay | null => {
     const edgeVector = {
       x: end.x - start.x,
       y: end.y - start.y,
@@ -2601,7 +2729,7 @@ function getItemDimensionMeasurementOverlays(
       : null
   }
 
-  const widthCandidates = [
+  const widthCandidates: LinearMeasurementOverlay[] = [
     polygon[0] && polygon[1]
       ? buildSideOverlay(`${itemEntry.item.id}:width-a`, polygon[0], polygon[1])
       : null,
@@ -2610,7 +2738,7 @@ function getItemDimensionMeasurementOverlays(
       : null,
   ].filter((overlay): overlay is LinearMeasurementOverlay => overlay !== null)
 
-  const depthCandidates = [
+  const depthCandidates: LinearMeasurementOverlay[] = [
     polygon[1] && polygon[2]
       ? buildSideOverlay(`${itemEntry.item.id}:depth-a`, polygon[1], polygon[2])
       : null,
@@ -2936,7 +3064,7 @@ function FloorplanGuideImage({
   const planHeight = getGuideHeight(planWidth, aspectRatio)
   const centerX = toSvgX(guide.position[0])
   const centerY = toSvgY(guide.position[2])
-  const rotationDeg = (-guide.rotation[1] * 180) / Math.PI
+  const rotationDeg = (getGuideSvgRotation(guide.rotation[1]) * 180) / Math.PI
 
   return (
     <g
@@ -3164,7 +3292,7 @@ const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
             activeGuideInteractionGuideId === guide.id ? activeGuideInteractionMode : null
           }
           guide={guide}
-          isInteractive={isInteractive}
+          isInteractive={isInteractive && guide.locked !== true}
           isSelected={selectedGuideId === guide.id}
           key={guide.id}
           onGuideSelect={onGuideSelect}
@@ -3174,6 +3302,143 @@ const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
     </>
   )
 })
+
+function FloorplanReferenceScaleLine({
+  end,
+  isDraft = false,
+  label,
+  palette,
+  start,
+  unitsPerPixel,
+}: {
+  end: WallPlanPoint
+  isDraft?: boolean
+  label: string
+  palette: FloorplanPalette
+  start: WallPlanPoint
+  unitsPerPixel: number
+}) {
+  const x1 = toSvgX(start[0])
+  const y1 = toSvgY(start[1])
+  const x2 = toSvgX(end[0])
+  const y2 = toSvgY(end[1])
+  const labelX = (x1 + x2) / 2
+  const labelY = (y1 + y2) / 2
+  const markerRadius = Math.max(unitsPerPixel * 5, 0.04)
+  const labelPaddingX = Math.max(unitsPerPixel * 8, 0.08)
+  const labelWidth = Math.max(
+    label.length * unitsPerPixel * 7.2 + labelPaddingX * 2,
+    unitsPerPixel * 54,
+  )
+
+  return (
+    <g className={isDraft ? 'reference-scale-draft' : 'reference-scale'} pointerEvents="none">
+      <line
+        stroke={palette.cursor}
+        strokeDasharray="8 6"
+        strokeLinecap="round"
+        strokeOpacity={isDraft ? 0.95 : 0.9}
+        strokeWidth={2.25}
+        vectorEffect="non-scaling-stroke"
+        x1={x1}
+        x2={x2}
+        y1={y1}
+        y2={y2}
+      />
+      <circle
+        cx={x1}
+        cy={y1}
+        fill={palette.surface}
+        r={markerRadius}
+        stroke={palette.cursor}
+        strokeWidth={1.75}
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle
+        cx={x2}
+        cy={y2}
+        fill={palette.surface}
+        r={markerRadius}
+        stroke={palette.cursor}
+        strokeWidth={1.75}
+        vectorEffect="non-scaling-stroke"
+      />
+      <g transform={`translate(${labelX} ${labelY - unitsPerPixel * 14})`}>
+        <rect
+          fill={palette.surface}
+          height={unitsPerPixel * 20}
+          opacity={0.94}
+          rx={unitsPerPixel * 4}
+          stroke={palette.cursor}
+          strokeOpacity={0.55}
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+          width={labelWidth}
+          x={-labelWidth / 2}
+          y={-unitsPerPixel * 10}
+        />
+        <text
+          dominantBaseline="middle"
+          fill={palette.measurementStroke}
+          fontSize={Math.max(unitsPerPixel * 11, 0.08)}
+          fontWeight={700}
+          pointerEvents="none"
+          textAnchor="middle"
+        >
+          {label}
+        </text>
+      </g>
+    </g>
+  )
+}
+
+function FloorplanReferenceScaleLayer({
+  draft,
+  guides,
+  palette,
+  unit,
+  unitsPerPixel,
+}: {
+  draft: ReferenceScaleDraft | null
+  guides: GuideNode[]
+  palette: FloorplanPalette
+  unit: 'metric' | 'imperial'
+  unitsPerPixel: number
+}) {
+  const visibleReferences = guides
+    .map((guide) => guide.scaleReference)
+    .filter((reference): reference is NonNullable<GuideNode['scaleReference']> =>
+      Boolean(reference && reference.visible !== false),
+    )
+
+  return (
+    <>
+      {visibleReferences.map((reference, index) => (
+        <FloorplanReferenceScaleLine
+          end={reference.end}
+          key={`${reference.label}-${index}-${reference.start.join(',')}-${reference.end.join(',')}`}
+          label={reference.label}
+          palette={palette}
+          start={reference.start}
+          unitsPerPixel={unitsPerPixel}
+        />
+      ))}
+      {draft?.start && draft.cursor && (
+        <FloorplanReferenceScaleLine
+          end={draft.cursor}
+          isDraft
+          label={`Ref ${formatMeasurement(
+            Math.hypot(draft.cursor[0] - draft.start[0], draft.cursor[1] - draft.start[1]),
+            unit,
+          )}`}
+          palette={palette}
+          start={draft.start}
+          unitsPerPixel={unitsPerPixel}
+        />
+      )}
+    </>
+  )
+}
 
 function FloorplanGuideSelectionOverlay({
   guide,
@@ -3207,7 +3472,7 @@ function FloorplanGuideSelectionOverlay({
   const planHeight = getGuideHeight(planWidth, aspectRatio)
   const centerX = toSvgX(guide.position[0])
   const centerY = toSvgY(guide.position[2])
-  const rotationDeg = (-guide.rotation[1] * 180) / Math.PI
+  const rotationDeg = (getGuideSvgRotation(guide.rotation[1]) * 180) / Math.PI
   const selectionStroke = isDarkMode ? '#ffffff' : '#09090b'
   const handleFill = isDarkMode ? '#ffffff' : '#09090b'
   const handleStroke = isDarkMode ? '#0a0e1b' : '#ffffff'
@@ -3265,7 +3530,7 @@ function FloorplanGuideSelectionOverlay({
                   style={{
                     cursor: rotationModifierPressed
                       ? getGuideRotateCursor(isDarkMode)
-                      : getGuideResizeCursor(corner, -guide.rotation[1]),
+                      : getGuideResizeCursor(corner, getGuideSvgRotation(guide.rotation[1])),
                   }}
                   vectorEffect="non-scaling-stroke"
                 />
@@ -3379,6 +3644,8 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   wallPolygons,
   wallSelectionHatchId,
   unit,
+  metersPerUnit,
+  isGuideTraceVisible,
 }: {
   canFocusGeometry: boolean
   canSelectSlabs: boolean
@@ -3412,11 +3679,18 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   wallPolygons: WallPolygonEntry[]
   wallSelectionHatchId: string
   unit: 'metric' | 'imperial'
+  metersPerUnit: number | null
+  isGuideTraceVisible: boolean
 }) {
   const selectedWallEntries = wallPolygons.filter(({ wall }) => selectedIdSet.has(wall.id))
   const wallMeasurements =
     selectedIdSet.size === 1 && selectedWallEntries.length === 1
-      ? getSelectedWallMeasurementOverlays(selectedWallEntries[0]!, wallPolygons, unit)
+      ? getSelectedWallMeasurementOverlays(
+          selectedWallEntries[0]!,
+          wallPolygons,
+          unit,
+          metersPerUnit,
+        )
       : []
 
   return (
@@ -3432,6 +3706,13 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
             ? palette.selectedSlabStroke
             : palette.slabStroke
         const slabBorderWidth = showSelectedSlabStyle ? '1.2' : '1'
+        const slabFillOpacity = isDeleteHovered
+          ? 1
+          : isGuideTraceVisible
+            ? showSelectedSlabStyle
+              ? FLOORPLAN_TRACE_STRUCTURE_SELECTED_FILL_OPACITY
+              : FLOORPLAN_TRACE_STRUCTURE_FILL_OPACITY
+            : 1
         let slabLabel = null
 
         if (isSelected) {
@@ -3455,7 +3736,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 x={toSvgX(centroid.x)}
                 y={toSvgY(centroid.y)}
               >
-                {formatArea(area, unit)}
+                {formatArea(area, unit, metersPerUnit)}
               </text>
             )
           }
@@ -3468,6 +3749,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               d={path}
               fill={palette.surface}
               fillRule="evenodd"
+              opacity={isGuideTraceVisible ? FLOORPLAN_TRACE_SURFACE_FILL_OPACITY : 1}
               pointerEvents="none"
               stroke="none"
             />
@@ -3476,6 +3758,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               d={path}
               fill={isDeleteHovered ? palette.deleteFill : palette.slabFill}
               fillRule="evenodd"
+              opacity={slabFillOpacity}
               onClick={
                 canSelectSlabs
                   ? (event) => {
@@ -3504,7 +3787,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 d={path}
                 fill={`url(#${slabSelectionHatchId})`}
                 fillRule="evenodd"
-                opacity={1}
+                opacity={isGuideTraceVisible ? FLOORPLAN_TRACE_STRUCTURE_SELECTED_FILL_OPACITY : 1}
                 pointerEvents="none"
               />
             ) : null}
@@ -3536,6 +3819,13 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
             ? palette.selectedCeilingStroke
             : palette.ceilingStroke
         const ceilingBorderWidth = showSelectedCeilingStyle ? '1.2' : '1'
+        const ceilingFillOpacity = isDeleteHovered
+          ? 1
+          : isGuideTraceVisible
+            ? showSelectedCeilingStyle
+              ? FLOORPLAN_TRACE_STRUCTURE_SELECTED_FILL_OPACITY
+              : FLOORPLAN_TRACE_STRUCTURE_FILL_OPACITY
+            : 1
 
         return (
           <g key={ceiling.id}>
@@ -3544,6 +3834,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               d={path}
               fill={isDeleteHovered ? palette.deleteFill : palette.ceilingFill}
               fillRule="evenodd"
+              opacity={ceilingFillOpacity}
               onClick={
                 canSelectCeilings
                   ? (event) => {
@@ -3574,7 +3865,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 d={path}
                 fill={`url(#${slabSelectionHatchId})`}
                 fillRule="evenodd"
-                opacity={1}
+                opacity={isGuideTraceVisible ? FLOORPLAN_TRACE_STRUCTURE_SELECTED_FILL_OPACITY : 1}
                 pointerEvents="none"
               />
             ) : null}
@@ -3635,7 +3926,13 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               />
             )}
             <polygon
-              fill={isDeleteHovered ? palette.deleteWallFill : palette.wallFill}
+              fill={
+                isDeleteHovered
+                  ? palette.deleteWallFill
+                  : showSelectedWallChrome
+                    ? '#ffffff'
+                    : palette.wallFill
+              }
               onClick={
                 canSelectGeometry
                   ? (event) => {
@@ -5739,6 +6036,14 @@ export function FloorplanPanel() {
   const [zoneBoundaryDraft, setZoneBoundaryDraft] = useState<ZoneBoundaryDraft | null>(null)
   const [zoneVertexDragState, setZoneVertexDragState] = useState<ZoneVertexDragState | null>(null)
   const [guideTransformDraft, setGuideTransformDraft] = useState<GuideTransformDraft | null>(null)
+  const [referenceScaleDraft, setReferenceScaleDraft] = useState<ReferenceScaleDraft | null>(null)
+  const [pendingReferenceScale, setPendingReferenceScale] = useState<PendingReferenceScale | null>(
+    null,
+  )
+  const [referenceScaleValue, setReferenceScaleValue] = useState('1')
+  const [referenceScaleUnit, setReferenceScaleUnit] = useState<ReferenceScaleUnit>(
+    unit === 'imperial' ? 'feet' : 'meters',
+  )
   const [cursorPoint, setCursorPoint] = useState<WallPlanPoint | null>(null)
   const [floorplanCursorPosition, setFloorplanCursorPosition] = useState<SvgPoint | null>(null)
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
@@ -5887,14 +6192,33 @@ export function FloorplanPanel() {
         : guide,
     )
   }, [guideTransformDraft, visibleGuides])
+  const isGuideTraceVisible = displayGuides.some((guide) => guide.opacity > 0 && guide.scale > 0)
   const selectedGuideId =
     selectedReferenceId && guideById.has(selectedReferenceId as GuideNode['id'])
       ? (selectedReferenceId as GuideNode['id'])
       : null
   const selectedGuide = useMemo(
-    () => displayGuides.find((guide) => guide.id === selectedGuideId) ?? null,
-    [displayGuides, selectedGuideId],
+    () =>
+      displayGuides.find((guide) => guide.id === selectedGuideId) ??
+      (selectedGuideId ? (guideById.get(selectedGuideId) ?? null) : null),
+    [displayGuides, guideById, selectedGuideId],
   )
+  const calibratedMeasurementGuide = useMemo(() => {
+    if (
+      selectedGuide?.scaleReference &&
+      selectedGuide.scaleReference.metersPerUnit > 0 &&
+      selectedGuide.visible !== false
+    ) {
+      return selectedGuide
+    }
+
+    return (
+      visibleGuides.find(
+        (guide) => guide.scaleReference && guide.scaleReference.metersPerUnit > 0,
+      ) ?? null
+    )
+  }, [selectedGuide, visibleGuides])
+  const calibratedMetersPerUnit = calibratedMeasurementGuide?.scaleReference?.metersPerUnit ?? null
   const selectedGuideResolvedUrl = useResolvedAssetUrl(selectedGuide?.url ?? '')
   const selectedGuideDimensions = useGuideImageDimensions(selectedGuideResolvedUrl)
   const activeGuideInteractionGuideId = guideTransformDraft
@@ -6599,7 +6923,7 @@ export function FloorplanPanel() {
         `${selectedItemEntry.item.id}:clearance:${index}`,
         midpoint,
         bestHit.point,
-        formatMeasurement(bestHit.distance, unit),
+        formatMeasurement(bestHit.distance, unit, calibratedMetersPerUnit),
         {
           extensionOvershoot: 0,
         },
@@ -6607,7 +6931,7 @@ export function FloorplanPanel() {
 
       return overlay ? [overlay] : []
     })
-  }, [displayWallPolygons, selectedItemEntry, unit])
+  }, [calibratedMetersPerUnit, displayWallPolygons, selectedItemEntry, unit])
   const movingOpeningPlacementMeasurements = useMemo(() => {
     if (!(movingNode?.type === 'door' || movingNode?.type === 'window')) {
       return [] as LinearMeasurementOverlay[]
@@ -6705,7 +7029,7 @@ export function FloorplanPanel() {
         `${opening.id}:placement-left`,
         leftBoundaryPoint,
         openingFaceStart,
-        formatMeasurement(leftDistance, unit),
+        formatMeasurement(leftDistance, unit, calibratedMetersPerUnit),
         {
           offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
           offsetVector: faceContext.outwardNormal,
@@ -6729,7 +7053,7 @@ export function FloorplanPanel() {
         `${opening.id}:placement-right`,
         openingFaceEnd,
         rightBoundaryPoint,
-        formatMeasurement(rightDistance, unit),
+        formatMeasurement(rightDistance, unit, calibratedMetersPerUnit),
         {
           offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
           offsetVector: faceContext.outwardNormal,
@@ -6747,7 +7071,7 @@ export function FloorplanPanel() {
     }
 
     return overlays
-  }, [displayWallPolygons, movingNode, openingsPolygons, unit])
+  }, [calibratedMetersPerUnit, displayWallPolygons, movingNode, openingsPolygons, unit])
   const selectedWallEntry = useMemo(() => {
     if (selectedIds.length !== 1) {
       return null
@@ -6941,7 +7265,11 @@ export function FloorplanPanel() {
     structureLayer !== 'zones'
   const canInteractElementFloorplanGeometry = isDeleteMode || canSelectElementFloorplanGeometry
   const canInteractFloorplanSlabs = isDeleteMode || canSelectElementFloorplanGeometry
-  const canInteractWithGuides = showGuides && canSelectElementFloorplanGeometry
+  const canInteractWithGuides =
+    showGuides &&
+    canSelectElementFloorplanGeometry &&
+    !referenceScaleDraft &&
+    !pendingReferenceScale
   const canSelectFloorplanZones =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
@@ -8061,6 +8389,152 @@ export function FloorplanPanel() {
   )
   const floorplanUnitsPerPixel = viewBox.width / Math.max(surfaceSize.width, 1)
 
+  useEffect(() => {
+    setReferenceScaleUnit(unit === 'imperial' ? 'feet' : 'meters')
+  }, [unit])
+
+  const startReferenceScaleForGuide = useCallback(
+    (guideId: GuideNode['id']) => {
+      const guide = guideById.get(guideId)
+      if (!guide) {
+        return
+      }
+
+      setReferenceScaleDraft({
+        guideId: guide.id,
+        start: null,
+        cursor: null,
+      })
+      setPendingReferenceScale(null)
+      setMode('select')
+      setFloorplanSelectionTool('click')
+      setShowGuides(true)
+      setSelection({ selectedIds: [], zoneId: null })
+      setSelectedReferenceId(guide.id)
+    },
+    [
+      guideById,
+      setFloorplanSelectionTool,
+      setMode,
+      setSelectedReferenceId,
+      setSelection,
+      setShowGuides,
+    ],
+  )
+
+  useEffect(() => {
+    const handleSetReferenceScale = (payload: { guideId?: GuideNode['id'] }) => {
+      if (payload.guideId) {
+        startReferenceScaleForGuide(payload.guideId)
+      }
+    }
+
+    emitter.on('guide:set-reference-scale', handleSetReferenceScale)
+    return () => {
+      emitter.off('guide:set-reference-scale', handleSetReferenceScale)
+    }
+  }, [startReferenceScaleForGuide])
+
+  useEffect(() => {
+    const handleCancel = () => {
+      setReferenceScaleDraft(null)
+      setPendingReferenceScale(null)
+    }
+
+    emitter.on('guide:cancel-reference-scale', handleCancel)
+    return () => {
+      emitter.off('guide:cancel-reference-scale', handleCancel)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleDeleted = (payload: { guideId?: GuideNode['id'] }) => {
+      if (!payload.guideId) {
+        return
+      }
+
+      setReferenceScaleDraft((current) => (current?.guideId === payload.guideId ? null : current))
+      setPendingReferenceScale((current) => (current?.guideId === payload.guideId ? null : current))
+    }
+
+    emitter.on('guide:deleted', handleDeleted)
+    return () => {
+      emitter.off('guide:deleted', handleDeleted)
+    }
+  }, [])
+
+  const handleReferenceScaleConfirm = useCallback(() => {
+    if (!pendingReferenceScale) {
+      return
+    }
+
+    const guide = guideById.get(pendingReferenceScale.guideId)
+    if (!guide) {
+      setPendingReferenceScale(null)
+      return
+    }
+
+    const displayLength = Number(referenceScaleValue)
+    if (!(displayLength > 0)) {
+      return
+    }
+
+    const realLengthMeters = convertReferenceLengthToMeters(displayLength, referenceScaleUnit)
+    const requestedScaleFactor = realLengthMeters / pendingReferenceScale.measuredLengthUnits
+    const currentGuideScale = guide.scale > 0 ? guide.scale : 1
+    const nextGuideScale = Math.max(
+      currentGuideScale * requestedScaleFactor,
+      FLOORPLAN_GUIDE_MIN_SCALE,
+    )
+    const appliedScaleFactor = nextGuideScale / currentGuideScale
+    const scaledEnd: WallPlanPoint = [
+      pendingReferenceScale.start[0] +
+        (pendingReferenceScale.end[0] - pendingReferenceScale.start[0]) * appliedScaleFactor,
+      pendingReferenceScale.start[1] +
+        (pendingReferenceScale.end[1] - pendingReferenceScale.start[1]) * appliedScaleFactor,
+    ]
+    const scaledMeasuredLengthUnits = Math.hypot(
+      scaledEnd[0] - pendingReferenceScale.start[0],
+      scaledEnd[1] - pendingReferenceScale.start[1],
+    )
+    const nextGuidePosition: GuideNode['position'] = [
+      pendingReferenceScale.start[0] +
+        (guide.position[0] - pendingReferenceScale.start[0]) * appliedScaleFactor,
+      guide.position[1],
+      pendingReferenceScale.start[1] +
+        (guide.position[2] - pendingReferenceScale.start[1]) * appliedScaleFactor,
+    ]
+    const metersPerUnit =
+      scaledMeasuredLengthUnits > 0 ? realLengthMeters / scaledMeasuredLengthUnits : 1
+
+    updateNode(
+      pendingReferenceScale.guideId as AnyNodeId,
+      {
+        locked: true,
+        position: nextGuidePosition,
+        scale: nextGuideScale,
+        scaleReference: {
+          start: pendingReferenceScale.start,
+          end: scaledEnd,
+          realLengthMeters,
+          measuredLengthUnits: scaledMeasuredLengthUnits,
+          metersPerUnit,
+          label: formatReferenceScaleLabel(displayLength, referenceScaleUnit),
+          visible: true,
+        },
+      } as Partial<GuideNode>,
+    )
+    setSelectedReferenceId(pendingReferenceScale.guideId)
+    setPendingReferenceScale(null)
+  }, [
+    guideById,
+    pendingReferenceScale,
+    referenceScaleUnit,
+    referenceScaleValue,
+    setSelectedReferenceId,
+    updateNode,
+  ])
+
   const getSvgPointFromClientPoint = useCallback(
     (clientX: number, clientY: number): SvgPoint | null => {
       const svg = svgRef.current
@@ -8877,6 +9351,7 @@ export function FloorplanPanel() {
             number,
           ],
           scale: nextDraft.scale,
+          scaleReference: transformGuideScaleReference(guide, nextDraft),
         })
       }
 
@@ -10008,6 +10483,23 @@ export function FloorplanPanel() {
         return
       }
 
+      if (referenceScaleDraft) {
+        emitFloorplanGridEvent('move', planPoint, event)
+
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, planPoint) ? previousPoint : planPoint,
+        )
+        setReferenceScaleDraft((currentDraft) =>
+          currentDraft
+            ? {
+                ...currentDraft,
+                cursor: planPoint,
+              }
+            : currentDraft,
+        )
+        return
+      }
+
       if (isCeilingBuildActive) {
         emitFloorplanGridEvent('move', planPoint, event)
 
@@ -10181,6 +10673,7 @@ export function FloorplanPanel() {
       isPolygonBuildActive,
       isRoofBuildActive,
       isWallBuildActive,
+      referenceScaleDraft,
       roofDraftStart,
       ceilingHoleMoveDraft,
       ceilingHoleVertexDragState,
@@ -10415,6 +10908,44 @@ export function FloorplanPanel() {
         return
       }
 
+      if (referenceScaleDraft) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        emitFloorplanGridEvent('click', planPoint, event)
+
+        if (!referenceScaleDraft.start) {
+          setReferenceScaleDraft({
+            ...referenceScaleDraft,
+            start: planPoint,
+            cursor: planPoint,
+          })
+          setCursorPoint(planPoint)
+          return
+        }
+
+        const measuredLengthUnits = Math.hypot(
+          planPoint[0] - referenceScaleDraft.start[0],
+          planPoint[1] - referenceScaleDraft.start[1],
+        )
+
+        if (measuredLengthUnits < 1e-6) {
+          return
+        }
+
+        setPendingReferenceScale({
+          guideId: referenceScaleDraft.guideId,
+          start: referenceScaleDraft.start,
+          end: planPoint,
+          measuredLengthUnits,
+        })
+        setReferenceScaleValue(formatNumber(measuredLengthUnits, 2))
+        setReferenceScaleUnit(unit === 'imperial' ? 'feet' : 'meters')
+        setReferenceScaleDraft(null)
+        setCursorPoint(null)
+        return
+      }
+
       if (handleBackgroundPlacementClick(planPoint, event, draftStart)) {
         return
       }
@@ -10490,12 +11021,14 @@ export function FloorplanPanel() {
       isWallBuildActive,
       levelId,
       levelNode,
+      referenceScaleDraft,
       setSelectedReferenceId,
       setSelection,
       structureLayer,
       getFloorplanHitIdAtPoint,
-      toPoint2D,
+      unit,
       visibleZonePolygons,
+      emitFloorplanGridEvent,
     ],
   )
   const handleBackgroundDoubleClick = useCallback(
@@ -10896,7 +11429,7 @@ export function FloorplanPanel() {
       corner: GuideCorner,
       event: ReactPointerEvent<SVGCircleElement>,
     ) => {
-      if (event.button !== 0 || !canInteractWithGuides) {
+      if (event.button !== 0 || !canInteractWithGuides || guide.locked === true) {
         return
       }
 
@@ -10912,7 +11445,7 @@ export function FloorplanPanel() {
       handleGuideSelect(guide.id)
 
       const centerSvg = getGuideCenterSvgPoint(guide)
-      const rotationSvg = -guide.rotation[1]
+      const rotationSvg = getGuideSvgRotation(guide.rotation[1])
       const width = getGuideWidth(guide.scale)
       const height = getGuideHeight(width, aspectRatio)
       const [cornerOffsetX, cornerOffsetY] = getGuideCornerLocalOffset(width, height, corner)
@@ -10959,7 +11492,12 @@ export function FloorplanPanel() {
   )
   const handleGuideTranslateStart = useCallback(
     (guide: GuideNode, event: ReactPointerEvent<SVGRectElement>) => {
-      if (event.button !== 0 || !canInteractWithGuides || selectedGuideId !== guide.id) {
+      if (
+        event.button !== 0 ||
+        !canInteractWithGuides ||
+        selectedGuideId !== guide.id ||
+        guide.locked === true
+      ) {
         return
       }
 
@@ -10982,7 +11520,7 @@ export function FloorplanPanel() {
         centerSvg,
         oppositeCornerSvg: null,
         pointerOffsetSvg: subtractSvgPoints(svgPoint, centerSvg),
-        rotationSvg: -guide.rotation[1],
+        rotationSvg: getGuideSvgRotation(guide.rotation[1]),
         cornerBaseAngle: 0,
         scale: guide.scale,
       }
@@ -13057,7 +13595,12 @@ export function FloorplanPanel() {
     selectedStairEntry,
   ])
   const activeDraftAnchorPoint =
-    draftStart ?? fenceDraftStart ?? roofDraftStart ?? activePolygonDraftPoints[0] ?? null
+    referenceScaleDraft?.start ??
+    draftStart ??
+    fenceDraftStart ??
+    roofDraftStart ??
+    activePolygonDraftPoints[0] ??
+    null
   const floorplanCursorColor =
     mode === 'delete'
       ? palette.deleteStroke
@@ -13066,6 +13609,25 @@ export function FloorplanPanel() {
         : activeDraftAnchorPoint
           ? palette.draftStroke
           : palette.cursor
+  const pendingReferenceDisplayLength = Number(referenceScaleValue)
+  const pendingReferenceRealLengthMeters =
+    pendingReferenceScale && pendingReferenceDisplayLength > 0
+      ? convertReferenceLengthToMeters(pendingReferenceDisplayLength, referenceScaleUnit)
+      : null
+  const pendingReferenceMetersPerUnit =
+    pendingReferenceScale && pendingReferenceRealLengthMeters
+      ? pendingReferenceRealLengthMeters / pendingReferenceScale.measuredLengthUnits
+      : null
+  const pendingReferenceImageScaleFactor =
+    pendingReferenceScale && pendingReferenceRealLengthMeters
+      ? pendingReferenceRealLengthMeters / pendingReferenceScale.measuredLengthUnits
+      : null
+  const referenceScaleInputError =
+    referenceScaleValue.trim() === ''
+      ? 'Enter the real length of the line.'
+      : pendingReferenceDisplayLength > 0
+        ? null
+        : 'Length must be greater than 0.'
   return (
     <div
       className="pointer-events-auto flex h-full w-full flex-col overflow-hidden bg-background/95"
@@ -13157,6 +13719,116 @@ export function FloorplanPanel() {
           offsetY={FLOORPLAN_ACTION_MENU_OFFSET_Y}
         />
 
+        {referenceScaleDraft && (
+          <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">
+            {referenceScaleDraft.start
+              ? 'Click the end of the known distance'
+              : 'Click the start of a known distance'}
+          </div>
+        )}
+
+        {pendingReferenceScale && (
+          <form
+            className="absolute top-1/2 left-1/2 z-40 w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background/95 p-3.5 text-foreground shadow-2xl backdrop-blur-md"
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleReferenceScaleConfirm()
+            }}
+          >
+            <div className="mb-3 flex items-start gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-white/5">
+                <Ruler className="h-4 w-4 text-foreground/80" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-medium text-sm">Set overlay scale</div>
+                <div className="mt-0.5 text-muted-foreground text-xs leading-4">
+                  Enter the real-world length of the line you just drew. The image will resize to
+                  match it.
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-3 rounded-xl border border-border/70 bg-white/5 px-3 py-2">
+              <div className="text-muted-foreground text-[11px] uppercase tracking-wide">
+                Drawn line
+              </div>
+              <div className="mt-1 font-medium text-sm">
+                {formatMeasurement(pendingReferenceScale.measuredLengthUnits, unit)}
+              </div>
+            </div>
+
+            <label className="block">
+              <span className="mb-1.5 block font-medium text-muted-foreground text-xs">
+                Real length
+              </span>
+              <div className="grid grid-cols-[1fr_8.25rem] gap-2">
+                <input
+                  aria-invalid={Boolean(referenceScaleInputError)}
+                  className={cn(
+                    'h-9 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-foreground/40',
+                    referenceScaleInputError ? 'border-destructive/60' : 'border-border',
+                  )}
+                  inputMode="decimal"
+                  onBlur={() => {
+                    const value = Number(referenceScaleValue)
+                    if (!(value > 0)) {
+                      setReferenceScaleValue('0.0001')
+                    }
+                  }}
+                  onChange={(event) => setReferenceScaleValue(event.target.value)}
+                  step="any"
+                  type="number"
+                  value={referenceScaleValue}
+                />
+                <select
+                  className="h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none transition focus:border-foreground/40"
+                  onChange={(event) =>
+                    setReferenceScaleUnit(event.target.value as ReferenceScaleUnit)
+                  }
+                  value={referenceScaleUnit}
+                >
+                  <option value="meters">Meters</option>
+                  <option value="centimeters">Centimeters</option>
+                  <option value="feet">Feet</option>
+                  <option value="inches">Inches</option>
+                </select>
+              </div>
+              <span
+                className={cn(
+                  'mt-1.5 block text-xs',
+                  referenceScaleInputError ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {referenceScaleInputError ??
+                  'Any decimal works. Use the known real length, not the drawn value.'}
+              </span>
+            </label>
+
+            <div className="mt-3 rounded-lg bg-muted/45 px-3 py-2 text-muted-foreground text-xs">
+              {pendingReferenceImageScaleFactor
+                ? `Image will scale ${formatNumber(pendingReferenceImageScaleFactor, 3)}x from the first point.`
+                : 'Enter a length greater than 0.'}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-white/8 hover:text-foreground"
+                onClick={() => setPendingReferenceScale(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="h-8 rounded-lg bg-foreground px-3 font-medium text-background text-xs transition hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!pendingReferenceMetersPerUnit}
+                type="submit"
+              >
+                Save Scale
+              </button>
+            </div>
+          </form>
+        )}
+
         {!levelNode || levelNode.type !== 'level' ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
             Switch to a building level to view and edit the floorplan.
@@ -13173,7 +13845,7 @@ export function FloorplanPanel() {
             onPointerMove={handleSvgPointerMove}
             onPointerUp={endPanning}
             ref={svgRef}
-            style={{ cursor: EDITOR_CURSOR }}
+            style={{ cursor: referenceScaleDraft ? 'crosshair' : EDITOR_CURSOR }}
             viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
           >
             <defs>
@@ -13272,6 +13944,8 @@ export function FloorplanPanel() {
                 slabSelectionHatchId={slabSelectionHatchId}
                 slabPolygons={displaySlabPolygons}
                 unit={unit}
+                metersPerUnit={calibratedMetersPerUnit}
+                isGuideTraceVisible={isGuideTraceVisible}
                 wallPolygons={displayWallPolygons}
                 wallSelectionHatchId={wallSelectionHatchId}
               />
@@ -13336,6 +14010,14 @@ export function FloorplanPanel() {
                 palette={palette}
                 roofEntries={floorplanRoofEntries}
                 selectedIdSet={selectedIdSet}
+              />
+
+              <FloorplanReferenceScaleLayer
+                draft={referenceScaleDraft}
+                guides={displayGuides}
+                palette={palette}
+                unit={unit}
+                unitsPerPixel={floorplanUnitsPerPixel}
               />
 
               <FloorplanMeasurementsLayer
@@ -13410,11 +14092,22 @@ export function FloorplanPanel() {
 
               <FloorplanDraftLayer
                 anchorFill={palette.anchor}
-                draftAnchorPoints={activePolygonDraftPoints.map((point, index) => ({
-                  x: toSvgX(point[0]),
-                  y: toSvgY(point[1]),
-                  isPrimary: index === 0,
-                }))}
+                draftAnchorPoints={[
+                  ...(referenceScaleDraft?.start
+                    ? [
+                        {
+                          x: toSvgX(referenceScaleDraft.start[0]),
+                          y: toSvgY(referenceScaleDraft.start[1]),
+                          isPrimary: true,
+                        },
+                      ]
+                    : []),
+                  ...activePolygonDraftPoints.map((point, index) => ({
+                    x: toSvgX(point[0]),
+                    y: toSvgY(point[1]),
+                    isPrimary: index === 0,
+                  })),
+                ]}
                 draftFill={palette.draftFill}
                 draftPolygonPoints={draftPolygonPoints}
                 draftStroke={palette.draftStroke}
@@ -13573,7 +14266,7 @@ export function FloorplanPanel() {
                   onCornerHoverChange={setHoveredGuideCorner}
                   onCornerPointerDown={handleGuideCornerPointerDown}
                   rotationModifierPressed={rotationModifierPressed}
-                  showHandles={canInteractWithGuides}
+                  showHandles={canInteractWithGuides && selectedGuide.locked !== true}
                 />
               )}
 

@@ -11,6 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { createLocalGuideImage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
@@ -61,35 +62,67 @@ function useLevelScans(): ScanNode[] {
 
 // ── Shared upload button for dropdowns ──────────────────────────────────────
 
-function UploadButton() {
+function UploadButton({ onError }: { onError: (message: string | null) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const levelId = useViewer((s) => s.selection.levelId)
+  const setSelection = useViewer((s) => s.setSelection)
+  const setShowGuides = useViewer((s) => s.setShowGuides)
+  const createNode = useScene((s) => s.createNode)
+  const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
+  const [isAddingGuide, setIsAddingGuide] = useState(false)
 
   const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!(file && levelId)) return
       e.target.value = ''
 
-      const { uploadHandler } = useUploadStore.getState()
-      if (!uploadHandler) return
+      onError(null)
 
-      if (file.size > MAX_FILE_SIZE) return
+      if (file.size > MAX_FILE_SIZE) {
+        onError('File is too large. Maximum size is 200 MB.')
+        return
+      }
 
       const isScan =
         file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')
       const isImage = file.type.startsWith('image/')
-      if (!(isScan || isImage)) return
+      if (!(isScan || isImage)) {
+        onError('Upload a .glb/.gltf scan or an image.')
+        return
+      }
 
-      const type = isScan ? 'scan' : 'guide'
+      if (isImage) {
+        setIsAddingGuide(true)
+        try {
+          const guide = await createLocalGuideImage({ createNode, file, levelId })
+          setShowGuides(true)
+          setSelectedReferenceId(guide.id)
+          setSelection({ selectedIds: [], zoneId: null })
+        } catch {
+          onError('Could not add that guide image.')
+        } finally {
+          setIsAddingGuide(false)
+        }
+        return
+      }
+
+      const { uploadHandler } = useUploadStore.getState()
+      if (!uploadHandler) {
+        onError('Scan upload is unavailable.')
+        return
+      }
 
       const projectId = window.location.pathname.split('/editor/')[1]?.split('/')[0]
-      if (!projectId) return
+      if (!projectId) {
+        onError('Open a project before uploading a scan.')
+        return
+      }
 
       useUploadStore.getState().clearUpload(levelId)
-      uploadHandler(projectId, levelId, file, type)
+      uploadHandler(projectId, levelId, file, 'scan')
     },
-    [levelId],
+    [createNode, levelId, onError, setSelectedReferenceId, setSelection, setShowGuides],
   )
 
   return (
@@ -97,6 +130,7 @@ function UploadButton() {
       <button
         aria-label="Upload scan or guide image"
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        disabled={isAddingGuide}
         onClick={() => fileInputRef.current?.click()}
         type="button"
       >
@@ -118,9 +152,13 @@ function UploadButton() {
 function GuidesControl() {
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
+  const setSelection = useViewer((state) => state.setSelection)
   const updateNode = useScene((state) => state.updateNode)
   const deleteNode = useScene((state) => state.deleteNode)
+  const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
+  const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const [isOpen, setIsOpen] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const guides = useLevelGuides()
   const hasGuides = guides.length > 0
@@ -130,6 +168,15 @@ function GuidesControl() {
       updateNode(guideId, { opacity: Math.round(Math.min(100, Math.max(0, opacity))) })
     },
     [updateNode],
+  )
+
+  const handleSelectGuide = useCallback(
+    (guideId: GuideNode['id']) => {
+      setShowGuides(true)
+      setSelectedReferenceId(guideId)
+      setSelection({ selectedIds: [], zoneId: null })
+    },
+    [setSelectedReferenceId, setSelection, setShowGuides],
   )
 
   return (
@@ -201,29 +248,55 @@ function GuidesControl() {
                 </p>
               )}
             </div>
-            <UploadButton />
+            <UploadButton onError={setUploadError} />
           </div>
+
+          {uploadError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-destructive text-xs">
+              {uploadError}
+            </div>
+          )}
 
           {hasGuides ? (
             <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
               {guides.map((guide, index) => (
                 <div
-                  className="group/item space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
+                  className={cn(
+                    'group/item space-y-2 rounded-xl border bg-background/75 p-2.5 transition-colors',
+                    selectedReferenceId === guide.id
+                      ? 'border-foreground/35 bg-white/10'
+                      : 'border-border/45',
+                  )}
                   key={guide.id}
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <img
-                      alt=""
-                      className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
-                      src="/icons/floorplan.png"
-                    />
-                    <p className="truncate font-medium text-foreground text-sm">
-                      {guide.name || `Guide image ${index + 1}`}
-                    </p>
+                    <button
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onClick={() => handleSelectGuide(guide.id)}
+                      type="button"
+                    >
+                      <img
+                        alt=""
+                        className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
+                        src="/icons/floorplan.png"
+                      />
+                      <p className="truncate font-medium text-foreground text-sm">
+                        {guide.name || `Guide image ${index + 1}`}
+                      </p>
+                      {selectedReferenceId === guide.id && (
+                        <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
+                      )}
+                    </button>
                     <button
                       aria-label="Delete guide image"
-                      className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
-                      onClick={() => deleteNode(guide.id)}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        deleteNode(guide.id)
+                        if (selectedReferenceId === guide.id) {
+                          setSelectedReferenceId(null)
+                        }
+                      }}
                       type="button"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -335,9 +408,13 @@ export function GridSnapControl() {
 function ScansControl() {
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
+  const setSelection = useViewer((state) => state.setSelection)
   const updateNode = useScene((state) => state.updateNode)
   const deleteNode = useScene((state) => state.deleteNode)
+  const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
+  const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const [isOpen, setIsOpen] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const scans = useLevelScans()
   const hasScans = scans.length > 0
@@ -347,6 +424,15 @@ function ScansControl() {
       updateNode(scanId, { opacity: Math.round(Math.min(100, Math.max(0, opacity))) })
     },
     [updateNode],
+  )
+
+  const handleSelectScan = useCallback(
+    (scanId: ScanNode['id']) => {
+      setShowScans(true)
+      setSelectedReferenceId(scanId)
+      setSelection({ selectedIds: [], zoneId: null })
+    },
+    [setSelectedReferenceId, setSelection, setShowScans],
   )
 
   return (
@@ -414,29 +500,55 @@ function ScansControl() {
                 </p>
               )}
             </div>
-            <UploadButton />
+            <UploadButton onError={setUploadError} />
           </div>
+
+          {uploadError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-destructive text-xs">
+              {uploadError}
+            </div>
+          )}
 
           {hasScans ? (
             <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
               {scans.map((scan, index) => (
                 <div
-                  className="group/item space-y-2 rounded-xl border border-border/45 bg-background/75 p-2.5"
+                  className={cn(
+                    'group/item space-y-2 rounded-xl border bg-background/75 p-2.5 transition-colors',
+                    selectedReferenceId === scan.id
+                      ? 'border-foreground/35 bg-white/10'
+                      : 'border-border/45',
+                  )}
                   key={scan.id}
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <img
-                      alt=""
-                      className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
-                      src="/icons/mesh.png"
-                    />
-                    <p className="truncate font-medium text-foreground text-sm">
-                      {scan.name || `Scan ${index + 1}`}
-                    </p>
+                    <button
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onClick={() => handleSelectScan(scan.id)}
+                      type="button"
+                    >
+                      <img
+                        alt=""
+                        className="h-3.5 w-3.5 shrink-0 object-contain opacity-70"
+                        src="/icons/mesh.png"
+                      />
+                      <p className="truncate font-medium text-foreground text-sm">
+                        {scan.name || `Scan ${index + 1}`}
+                      </p>
+                      {selectedReferenceId === scan.id && (
+                        <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
+                      )}
+                    </button>
                     <button
                       aria-label="Delete scan"
-                      className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
-                      onClick={() => deleteNode(scan.id)}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        deleteNode(scan.id)
+                        if (selectedReferenceId === scan.id) {
+                          setSelectedReferenceId(null)
+                        }
+                      }}
                       type="button"
                     >
                       <Trash2 className="h-3 w-3" />
