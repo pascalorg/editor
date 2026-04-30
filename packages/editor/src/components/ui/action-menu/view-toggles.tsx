@@ -83,6 +83,10 @@ function useLowerReferenceLevels(): LevelNode[] {
   )
 }
 
+function getLevelDisplayName(level: LevelNode) {
+  return level.name || `Level ${level.level}`
+}
+
 // ── Shared upload button for dropdowns ──────────────────────────────────────
 
 function UploadButton({ onError }: { onError: (message: string | null) => void }) {
@@ -612,6 +616,7 @@ function ReferenceFloorControl() {
   const lowerLevels = useLowerReferenceLevels()
   const hasLowerLevels = lowerLevels.length > 0
   const selectedLevel = lowerLevels[referenceFloorOffset - 1] ?? lowerLevels[0] ?? null
+  const selectedLevelName = selectedLevel ? getLevelDisplayName(selectedLevel) : null
 
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
@@ -625,8 +630,8 @@ function ReferenceFloorControl() {
           )}
           disabled={!hasLowerLevels}
           label={
-            selectedLevel && showReferenceFloor
-              ? `Reference floor: ${selectedLevel.name}`
+            selectedLevelName && showReferenceFloor
+              ? `Reference floor: ${selectedLevelName}`
               : 'Reference floor'
           }
           onClick={() => {
@@ -678,8 +683,8 @@ function ReferenceFloorControl() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-medium text-foreground text-sm">Reference floor</p>
-              {selectedLevel && (
-                <p className="truncate text-muted-foreground text-xs">{selectedLevel.name}</p>
+              {selectedLevelName && (
+                <p className="truncate text-muted-foreground text-xs">{selectedLevelName}</p>
               )}
             </div>
             <button
@@ -698,6 +703,7 @@ function ReferenceFloorControl() {
               <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border/45 bg-background/60 p-1.5">
                 {lowerLevels.map((level, index) => {
                   const isSelected = referenceFloorOffset === index + 1
+                  const levelName = getLevelDisplayName(level)
                   return (
                     <button
                       className={cn(
@@ -721,7 +727,7 @@ function ReferenceFloorControl() {
                             : 'border-muted-foreground/35',
                         )}
                       />
-                      <span className="min-w-0 flex-1 truncate">{level.name}</span>
+                      <span className="min-w-0 flex-1 truncate">{levelName}</span>
                       <span className="text-[10px] text-muted-foreground">
                         {index + 1} below
                       </span>
