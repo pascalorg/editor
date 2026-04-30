@@ -328,7 +328,9 @@ export function bindingResourceIsExplicitGroupMember(
   resource: HomeAssistantResourceBinding,
   memberEntityIds: Set<string>,
 ) {
-  return memberEntityIds.has(resource.id) || memberEntityIds.has(getBindingResourceEntityId(resource))
+  return (
+    memberEntityIds.has(resource.id) || memberEntityIds.has(getBindingResourceEntityId(resource))
+  )
 }
 
 function excludedResourceIdIsExplicitGroupMember(
@@ -381,9 +383,13 @@ export function bindingHasUserManagedGroupComposition({
   }
 
   const excludedResourceIds = getSmartHomeExcludedResourceIds(binding.presentation)
-  if (excludedResourceIds.length > 0 && binding.resources.some(isSmartHomeDeviceComponentResource)) {
+  if (
+    excludedResourceIds.length > 0 &&
+    binding.resources.some(isSmartHomeDeviceComponentResource)
+  ) {
     const hasUserManagedExclusion = excludedResourceIds.some(
-      (resourceId) => !excludedResourceIdIsExplicitGroupMember(binding, resourceId, memberEntityIds),
+      (resourceId) =>
+        !excludedResourceIdIsExplicitGroupMember(binding, resourceId, memberEntityIds),
     )
     if (hasUserManagedExclusion) {
       return true
@@ -482,8 +488,7 @@ export function orderDeviceGroupsBySharedMembers<
   const explicitGroups = groups
     .filter((deviceGroup) => Boolean(deviceGroup.group))
     .sort((left, right) => {
-      const specificityDelta =
-        getGroupSpecificity(left.group!) - getGroupSpecificity(right.group!)
+      const specificityDelta = getGroupSpecificity(left.group!) - getGroupSpecificity(right.group!)
       if (specificityDelta !== 0) {
         return specificityDelta
       }

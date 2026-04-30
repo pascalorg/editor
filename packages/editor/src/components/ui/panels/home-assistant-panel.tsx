@@ -221,6 +221,43 @@ const PROVIDERS: ProviderDefinition[] = [
   },
 ]
 
+const SCENE_STORAGE_KEY = 'pascal-editor-scene'
+
+function storedSceneHasUserManagedBindingForGroupResource(groupResourceId: string) {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  try {
+    const rawScene = window.localStorage.getItem(SCENE_STORAGE_KEY)
+    if (!rawScene) {
+      return false
+    }
+
+    const scene = JSON.parse(rawScene) as { nodes?: Record<string, unknown> }
+    return Object.values(scene.nodes ?? {}).some((node) => {
+      if (!(node && typeof node === 'object')) {
+        return false
+      }
+
+      const record = node as {
+        presentation?: { rtsRoomControls?: { mode?: unknown } }
+        resources?: { id?: unknown }[]
+        type?: unknown
+      }
+
+      return (
+        record.type === 'home-assistant-binding' &&
+        record.presentation?.rtsRoomControls?.mode === 'user-managed' &&
+        Array.isArray(record.resources) &&
+        record.resources.some((resource) => resource?.id === groupResourceId)
+      )
+    })
+  } catch {
+    return false
+  }
+}
+
 function ensureHomeAssistantResourceCollection(
   resource: HomeAssistantImportedResource,
 ): Collection | null {
@@ -1360,6 +1397,12 @@ export function HomeAssistantPanel() {
       const existingBindingNode = Object.values(currentBindings).find((bindingNode) =>
         bindingNode.resources.some((entry) => entry.id === groupResource.id),
       )
+      if (
+        !existingBindingNode &&
+        storedSceneHasUserManagedBindingForGroupResource(groupResource.id)
+      ) {
+        continue
+      }
       let collection = existingBindingNode
         ? currentCollections[existingBindingNode.collectionId]
         : null
@@ -1474,7 +1517,7 @@ export function HomeAssistantPanel() {
         resources: nextResources,
       })
 
-    if (!nextBinding || homeAssistantBindingsAreEqual(existingBinding, nextBinding)) {
+      if (!nextBinding || homeAssistantBindingsAreEqual(existingBinding, nextBinding)) {
         continue
       }
 

@@ -86,6 +86,7 @@ function readLegacyRoomControlComposition(
   }
 
   const excludedResourceIds = readStringArray(value.excludedResourceIds)
+  const mode = value.mode === 'user-managed' || value.mode === 'ha-derived' ? value.mode : undefined
   const groups = Array.isArray(value.groups)
     ? value.groups
         .map((group) => {
@@ -103,13 +104,14 @@ function readLegacyRoomControlComposition(
         .filter((group): group is { memberResourceIds: string[] } => Boolean(group))
     : undefined
 
-  if (!(excludedResourceIds?.length || groups?.length)) {
+  if (!(excludedResourceIds?.length || groups?.length || mode)) {
     return undefined
   }
 
   return {
     ...(excludedResourceIds?.length ? { excludedResourceIds } : {}),
     ...(groups?.length ? { groups } : {}),
+    ...(mode ? { mode } : {}),
   }
 }
 
@@ -187,17 +189,52 @@ function isUsableSceneGraph(scene: SceneGraph | null | undefined): scene is Scen
   )
 }
 
-function sceneHasBuilding(scene: SceneGraph): boolean {
-  const siteId = scene.rootNodeIds[0]
-  const siteNode = siteId ? scene.nodes[siteId] : null
-  if (!(isRecord(siteNode) && siteNode.type === 'site' && Array.isArray(siteNode.children))) {
-    return false
+function readNodeRefId(value: unknown) {
+  if (typeof value === 'string') {
+    return value
+  }
+  return isRecord(value) && typeof value.id === 'string' ? value.id : null
+}
+
+function sceneHasAuthoredBuildingLayout(scene: SceneGraph): boolean {
+  for (const siteId of scene.rootNodeIds) {
+    const siteNode = scene.nodes[siteId]
+    if (!(isRecord(siteNode) && siteNode.type === 'site' && Array.isArray(siteNode.children))) {
+      continue
+    }
+
+    for (const buildingRef of siteNode.children) {
+      const buildingId = readNodeRefId(buildingRef)
+      const buildingNode = buildingId ? scene.nodes[buildingId] : null
+      if (
+        !(
+          isRecord(buildingNode) &&
+          buildingNode.type === 'building' &&
+          Array.isArray(buildingNode.children)
+        )
+      ) {
+        continue
+      }
+
+      for (const levelRef of buildingNode.children) {
+        const levelId = readNodeRefId(levelRef)
+        const levelNode = levelId ? scene.nodes[levelId] : null
+        if (
+          isRecord(levelNode) &&
+          levelNode.type === 'level' &&
+          Array.isArray(levelNode.children) &&
+          levelNode.children.some((childRef) => {
+            const childId = readNodeRefId(childRef)
+            return Boolean(childId && scene.nodes[childId])
+          })
+        ) {
+          return true
+        }
+      }
+    }
   }
 
-  return siteNode.children.some((childId) => {
-    const childNode = typeof childId === 'string' ? scene.nodes[childId] : null
-    return isRecord(childNode) && childNode.type === 'building'
-  })
+  return false
 }
 
 function readStoredScene(): LegacySceneGraph | null {
@@ -475,7 +512,8 @@ function extractLegacyHomeAssistantBindings(scene: LegacySceneGraph): SceneGraph
       aggregation: rawNode.aggregation,
       collectionId: rawNode.collectionId as keyof HomeAssistantCollectionBindingMap,
       presentation: legacyPresentation,
-      primaryResourceId: typeof rawNode.primaryResourceId === 'string' ? rawNode.primaryResourceId : null,
+      primaryResourceId:
+        typeof rawNode.primaryResourceId === 'string' ? rawNode.primaryResourceId : null,
       resources: rawNode.resources,
     } as any)
 
@@ -604,7 +642,12 @@ function extractLegacyHomeAssistantBindings(scene: LegacySceneGraph): SceneGraph
 }
 
 function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
+  let nextCollections: SceneGraph['collections'] | null = null
   let nextNodes: SceneGraph['nodes'] | null = null
+  const nextRootNodeIds = scene.rootNodeIds.filter((nodeId) => {
+    const node = scene.nodes[nodeId]
+    return node && (node as { type?: unknown }).type !== 'home-assistant-binding'
+  })
   const allResourcesById = new Map<string, HomeAssistantResourceBinding>()
 
   for (const bindingNode of getHomeAssistantBindingNodes(scene.nodes as any)) {
@@ -615,6 +658,14 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
 
   for (const bindingNode of getHomeAssistantBindingNodes(scene.nodes as any)) {
     const collectionId = bindingNode.collectionId as string
+    if (!scene.collections?.[collectionId as CollectionId]) {
+      nextCollections ??= { ...(scene.collections ?? {}) }
+      nextCollections[collectionId as CollectionId] = {
+        id: collectionId as CollectionId,
+        name: bindingNode.presentation?.label ?? bindingNode.name ?? collectionId,
+        nodeIds: [],
+      }
+    }
     const sceneRawGroups = getSmartHomeRoomControlTileGroups({
       collectionId,
       presentation: bindingNode.presentation,
@@ -694,7 +745,16 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
     }
   }
 
-  return nextNodes ? { ...scene, nodes: nextNodes } : scene
+  const rootNodeIdsChanged = nextRootNodeIds.length !== scene.rootNodeIds.length
+
+  return nextNodes || nextCollections || rootNodeIdsChanged
+    ? {
+        ...scene,
+        collections: nextCollections ?? scene.collections,
+        nodes: nextNodes ?? scene.nodes,
+        rootNodeIds: rootNodeIdsChanged ? nextRootNodeIds : scene.rootNodeIds,
+      }
+    : scene
 }
 
 function hydrateInteractiveAssets(scene: SceneGraph): SceneGraph {
@@ -728,16 +788,80 @@ function hydrateInteractiveAssets(scene: SceneGraph): SceneGraph {
   return nextNodes ? { ...scene, nodes: nextNodes } : scene
 }
 
+function mergeDetachedHomeAssistantState(
+  layoutScene: SceneGraph,
+  storedScene: SceneGraph | null,
+): SceneGraph {
+  if (!storedScene) {
+    return layoutScene
+  }
+
+  const storedBindingNodes = getHomeAssistantBindingNodes(storedScene.nodes as any)
+  if (storedBindingNodes.length === 0) {
+    return layoutScene
+  }
+
+  const nextNodes = { ...layoutScene.nodes }
+  const nextCollections = { ...(layoutScene.collections ?? {}) }
+  let changed = false
+
+  for (const bindingNode of storedBindingNodes) {
+    const layoutNode = nextNodes[bindingNode.id]
+    if (!(isRecord(layoutNode) && layoutNode.type === 'home-assistant-binding')) {
+      nextNodes[bindingNode.id] = bindingNode
+      changed = true
+    }
+
+    const collectionId = bindingNode.collectionId as CollectionId
+    const storedCollection = storedScene.collections?.[collectionId]
+    const storedCollectionNodeIds = Array.isArray(storedCollection?.nodeIds)
+      ? storedCollection.nodeIds
+      : []
+    const nextNodeIds = storedCollectionNodeIds.filter((nodeId) => Boolean(nextNodes[nodeId]))
+    const storedCollectionName =
+      typeof storedCollection?.name === 'string' ? storedCollection.name : undefined
+    const storedCollectionColor =
+      typeof storedCollection?.color === 'string' ? storedCollection.color : undefined
+    const storedControlNodeId =
+      typeof storedCollection?.controlNodeId === 'string'
+        ? storedCollection.controlNodeId
+        : undefined
+
+    nextCollections[collectionId] = {
+      id: collectionId,
+      name:
+        storedCollectionName ?? bindingNode.presentation?.label ?? bindingNode.name ?? collectionId,
+      nodeIds: nextNodeIds ?? [],
+      ...(storedCollectionColor ? { color: storedCollectionColor } : {}),
+      ...(storedControlNodeId && nextNodes[storedControlNodeId]
+        ? { controlNodeId: storedControlNodeId }
+        : {}),
+    }
+    changed = true
+  }
+
+  return changed
+    ? {
+        ...layoutScene,
+        collections: nextCollections,
+        nodes: nextNodes,
+        rootNodeIds: layoutScene.rootNodeIds.filter((nodeId) => nextNodes[nodeId]),
+      }
+    : layoutScene
+}
+
 export async function loadHomeScene(): Promise<SceneGraph | null> {
   const storedScene = readStoredScene()
+  let repairedStoredScene: SceneGraph | null = null
+
   if (isUsableSceneGraph(storedScene)) {
     const sanitizedStoredScene = stripHiddenHomeAssistantGroupBindings(
       stripDeprecatedDemoBindings(
         extractLegacyHomeAssistantBindings(sanitizeLegacyScene(storedScene)),
       ),
     )
-    const repairedStoredScene = repairHomeAssistantPersistedState(sanitizedStoredScene)
-    if (sceneHasBuilding(repairedStoredScene)) {
+    repairedStoredScene = repairHomeAssistantPersistedState(sanitizedStoredScene)
+    if (sceneHasAuthoredBuildingLayout(repairedStoredScene)) {
       const hydratedStoredScene = hydrateInteractiveAssets(repairedStoredScene)
       if (hydratedStoredScene !== storedScene) {
         writeStoredScene(hydratedStoredScene)
@@ -761,7 +885,9 @@ export async function loadHomeScene(): Promise<SceneGraph | null> {
       extractLegacyHomeAssistantBindings(sanitizeLegacyScene(layoutScene)),
     ),
   )
-  const repairedLayoutScene = repairHomeAssistantPersistedState(sanitizedLayoutScene)
+  const repairedLayoutScene = repairHomeAssistantPersistedState(
+    mergeDetachedHomeAssistantState(sanitizedLayoutScene, repairedStoredScene),
+  )
   const hydratedLayoutScene = hydrateInteractiveAssets(repairedLayoutScene)
   writeStoredScene(hydratedLayoutScene)
   return hydratedLayoutScene

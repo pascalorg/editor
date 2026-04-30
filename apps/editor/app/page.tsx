@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  Editor,
-  type SidebarTab,
-  ViewerToolbarLeft,
-  ViewerToolbarRight,
-} from '@pascal-app/editor'
+import { Editor, type SidebarTab, ViewerToolbarLeft, ViewerToolbarRight } from '@pascal-app/editor'
 import Link from 'next/link'
 import { useCallback } from 'react'
 import { loadHomeScene } from './_lib/home-assistant-scene-hydration'

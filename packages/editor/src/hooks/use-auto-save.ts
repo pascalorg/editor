@@ -2,11 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
-import {
-  SCENE_IMMEDIATE_SAVE_EVENT,
-  type SceneGraph,
-  saveSceneToLocalStorage,
-} from '../lib/scene'
+import { SCENE_IMMEDIATE_SAVE_EVENT, type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -33,7 +29,7 @@ export function useAutoSave({
 }: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
-  const isLoadingSceneRef = useRef(false)
+  const isLoadingSceneRef = useRef(true)
   const pendingSaveRef = useRef(false)
   const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
   const hasDirtyChangesRef = useRef(false)
@@ -115,7 +111,12 @@ export function useAutoSave({
     }
 
     async function executeSave(sceneOverride?: SceneGraph) {
-      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
+      if (isLoadingSceneRef.current) {
+        setSaveStatus('paused')
+        return
+      }
+
+      if (isVersionPreviewModeRef.current) {
         pendingSaveRef.current = true
         setSaveStatus('paused')
         return
@@ -197,6 +198,9 @@ export function useAutoSave({
     })
 
     function flushOnExit() {
+      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
+        return
+      }
       if (!hasDirtyChangesRef.current) return
       const { collections, nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { collections, nodes, rootNodeIds } as SceneGraph
@@ -216,7 +220,6 @@ export function useAutoSave({
       window.removeEventListener('beforeunload', flushOnExit)
       window.removeEventListener(SCENE_IMMEDIATE_SAVE_EVENT, flushImmediately)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-      flushOnExit()
       unsubscribe()
     }
   }, [setSaveStatus])

@@ -28,6 +28,7 @@ import {
   applyNumericGroupDelta,
   canMergeControlGroups,
   canMergeControlMemberIntoGroup,
+  type GroupIntensitySegment,
   getAccentRgb,
   getControlLabel,
   getGroupAccessibleLabel,
@@ -38,24 +39,16 @@ import {
   getGroupNumericDisplayValue,
   getGroupTooltip,
   getGroupVisualSegments,
-  getItemBadgeText,
   getMajorityItemKind,
   getResolvedControlValue,
   getSliderValueAtRatio,
-  type GroupIntensitySegment,
   type RoomControlGroup,
   type RoomControlLookupEntry,
   type RoomControlOverlayProps,
   type RoomControlTile,
-  type RoomOverlayNode,
   scaleRgb,
 } from './room-control-model'
 
-export {
-  buildRoomControlGroups,
-  normalizeRoomControlGroupList,
-  selectRoomControlGroupSource,
-} from './room-control-model'
 export type {
   RoomControlChange,
   RoomControlChangeSource,
@@ -65,6 +58,11 @@ export type {
   RoomControlOverlayProps,
   RoomControlTile,
   RoomOverlayNode,
+} from './room-control-model'
+export {
+  buildRoomControlGroups,
+  normalizeRoomControlGroupList,
+  selectRoomControlGroupSource,
 } from './room-control-model'
 
 const PANEL_CLOSED_MIN_WIDTH = 56
@@ -111,6 +109,16 @@ const INTENSITY_STRIP_HEIGHT = 8
 const INTENSITY_STRIP_GAP = 4
 const INTENSITY_SEGMENT_BOUNDARY_INSET = 2
 const INTENSITY_CONTENT_BOTTOM_OFFSET = INTENSITY_STRIP_INSET + INTENSITY_STRIP_HEIGHT + 2
+const DEVICE_OVERLAY_Z_INDEX = {
+  closed: 10,
+  editing: 40,
+  open: 30,
+}
+const PILL_OVERLAY_Z_INDEX = {
+  closed: 50,
+  editing: 80,
+  open: 70,
+}
 const _anchor = new Vector3()
 const _groundProjected = new Vector3()
 const _projected = new Vector3()
@@ -943,6 +951,7 @@ export const RoomControlOverlay = ({
             style={getOverlayItemStyle(
               openRoomId === roomOverlayNode.id,
               editingRoomId === roomOverlayNode.id,
+              Boolean(roomOverlayNode.iconOnly),
             )}
           >
             <div
@@ -3119,10 +3128,19 @@ const getClosedPanelWidth = (roomName: string) => {
   return Math.max(PANEL_CLOSED_MIN_WIDTH, Math.min(PANEL_CLOSED_MAX_WIDTH, estimatedWidth))
 }
 
-const getOverlayItemStyle = (isOpen: boolean, isEditing: boolean): CSSProperties => ({
+const getOverlayItemStyle = (
+  isOpen: boolean,
+  isEditing: boolean,
+  iconOnly: boolean,
+): CSSProperties => ({
   ...overlayItemStyle,
-  zIndex: isEditing ? 40 : isOpen ? 30 : 10,
+  zIndex: getOverlayZIndex(isOpen, isEditing, iconOnly),
 })
+
+const getOverlayZIndex = (isOpen: boolean, isEditing: boolean, iconOnly: boolean) => {
+  const zIndex = iconOnly ? DEVICE_OVERLAY_Z_INDEX : PILL_OVERLAY_Z_INDEX
+  return isEditing ? zIndex.editing : isOpen ? zIndex.open : zIndex.closed
+}
 
 const getRoomPanelCenterDistanceRatio = (
   x: number,

@@ -218,10 +218,7 @@ export function getBindingAfterDeviceResourceCopyToGroup({
   const currentPrimaryResource = targetBinding.resources.find(
     (resource) => resource.id === targetBinding.primaryResourceId,
   )
-  const nextResources = [
-    ...targetBinding.resources,
-    cloneSmartHomeResourceBinding(sourceResource),
-  ]
+  const nextResources = [...targetBinding.resources, cloneSmartHomeResourceBinding(sourceResource)]
 
   return normalizeHomeAssistantCollectionBinding({
     aggregation: 'all',
@@ -230,9 +227,9 @@ export function getBindingAfterDeviceResourceCopyToGroup({
       ...(targetBinding.presentation ?? {}),
       rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
         collectionId: targetCollectionId,
-        excludedResourceIds: getSmartHomeExcludedResourceIds(
-          targetBinding.presentation,
-        ).filter((resourceId) => resourceId !== sourceResource.id),
+        excludedResourceIds: getSmartHomeExcludedResourceIds(targetBinding.presentation).filter(
+          (resourceId) => resourceId !== sourceResource.id,
+        ),
         groups: nextGroups,
         mode: 'user-managed',
         resources: nextResources,
@@ -263,10 +260,7 @@ export function getBindingAfterDeviceResourceRemovalFromGroup(
   const nextPrimaryResourceId =
     binding.primaryResourceId === removedResource.id
       ? (nextDeviceResources[0]?.id ?? nextResources[0]?.id ?? null)
-      : (binding.primaryResourceId ??
-        nextDeviceResources[0]?.id ??
-        nextResources[0]?.id ??
-        null)
+      : (binding.primaryResourceId ?? nextDeviceResources[0]?.id ?? nextResources[0]?.id ?? null)
   const nextExcludedResourceIds = Array.from(
     new Set([...getSmartHomeExcludedResourceIds(binding.presentation), removedResource.id]),
   )

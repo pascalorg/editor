@@ -2,7 +2,6 @@
 
 import {
   type AnyNode,
-  type AnyNodeId,
   type CollectionId,
   getHomeAssistantBindingNodeMap,
   type HomeAssistantActionRequest,
@@ -12,18 +11,18 @@ import {
 } from '@pascal-app/core'
 import { InteractiveSystem, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import {
-  type RoomControlChange,
-  type RoomControlTile,
-  type RoomOverlayNode,
+import type {
+  RoomControlChange,
+  RoomControlTile,
+  RoomOverlayNode,
 } from '../../features/home-assistant/room-overlay/room-control-model'
+import { RoomControlOverlay } from '../../features/home-assistant/room-overlay/room-control-overlay'
 import {
   buildCollectionActionRequest,
   buildHomeAssistantRoomOverlayNodes,
   getActionBindingForMember,
   getCollectionDisplayName,
 } from '../../features/home-assistant/room-overlay/room-overlay-nodes'
-import { RoomControlOverlay } from '../../features/home-assistant/room-overlay/room-control-overlay'
 import {
   getBindingAfterDeviceResourceCopyToGroup,
   getBindingAfterDeviceResourceRemovalFromGroup,

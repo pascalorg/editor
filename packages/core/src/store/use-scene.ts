@@ -44,6 +44,35 @@ function getStringArray(value: unknown) {
     : []
 }
 
+function normalizeInputRootNodeIds(
+  rootNodeIds: unknown,
+  nodes: Record<AnyNodeId, AnyNode>,
+): AnyNodeId[] {
+  if (!Array.isArray(rootNodeIds)) {
+    return []
+  }
+
+  const seen = new Set<AnyNodeId>()
+  return rootNodeIds.flatMap((nodeId) => {
+    if (typeof nodeId !== 'string') {
+      return []
+    }
+
+    const node = nodes[nodeId as AnyNodeId]
+    if (!node || node.type === 'home-assistant-binding') {
+      return []
+    }
+
+    const typedNodeId = nodeId as AnyNodeId
+    if (seen.has(typedNodeId)) {
+      return []
+    }
+
+    seen.add(typedNodeId)
+    return [typedNodeId]
+  })
+}
+
 function getVector3(value: unknown, fallback: [number, number, number]): [number, number, number] {
   if (!Array.isArray(value) || value.length < 3) {
     return fallback
@@ -414,6 +443,10 @@ function collectReachableNodeIds(
   return reachable
 }
 
+function isDetachedDurableNode(node: AnyNode) {
+  return node.type === 'home-assistant-binding'
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -475,6 +508,12 @@ function getCollectionIdsReferencedByAttachmentNodes(nodes: Record<AnyNodeId, An
     if (collectionId) {
       referencedCollectionIds.add(collectionId)
     }
+    if (
+      node.type === 'home-assistant-binding' &&
+      typeof (node as { collectionId?: unknown }).collectionId === 'string'
+    ) {
+      referencedCollectionIds.add((node as { collectionId: CollectionId }).collectionId)
+    }
   }
 
   return referencedCollectionIds
@@ -492,10 +531,7 @@ function normalizeCollectionsRecord(
         new Set(collection.nodeIds.filter((nodeId) => Boolean(nodes[nodeId]))),
       ) as AnyNodeId[]
 
-      if (
-        normalizedNodeIds.length === 0 &&
-        !referencedCollectionIds.has(id as CollectionId)
-      ) {
+      if (normalizedNodeIds.length === 0 && !referencedCollectionIds.has(id as CollectionId)) {
         return []
       }
 
@@ -540,10 +576,19 @@ function normalizeCollectionAttachmentNodes(
   const nextRootNodeIds = [...rootNodeIds]
   let changed = false
 
-  for (const node of Object.values(nodes)) {
+  for (const [storedNodeId, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
+    if (node.type === 'home-assistant-binding') {
+      continue
+    }
+
     const collectionId = getCollectionAttachmentNodeCollectionId(node)
     if (!collectionId) {
       continue
+    }
+
+    if (node.id !== storedNodeId) {
+      nextNodes[storedNodeId] = { ...node, id: storedNodeId } as AnyNode
+      changed = true
     }
 
     const resources = (node as { resources?: unknown[] }).resources ?? []
@@ -551,8 +596,8 @@ function normalizeCollectionAttachmentNodes(
     const hasResources = resources.length > 0
 
     if (!(hasCollection && hasResources)) {
-      delete nextNodes[node.id]
-      const rootIndex = nextRootNodeIds.indexOf(node.id)
+      delete nextNodes[storedNodeId]
+      const rootIndex = nextRootNodeIds.indexOf(storedNodeId)
       if (rootIndex >= 0) {
         nextRootNodeIds.splice(rootIndex, 1)
       }
@@ -560,8 +605,8 @@ function normalizeCollectionAttachmentNodes(
       continue
     }
 
-    if (!nextRootNodeIds.includes(node.id)) {
-      nextRootNodeIds.push(node.id)
+    if (!nextRootNodeIds.includes(storedNodeId)) {
+      nextRootNodeIds.push(storedNodeId)
       changed = true
     }
   }
@@ -609,7 +654,11 @@ const useScene: UseSceneStore = create<SceneState>()(
         // Remove orphans: nodes whose parentId points to a non-existent node
         const cleanedNodes = { ...patchedNodes }
         for (const node of Object.values(cleanedNodes)) {
-          if (node.parentId && !cleanedNodes[node.parentId]) {
+          if (
+            node.type !== 'home-assistant-binding' &&
+            node.parentId &&
+            !cleanedNodes[node.parentId]
+          ) {
             console.warn(
               '[Scene] Removing orphan node',
               node.id,
@@ -621,11 +670,12 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
+        const inputRootNodeIds = normalizeInputRootNodeIds(rootNodeIds, cleanedNodes)
         const normalizedCollections = normalizeCollectionsRecord(collections, cleanedNodes)
         const normalizedScene = normalizeCollectionAttachmentNodes(
           cleanedNodes,
           normalizedCollections,
-          rootNodeIds,
+          inputRootNodeIds,
         )
         const normalizedRootNodeIds = normalizeRootNodeIds(
           normalizedScene.nodes,
@@ -636,6 +686,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         if (normalizedRootNodeIds.length > 0) {
           for (const node of Object.values(normalizedNodes)) {
             if (reachableNodeIds.has(node.id as AnyNodeId)) continue
+            if (isDetachedDurableNode(node)) continue
             console.warn('[Scene] Removing unreachable node', node.id)
             delete normalizedNodes[node.id]
           }

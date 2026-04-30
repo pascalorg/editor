@@ -145,14 +145,15 @@ const collectionHasBoundResources = (
 const isIconOnlyDeviceCollection = (
   collection: Collection,
   binding: HomeAssistantCollectionBinding | null | undefined,
+  selectedLevelId: AnyNodeId | null = null,
 ) =>
   Boolean(
     binding &&
       !bindingHasGroupResource(binding) &&
-      !binding.presentation?.rtsWorldPosition &&
-      !binding.presentation?.rtsScreenPosition &&
+      (selectedLevelId ||
+        (!binding.presentation?.rtsWorldPosition && !binding.presentation?.rtsScreenPosition)) &&
       collection.nodeIds.length === 1 &&
-      binding.resources.some((resource) => resource.kind === 'entity'),
+      getBindingDeviceComponentResources(binding).length === 1,
   )
 
 export const getCollectionDisplayName = (
@@ -193,13 +194,31 @@ const getCollectionAnchorItemNodes = (
     .filter((node): node is ItemNode => node?.type === 'item')
 }
 
+const getCollectionLinkedItemNodes = (
+  collection: Collection,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+) => getCollectionItemNodes(collection, sceneNodes)
+
+const itemIsOnSelectedLevel = (
+  item: ItemNode,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null,
+) => !selectedLevelId || resolveLevelId(item, sceneNodes) === selectedLevelId
+
 const isCollectionVisibleOnSelectedLevel = (
   collection: Collection,
+  binding: HomeAssistantCollectionBinding | null | undefined,
   sceneNodes: Record<AnyNodeId, AnyNode>,
   selectedLevelId: AnyNodeId | null,
 ) => {
   if (!selectedLevelId) {
     return true
+  }
+
+  if (getBindingDeviceComponentResources(binding).length > 0) {
+    return getCollectionItemNodes(collection, sceneNodes).some((item) =>
+      itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+    )
   }
 
   const candidateNodeIds = collection.controlNodeId
@@ -216,14 +235,18 @@ const getCollectionAnchorNodeIds = (
   collection: Collection,
   controls: RoomControlTile[],
   sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null = null,
 ) => {
   const controlItemIds = controls.map((control) => control.linkedItemId ?? control.itemId)
-  const fallbackItemIds = getCollectionItemNodes(collection, sceneNodes).map((node) => node.id)
-  const preferredIds = collection.controlNodeId
-    ? [collection.controlNodeId, ...controlItemIds, ...fallbackItemIds]
-    : [...controlItemIds, ...fallbackItemIds]
+  const fallbackItemIds = getCollectionItemNodes(collection, sceneNodes)
+    .filter((item) => itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId))
+    .map((node) => node.id)
+  const preferredIds = [...controlItemIds, ...fallbackItemIds]
 
-  return Array.from(new Set(preferredIds)).filter((nodeId) => sceneNodes[nodeId]?.type === 'item')
+  return Array.from(new Set(preferredIds)).filter((nodeId) => {
+    const node = sceneNodes[nodeId]
+    return node?.type === 'item' && itemIsOnSelectedLevel(node, sceneNodes, selectedLevelId)
+  })
 }
 
 const getResourceIdentityKeys = (resource: HomeAssistantResourceBinding | null | undefined) =>
@@ -244,16 +267,36 @@ const getBindingGroupMemberEntityIds = (
       .flatMap((resource) => resource.memberEntityIds ?? []),
   )
 
+const getBindingRelatedResourceIdentityKeys = (
+  binding: HomeAssistantCollectionBinding | null | undefined,
+) => {
+  const identityKeys = getBindingGroupMemberEntityIds(binding)
+  for (const resource of binding?.resources ?? []) {
+    if (!isSmartHomeDeviceComponentResource(resource)) {
+      continue
+    }
+    for (const key of getResourceIdentityKeys(resource)) {
+      identityKeys.add(key)
+    }
+  }
+  return identityKeys
+}
+
 const getRelatedGroupMemberItemNodes = (
   collectionId: CollectionId,
   memberEntityIds: Set<string>,
   collections: Record<CollectionId, Collection>,
   bindings: HomeAssistantCollectionBindingMap,
   sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null = null,
 ) => {
   const nodesById = new Map<AnyNodeId, ItemNode>()
 
   for (const binding of Object.values(bindings)) {
+    if (binding.collectionId === collectionId) {
+      continue
+    }
+
     const collection = collections[binding.collectionId]
     if (!collection) {
       continue
@@ -265,11 +308,13 @@ const getRelatedGroupMemberItemNodes = (
         getResourceIdentityKeys(resource).some((key) => memberEntityIds.has(key)),
     )
 
-    if (!hasMatchingMemberResource && binding.collectionId !== collectionId) {
+    if (!hasMatchingMemberResource) {
       continue
     }
 
-    for (const node of getCollectionAnchorItemNodes(collection, sceneNodes)) {
+    for (const node of getCollectionLinkedItemNodes(collection, sceneNodes).filter((item) =>
+      itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+    )) {
       nodesById.set(node.id, node)
     }
   }
@@ -277,18 +322,20 @@ const getRelatedGroupMemberItemNodes = (
   return Array.from(nodesById.values())
 }
 
-const getResourceLinkedItemNode = (
+const getResourceLinkedItemNodes = (
   resource: HomeAssistantResourceBinding,
   collectionId: CollectionId,
   collections: Record<CollectionId, Collection>,
   bindings: HomeAssistantCollectionBindingMap,
   sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null = null,
 ) => {
   const identityKeys = new Set(getResourceIdentityKeys(resource))
   if (identityKeys.size === 0) {
-    return null
+    return []
   }
 
+  const linkedItemNodes: ItemNode[] = []
   for (const binding of Object.values(bindings)) {
     if (binding.collectionId === collectionId) {
       continue
@@ -308,44 +355,99 @@ const getResourceLinkedItemNode = (
       continue
     }
 
-    const anchorNode = getCollectionAnchorItemNodes(collection, sceneNodes)[0]
-    if (anchorNode) {
-      return anchorNode
+    for (const anchorNode of getCollectionLinkedItemNodes(collection, sceneNodes).filter((item) =>
+      itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+    )) {
+      linkedItemNodes.push(anchorNode)
     }
   }
 
-  return null
+  return linkedItemNodes
 }
 
-const getItemFootprintCenterWorldPosition = (items: ItemNode[]) => {
+const getResourceLinkedItemNode = (
+  resource: HomeAssistantResourceBinding,
+  collectionId: CollectionId,
+  collections: Record<CollectionId, Collection>,
+  bindings: HomeAssistantCollectionBindingMap,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null = null,
+) =>
+  getResourceLinkedItemNodes(
+    resource,
+    collectionId,
+    collections,
+    bindings,
+    sceneNodes,
+    selectedLevelId,
+  )[0] ?? null
+
+const resourceHasLevelLocalLinkedItem = (
+  resource: HomeAssistantResourceBinding,
+  collectionId: CollectionId,
+  collections: Record<CollectionId, Collection>,
+  bindings: HomeAssistantCollectionBindingMap,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null,
+) => {
+  if (!selectedLevelId) {
+    return true
+  }
+
+  if (isSmartHomeGroupResource(resource)) {
+    const memberEntityIds = new Set(resource.memberEntityIds ?? [])
+    return (
+      memberEntityIds.size > 0 &&
+      getRelatedGroupMemberItemNodes(
+        collectionId,
+        memberEntityIds,
+        collections,
+        bindings,
+        sceneNodes,
+        selectedLevelId,
+      ).length > 0
+    )
+  }
+
+  return (
+    getResourceLinkedItemNodes(
+      resource,
+      collectionId,
+      collections,
+      bindings,
+      sceneNodes,
+      selectedLevelId,
+    ).length > 0
+  )
+}
+
+const getItemCenterWorldPosition = (items: ItemNode[]) => {
   if (items.length === 0) {
     return null
   }
 
-  let minX = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
+  let totalX = 0
+  let totalZ = 0
+  let count = 0
 
   for (const item of items) {
-    const [width, , depth] = item.asset.dimensions
-    const [scaleX, , scaleZ] = item.scale
-    const halfWidth = Math.abs(width * scaleX) / 2
-    const halfDepth = Math.abs(depth * scaleZ) / 2
-    minX = Math.min(minX, item.position[0] - halfWidth)
-    maxX = Math.max(maxX, item.position[0] + halfWidth)
-    minZ = Math.min(minZ, item.position[2] - halfDepth)
-    maxZ = Math.max(maxZ, item.position[2] + halfDepth)
+    const [x, , z] = item.position
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      continue
+    }
+    totalX += x
+    totalZ += z
+    count += 1
   }
 
-  if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) {
+  if (count === 0) {
     return null
   }
 
   return {
-    x: (minX + maxX) / 2,
+    x: totalX / count,
     y: 0,
-    z: (minZ + maxZ) / 2,
+    z: totalZ / count,
   }
 }
 
@@ -355,16 +457,17 @@ const getCollectionRelatedGroupWorldPosition = (
   collections: Record<CollectionId, Collection>,
   bindings: HomeAssistantCollectionBindingMap,
   sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null = null,
 ) => {
   if (
-    !bindingHasGroupResource(binding) ||
-    binding?.presentation?.rtsWorldPosition ||
-    binding?.presentation?.rtsScreenPosition
+    !binding?.resources.length ||
+    (!selectedLevelId &&
+      (binding?.presentation?.rtsWorldPosition || binding?.presentation?.rtsScreenPosition))
   ) {
     return null
   }
 
-  const memberEntityIds = getBindingGroupMemberEntityIds(binding)
+  const memberEntityIds = getBindingRelatedResourceIdentityKeys(binding)
   if (memberEntityIds.size === 0) {
     return null
   }
@@ -375,9 +478,39 @@ const getCollectionRelatedGroupWorldPosition = (
     collections,
     bindings,
     sceneNodes,
+    selectedLevelId,
   )
 
-  return getItemFootprintCenterWorldPosition(relatedItemNodes)
+  return getItemCenterWorldPosition(relatedItemNodes)
+}
+
+const getCollectionSelectedLevelWorldPosition = (
+  collection: Collection,
+  binding: HomeAssistantCollectionBinding | null | undefined,
+  collections: Record<CollectionId, Collection>,
+  bindings: HomeAssistantCollectionBindingMap,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null,
+) => {
+  if (!selectedLevelId) {
+    return null
+  }
+
+  if (bindingHasGroupResource(binding) || (binding?.resources.length ?? 0) > 1) {
+    return getCollectionRelatedGroupWorldPosition(
+      collection,
+      binding,
+      collections,
+      bindings,
+      sceneNodes,
+      selectedLevelId,
+    )
+  }
+
+  const directItemNodes = getCollectionItemNodes(collection, sceneNodes).filter((item) =>
+    itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+  )
+  return getItemCenterWorldPosition(directItemNodes)
 }
 
 const getResourceItemKind = (
@@ -454,15 +587,24 @@ const buildCollectionRoomControlTiles = (
   hasPositionedPill = Boolean(
     binding?.presentation?.rtsWorldPosition || binding?.presentation?.rtsScreenPosition,
   ),
+  selectedLevelId: AnyNodeId | null = null,
 ): RoomControlTile[] => {
   const collectionLabel = getHomeAssistantBindingDisplayLabel(binding, collection.name)
   const itemNodes = Array.from(
     new Map(
-      getCollectionItemNodes(collection, sceneNodes).map((node) => [node.id, node] as const),
+      getCollectionItemNodes(collection, sceneNodes)
+        .filter((item) => itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId))
+        .map((node) => [node.id, node] as const),
     ).values(),
   )
   const fallbackControlNode =
-    collection.controlNodeId && sceneNodes[collection.controlNodeId]?.type === 'item'
+    collection.controlNodeId &&
+    sceneNodes[collection.controlNodeId]?.type === 'item' &&
+    itemIsOnSelectedLevel(
+      sceneNodes[collection.controlNodeId] as ItemNode,
+      sceneNodes,
+      selectedLevelId,
+    )
       ? (sceneNodes[collection.controlNodeId] as ItemNode)
       : null
   const controlSourceNodes =
@@ -472,46 +614,59 @@ const buildCollectionRoomControlTiles = (
   if (
     hasPositionedPill &&
     (controlSourceNodes.length === 0 ||
-      (bindingHasGroupResource(binding) && controlResources.length > controlSourceNodes.length))
+      ((bindingHasGroupResource(binding) || controlResources.length > 1) &&
+        controlResources.length > controlSourceNodes.length))
   ) {
-    return controlResources.map((resource, index) => {
-      const disabled = !isSmartHomeControllableEntityResource(resource)
-      const syntheticIntensityControl = getResourceSyntheticIntensityControl(resource)
-      const linkedItemNode = getResourceLinkedItemNode(
-        resource,
-        collection.id,
-        collections,
-        bindings,
-        sceneNodes,
+    return controlResources
+      .filter((resource) =>
+        resourceHasLevelLocalLinkedItem(
+          resource,
+          collection.id,
+          collections,
+          bindings,
+          sceneNodes,
+          selectedLevelId,
+        ),
       )
-      const control = isHomeAssistantTriggerBinding(binding)
-        ? createCollectionFallbackControl('Run')
-        : createCollectionFallbackControl('Toggle')
-      const tileId = getSmartHomeRoomControlTileId(collection.id, resource.id)
-      const legacyTileId = getLegacySmartHomeRoomControlTileId(collection.id, resource.id)
+      .map((resource, index) => {
+        const disabled = !isSmartHomeControllableEntityResource(resource)
+        const syntheticIntensityControl = getResourceSyntheticIntensityControl(resource)
+        const linkedItemNode = getResourceLinkedItemNode(
+          resource,
+          collection.id,
+          collections,
+          bindings,
+          sceneNodes,
+          selectedLevelId,
+        )
+        const control = isHomeAssistantTriggerBinding(binding)
+          ? createCollectionFallbackControl('Run')
+          : createCollectionFallbackControl('Toggle')
+        const tileId = getSmartHomeRoomControlTileId(collection.id, resource.id)
+        const legacyTileId = getLegacySmartHomeRoomControlTileId(collection.id, resource.id)
 
-      return {
-        canDetachFromRoom: bindingHasGroupResource(binding),
-        collectionId: collection.id,
-        collectionLabel,
-        control,
-        controlIndex: 0,
-        directActionMode: getDirectActionMode(binding, control, syntheticIntensityControl),
-        disabled,
-        id: tileId,
-        intensityControl: syntheticIntensityControl,
-        intensityControlIndex: syntheticIntensityControl ? 1 : null,
-        itemId: tileId as AnyNodeId,
-        itemKind: getResourceItemKind(resource, collectionLabel),
-        itemName: resource.label ?? linkedItemNode?.asset.name?.trim() ?? collectionLabel,
-        legacyIds:
-          legacyTileId === tileId
-            ? [`${tileId}:${index}`]
-            : [legacyTileId, `${legacyTileId}:${index}`],
-        linkedItemId: linkedItemNode?.id,
-        resourceId: resource.id,
-      }
-    })
+        return {
+          canDetachFromRoom: bindingHasGroupResource(binding),
+          collectionId: collection.id,
+          collectionLabel,
+          control,
+          controlIndex: 0,
+          directActionMode: getDirectActionMode(binding, control, syntheticIntensityControl),
+          disabled,
+          id: tileId,
+          intensityControl: syntheticIntensityControl,
+          intensityControlIndex: syntheticIntensityControl ? 1 : null,
+          itemId: tileId as AnyNodeId,
+          itemKind: getResourceItemKind(resource, collectionLabel),
+          itemName: resource.label ?? linkedItemNode?.asset.name?.trim() ?? collectionLabel,
+          legacyIds:
+            legacyTileId === tileId
+              ? [`${tileId}:${index}`]
+              : [legacyTileId, `${legacyTileId}:${index}`],
+          linkedItemId: linkedItemNode?.id,
+          resourceId: resource.id,
+        }
+      })
   }
 
   const deviceResources = getBindingDeviceComponentResources(binding)
@@ -524,6 +679,7 @@ const buildCollectionRoomControlTiles = (
       collections,
       bindings,
       sceneNodes,
+      selectedLevelId,
     )
     if (linkedItemNode) {
       resourceByLinkedItemId.set(linkedItemNode.id, resource)
@@ -668,40 +824,64 @@ export function buildHomeAssistantRoomOverlayNodes({
   return Object.values(collections)
     .filter((collection) => {
       const binding = bindings[collection.id]
-      const derivedWorldPosition = getCollectionRelatedGroupWorldPosition(
-        collection,
-        binding,
-        collections,
-        bindings,
-        sceneNodes,
-      )
+      const derivedWorldPosition = selectedLevelId
+        ? getCollectionSelectedLevelWorldPosition(
+            collection,
+            binding,
+            collections,
+            bindings,
+            sceneNodes,
+            selectedLevelId,
+          )
+        : getCollectionRelatedGroupWorldPosition(
+            collection,
+            binding,
+            collections,
+            bindings,
+            sceneNodes,
+          )
       return (
         collectionHasBoundResources(collection, bindings) &&
         isHomeAssistantOverlayBindingVisible(binding, visibility) &&
-        (isCollectionVisibleOnSelectedLevel(collection, sceneNodes, selectedLevelId) ||
-          Boolean(
-            binding?.presentation?.rtsWorldPosition ||
-              binding?.presentation?.rtsScreenPosition ||
-              derivedWorldPosition,
-          ))
+        (selectedLevelId
+          ? isCollectionVisibleOnSelectedLevel(collection, binding, sceneNodes, selectedLevelId) ||
+            Boolean(derivedWorldPosition)
+          : isCollectionVisibleOnSelectedLevel(collection, binding, sceneNodes, selectedLevelId) ||
+            Boolean(
+              binding?.presentation?.rtsWorldPosition ||
+                binding?.presentation?.rtsScreenPosition ||
+                derivedWorldPosition,
+            ))
       )
     })
     .sort((left, right) => compareCollectionsForRoom(left, right, bindings))
     .map((collection) => {
       const binding = bindings[collection.id]
-      const iconOnly = isIconOnlyDeviceCollection(collection, binding)
-      const derivedWorldPosition = getCollectionRelatedGroupWorldPosition(
-        collection,
-        binding,
-        collections,
-        bindings,
-        sceneNodes,
-      )
+      const iconOnly = isIconOnlyDeviceCollection(collection, binding, selectedLevelId)
+      const derivedWorldPosition = selectedLevelId
+        ? getCollectionSelectedLevelWorldPosition(
+            collection,
+            binding,
+            collections,
+            bindings,
+            sceneNodes,
+            selectedLevelId,
+          )
+        : getCollectionRelatedGroupWorldPosition(
+            collection,
+            binding,
+            collections,
+            bindings,
+            sceneNodes,
+          )
       const worldPosition =
-        binding?.presentation?.rtsWorldPosition ??
-        (binding?.presentation?.rtsScreenPosition
+        iconOnly && selectedLevelId
           ? undefined
-          : (derivedWorldPosition ?? undefined))
+          : ((selectedLevelId ? derivedWorldPosition : null) ??
+            (!selectedLevelId ? binding?.presentation?.rtsWorldPosition : undefined) ??
+            (binding?.presentation?.rtsScreenPosition
+              ? undefined
+              : (derivedWorldPosition ?? undefined)))
       const roomControls = buildCollectionRoomControlTiles(
         collection,
         binding,
@@ -709,8 +889,10 @@ export function buildHomeAssistantRoomOverlayNodes({
         collections,
         bindings,
         Boolean(worldPosition || binding?.presentation?.rtsScreenPosition),
+        selectedLevelId,
       )
-      const defaultGroups = roomControls.length > 0 ? [roomControls.map((control) => control.id)] : []
+      const defaultGroups =
+        roomControls.length > 0 ? [roomControls.map((control) => control.id)] : []
       const presentationGroups = normalizeRoomControlGroupList(
         getSmartHomeRoomControlTileGroups({
           collectionId: collection.id,
@@ -727,12 +909,17 @@ export function buildHomeAssistantRoomOverlayNodes({
           ? presentationGroups
           : storedGroups
       return {
-        anchorNodeIds: getCollectionAnchorNodeIds(collection, roomControls, sceneNodes),
+        anchorNodeIds: getCollectionAnchorNodeIds(
+          collection,
+          roomControls,
+          sceneNodes,
+          selectedLevelId,
+        ),
         controlGroups: buildRoomControlGroups(roomControls, controlGroups),
         iconOnly,
         id: collection.id,
         roomName: getCollectionDisplayName(collection, bindings),
-        screenPosition: binding?.presentation?.rtsScreenPosition,
+        screenPosition: selectedLevelId ? undefined : binding?.presentation?.rtsScreenPosition,
         totalSlotCount: roomControls.length,
         worldPosition,
       }

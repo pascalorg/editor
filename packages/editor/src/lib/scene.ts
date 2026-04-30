@@ -410,8 +410,82 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
 
+function getUserManagedHomeAssistantCollectionIds(scene: SceneGraph | null | undefined) {
+  const collectionIds = new Set<string>()
+  if (!scene?.nodes) {
+    return collectionIds
+  }
+
+  for (const node of Object.values(scene.nodes)) {
+    if (!(node && typeof node === 'object')) {
+      continue
+    }
+
+    const record = node as {
+      collectionId?: unknown
+      presentation?: { rtsRoomControls?: { mode?: unknown } }
+      type?: unknown
+    }
+    if (
+      record.type === 'home-assistant-binding' &&
+      typeof record.collectionId === 'string' &&
+      record.presentation?.rtsRoomControls?.mode === 'user-managed'
+    ) {
+      collectionIds.add(record.collectionId)
+    }
+  }
+
+  return collectionIds
+}
+
+function homeAssistantCollectionIsUserManaged(scene: SceneGraph, collectionId: string) {
+  return Object.values(scene.nodes ?? {}).some((node) => {
+    if (!(node && typeof node === 'object')) {
+      return false
+    }
+
+    const record = node as {
+      collectionId?: unknown
+      presentation?: { rtsRoomControls?: { mode?: unknown } }
+      type?: unknown
+    }
+
+    return (
+      record.type === 'home-assistant-binding' &&
+      record.collectionId === collectionId &&
+      record.presentation?.rtsRoomControls?.mode === 'user-managed'
+    )
+  })
+}
+
+function wouldDowngradeStoredHomeAssistantRoomControls(scene: SceneGraph) {
+  const rawStoredScene = localStorage.getItem(LOCAL_STORAGE_KEY)
+  if (!rawStoredScene) {
+    return false
+  }
+
+  let storedScene: SceneGraph | null = null
+  try {
+    storedScene = JSON.parse(rawStoredScene) as SceneGraph
+  } catch {
+    return false
+  }
+
+  for (const collectionId of getUserManagedHomeAssistantCollectionIds(storedScene)) {
+    if (!homeAssistantCollectionIsUserManaged(scene, collectionId)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 export function saveSceneToLocalStorage(scene: SceneGraph): void {
   try {
+    if (wouldDowngradeStoredHomeAssistantRoomControls(scene)) {
+      return
+    }
+
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scene))
   } catch {
     // Swallow storage quota errors

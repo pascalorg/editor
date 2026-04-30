@@ -401,10 +401,7 @@ export const normalizeHomeAssistantCollectionBinding = (
             presentation,
             resources: normalizedResources,
           }),
-          rtsOrder:
-            typeof presentation.rtsOrder === 'number'
-              ? presentation.rtsOrder
-              : undefined,
+          rtsOrder: typeof presentation.rtsOrder === 'number' ? presentation.rtsOrder : undefined,
           rtsScreenPosition:
             presentation.rtsScreenPosition &&
             typeof presentation.rtsScreenPosition.x === 'number' &&

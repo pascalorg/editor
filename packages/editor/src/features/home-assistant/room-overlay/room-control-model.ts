@@ -1,9 +1,4 @@
-import {
-  type AnyNodeId,
-  type CollectionId,
-  type Control,
-  type ControlValue,
-} from '@pascal-app/core'
+import type { AnyNodeId, CollectionId, Control, ControlValue } from '@pascal-app/core'
 
 export type RoomControlTile = {
   canDetachFromRoom?: boolean
@@ -209,10 +204,8 @@ const createRoomControlGroup = (members: RoomControlTile[]): RoomControlGroup =>
 export const canMergeControlGroups = (source: RoomControlGroup, target: RoomControlGroup) =>
   source.id !== target.id && source.controlKind === target.controlKind
 
-export const canMergeControlMemberIntoGroup = (
-  member: RoomControlTile,
-  target: RoomControlGroup,
-) => getRoomControlKind(member.control) === target.controlKind
+export const canMergeControlMemberIntoGroup = (member: RoomControlTile, target: RoomControlGroup) =>
+  getRoomControlKind(member.control) === target.controlKind
 
 export const getGroupItemKind = (group: RoomControlGroup) => {
   const itemKinds = Array.from(new Set(group.members.map((member) => member.itemKind)))
@@ -299,9 +292,7 @@ export const getGroupAccessibleLabel = (group: RoomControlGroup) => {
   return `${group.members.length} grouped items`
 }
 
-export const hasIntensityControl = (
-  member: RoomControlTile,
-): member is RoomControlIntensityTile =>
+export const hasIntensityControl = (member: RoomControlTile): member is RoomControlIntensityTile =>
   Boolean(member.intensityControl && member.intensityControlIndex !== null)
 
 export const getGroupIntensityTiles = (group: RoomControlGroup) =>
