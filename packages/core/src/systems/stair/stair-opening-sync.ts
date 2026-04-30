@@ -1,12 +1,14 @@
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import type {
   AnyNode,
   AnyNodeId,
   CeilingNode,
+  LevelNode,
   SlabNode,
   StairNode,
   StairSegmentNode,
 } from '../../schema'
+
+import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
 type Point2D = [number, number]
@@ -34,9 +36,10 @@ type AxisAlignedRect = {
   maxZ: number
 }
 
-const CURVED_STAIR_SLAB_OPENING_RATIO = 0.8
+const CURVED_STAIR_SLAB_OPENING_RATIO = 0.9
 const STRAIGHT_STAIR_TARGET_THRESHOLD_MIN = 0.35
 const STAIR_SLAB_OPENING_TIGHTENING = 0
+const CURVED_STAIR_OPENING_STEP_PADDING = 3
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -423,24 +426,39 @@ function buildUnionPolygonsFromRects(rects: AxisAlignedRect[]): Point2D[][] {
   return polygons
 }
 
-function getCurvedOpeningPolygon(stair: StairNode): Point2D[] {
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const innerRadius = Math.max(0.2, stair.innerRadius ?? 0.9)
-  const outerRadius = innerRadius + width
-  const totalSweep = stair.sweepAngle ?? Math.PI / 2
-  const openingSweep =
-    Math.sign(totalSweep || 1) *
+function getCurvedOpeningStepCount(
+  stair: StairNode,
+  innerRadius: number,
+  outerRadius: number,
+  totalSweep: number,
+) {
+  const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
+  const stepSweep = Math.abs(totalSweep) / stepCount
+  const midRadius = Math.max((innerRadius + outerRadius) * 0.5, 0.01)
+  const treadDepth = Math.max(stepSweep * midRadius, 0.2)
+  return Math.min(
+    stepCount,
     Math.max(
-      Math.abs(totalSweep) * CURVED_STAIR_SLAB_OPENING_RATIO,
-      Math.abs(totalSweep) / Math.max(stair.stepCount ?? 1, 1),
-    )
-  const startAngle = totalSweep / 2 - openingSweep
-  const endAngle = totalSweep / 2
+      1,
+      Math.ceil(1.8 / treadDepth),
+      Math.ceil(stepCount * CURVED_STAIR_SLAB_OPENING_RATIO),
+    ),
+  )
+}
+
+function buildArcOpeningPolygon(
+  stair: StairNode,
+  innerRadius: number,
+  outerRadius: number,
+  startAngle: number,
+  endAngle: number,
+): Point2D[] {
+  const sweep = endAngle - startAngle
   const segmentCount = Math.max(
     10,
     Math.min(
       32,
-      Math.ceil(Math.abs(openingSweep) / (Math.PI / 24) + Math.max(stair.stepCount ?? 1, 1) * 0.5),
+      Math.ceil(Math.abs(sweep) / (Math.PI / 24) + Math.max(stair.stepCount ?? 1, 1) * 0.5),
     ),
   )
   const outerPoints: Point2D[] = []
@@ -448,7 +466,7 @@ function getCurvedOpeningPolygon(stair: StairNode): Point2D[] {
 
   for (let index = 0; index <= segmentCount; index++) {
     const t = index / segmentCount
-    const angle = startAngle + (endAngle - startAngle) * t
+    const angle = startAngle + sweep * t
     outerPoints.push(
       toWorldPlanPoint(stair, Math.cos(angle) * outerRadius, Math.sin(angle) * outerRadius),
     )
@@ -456,13 +474,47 @@ function getCurvedOpeningPolygon(stair: StairNode): Point2D[] {
 
   for (let index = segmentCount; index >= 0; index--) {
     const t = index / segmentCount
-    const angle = startAngle + (endAngle - startAngle) * t
+    const angle = startAngle + sweep * t
+
     innerPoints.push(
       toWorldPlanPoint(stair, Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius),
     )
   }
 
   return [...outerPoints, ...innerPoints]
+}
+
+function getCurvedOpeningPolygon(stair: StairNode, targetElevation?: number): Point2D[] {
+  const width = Math.max(stair.width ?? 1, 0.4)
+  const innerRadius = Math.max(0.2, stair.innerRadius ?? 0.9)
+  const outerRadius = innerRadius + width
+  const totalSweep = stair.sweepAngle ?? Math.PI / 2
+  const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
+  const stepHeight = Math.max(stair.totalRise ?? 2.5, 0.1) / stepCount
+  const stepSweep = totalSweep / stepCount
+  const targetThreshold = Math.max(stepHeight * 2, STRAIGHT_STAIR_TARGET_THRESHOLD_MIN)
+  const endAngle = totalSweep / 2
+
+  const fallbackStartStepIndex = Math.max(
+    0,
+    stepCount - getCurvedOpeningStepCount(stair, innerRadius, outerRadius, totalSweep),
+  )
+  let startStepIndex = fallbackStartStepIndex
+  if (typeof targetElevation === 'number') {
+    for (let index = 0; index < stepCount; index += 1) {
+      const stepTopElevation = stepHeight * (index + 1)
+      if (stepTopElevation >= targetElevation - targetThreshold) {
+        startStepIndex = Math.max(
+          0,
+          Math.min(fallbackStartStepIndex, index - CURVED_STAIR_OPENING_STEP_PADDING),
+        )
+        break
+      }
+    }
+  }
+
+  const startAngle = -totalSweep / 2 + stepSweep * startStepIndex
+  return buildArcOpeningPolygon(stair, innerRadius, outerRadius, startAngle, endAngle)
 }
 
 function getSpiralOpeningPolygon(stair: StairNode): Point2D[] {
@@ -569,7 +621,7 @@ function getStairOpeningPolygons(
   }
 
   if (stair.stairType === 'curved') {
-    return [getCurvedOpeningPolygon(stair)]
+    return [getCurvedOpeningPolygon(stair, targetElevation)]
   }
 
   if (stair.stairType === 'spiral') {

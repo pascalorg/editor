@@ -34,6 +34,7 @@ import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { RoofSegmentPanel } from './roof-segment-panel'
 import { SlabPanel } from './slab-panel'
+import { SpawnPanel } from './spawn-panel'
 import { StairPanel } from './stair-panel'
 import { StairSegmentPanel } from './stair-segment-panel'
 import { WallPanel } from './wall-panel'
@@ -231,5 +232,34 @@ export function PanelManager() {
   }
 
   // Show appropriate panel based on selected node type
-  return panelForType(selectedNodeType)
+  if (selectedNodeType) {
+    switch (selectedNodeType) {
+      case 'item':
+        return <ItemPanel />
+      case 'roof':
+        return <RoofPanel />
+      case 'roof-segment':
+        return <RoofSegmentPanel />
+      case 'stair':
+        return <StairPanel />
+      case 'stair-segment':
+        return <StairSegmentPanel />
+      case 'slab':
+        return <SlabPanel />
+      case 'spawn':
+        return <SpawnPanel />
+      case 'ceiling':
+        return <CeilingPanel />
+      case 'wall':
+        return <WallPanel />
+      case 'fence':
+        return <FencePanel />
+      case 'door':
+        return <DoorPanel />
+      case 'window':
+        return <WindowPanel />
+    }
+  }
+
+  return null
 }

@@ -3,9 +3,9 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
-  type GuideNode,
+  GuideNode,
   LevelNode,
-  type ScanNode,
+  ScanNode,
   type SiteNode,
   useScene,
   type ZoneNode,
@@ -14,6 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import {
   Camera,
   ChevronDown,
+  Copy,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -33,9 +34,16 @@ import {
 } from './../../../../../components/ui/primitives/popover'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+
+import {
+  buildLevelDuplicateCreateOps,
+  type LevelDuplicatePreset,
+} from './../../../../../lib/level-duplication'
+
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
+import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
@@ -361,7 +369,7 @@ const ReferenceItem = memo(function ReferenceItem({
         <InlineRenameInput
           defaultName={refNode.type === 'scan' ? '3D Scan' : 'Guide Image'}
           isEditing={isEditing}
-          node={refNode}
+          nodeId={refNode.id}
           onStartEditing={() => setIsEditing(true)}
           onStopEditing={() => setIsEditing(false)}
         />
@@ -578,6 +586,7 @@ const LevelReferences = memo(function LevelReferences({
 
 const LevelItem = memo(function LevelItem({
   level,
+  levels,
   selectedLevelId,
   setSelection,
   updateNode,
@@ -587,6 +596,7 @@ const LevelItem = memo(function LevelItem({
   onDeleteAsset,
 }: {
   level: LevelNode
+  levels: LevelNode[]
   selectedLevelId: string | null
   setSelection: (selection: any) => void
   updateNode: (id: AnyNodeId, updates: Partial<AnyNode>) => void
@@ -596,11 +606,22 @@ const LevelItem = memo(function LevelItem({
   onDeleteAsset?: (projectId: string, url: string) => void
 }) {
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const createNodes = useScene((s) => s.createNodes)
+  const updateNodes = useScene((s) => s.updateNodes)
   const itemRef = useRef<HTMLDivElement>(null)
   const isSelected = selectedLevelId === level.id
   const canDeleteLevel = level.level !== 0
   const [isExpanded, setIsExpanded] = useState(isSelected)
+  const buildingId =
+    typeof level.parentId === 'string' && level.parentId.startsWith('building_')
+      ? (level.parentId as BuildingNode['id'])
+      : undefined
+
+  const selectLevel = (levelId: LevelNode['id']) => {
+    setSelection(buildingId ? { buildingId, levelId } : { levelId })
+  }
 
   useEffect(() => {
     setIsExpanded(isSelected)
@@ -613,11 +634,32 @@ const LevelItem = memo(function LevelItem({
   }, [isSelected])
 
   const handleSelect = () => {
-    setSelection({ levelId: level.id })
+    selectLevel(level.id)
   }
 
   const handleDoubleClick = () => {
     focusTreeNode(level.id)
+  }
+
+  const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
+    const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
+      nodes: useScene.getState().nodes,
+      level,
+      levels,
+      preset,
+    })
+
+    if (shiftedLevels.length > 0) {
+      updateNodes(
+        shiftedLevels.map((shiftedLevel) => ({
+          id: shiftedLevel.id as AnyNodeId,
+          data: { level: shiftedLevel.level } as Partial<AnyNode>,
+        })),
+      )
+    }
+    createNodes(createOps)
+    selectLevel(newLevelId as LevelNode['id'])
+    setDuplicateDialogOpen(false)
   }
 
   return (
@@ -661,7 +703,7 @@ const LevelItem = memo(function LevelItem({
               if (isSelected) {
                 setIsExpanded(!isExpanded)
               } else {
-                setSelection({ levelId: level.id })
+                selectLevel(level.id)
               }
             }}
           >
@@ -685,7 +727,7 @@ const LevelItem = memo(function LevelItem({
           <InlineRenameInput
             defaultName={`Level ${level.level}`}
             isEditing={isEditing}
-            node={level}
+            nodeId={level.id}
             onStartEditing={() => setIsEditing(true)}
             onStopEditing={() => setIsEditing(false)}
           />
@@ -770,7 +812,23 @@ const LevelItem = memo(function LevelItem({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-40 p-1" side="right">
+          <PopoverContent align="start" className="w-48 p-1" side="right">
+            <button
+              className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              onClick={() => handleDuplicateLevel()}
+              title="Duplicate level"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate
+            </button>
+            <button
+              className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+              onClick={() => setDuplicateDialogOpen(true)}
+              title="Duplicate level with options"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate with options...
+            </button>
             <button
               className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors enabled:cursor-pointer enabled:hover:bg-accent enabled:hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canDeleteLevel}
@@ -802,6 +860,12 @@ const LevelItem = memo(function LevelItem({
           </motion.div>
         )}
       </AnimatePresence>
+      <LevelDuplicateDialog
+        level={level}
+        onConfirm={handleDuplicateLevel}
+        onOpenChange={setDuplicateDialogOpen}
+        open={duplicateDialogOpen}
+      />
     </div>
   )
 })
@@ -844,7 +908,7 @@ const LevelsSection = memo(function LevelsSection({
       parentId: building.id,
     })
     createNode(newLevel, building.id)
-    setSelection({ levelId: newLevel.id })
+    setSelection({ buildingId: building.id, levelId: newLevel.id })
   }
 
   return (
@@ -879,6 +943,7 @@ const LevelsSection = memo(function LevelsSection({
             isLast={index === levels.length - 1}
             key={level.id}
             level={level}
+            levels={levels}
             onDeleteAsset={onDeleteAsset}
             onUploadAsset={onUploadAsset}
             projectId={projectId}
@@ -1107,7 +1172,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
         <InlineRenameInput
           defaultName={defaultName}
           isEditing={isEditing}
-          node={zone}
+          nodeId={zone.id}
           onStartEditing={() => setIsEditing(true)}
           onStopEditing={() => setIsEditing(false)}
         />

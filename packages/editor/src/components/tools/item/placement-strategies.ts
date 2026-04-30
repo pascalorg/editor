@@ -309,8 +309,11 @@ export const ceilingStrategy = {
     const rotY = ctx.draftItem?.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
 
-    const x = snapToGrid(event.position[0], swapDims ? dimZ : dimX)
-    const z = snapToGrid(event.position[2], swapDims ? dimX : dimZ)
+    // Ceiling items are stored in ceiling-local coordinates, so snapping must
+    // use the ceiling hit's local position rather than world position.
+    const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
+    const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    const worldSnapped = event.object.localToWorld(new Vector3(x, -itemHeight, z))
 
     return {
       stateUpdate: { surface: 'ceiling', ceilingId: event.node.id },
@@ -320,7 +323,7 @@ export const ceilingStrategy = {
       },
       cursorRotationY: 0,
       gridPosition: [x, -itemHeight, z],
-      cursorPosition: [x, event.position[1] - itemHeight, z],
+      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       stopPropagation: true,
     }
   },
@@ -338,12 +341,13 @@ export const ceilingStrategy = {
     const rotY = ctx.draftItem.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
 
-    const x = snapToGrid(event.position[0], swapDims ? dimZ : dimX)
-    const z = snapToGrid(event.position[2], swapDims ? dimX : dimZ)
+    const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
+    const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    const worldSnapped = event.object.localToWorld(new Vector3(x, -itemHeight, z))
 
     return {
       gridPosition: [x, -itemHeight, z],
-      cursorPosition: [x, event.position[1] - itemHeight, z],
+      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       cursorRotationY: 0,
       nodeUpdate: null,
       stopPropagation: true,

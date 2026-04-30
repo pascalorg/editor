@@ -1,4 +1,4 @@
-import { type AnyNodeId, type LevelNode, useScene } from '@pascal-app/core'
+import { type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
@@ -8,7 +8,7 @@ import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface LevelTreeNodeProps {
-  nodeId: AnyNodeId
+  nodeId: LevelNode['id']
   depth: number
   isLast?: boolean
 }

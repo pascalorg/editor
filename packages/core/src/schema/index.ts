@@ -51,6 +51,7 @@ export { ScanNode } from './nodes/scan'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
 export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
+export { SpawnNode } from './nodes/spawn'
 export {
   getEffectiveStairSurfaceMaterial,
   StairNode,

@@ -13,6 +13,7 @@ import { RoofSegmentRenderer } from './roof-segment/roof-segment-renderer'
 import { ScanRenderer } from './scan/scan-renderer'
 import { SiteRenderer } from './site/site-renderer'
 import { SlabRenderer } from './slab/slab-renderer'
+import { SpawnRenderer } from './spawn/spawn-renderer'
 import { StairRenderer } from './stair/stair-renderer'
 import { StairSegmentRenderer } from './stair-segment/stair-segment-renderer'
 import { WallRenderer } from './wall/wall-renderer'
@@ -32,6 +33,7 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
       {node.type === 'level' && <LevelRenderer node={node} />}
       {node.type === 'item' && <ItemRenderer node={node} />}
       {node.type === 'slab' && <SlabRenderer node={node} />}
+      {node.type === 'spawn' && <SpawnRenderer node={node} />}
       {node.type === 'wall' && <WallRenderer node={node} />}
       {node.type === 'fence' && <FenceRenderer node={node} />}
       {node.type === 'door' && <DoorRenderer node={node} />}
