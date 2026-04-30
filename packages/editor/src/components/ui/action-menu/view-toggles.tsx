@@ -2,13 +2,14 @@
 
 import {
   type AnyNodeId,
+  type BuildingNode,
   type GuideNode,
   type LevelNode,
   type ScanNode,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createLocalGuideImage } from '../../../lib/local-guide-image'
@@ -56,6 +57,28 @@ function useLevelScans(): ScanNode[] {
       return (level as LevelNode).children
         .map((id) => state.nodes[id])
         .filter((node): node is ScanNode => node?.type === 'scan')
+    }),
+  )
+}
+
+function useLowerReferenceLevels(): LevelNode[] {
+  const levelId = useViewer((s) => s.selection.levelId)
+  return useScene(
+    useShallow((state) => {
+      if (!levelId) return [] as LevelNode[]
+      const activeLevel = state.nodes[levelId]
+      if (!activeLevel || activeLevel.type !== 'level') return [] as LevelNode[]
+      const buildingId = activeLevel.parentId as BuildingNode['id'] | undefined
+      const building = buildingId ? state.nodes[buildingId] : null
+      if (!building || building.type !== 'building') return [] as LevelNode[]
+
+      return (building.children ?? [])
+        .map((id) => state.nodes[id])
+        .filter(
+          (node): node is LevelNode =>
+            node?.type === 'level' && node.id !== levelId && node.level < activeLevel.level,
+        )
+        .sort((a, b) => b.level - a.level)
     }),
   )
 }
@@ -578,6 +601,156 @@ function ScansControl() {
   )
 }
 
+function ReferenceFloorControl() {
+  const showReferenceFloor = useEditor((state) => state.showReferenceFloor)
+  const toggleReferenceFloor = useEditor((state) => state.toggleReferenceFloor)
+  const referenceFloorOffset = useEditor((state) => state.referenceFloorOffset)
+  const setReferenceFloorOffset = useEditor((state) => state.setReferenceFloorOffset)
+  const referenceFloorOpacity = useEditor((state) => state.referenceFloorOpacity)
+  const setReferenceFloorOpacity = useEditor((state) => state.setReferenceFloorOpacity)
+  const [isOpen, setIsOpen] = useState(false)
+  const lowerLevels = useLowerReferenceLevels()
+  const hasLowerLevels = lowerLevels.length > 0
+  const selectedLevel = lowerLevels[referenceFloorOffset - 1] ?? lowerLevels[0] ?? null
+
+  return (
+    <Popover onOpenChange={setIsOpen} open={isOpen}>
+      <div className="flex items-center">
+        <ActionButton
+          className={cn(
+            'rounded-r-none p-0',
+            showReferenceFloor && selectedLevel
+              ? 'bg-white/15'
+              : 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0',
+          )}
+          disabled={!hasLowerLevels}
+          label={
+            selectedLevel && showReferenceFloor
+              ? `Reference floor: ${selectedLevel.name}`
+              : 'Reference floor'
+          }
+          onClick={() => {
+            if (hasLowerLevels) toggleReferenceFloor()
+          }}
+          size="icon"
+          variant="ghost"
+        >
+          <div className="relative">
+            <Layers2 className="h-4 w-4" />
+            <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-white/20 px-[3px] text-center font-medium text-[9px] text-white/70 leading-[14px]">
+              {lowerLevels.length}
+            </span>
+          </div>
+        </ActionButton>
+
+        <PopoverTrigger asChild>
+          <button
+            aria-expanded={isOpen}
+            aria-label="Reference floor settings"
+            className={cn(
+              'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
+              showReferenceFloor && selectedLevel
+                ? isOpen
+                  ? 'bg-white/10'
+                  : 'bg-white/5 hover:bg-white/8'
+                : isOpen
+                  ? 'bg-white/8'
+                  : 'opacity-60 hover:bg-white/5 hover:opacity-100',
+            )}
+            disabled={!hasLowerLevels}
+            type="button"
+          >
+            <ChevronDown className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')} />
+          </button>
+        </PopoverTrigger>
+      </div>
+
+      <PopoverContent
+        align="center"
+        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
+        side="top"
+        sideOffset={14}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background/80">
+              <Layers2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-foreground text-sm">Reference floor</p>
+              {selectedLevel && (
+                <p className="truncate text-muted-foreground text-xs">{selectedLevel.name}</p>
+              )}
+            </div>
+            <button
+              aria-label={showReferenceFloor ? 'Hide reference floor' : 'Show reference floor'}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              disabled={!hasLowerLevels}
+              onClick={toggleReferenceFloor}
+              type="button"
+            >
+              {showReferenceFloor ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+
+          {hasLowerLevels ? (
+            <>
+              <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border/45 bg-background/60 p-1.5">
+                {lowerLevels.map((level, index) => {
+                  const isSelected = referenceFloorOffset === index + 1
+                  return (
+                    <button
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-white/8',
+                        isSelected && showReferenceFloor && 'bg-white/10 text-foreground',
+                      )}
+                      key={level.id}
+                      onClick={() => {
+                        setReferenceFloorOffset(index + 1)
+                        if (!showReferenceFloor) {
+                          toggleReferenceFloor()
+                        }
+                      }}
+                      type="button"
+                    >
+                      <span
+                        className={cn(
+                          'h-3.5 w-3.5 rounded-full border',
+                          isSelected && showReferenceFloor
+                            ? 'border-foreground bg-foreground'
+                            : 'border-muted-foreground/35',
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{level.name}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {index + 1} below
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <SliderControl
+                label="Opacity"
+                max={0.8}
+                min={0.1}
+                onChange={setReferenceFloorOpacity}
+                precision={2}
+                step={0.05}
+                value={referenceFloorOpacity}
+              />
+            </>
+          ) : (
+            <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
+              No lower floor available.
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // ── Main ViewToggles ────────────────────────────────────────────────────────
 
 export function ViewToggles() {
@@ -588,6 +761,8 @@ export function ViewToggles() {
 
       {/* Guides (toggle + dropdown) */}
       <GuidesControl />
+
+      <ReferenceFloorControl />
     </div>
   )
 }
@@ -599,6 +774,7 @@ export function SecondaryToggles() {
       <GridSnapControl />
       <ScansControl />
       <GuidesControl />
+      <ReferenceFloorControl />
     </div>
   )
 }

@@ -96,7 +96,11 @@ export type MovingFenceEndpoint = {
   endpoint: 'start' | 'end'
 }
 
-export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole |  SingleSurfaceMaterialRole
+export type MaterialTargetRole =
+  | WallSurfaceSide
+  | StairSurfaceMaterialRole
+  | RoofSurfaceMaterialRole
+  | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
   nodeId: AnyNodeId
@@ -197,6 +201,13 @@ type EditorState = {
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
+  showReferenceFloor: boolean
+  toggleReferenceFloor: () => void
+  setShowReferenceFloor: (show: boolean) => void
+  referenceFloorOffset: number
+  setReferenceFloorOffset: (offset: number) => void
+  referenceFloorOpacity: number
+  setReferenceFloorOpacity: (opacity: number) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
@@ -226,6 +237,9 @@ type PersistedEditorLayoutState = Pick<
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
+  | 'showReferenceFloor'
+  | 'referenceFloorOffset'
+  | 'referenceFloorOpacity'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -245,6 +259,9 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
+  showReferenceFloor: false,
+  referenceFloorOffset: 1,
+  referenceFloorOpacity: 0.35,
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -354,6 +371,16 @@ function normalizePersistedEditorLayoutState(
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+    showReferenceFloor: state?.showReferenceFloor === true,
+    referenceFloorOffset:
+      typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
+        ? Math.floor(state.referenceFloorOffset)
+        : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOffset,
+    referenceFloorOpacity:
+      typeof state?.referenceFloorOpacity === 'number' &&
+      Number.isFinite(state.referenceFloorOpacity)
+        ? Math.min(0.8, Math.max(0.1, state.referenceFloorOpacity))
+        : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
   }
 }
 
@@ -632,6 +659,16 @@ const useEditor = create<EditorState>()(
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
+      showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
+      toggleReferenceFloor: () =>
+        set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
+      setShowReferenceFloor: (show) => set({ showReferenceFloor: show }),
+      referenceFloorOffset: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOffset,
+      setReferenceFloorOffset: (offset) =>
+        set({ referenceFloorOffset: Math.max(1, Math.floor(offset)) }),
+      referenceFloorOpacity: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
+      setReferenceFloorOpacity: (opacity) =>
+        set({ referenceFloorOpacity: Math.min(0.8, Math.max(0.1, opacity)) }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
@@ -702,6 +739,9 @@ const useEditor = create<EditorState>()(
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
+        showReferenceFloor: state.showReferenceFloor,
+        referenceFloorOffset: state.referenceFloorOffset,
+        referenceFloorOpacity: state.referenceFloorOpacity,
       }),
     },
   ),

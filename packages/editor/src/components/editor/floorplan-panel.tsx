@@ -2,6 +2,7 @@
 
 import { Icon } from '@iconify/react'
 import {
+  type AnyNode,
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
@@ -57,6 +58,7 @@ import { createPortal } from 'react-dom'
 import {
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
+  collectLevelDescendants,
   getFloorplanWall as getSharedFloorplanWall,
   rotatePlanVector as rotateSharedPlanVector,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
@@ -580,6 +582,15 @@ type FloorplanItemEntry = {
   rotation: number
   width: number
   depth: number
+}
+
+type ReferenceFloorData = {
+  ceilingPolygons: CeilingPolygonEntry[]
+  fenceEntries: FloorplanFenceEntry[]
+  itemEntries: FloorplanItemEntry[]
+  openingPolygons: OpeningPolygonEntry[]
+  slabPolygons: SlabPolygonEntry[]
+  wallPolygons: WallPolygonEntry[]
 }
 
 type FloorplanStairSegmentEntry = {
@@ -3611,6 +3622,97 @@ function FloorplanGuideHandleHint({
   )
 }
 
+const FloorplanReferenceFloorLayer = memo(function FloorplanReferenceFloorLayer({
+  data,
+  opacity,
+}: {
+  data: ReferenceFloorData | null
+  opacity: number
+}) {
+  if (!data) {
+    return null
+  }
+
+  const clampedOpacity = clamp(opacity, 0.1, 0.8)
+
+  return (
+    <g opacity={clampedOpacity} pointerEvents="none">
+      {data.slabPolygons.map(({ path, slab }) => (
+        <path
+          d={path}
+          fill="rgba(100, 116, 139, 0.14)"
+          fillRule="evenodd"
+          key={slab.id}
+          stroke="rgba(100, 116, 139, 0.45)"
+          strokeWidth={1.2}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+
+      {data.ceilingPolygons.map(({ ceiling, path }) => (
+        <path
+          d={path}
+          fill="rgba(245, 158, 11, 0.06)"
+          fillRule="evenodd"
+          key={ceiling.id}
+          stroke="rgba(245, 158, 11, 0.28)"
+          strokeDasharray="6 4"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+
+      {data.wallPolygons.map(({ polygon, points, wall }) =>
+        polygon.length >= 3 ? (
+          <polygon
+            fill="rgba(100, 116, 139, 0.18)"
+            key={wall.id}
+            points={points}
+            stroke="rgba(71, 85, 105, 0.7)"
+            strokeWidth={1.25}
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : null,
+      )}
+
+      {data.fenceEntries.map(({ fence, path }) => (
+        <path
+          d={path}
+          fill="none"
+          key={fence.id}
+          stroke="rgba(71, 85, 105, 0.65)"
+          strokeDasharray="5 4"
+          strokeLinecap="round"
+          strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+
+      {data.openingPolygons.map(({ opening, points }) => (
+        <polygon
+          fill="rgba(255, 255, 255, 0.72)"
+          key={opening.id}
+          points={points}
+          stroke="rgba(51, 65, 85, 0.72)"
+          strokeWidth={1.1}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+
+      {data.itemEntries.map(({ item, points }) => (
+        <polygon
+          fill="rgba(71, 85, 105, 0.12)"
+          key={item.id}
+          points={points}
+          stroke="rgba(71, 85, 105, 0.5)"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </g>
+  )
+})
+
 const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   canFocusGeometry,
   canSelectGeometry,
@@ -6065,6 +6167,10 @@ export function FloorplanPanel() {
   const [hoveredGuideCorner, setHoveredGuideCorner] = useState<GuideCorner | null>(null)
   const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
   const setFloorplanSelectionTool = useEditor((s) => s.setFloorplanSelectionTool)
+  const showReferenceFloor = useEditor((s) => s.showReferenceFloor)
+  const referenceFloorOffset = useEditor((s) => s.referenceFloorOffset)
+  const referenceFloorOpacity = useEditor((s) => s.referenceFloorOpacity)
+  const sceneNodes = useScene((state) => state.nodes)
   const [floorplanMarqueeState, setFloorplanMarqueeState] = useState<FloorplanMarqueeState | null>(
     null,
   )
@@ -6658,6 +6764,174 @@ export function FloorplanPanel() {
       ]
     })
   }, [cursorPoint, floorplanItems, levelDescendantNodeById, movingFloorplanNodeRevision])
+  const referenceFloorLevel = useMemo(() => {
+    if (!(showReferenceFloor && levelNode)) {
+      return null
+    }
+
+    const lowerLevels = floorplanLevels
+      .filter((floorLevel) => floorLevel.id !== levelNode.id && floorLevel.level < levelNode.level)
+      .sort((a, b) => b.level - a.level)
+
+    return lowerLevels[referenceFloorOffset - 1] ?? lowerLevels[0] ?? null
+  }, [floorplanLevels, levelNode, referenceFloorOffset, showReferenceFloor])
+  const referenceFloorData = useMemo<ReferenceFloorData | null>(() => {
+    if (!referenceFloorLevel) {
+      return null
+    }
+
+    const children = referenceFloorLevel.children
+      .map((childId) => sceneNodes[childId])
+      .filter((node): node is AnyNode => Boolean(node && node.visible !== false))
+    const referenceWalls = children.filter((node): node is WallNode => node.type === 'wall')
+    const referenceFences = children.filter((node): node is FenceNode => node.type === 'fence')
+    const referenceSlabs = children.filter((node): node is SlabNode => node.type === 'slab')
+    const referenceCeilings = children.filter(
+      (node): node is CeilingNode => node.type === 'ceiling',
+    )
+    const referenceDescendants = collectLevelDescendants(
+      referenceFloorLevel,
+      sceneNodes as Record<string, AnyNode>,
+    ).filter((node) => node.visible !== false)
+    const referenceDescendantById = new Map(referenceDescendants.map((node) => [node.id, node]))
+
+    const referenceFloorplanWalls = referenceWalls.map(getFloorplanWall)
+    const referenceWallMiterData = calculateLevelMiters(referenceFloorplanWalls)
+    const referenceFloorplanWallById = new Map(
+      referenceFloorplanWalls.map((wall) => [wall.id, wall] as const),
+    )
+
+    const wallPolygons = referenceWalls.map((wall) => {
+      const floorplanWall = referenceFloorplanWallById.get(wall.id) ?? getFloorplanWall(wall)
+      const polygon = getWallPlanFootprint(floorplanWall, referenceWallMiterData)
+
+      return {
+        points: formatPolygonPoints(polygon),
+        polygon,
+        wall,
+      }
+    })
+
+    const openingPolygons = referenceDescendants.flatMap((node) => {
+      if (!(node.type === 'door' || node.type === 'window')) {
+        return []
+      }
+
+      const wall = referenceFloorplanWallById.get(node.parentId as WallNode['id'])
+      if (!wall) {
+        return []
+      }
+
+      const polygon = getOpeningFootprint(wall, node)
+      return [
+        {
+          opening: node,
+          points: formatPolygonPoints(polygon),
+          polygon,
+        },
+      ]
+    })
+
+    const slabPolygons = referenceSlabs.flatMap((slab) => {
+      const polygon = toFloorplanPolygon(slab.polygon)
+      if (polygon.length < 3) {
+        return []
+      }
+
+      const holes = (slab.holes ?? [])
+        .map((hole) => toFloorplanPolygon(hole))
+        .filter((hole) => hole.length >= 3)
+      const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
+      const visualHoles = holes
+
+      return [
+        {
+          slab,
+          polygon,
+          holes,
+          visualPolygon,
+          visualHoles,
+          path: formatPolygonPath(visualPolygon, visualHoles),
+        },
+      ]
+    })
+
+    const ceilingPolygons = referenceCeilings.flatMap((ceiling) => {
+      const polygon = toFloorplanPolygon(ceiling.polygon)
+      if (polygon.length < 3) {
+        return []
+      }
+
+      const holes = (ceiling.holes ?? [])
+        .map((hole) => toFloorplanPolygon(hole))
+        .filter((hole) => hole.length >= 3)
+
+      return [
+        {
+          ceiling,
+          polygon,
+          holes,
+          path: formatPolygonPath(polygon, holes),
+        },
+      ]
+    })
+
+    const fenceEntries = referenceFences.flatMap((fence) => {
+      const centerline = isCurvedWall(fence)
+        ? sampleWallCenterline(fence, 24)
+        : [
+            { x: fence.start[0], y: fence.start[1] },
+            { x: fence.end[0], y: fence.end[1] },
+          ]
+      const path = buildSvgPolylinePath(centerline)
+      if (!path) {
+        return []
+      }
+
+      return [{ fence, centerline, markerFrames: [], path }]
+    })
+
+    const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
+    const itemEntries = referenceDescendants.flatMap((node) => {
+      if (
+        !(
+          node.type === 'item' &&
+          node.asset.category !== 'door' &&
+          node.asset.category !== 'window'
+        )
+      ) {
+        return []
+      }
+
+      const entry = buildFloorplanItemEntry(node, referenceDescendantById, transformCache)
+      if (!entry) {
+        return []
+      }
+
+      return [
+        {
+          dimensionPolygon: entry.dimensionPolygon,
+          item: entry.item,
+          points: formatPolygonPoints(entry.polygon),
+          polygon: entry.polygon,
+          usesRealMesh: entry.usesRealMesh,
+          center: entry.center,
+          rotation: entry.rotation,
+          width: entry.width,
+          depth: entry.depth,
+        },
+      ]
+    })
+
+    return {
+      ceilingPolygons,
+      fenceEntries,
+      itemEntries,
+      openingPolygons,
+      slabPolygons,
+      wallPolygons,
+    }
+  }, [referenceFloorLevel, sceneNodes])
   const hasPendingItemMeshFootprints = floorplanItemEntries.some((entry) => !entry.usesRealMesh)
   const floorplanStairEntries = useMemo(
     () =>
@@ -13899,6 +14173,11 @@ export function FloorplanPanel() {
                 minorGridPath={minorGridPath}
                 palette={palette}
                 showGrid={showGrid}
+              />
+
+              <FloorplanReferenceFloorLayer
+                data={referenceFloorData}
+                opacity={referenceFloorOpacity}
               />
 
               <FloorplanGuideLayer
