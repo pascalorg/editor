@@ -1,8 +1,6 @@
 import {
   type AnimationEffect,
   type AnyNodeId,
-  baseMaterial,
-  glassMaterial,
   type Interactive,
   type ItemNode,
   type LightEffect,
@@ -21,6 +19,7 @@ import { positionLocal, smoothstep, time } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
+import { baseMaterial, glassMaterial } from '../../../lib/materials'
 import { useItemLightPool } from '../../../store/use-item-light-pool'
 import {
   requestItemMeshMetadataSync,

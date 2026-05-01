@@ -1,27 +1,25 @@
 'use client'
 
-import {
-  CeilingSystem,
-  DoorSystem,
-  FenceSystem,
-  ItemSystem,
-  RoofSystem,
-  SlabSystem,
-  StairSystem,
-  WallSystem,
-  WindowSystem,
-} from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
+import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
+import { DoorSystem } from '../../systems/door/door-system'
+import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
+import { ItemSystem } from '../../systems/item/item-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { ItemMeshMetadataSystem } from '../../systems/item-mesh-metadata/item-mesh-metadata-system'
 import { LevelSystem } from '../../systems/level/level-system'
+import { RoofSystem } from '../../systems/roof/roof-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
+import { SlabSystem } from '../../systems/slab/slab-system'
+import { StairSystem } from '../../systems/stair/stair-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
+import { WallSystem } from '../../systems/wall/wall-system'
+import { WindowSystem } from '../../systems/window/window-system'
 import { ZoneSystem } from '../../systems/zone/zone-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'

@@ -2,27 +2,40 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, AnyNodeId, DoorNode, WallNode, WindowNode } from '../../schema'
-import useScene from '../../store/use-scene'
-import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
-import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import {
   calculateLevelMiters,
+  type AnyNode,
+  type AnyNodeId,
+  type DoorNode,
   getAdjacentWallIds,
+  DEFAULT_WALL_HEIGHT,
+  getWallCurveFrameAt,
   getWallMiterBoundaryPoints,
+  getWallPlanFootprint,
+  getWallSurfacePolygon,
+  getWallThickness,
+  isCurvedWall,
   type Point2D,
   pointToKey,
+  resolveLevelId,
+  sceneRegistry,
+  spatialGridManager,
+  useScene,
+  type WallNode,
   type WallMiterData,
-} from './wall-mitering'
+  type WindowNode,
+} from '@pascal-app/core'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
 const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
 const WALL_FACE_NORMAL_Y_EPSILON = 0.6
 const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
+
+function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
+  ;(geometry as any).computeBoundsTree = computeBoundsTree
+  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+}
 
 type WallBoundaryEdgeTag = 'front' | 'back' | 'base'
 
@@ -495,8 +508,7 @@ export function generateExtrudedWall(
 
   // Create wall brush from geometry
   // Pre-compute BVH with new API to avoid deprecation warning
-  geometry.computeBoundsTree = computeBoundsTree
-  geometry.computeBoundsTree({ maxLeafSize: 10 })
+  computeGeometryBoundsTree(geometry)
 
   const wallBrush = new Brush(geometry)
   wallBrush.updateMatrixWorld()
@@ -599,8 +611,7 @@ function collectCutoutBrushes(
     )
 
     // Pre-compute BVH with new API to avoid deprecation warning
-    boxGeo.computeBoundsTree = computeBoundsTree
-    boxGeo.computeBoundsTree({ maxLeafSize: 10 })
+    computeGeometryBoundsTree(boxGeo)
 
     const brush = new Brush(boxGeo)
     brushes.push(brush)
@@ -638,8 +649,7 @@ function createShapedOpeningCutoutBrush(opening: ShapedOpeningNode, wallThicknes
   })
 
   geometry.translate(0, 0, -depth / 2)
-  geometry.computeBoundsTree = computeBoundsTree
-  geometry.computeBoundsTree({ maxLeafSize: 10 })
+  computeGeometryBoundsTree(geometry)
 
   return new Brush(geometry)
 }

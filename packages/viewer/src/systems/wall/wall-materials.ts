@@ -1,5 +1,4 @@
 import {
-  baseMaterial,
   getEffectiveWallSurfaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
@@ -10,7 +9,7 @@ import {
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
+import { baseMaterial, createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
 
 const DEFAULT_WALL_COLOR = '#f2f0ed'
 

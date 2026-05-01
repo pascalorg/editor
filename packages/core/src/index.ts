@@ -52,7 +52,6 @@ export {
   type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
-export { baseMaterial, glassMaterial } from './materials'
 export * from './schema'
 export {
   getSceneHistoryPauseDepth,
@@ -67,13 +66,7 @@ export {
 } from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
-export { CeilingSystem } from './systems/ceiling/ceiling-system'
-export { DoorSystem } from './systems/door/door-system'
-export { FenceSystem } from './systems/fence/fence-system'
-export { ItemSystem } from './systems/item/item-system'
-export { RoofSystem } from './systems/roof/roof-system'
-export { SlabSystem } from './systems/slab/slab-system'
-export { StairSystem } from './systems/stair/stair-system'
+export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
@@ -95,14 +88,13 @@ export {
 } from './systems/wall/wall-footprint'
 export {
   calculateLevelMiters,
+  getAdjacentWallIds,
   getWallMiterBoundaryPoints,
   type Point2D,
   pointToKey,
   type WallMiterBoundaryPoints,
   type WallMiterData,
 } from './systems/wall/wall-mitering'
-export { WallSystem } from './systems/wall/wall-system'
-export { WindowSystem } from './systems/window/window-system'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'

@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "polygon-clipping": "^0.15.7",
+    "three-bvh-csg": "^0.0.18",
+    "three-mesh-bvh": "^0.9.8",
     "zustand": "^5"
   },
   "devDependencies": {

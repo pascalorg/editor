@@ -1,13 +1,18 @@
 import { useFrame } from '@react-three/fiber'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  resolveLevelId,
+  sceneRegistry,
+  spatialGridManager,
+  type StairNode,
+  type StairSegmentNode,
+  syncAutoStairOpenings,
+  useScene,
+} from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
-import useScene from '../../store/use-scene'
-import { syncAutoStairOpenings } from './stair-opening-sync'
 
 const pendingStairUpdates = new Set<AnyNodeId>()
 const MAX_STAIRS_PER_FRAME = 2

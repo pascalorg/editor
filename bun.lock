@@ -56,8 +56,6 @@
         "idb-keyval": "^6.2.2",
         "mitt": "^3.0.1",
         "nanoid": "^5.1.6",
-        "three-bvh-csg": "^0.0.18",
-        "three-mesh-bvh": "^0.9.8",
         "zod": "^4.3.5",
         "zundo": "^2.3.0",
         "zustand": "^5",
@@ -196,6 +194,8 @@
       "version": "0.6.0",
       "dependencies": {
         "polygon-clipping": "^0.15.7",
+        "three-bvh-csg": "^0.0.18",
+        "three-mesh-bvh": "^0.9.8",
         "zustand": "^5",
       },
       "devDependencies": {

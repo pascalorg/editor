@@ -1,21 +1,30 @@
 import { useFrame } from '@react-three/fiber'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  type RoofType,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import type { AnyNode, AnyNodeId, RoofNode, RoofSegmentNode } from '../../schema'
-import type { RoofType } from '../../schema/nodes/roof-segment'
-import useScene from '../../store/use-scene'
 
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
 ;(csgEvaluator as any).consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
 csgEvaluator.attributes = ['position', 'normal', 'uv']
 
+function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
+  ;(geometry as any).computeBoundsTree = computeBoundsTree
+  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+}
+
 function prepareBrushForCSG(brush: Brush) {
-  brush.geometry.computeBoundsTree = computeBoundsTree
-  brush.geometry.computeBoundsTree({ maxLeafSize: 10 })
+  computeGeometryBoundsTree(brush.geometry)
   brush.updateMatrixWorld()
 }
 
@@ -78,8 +87,7 @@ export const RoofSystem = () => {
               mesh.geometry.dispose()
               const placeholder = new THREE.BufferGeometry()
               placeholder.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-              placeholder.computeBoundsTree = computeBoundsTree
-              placeholder.computeBoundsTree({ maxLeafSize: 10 })
+              computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
             }
             mesh.position.set(node.position[0], node.position[1], node.position[2])
@@ -134,8 +142,7 @@ function updateRoofSegmentGeometry(node: RoofSegmentNode, mesh: THREE.Mesh) {
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
-  newGeo.computeBoundsTree = computeBoundsTree
-  newGeo.computeBoundsTree({ maxLeafSize: 10 })
+  computeGeometryBoundsTree(newGeo)
 
   mesh.position.set(node.position[0], node.position[1], node.position[2])
   mesh.rotation.y = node.rotation
@@ -524,8 +531,7 @@ export function getRoofSegmentBrushes(
     // when a group exists but covers no triangles (can happen after mergeVertices)
     geo.groups = geo.groups.filter((g) => g.count > 0)
     if (geo.groups.length === 0) return null
-    geo.computeBoundsTree = computeBoundsTree
-    geo.computeBoundsTree({ maxLeafSize: 10 })
+    computeGeometryBoundsTree(geo)
     const brush = new Brush(geo, dummyMats)
     brush.updateMatrixWorld()
     return brush

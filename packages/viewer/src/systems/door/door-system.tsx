@@ -1,9 +1,12 @@
 import { useFrame } from '@react-three/fiber'
+import {
+  type AnyNodeId,
+  type DoorNode,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import * as THREE from 'three'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import { baseMaterial, glassMaterial } from '../../materials'
-import type { AnyNodeId, DoorNode } from '../../schema'
-import useScene from '../../store/use-scene'
+import { baseMaterial, glassMaterial } from '../../lib/materials'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
