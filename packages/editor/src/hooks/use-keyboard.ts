@@ -153,12 +153,14 @@ export const useKeyboard = ({
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
           if (node?.type === 'door') {
             e.preventDefault()
-            const currentSwingAngle = node.swingAngle ?? 0
-            useScene.getState().updateNode(node.id, {
-              swingAngle:
-                currentSwingAngle >= DOOR_SWING_OPEN_ANGLE / 2 ? 0 : DOOR_SWING_OPEN_ANGLE,
-            })
-            sfxEmitter.emit('sfx:item-rotate')
+            if (node.openingKind !== 'opening') {
+              const currentSwingAngle = node.swingAngle ?? 0
+              useScene.getState().updateNode(node.id, {
+                swingAngle:
+                  currentSwingAngle >= DOOR_SWING_OPEN_ANGLE / 2 ? 0 : DOOR_SWING_OPEN_ANGLE,
+              })
+              sfxEmitter.emit('sfx:item-rotate')
+            }
           } else if (node && 'rotation' in node) {
             e.preventDefault()
             const ROTATION_STEP = Math.PI / 4
@@ -181,8 +183,10 @@ export const useKeyboard = ({
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
           if (node?.type === 'door') {
             e.preventDefault()
-            useScene.getState().updateNode(node.id, { swingAngle: 0 })
-            sfxEmitter.emit('sfx:item-rotate')
+            if (node.openingKind !== 'opening') {
+              useScene.getState().updateNode(node.id, { swingAngle: 0 })
+              sfxEmitter.emit('sfx:item-rotate')
+            }
           } else if (node && 'rotation' in node) {
             e.preventDefault()
             const ROTATION_STEP = Math.PI / 4

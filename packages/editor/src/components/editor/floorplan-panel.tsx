@@ -4346,9 +4346,15 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           const doorCubeSize = Math.min(Math.max(width * 0.08, 0.06), 0.12)
           const doorCubeInset = doorCubeSize * 0.5
           const doorCubeStroke = palette.openingStroke
-          const hingeCubeCenter = { x: hx + nx * doorCubeInset, y: hy + ny * doorCubeInset }
-          const strikeCubeCenter = { x: ox2 - nx * doorCubeInset, y: oy2 - ny * doorCubeInset }
           const hingeTangentSign = hingesSide === 'left' ? 1 : -1
+          const hingeCubeCenter = {
+            x: hx + nx * hingeTangentSign * doorCubeInset,
+            y: hy + ny * hingeTangentSign * doorCubeInset,
+          }
+          const strikeCubeCenter = {
+            x: ox2 - nx * hingeTangentSign * doorCubeInset,
+            y: oy2 - ny * hingeTangentSign * doorCubeInset,
+          }
           const leafHalfThickness = doorCubeSize * 0.18
           const leafSideOffset = hingeTangentSign * (doorCubeSize / 2 + leafHalfThickness)
           const leafStart = {
@@ -4377,7 +4383,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
             x: leafStart.x + closedLeafVector.x * openCos - closedLeafVector.y * openSin,
             y: leafStart.y + closedLeafVector.x * openSin + closedLeafVector.y * openCos,
           }
-          const doorBackgroundPoints = [
+          const doorBackgroundPointList = [
             {
               x: svgP1.x - px * depthDirectionSign * depthExtraOffset,
               y: svgP1.y - py * depthDirectionSign * depthExtraOffset,
@@ -4395,8 +4401,76 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               y: svgP4.y + py * depthDirectionSign * depthExtraOffset,
             },
           ]
+          const doorBackgroundPoints = doorBackgroundPointList
             .map((point) => `${point.x},${point.y}`)
             .join(' ')
+          const openingPlanPath =
+            opening.openingKind === 'opening' && opening.openingShape === 'rounded'
+              ? (() => {
+                  const [a, b, c, d] = doorBackgroundPointList
+                  if (!(a && b && c && d)) return null
+
+                  const tangentRadius = Math.min(width * 0.14, doorCubeSize * 1.6)
+                  const depthRadius = Math.min(
+                    Math.hypot(svgP4.x - svgP1.x, svgP4.y - svgP1.y) * 0.42,
+                    doorCubeSize,
+                  )
+                  const radius = Math.min(tangentRadius, depthRadius)
+                  const offset = (from: Point2D, to: Point2D, distance: number) => {
+                    const dx = to.x - from.x
+                    const dy = to.y - from.y
+                    const length = Math.hypot(dx, dy)
+                    if (length < 1e-6) return from
+                    return {
+                      x: from.x + (dx / length) * Math.min(distance, length / 2),
+                      y: from.y + (dy / length) * Math.min(distance, length / 2),
+                    }
+                  }
+
+                  const aToB = offset(a, b, radius)
+                  const bToA = offset(b, a, radius)
+                  const bToC = offset(b, c, radius)
+                  const cToB = offset(c, b, radius)
+                  const cToD = offset(c, d, radius)
+                  const dToC = offset(d, c, radius)
+                  const dToA = offset(d, a, radius)
+                  const aToD = offset(a, d, radius)
+
+                  return [
+                    `M ${aToB.x} ${aToB.y}`,
+                    `L ${bToA.x} ${bToA.y}`,
+                    `Q ${b.x} ${b.y} ${bToC.x} ${bToC.y}`,
+                    `L ${cToB.x} ${cToB.y}`,
+                    `Q ${c.x} ${c.y} ${cToD.x} ${cToD.y}`,
+                    `L ${dToC.x} ${dToC.y}`,
+                    `Q ${d.x} ${d.y} ${dToA.x} ${dToA.y}`,
+                    `L ${aToD.x} ${aToD.y}`,
+                    `Q ${a.x} ${a.y} ${aToB.x} ${aToB.y}`,
+                    'Z',
+                  ].join(' ')
+                })()
+              : null
+          const archPlanPath =
+            opening.openingKind === 'opening' && opening.openingShape === 'arch'
+              ? (() => {
+                  const centerStart = {
+                    x: (svgP1.x + svgP4.x) / 2,
+                    y: (svgP1.y + svgP4.y) / 2,
+                  }
+                  const centerEnd = {
+                    x: (svgP2.x + svgP3.x) / 2,
+                    y: (svgP2.y + svgP3.y) / 2,
+                  }
+                  const midpoint = {
+                    x: (centerStart.x + centerEnd.x) / 2,
+                    y: (centerStart.y + centerEnd.y) / 2,
+                  }
+                  const bow = Math.min(width * 0.18, doorCubeSize * 1.8)
+                  return `M ${centerStart.x} ${centerStart.y} Q ${midpoint.x + px * bow} ${
+                    midpoint.y + py * bow
+                  } ${centerEnd.x} ${centerEnd.y}`
+                })()
+              : null
           const leafPolygonPoints = [
             {
               x: leafStart.x - nx * leafHalfThickness,
@@ -4467,34 +4541,67 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                   vectorEffect="non-scaling-stroke"
                 />
               )}
-              <polygon fill="#ffffff" points={doorBackgroundPoints} stroke="none" />
-              {[hingeCubeCenter, strikeCubeCenter].map((point, index) => (
-                <rect
-                  fill="#ffffff"
-                  height={doorCubeSize}
-                  key={`${opening.id}:door-cube:${index}`}
-                  stroke={doorCubeStroke}
-                  strokeWidth="1.25"
-                  vectorEffect="non-scaling-stroke"
-                  width={doorCubeSize}
-                  x={point.x - doorCubeSize / 2}
-                  y={point.y - doorCubeSize / 2}
-                />
-              ))}
-              <polygon
-                fill="#ffffff"
-                points={leafPolygonPoints}
-                stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
-                strokeWidth="1.25"
-                vectorEffect="non-scaling-stroke"
-              />
-              <path
-                d={`M ${leafEnd.x} ${leafEnd.y} A ${swingRadius} ${swingRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
-                fill="none"
-                stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
-                strokeWidth={arcStrokeWidth}
-                vectorEffect="non-scaling-stroke"
-              />
+              {opening.openingKind === 'opening' ? (
+                <>
+                  {openingPlanPath ? (
+                    <path
+                      d={openingPlanPath}
+                      fill="#ffffff"
+                      stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                      strokeWidth="1.25"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : (
+                    <polygon
+                      fill="#ffffff"
+                      points={doorBackgroundPoints}
+                      stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                      strokeWidth="1.25"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                  {archPlanPath && (
+                    <path
+                      d={archPlanPath}
+                      fill="none"
+                      stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                      strokeWidth={arcStrokeWidth}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <polygon fill="#ffffff" points={doorBackgroundPoints} stroke="none" />
+                  {[hingeCubeCenter, strikeCubeCenter].map((point, index) => (
+                    <rect
+                      fill="#ffffff"
+                      height={doorCubeSize}
+                      key={`${opening.id}:door-cube:${index}`}
+                      stroke={doorCubeStroke}
+                      strokeWidth="1.25"
+                      vectorEffect="non-scaling-stroke"
+                      width={doorCubeSize}
+                      x={point.x - doorCubeSize / 2}
+                      y={point.y - doorCubeSize / 2}
+                    />
+                  ))}
+                  <polygon
+                    fill="#ffffff"
+                    points={leafPolygonPoints}
+                    stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                    strokeWidth="1.25"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <path
+                    d={`M ${leafEnd.x} ${leafEnd.y} A ${swingRadius} ${swingRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
+                    fill="none"
+                    stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                    strokeWidth={arcStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </>
+              )}
             </g>
           )
         }

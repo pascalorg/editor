@@ -78,6 +78,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   const {
     width,
     height,
+    openingKind,
     frameThickness,
     frameDepth,
     threshold,
@@ -96,6 +97,11 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   } = node
   const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
   const clampedSwingAngle = Math.max(0, Math.min(Math.PI / 2, swingAngle))
+
+  if (openingKind === 'opening') {
+    syncDoorCutout(node, mesh)
+    return
+  }
 
   // Leaf occupies the full opening (no bottom frame bar — door opens to floor)
   const leafW = width - 2 * frameThickness
@@ -306,6 +312,10 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeX, leafTop - 0.25, hingeZ)
   }
 
+  syncDoorCutout(node, mesh)
+}
+
+function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
   // ── Cutout (for wall CSG) — always full door dimensions, 1m deep ──
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {

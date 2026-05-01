@@ -45,6 +45,12 @@ function isMesh(object: THREE.Object3D): object is THREE.Mesh {
   return 'isMesh' in object && (object as THREE.Mesh).isMesh
 }
 
+function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) {
+  return Array.isArray(material)
+    ? material.some((entry) => entry.visible)
+    : material.visible
+}
+
 function cloneWorldGeometry(mesh: THREE.Mesh) {
   const sourceGeometry = mesh.geometry
   const position = sourceGeometry.getAttribute('position')
@@ -79,6 +85,8 @@ function shouldSkipColliderNode(nodeId: string, type: (typeof COLLIDER_NODE_TYPE
   const node = useScene.getState().nodes[nodeId]
   if (!node || node.type !== 'door') return false
 
+  if (node.openingKind === 'opening') return true
+
   if (!node.segments.length) return true
 
   return node.segments.every((segment) => segment.type === 'empty')
@@ -109,7 +117,12 @@ function collectColliderGeometriesFromNode(
     if (visitedMeshes.has(object)) return
     visitedMeshes.add(object)
 
-    if (isMesh(object) && object.visible && !SKIPPED_MESH_NAMES.has(object.name)) {
+    if (
+      isMesh(object) &&
+      object.visible &&
+      isColliderMaterialVisible(object.material) &&
+      !SKIPPED_MESH_NAMES.has(object.name)
+    ) {
       const geometry = cloneWorldGeometry(object)
       if (geometry) {
         geometries.push(geometry)

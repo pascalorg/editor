@@ -85,9 +85,10 @@ export function DoorPanel() {
   }, [node, setMovingNode, setSelection])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
-    const numSegs = node?.segments.length
-    const totalH = node?.segments.reduce((sum, s) => sum + s.heightRatio, 0)
-    const normH = node?.segments.map((s) => s.heightRatio / totalH)
+    if (!node) return
+    const numSegs = node.segments.length
+    const totalH = node.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const normH = node.segments.map((s) => s.heightRatio / totalH)
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
     const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
     const delta = clamped - normH[segIdx]!
@@ -97,7 +98,7 @@ export function DoorPanel() {
       if (i === neighborIdx) return neighborVal
       return v
     })
-    const updated = node?.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
+    const updated = node.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
     handleUpdate({ segments: updated })
   }
 
@@ -131,6 +132,11 @@ export function DoorPanel() {
       height: node.height,
       frameThickness: node.frameThickness,
       frameDepth: node.frameDepth,
+      openingKind: node.openingKind,
+      openingShape: node.openingShape,
+      cornerRadius: node.cornerRadius,
+      archHeight: node.archHeight,
+      openingRevealRadius: node.openingRevealRadius,
       contentPadding: node.contentPadding,
       hingesSide: node.hingesSide,
       swingDirection: node.swingDirection,
@@ -177,6 +183,11 @@ export function DoorPanel() {
 
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)
+  const isOpening = node.openingKind === 'opening'
+  const openingShape = node.openingShape ?? 'rectangle'
+  const cornerRadius = node.cornerRadius ?? 0.15
+  const archHeight = node.archHeight ?? 0.45
+  const openingRevealRadius = node.openingRevealRadius ?? 0.025
 
   return (
     <PanelWrapper
@@ -206,6 +217,31 @@ export function DoorPanel() {
         </PresetsPopover>
       </div>
 
+      <PanelSection title="Type">
+        <div className="flex flex-col gap-2 px-1 pb-1">
+          <SegmentedControl
+            onChange={(v) =>
+              handleUpdate(
+                v === 'opening'
+                  ? {
+                      openingKind: v,
+                      openingShape,
+                      cornerRadius,
+                      archHeight,
+                      openingRevealRadius,
+                    }
+                  : { openingKind: v },
+              )
+            }
+            options={[
+              { label: 'Door', value: 'door' },
+              { label: 'Opening', value: 'opening' },
+            ]}
+            value={node.openingKind}
+          />
+        </div>
+      </PanelSection>
+
       <PanelSection title="Position">
         <SliderControl
           label={
@@ -221,14 +257,16 @@ export function DoorPanel() {
           unit="m"
           value={Math.round(node.position[0] * 100) / 100}
         />
-        <div className="px-1 pt-2 pb-1">
-          <ActionButton
-            className="w-full"
-            icon={<FlipHorizontal2 className="h-4 w-4" />}
-            label="Flip Side"
-            onClick={handleFlip}
-          />
-        </div>
+        {!isOpening && (
+          <div className="px-1 pt-2 pb-1">
+            <ActionButton
+              className="w-full"
+              icon={<FlipHorizontal2 className="h-4 w-4" />}
+              label="Flip Side"
+              onClick={handleFlip}
+            />
+          </div>
+        )}
       </PanelSection>
 
       <PanelSection title="Dimensions">
@@ -256,6 +294,66 @@ export function DoorPanel() {
         />
       </PanelSection>
 
+      {isOpening && (
+        <PanelSection title="Opening Shape">
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <SegmentedControl
+              onChange={(v) =>
+                handleUpdate({
+                  openingShape: v,
+                  ...(v === 'rounded' ? { cornerRadius, openingRevealRadius } : {}),
+                  ...(v === 'arch' ? { archHeight } : {}),
+                })
+              }
+              options={[
+                { label: 'Rect', value: 'rectangle' },
+                { label: 'Rounded', value: 'rounded' },
+                { label: 'Arch', value: 'arch' },
+              ]}
+              value={openingShape}
+            />
+          </div>
+          {openingShape === 'rounded' && (
+            <>
+              <SliderControl
+                label="Corner Radius"
+                max={Math.min(node.width / 2, node.height)}
+                min={0}
+                onChange={(v) => handleUpdate({ cornerRadius: v })}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={Math.round(cornerRadius * 100) / 100}
+              />
+              <SliderControl
+                label="Reveal Radius"
+                max={0.08}
+                min={0}
+                onChange={(v) => handleUpdate({ openingRevealRadius: v })}
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={Math.round(openingRevealRadius * 1000) / 1000}
+              />
+            </>
+          )}
+          {openingShape === 'arch' && (
+            <SliderControl
+              label="Arch Height"
+              max={node.height}
+              min={0.05}
+              onChange={(v) => handleUpdate({ archHeight: v })}
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={Math.round(archHeight * 100) / 100}
+            />
+          )}
+        </PanelSection>
+      )}
+
+      {!isOpening && (
+        <>
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
@@ -566,6 +664,9 @@ export function DoorPanel() {
           )}
         </div>
       </PanelSection>
+
+        </>
+      )}
 
       <PanelSection title="Actions">
         <ActionGroup>

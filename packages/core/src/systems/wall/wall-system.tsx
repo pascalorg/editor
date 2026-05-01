@@ -5,7 +5,7 @@ import { computeBoundsTree } from 'three-mesh-bvh'
 import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
+import type { AnyNode, AnyNodeId, DoorNode, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
 import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
@@ -546,6 +546,11 @@ function collectCutoutBrushes(
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
+    if (child.type === 'door' && child.openingKind === 'opening') {
+      brushes.push(createDoorOpeningCutoutBrush(child, wallThickness))
+      continue
+    }
+
     const childMesh = sceneRegistry.nodes.get(child.id)
     if (!childMesh) continue
 
@@ -599,4 +604,77 @@ function collectCutoutBrushes(
   }
 
   return brushes
+}
+
+function createDoorOpeningCutoutBrush(door: DoorNode, wallThickness: number): Brush {
+  const shape = createDoorOpeningCutoutShape(door)
+  const depth = wallThickness * 2
+  const bevelSize =
+    door.openingShape === 'rounded'
+      ? Math.min(
+          Math.max(door.openingRevealRadius ?? 0.025, 0),
+          Math.max(wallThickness * 0.45, 0.001),
+          Math.max((door.cornerRadius ?? 0.15) * 0.45, 0.001),
+        )
+      : 0
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: bevelSize > 0,
+    bevelSegments: bevelSize > 0 ? 8 : 0,
+    bevelSize,
+    bevelThickness: bevelSize,
+    curveSegments: 24,
+  })
+
+  geometry.translate(0, 0, -depth / 2)
+  geometry.computeBoundsTree = computeBoundsTree
+  geometry.computeBoundsTree({ maxLeafSize: 10 })
+
+  return new Brush(geometry)
+}
+
+function createDoorOpeningCutoutShape(door: DoorNode): THREE.Shape {
+  const halfWidth = door.width / 2
+  const bottom = door.position[1] - door.height / 2
+  const top = door.position[1] + door.height / 2
+  const centerX = door.position[0]
+  const left = centerX - halfWidth
+  const right = centerX + halfWidth
+  const width = Math.max(door.width, 1e-6)
+  const height = Math.max(door.height, 1e-6)
+  const shape = new THREE.Shape()
+
+  if (door.openingShape === 'arch') {
+    const archHeight = Math.min(Math.max(door.archHeight ?? width / 2, 0.01), height)
+    const springY = top - archHeight
+
+    shape.moveTo(left, bottom)
+    shape.lineTo(right, bottom)
+    shape.lineTo(right, springY)
+    shape.quadraticCurveTo(centerX, top, left, springY)
+    shape.lineTo(left, bottom)
+    shape.closePath()
+    return shape
+  }
+
+  if (door.openingShape === 'rounded') {
+    const radius = Math.min(Math.max(door.cornerRadius ?? 0.15, 0), width / 2, height)
+
+    shape.moveTo(left, bottom)
+    shape.lineTo(right, bottom)
+    shape.lineTo(right, top - radius)
+    shape.absarc(right - radius, top - radius, radius, 0, Math.PI / 2, false)
+    shape.lineTo(left + radius, top)
+    shape.absarc(left + radius, top - radius, radius, Math.PI / 2, Math.PI, false)
+    shape.lineTo(left, bottom)
+    shape.closePath()
+    return shape
+  }
+
+  shape.moveTo(left, bottom)
+  shape.lineTo(right, bottom)
+  shape.lineTo(right, top)
+  shape.lineTo(left, top)
+  shape.closePath()
+  return shape
 }
