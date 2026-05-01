@@ -2841,6 +2841,21 @@ function getOpeningCenterLine(polygon: Point2D[]) {
   }
 }
 
+function isOpeningPlanFlipped(rotation: [number, number, number]) {
+  const normalized =
+    ((((rotation[1] % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) + 1e-6) % (Math.PI * 2)
+
+  return normalized > Math.PI / 2 && normalized < (Math.PI * 3) / 2
+}
+
+function getFlippedHingesSide(hingesSide: DoorNode['hingesSide']) {
+  return hingesSide === 'left' ? 'right' : 'left'
+}
+
+function getFlippedSwingDirection(swingDirection: DoorNode['swingDirection']) {
+  return swingDirection === 'inward' ? 'outward' : 'inward'
+}
+
 function normalizeGridCoordinate(value: number): number {
   return Number(value.toFixed(GRID_COORDINATE_PRECISION))
 }
@@ -4301,8 +4316,14 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           const px = -ny
           const py = nx
 
-          const hingesSide = opening.hingesSide ?? 'left'
-          const swingDirection = opening.swingDirection ?? 'inward'
+          const isPlanFlipped = isOpeningPlanFlipped(opening.rotation)
+          const baseHingesSide = opening.hingesSide ?? 'left'
+          const baseSwingDirection = opening.swingDirection ?? 'inward'
+          const hingesSide = isPlanFlipped ? getFlippedHingesSide(baseHingesSide) : baseHingesSide
+          const swingDirection = isPlanFlipped
+            ? getFlippedSwingDirection(baseSwingDirection)
+            : baseSwingDirection
+          const swingAngle = Math.max(0, Math.min(Math.PI / 2, opening.swingAngle ?? 0))
           const width = opening.width
           const sweepFlag =
             hingesSide === 'left'
@@ -4345,9 +4366,16 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               ny * hingeTangentSign * (doorCubeSize / 2),
           }
           const swingRadius = Math.hypot(arcEnd.x - leafStart.x, arcEnd.y - leafStart.y)
+          const closedLeafVector = {
+            x: arcEnd.x - leafStart.x,
+            y: arcEnd.y - leafStart.y,
+          }
+          const openAngle = swingAngle * swingSign * hingeTangentSign
+          const openCos = Math.cos(openAngle)
+          const openSin = Math.sin(openAngle)
           const leafEnd = {
-            x: leafStart.x + px * swingSign * swingRadius,
-            y: leafStart.y + py * swingSign * swingRadius,
+            x: leafStart.x + closedLeafVector.x * openCos - closedLeafVector.y * openSin,
+            y: leafStart.y + closedLeafVector.x * openSin + closedLeafVector.y * openCos,
           }
           const doorBackgroundPoints = [
             {

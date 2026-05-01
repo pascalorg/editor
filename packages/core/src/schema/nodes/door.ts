@@ -41,6 +41,11 @@ export const DoorNode = BaseNode.extend({
   // Swing
   hingesSide: z.enum(['left', 'right']).default('left'),
   swingDirection: z.enum(['inward', 'outward']).default('inward'),
+  swingAngle: z
+    .number()
+    .min(0)
+    .max(Math.PI / 2)
+    .default(0),
 
   // Leaf segments — stacked top to bottom, each with its own column split
   segments: z.array(DoorSegment).default([
@@ -78,7 +83,7 @@ export const DoorNode = BaseNode.extend({
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
   - segments: rows stacked top to bottom, each defining its own columnRatios
   - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
-  - hingesSide/swingDirection: which way the door opens
+  - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
   - doorCloser/panicBar: commercial and emergency hardware options
 `)
 
