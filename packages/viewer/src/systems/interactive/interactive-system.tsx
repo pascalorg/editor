@@ -7,9 +7,9 @@ import { useShallow } from 'zustand/react/shallow'
 export const InteractiveSystem = () => {
   const interactiveNodes = useScene(
     useShallow((state) =>
-      Object.values(state.nodes).filter(
+      Object.values(state.nodes ?? {}).filter(
         (node): node is ItemNode =>
-          node.type === 'item' && (node.asset.interactive?.controls?.length ?? 0) > 0,
+          node.type === 'item' && (node.asset?.interactive?.controls?.length ?? 0) > 0,
       ),
     ),
   )
