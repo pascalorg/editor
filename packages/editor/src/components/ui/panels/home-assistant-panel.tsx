@@ -116,7 +116,7 @@ import {
   getPackedDeviceLayout,
   getPlacementPillWidth,
   getResourceAccentClasses,
-  getSmartHomeSectionOverflow,
+  getSmartHomeConfigContentHeight,
   PLACEMENT_LINE_GAP,
   PLACEMENT_PILL_CLOSED_MIN_WIDTH,
   PLACEMENT_PILL_GAP,
@@ -566,63 +566,46 @@ export function HomeAssistantPanel() {
       return
     }
 
-    const animationFrame = window.requestAnimationFrame(() => {
-      if (!hasOpenFlexibleImportSection) {
-        setPanelSize((currentValue) => {
-          const nextValue = clampSmartHomePanelSize(
-            {
-              height: SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT,
-              width: currentValue.width,
-            },
-            SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT,
-          )
-
-          return Math.abs(nextValue.height - currentValue.height) > 1
-            ? nextValue
-            : currentValue
-        })
-        return
-      }
-
-      const panelElement = smartHomePanelRef.current
-      const configContent = configContentRef.current
-      const sectionBodies = Array.from(
-        configContent?.querySelectorAll<HTMLElement>('[data-smart-home-section-body]') ?? [],
-      )
-
-      if (!panelElement || !configContent || sectionBodies.length === 0) {
-        return
-      }
-
-      const sectionOverflows = sectionBodies.map(getSmartHomeSectionOverflow)
-      const neededGrowth = sectionOverflows.reduce(
-        (totalGrowth, overflow) => totalGrowth + overflow,
-        0,
-      )
-
-      if (neededGrowth <= 1) {
-        return
-      }
-
-      const panelHeight = panelElement.getBoundingClientRect().height
-      const requiredPanelHeight = panelHeight + Math.ceil(neededGrowth)
-
+    if (!hasOpenFlexibleImportSection) {
       setPanelSize((currentValue) => {
         const nextValue = clampSmartHomePanelSize(
           {
-            height: Math.max(currentValue.height, requiredPanelHeight),
+            height: SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT,
             width: currentValue.width,
           },
-          SMART_HOME_PANEL_EXPANDED_MIN_HEIGHT,
+          SMART_HOME_PANEL_COLLAPSED_MIN_HEIGHT,
         )
 
-        return Math.abs(nextValue.height - currentValue.height) > 1
-          ? nextValue
-          : currentValue
+        return Math.abs(nextValue.height - currentValue.height) > 1 ? nextValue : currentValue
       })
-    })
+      return
+    }
 
-    return () => window.cancelAnimationFrame(animationFrame)
+    const panelElement = smartHomePanelRef.current
+    const configContent = configContentRef.current
+
+    if (!panelElement || !configContent) {
+      return
+    }
+
+    const panelHeight = panelElement.getBoundingClientRect().height
+    const configContentHeight = configContent.getBoundingClientRect().height
+    const targetConfigContentHeight = getSmartHomeConfigContentHeight(configContent)
+    const heightDelta = targetConfigContentHeight - configContentHeight
+
+    if (Math.abs(heightDelta) <= 1) return
+
+    setPanelSize((currentValue) => {
+      const nextValue = clampSmartHomePanelSize(
+        {
+          height: panelHeight + heightDelta,
+          width: currentValue.width,
+        },
+        SMART_HOME_PANEL_EXPANDED_MIN_HEIGHT,
+      )
+
+      return Math.abs(nextValue.height - currentValue.height) > 1 ? nextValue : currentValue
+    })
   }, [
     activePanel?.kind,
     activePanelProviderId,
@@ -1760,7 +1743,7 @@ export function HomeAssistantPanel() {
   const SelectedPanelProviderIcon = selectedPanelProvider?.icon ?? null
   const clampedPanelSize = clampSmartHomePanelSize(panelSize, smartHomePanelMinHeight)
   const panelWidthStyle = `min(${clampedPanelSize.width}px, calc(100vw - 2rem))`
-  const panelHeightStyle = `min(${clampedPanelSize.height}px, calc(100vh - 5rem))`
+  const panelHeightStyle = `${clampedPanelSize.height}px`
   const panelUsesFixedHeight = activePanel?.kind === 'config' && hasOpenFlexibleImportSection
   const placementPillWidth = positioningResource
     ? getPlacementPillWidth(positioningResource.label)
@@ -2074,7 +2057,7 @@ export function HomeAssistantPanel() {
       <div className="pointer-events-none fixed top-16 right-4 z-[320] flex items-start">
       {isSmartHomePanelOpen && activePanel && (
         <section
-          className="pointer-events-auto relative flex max-h-[calc(100vh-5rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/8 bg-[rgba(226,228,232,0.97)] p-3 text-zinc-900 shadow-[0_18px_50px_rgba(0,0,0,0.16)] backdrop-blur-xl"
+          className="pointer-events-auto relative flex max-h-[calc(100vh-5rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/8 bg-[rgba(226,228,232,0.97)] p-3 text-zinc-900 shadow-[0_18px_50px_rgba(0,0,0,0.16)] backdrop-blur-xl transition-[height,width] duration-200 ease-out"
           ref={smartHomePanelRef}
           style={{
             height: panelUsesFixedHeight ? panelHeightStyle : undefined,
@@ -2286,12 +2269,11 @@ export function HomeAssistantPanel() {
                         isOpen
                           ? cn(
                               'flex min-h-0 flex-col overflow-hidden shadow-[0_10px_24px_rgba(0,0,0,0.14)]',
-                              section.key === 'devices'
-                                ? 'flex-1 basis-0'
-                                : 'shrink-0',
+                              'shrink-0',
                             )
                           : 'shrink-0 overflow-hidden',
                       )}
+                      data-smart-home-section
                       key={section.key}
                     >
                       <div
@@ -2301,6 +2283,7 @@ export function HomeAssistantPanel() {
                             ? 'bg-white text-zinc-950'
                             : 'bg-[rgba(241,243,246,0.95)] text-zinc-950 hover:bg-white',
                         )}
+                        data-smart-home-section-header
                       >
                         <button
                           className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left transition"
@@ -2357,7 +2340,7 @@ export function HomeAssistantPanel() {
                           className={cn(
                             'min-h-0 overflow-y-auto overscroll-contain border-t border-black/6 px-3 py-2.5 pr-1 [scrollbar-gutter:stable]',
                             section.key === 'devices'
-                              ? 'flex flex-1 flex-col gap-1.5'
+                              ? 'flex max-h-[calc(100vh-12rem)] flex-col gap-1.5'
                               : section.key === 'groups'
                                 ? 'grid content-start grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5'
                                 : 'grid content-start gap-1.5 grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]',

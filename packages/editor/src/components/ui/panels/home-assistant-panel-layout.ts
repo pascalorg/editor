@@ -47,7 +47,7 @@ const SMART_HOME_PANEL_MIN_WIDTH = 320
 const SMART_HOME_PANEL_VIEWPORT_MARGIN_X = 32
 const SMART_HOME_PANEL_TOP_OFFSET = 64
 const SMART_HOME_PANEL_BOTTOM_MARGIN_MIN = 16
-const SMART_HOME_PANEL_BOTTOM_MARGIN_RATIO = 0.15
+const SMART_HOME_PANEL_BOTTOM_MARGIN_RATIO = 0.1
 
 const DEVICE_GROUP_COLORS: DeviceGroupColor[] = [
   { background: '#efd98d', border: '#d09b23', dot: '#efd98d' },
@@ -393,21 +393,53 @@ export function getSmartHomeSectionOverflow(sectionBody: HTMLElement) {
       totalOverflow + Math.max(0, element.scrollHeight - element.clientHeight),
     0,
   )
-  const contentBottom = Array.from(sectionBody.querySelectorAll<HTMLElement>('*')).reduce(
-    (bottom, element) => {
-      const rect = element.getBoundingClientRect()
-      if (rect.width === 0 && rect.height === 0) {
-        return bottom
-      }
-
-      return Math.max(bottom, rect.bottom)
-    },
-    sectionRect.bottom,
-  )
+  const contentBottom = getSmartHomeSectionContentBottom(sectionBody)
 
   return Math.max(
     scrollOverflow,
     nestedScrollOverflow,
     Math.max(0, contentBottom - sectionRect.bottom),
   )
+}
+
+export function getSmartHomeConfigContentHeight(configContent: HTMLElement) {
+  const sections = Array.from(
+    configContent.querySelectorAll<HTMLElement>(':scope > [data-smart-home-section]'),
+  )
+  const gap = Number.parseFloat(getComputedStyle(configContent).rowGap) || 0
+
+  return sections.reduce((height, section, index) => {
+    const header = section.querySelector<HTMLElement>(':scope > [data-smart-home-section-header]')
+    const body = section.querySelector<HTMLElement>(':scope > [data-smart-home-section-body]')
+    const headerHeight = header?.getBoundingClientRect().height ?? 0
+    const bodyHeight = body ? getSmartHomeSectionBodyNaturalHeight(body) : 0
+
+    return height + headerHeight + bodyHeight + (index > 0 ? gap : 0)
+  }, 0)
+}
+
+function getSmartHomeSectionContentBottom(sectionBody: HTMLElement) {
+  const sectionRect = sectionBody.getBoundingClientRect()
+
+  return Array.from(sectionBody.querySelectorAll<HTMLElement>('*')).reduce((bottom, element) => {
+    const rect = element.getBoundingClientRect()
+    if (rect.width === 0 && rect.height === 0) {
+      return bottom
+    }
+
+    return Math.max(bottom, rect.bottom)
+  }, sectionRect.top)
+}
+
+function getSmartHomeSectionBodyNaturalHeight(sectionBody: HTMLElement) {
+  const computedStyle = getComputedStyle(sectionBody)
+  const sectionRect = sectionBody.getBoundingClientRect()
+  const paddingTop = Number.parseFloat(computedStyle.paddingTop) || 0
+  const paddingBottom = Number.parseFloat(computedStyle.paddingBottom) || 0
+  const maxHeight = Number.parseFloat(computedStyle.maxHeight)
+  const contentHeight =
+    getSmartHomeSectionContentBottom(sectionBody) - sectionRect.top - paddingTop
+
+  const naturalHeight = Math.max(0, paddingTop + contentHeight + paddingBottom)
+  return Number.isFinite(maxHeight) ? Math.min(naturalHeight, maxHeight) : naturalHeight
 }
