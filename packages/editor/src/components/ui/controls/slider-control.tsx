@@ -15,6 +15,7 @@ interface SliderControlProps {
   step?: number
   className?: string
   unit?: string
+  restoreOnCommit?: boolean
 }
 
 function stepPrecision(s: number): number {
@@ -56,6 +57,7 @@ export function SliderControl({
   step = 1,
   className,
   unit = '',
+  restoreOnCommit = true,
 }: SliderControlProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -161,7 +163,10 @@ export function SliderControl({
       const newValue = clamp(
         Number.parseFloat((anchorValue + (dx / 4) * s).toFixed(stepPrecision(s))),
       )
-      onChange(newValue)
+      if (newValue !== valueRef.current) {
+        valueRef.current = newValue
+        onChange(newValue)
+      }
     },
     [step, clamp, onChange],
   )
@@ -175,7 +180,7 @@ export function SliderControl({
       setIsDragging(false)
       e.currentTarget.releasePointerCapture(e.pointerId)
 
-      if (originValue !== finalVal) {
+      if (originValue !== finalVal && restoreOnCommit) {
         onChange(originValue)
         useScene.temporal.getState().resume()
         onChange(finalVal)
@@ -185,7 +190,7 @@ export function SliderControl({
         onCommit?.(finalVal)
       }
     },
-    [onChange, onCommit],
+    [onChange, onCommit, restoreOnCommit],
   )
 
   const handleValueClick = useCallback(() => {

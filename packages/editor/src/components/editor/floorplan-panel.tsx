@@ -4154,6 +4154,137 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           const detailStrokeWidth = isSelected || isSelectionHighlighted ? '1.05' : '0.75'
           const markerX = (p1!.x + p2!.x + p3!.x + p4!.x) / 4
           const markerY = (p1!.y + p2!.y + p3!.y + p4!.y) / 4
+          const windowOpeningShape = opening.openingShape ?? 'rectangle'
+
+          if (opening.openingKind === 'opening') {
+            const detailInset = Math.min(tangentLength * 0.14, 0.18)
+            const detailStart = {
+              x: centerLine.start.x + tangentX * detailInset,
+              y: centerLine.start.y + tangentY * detailInset,
+            }
+            const detailEnd = {
+              x: centerLine.end.x - tangentX * detailInset,
+              y: centerLine.end.y - tangentY * detailInset,
+            }
+            const detailControl = {
+              x: (detailStart.x + detailEnd.x) / 2 + normalX * normalLength * 0.34,
+              y: (detailStart.y + detailEnd.y) / 2 + normalY * normalLength * 0.34,
+            }
+            const detailPath =
+              windowOpeningShape === 'rectangle'
+                ? null
+                : `M ${toSvgX(detailStart.x)} ${toSvgY(detailStart.y)} Q ${toSvgX(detailControl.x)} ${toSvgY(detailControl.y)} ${toSvgX(detailEnd.x)} ${toSvgY(detailEnd.y)}`
+
+            return (
+              <g
+                key={opening.id}
+                onClick={
+                  canSelectGeometry
+                    ? (event) => {
+                        event.stopPropagation()
+                        onOpeningSelect(opening.id, event)
+                      }
+                    : undefined
+                }
+                onDoubleClick={
+                  canFocusGeometry
+                    ? (event) => {
+                        event.stopPropagation()
+                        onOpeningDoubleClick(opening)
+                      }
+                    : undefined
+                }
+                onPointerDown={
+                  canFocusGeometry && isSelected
+                    ? (event) => {
+                        if (event.button === 0) {
+                          onOpeningPointerDown(opening.id, event)
+                        }
+                      }
+                    : undefined
+                }
+                onPointerEnter={
+                  canSelectGeometry
+                    ? () => {
+                        onWallHoverChange(null)
+                        onOpeningHoverChange(opening.id)
+                      }
+                    : undefined
+                }
+                onPointerLeave={canSelectGeometry ? () => onOpeningHoverChange(null) : undefined}
+                style={{ cursor: EDITOR_CURSOR }}
+              >
+                {canSelectGeometry && (
+                  <polygon
+                    fill="transparent"
+                    points={points}
+                    pointerEvents="all"
+                    stroke="transparent"
+                    strokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                <polygon
+                  fill={isDeleteHovered ? palette.deleteFill : '#ffffff'}
+                  points={points}
+                  stroke={isDeleteHovered ? palette.deleteStroke : symbolStroke}
+                  strokeDasharray={windowOpeningShape === 'rectangle' ? 'none' : '0.18 0.08'}
+                  strokeOpacity={1}
+                  strokeWidth={symbolStrokeWidth}
+                  vectorEffect="non-scaling-stroke"
+                />
+                {detailPath ? (
+                  <path
+                    d={detailPath}
+                    fill="none"
+                    stroke={isDeleteHovered ? palette.deleteStroke : symbolStroke}
+                    strokeLinecap="round"
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ) : (
+                  <line
+                    stroke={isDeleteHovered ? palette.deleteStroke : symbolStroke}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(detailStart.x)}
+                    x2={toSvgX(detailEnd.x)}
+                    y1={toSvgY(detailStart.y)}
+                    y2={toSvgY(detailEnd.y)}
+                  />
+                )}
+                {isSelected ? (
+                  <>
+                    <circle
+                      cx={toSvgX(markerX)}
+                      cy={toSvgY(markerY)}
+                      fill="#f97316"
+                      r="0.1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                      cx={toSvgX(markerX)}
+                      cy={toSvgY(markerY)}
+                      fill="none"
+                      r="0.17"
+                      stroke="rgba(249, 115, 22, 0.4)"
+                      strokeWidth="2"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                      cx={toSvgX(markerX)}
+                      cy={toSvgY(markerY)}
+                      fill="none"
+                      r="0.17"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </>
+                ) : null}
+              </g>
+            )
+          }
 
           return (
             <g
@@ -4345,7 +4476,22 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           const depthExtraOffset = 0.005
           const doorCubeSize = Math.min(Math.max(width * 0.08, 0.06), 0.12)
           const doorCubeInset = doorCubeSize * 0.5
-          const doorCubeStroke = palette.openingStroke
+          const doorAccent =
+            isSelected || isSelectionHighlighted ? '#f97316' : 'rgba(100, 116, 139, 0.82)'
+          const doorStroke = isDeleteHovered ? palette.deleteStroke : doorAccent
+          const doorSoftStroke =
+            isSelected || isSelectionHighlighted
+              ? 'rgba(251, 146, 60, 0.62)'
+              : 'rgba(148, 163, 184, 0.58)'
+          const doorLeafFill =
+            isSelected || isSelectionHighlighted ? 'rgba(255, 247, 237, 0.98)' : '#ffffff'
+          const doorOpeningFill =
+            isSelected || isSelectionHighlighted ? 'rgba(255, 247, 237, 0.98)' : '#ffffff'
+          const doorSwingFill =
+            isSelected || isSelectionHighlighted
+              ? 'rgba(251, 146, 60, 0.08)'
+              : 'rgba(148, 163, 184, 0.08)'
+          const doorCubeStroke = doorStroke
           const hingeTangentSign = hingesSide === 'left' ? 1 : -1
           const hingeCubeCenter = {
             x: hx + nx * hingeTangentSign * doorCubeInset,
@@ -4491,6 +4637,48 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           ]
             .map((point) => `${point.x},${point.y}`)
             .join(' ')
+          const swingSweepPath =
+            swingRadius > 1e-6
+              ? `M ${leafStart.x} ${leafStart.y} L ${leafEnd.x} ${leafEnd.y} A ${swingRadius} ${swingRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y} Z`
+              : null
+          const jambTickSize = doorCubeSize * 0.82
+          const hingeMarkerRadius = Math.min(Math.max(doorCubeSize * 0.22, 0.018), 0.034)
+          const strikeTickStart = {
+            x: strikeCubeCenter.x - px * swingSign * jambTickSize * 0.5,
+            y: strikeCubeCenter.y - py * swingSign * jambTickSize * 0.5,
+          }
+          const strikeTickEnd = {
+            x: strikeCubeCenter.x + px * swingSign * jambTickSize * 0.5,
+            y: strikeCubeCenter.y + py * swingSign * jambTickSize * 0.5,
+          }
+          const closedLeafHintPoints = [
+            {
+              x: leafStart.x - nx * leafHalfThickness * 0.7,
+              y: leafStart.y - ny * leafHalfThickness * 0.7,
+            },
+            {
+              x: arcEnd.x - nx * leafHalfThickness * 0.7,
+              y: arcEnd.y - ny * leafHalfThickness * 0.7,
+            },
+            {
+              x: arcEnd.x + nx * leafHalfThickness * 0.7,
+              y: arcEnd.y + ny * leafHalfThickness * 0.7,
+            },
+            {
+              x: leafStart.x + nx * leafHalfThickness * 0.7,
+              y: leafStart.y + ny * leafHalfThickness * 0.7,
+            },
+          ]
+            .map((point) => `${point.x},${point.y}`)
+            .join(' ')
+          const openingCenterLineStart = {
+            x: (svgP1.x + svgP4.x) / 2,
+            y: (svgP1.y + svgP4.y) / 2,
+          }
+          const openingCenterLineEnd = {
+            x: (svgP2.x + svgP3.x) / 2,
+            y: (svgP2.y + svgP3.y) / 2,
+          }
 
           return (
             <g
@@ -4546,25 +4734,39 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                   {openingPlanPath ? (
                     <path
                       d={openingPlanPath}
-                      fill="#ffffff"
-                      stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
-                      strokeWidth="1.25"
+                      fill={doorOpeningFill}
+                      stroke={doorStroke}
+                      strokeLinejoin="round"
+                      strokeWidth={isSelected || isSelectionHighlighted ? '1.8' : '1.25'}
                       vectorEffect="non-scaling-stroke"
                     />
                   ) : (
                     <polygon
-                      fill="#ffffff"
+                      fill={doorOpeningFill}
                       points={doorBackgroundPoints}
-                      stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
-                      strokeWidth="1.25"
+                      stroke={doorStroke}
+                      strokeLinejoin="round"
+                      strokeWidth={isSelected || isSelectionHighlighted ? '1.8' : '1.25'}
                       vectorEffect="non-scaling-stroke"
                     />
                   )}
+                  <line
+                    stroke={doorSoftStroke}
+                    strokeDasharray="0.08 0.06"
+                    strokeLinecap="round"
+                    strokeWidth="0.85"
+                    vectorEffect="non-scaling-stroke"
+                    x1={openingCenterLineStart.x}
+                    x2={openingCenterLineEnd.x}
+                    y1={openingCenterLineStart.y}
+                    y2={openingCenterLineEnd.y}
+                  />
                   {archPlanPath && (
                     <path
                       d={archPlanPath}
                       fill="none"
-                      stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                      stroke={doorStroke}
+                      strokeLinecap="round"
                       strokeWidth={arcStrokeWidth}
                       vectorEffect="non-scaling-stroke"
                     />
@@ -4572,36 +4774,108 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 </>
               ) : (
                 <>
-                  <polygon fill="#ffffff" points={doorBackgroundPoints} stroke="none" />
+                  <polygon
+                    fill="rgba(255, 255, 255, 0.94)"
+                    points={doorBackgroundPoints}
+                    stroke="none"
+                  />
+                  {swingSweepPath && (
+                    <path
+                      d={swingSweepPath}
+                      fill={doorSwingFill}
+                      stroke="none"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                  {swingAngle > 0.03 && (
+                    <polygon
+                      fill="none"
+                      points={closedLeafHintPoints}
+                      stroke={doorSoftStroke}
+                      strokeDasharray="0.08 0.06"
+                      strokeLinecap="round"
+                      strokeWidth="0.8"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
                   {[hingeCubeCenter, strikeCubeCenter].map((point, index) => (
                     <rect
-                      fill="#ffffff"
+                      fill={index === 0 ? doorLeafFill : '#ffffff'}
                       height={doorCubeSize}
                       key={`${opening.id}:door-cube:${index}`}
-                      stroke={doorCubeStroke}
-                      strokeWidth="1.25"
+                      rx={doorCubeSize * 0.12}
+                      stroke={index === 0 ? doorStroke : doorSoftStroke}
+                      strokeWidth={index === 0 ? '1.35' : '1'}
                       vectorEffect="non-scaling-stroke"
                       width={doorCubeSize}
                       x={point.x - doorCubeSize / 2}
                       y={point.y - doorCubeSize / 2}
                     />
                   ))}
+                  <circle
+                    cx={hingeCubeCenter.x}
+                    cy={hingeCubeCenter.y}
+                    fill={doorStroke}
+                    r={hingeMarkerRadius}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <line
+                    stroke={doorSoftStroke}
+                    strokeLinecap="round"
+                    strokeWidth="1.1"
+                    vectorEffect="non-scaling-stroke"
+                    x1={strikeTickStart.x}
+                    x2={strikeTickEnd.x}
+                    y1={strikeTickStart.y}
+                    y2={strikeTickEnd.y}
+                  />
                   <polygon
-                    fill="#ffffff"
+                    fill={doorLeafFill}
                     points={leafPolygonPoints}
-                    stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
-                    strokeWidth="1.25"
+                    stroke={doorStroke}
+                    strokeLinejoin="round"
+                    strokeWidth={isSelected || isSelectionHighlighted ? '1.7' : '1.25'}
                     vectorEffect="non-scaling-stroke"
                   />
                   <path
                     d={`M ${leafEnd.x} ${leafEnd.y} A ${swingRadius} ${swingRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
                     fill="none"
-                    stroke={isDeleteHovered ? palette.deleteStroke : doorCubeStroke}
+                    stroke={doorStroke}
+                    strokeLinecap="round"
                     strokeWidth={arcStrokeWidth}
                     vectorEffect="non-scaling-stroke"
                   />
                 </>
               )}
+              {isSelected ? (
+                <>
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    fill="#f97316"
+                    r="0.1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    fill="none"
+                    r="0.17"
+                    stroke="rgba(249, 115, 22, 0.4)"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    fill="none"
+                    r="0.17"
+                    stroke="#ffffff"
+                    strokeWidth="1.5"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </>
+              ) : null}
             </g>
           )
         }

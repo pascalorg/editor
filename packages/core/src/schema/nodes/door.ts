@@ -35,6 +35,8 @@ export const DoorNode = BaseNode.extend({
   // Opening mode
   openingKind: z.enum(['door', 'opening']).default('door'),
   openingShape: z.enum(['rectangle', 'rounded', 'arch']).default('rectangle'),
+  openingRadiusMode: z.enum(['all', 'individual']).default('all'),
+  openingTopRadii: z.tuple([z.number(), z.number()]).default([0.15, 0.15]),
   cornerRadius: z.number().min(0).default(0.15),
   archHeight: z.number().min(0).default(0.45),
   openingRevealRadius: z.number().min(0).default(0.025),

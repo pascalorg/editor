@@ -81,7 +81,13 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
     sill,
     sillDepth,
     sillThickness,
+    openingKind,
   } = node
+
+  if (openingKind === 'opening') {
+    syncWindowCutout(node, mesh)
+    return
+  }
 
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -231,6 +237,10 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
+  syncWindowCutout(node, mesh)
+}
+
+function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {
   // ── Cutout (for wall CSG) — always full window dimensions, 1m deep ──
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {
