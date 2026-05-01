@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { GuideSystem } from '../../systems/guide/guide-system'
@@ -101,7 +101,7 @@ type WebGPUDeviceLike = {
   removeEventListener?: (type: string, listener: EventListener) => void
 }
 
-function GPUDeviceWatcher({ onDeviceLost }: { onDeviceLost: () => void }) {
+function GPUDeviceWatcher() {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
@@ -121,15 +121,11 @@ function GPUDeviceWatcher({ onDeviceLost }: { onDeviceLost: () => void }) {
       features: device.features ? Array.from(device.features) : [],
     })
 
-    let active = true
     device.lost.then((info: WebGPUDeviceLossInfo) => {
-      if (!active) return
-
-      console.warn(
+      console.error(
         `[viewer] WebGPU device lost: reason="${info.reason ?? 'unknown'}", message="${info.message ?? ''}". ` +
-          'Remounting the viewer renderer.',
+          'The page must be reloaded to recover the GPU context.',
       )
-      onDeviceLost()
     })
 
     // Uncaptured errors are normally silent (only console-warned by Chrome at
@@ -140,10 +136,9 @@ function GPUDeviceWatcher({ onDeviceLost }: { onDeviceLost: () => void }) {
     device.addEventListener?.('uncapturederror', onUncapturedError)
 
     return () => {
-      active = false
       device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
-  }, [gl, onDeviceLost])
+  }, [gl])
 
   return null
 }
@@ -162,11 +157,6 @@ const Viewer: React.FC<ViewerProps> = ({
   perf = false,
 }) => {
   const theme = useViewer((state) => state.theme)
-  const [rendererResetKey, setRendererResetKey] = useState(0)
-  const handleDeviceLost = useCallback(() => {
-    setRendererResetKey((currentKey) => currentKey + 1)
-  }, [])
-
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
@@ -210,7 +200,6 @@ const Viewer: React.FC<ViewerProps> = ({
           return promise
         }) as any
       }
-      key={rendererResetKey}
       resize={{
         debounce: 100,
       }}
@@ -222,7 +211,7 @@ const Viewer: React.FC<ViewerProps> = ({
       <FrameLimiter fps={50} />
       {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
-      <GPUDeviceWatcher onDeviceLost={handleDeviceLost} />
+      <GPUDeviceWatcher />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow

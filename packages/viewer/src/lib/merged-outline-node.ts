@@ -622,7 +622,7 @@ export class MergedOutlineNode extends TempNode {
 
   private _buildCache(objects: Object3D[], cache: Set<Object3D>) {
     for (const obj of objects) {
-      if (!obj?.traverse) continue
+      if (!obj || !obj.traverse) continue
       try {
         obj.traverse((child: any) => {
           if (child.isMesh || child.isSprite) cache.add(child)
