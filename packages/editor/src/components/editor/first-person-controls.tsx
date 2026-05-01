@@ -1,15 +1,13 @@
 'use client'
 
 import '../../three-types'
-import { KeyboardControls } from '@react-three/drei'
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { KeyboardControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Euler, Vector3 } from 'three'
+import { Box3, Euler, Matrix4, Ray, Raycaster, Vector2, Vector3 } from 'three'
 import useEditor from '../../store/use-editor'
-import BVHEcctrl from './first-person/bvh-ecctrl'
-import type { BVHEcctrlApi } from './first-person/bvh-ecctrl'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,
@@ -17,10 +15,15 @@ import {
   type FirstPersonColliderWorld,
   type FirstPersonSpawn,
 } from './first-person/build-collider-world'
+import type { BVHEcctrlApi } from './first-person/bvh-ecctrl'
+import BVHEcctrl from './first-person/bvh-ecctrl'
 
 const CAMERA_EYE_OFFSET = 0.45
 const LOOK_SENSITIVITY = 0.002
 const CONTROLLER_CENTER_FROM_EYE = 0.85
+const DOOR_INTERACTION_DISTANCE = 2.5
+const DOOR_SWING_OPEN_ANGLE = Math.PI / 2
+const DOOR_LEAF_INTERACTION_DEPTH = 0.08
 const keyboardMap = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
   { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
@@ -32,13 +35,21 @@ const keyboardMap = [
 
 const cameraOffset = new Vector3(0, CAMERA_EYE_OFFSET, 0)
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
+const centerScreenPoint = new Vector2(0, 0)
+const doorInteractionRaycaster = new Raycaster()
+const doorLeafBox = new Box3()
+const doorLeafInverseMatrix = new Matrix4()
+const doorLeafLocalHit = new Vector3()
+const doorLeafLocalRay = new Ray()
+const doorLeafMatrix = new Matrix4()
+const doorLeafWorldHit = new Vector3()
 const spawnWorldPosition = new Vector3()
 const spawnWorldEuler = new Euler(0, 0, 0, 'YXZ')
 
 const resolvePlacedSpawnNode = (
   nodes: ReturnType<typeof useScene.getState>['nodes'],
   _levelId: string | null,
- ) => {
+) => {
   const candidates = Object.values(nodes).filter((node) => node.type === 'spawn')
   if (candidates.length === 0) return null
 
@@ -52,7 +63,101 @@ export const FirstPersonControls = () => {
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
   const yawRef = useRef(0)
   const pitchRef = useRef(0)
+  const interactableDoorIdRef = useRef<AnyNodeId | null>(null)
+  const worldRef = useRef<FirstPersonColliderWorld | null>(null)
   const [world, setWorld] = useState<FirstPersonColliderWorld | null>(null)
+  const [controllerStart, setControllerStart] = useState<{
+    position: [number, number, number]
+    yaw: number
+  } | null>(null)
+
+  const replaceColliderWorld = useCallback((nextWorld: FirstPersonColliderWorld | null) => {
+    worldRef.current?.dispose()
+    worldRef.current = nextWorld
+    setWorld(nextWorld)
+  }, [])
+
+  const rebuildColliderWorld = useCallback(() => {
+    replaceColliderWorld(buildFirstPersonColliderWorldFromRegistry())
+  }, [replaceColliderWorld])
+
+  const resolveInteractableDoorId = useCallback((): AnyNodeId | null => {
+    const nodes = useScene.getState().nodes
+    camera.updateMatrixWorld(true)
+    doorInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
+
+    let closestDoorId: AnyNodeId | null = null
+    let closestDistance = DOOR_INTERACTION_DISTANCE
+
+    for (const doorId of sceneRegistry.byType.door) {
+      const node = nodes[doorId as AnyNodeId]
+      if (node?.type !== 'door') continue
+      if (node.openingKind === 'opening') continue
+      if (node.segments.every((segment) => segment.type === 'empty')) continue
+
+      const object = sceneRegistry.nodes.get(doorId)
+      if (!object) continue
+
+      object.updateWorldMatrix(true, true)
+
+      const placementHit = doorInteractionRaycaster
+        .intersectObject(object, true)
+        .find((intersection) => intersection.distance <= DOOR_INTERACTION_DISTANCE)
+      if (placementHit && placementHit.distance < closestDistance) {
+        closestDoorId = doorId as AnyNodeId
+        closestDistance = placementHit.distance
+      }
+
+      const leafW = node.width - 2 * node.frameThickness
+      const leafH = node.height - node.frameThickness
+      if (leafW <= 0 || leafH <= 0) continue
+
+      const leafCenterY = -node.frameThickness / 2
+      const hingeX = node.hingesSide === 'right' ? leafW / 2 : -leafW / 2
+      const swingDirectionSign = node.swingDirection === 'inward' ? 1 : -1
+      const hingeDirectionSign = node.hingesSide === 'right' ? 1 : -1
+      const clampedSwingAngle = Math.max(0, Math.min(DOOR_SWING_OPEN_ANGLE, node.swingAngle ?? 0))
+      const leafSwingRotation = clampedSwingAngle * swingDirectionSign * hingeDirectionSign
+
+      doorLeafMatrix
+        .copy(object.matrixWorld)
+        .multiply(new Matrix4().makeTranslation(hingeX, 0, 0))
+        .multiply(new Matrix4().makeRotationY(leafSwingRotation))
+        .multiply(new Matrix4().makeTranslation(-hingeX, leafCenterY, 0))
+      doorLeafInverseMatrix.copy(doorLeafMatrix).invert()
+      doorLeafBox.min.set(-leafW / 2, -leafH / 2, -DOOR_LEAF_INTERACTION_DEPTH / 2)
+      doorLeafBox.max.set(leafW / 2, leafH / 2, DOOR_LEAF_INTERACTION_DEPTH / 2)
+      doorLeafLocalRay.copy(doorInteractionRaycaster.ray).applyMatrix4(doorLeafInverseMatrix)
+
+      const localHit = doorLeafLocalRay.intersectBox(doorLeafBox, doorLeafLocalHit)
+      if (!localHit) continue
+
+      doorLeafWorldHit.copy(localHit).applyMatrix4(doorLeafMatrix)
+      const hitDistance = doorLeafWorldHit.distanceTo(doorInteractionRaycaster.ray.origin)
+
+      if (hitDistance <= DOOR_INTERACTION_DISTANCE && hitDistance < closestDistance) {
+        closestDoorId = doorId as AnyNodeId
+        closestDistance = hitDistance
+      }
+    }
+
+    return closestDoorId
+  }, [camera])
+
+  const toggleInteractableDoor = useCallback(() => {
+    const doorId = interactableDoorIdRef.current ?? resolveInteractableDoorId()
+    if (!doorId) return
+
+    const node = useScene.getState().nodes[doorId]
+    if (node?.type !== 'door' || node.openingKind === 'opening') return
+
+    const currentSwingAngle = node.swingAngle ?? 0
+    useScene.getState().updateNode(doorId, {
+      swingAngle: currentSwingAngle >= DOOR_SWING_OPEN_ANGLE / 2 ? 0 : DOOR_SWING_OPEN_ANGLE,
+    })
+
+    requestAnimationFrame(rebuildColliderWorld)
+  }, [rebuildColliderWorld, resolveInteractableDoorId])
 
   const placedSpawn = useMemo<FirstPersonSpawn | null>(() => {
     if (!(placedSpawnNode && placedSpawnNode.type === 'spawn')) return null
@@ -84,25 +189,28 @@ export const FirstPersonControls = () => {
   }, [placedSpawnNode])
 
   useEffect(() => {
-    const nextWorld = buildFirstPersonColliderWorldFromRegistry()
-    if (!nextWorld) {
-      setWorld(null)
-      return
-    }
-
-    setWorld(nextWorld)
+    rebuildColliderWorld()
 
     return () => {
-      nextWorld.dispose()
+      worldRef.current?.dispose()
+      worldRef.current = null
       setWorld(null)
     }
-  }, [camera])
+  }, [rebuildColliderWorld])
 
   useEffect(() => {
     if (!world) return
-    yawRef.current = (placedSpawn ?? deriveFirstPersonSpawn(camera, world)).yaw
+    if (controllerStart) return
+
+    const spawn = placedSpawn ?? deriveFirstPersonSpawn(camera, world)
+    const [x, y, z] = spawn.position
+    yawRef.current = spawn.yaw
     pitchRef.current = 0
-  }, [camera, placedSpawn, world])
+    setControllerStart({
+      position: [x, y - CONTROLLER_CENTER_FROM_EYE, z],
+      yaw: spawn.yaw,
+    })
+  }, [camera, controllerStart, placedSpawn, world])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -152,6 +260,10 @@ export const FirstPersonControls = () => {
           document.exitPointerLock()
         }
         useEditor.getState().setFirstPersonMode(false)
+      } else if (event.code === 'KeyE') {
+        event.preventDefault()
+        event.stopPropagation()
+        toggleInteractableDoor()
       }
     }
 
@@ -159,7 +271,7 @@ export const FirstPersonControls = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
     }
-  }, [gl])
+  }, [gl, toggleInteractableDoor])
 
   useFrame((_, delta) => {
     if (!controllerRef.current?.group) return
@@ -170,18 +282,21 @@ export const FirstPersonControls = () => {
     cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
     camera.quaternion.setFromEuler(cameraEuler)
     camera.updateMatrixWorld(true)
+
+    const nextInteractableDoorId = resolveInteractableDoorId()
+    if (interactableDoorIdRef.current !== nextInteractableDoorId) {
+      interactableDoorIdRef.current = nextInteractableDoorId
+      useViewer.getState().setHoveredId(nextInteractableDoorId)
+    }
   })
 
-  const controllerPosition = useMemo(() => {
-    if (!world) return null
-    const [x, y, z] = (placedSpawn ?? deriveFirstPersonSpawn(camera, world)).position
-    return [x, y - CONTROLLER_CENTER_FROM_EYE, z] as const
-  }, [camera, placedSpawn, world])
-
-  const spawnYaw = useMemo(() => {
-    if (!world) return 0
-    return (placedSpawn ?? deriveFirstPersonSpawn(camera, world)).yaw
-  }, [camera, placedSpawn, world])
+  useEffect(() => {
+    return () => {
+      if (useViewer.getState().hoveredId === interactableDoorIdRef.current) {
+        useViewer.getState().setHoveredId(null)
+      }
+    }
+  }, [])
 
   if (!world) {
     return null
@@ -189,11 +304,11 @@ export const FirstPersonControls = () => {
 
   return (
     <>
-      {controllerPosition && (
+      {controllerStart && (
         <KeyboardControls map={keyboardMap}>
           <BVHEcctrl
             ref={controllerRef}
-            key={`${world.mesh.uuid}:${controllerPosition.join(':')}:${spawnYaw}`}
+            key="first-person-controller"
             colliderCapsuleArgs={[0.25, 0.8, 4, 8]}
             colliderMeshes={[world.mesh]}
             collisionCheckIteration={3}
@@ -213,7 +328,7 @@ export const FirstPersonControls = () => {
             maxRunSpeed={5.5}
             maxSlope={1.2}
             maxWalkSpeed={4}
-            position={controllerPosition}
+            position={controllerStart.position}
             acceleration={26}
             airDragFactor={0.3}
             deceleration={30}
@@ -293,7 +408,9 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
             <InlineControlHint label="Jump" keyLabel="Space" />
             <InlineControlHint label="Sprint" keyLabel="Shift" />
             <div className="h-px w-full bg-border/30" />
-            <span className="text-center text-muted-foreground/60 text-xs">Click to look around</span>
+            <span className="text-center text-muted-foreground/60 text-xs">
+              Click to look around
+            </span>
           </div>
         </div>
       )}

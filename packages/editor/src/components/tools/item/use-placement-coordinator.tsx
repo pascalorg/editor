@@ -1287,7 +1287,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       >
         <bufferGeometry />
       </lineSegments>
-      <Html center position={widthLabelPosition}>
+      <Html center position={widthLabelPosition} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             background: 'rgba(15, 23, 42, 0.86)',
@@ -1299,13 +1299,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             fontWeight: 600,
             lineHeight: 1,
             padding: '4px 8px',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >
           {widthLabel}
         </div>
       </Html>
-      <Html center position={depthLabelPosition}>
+      <Html center position={depthLabelPosition} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             background: 'rgba(15, 23, 42, 0.86)',
@@ -1317,13 +1318,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             fontWeight: 600,
             lineHeight: 1,
             padding: '4px 8px',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >
           {depthLabel}
         </div>
       </Html>
-      <Html center position={heightLabelPosition}>
+      <Html center position={heightLabelPosition} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             background: 'rgba(15, 23, 42, 0.86)',
@@ -1335,6 +1337,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             fontWeight: 600,
             lineHeight: 1,
             padding: '4px 8px',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >

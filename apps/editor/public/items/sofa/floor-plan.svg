@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 256" role="img" aria-label="Sofa floor plan">
+  <g fill="#ffffff" stroke="#3f3f3f" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M70 45h372c9 0 16 7 16 16v140c0 16-13 29-29 29H83c-16 0-29-13-29-29V61c0-9 7-16 16-16z"/>
+    <path d="M80 45v141"/>
+    <path d="M432 45v141"/>
+    <path d="M256 45v141"/>
+    <path d="M80 186h352"/>
+    <rect x="99" y="126" width="141" height="62" rx="8"/>
+    <rect x="272" y="126" width="141" height="62" rx="8"/>
+  </g>
+</svg>

@@ -139,6 +139,21 @@ export function buildFloorplanItemEntry(
     return null
   }
 
+  const dimensionPolygon = getItemDimensionPolygon(item, transform)
+  const [width, , depth] = getScaledDimensions(item)
+  if (shouldUseDimensionFloorplanFootprint(item)) {
+    return {
+      dimensionPolygon,
+      item,
+      polygon: dimensionPolygon,
+      usesRealMesh: true,
+      center: transform.position,
+      rotation: transform.rotation,
+      width,
+      depth,
+    }
+  }
+
   const object = sceneRegistry.nodes.get(item.id)
   const realMeshPolygon = object
     ? getRealMeshFloorplanPolygon(transform, object)
@@ -146,9 +161,6 @@ export function buildFloorplanItemEntry(
   if (!realMeshPolygon) {
     return null
   }
-
-  const dimensionPolygon = getItemDimensionPolygon(item, transform)
-  const [width, , depth] = getScaledDimensions(item)
 
   return {
     dimensionPolygon,
@@ -165,6 +177,29 @@ export function buildFloorplanItemEntry(
 type Point = {
   x: number
   y: number
+}
+
+const DIMENSION_FOOTPRINT_ASSET_IDS = new Set(['tree', 'fir-tree', 'palm', 'bush'])
+const DIMENSION_FOOTPRINT_TAGS = new Set([
+  'botanical',
+  'foliage',
+  'greenery',
+  'plant',
+  'tree',
+  'vegetation',
+])
+
+function shouldUseDimensionFloorplanFootprint(item: ItemNode) {
+  const asset = item.asset
+  if (asset.category !== 'outdoor') {
+    return false
+  }
+
+  if (DIMENSION_FOOTPRINT_ASSET_IDS.has(asset.id)) {
+    return true
+  }
+
+  return asset.tags?.some((tag) => DIMENSION_FOOTPRINT_TAGS.has(tag.toLowerCase())) ?? false
 }
 
 function getItemDimensionPolygon(item: ItemNode, transform: FloorplanNodeTransform): Point[] {

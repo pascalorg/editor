@@ -1,8 +1,6 @@
 import { useFrame } from '@react-three/fiber'
+import { type AnyNodeId, type CeilingNode, sceneRegistry, useScene } from '@pascal-app/core'
 import * as THREE from 'three'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import type { AnyNodeId, CeilingNode } from '../../schema'
-import useScene from '../../store/use-scene'
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
   const uv = geometry.getAttribute('uv')

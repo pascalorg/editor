@@ -9,7 +9,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { usePresetsAdapter } from '../../../contexts/presets-context'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -22,12 +22,32 @@ import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
 import { PresetsPopover } from './presets/presets-popover'
 
+function isSameDoorValue(current: unknown, next: unknown): boolean {
+  if (typeof current === 'number' && typeof next === 'number') {
+    return Math.abs(current - next) < 1e-6
+  }
+
+  if (Array.isArray(current) && Array.isArray(next)) {
+    return (
+      current.length === next.length &&
+      current.every((value, index) => isSameDoorValue(value, next[index]))
+    )
+  }
+
+  return Object.is(current, next)
+}
+
 export function DoorPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const previewRef = useRef<{
+    id: AnyNodeId
+    key: keyof DoorNode
+    value: unknown
+  } | null>(null)
 
   const adapter = usePresetsAdapter()
 
@@ -37,9 +57,56 @@ export function DoorPanel() {
 
   const handleUpdate = useCallback(
     (updates: Partial<DoorNode>) => {
-      if (!selectedId) return
+      if (!(selectedId && node)) return
+      const hasChange = Object.entries(updates).some(([key, value]) => {
+        const currentValue = node[key as keyof DoorNode]
+        return !isSameDoorValue(currentValue, value)
+      })
+      if (!hasChange) return
+
       updateNode(selectedId as AnyNode['id'], updates)
       useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
+    },
+    [selectedId, node, updateNode],
+  )
+
+  const previewDoorUpdate = useCallback(
+    <K extends keyof DoorNode>(key: K, value: DoorNode[K]) => {
+      if (!selectedId) return
+      const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
+      if (liveNode?.type !== 'door') return
+
+      if (!(previewRef.current && previewRef.current.id === selectedId && previewRef.current.key === key)) {
+        previewRef.current = {
+          id: selectedId as AnyNodeId,
+          key,
+          value: liveNode[key],
+        }
+      }
+
+      if (isSameDoorValue(liveNode[key], value)) return
+
+      ;(liveNode as DoorNode)[key] = value
+      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
+    },
+    [selectedId],
+  )
+
+  const commitDoorPreview = useCallback(
+    <K extends keyof DoorNode>(key: K, value: DoorNode[K]) => {
+      if (!selectedId) return
+
+      const scene = useScene.getState()
+      const liveNode = scene.nodes[selectedId as AnyNodeId]
+      const preview = previewRef.current
+      if (liveNode?.type === 'door' && preview?.id === selectedId && preview.key === key) {
+        ;(liveNode as DoorNode)[key] = preview.value as DoorNode[K]
+        scene.dirtyNodes.add(selectedId as AnyNodeId)
+      }
+      previewRef.current = null
+
+      updateNode(selectedId as AnyNode['id'], { [key]: value } as Partial<DoorNode>)
+      scene.dirtyNodes.add(selectedId as AnyNodeId)
     },
     [selectedId, updateNode],
   )
@@ -85,9 +152,10 @@ export function DoorPanel() {
   }, [node, setMovingNode, setSelection])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
-    const numSegs = node?.segments.length
-    const totalH = node?.segments.reduce((sum, s) => sum + s.heightRatio, 0)
-    const normH = node?.segments.map((s) => s.heightRatio / totalH)
+    if (!node) return
+    const numSegs = node.segments.length
+    const totalH = node.segments.reduce((sum, s) => sum + s.heightRatio, 0)
+    const normH = node.segments.map((s) => s.heightRatio / totalH)
     const clamped = Math.max(0.05, Math.min(0.95, newVal))
     const neighborIdx = segIdx < numSegs - 1 ? segIdx + 1 : segIdx - 1
     const delta = clamped - normH[segIdx]!
@@ -97,7 +165,7 @@ export function DoorPanel() {
       if (i === neighborIdx) return neighborVal
       return v
     })
-    const updated = node?.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
+    const updated = node.segments.map((s, idx) => ({ ...s, heightRatio: newRatios[idx]! }))
     handleUpdate({ segments: updated })
   }
 
@@ -131,6 +199,13 @@ export function DoorPanel() {
       height: node.height,
       frameThickness: node.frameThickness,
       frameDepth: node.frameDepth,
+      openingKind: node.openingKind,
+      openingShape: node.openingShape,
+      openingRadiusMode: node.openingRadiusMode ?? 'all',
+      openingTopRadii: node.openingTopRadii ?? [0.15, 0.15],
+      cornerRadius: node.cornerRadius,
+      archHeight: node.archHeight,
+      openingRevealRadius: node.openingRevealRadius,
       contentPadding: node.contentPadding,
       hingesSide: node.hingesSide,
       swingDirection: node.swingDirection,
@@ -177,6 +252,24 @@ export function DoorPanel() {
 
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)
+  const isOpening = node.openingKind === 'opening'
+  const openingShape = node.openingShape ?? 'rectangle'
+  const openingRadiusMode = node.openingRadiusMode ?? 'all'
+  const openingTopRadii = node.openingTopRadii ?? [0.15, 0.15]
+  const cornerRadius = node.cornerRadius ?? 0.15
+  const archHeight = node.archHeight ?? 0.45
+  const openingRevealRadius = node.openingRevealRadius ?? 0.025
+  const maxRoundedRadius = Math.max(0.01, Math.min(node.width / 2, node.height))
+
+  const setOpeningTopRadius = (index: number, value: number, commit = false) => {
+    const next = [...openingTopRadii] as [number, number]
+    next[index] = value
+    if (commit) {
+      commitDoorPreview('openingTopRadii', next)
+    } else {
+      previewDoorUpdate('openingTopRadii', next)
+    }
+  }
 
   return (
     <PanelWrapper
@@ -206,6 +299,33 @@ export function DoorPanel() {
         </PresetsPopover>
       </div>
 
+      <PanelSection title="Type">
+        <div className="flex flex-col gap-2 px-1 pb-1">
+          <SegmentedControl
+            onChange={(v) =>
+              handleUpdate(
+                v === 'opening'
+                  ? {
+                      openingKind: v,
+                      openingShape,
+                      openingRadiusMode,
+                      openingTopRadii,
+                      cornerRadius,
+                      archHeight,
+                      openingRevealRadius,
+                    }
+                  : { openingKind: v },
+              )
+            }
+            options={[
+              { label: 'Door', value: 'door' },
+              { label: 'Opening', value: 'opening' },
+            ]}
+            value={node.openingKind}
+          />
+        </div>
+      </PanelSection>
+
       <PanelSection title="Position">
         <SliderControl
           label={
@@ -221,14 +341,16 @@ export function DoorPanel() {
           unit="m"
           value={Math.round(node.position[0] * 100) / 100}
         />
-        <div className="px-1 pt-2 pb-1">
-          <ActionButton
-            className="w-full"
-            icon={<FlipHorizontal2 className="h-4 w-4" />}
-            label="Flip Side"
-            onClick={handleFlip}
-          />
-        </div>
+        {!isOpening && (
+          <div className="px-1 pt-2 pb-1">
+            <ActionButton
+              className="w-full"
+              icon={<FlipHorizontal2 className="h-4 w-4" />}
+              label="Flip Side"
+              onClick={handleFlip}
+            />
+          </div>
+        )}
       </PanelSection>
 
       <PanelSection title="Dimensions">
@@ -238,6 +360,7 @@ export function DoorPanel() {
           min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
+          restoreOnCommit={false}
           step={0.05}
           unit="m"
           value={Math.round(node.width * 100) / 100}
@@ -250,12 +373,111 @@ export function DoorPanel() {
             handleUpdate({ height: v, position: [node.position[0], v / 2, node.position[2]] })
           }
           precision={2}
+          restoreOnCommit={false}
           step={0.05}
           unit="m"
           value={Math.round(node.height * 100) / 100}
         />
       </PanelSection>
 
+      {isOpening && (
+        <PanelSection title="Opening Shape">
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <SegmentedControl
+              onChange={(v) =>
+                handleUpdate({
+                  openingShape: v,
+                  ...(v === 'rounded'
+                    ? { openingRadiusMode, openingTopRadii, cornerRadius, openingRevealRadius }
+                    : {}),
+                  ...(v === 'arch' ? { archHeight } : {}),
+                })
+              }
+              options={[
+                { label: 'Rect', value: 'rectangle' },
+                { label: 'Rounded', value: 'rounded' },
+                { label: 'Arch', value: 'arch' },
+              ]}
+              value={openingShape}
+            />
+          </div>
+          {openingShape === 'rounded' && (
+            <>
+              <div className="flex flex-col gap-2 px-1 pb-1">
+                <SegmentedControl
+                  onChange={(v) =>
+                    handleUpdate({ openingRadiusMode: v as DoorNode['openingRadiusMode'] })
+                  }
+                  options={[
+                    { label: 'All', value: 'all' },
+                    { label: 'Individual', value: 'individual' },
+                  ]}
+                  value={openingRadiusMode}
+                />
+              </div>
+              {openingRadiusMode === 'all' ? (
+                <SliderControl
+                  label="Corner Radius"
+                  max={maxRoundedRadius}
+                  min={0}
+                  onChange={(v) => previewDoorUpdate('cornerRadius', v)}
+                  onCommit={(v) => commitDoorPreview('cornerRadius', v)}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={Math.round(cornerRadius * 100) / 100}
+                />
+              ) : (
+                <>
+                  {[
+                    ['Top Left', 0],
+                    ['Top Right', 1],
+                  ].map(([label, index]) => (
+                    <SliderControl
+                      key={label}
+                      label={label}
+                      max={maxRoundedRadius}
+                      min={0}
+                      onChange={(v) => setOpeningTopRadius(index as number, v)}
+                      onCommit={(v) => setOpeningTopRadius(index as number, v, true)}
+                      precision={2}
+                      step={0.05}
+                      unit="m"
+                      value={Math.round((openingTopRadii[index as number] ?? 0) * 100) / 100}
+                    />
+                  ))}
+                </>
+              )}
+              <SliderControl
+                label="Reveal Radius"
+                max={0.08}
+                min={0}
+                onChange={(v) => previewDoorUpdate('openingRevealRadius', v)}
+                onCommit={(v) => commitDoorPreview('openingRevealRadius', v)}
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={Math.round(openingRevealRadius * 1000) / 1000}
+              />
+            </>
+          )}
+          {openingShape === 'arch' && (
+            <SliderControl
+              label="Arch Height"
+              max={node.height}
+              min={0.05}
+              onChange={(v) => handleUpdate({ archHeight: v })}
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={Math.round(archHeight * 100) / 100}
+            />
+          )}
+        </PanelSection>
+      )}
+
+      {!isOpening && (
+        <>
       <PanelSection title="Frame">
         <SliderControl
           label="Thickness"
@@ -566,6 +788,9 @@ export function DoorPanel() {
           )}
         </div>
       </PanelSection>
+
+        </>
+      )}
 
       <PanelSection title="Actions">
         <ActionGroup>

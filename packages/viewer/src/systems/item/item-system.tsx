@@ -1,10 +1,15 @@
 import { useFrame } from '@react-three/fiber'
+import {
+  type AnyNodeId,
+  getScaledDimensions,
+  type ItemNode,
+  resolveLevelId,
+  sceneRegistry,
+  spatialGridManager,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import type * as THREE from 'three'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import { type AnyNodeId, getScaledDimensions, type ItemNode, type WallNode } from '../../schema'
-import useScene from '../../store/use-scene'
 
 // ============================================================================
 // ITEM SYSTEM

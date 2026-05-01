@@ -21,6 +21,9 @@
     "three": "^0.184"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.5.14",
     "@radix-ui/react-alert-dialog": "^1.1.15",

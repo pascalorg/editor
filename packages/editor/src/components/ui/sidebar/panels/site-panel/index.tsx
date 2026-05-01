@@ -33,10 +33,13 @@ import {
   PopoverTrigger,
 } from './../../../../../components/ui/primitives/popover'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
+import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from './../../../../../lib/level-duplication'
+
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
@@ -400,7 +403,10 @@ const LevelReferences = memo(function LevelReferences({
   onUploadAsset,
   onDeleteAsset,
 }: LevelReferencesProps) {
+  const createNode = useScene((s) => s.createNode)
   const deleteNode = useScene((s) => s.deleteNode)
+  const setSelection = useViewer((s) => s.setSelection)
+  const setShowGuides = useViewer((s) => s.setShowGuides)
   const references = useScene(
     useShallow((s) =>
       Object.values(s.nodes).filter(
@@ -423,19 +429,27 @@ const LevelReferences = memo(function LevelReferences({
 
   const scanInputRef = useRef<HTMLInputElement>(null)
 
-  const handleAddAsset = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddAsset = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
 
-    if (!projectId) {
-      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
-      useUploadStore.getState().setError(levelId, 'No active project. Please open a project first.')
+    // Auto-detect type based on file extension/mime type
+    const isScan =
+      file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')
+    const isImage = file.type.startsWith('image/')
+    const type = isScan ? 'scan' : 'guide'
+
+    if (!(isScan || isImage)) {
+      useUploadStore.getState().startUpload(levelId, type, file.name)
+      useUploadStore
+        .getState()
+        .setError(levelId, 'Invalid file type. Please upload a .glb/.gltf scan or an image.')
       return
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
+      useUploadStore.getState().startUpload(levelId, type, file.name)
       useUploadStore
         .getState()
         .setError(
@@ -445,20 +459,28 @@ const LevelReferences = memo(function LevelReferences({
       return
     }
 
-    // Auto-detect type based on file extension/mime type
-    const isScan =
-      file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')
-    const isImage = file.type.startsWith('image/')
+    if (isImage) {
+      useUploadStore.getState().startUpload(levelId, 'guide', file.name)
+      useUploadStore.getState().setStatus(levelId, 'uploading')
 
-    if (!(isScan || isImage)) {
-      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
-      useUploadStore
-        .getState()
-        .setError(levelId, 'Invalid file type. Please upload a .glb/.gltf scan or an image.')
+      try {
+        const guide = await createLocalGuideImage({ createNode, file, levelId })
+        setShowGuides(true)
+        setSelectedReferenceId(guide.id)
+        setSelection({ selectedIds: [], zoneId: null })
+        useUploadStore.getState().setResult(levelId, guide.url)
+        window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
+      } catch {
+        useUploadStore.getState().setError(levelId, 'Could not add that guide image.')
+      }
       return
     }
 
-    const type = isScan ? 'scan' : 'guide'
+    if (!projectId) {
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
+      useUploadStore.getState().setError(levelId, 'No active project. Please open a project first.')
+      return
+    }
 
     clearUpload(levelId)
     onUploadAsset?.(projectId, levelId, file, type)
