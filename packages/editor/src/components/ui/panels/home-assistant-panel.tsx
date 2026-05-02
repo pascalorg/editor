@@ -173,7 +173,7 @@ type HomeAssistantDiscoveredInstance = {
   id: string
   instanceUrl: string
   label: string
-  source: 'loopback' | 'zeroconf'
+  source: 'known-host' | 'loopback' | 'zeroconf'
 }
 
 type ProviderDefinition = {
@@ -348,8 +348,7 @@ export function HomeAssistantPanel() {
   const [connectionState, setConnectionState] = useState<HomeAssistantConnectionResponse | null>(null)
   const [imports, setImports] = useState<HomeAssistantImportedResource[]>([])
   const [discoveredInstances, setDiscoveredInstances] = useState<HomeAssistantDiscoveredInstance[]>([])
-  const [instanceUrlInput, setInstanceUrlInput] = useState('http://localhost:8123')
-  const [externalUrlInput, setExternalUrlInput] = useState('')
+  const [instanceUrlInput, setInstanceUrlInput] = useState('http://homeassistant.local:8123')
   const [isRefreshingConnection, setIsRefreshingConnection] = useState(false)
   const [isRefreshingImports, setIsRefreshingImports] = useState(false)
   const [isDiscoveringInstances, setIsDiscoveringInstances] = useState(false)
@@ -743,7 +742,6 @@ export function HomeAssistantPanel() {
     try {
       const response = await fetch('/api/home-assistant/oauth/start', {
         body: JSON.stringify({
-          externalUrl: externalUrlInput.trim() || undefined,
           instanceUrl: instanceUrlOverride ?? (instanceUrlInput.trim() || undefined),
         }),
         headers: {
@@ -2158,10 +2156,35 @@ export function HomeAssistantPanel() {
           {activePanel.kind === 'connect' && activePanel.providerId === 'home-assistant' && (
             <div className="mt-3 grid gap-2.5">
               <div className="rounded-xl border border-black/8 bg-white/45 p-3">
+                <div className="grid gap-1.5">
+                  <input
+                    aria-label="Home Assistant URL"
+                    className="rounded-xl border border-black/8 bg-white/62 px-3 py-2.5 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:border-cyan-600/45"
+                    onChange={(event) => setInstanceUrlInput(event.target.value)}
+                    placeholder="http://homeassistant.local:8123"
+                    value={instanceUrlInput}
+                  />
+                  <button
+                    className="flex items-center justify-center gap-2 rounded-xl border border-cyan-700/20 bg-cyan-600/12 px-3 py-2.5 text-sm font-medium text-cyan-950 transition hover:bg-cyan-600/18"
+                    disabled={isStartingOauth}
+                    onClick={() => void startHomeAssistantOauth()}
+                    type="button"
+                  >
+                    {isStartingOauth ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Link2 className="h-4 w-4" />
+                    )}
+                    Connect Home Assistant
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-black/8 bg-white/45 p-3">
                 <div className="mb-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-zinc-800">
                     <Wifi className="h-4 w-4 text-cyan-700" />
-                    <span>Nearby</span>
+                    <span>Discovered</span>
                   </div>
                   <button
                     aria-label="Rescan Home Assistant instances"
@@ -2195,39 +2218,9 @@ export function HomeAssistantPanel() {
 
                   {!isDiscoveringInstances && discoveredInstances.length === 0 && (
                     <div className="rounded-xl border border-dashed border-black/8 bg-white/42 px-3 py-3.5 text-center text-xs text-zinc-500">
-                      No Home Assistant instance discovered yet
+                      No network instances found
                     </div>
                   )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-black/8 bg-white/45 p-3">
-                <div className="grid gap-1.5">
-                  <input
-                    className="rounded-xl border border-black/8 bg-white/62 px-3 py-2.5 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:border-cyan-600/45"
-                    onChange={(event) => setInstanceUrlInput(event.target.value)}
-                    placeholder="http://raspberrypi.local:8123"
-                    value={instanceUrlInput}
-                  />
-                  <input
-                    className="rounded-xl border border-black/8 bg-white/62 px-3 py-2.5 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:border-cyan-600/45"
-                    onChange={(event) => setExternalUrlInput(event.target.value)}
-                    placeholder="https://your-ha.example.com"
-                    value={externalUrlInput}
-                  />
-                  <button
-                    className="flex items-center justify-center gap-2 rounded-xl border border-cyan-700/20 bg-cyan-600/12 px-3 py-2.5 text-sm font-medium text-cyan-950 transition hover:bg-cyan-600/18"
-                    disabled={isStartingOauth}
-                    onClick={() => void startHomeAssistantOauth()}
-                    type="button"
-                  >
-                    {isStartingOauth ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Link2 className="h-4 w-4" />
-                    )}
-                    Connect Home Assistant
-                  </button>
                 </div>
               </div>
 

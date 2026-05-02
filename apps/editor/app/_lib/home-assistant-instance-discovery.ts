@@ -1,16 +1,21 @@
 import dgram from 'node:dgram'
+import os from 'node:os'
 
 export type HomeAssistantDiscoveredInstance = {
   id: string
   instanceUrl: string
   label: string
-  source: 'loopback' | 'zeroconf'
+  source: 'known-host' | 'loopback' | 'zeroconf'
 }
 
 const MDNS_GROUP = '224.0.0.251'
 const MDNS_PORT = 5353
 const DISCOVERY_TIMEOUT_MS = 1800
 const HOME_ASSISTANT_SERVICE_TYPE = '_home-assistant._tcp.local'
+const HOME_ASSISTANT_KNOWN_HOST_CANDIDATES = [
+  'http://homeassistant.local:8123',
+  'http://homeassistant:8123',
+]
 
 type MdnsRecord =
   | {
@@ -86,6 +91,13 @@ function buildMdnsQuery(serviceType: string) {
     Buffer.from([0x00, 0x0c]),
     Buffer.from([0x00, 0x01]),
   ])
+}
+
+function getLanIpv4Addresses() {
+  return Object.values(os.networkInterfaces())
+    .flatMap((entries) => entries ?? [])
+    .filter((entry) => entry.family === 'IPv4' && !entry.internal)
+    .map((entry) => entry.address)
 }
 
 function decodeDnsName(message: Buffer, startOffset: number) {
@@ -285,7 +297,16 @@ async function collectUdpMessages(onMessage: (message: Buffer) => void) {
     socket.bind(0, () => {
       try {
         socket.setMulticastTTL(255)
-        socket.send(buildMdnsQuery(HOME_ASSISTANT_SERVICE_TYPE), MDNS_PORT, MDNS_GROUP)
+        const query = buildMdnsQuery(HOME_ASSISTANT_SERVICE_TYPE)
+        const interfaces = getLanIpv4Addresses()
+
+        socket.send(query, MDNS_PORT, MDNS_GROUP)
+        for (const interfaceAddress of interfaces) {
+          try {
+            socket.setMulticastInterface(interfaceAddress)
+            socket.send(query, MDNS_PORT, MDNS_GROUP)
+          } catch {}
+        }
       } catch (error) {
         clearTimeout(timeout)
         finish(() => reject(error))
@@ -298,7 +319,7 @@ async function collectUdpMessages(onMessage: (message: Buffer) => void) {
   })
 }
 
-async function probeLoopbackCandidate(url: string) {
+async function probeHttpCandidate(url: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 1200)
 
@@ -328,7 +349,7 @@ async function discoverLoopbackInstances() {
   const discovered: HomeAssistantDiscoveredInstance[] = []
 
   for (const candidate of candidates) {
-    const reachable = await probeLoopbackCandidate(candidate)
+    const reachable = await probeHttpCandidate(candidate)
     if (!reachable) {
       continue
     }
@@ -338,6 +359,27 @@ async function discoverLoopbackInstances() {
       instanceUrl: candidate,
       label: 'This machine',
       source: 'loopback',
+    })
+  }
+
+  return discovered
+}
+
+async function discoverKnownHostInstances() {
+  const discovered: HomeAssistantDiscoveredInstance[] = []
+
+  for (const candidate of HOME_ASSISTANT_KNOWN_HOST_CANDIDATES) {
+    const reachable = await probeHttpCandidate(candidate)
+    if (!reachable) {
+      continue
+    }
+
+    const url = new URL(candidate)
+    discovered.push({
+      id: `known-host:${stableId([candidate])}`,
+      instanceUrl: candidate,
+      label: url.hostname,
+      source: 'known-host',
     })
   }
 
@@ -415,6 +457,12 @@ export async function discoverHomeAssistantInstances() {
 
   for (const instance of await discoverZeroconfInstances()) {
     discovered.set(instance.instanceUrl, instance)
+  }
+
+  for (const instance of await discoverKnownHostInstances()) {
+    if (!discovered.has(instance.instanceUrl)) {
+      discovered.set(instance.instanceUrl, instance)
+    }
   }
 
   for (const instance of await discoverLoopbackInstances()) {
