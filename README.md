@@ -17,12 +17,13 @@ https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 This is a Turborepo monorepo with three main packages:
 
 ```
-editor-v2/
+editor/
 ├── apps/
 │   └── editor/          # Next.js application
 ├── packages/
 │   ├── core/            # Schema definitions, state management, systems
-│   └── viewer/          # 3D rendering components
+│   ├── viewer/          # 3D rendering components
+│   └── ui/              # Shared UI components
 ```
 
 ### Separation of Concerns
