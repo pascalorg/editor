@@ -60,6 +60,7 @@ import {
   rotatePlanVector as rotateSharedPlanVector,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
 } from '../../lib/floorplan'
+import { getHomeAssistantLink } from '../../lib/home-assistant'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -101,6 +102,7 @@ import {
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
+import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
 import { useFloorplanSceneData } from './use-floorplan-scene-data'
@@ -2347,7 +2349,11 @@ function getItemDimensionMeasurementOverlays(
     itemEntry.item.scale[2] * itemEntry.item.asset.dimensions[2],
     unit,
   )
-  const buildSideOverlay = (id: string, start: Point2D, end: Point2D) => {
+  const buildSideOverlay = (
+    id: string,
+    start: Point2D,
+    end: Point2D,
+  ): LinearMeasurementOverlay | null => {
     const edgeVector = {
       x: end.x - start.x,
       y: end.y - start.y,
@@ -2391,8 +2397,8 @@ function getItemDimensionMeasurementOverlays(
 
     return overlay
       ? {
-          dashedExtensions: false,
           ...overlay,
+          dashedExtensions: false,
           isSelected: true,
           showTicks: false,
         }
@@ -6044,6 +6050,8 @@ export function FloorplanPanel() {
 
     return floorplanItemEntries.find(({ item }) => item.id === selectedIds[0]) ?? null
   }, [floorplanItemEntries, selectedIds])
+  const homeAssistantControlItemId = useEditor((state) => state.homeAssistantControlItemId)
+  const setHomeAssistantControlItemId = useEditor((state) => state.setHomeAssistantControlItemId)
   const selectedItemClearanceMeasurements = useMemo(() => {
     if (!selectedItemEntry) {
       return [] as LinearMeasurementOverlay[]
@@ -7082,6 +7090,12 @@ export function FloorplanPanel() {
         : null,
     [selectedItemEntry, surfaceSize, viewBox],
   )
+  const selectedItemLink = selectedItemEntry
+    ? getHomeAssistantLink(selectedItemEntry.item.metadata)
+    : null
+  const isSelectedItemHomeAssistantControlOpen =
+    Boolean(selectedItemEntry?.item && selectedItemLink?.haEntityId) &&
+    homeAssistantControlItemId === selectedItemEntry?.item.id
   const selectedSlabActionMenuPosition = useMemo(
     () =>
       selectedSlabEntry
@@ -9953,6 +9967,24 @@ export function FloorplanPanel() {
     },
     [deleteNode, selectedItemEntry, setSelection],
   )
+  const handleSelectedItemConnect = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const item = selectedItemEntry?.item
+      if (!item) {
+        return
+      }
+
+      const link = getHomeAssistantLink(item.metadata)
+      if (!link?.haEntityId) {
+        return
+      }
+
+      setHomeAssistantControlItemId(homeAssistantControlItemId === item.id ? null : String(item.id))
+    },
+    [homeAssistantControlItemId, selectedItemEntry, setHomeAssistantControlItemId],
+  )
   const handleSelectedWallMove = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
@@ -11259,7 +11291,18 @@ export function FloorplanPanel() {
             position: selectedItemActionMenuPosition,
             onDelete: handleSelectedItemDelete,
             onDuplicate: handleSelectedItemDuplicate,
+            onExtraAction: selectedItemLink?.haEntityId ? handleSelectedItemConnect : undefined,
             onMove: handleSelectedItemMove,
+            extraActionIcon: selectedItemLink?.haEntityId ? 'connectivity' : undefined,
+            extraActionLabel: selectedItemLink?.haEntityId ? 'Home Assistant' : undefined,
+            customContent:
+              isSelectedItemHomeAssistantControlOpen && selectedItemEntry && selectedItemLink ? (
+                <HomeAssistantConnectivityPanel
+                  item={selectedItemEntry.item}
+                  link={selectedItemLink}
+                  onClose={() => setHomeAssistantControlItemId(null)}
+                />
+              ) : undefined,
           }}
           opening={{
             position: selectedOpeningActionMenuPosition,

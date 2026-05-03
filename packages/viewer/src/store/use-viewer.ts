@@ -1,6 +1,13 @@
 'use client'
 
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import type { Object3D } from 'three'
 
 import { create } from 'zustand'
@@ -18,15 +25,29 @@ type Outliner = {
   hoveredObjects: Object3D[]
 }
 
+export type ItemTriggerEffect = {
+  fadeInMs: number
+  startedAtMs: number
+}
+
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  nodeEventsSuppressed: boolean
+  nodeEventsSuppressedUntil: number
+  suppressNodeEvents: (durationMs?: number) => void
+  interactiveOverlayActive: boolean
+  setInteractiveOverlayActive: (active: boolean) => void
+  itemTriggerEffects: Record<AnyNodeId, ItemTriggerEffect>
+  triggerItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
+  clearItemEffect: (itemId: AnyNodeId) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
+  hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
-
+  setHoveredIds: (ids: Array<AnyNode['id'] | ZoneNode['id']>) => void
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
@@ -84,11 +105,44 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      nodeEventsSuppressed: false,
+      nodeEventsSuppressedUntil: 0,
+      suppressNodeEvents: (durationMs = 250) =>
+        set({
+          nodeEventsSuppressedUntil:
+            (typeof performance !== 'undefined' ? performance.now() : Date.now()) + durationMs,
+        }),
+      interactiveOverlayActive: false,
+      setInteractiveOverlayActive: (interactiveOverlayActive) => set({ interactiveOverlayActive }),
+      itemTriggerEffects: {},
+      triggerItemEffect: (itemId, fadeInMs = 450) =>
+        set((state) => {
+          if (state.itemTriggerEffects[itemId]) {
+            return state
+          }
+
+          return {
+            itemTriggerEffects: {
+              ...state.itemTriggerEffects,
+              [itemId]: {
+                fadeInMs: Math.max(1, fadeInMs),
+                startedAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+              },
+            },
+          }
+        }),
+      clearItemEffect: (itemId) =>
+        set((state) => {
+          const { [itemId]: _removed, ...rest } = state.itemTriggerEffects
+          return { itemTriggerEffects: rest }
+        }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
       hoveredId: null,
+      hoveredIds: [],
       setHoveredId: (id) => set((state) => (state.hoveredId === id ? state : { hoveredId: id })),
+      setHoveredIds: (ids) => set({ hoveredIds: ids }),
 
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),

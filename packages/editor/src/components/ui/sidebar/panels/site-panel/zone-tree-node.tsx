@@ -20,7 +20,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color)
+  const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color ?? '#3b82f6')
   const polygon = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.polygon ?? [])
   const isSelected = useViewer((state) => state.selection.zoneId === nodeId)
   const isHovered = useViewer((state) => state.hoveredId === nodeId)

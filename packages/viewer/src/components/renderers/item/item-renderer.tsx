@@ -15,13 +15,14 @@ import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
-import type { AnimationAction, Group, Material, Mesh } from 'three'
-import { MathUtils } from 'three'
+import type { AnimationAction, Group, Material, Mesh, MeshStandardMaterial } from 'three'
+import { DoubleSide, MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveCdnUrl } from '../../../lib/asset-url'
 import { useItemLightPool } from '../../../store/use-item-light-pool'
+import useViewer, { type ItemTriggerEffect } from '../../../store/use-viewer'
 import {
   requestItemMeshMetadataSync,
   setItemMeshMetadataSourceRoot,
@@ -92,6 +93,28 @@ const multiplyScales = (
   a: [number, number, number],
   b: [number, number, number],
 ): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
+
+type TelevisionTriggerGlowSpec = {
+  position: [number, number, number]
+  size: [number, number]
+}
+
+const TELEVISION_TRIGGER_GLOW_SPEC: TelevisionTriggerGlowSpec = {
+  position: [0, 0.6207, -0.025],
+  size: [1.4626, 0.7423],
+}
+
+const getTelevisionTriggerGlowSpec = (node: ItemNode): TelevisionTriggerGlowSpec | null => {
+  const assetId = node.asset.id.trim().toLowerCase()
+  const assetName = node.asset.name.trim().toLowerCase()
+  const assetSrc = node.asset.src.trim().toLowerCase()
+
+  return assetId === 'television' ||
+    assetName === 'television' ||
+    assetSrc.endsWith('/items/television/model.glb')
+    ? TELEVISION_TRIGGER_GLOW_SPEC
+    : null
+}
 
 const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
@@ -169,10 +192,13 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   }, [scene])
 
   const interactive = interactiveRef.current
-  const animEffect =
-    interactive?.effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
-  const lightEffects =
-    interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
+  const controls = interactive?.controls ?? []
+  const effects = interactive?.effects ?? []
+  const animEffect = effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
+  const lightEffects = effects.filter((e): e is LightEffect => e.kind === 'light')
+  const renderScale = multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])
+  const televisionTriggerGlowSpec = getTelevisionTriggerGlowSpec(node)
+  const triggerEffect = useViewer((state) => state.itemTriggerEffects[node.id] ?? null)
 
   return (
     <>
@@ -181,15 +207,25 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         position={node.asset.offset}
         ref={ref}
         rotation={node.asset.rotation}
-        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
+        scale={renderScale}
         {...handlers}
       />
+      {televisionTriggerGlowSpec && triggerEffect && (
+        <TelevisionScreenTriggerGlow
+          assetOffset={node.asset.offset}
+          assetRotation={node.asset.rotation}
+          effect={triggerEffect}
+          renderScale={renderScale}
+          screenPosition={televisionTriggerGlowSpec.position}
+          screenSize={televisionTriggerGlowSpec.size}
+        />
+      )}
       {animations.length > 0 && (
         <ItemAnimation
           actions={actions}
           animations={animations}
           animEffect={animEffect}
-          interactive={interactive ?? null}
+          controls={controls}
           nodeId={node.id}
         />
       )}
@@ -206,16 +242,66 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   )
 }
 
+const TelevisionScreenTriggerGlow = ({
+  assetOffset,
+  assetRotation,
+  effect,
+  renderScale,
+  screenPosition,
+  screenSize,
+}: {
+  assetOffset: [number, number, number]
+  assetRotation: [number, number, number]
+  effect: ItemTriggerEffect
+  renderScale: [number, number, number]
+  screenPosition: [number, number, number]
+  screenSize: [number, number]
+}) => {
+  const materialRef = useRef<MeshStandardMaterial>(null!)
+
+  useFrame(() => {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    const progress = MathUtils.clamp(
+      (now - effect.startedAtMs) / Math.max(1, effect.fadeInMs),
+      0,
+      1,
+    )
+    const opacity = 0.92 * MathUtils.smootherstep(progress, 0, 1)
+
+    if (materialRef.current) {
+      materialRef.current.opacity = opacity
+    }
+  })
+
+  return (
+    <group position={assetOffset} rotation={assetRotation} scale={renderScale}>
+      <mesh position={screenPosition} userData={{ pascalExcludeFromToolConeTarget: true }}>
+        <planeGeometry args={screenSize} />
+        <meshStandardMaterial
+          color="#ffffff"
+          depthWrite={false}
+          emissive="#ffffff"
+          emissiveIntensity={2.2}
+          opacity={0}
+          ref={materialRef}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+    </group>
+  )
+}
+
 const ItemAnimation = ({
   nodeId,
   animEffect,
-  interactive,
+  controls,
   actions,
   animations,
 }: {
   nodeId: AnyNodeId
   animEffect: AnimationEffect | null
-  interactive: Interactive | null
+  controls: Interactive['controls']
   actions: Record<string, AnimationAction | null>
   animations: { name: string }[]
 }) => {
@@ -226,7 +312,7 @@ const ItemAnimation = ({
   const targetClip = useInteractive((s) => {
     const values = s.items[nodeId]?.controlValues
     if (!animEffect) return animations[0]?.name ?? null
-    const toggleIndex = interactive!.controls.findIndex((c) => c.kind === 'toggle')
+    const toggleIndex = controls.findIndex((c) => c.kind === 'toggle')
     const isOn = toggleIndex >= 0 ? Boolean(values?.[toggleIndex]) : false
     return isOn
       ? (animEffect.clips.on ?? null)

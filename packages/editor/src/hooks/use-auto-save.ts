@@ -2,7 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
-import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
+import { SCENE_IMMEDIATE_SAVE_EVENT, type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -29,7 +29,7 @@ export function useAutoSave({
 }: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
-  const isLoadingSceneRef = useRef(false)
+  const isLoadingSceneRef = useRef(true)
   const pendingSaveRef = useRef(false)
   const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
   const hasDirtyChangesRef = useRef(false)
@@ -59,17 +59,76 @@ export function useAutoSave({
 
   // Stable subscription to scene changes
   useEffect(() => {
-    let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
+    let lastSceneSnapshot = JSON.stringify({
+      collections: useScene.getState().collections,
+      nodes: useScene.getState().nodes,
+    })
 
-    async function executeSave() {
-      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
+    function updateSnapshot(snapshot: {
+      collections: SceneGraph['collections']
+      nodes: SceneGraph['nodes']
+    }) {
+      const currentSceneSnapshot = JSON.stringify(snapshot)
+      if (currentSceneSnapshot === lastSceneSnapshot) {
+        return false
+      }
+
+      lastSceneSnapshot = currentSceneSnapshot
+      return true
+    }
+
+    function scheduleSaveIfNeeded(snapshot: {
+      collections: SceneGraph['collections']
+      nodes: SceneGraph['nodes']
+    }) {
+      if (!updateSnapshot(snapshot)) {
+        return
+      }
+
+      hasDirtyChangesRef.current = true
+      onDirtyRef.current?.()
+      setSaveStatus('pending')
+
+      if (isSavingRef.current) {
+        pendingSaveRef.current = true
+        return
+      }
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+
+      saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = undefined
+        executeSave()
+      }, AUTOSAVE_DEBOUNCE_MS)
+    }
+
+    function readSceneGraphFromEvent(event: Event): SceneGraph | null {
+      if (!(event instanceof CustomEvent)) {
+        return null
+      }
+      const scene = event.detail as Partial<SceneGraph> | null | undefined
+      return scene?.nodes && scene.rootNodeIds ? (scene as SceneGraph) : null
+    }
+
+    async function executeSave(sceneOverride?: SceneGraph) {
+      if (isLoadingSceneRef.current) {
+        setSaveStatus('paused')
+        return
+      }
+
+      if (isVersionPreviewModeRef.current) {
         pendingSaveRef.current = true
         setSaveStatus('paused')
         return
       }
 
-      const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const sceneGraph =
+        sceneOverride ??
+        ({
+          collections: useScene.getState().collections,
+          nodes: useScene.getState().nodes,
+          rootNodeIds: useScene.getState().rootNodeIds,
+        } as SceneGraph)
 
       isSavingRef.current = true
       pendingSaveRef.current = false
@@ -101,43 +160,50 @@ export function useAutoSave({
 
     executeSaveRef.current = executeSave
 
+    function flushImmediately(event: Event) {
+      const sceneOverride = readSceneGraphFromEvent(event) ?? undefined
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = undefined
+      }
+      if (isSavingRef.current) {
+        pendingSaveRef.current = true
+        return
+      }
+      void executeSave(sceneOverride)
+    }
+
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        updateSnapshot({
+          collections: state.collections,
+          nodes: state.nodes,
+        })
         return
       }
 
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        updateSnapshot({
+          collections: state.collections,
+          nodes: state.nodes,
+        })
         return
       }
 
-      const currentNodesSnapshot = JSON.stringify(state.nodes)
-      if (currentNodesSnapshot === lastNodesSnapshot) return
-
-      lastNodesSnapshot = currentNodesSnapshot
-      hasDirtyChangesRef.current = true
-      onDirtyRef.current?.()
-      setSaveStatus('pending')
-
-      if (isSavingRef.current) {
-        pendingSaveRef.current = true
-        return
-      }
-
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-
-      saveTimeoutRef.current = setTimeout(() => {
-        saveTimeoutRef.current = undefined
-        executeSave()
-      }, AUTOSAVE_DEBOUNCE_MS)
+      scheduleSaveIfNeeded({
+        collections: state.collections,
+        nodes: state.nodes,
+      })
     })
 
     function flushOnExit() {
+      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
+        return
+      }
       if (!hasDirtyChangesRef.current) return
-      const { nodes, rootNodeIds } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds } as SceneGraph
+      const { collections, nodes, rootNodeIds } = useScene.getState()
+      const sceneGraph = { collections, nodes, rootNodeIds } as SceneGraph
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph).catch(() => {})
       } else {
@@ -147,12 +213,13 @@ export function useAutoSave({
     }
 
     window.addEventListener('beforeunload', flushOnExit)
+    window.addEventListener(SCENE_IMMEDIATE_SAVE_EVENT, flushImmediately)
 
     return () => {
       executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
+      window.removeEventListener(SCENE_IMMEDIATE_SAVE_EVENT, flushImmediately)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-      flushOnExit()
       unsubscribe()
     }
   }, [setSaveStatus])

@@ -1,6 +1,7 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
+import { getCollectionAttachmentNodeCollectionId } from '../schema/collections'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -120,6 +121,16 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
           }
         }
       }
+    }
+
+    for (const node of Object.values(clonedNodes)) {
+      const collectionId = getCollectionAttachmentNodeCollectionId(node)
+      if (!collectionId) {
+        continue
+      }
+
+      ;(node as { collectionId: CollectionId }).collectionId =
+        collectionIdMap.get(collectionId) ?? collectionId
     }
   }
 

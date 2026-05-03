@@ -417,8 +417,10 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 if (newVertexIndex >= 0) {
                   setDragState({
                     isDragging: true,
+                    mode: 'vertex',
                     vertexIndex: newVertexIndex,
                     initialPosition: [x!, z!],
+                    initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
                     pointerId: e.pointerId,
                   })
                   setHoveredMidpoint(null)

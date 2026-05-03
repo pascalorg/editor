@@ -1,5 +1,13 @@
 'use client'
 
+import type {
+  BaseNode,
+  BuildingNode,
+  Collection,
+  CollectionId,
+  LevelNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import { resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
@@ -9,11 +17,34 @@ import useEditor, {
 } from '../store/use-editor'
 
 export type SceneGraph = {
+  collections?: Record<CollectionId, Collection>
   nodes: Record<string, unknown>
   rootNodeIds: string[]
 }
 
+export const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
+
+export function requestSceneImmediateSave() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const { collections, nodes, rootNodeIds } = useScene.getState()
+  window.dispatchEvent(
+    new CustomEvent(SCENE_IMMEDIATE_SAVE_EVENT, {
+      detail: { collections, nodes, rootNodeIds },
+    }),
+  )
+}
+
 type PersistedSelectionPath = {
+  buildingId: BuildingNode['id'] | null
+  levelId: LevelNode['id'] | null
+  zoneId: ZoneNode['id'] | null
+  selectedIds: BaseNode['id'][]
+}
+
+type PersistedSelectionPathInput = {
   buildingId: string | null
   levelId: string | null
   zoneId: string | null
@@ -41,8 +72,8 @@ function getSelectionStorageReadKeys(): string[] {
 
 function getDefaultLevelIdForBuilding(
   sceneNodes: Record<string, any>,
-  buildingId: string | null,
-): string | null {
+  buildingId: BuildingNode['id'] | null,
+): LevelNode['id'] | null {
   if (!buildingId) {
     return null
   }
@@ -52,7 +83,7 @@ function getDefaultLevelIdForBuilding(
     return null
   }
 
-  let firstLevelId: string | null = null
+  let firstLevelId: LevelNode['id'] | null = null
 
   for (const childId of buildingNode.children) {
     const levelNode = sceneNodes[childId]
@@ -60,10 +91,10 @@ function getDefaultLevelIdForBuilding(
       continue
     }
 
-    firstLevelId ??= levelNode.id
+    firstLevelId ??= levelNode.id as LevelNode['id']
 
     if (levelNode.level === 0) {
-      return levelNode.id
+      return levelNode.id as LevelNode['id']
     }
   }
 
@@ -71,14 +102,17 @@ function getDefaultLevelIdForBuilding(
 }
 
 function normalizePersistedSelectionPath(
-  selection: Partial<PersistedSelectionPath> | null | undefined,
+  selection: Partial<PersistedSelectionPathInput> | null | undefined,
 ): PersistedSelectionPath {
   return {
-    buildingId: typeof selection?.buildingId === 'string' ? selection.buildingId : null,
-    levelId: typeof selection?.levelId === 'string' ? selection.levelId : null,
-    zoneId: typeof selection?.zoneId === 'string' ? selection.zoneId : null,
+    buildingId:
+      typeof selection?.buildingId === 'string'
+        ? (selection.buildingId as BuildingNode['id'])
+        : null,
+    levelId: typeof selection?.levelId === 'string' ? (selection.levelId as LevelNode['id']) : null,
+    zoneId: typeof selection?.zoneId === 'string' ? (selection.zoneId as ZoneNode['id']) : null,
     selectedIds: Array.isArray(selection?.selectedIds)
-      ? selection.selectedIds.filter((id): id is string => typeof id === 'string')
+      ? selection.selectedIds.filter((id): id is BaseNode['id'] => typeof id === 'string')
       : [],
   }
 }
@@ -196,29 +230,29 @@ function getValidatedSelectionForScene(
   const buildingNodeFromLevel =
     hasValidLevel && levelNode.parentId ? sceneNodes[levelNode.parentId] : null
   const explicitBuildingNode = selection.buildingId ? sceneNodes[selection.buildingId] : null
-  const buildingId =
+  const buildingId: BuildingNode['id'] | null =
     buildingNodeFromLevel?.type === 'building'
-      ? buildingNodeFromLevel.id
+      ? (buildingNodeFromLevel.id as BuildingNode['id'])
       : explicitBuildingNode?.type === 'building'
-        ? explicitBuildingNode.id
+        ? (explicitBuildingNode.id as BuildingNode['id'])
         : null
 
   if (!buildingId) {
     return null
   }
 
-  const levelId = hasValidLevel
-    ? levelNode.id
+  const levelId: LevelNode['id'] | null = hasValidLevel
+    ? (levelNode.id as LevelNode['id'])
     : getDefaultLevelIdForBuilding(sceneNodes, buildingId)
 
   if (levelId) {
     const zoneNode = selection.zoneId ? sceneNodes[selection.zoneId] : null
-    const zoneId =
+    const zoneId: ZoneNode['id'] | null =
       zoneNode?.type === 'zone' && resolveLevelId(zoneNode, sceneNodes) === levelId
-        ? zoneNode.id
+        ? (zoneNode.id as ZoneNode['id'])
         : null
 
-    const selectedIds = selection.selectedIds.filter((id) => {
+    const selectedIds = selection.selectedIds.filter((id): id is BaseNode['id'] => {
       const node = sceneNodes[id]
       return Boolean(node) && resolveLevelId(node, sceneNodes) === levelId
     })
@@ -365,8 +399,8 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   if (hasUsableSceneGraph(sceneGraph)) {
-    const { nodes, rootNodeIds } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any)
+    const { collections, nodes, rootNodeIds } = sceneGraph
+    useScene.getState().setScene(nodes as any, rootNodeIds as any, collections as any)
   } else {
     useScene.getState().clearScene()
   }
@@ -376,8 +410,82 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
 
+function getUserManagedHomeAssistantCollectionIds(scene: SceneGraph | null | undefined) {
+  const collectionIds = new Set<string>()
+  if (!scene?.nodes) {
+    return collectionIds
+  }
+
+  for (const node of Object.values(scene.nodes)) {
+    if (!(node && typeof node === 'object')) {
+      continue
+    }
+
+    const record = node as {
+      collectionId?: unknown
+      presentation?: { rtsRoomControls?: { mode?: unknown } }
+      type?: unknown
+    }
+    if (
+      record.type === 'home-assistant-binding' &&
+      typeof record.collectionId === 'string' &&
+      record.presentation?.rtsRoomControls?.mode === 'user-managed'
+    ) {
+      collectionIds.add(record.collectionId)
+    }
+  }
+
+  return collectionIds
+}
+
+function homeAssistantCollectionIsUserManaged(scene: SceneGraph, collectionId: string) {
+  return Object.values(scene.nodes ?? {}).some((node) => {
+    if (!(node && typeof node === 'object')) {
+      return false
+    }
+
+    const record = node as {
+      collectionId?: unknown
+      presentation?: { rtsRoomControls?: { mode?: unknown } }
+      type?: unknown
+    }
+
+    return (
+      record.type === 'home-assistant-binding' &&
+      record.collectionId === collectionId &&
+      record.presentation?.rtsRoomControls?.mode === 'user-managed'
+    )
+  })
+}
+
+function wouldDowngradeStoredHomeAssistantRoomControls(scene: SceneGraph) {
+  const rawStoredScene = localStorage.getItem(LOCAL_STORAGE_KEY)
+  if (!rawStoredScene) {
+    return false
+  }
+
+  let storedScene: SceneGraph | null = null
+  try {
+    storedScene = JSON.parse(rawStoredScene) as SceneGraph
+  } catch {
+    return false
+  }
+
+  for (const collectionId of getUserManagedHomeAssistantCollectionIds(storedScene)) {
+    if (!homeAssistantCollectionIsUserManaged(scene, collectionId)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 export function saveSceneToLocalStorage(scene: SceneGraph): void {
   try {
+    if (wouldDowngradeStoredHomeAssistantRoomControls(scene)) {
+      return
+    }
+
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scene))
   } catch {
     // Swallow storage quota errors

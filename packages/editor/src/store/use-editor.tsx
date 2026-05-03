@@ -47,6 +47,9 @@ export type Phase = 'site' | 'structure' | 'furnish'
 
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
 
+export type SmartHomeOverlaySection = 'actions' | 'devices' | 'groups'
+export type SmartHomeOverlayVisibility = Record<SmartHomeOverlaySection, boolean>
+
 // Structure mode tools (building elements)
 export type StructureTool =
   | 'wall'
@@ -98,7 +101,11 @@ export type MovingFenceEndpoint = {
   endpoint: 'start' | 'end'
 }
 
-export type MaterialTargetRole = WallSurfaceSide | StairSurfaceMaterialRole | RoofSurfaceMaterialRole |  SingleSurfaceMaterialRole
+export type MaterialTargetRole =
+  | WallSurfaceSide
+  | StairSurfaceMaterialRole
+  | RoofSurfaceMaterialRole
+  | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
   nodeId: AnyNodeId
@@ -177,6 +184,16 @@ type EditorState = {
   setPaintPanelOpen: (open: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  homeAssistantControlItemId: string | null
+  setHomeAssistantControlItemId: (id: string | null) => void
+  homeAssistantPairingResourceId: string | null
+  setHomeAssistantPairingResourceId: (id: string | null) => void
+  homeAssistantPairingTargetItemId: AnyNodeId | null
+  setHomeAssistantPairingTargetItemId: (id: AnyNodeId | null) => void
+  isSmartHomePanelOpen: boolean
+  setSmartHomePanelOpen: (open: boolean) => void
+  smartHomeOverlayVisibility: SmartHomeOverlayVisibility
+  setSmartHomeOverlaySectionVisible: (section: SmartHomeOverlaySection, visible: boolean) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -230,6 +247,7 @@ type PersistedEditorLayoutState = Pick<
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
+  | 'smartHomeOverlayVisibility'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -249,6 +267,11 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
+  smartHomeOverlayVisibility: {
+    actions: true,
+    devices: true,
+    groups: true,
+  },
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -358,6 +381,12 @@ function normalizePersistedEditorLayoutState(
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+    smartHomeOverlayVisibility: {
+      ...DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.smartHomeOverlayVisibility,
+      ...(state?.smartHomeOverlayVisibility && typeof state.smartHomeOverlayVisibility === 'object'
+        ? state.smartHomeOverlayVisibility
+        : {}),
+    },
   }
 }
 
@@ -605,6 +634,26 @@ const useEditor = create<EditorState>()(
       setPaintPanelOpen: (open) => set({ isPaintPanelOpen: open }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      homeAssistantControlItemId: null,
+      setHomeAssistantControlItemId: (id) => set({ homeAssistantControlItemId: id }),
+      homeAssistantPairingResourceId: null,
+      setHomeAssistantPairingResourceId: (id) => set({ homeAssistantPairingResourceId: id }),
+      homeAssistantPairingTargetItemId: null,
+      setHomeAssistantPairingTargetItemId: (id) => set({ homeAssistantPairingTargetItemId: id }),
+      isSmartHomePanelOpen: false,
+      setSmartHomePanelOpen: (open) => set({ isSmartHomePanelOpen: open }),
+      smartHomeOverlayVisibility: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.smartHomeOverlayVisibility,
+      setSmartHomeOverlaySectionVisible: (section, visible) =>
+        set((state) =>
+          state.smartHomeOverlayVisibility[section] === visible
+            ? state
+            : {
+                smartHomeOverlayVisibility: {
+                  ...state.smartHomeOverlayVisibility,
+                  [section]: visible,
+                },
+              },
+        ),
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,
@@ -703,6 +752,7 @@ const useEditor = create<EditorState>()(
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
+        smartHomeOverlayVisibility: state.smartHomeOverlayVisibility,
       }),
     },
   ),

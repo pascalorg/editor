@@ -277,6 +277,7 @@ export const SelectionManager = () => {
 
   useEffect(() => {
     const onEnter = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const strategy = getStrategy()
       if (!strategy) return
       if (strategy.isValid(event.node)) {
@@ -290,6 +291,7 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const strategy = getStrategy()
       if (!strategy) return
       if (strategy.isValid(event.node)) {
@@ -299,6 +301,7 @@ export const SelectionManager = () => {
     }
 
     const onClick = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const strategy = getStrategy()
       if (!strategy) return
       if (!strategy.isValid(event.node)) return
@@ -359,6 +362,7 @@ const PointerMissedHandler = ({
     const handleClick = (event: MouseEvent) => {
       // Only handle left clicks
       if (useViewer.getState().cameraDragging) return
+      if (useViewer.getState().interactiveOverlayActive) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers
@@ -391,6 +395,7 @@ const PointerMissedHandler = ({
 const OutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const hoveredIds = useViewer((s) => s.hoveredIds)
   const outliner = useViewer((s) => s.outliner)
   const nodes = useScene((s) => s.nodes)
 
@@ -406,13 +411,15 @@ const OutlinerSync = () => {
 
     // Sync hovered objects
     outliner.hoveredObjects.length = 0
-    if (hoveredId) {
-      const hoveredNode = nodes[hoveredId as AnyNodeId]
-      if (hoveredNode?.type === 'slab') return
-      const obj = sceneRegistry.nodes.get(hoveredId)
+    for (const id of new Set([hoveredId, ...hoveredIds].filter(Boolean))) {
+      const hoveredNode = nodes[id as AnyNodeId]
+      if (hoveredNode?.type === 'slab') {
+        continue
+      }
+      const obj = sceneRegistry.nodes.get(id as string)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [selection, hoveredId, outliner, nodes])
+  }, [selection, hoveredId, hoveredIds, outliner, nodes])
 
   return null
 }

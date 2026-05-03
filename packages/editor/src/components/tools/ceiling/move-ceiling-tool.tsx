@@ -1,13 +1,19 @@
 'use client'
 
-import { type AnyNodeId, emitter, type GridEvent, useScene, type CeilingNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type CeilingNode,
+  emitter,
+  type GridEvent,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 'three'
 
 function snap(value: number) {
   return Math.round(value * 2) / 2
@@ -202,9 +208,9 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
           transparent
         />
       </mesh>
-      <line geometry={previewOutlineGeometry} position={[0, (node.height ?? 2.5) + 0.02, 0]}>
+      <threeLine geometry={previewOutlineGeometry} position={[0, (node.height ?? 2.5) + 0.02, 0]}>
         <lineBasicMaterial color="#ffffff" depthWrite={false} opacity={0.95} transparent />
-      </line>
+      </threeLine>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
     </group>
   )

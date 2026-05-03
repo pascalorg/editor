@@ -68,6 +68,11 @@ import { WallTreeNode } from './wall-tree-node'
 import { WindowTreeNode } from './window-tree-node'
 import { ZoneTreeNode } from './zone-tree-node'
 
+const isBuildingNodeId = (nodeId: AnyNodeId): nodeId is `building_${string}` =>
+  nodeId.startsWith('building_')
+const isLevelNodeId = (nodeId: AnyNodeId): nodeId is `level_${string}` => nodeId.startsWith('level_')
+const isZoneNodeId = (nodeId: AnyNodeId): nodeId is `zone_${string}` => nodeId.startsWith('zone_')
+
 interface TreeNodeProps {
   nodeId: AnyNodeId
   depth?: number
@@ -81,11 +86,15 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
 
   switch (nodeType) {
     case 'building':
-      return <BuildingTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `building_${string}`} />
+      return isBuildingNodeId(nodeId) ? (
+        <BuildingTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
+      ) : null
     case 'ceiling':
       return <CeilingTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'level':
-      return <LevelTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `level_${string}`} />
+      return isLevelNodeId(nodeId) ? (
+        <LevelTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
+      ) : null
     case 'slab':
       return <SlabTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'spawn':
@@ -105,7 +114,9 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
     case 'window':
       return <WindowTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'zone':
-      return <ZoneTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `zone_${string}`} />
+      return isZoneNodeId(nodeId) ? (
+        <ZoneTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
+      ) : null
     default:
       return null
   }

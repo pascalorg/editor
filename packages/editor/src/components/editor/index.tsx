@@ -7,7 +7,7 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import { type HoverStyles, useViewer, Viewer } from '@pascal-app/viewer'
 import {
   memo,
   type ReactNode,
@@ -34,7 +34,6 @@ import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-sel
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
-import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
@@ -43,6 +42,7 @@ import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-pa
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
 import { HelperManager } from '../ui/helpers/helper-manager'
+import { HomeAssistantPanel } from '../ui/panels/home-assistant-panel'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -61,6 +61,11 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
+import {
+  type HomeAssistantDeviceActionDispatch,
+  HomeAssistantInteractiveSystem,
+} from './home-assistant-interactive-system'
+import { HomeAssistantPlacementGroundSystem } from './home-assistant-placement-ground-system'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
@@ -568,6 +573,16 @@ function PaintCursorBadge({
   )
 }
 
+function dispatchHomeAssistantDeviceAction(payload: HomeAssistantDeviceActionDispatch) {
+  void fetch('/api/home-assistant/device-action', {
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  }).catch(() => {})
+}
+
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
 
 const ViewerSceneContent = memo(function ViewerSceneContent({
@@ -603,7 +618,10 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
-      {isFirstPersonMode && <InteractiveSystem />}
+      <HomeAssistantPlacementGroundSystem />
+      <HomeAssistantInteractiveSystem
+        onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
+      />
     </>
   )
 })
@@ -909,7 +927,6 @@ const ViewerCanvas = memo(function ViewerCanvas({
           </Viewer>
         </div>
       </div>
-      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
@@ -1074,7 +1091,9 @@ export default function Editor({
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      <InteractiveSystem />
+      <HomeAssistantInteractiveSystem
+        onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
+      />
     </Viewer>
   )
 
@@ -1144,6 +1163,11 @@ export default function Editor({
                   {!isVersionPreviewMode && (
                     <div className="pointer-events-auto">
                       <PanelManager />
+                    </div>
+                  )}
+                  {!isVersionPreviewMode && (
+                    <div className="pointer-events-auto">
+                      <HomeAssistantPanel />
                     </div>
                   )}
                   <div className="pointer-events-auto">
@@ -1217,6 +1241,9 @@ export default function Editor({
               </div>
               <div className="pointer-events-auto">
                 <PanelManager />
+              </div>
+              <div className="pointer-events-auto">
+                <HomeAssistantPanel />
               </div>
               <div className="pointer-events-auto">
                 <HelperManager />
