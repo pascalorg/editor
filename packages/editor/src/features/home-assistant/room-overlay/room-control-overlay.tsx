@@ -102,6 +102,7 @@ const COLLAPSED_PILL_SINGLE_CLICK_DELAY_MS = 220
 const ROOM_PANEL_CENTER_DISTANCE_LIMIT = 0.88
 const ROOM_PANEL_OPEN_CENTER_DISTANCE_LIMIT = 1.02
 const EXPANDED_GROUP_PADDING = 6
+const EDIT_GROUP_GRID_ROW_HEIGHT = CONTROL_ICON_BUTTON_SIZE + EXPANDED_GROUP_PADDING * 2
 const EXPANDED_GROUP_GAP = 4
 const MIN_EXPANDED_GROUP_MEMBER_BUTTON_SIZE = 28
 const INTENSITY_STRIP_INSET = 4
@@ -619,6 +620,9 @@ export const RoomControlOverlay = ({
   const setControlValue = useInteractive((state) => state.setControlValue)
   const [openRoomId, setOpenRoomId] = useState<string | null>(null)
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
+  const [expandedEditGroupByRoomId, setExpandedEditGroupByRoomId] = useState<
+    Record<string, string | null>
+  >({})
 
   const domRefsRef = useRef<Record<string, OverlayDomRefs>>({})
   const layoutRef = useRef<Record<string, OverlayLayout>>({})
@@ -796,12 +800,14 @@ export const RoomControlOverlay = ({
     for (const roomOverlayNode of roomOverlayNodes) {
       const refs = domRefsRef.current[roomOverlayNode.id]
       const open = openRoomId === roomOverlayNode.id
+      const expandedEditGroupId = expandedEditGroupByRoomId[roomOverlayNode.id] ?? null
       const metrics = getRoomPanelMetrics(
         open,
         roomOverlayNode.controlGroups,
         roomOverlayNode.totalSlotCount,
         roomOverlayNode.roomName,
         roomOverlayNode.iconOnly,
+        editingRoomId === roomOverlayNode.id && expandedEditGroupId !== null,
       )
 
       const anchorObjects = roomOverlayNode.anchorNodeIds
@@ -969,6 +975,7 @@ export const RoomControlOverlay = ({
               controlGroups={roomOverlayNode.controlGroups}
               controlValues={interactiveState}
               editing={editingRoomId === roomOverlayNode.id}
+              expandedGroupId={expandedEditGroupByRoomId[roomOverlayNode.id] ?? null}
               isOpen={openRoomId === roomOverlayNode.id}
               onApplyGrouping={(nextGroups) =>
                 onApplyRoomGrouping?.(roomOverlayNode.id, nextGroups)
@@ -982,10 +989,28 @@ export const RoomControlOverlay = ({
                 setEditingRoomId(roomOverlayNode.id)
               }}
               onSetEditing={(editing) => setEditingRoomId(editing ? roomOverlayNode.id : null)}
+              onSetExpandedGroupId={(groupId) =>
+                setExpandedEditGroupByRoomId((current) =>
+                  (current[roomOverlayNode.id] ?? null) === groupId
+                    ? current
+                    : {
+                        ...current,
+                        [roomOverlayNode.id]: groupId,
+                      },
+                )
+              }
               onSetOpen={(open) => {
                 setOpenRoomId(open ? roomOverlayNode.id : null)
                 if (!open) {
                   setEditingRoomId(null)
+                  setExpandedEditGroupByRoomId((current) =>
+                    current[roomOverlayNode.id] == null
+                      ? current
+                      : {
+                          ...current,
+                          [roomOverlayNode.id]: null,
+                        },
+                  )
                   clearHoveredItemTargets()
                 }
               }}
@@ -1009,6 +1034,7 @@ const RoomPanel = ({
   controlGroups,
   controlValues,
   editing,
+  expandedGroupId,
   iconOnly,
   isOpen,
   onApplyGrouping,
@@ -1017,6 +1043,7 @@ const RoomPanel = ({
   onOpenIntoEdit,
   onRemoveDeviceFromGroup,
   onSetEditing,
+  onSetExpandedGroupId,
   onSetOpen,
   refsStore,
   roomId,
@@ -1028,6 +1055,7 @@ const RoomPanel = ({
   controlGroups: RoomControlGroup[]
   controlValues: Record<AnyNodeId, { controlValues: ControlValue[] }>
   editing: boolean
+  expandedGroupId: string | null
   iconOnly?: boolean
   isOpen: boolean
   onApplyGrouping: (nextGroups: string[][]) => void
@@ -1036,6 +1064,7 @@ const RoomPanel = ({
   onOpenIntoEdit: () => void
   onRemoveDeviceFromGroup: (member: RoomControlTile) => void
   onSetEditing: (editing: boolean) => void
+  onSetExpandedGroupId: (groupId: string | null) => void
   onSetOpen: (open: boolean) => void
   refsStore: Record<string, OverlayDomRefs>
   roomId: string
@@ -1045,7 +1074,6 @@ const RoomPanel = ({
 }) => {
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [deviceIconDragState, setDeviceIconDragState] = useState<DeviceIconDragState | null>(null)
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
   const [orderedGroupIds, setOrderedGroupIds] = useState<string[]>(() =>
     controlGroups.map((group) => group.id),
   )
@@ -1388,10 +1416,17 @@ const RoomPanel = ({
           .filter((group) => group.length > 0),
     )
     clearPendingExpand()
-    setExpandedGroupId(null)
+    onSetExpandedGroupId(null)
     clearHoveredItemTargets()
     onSetEditing(false)
-  }, [clearHoveredItemTargets, clearPendingExpand, onApplyGrouping, onSetEditing, orderedGroups])
+  }, [
+    clearHoveredItemTargets,
+    clearPendingExpand,
+    onApplyGrouping,
+    onSetEditing,
+    onSetExpandedGroupId,
+    orderedGroups,
+  ])
 
   useEffect(() => {
     setOrderedGroupIds((current) =>
@@ -1531,7 +1566,7 @@ const RoomPanel = ({
       if (heldLongEnough && movedDistance < GROUP_EXPAND_DRAG_THRESHOLD_PX) {
         const groupId = activePendingExpand.groupId
         clearPendingExpand()
-        setExpandedGroupId(groupId)
+        onSetExpandedGroupId(groupId)
         return
       }
       clearPendingExpand()
@@ -1553,6 +1588,7 @@ const RoomPanel = ({
     clearPendingExpand,
     editing,
     exitEditMode,
+    onSetExpandedGroupId,
     pendingExpand,
     startGroupDrag,
     suppressEditExitActions,
@@ -1565,9 +1601,9 @@ const RoomPanel = ({
 
     const expandedGroup = groupById.get(expandedGroupId)
     if (!expandedGroup || expandedGroup.members.length < 2) {
-      setExpandedGroupId(null)
+      onSetExpandedGroupId(null)
     }
-  }, [expandedGroupId, groupById])
+  }, [expandedGroupId, groupById, onSetExpandedGroupId])
 
   useEffect(() => {
     if (!(editing && expandedGroupId) || dragState) {
@@ -1582,14 +1618,14 @@ const RoomPanel = ({
       ) {
         return
       }
-      setExpandedGroupId(null)
+      onSetExpandedGroupId(null)
     }
 
     window.addEventListener('pointerdown', handlePointerDown, true)
     return () => {
       window.removeEventListener('pointerdown', handlePointerDown, true)
     }
-  }, [dragState, editing, expandedGroupId])
+  }, [dragState, editing, expandedGroupId, onSetExpandedGroupId])
 
   useEffect(() => {
     if (!(editing && dragState)) {
@@ -1803,7 +1839,7 @@ const RoomPanel = ({
           )
         }
 
-        setExpandedGroupId(null)
+        onSetExpandedGroupId(null)
       } else if (
         sourceGroup &&
         sourceGroup.members.length === 1 &&
@@ -1894,10 +1930,10 @@ const RoomPanel = ({
   useEffect(() => {
     if (!editing) {
       setDragState(null)
-      setExpandedGroupId(null)
+      onSetExpandedGroupId(null)
       clearPendingExpand()
     }
-  }, [clearPendingExpand, editing])
+  }, [clearPendingExpand, editing, onSetExpandedGroupId])
 
   useEffect(
     () => () => {
@@ -2140,7 +2176,11 @@ const RoomPanel = ({
       {isOpen ? (
         <div
           onPointerDown={handlePanelBodyPointerDown}
-          style={getPanelBodyGridStyle(totalSlotCount, displayedGroups)}
+          style={getPanelBodyGridStyle(
+            totalSlotCount,
+            displayedGroups,
+            editing && expandedGroupId !== null,
+          )}
         >
           {controlGroups.length > 0 ? (
             displayedGroups.map((group) =>
@@ -2201,7 +2241,7 @@ const RoomPanel = ({
                               return
                             }
                             clearPendingExpand()
-                            setExpandedGroupId(group.id)
+                            onSetExpandedGroupId(group.id)
                           }, GROUP_EXPAND_HOLD_MS)
                         }
                         return
@@ -3066,6 +3106,7 @@ const getPackedPanelRowCount = (groups: RoomControlGroup[], panelColumns: number
 const getPanelBodyMetrics = (
   totalSlotCount: number,
   groups: RoomControlGroup[] = [],
+  editing = false,
 ): PanelBodyMetrics => {
   const baseMetrics = getCanonicalPanelGridMetrics(totalSlotCount)
   const minimumGroupColumns =
@@ -3105,18 +3146,21 @@ const getPanelBodyMetrics = (
     rows = bestRows
   }
 
+  const rowHeight = editing ? EDIT_GROUP_GRID_ROW_HEIGHT : CONTROL_ICON_BUTTON_SIZE
   const bodyWidth = columns * CONTROL_ICON_BUTTON_SIZE + Math.max(columns - 1, 0) * PANEL_GRID_GAP
-  const bodyHeight = rows * CONTROL_ICON_BUTTON_SIZE + Math.max(rows - 1, 0) * PANEL_GRID_GAP
+  const bodyHeight = rows * rowHeight + Math.max(rows - 1, 0) * PANEL_GRID_GAP
   return { bodyHeight, bodyWidth, columns, rows }
 }
 
 const getPanelBodyGridStyle = (
   totalSlotCount: number,
   groups: RoomControlGroup[],
+  editing = false,
 ): CSSProperties => {
   const { columns } = getPanelBodyMetrics(totalSlotCount, groups)
   return {
     ...panelBodyStyle,
+    gridAutoRows: editing ? EDIT_GROUP_GRID_ROW_HEIGHT : CONTROL_ICON_BUTTON_SIZE,
     gridTemplateColumns: `repeat(${columns}, ${CONTROL_ICON_BUTTON_SIZE}px)`,
   }
 }
@@ -3183,6 +3227,7 @@ const getRoomPanelMetrics = (
   totalSlotCount: number,
   roomName: string,
   iconOnly = false,
+  editing = false,
 ) => {
   if (!open) {
     return {
@@ -3198,7 +3243,7 @@ const getRoomPanelMetrics = (
     }
   }
 
-  const { bodyHeight, bodyWidth } = getPanelBodyMetrics(totalSlotCount, groups)
+  const { bodyHeight, bodyWidth } = getPanelBodyMetrics(totalSlotCount, groups, editing)
 
   return {
     height: PANEL_HEADER_HEIGHT + PANEL_BODY_PADDING * 2 + bodyHeight,
@@ -3275,10 +3320,15 @@ const getSliderPointerRatio = (clientX: number, element: HTMLElement) => {
   return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
 }
 
-const getGroupPanelFootprintSize = (group: RoomControlGroup, panelColumns: number) => {
+const getGroupPanelFootprintSize = (
+  group: RoomControlGroup,
+  panelColumns: number,
+  editing = false,
+) => {
   const { columnSpan, rowSpan } = getGroupPanelSpan(group, panelColumns)
+  const rowHeight = editing ? EDIT_GROUP_GRID_ROW_HEIGHT : CONTROL_ICON_BUTTON_SIZE
   return {
-    height: rowSpan * CONTROL_ICON_BUTTON_SIZE + Math.max(rowSpan - 1, 0) * PANEL_GRID_GAP,
+    height: rowSpan * rowHeight + Math.max(rowSpan - 1, 0) * PANEL_GRID_GAP,
     width: columnSpan * CONTROL_ICON_BUTTON_SIZE + Math.max(columnSpan - 1, 0) * PANEL_GRID_GAP,
   }
 }
@@ -3286,13 +3336,15 @@ const getGroupPanelFootprintSize = (group: RoomControlGroup, panelColumns: numbe
 const getGroupPanelFootprintStyle = (
   group: RoomControlGroup,
   panelColumns: number,
+  editing = false,
 ): CSSProperties => {
   const { columnSpan, rowSpan } = getGroupPanelSpan(group, panelColumns)
+  const isMergedEditTile = editing && group.members.length > 1
   return {
-    alignSelf: 'stretch',
+    alignSelf: isMergedEditTile ? 'stretch' : editing ? 'center' : 'stretch',
     gridColumn: `span ${columnSpan}`,
     gridRow: `span ${rowSpan}`,
-    height: '100%',
+    height: isMergedEditTile ? '100%' : editing ? CONTROL_ICON_BUTTON_SIZE : '100%',
     justifySelf: 'stretch',
     minHeight: CONTROL_ICON_BUTTON_SIZE,
     minWidth: CONTROL_ICON_BUTTON_SIZE,
@@ -3304,7 +3356,7 @@ const getExpandedGroupMemberLayout = (
   group: RoomControlGroup,
   panelColumns: number,
 ): ExpandedGroupMemberLayout => {
-  const footprint = getGroupPanelFootprintSize(group, panelColumns)
+  const footprint = getGroupPanelFootprintSize(group, panelColumns, true)
   const { columnSpan, rowSpan } = getGroupPanelSpan(group, panelColumns)
   const usableWidth = Math.max(
     footprint.width - EXPANDED_GROUP_PADDING * 2,
@@ -3351,7 +3403,7 @@ const getExpandedGroupEditTileStyle = (
   panelColumns: number,
   mergeTarget: boolean,
 ): CSSProperties => ({
-  ...getEditTileStyle(group, panelColumns, false, mergeTarget, false),
+  ...getEditTileStyle(group, panelColumns, false, mergeTarget, false, true),
   cursor: 'default',
   padding: EXPANDED_GROUP_PADDING,
 })
@@ -3536,9 +3588,10 @@ const getEditTileStyle = (
   dragging: boolean,
   mergeTarget: boolean,
   animated: boolean,
+  expanded = false,
 ): CSSProperties => ({
   ...editTileStyle,
-  ...getGroupPanelFootprintStyle(group, panelColumns),
+  ...getGroupPanelFootprintStyle(group, panelColumns, expanded),
   animation:
     !dragging && !mergeTarget
       ? 'room-panel-edit-wobble 172ms ease-in-out infinite alternate'

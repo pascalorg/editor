@@ -61,6 +61,14 @@ function stableId(parts: Array<string | null | undefined>) {
     .slice(0, 96)
 }
 
+function getDisplayHostFromUrl(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^\[|\]$/g, '')
+  } catch {
+    return url
+  }
+}
+
 function encodeDnsName(value: string) {
   const normalized = value.replace(/\.$/, '')
   const labels = normalized.split('.').filter(Boolean)
@@ -94,8 +102,9 @@ function buildMdnsQuery(serviceType: string) {
 }
 
 function getLanIpv4Addresses() {
-  return Object.values(os.networkInterfaces())
-    .flatMap((entries) => entries ?? [])
+  return Object.entries(os.networkInterfaces())
+    .filter(([name]) => !/docker|hyper-v|vethernet|virtual|vmware|wsl/i.test(name))
+    .flatMap(([, entries]) => entries ?? [])
     .filter((entry) => entry.family === 'IPv4' && !entry.internal)
     .map((entry) => entry.address)
 }
@@ -444,7 +453,7 @@ async function discoverZeroconfInstances() {
     instances.set(id, {
       id,
       instanceUrl,
-      label,
+      label: getDisplayHostFromUrl(instanceUrl) || label,
       source: 'zeroconf',
     })
   }
@@ -454,8 +463,9 @@ async function discoverZeroconfInstances() {
 
 export async function discoverHomeAssistantInstances() {
   const discovered = new Map<string, HomeAssistantDiscoveredInstance>()
+  const zeroconfInstances = await discoverZeroconfInstances()
 
-  for (const instance of await discoverZeroconfInstances()) {
+  for (const instance of zeroconfInstances) {
     discovered.set(instance.instanceUrl, instance)
   }
 
@@ -465,9 +475,11 @@ export async function discoverHomeAssistantInstances() {
     }
   }
 
-  for (const instance of await discoverLoopbackInstances()) {
-    if (!discovered.has(instance.instanceUrl)) {
-      discovered.set(instance.instanceUrl, instance)
+  if (zeroconfInstances.length === 0) {
+    for (const instance of await discoverLoopbackInstances()) {
+      if (!discovered.has(instance.instanceUrl)) {
+        discovered.set(instance.instanceUrl, instance)
+      }
     }
   }
 

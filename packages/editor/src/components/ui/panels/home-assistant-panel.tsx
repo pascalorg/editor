@@ -23,6 +23,7 @@ import {
   Layers,
   Link2,
   LoaderCircle,
+  LogOut,
   MapPin,
   MoreHorizontal,
   Pencil,
@@ -167,6 +168,10 @@ type HomeAssistantConnectionResponse = {
   message: string
   mode?: 'linked-session' | 'local-env' | 'unlinked'
   success: boolean
+}
+
+function hasLinkedHomeAssistantSession(connectionState: HomeAssistantConnectionResponse | null) {
+  return connectionState?.linked === true && connectionState.mode === 'linked-session'
 }
 
 type HomeAssistantDiscoveredInstance = {
@@ -353,6 +358,7 @@ export function HomeAssistantPanel() {
   const [isRefreshingImports, setIsRefreshingImports] = useState(false)
   const [isDiscoveringInstances, setIsDiscoveringInstances] = useState(false)
   const [isStartingOauth, setIsStartingOauth] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [panelError, setPanelError] = useState('')
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
@@ -548,8 +554,10 @@ export function HomeAssistantPanel() {
   )
 
   const connectedProviderIds = useMemo(() => {
-    return connectionState?.linked ? (['home-assistant'] satisfies ProviderId[]) : ([] as ProviderId[])
-  }, [connectionState?.linked])
+    return hasLinkedHomeAssistantSession(connectionState)
+      ? (['home-assistant'] satisfies ProviderId[])
+      : ([] as ProviderId[])
+  }, [connectionState])
   const activePanelProviderId =
     activePanel?.kind === 'connect' || activePanel?.kind === 'config'
       ? activePanel.providerId
@@ -761,6 +769,32 @@ export function HomeAssistantPanel() {
         error instanceof Error ? error.message : 'Failed to start Home Assistant sign-in.'
       setPanelError(message)
       setIsStartingOauth(false)
+    }
+  }
+
+  async function logOutHomeAssistant() {
+    setIsLoggingOut(true)
+    setPanelError('')
+
+    try {
+      const response = await fetch('/api/home-assistant/unlink', {
+        method: 'DELETE',
+      })
+      const payload = (await response.json()) as { error?: string; success?: boolean }
+
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.error || 'Failed to log out of Home Assistant.')
+      }
+
+      setConnectionState(null)
+      setImports([])
+      setActivePanel({ kind: 'chooser' })
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to log out of Home Assistant.'
+      setPanelError(message)
+    } finally {
+      setIsLoggingOut(false)
     }
   }
 
@@ -1573,7 +1607,7 @@ export function HomeAssistantPanel() {
 
   useEffect(() => {
     void refreshConnectionStatus({ silent: true }).then((payload) => {
-      if (payload?.linked) {
+      if (hasLinkedHomeAssistantSession(payload)) {
         void refreshImports({ silent: true })
       }
     })
@@ -1584,15 +1618,8 @@ export function HomeAssistantPanel() {
       return
     }
 
-    void refreshConnectionStatus({ silent: true }).then((payload) => {
-      if (payload?.linked) {
-        setActivePanel({ kind: 'config', providerId: 'home-assistant' })
-        void refreshImports({ silent: true })
-        return
-      }
-
-      void refreshDiscoveredInstances()
-    })
+    void refreshConnectionStatus({ silent: true })
+    void refreshDiscoveredInstances()
   }, [activePanel])
 
   useEffect(() => {
@@ -1601,7 +1628,7 @@ export function HomeAssistantPanel() {
     }
 
     void refreshConnectionStatus({ silent: true }).then((payload) => {
-      if (payload?.linked) {
+      if (hasLinkedHomeAssistantSession(payload)) {
         void refreshImports({ silent: true })
       } else {
         setActivePanel({ kind: 'connect', providerId: 'home-assistant' })
@@ -2121,33 +2148,53 @@ export function HomeAssistantPanel() {
                 const isConnected = connectedProviderIds.includes(provider.id)
 
                 return (
-                  <button
+                  <div
                     className={cn(
                       'flex items-center justify-between rounded-xl border px-3 py-2.5 text-left transition',
                       provider.connectable
                         ? 'border-black/8 bg-[rgba(244,245,247,0.9)] text-zinc-950 hover:bg-white'
                         : 'cursor-default border-black/6 bg-[rgba(236,238,241,0.74)] text-zinc-500',
                     )}
-                    disabled={!provider.connectable}
                     key={provider.id}
-                    onClick={() => handleProviderChoice(provider.id)}
-                    type="button"
                   >
-                    <div className="flex min-w-0 items-center gap-3">
+                    <button
+                      className={cn(
+                        'flex min-w-0 flex-1 items-center gap-3 text-left',
+                        !provider.connectable && 'cursor-default',
+                      )}
+                      disabled={!provider.connectable}
+                      onClick={() => handleProviderChoice(provider.id)}
+                      type="button"
+                    >
                       <div
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-zinc-950/8"
                       >
                         <ProviderIcon className={cn('h-6.5 w-6.5', provider.accentClassName)} />
                       </div>
                       <span className="truncate text-sm font-medium">{provider.name}</span>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-2">
-                       {isConnected && <Check className="h-4 w-4 text-cyan-700" />}
-                       {provider.connectable && !isConnected && (
-                         <Wifi className="h-4 w-4 text-zinc-600" />
-                       )}
+                      {isConnected && provider.id === 'home-assistant' ? (
+                        <button
+                          aria-label="Log out of Home Assistant"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-700/18 bg-cyan-50/80 text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
+                          disabled={isLoggingOut}
+                          onClick={logOutHomeAssistant}
+                          title="Log out"
+                          type="button"
+                        >
+                          {isLoggingOut ? (
+                            <LoaderCircle className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <LogOut className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      ) : null}
+                      {provider.connectable && !isConnected && (
+                        <Wifi className="h-4 w-4 text-zinc-600" />
+                      )}
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>

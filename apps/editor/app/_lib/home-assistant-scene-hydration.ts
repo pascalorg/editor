@@ -51,8 +51,8 @@ type LegacySceneGraph = SceneGraph & {
   homeAssistantBindings?: HomeAssistantCollectionBindingMap
 }
 
-const INTERACTIVE_ASSETS_BY_ID = new Map(
-  CATALOG_ITEMS.filter((item) => item.interactive).map((item) => [item.id, item]),
+const CATALOG_INTERACTIVE_ASSETS_BY_ID = new Map(
+  CATALOG_ITEMS.filter((item) => item.interactive).map((item) => [item.id, item.interactive]),
 )
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -758,7 +758,19 @@ function repairHomeAssistantPersistedState(scene: SceneGraph): SceneGraph {
 }
 
 function hydrateInteractiveAssets(scene: SceneGraph): SceneGraph {
+  const sceneInteractiveAssetsById = new Map<string, unknown>()
   let nextNodes: SceneGraph['nodes'] | null = null
+
+  for (const rawNode of Object.values(scene.nodes ?? {})) {
+    if (!(isRecord(rawNode) && rawNode.type === 'item' && isRecord(rawNode.asset))) {
+      continue
+    }
+
+    const assetId = typeof rawNode.asset.id === 'string' ? rawNode.asset.id : null
+    if (assetId && rawNode.asset.interactive != null && !sceneInteractiveAssetsById.has(assetId)) {
+      sceneInteractiveAssetsById.set(assetId, rawNode.asset.interactive)
+    }
+  }
 
   for (const [nodeId, rawNode] of Object.entries(scene.nodes ?? {})) {
     if (!(isRecord(rawNode) && rawNode.type === 'item' && isRecord(rawNode.asset))) {
@@ -770,8 +782,9 @@ function hydrateInteractiveAssets(scene: SceneGraph): SceneGraph {
       continue
     }
 
-    const latestAsset = INTERACTIVE_ASSETS_BY_ID.get(assetId)
-    if (!latestAsset?.interactive) {
+    const latestInteractive =
+      sceneInteractiveAssetsById.get(assetId) ?? CATALOG_INTERACTIVE_ASSETS_BY_ID.get(assetId)
+    if (!latestInteractive) {
       continue
     }
 
@@ -780,7 +793,7 @@ function hydrateInteractiveAssets(scene: SceneGraph): SceneGraph {
       ...rawNode,
       asset: {
         ...rawNode.asset,
-        interactive: latestAsset.interactive,
+        interactive: latestInteractive,
       },
     }
   }
