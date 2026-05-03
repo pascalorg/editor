@@ -1,10 +1,21 @@
 import { readFile } from 'node:fs/promises'
 
-const DEFAULT_LAYOUT_PATH = 'C:\\Users\\briss\\Downloads\\layout_2026-04-08.json'
+const DEFAULT_LAYOUT_PATH = process.env.PASCAL_DEFAULT_LAYOUT_PATH?.trim()
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  if (!DEFAULT_LAYOUT_PATH) {
+    return Response.json(
+      {
+        error: 'No default layout file is configured.',
+      },
+      {
+        status: 404,
+      },
+    )
+  }
+
   try {
     const layout = await readFile(DEFAULT_LAYOUT_PATH, 'utf8')
 
