@@ -97,8 +97,6 @@ const ROOM_PANEL_LONG_PRESS_NODE_EVENT_SUPPRESS_MS =
   GROUP_EXPAND_HOLD_MS + ROOM_PANEL_NODE_EVENT_SUPPRESS_MS
 const DEVICE_ICON_DRAG_THRESHOLD_PX = 8
 const COLLAPSED_PILL_SINGLE_CLICK_DELAY_MS = 220
-const ROOM_PANEL_CENTER_DISTANCE_LIMIT = 0.88
-const ROOM_PANEL_OPEN_CENTER_DISTANCE_LIMIT = 1.02
 const EXPANDED_GROUP_PADDING = 6
 const EDIT_GROUP_GRID_ROW_HEIGHT = CONTROL_ICON_BUTTON_SIZE + EXPANDED_GROUP_PADDING * 2
 const EXPANDED_GROUP_GAP = 4
@@ -890,13 +888,7 @@ export const RoomControlOverlay = ({
         Math.max(collapsedPanelTop, 14),
         Math.max(14, size.height - metrics.height - PANEL_BOTTOM_MARGIN),
       )
-      const centerDistanceRatio = getRoomPanelCenterDistanceRatio(x, panelTop, metrics.height, size)
-      const centerDistanceLimit = open
-        ? ROOM_PANEL_OPEN_CENTER_DISTANCE_LIMIT
-        : ROOM_PANEL_CENTER_DISTANCE_LIMIT
-
       const visible =
-        centerDistanceRatio <= centerDistanceLimit &&
         _projected.z >= -1 &&
         _projected.z <= 1 &&
         (!roomOverlayNode.worldPosition || (_groundProjected.z >= -1 && _groundProjected.z <= 1)) &&
@@ -3182,22 +3174,6 @@ const getOverlayItemStyle = (
 const getOverlayZIndex = (isOpen: boolean, isEditing: boolean, iconOnly: boolean) => {
   const zIndex = iconOnly ? DEVICE_OVERLAY_Z_INDEX : PILL_OVERLAY_Z_INDEX
   return isEditing ? zIndex.editing : isOpen ? zIndex.open : zIndex.closed
-}
-
-const getRoomPanelCenterDistanceRatio = (
-  x: number,
-  panelTop: number,
-  panelHeight: number,
-  size: { height: number; width: number },
-) => {
-  const halfWidth = Math.max(1, size.width / 2)
-  const halfHeight = Math.max(1, size.height / 2)
-  const panelCenterX = x
-  const panelCenterY = panelTop + panelHeight / 2
-  const normalizedX = (panelCenterX - halfWidth) / halfWidth
-  const normalizedY = (panelCenterY - halfHeight) / halfHeight
-
-  return Math.hypot(normalizedX, normalizedY)
 }
 
 const isRoomPanelInsideViewportMargin = (
