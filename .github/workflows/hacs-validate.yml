@@ -1,0 +1,17 @@
+name: Validate HACS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  validate-hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: plugin

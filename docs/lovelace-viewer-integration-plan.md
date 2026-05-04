@@ -9,7 +9,7 @@ Build a Home Assistant Lovelace integration where Pascal-authored smart-home sce
 The core user need is:
 
 - author the home layout and HA bindings in Pascal on a laptop or desktop
-- publish a viewer artifact for Home Assistant
+- export a viewer artifact for a Home Assistant Lovelace card
 - use the artifact in Lovelace as a normal dashboard card
 - see realtime HA state in the Pascal viewer
 - control HA entities from Pascal controls inside Lovelace
@@ -23,7 +23,7 @@ Pascal should act like a visual authoring tool plus runtime viewer, not like a r
 
 The split should be:
 
-- Pascal editor: imports HA resources, places devices, creates bindings, validates the scene, exports/publishes the Lovelace artifact.
+- Pascal editor: imports HA resources, places devices, creates bindings, validates the scene, and exports the Lovelace card config.
 - Pascal Lovelace card: displays the published scene, receives HA state from Lovelace, and sends HA actions back through Lovelace.
 - Home Assistant: remains the source of realtime entity state, auth, service execution, dashboard layout, and mobile/tablet shell.
 
@@ -34,8 +34,8 @@ This is closest to a 3D, visually-authored version of picture-elements or floorp
 1. User opens Pascal outside Home Assistant.
 2. User connects Pascal to Home Assistant and imports smart-home resources.
 3. User visually places or verifies devices, rooms, groups, and controls.
-4. User exports or publishes a Lovelace viewer artifact.
-5. User installs or references the Pascal Lovelace card in Home Assistant.
+4. User exports a Lovelace card config from Pascal.
+5. User installs the Pascal Lovelace card through HACS.
 6. User adds the Pascal card to a Lovelace dashboard.
 7. Lovelace passes HA state into the Pascal viewer.
 8. User taps Pascal controls inside the card and HA performs the action.
@@ -46,8 +46,9 @@ This is closest to a 3D, visually-authored version of picture-elements or floorp
 - The Lovelace card must not run the Pascal editor.
 - The Lovelace card must work as a normal HA card, not only as a full-page app.
 - The Lovelace card should support both wall-tablet/full-home dashboards and smaller room cards.
-- The published artifact must not contain HA access tokens or local machine paths.
+- The exported artifact must not contain HA access tokens or local machine paths.
 - The setup should not depend on custom one-off bridges that only work on the developer machine.
+- The setup must not require Home Assistant core changes, `custom_components`, add-ons, scripts inside Home Assistant, or writes to Home Assistant `.storage`.
 
 ### Non-Goals For The First Implementation
 
@@ -175,9 +176,8 @@ Phase 0: iframe proof
 Phase 1: local custom card proof
 
 - Build `pascal-viewer-card.js`.
-- Install manually under HA `/config/www/pascal/`.
-- Register the resource as `/local/pascal/pascal-viewer-card.js`.
-- Load `/local/pascal/scenes/home.scene.json`.
+- Load the built card as a frontend-only custom card.
+- Use inline scene config exported by Pascal.
 - Display live state from `hass.states`.
 
 Phase 2: product custom card
@@ -186,19 +186,18 @@ Phase 2: product custom card
 - Add built-in config form or simple editor schema.
 - Support room/overview/compact modes.
 - Support HA-style actions.
-- Prepare HACS distribution.
+- Prepare HACS distribution with root `hacs.json` and `dist/pascal-viewer-card.js`.
 
-Phase 3: publish workflow
+Phase 3: export workflow
 
 - Add Pascal editor export UI.
-- Generate artifact, YAML snippet, validation report, and installation notes.
-- Optionally support copying assets to an HA config folder if a user selects one.
+- Generate inline card config, validation report, and installation notes.
+- Do not write into Home Assistant config, `.storage`, or dashboard files.
 
-Phase 4: optional HA integration
+Phase 4: optional hosted artifact path
 
-- Only add a backend HA custom integration if it solves real install friction:
-  automatic resource registration, artifact storage, or local publish endpoint.
-- Do not make a backend integration mandatory for the viewer card MVP.
+- If inline card config becomes too large, add Pascal-hosted artifact URLs outside Home Assistant.
+- Do not make a Home Assistant backend integration mandatory for the viewer card MVP.
 
 ## 3. Feature-Specific Plan
 
@@ -229,11 +228,17 @@ Start with:
 
 ```yaml
 type: custom:pascal-viewer-card
-scene_url: /local/pascal/scenes/home.scene.json
 mode: overview
 room: kitchen
 default_level: main
 view_mode: 3d
+scene:
+  version: 1
+  scene:
+    nodes: {}
+    rootNodeIds: []
+  homeAssistant:
+    bindings: []
 renderer: auto
 show_header: true
 show_floor_selector: true
@@ -326,11 +331,11 @@ The editor export should:
 2. validate referenced entities still exist
 3. validate asset references are portable
 4. validate there are no local absolute paths
-5. generate `home.scene.json`
-6. generate Lovelace YAML snippet
+5. generate inline Lovelace card artifact
+6. generate Lovelace card config
 7. list missing/unsupported resources
-8. provide manual install instructions for `/local`
-9. later provide HACS-ready install docs
+8. provide HACS install instructions
+9. provide a copy/download config path
 
 ### Error And Fallback UX
 
@@ -464,7 +469,7 @@ Requirements:
 - no dev server dependency
 - static asset path strategy
 - sourcemap in development builds
-- production build suitable for `/local` or HACS
+- production build suitable for HACS
 
 ### Step 7: Add Viewer-Only Route For Iframe Proof
 
@@ -502,7 +507,7 @@ Responsibilities:
 - generate YAML snippet
 - expose export command/button in the HA panel or scene menu
 
-This belongs in editor because it is authoring/publishing UI.
+This belongs in editor because it is authoring/export UI.
 
 ### Step 9: Add Examples And Docs
 
@@ -561,7 +566,7 @@ Compatibility proof:
 7. Card modes: `overview`, `room`, `compact`.
 8. Editor export workflow.
 9. HACS-ready packaging.
-10. Optional HA backend integration only if installation/publish friction proves worth it.
+10. Optional Pascal-hosted artifact path if inline scene config becomes too large.
 
 ## Acceptance Criteria
 
@@ -569,7 +574,7 @@ The first useful MVP is done when:
 
 - Pascal can export a portable Lovelace scene artifact.
 - Home Assistant can load `custom:pascal-viewer-card`.
-- The card can load the artifact from `/local`.
+- The card can load the inline artifact exported by Pascal.
 - The card renders without Pascal editor UI.
 - HA entity state changes are visible in the Pascal scene.
 - Tapping a supported Pascal control calls the appropriate HA service through Lovelace.

@@ -12,15 +12,16 @@ import {
   type HomeAssistantResourceBinding,
 } from '@pascal-app/core/schema'
 import {
-  Lightbulb,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Check,
+  Download,
   Eye,
   EyeOff,
   Fan,
   Layers,
+  Lightbulb,
   Link2,
   LoaderCircle,
   LogOut,
@@ -33,7 +34,6 @@ import {
   Trash2,
   Tv,
   Unlink,
-  UploadCloud,
   Wifi,
   X,
 } from 'lucide-react'
@@ -99,6 +99,12 @@ import {
   type HomeAssistantGroundPoint,
   type HomeAssistantPlacementPreview,
 } from '../../../lib/home-assistant-placement-ground'
+import {
+  createPascalLovelaceArtifact,
+  createPascalLovelaceCardConfig,
+  createPascalLovelaceCardConfigText,
+  downloadPascalLovelaceCardConfig,
+} from '../../../lib/home-assistant-lovelace-export'
 import { requestSceneImmediateSave } from '../../../lib/scene'
 import { cn } from '../../../lib/utils'
 import {
@@ -169,15 +175,6 @@ type HomeAssistantConnectionResponse = {
   message: string
   mode?: 'linked-session' | 'local-env' | 'unlinked'
   success: boolean
-}
-
-type HomeAssistantLovelacePublishResponse = {
-  bindingCount?: number
-  dashboardPath?: string
-  error?: string
-  message?: string
-  sceneUrl?: string
-  success?: boolean
 }
 
 function hasLinkedHomeAssistantSession(connectionState: HomeAssistantConnectionResponse | null) {
@@ -810,7 +807,7 @@ export function HomeAssistantPanel() {
     }
   }
 
-  async function publishLovelaceScene() {
+  async function exportLovelaceScene() {
     setIsPublishingLovelace(true)
     setPanelError('')
     setLovelacePublishStatus('')
@@ -824,44 +821,35 @@ export function HomeAssistantPanel() {
         .map((bindingNode) => toCollectionBinding(bindingNode))
         .filter((binding): binding is HomeAssistantCollectionBinding => Boolean(binding))
 
-      const response = await fetch('/api/home-assistant/publish-lovelace', {
-        body: JSON.stringify({
-          artifact: {
-            homeAssistant: {
-              bindings: currentBindings,
-            },
-            scene: {
-              collections: sceneState.collections,
-              nodes: sceneState.nodes,
-              rootNodeIds: sceneState.rootNodeIds,
-            },
-            version: 1,
-            viewer: {
-              defaultLevelId: viewerState.selection.levelId,
-              defaultMode: 'overview',
-              levelMode: viewerState.levelMode,
-              viewMode: '3d',
-              wallMode: viewerState.wallMode,
-            },
-          },
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
+      const artifact = createPascalLovelaceArtifact({
+        bindings: currentBindings,
+        collections: sceneState.collections,
+        defaultLevelId: viewerState.selection.levelId,
+        levelMode: viewerState.levelMode,
+        nodes: sceneState.nodes,
+        rootNodeIds: sceneState.rootNodeIds,
+        wallMode: viewerState.wallMode,
       })
-      const payload = (await response.json()) as HomeAssistantLovelacePublishResponse
+      const config = createPascalLovelaceCardConfig(artifact)
+      const configText = createPascalLovelaceCardConfigText(config)
 
-      if (!response.ok || payload.success === false) {
-        throw new Error(payload.error || 'Failed to publish Pascal scene to Lovelace.')
+      let copied = false
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(configText)
+          copied = true
+        } catch {
+          copied = false
+        }
       }
 
+      downloadPascalLovelaceCardConfig(configText)
       setLovelacePublishStatus(
-        `Published to Lovelace${payload.bindingCount !== undefined ? ` with ${payload.bindingCount} HA bindings` : ''}.`,
+        `Exported Lovelace card config with ${currentBindings.length} HA binding${currentBindings.length === 1 ? '' : 's'}${copied ? ' and copied it to the clipboard' : ''}.`,
       )
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to publish Pascal scene to Lovelace.'
+        error instanceof Error ? error.message : 'Failed to export Pascal scene for Lovelace.'
       setPanelError(message)
     } finally {
       setIsPublishingLovelace(false)
@@ -2189,17 +2177,17 @@ export function HomeAssistantPanel() {
               {activePanel.kind === 'config' && (
                 <>
                   <button
-                    aria-label="Publish current Pascal scene to Lovelace"
+                    aria-label="Export current Pascal scene for Lovelace"
                     className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-cyan-700/18 bg-cyan-50/80 text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
                     disabled={isPublishingLovelace}
-                    onClick={() => void publishLovelaceScene()}
-                    title="Publish to Lovelace"
+                    onClick={() => void exportLovelaceScene()}
+                    title="Export Lovelace card config"
                     type="button"
                   >
                     {isPublishingLovelace ? (
                       <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <UploadCloud className="h-3.5 w-3.5" />
+                      <Download className="h-3.5 w-3.5" />
                     )}
                   </button>
                   <button

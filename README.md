@@ -10,6 +10,29 @@ A 3D building editor built with React Three Fiber and WebGPU.
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
+## Home Assistant Lovelace Card
+
+Pascal includes a HACS-ready Lovelace dashboard card: `custom:pascal-viewer-card`.
+
+User install flow:
+
+1. In Home Assistant, install HACS if it is not already installed.
+2. Open HACS, add this GitHub repository as a custom repository with category `Dashboard`.
+3. Install **Pascal Viewer Card** from HACS.
+4. Refresh the Home Assistant frontend.
+5. In Pascal, connect to Home Assistant, bind devices in the scene, then use the Smart Home export button to download/copy the Lovelace card config.
+6. In Home Assistant, edit a dashboard, add a manual card, and paste the exported config.
+
+This path is frontend-only. It does not require Home Assistant core changes, `custom_components`, add-ons, scripts inside Home Assistant, or writes to Home Assistant `.storage`.
+
+Developer release command:
+
+```bash
+bun run build:lovelace
+```
+
+The HACS bundle is emitted to `dist/pascal-viewer-card.js`, and `hacs.json` points HACS at that file.
+
 
 
 ## Repository Architecture

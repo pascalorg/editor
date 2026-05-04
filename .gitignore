@@ -31,7 +31,9 @@ supabase/.temp/
 .next/
 out/
 build
-dist
+**/dist/
+!/dist/
+!/dist/pascal-viewer-card.js
 *.tsbuildinfo
 
 

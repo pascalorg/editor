@@ -10,7 +10,7 @@ const resourceLogPath = path.join(repoRoot, '.codex/runtime-logs/ha-import-resou
 const outDir = path.join(repoRoot, 'docs/examples/lovelace')
 const editorPublicOutDir = path.join(repoRoot, 'apps/editor/public/lovelace')
 
-const LOCAL_PASCAL_ASSET_PREFIX = '/local/pascal'
+const PASCAL_ASSET_PREFIX = '/items'
 
 const SUPABASE_ITEM_BASE =
   'https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system'
@@ -88,16 +88,16 @@ const assets = {
     attachTo: 'ceiling',
     category: 'appliance',
     dimensions: [1.4, 0.45, 1.4],
-    floorPlanUrl: `${LOCAL_PASCAL_ASSET_PREFIX}/items/ceiling-fan/floor-plan.png`,
+    floorPlanUrl: `${PASCAL_ASSET_PREFIX}/ceiling-fan/floor-plan.png`,
     id: 'ceiling-fan',
     interactive: interactivePower,
     name: 'Ceiling Fan',
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    src: `${LOCAL_PASCAL_ASSET_PREFIX}/items/ceiling-fan/model.glb`,
+    src: `${PASCAL_ASSET_PREFIX}/ceiling-fan/model.glb`,
     tags: ['fan', 'ceiling', 'air'],
-    thumbnail: `${LOCAL_PASCAL_ASSET_PREFIX}/items/ceiling-fan/thumbnail.png`,
+    thumbnail: `${PASCAL_ASSET_PREFIX}/ceiling-fan/thumbnail.png`,
   },
 }
 
@@ -109,7 +109,7 @@ function rewriteLocalAssetUrls(scene) {
     for (const key of ['floorPlanUrl', 'src', 'thumbnail']) {
       const value = node.asset[key]
       if (typeof value === 'string' && value.startsWith('/items/')) {
-        node.asset[key] = `${LOCAL_PASCAL_ASSET_PREFIX}${value}`
+        node.asset[key] = value
       }
     }
   }
@@ -422,7 +422,7 @@ async function main() {
   }
 
   const yaml = `type: custom:pascal-viewer-card
-scene_url: /local/pascal/home.scene.json
+scene_url: https://editor.pascal.app/lovelace/home.scene.json
 mode: overview
 show_header: true
 tap_action:

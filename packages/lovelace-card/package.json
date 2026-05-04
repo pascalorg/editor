@@ -6,9 +6,9 @@
   "private": true,
   "main": "./dist/pascal-viewer-card.js",
   "scripts": {
-    "build": "bun build ./src/pascal-viewer-card.tsx --target=browser --format=esm --outfile=dist/pascal-viewer-card.js --banner=\"var process = { env: { NEXT_PUBLIC_ASSETS_CDN_URL: (globalThis.location && globalThis.location.origin) || '', NODE_ENV: 'production' } };\" --define:process.env.NODE_ENV='\"production\"'",
+    "build": "bun build ./src/pascal-viewer-card.tsx --target=browser --format=esm --minify --outfile=dist/pascal-viewer-card.js --banner=\"var process = { env: { NEXT_PUBLIC_ASSETS_CDN_URL: 'https://editor.pascal.app', NODE_ENV: 'production' } };\" --define:process.env.NODE_ENV='\"production\"'",
     "build:demo": "node ./scripts/create-demo-artifact.mjs",
-    "install:ha": "node ./scripts/install-home-assistant.mjs",
+    "prepare:hacs": "node ./scripts/prepare-hacs-release.mjs",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

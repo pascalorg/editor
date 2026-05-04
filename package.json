@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "build:lovelace": "bun run --cwd packages/lovelace-card build && bun run --cwd packages/lovelace-card prepare:hacs",
     "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",

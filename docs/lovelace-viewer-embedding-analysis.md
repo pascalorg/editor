@@ -85,9 +85,13 @@ This is the product path:
 
 ```yaml
 type: custom:pascal-viewer-card
-scene_url: /local/pascal/scenes/home.json
 default_level: main
 view_mode: 3d
+scene:
+  version: 1
+  scene:
+    nodes: {}
+    rootNodeIds: []
 show_controls: true
 ```
 
@@ -123,7 +127,7 @@ Relevant Lovelace usage patterns:
 4. Custom cards are normal for advanced dashboards.
    - Custom cards are registered as JavaScript resources and used with `type: custom:...`.
    - HACS is the adoption path users already understand for community frontend cards.
-   - Manual `/local/...` install is acceptable for a spike, but public adoption wants a HACS-ready bundle.
+   - Public adoption wants a HACS-ready bundle and an inline card config exported from Pascal, not a workflow that writes into HA internals.
 5. Lovelace is not the place for initial account setup.
    - A dashboard card should not ask the user to discover, authorize, import, and place devices.
    - That belongs in Pascal editor or a future HA integration/config flow.
@@ -209,10 +213,9 @@ The second mode matters because not everyone wants a full dashboard tab consumed
 4. User places or confirms devices in the 3D house.
 5. User chooses dashboard defaults: floor, camera, wall mode, visible controls.
 6. Pascal exports:
-   - `home.scene.json`
-   - `pascal-viewer-card.js` install instructions
-   - Lovelace YAML snippet
-7. User installs the card through HACS or `/local`.
+   - inline Lovelace card config
+   - HACS install instructions
+7. User installs the card through HACS.
 8. User adds a panel-view card in HA:
 
 ```yaml
@@ -220,8 +223,12 @@ title: Home
 type: panel
 cards:
   - type: custom:pascal-viewer-card
-    scene_url: /local/pascal/scenes/home.scene.json
     mode: overview
+    scene:
+      version: 1
+      scene:
+        nodes: {}
+        rootNodeIds: []
 ```
 
 9. Lovelace passes `hass` state to the card.
@@ -278,7 +285,7 @@ The desktop/laptop Pascal editor remains the place where users:
 5. save the authored scene
 6. publish a viewer artifact for Home Assistant
 
-The authoring app may eventually have a "Publish to Lovelace" action. Initially it can export files manually.
+The authoring app can provide an "Export Lovelace card config" action. The output should be pasted into a Lovelace manual card after the HACS card is installed.
 
 ### 2. Viewer Artifact
 
@@ -401,7 +408,7 @@ State from Home Assistant should normally remain runtime state. It should not mu
 
 The product flows above describe how users would approach the feature. The runtime flows below describe what the software should actually do.
 
-### Publish/Install Flow
+### Export/Install Flow
 
 1. User opens Pascal editor on laptop/desktop.
 2. User connects Pascal to Home Assistant.
@@ -409,17 +416,15 @@ The product flows above describe how users would approach the feature. The runti
 4. User places or groups devices in the spatial scene.
 5. User adjusts room-control pills and overlay layout.
 6. User saves the Pascal scene.
-7. User publishes Lovelace assets:
-   - `pascal-viewer-card.js`
-   - `home.json` scene artifact
-   - optional generated Lovelace YAML/card config
+7. User exports a generated Lovelace card config from Pascal.
+8. User installs `custom:pascal-viewer-card` through HACS and pastes the generated config into a dashboard card.
 
 ### Card Load Flow
 
-1. Home Assistant loads the custom card module from `/local/pascal/pascal-viewer-card.js`.
+1. Home Assistant loads the custom card module installed by HACS.
 2. Lovelace creates `<pascal-viewer-card>`.
-3. HA calls `setConfig()` with the selected scene URL and view options.
-4. The card loads the scene artifact.
+3. HA calls `setConfig()` with the inline scene and view options.
+4. The card validates and loads the scene artifact from its own config.
 5. The card seeds Pascal `useScene` with the authored scene.
 6. The card receives `hass` updates from Home Assistant.
 7. The card maps `hass.states` into Pascal viewer runtime state.
@@ -581,13 +586,13 @@ First supported resources:
 - media players / TVs
 - covers/locks if binding data already exists
 
-### Phase 3: Publish Workflow From Pascal Editor
+### Phase 3: Export Workflow From Pascal Editor
 
 Goal: make it usable by normal users.
 
 - Add "Export Lovelace viewer" in Pascal editor.
-- Emit scene artifact and card YAML.
-- Optionally copy files into HA `/config/www/pascal`.
+- Emit inline Lovelace card config.
+- Do not copy files into HA `/config/www/pascal`, write `.storage`, or require scripts inside Home Assistant.
 - Validate missing assets/entities before export.
 - Provide a preview of what the Lovelace card will render.
 
@@ -596,9 +601,9 @@ Goal: make it usable by normal users.
 Goal: reduce manual setup.
 
 - Package a HACS-ready dashboard/frontend card.
-- Include `hacs.json`, release assets, and clear `/hacsfiles/...` or `/local/...` resource instructions.
-- Consider a later HA custom integration only if automatic resource registration or publish-to-HA workflows need backend support.
-- Add documentation for local `/local` assets and remote CDN assets.
+- Include `hacs.json`, root `dist/pascal-viewer-card.js`, and clear HACS custom-repository instructions.
+- Keep the product path frontend-only; no HA custom integration is required for this step.
+- Add documentation for Pascal CDN assets and inline scene config.
 - Add migration/versioning for scene artifacts.
 
 ## Decision Matrix
@@ -627,8 +632,8 @@ The first slice should not try to embed editor tools, scene tree, OAuth setup, o
 
 - Should the Lovelace card bundle React and R3F directly, or should we first expose a smaller viewer web component from Pascal?
 - Do we need a WebGL fallback before any public Lovelace card can be considered usable?
-- Where should scene artifacts live for normal users: HA `/config/www`, Pascal cloud, or user-hosted static files?
-- Should publish overwrite one artifact, version artifacts by scene ID, or keep multiple named scenes?
+- When inline scene config becomes too large, should artifacts move to Pascal cloud or user-hosted static files?
+- Should export overwrite one artifact, version artifacts by scene ID, or keep multiple named scenes?
 - How should card configuration select a default floor/view/camera when the user has a large multi-level Pascal scene?
 - Which controls should be visible on mobile versus wall-tablet dashboards?
 
