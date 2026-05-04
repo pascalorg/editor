@@ -6,6 +6,7 @@ export const ASSETS_CDN_URL = process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https:/
  * Resolves an asset URL to the appropriate format:
  * - If URL starts with http:// or https://, return as-is (external URL)
  * - If URL starts with asset://, resolve from IndexedDB storage
+ * - If URL starts with /local/, return as-is (host-local asset path)
  * - If URL starts with /, prepend CDN URL (absolute path)
  * - Otherwise, prepend CDN URL (relative path)
  */
@@ -20,6 +21,10 @@ export async function resolveAssetUrl(url: string | undefined | null): Promise<s
   // IndexedDB asset - resolve from storage
   if (url.startsWith('asset://')) {
     return loadAssetUrl(url)
+  }
+
+  if (url.startsWith('/local/')) {
+    return url
   }
 
   // Absolute or relative path - prepend CDN URL
@@ -43,6 +48,10 @@ export function resolveCdnUrl(url: string | undefined | null): string | null {
   if (url.startsWith('asset://')) {
     console.warn('Use resolveAssetUrl() for asset:// URLs, not resolveCdnUrl()')
     return null
+  }
+
+  if (url.startsWith('/local/')) {
+    return url
   }
 
   // Absolute or relative path - prepend CDN URL

@@ -4,7 +4,7 @@ import { useScene } from '@pascal-app/core'
 import {
   HomeAssistantInteractiveSystem,
   type HomeAssistantDeviceActionDispatch,
-} from '@pascal-app/editor/home-assistant-runtime'
+} from '@pascal-app/home-assistant-runtime'
 import { Viewer, ViewerFitCameraControls, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo } from 'react'
 import { getArtifactBindings } from './artifact'
@@ -23,9 +23,11 @@ const cardShellStyle: React.CSSProperties = {
   color: 'var(--primary-text-color, #fff)',
   display: 'flex',
   flexDirection: 'column',
-  minHeight: 360,
+  height: '100%',
+  minHeight: 0,
   overflow: 'hidden',
   position: 'relative',
+  width: '100%',
 }
 
 const viewerWrapStyle: React.CSSProperties = {
@@ -35,27 +37,10 @@ const viewerWrapStyle: React.CSSProperties = {
   position: 'relative',
 }
 
-function getCardMinHeight(config: PascalViewerCardConfig) {
-  if (config.mode === 'compact') {
-    return 280
-  }
-  if (config.mode === 'room') {
-    return 360
-  }
-  return 520
-}
-
-function getCardHeight(config: PascalViewerCardConfig) {
-  if (config.mode === 'compact') {
-    return 320
-  }
-  if (config.mode === 'room') {
-    return 440
-  }
-  return 'calc(100vh - 72px)'
-}
-
-function applyViewerDefaults(artifact: PascalLovelaceSceneArtifact, config: PascalViewerCardConfig) {
+function applyViewerDefaults(
+  artifact: PascalLovelaceSceneArtifact,
+  config: PascalViewerCardConfig,
+) {
   const viewer = useViewer.getState()
   viewer.setTheme('dark')
   viewer.setShowGrid(false)
@@ -230,8 +215,6 @@ export function PascalViewerRuntime({
     <div
       style={{
         ...cardShellStyle,
-        height: getCardHeight(config),
-        minHeight: getCardMinHeight(config),
       }}
     >
       <PascalLovelaceHeader artifact={artifact} config={config} hass={hass} />

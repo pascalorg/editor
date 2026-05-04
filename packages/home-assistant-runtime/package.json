@@ -1,0 +1,30 @@
+{
+  "name": "@pascal-app/home-assistant-runtime",
+  "version": "0.1.0",
+  "description": "Home Assistant runtime overlays for Pascal viewers",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": "^0.6.0",
+    "@pascal-app/viewer": "^0.6.0",
+    "@react-three/fiber": "^9",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "three": "^0.184"
+  },
+  "devDependencies": {
+    "@pascal-app/core": "^0.6.0",
+    "@pascal-app/viewer": "^0.6.0",
+    "@pascal/typescript-config": "*",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/three": "^0.184.0",
+    "typescript": "5.9.3"
+  }
+}

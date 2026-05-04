@@ -27,8 +27,8 @@ import {
   isSmartHomeControllableEntityResource,
   isSmartHomeDeviceComponentResource,
   isSmartHomeGroupResource,
-} from '../../../lib/smart-home-composition'
-import type { SmartHomeOverlayVisibility } from '../../../store/use-editor'
+} from '../smart-home-composition'
+import type { SmartHomeOverlayVisibility } from '../types'
 import {
   buildRoomControlGroups,
   normalizeRoomControlGroupList,

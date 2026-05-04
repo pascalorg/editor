@@ -114,7 +114,8 @@ class PascalViewerCard extends HTMLElement {
     style.textContent = `
       :host {
         display: block;
-        min-height: 280px;
+        height: 100%;
+        min-height: 0;
       }
       * {
         box-sizing: border-box;
@@ -124,7 +125,8 @@ class PascalViewerCard extends HTMLElement {
       }
     `
     this.mount = document.createElement('div')
-    this.mount.style.minHeight = '280px'
+    this.mount.style.height = '100%'
+    this.mount.style.minHeight = '0'
     shadow.append(style, this.mount)
   }
 

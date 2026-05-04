@@ -1,18 +1,6 @@
 'use client'
 
 import {
-  RoomControlOverlay,
-  type RoomControlChange,
-  type RoomControlTile,
-  type RoomOverlayNode,
-  buildCollectionActionRequest,
-  buildHomeAssistantRoomOverlayNodes,
-  getActionBindingForMember,
-  getCollectionDisplayName,
-} from '@pascal-app/home-assistant-runtime'
-import {
-  type AnyNode,
-  type CollectionId,
   getHomeAssistantBindingNodeMap,
   type HomeAssistantActionRequest,
   type HomeAssistantCollectionBinding,
@@ -21,13 +9,15 @@ import {
 } from '@pascal-app/core'
 import { InteractiveSystem, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import type { RoomControlChange, RoomOverlayNode } from './room-overlay/room-control-model'
+import { RoomControlOverlay } from './room-overlay/room-control-overlay'
 import {
-  getBindingAfterDeviceResourceCopyToGroup,
-  getBindingAfterDeviceResourceRemovalFromGroup,
-  getBindingAfterRoomGrouping,
-} from '../../lib/home-assistant-binding-presentation'
-import { requestSceneImmediateSave } from '../../lib/scene'
-import useEditor from '../../store/use-editor'
+  buildCollectionActionRequest,
+  buildHomeAssistantRoomOverlayNodes,
+  getActionBindingForMember,
+  getCollectionDisplayName,
+} from './room-overlay/room-overlay-nodes'
+import { DEFAULT_SMART_HOME_OVERLAY_VISIBILITY, type SmartHomeOverlayVisibility } from './types'
 
 export type HomeAssistantDeviceActionDispatch = {
   binding: HomeAssistantCollectionBinding
@@ -37,17 +27,17 @@ export type HomeAssistantDeviceActionDispatch = {
 
 type HomeAssistantInteractiveSystemProps = {
   onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
+  overlayVisibility?: SmartHomeOverlayVisibility
 }
 
 export function HomeAssistantInteractiveSystem({
   onHomeAssistantDeviceAction,
+  overlayVisibility = DEFAULT_SMART_HOME_OVERLAY_VISIBILITY,
 }: HomeAssistantInteractiveSystemProps = {}) {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const sceneNodes = useScene((state) => state.nodes)
   const sceneCollections = useScene((state) => state.collections ?? {})
-  const updateNode = useScene((state) => state.updateNode)
   const setControlValue = useInteractive((state) => state.setControlValue)
-  const smartHomeOverlayVisibility = useEditor((state) => state.smartHomeOverlayVisibility)
   const pendingCollectionActionTimeoutsRef = useRef<Record<string, number>>({})
 
   const homeAssistantBindings = useMemo(
@@ -62,15 +52,9 @@ export function HomeAssistantInteractiveSystem({
         collections: sceneCollections,
         sceneNodes,
         selectedLevelId,
-        visibility: smartHomeOverlayVisibility,
+        visibility: overlayVisibility,
       }),
-    [
-      homeAssistantBindings,
-      sceneCollections,
-      sceneNodes,
-      selectedLevelId,
-      smartHomeOverlayVisibility,
-    ],
+    [homeAssistantBindings, sceneCollections, sceneNodes, selectedLevelId, overlayVisibility],
   )
 
   useEffect(
@@ -84,86 +68,6 @@ export function HomeAssistantInteractiveSystem({
       pendingCollectionActionTimeoutsRef.current = {}
     },
     [],
-  )
-
-  const applyRoomGroupingToCollection = useCallback(
-    (collectionId: string, nextGroups: string[][]) => {
-      const controls =
-        roomOverlayNodes
-          .find((roomOverlayNode) => roomOverlayNode.id === collectionId)
-          ?.controlGroups.flatMap((group) => group.members) ?? []
-      const bindingNode = homeAssistantBindings[collectionId as CollectionId]
-      if (!bindingNode) {
-        return
-      }
-
-      const nextBinding = getBindingAfterRoomGrouping({
-        binding: bindingNode,
-        collectionId,
-        controls,
-        groups: nextGroups,
-      })
-      if (!nextBinding) {
-        return
-      }
-
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
-      requestSceneImmediateSave()
-    },
-    [homeAssistantBindings, roomOverlayNodes, updateNode],
-  )
-
-  const copyDeviceResourceToGroup = useCallback(
-    (sourceCollectionId: CollectionId, targetCollectionId: CollectionId) => {
-      if (sourceCollectionId === targetCollectionId) {
-        return
-      }
-
-      const sourceBinding = homeAssistantBindings[sourceCollectionId]
-      const targetBindingNode = homeAssistantBindings[targetCollectionId]
-      if (!(sourceBinding && targetBindingNode)) {
-        return
-      }
-
-      const nextBinding = getBindingAfterDeviceResourceCopyToGroup({
-        sourceBinding,
-        targetBinding: targetBindingNode,
-        targetCollectionId,
-      })
-      if (!nextBinding) {
-        return
-      }
-
-      updateNode(targetBindingNode.id, nextBinding as Partial<AnyNode>)
-      requestSceneImmediateSave()
-    },
-    [homeAssistantBindings, updateNode],
-  )
-
-  const removeDeviceResourceFromGroup = useCallback(
-    (member: RoomControlTile) => {
-      if (!member.resourceId) {
-        return
-      }
-
-      const currentBindings = getHomeAssistantBindingNodeMap(useScene.getState().nodes)
-      const bindingNode = currentBindings[member.collectionId]
-      if (!bindingNode) {
-        return
-      }
-
-      const nextBinding = getBindingAfterDeviceResourceRemovalFromGroup(
-        bindingNode,
-        member.resourceId,
-      )
-      if (!nextBinding) {
-        return
-      }
-
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
-      requestSceneImmediateSave()
-    },
-    [updateNode],
   )
 
   const handleRoomControlChange = useCallback(
@@ -246,9 +150,6 @@ export function HomeAssistantInteractiveSystem({
     <>
       <InteractiveSystem />
       <RoomControlOverlay
-        onApplyRoomGrouping={applyRoomGroupingToCollection}
-        onCopyRoomControlToRoom={copyDeviceResourceToGroup}
-        onRemoveRoomControlFromRoom={removeDeviceResourceFromGroup}
         onRoomControlChange={handleRoomControlChange}
         roomOverlayNodes={roomOverlayNodes}
       />

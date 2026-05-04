@@ -1,6 +1,6 @@
 'use client'
 
-import { CameraControls, type CameraControlsImpl } from '@react-three/drei'
+import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Vector3Tuple } from 'three'
@@ -14,6 +14,15 @@ export const ViewerFitCameraControls = ({ center, radius }: ViewerFitCameraContr
   const controls = useRef<CameraControlsImpl>(null)
   const camera = useThree((state) => state.camera)
   const invalidate = useThree((state) => state.invalidate)
+  const mouseButtons = useMemo(
+    () => ({
+      left: CameraControlsImpl.ACTION.NONE,
+      middle: CameraControlsImpl.ACTION.SCREEN_PAN,
+      right: CameraControlsImpl.ACTION.ROTATE,
+      wheel: CameraControlsImpl.ACTION.DOLLY,
+    }),
+    [],
+  )
   const pose = useMemo(() => {
     const safeRadius = Math.max(radius, 1)
     const [cx, cy, cz] = center
@@ -45,6 +54,7 @@ export const ViewerFitCameraControls = ({ center, radius }: ViewerFitCameraContr
       makeDefault
       maxDistance={pose.maxDistance}
       minDistance={pose.minDistance}
+      mouseButtons={mouseButtons}
       ref={controls}
     />
   )

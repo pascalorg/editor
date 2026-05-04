@@ -22,6 +22,7 @@
     "three": "^0.184"
   },
   "dependencies": {
+    "@pascal-app/home-assistant-runtime": "*",
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.5.14",
     "@radix-ui/react-alert-dialog": "^1.1.15",
