@@ -7,7 +7,7 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { InteractiveSystem, useViewer } from '@pascal-app/viewer'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { RoomControlChange, RoomOverlayNode } from './room-overlay/room-control-model'
 import { RoomControlOverlay } from './room-overlay/room-control-overlay'
@@ -147,12 +147,9 @@ export function HomeAssistantInteractiveSystem({
   )
 
   return (
-    <>
-      <InteractiveSystem />
-      <RoomControlOverlay
-        onRoomControlChange={handleRoomControlChange}
-        roomOverlayNodes={roomOverlayNodes}
-      />
-    </>
+    <RoomControlOverlay
+      onRoomControlChange={handleRoomControlChange}
+      roomOverlayNodes={roomOverlayNodes}
+    />
   )
 }
