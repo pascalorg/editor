@@ -33,6 +33,7 @@ import {
   Trash2,
   Tv,
   Unlink,
+  UploadCloud,
   Wifi,
   X,
 } from 'lucide-react'
@@ -168,6 +169,15 @@ type HomeAssistantConnectionResponse = {
   message: string
   mode?: 'linked-session' | 'local-env' | 'unlinked'
   success: boolean
+}
+
+type HomeAssistantLovelacePublishResponse = {
+  bindingCount?: number
+  dashboardPath?: string
+  error?: string
+  message?: string
+  sceneUrl?: string
+  success?: boolean
 }
 
 function hasLinkedHomeAssistantSession(connectionState: HomeAssistantConnectionResponse | null) {
@@ -359,7 +369,9 @@ export function HomeAssistantPanel() {
   const [isDiscoveringInstances, setIsDiscoveringInstances] = useState(false)
   const [isStartingOauth, setIsStartingOauth] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isPublishingLovelace, setIsPublishingLovelace] = useState(false)
   const [panelError, setPanelError] = useState('')
+  const [lovelacePublishStatus, setLovelacePublishStatus] = useState('')
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [openGroupMenuResourceId, setOpenGroupMenuResourceId] = useState<string | null>(null)
@@ -795,6 +807,64 @@ export function HomeAssistantPanel() {
       setPanelError(message)
     } finally {
       setIsLoggingOut(false)
+    }
+  }
+
+  async function publishLovelaceScene() {
+    setIsPublishingLovelace(true)
+    setPanelError('')
+    setLovelacePublishStatus('')
+    requestSceneImmediateSave()
+
+    try {
+      const sceneState = useScene.getState()
+      const viewerState = useViewer.getState()
+      const currentNodes = sceneState.nodes as Record<AnyNodeId, AnyNode>
+      const currentBindings = Object.values(getHomeAssistantBindingNodeMap(currentNodes))
+        .map((bindingNode) => toCollectionBinding(bindingNode))
+        .filter((binding): binding is HomeAssistantCollectionBinding => Boolean(binding))
+
+      const response = await fetch('/api/home-assistant/publish-lovelace', {
+        body: JSON.stringify({
+          artifact: {
+            homeAssistant: {
+              bindings: currentBindings,
+            },
+            scene: {
+              collections: sceneState.collections,
+              nodes: sceneState.nodes,
+              rootNodeIds: sceneState.rootNodeIds,
+            },
+            version: 1,
+            viewer: {
+              defaultLevelId: viewerState.selection.levelId,
+              defaultMode: 'overview',
+              levelMode: viewerState.levelMode,
+              viewMode: '3d',
+              wallMode: viewerState.wallMode,
+            },
+          },
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+      })
+      const payload = (await response.json()) as HomeAssistantLovelacePublishResponse
+
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.error || 'Failed to publish Pascal scene to Lovelace.')
+      }
+
+      setLovelacePublishStatus(
+        `Published to Lovelace${payload.bindingCount !== undefined ? ` with ${payload.bindingCount} HA bindings` : ''}.`,
+      )
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to publish Pascal scene to Lovelace.'
+      setPanelError(message)
+    } finally {
+      setIsPublishingLovelace(false)
     }
   }
 
@@ -2117,18 +2187,34 @@ export function HomeAssistantPanel() {
                 </p>
               )}
               {activePanel.kind === 'config' && (
-                <button
-                  aria-label="Refresh imported devices"
-                  className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-black/8 bg-white/55 text-zinc-700 transition hover:bg-white/80 hover:text-zinc-950"
-                  onClick={() => void refreshImports()}
-                  type="button"
-                >
-                  {isRefreshingImports ? (
-                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                <>
+                  <button
+                    aria-label="Publish current Pascal scene to Lovelace"
+                    className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-cyan-700/18 bg-cyan-50/80 text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
+                    disabled={isPublishingLovelace}
+                    onClick={() => void publishLovelaceScene()}
+                    title="Publish to Lovelace"
+                    type="button"
+                  >
+                    {isPublishingLovelace ? (
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <button
+                    aria-label="Refresh imported devices"
+                    className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-black/8 bg-white/55 text-zinc-700 transition hover:bg-white/80 hover:text-zinc-950"
+                    onClick={() => void refreshImports()}
+                    type="button"
+                  >
+                    {isRefreshingImports ? (
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </>
               )}
             </div>
             <button
@@ -2293,6 +2379,16 @@ export function HomeAssistantPanel() {
                 )}
                 ref={configContentRef}
               >
+                {lovelacePublishStatus && (
+                  <div className="rounded-xl border border-cyan-700/18 bg-cyan-50/80 px-3 py-2.5 text-sm text-cyan-950">
+                    {lovelacePublishStatus}
+                  </div>
+                )}
+                {panelError && (
+                  <div className="rounded-xl border border-rose-700/22 bg-rose-500/12 px-3 py-2.5 text-sm text-rose-950">
+                    {panelError}
+                  </div>
+                )}
                 {([
                   { key: 'devices' as const, label: 'Devices', resources: deviceImports },
                   { key: 'groups' as const, label: 'Groups', resources: groupImports },

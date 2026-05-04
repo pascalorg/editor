@@ -1,0 +1,32 @@
+{
+  "name": "@pascal-app/lovelace-card",
+  "version": "0.1.0",
+  "description": "Home Assistant Lovelace card for Pascal viewer artifacts",
+  "type": "module",
+  "private": true,
+  "main": "./dist/pascal-viewer-card.js",
+  "scripts": {
+    "build": "bun build ./src/pascal-viewer-card.tsx --target=browser --format=esm --outfile=dist/pascal-viewer-card.js --banner=\"var process = { env: { NEXT_PUBLIC_ASSETS_CDN_URL: (globalThis.location && globalThis.location.origin) || '', NODE_ENV: 'production' } };\" --define:process.env.NODE_ENV='\"production\"'",
+    "build:demo": "node ./scripts/create-demo-artifact.mjs",
+    "install:ha": "node ./scripts/install-home-assistant.mjs",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pascal-app/core": "*",
+    "@pascal-app/editor": "*",
+    "@pascal-app/viewer": "*",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "three": "^0.184.0",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/three": "^0.184.0",
+    "typescript": "5.9.3"
+  }
+}

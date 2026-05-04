@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx"
+    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./home-assistant-runtime": "./src/components/editor/home-assistant-interactive-system.tsx"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
