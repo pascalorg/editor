@@ -6,14 +6,15 @@ import {
   type HomeAssistantDeviceActionDispatch,
 } from '@pascal-app/home-assistant-runtime'
 import { Viewer, ViewerFitCameraControls, useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useMemo } from 'react'
-import { getArtifactBindings } from './artifact'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { getArtifactBindings, getResourceEntityIds } from './artifact'
 import { runHomeAssistantActionRequest } from './ha-actions'
 import { PascalLovelaceHomeAssistantSystem } from './pascal-lovelace-system'
 import type {
   HomeAssistantLike,
   PascalLovelaceSceneArtifact,
   PascalViewerCardConfig,
+  PendingHomeAssistantState,
 } from './types'
 
 const cardShellStyle: React.CSSProperties = {
@@ -36,6 +37,8 @@ const viewerWrapStyle: React.CSSProperties = {
   minHeight: 0,
   position: 'relative',
 }
+
+const PENDING_HOME_ASSISTANT_STATE_TTL_MS = 3500
 
 function applyViewerDefaults(
   artifact: PascalLovelaceSceneArtifact,
@@ -187,10 +190,28 @@ export function PascalViewerRuntime({
   hass: HomeAssistantLike | null
 }) {
   const sceneBounds = useMemo(() => getSceneBounds(artifact), [artifact])
+  const pendingHomeAssistantStateRef = useRef<Record<string, PendingHomeAssistantState>>({})
   const handleHomeAssistantDeviceAction = useCallback(
     async ({ binding, request }: HomeAssistantDeviceActionDispatch) => {
       if (!hass) {
         return
+      }
+      const pendingState: Omit<PendingHomeAssistantState, 'expiresAt'> | null =
+        request.kind === 'toggle'
+          ? { desiredOn: request.value }
+          : request.kind === 'range' && request.capability === 'brightness'
+            ? { brightnessPct: request.value }
+            : null
+      if (pendingState) {
+        const expiresAt = Date.now() + PENDING_HOME_ASSISTANT_STATE_TTL_MS
+        for (const resource of binding.resources) {
+          for (const entityId of getResourceEntityIds(resource)) {
+            pendingHomeAssistantStateRef.current[entityId] = {
+              ...pendingState,
+              expiresAt,
+            }
+          }
+        }
       }
       await runHomeAssistantActionRequest({ binding, hass, request })
     },
@@ -221,7 +242,10 @@ export function PascalViewerRuntime({
       <div style={viewerWrapStyle}>
         <Viewer selectionManager="custom">
           <ViewerFitCameraControls center={sceneBounds.center} radius={sceneBounds.radius} />
-          <PascalLovelaceHomeAssistantSystem hass={hass} />
+          <PascalLovelaceHomeAssistantSystem
+            hass={hass}
+            pendingStateRef={pendingHomeAssistantStateRef}
+          />
           <HomeAssistantInteractiveSystem
             onHomeAssistantDeviceAction={handleHomeAssistantDeviceAction}
           />

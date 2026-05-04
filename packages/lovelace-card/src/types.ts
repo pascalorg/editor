@@ -97,3 +97,9 @@ export type BindingControlSummary = {
   resourceStates: ResourceStateSummary[]
   state: ResourceStateSummary
 }
+
+export type PendingHomeAssistantState = {
+  brightnessPct?: number
+  desiredOn?: boolean
+  expiresAt: number
+}
