@@ -80,7 +80,7 @@
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.5.14",
-        "@pascal-app/home-assistant-runtime": "*",
+        "@pascal-app/home-assistant": "*",
         "@radix-ui/react-alert-dialog": "^1.1.15",
         "@radix-ui/react-context-menu": "^2.2.16",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -147,8 +147,8 @@
         "typescript-eslint": "^8.50.0",
       },
     },
-    "packages/home-assistant-runtime": {
-      "name": "@pascal-app/home-assistant-runtime",
+    "packages/home-assistant": {
+      "name": "@pascal-app/home-assistant",
       "version": "0.1.0",
       "devDependencies": {
         "@pascal-app/core": "^0.6.0",
@@ -173,7 +173,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@pascal-app/core": "*",
-        "@pascal-app/home-assistant-runtime": "*",
+        "@pascal-app/home-assistant": "*",
         "@pascal-app/viewer": "*",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.5.0",
@@ -515,7 +515,7 @@
 
     "@pascal-app/editor": ["@pascal-app/editor@workspace:packages/editor"],
 
-    "@pascal-app/home-assistant-runtime": ["@pascal-app/home-assistant-runtime@workspace:packages/home-assistant-runtime"],
+    "@pascal-app/home-assistant": ["@pascal-app/home-assistant@workspace:packages/home-assistant"],
 
     "@pascal-app/lovelace-card": ["@pascal-app/lovelace-card@workspace:packages/lovelace-card"],
 
@@ -1603,7 +1603,7 @@
 
     "@pascal-app/editor/@types/react": ["@types/react@19.2.2", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA=="],
 
-    "@pascal-app/home-assistant-runtime/@types/react": ["@types/react@19.2.2", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA=="],
+    "@pascal-app/home-assistant/@types/react": ["@types/react@19.2.2", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA=="],
 
     "@pascal-app/lovelace-card/@types/react": ["@types/react@19.2.2", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA=="],
 

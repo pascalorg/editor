@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.tsx",
     "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./home-assistant": "./src/components/editor/home-assistant-interactive-system.tsx",
     "./home-assistant-runtime": "./src/components/editor/home-assistant-interactive-system.tsx"
   },
   "scripts": {
@@ -22,7 +23,7 @@
     "three": "^0.184"
   },
   "dependencies": {
-    "@pascal-app/home-assistant-runtime": "*",
+    "@pascal-app/home-assistant": "*",
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.5.14",
     "@radix-ui/react-alert-dialog": "^1.1.15",

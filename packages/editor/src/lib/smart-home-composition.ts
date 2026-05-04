@@ -1,1 +1,1 @@
-export * from '@pascal-app/home-assistant-runtime/smart-home-composition'
+export * from '@pascal-app/home-assistant/smart-home-composition'

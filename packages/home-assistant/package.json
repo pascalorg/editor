@@ -1,15 +1,23 @@
 {
-  "name": "@pascal-app/home-assistant-runtime",
+  "name": "@pascal-app/home-assistant",
   "version": "0.1.0",
-  "description": "Home Assistant runtime overlays for Pascal viewers",
+  "description": "Home Assistant feature integration for Pascal",
   "type": "module",
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./binding-presentation": "./src/home-assistant-binding-presentation.ts",
+    "./collections": "./src/home-assistant-collections.ts",
+    "./connect": "./src/home-assistant-connect.ts",
+    "./controls": "./src/home-assistant-controls.ts",
+    "./lovelace-export": "./src/home-assistant-lovelace-export.ts",
+    "./placement-ground": "./src/home-assistant-placement-ground.ts",
+    "./runtime": "./src/index.ts",
     "./smart-home-composition": "./src/smart-home-composition.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "bun test src/**/*.test.ts"
   },
   "peerDependencies": {
     "@pascal-app/core": "^0.6.0",

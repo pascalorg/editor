@@ -15,7 +15,9 @@ const collectionId = 'collection_master' as CollectionId
 
 function light(id: string): HomeAssistantResourceBinding {
   return {
-    actions: [{ domain: 'light', key: 'toggle', label: 'Toggle', service: 'toggle' }],
+    actions: [
+      { capability: 'power', domain: 'light', key: 'toggle', label: 'Toggle', service: 'toggle' },
+    ],
     capabilities: ['power'],
     defaultActionKey: 'toggle',
     entityId: id,
@@ -27,7 +29,15 @@ function light(id: string): HomeAssistantResourceBinding {
 
 function mediaPlayer(id: string): HomeAssistantResourceBinding {
   return {
-    actions: [{ domain: 'media_player', key: 'toggle', label: 'Toggle', service: 'toggle' }],
+    actions: [
+      {
+        capability: 'power',
+        domain: 'media_player',
+        key: 'toggle',
+        label: 'Toggle',
+        service: 'toggle',
+      },
+    ],
     capabilities: ['power', 'media'],
     defaultActionKey: 'toggle',
     entityId: id,
@@ -58,7 +68,7 @@ describe('home assistant binding presentation helpers', () => {
       rtsGroups: [
         resources.map((resource) => getSmartHomeRoomControlTileId(collectionId, resource.id)),
       ],
-    }
+    } as never
 
     const nextPresentation = getPresentationAfterResourceRemoval(
       presentation,

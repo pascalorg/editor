@@ -9,7 +9,7 @@ import {
   buildHomeAssistantRoomOverlayNodes,
   getActionBindingForMember,
   getCollectionDisplayName,
-} from '@pascal-app/home-assistant-runtime'
+} from '@pascal-app/home-assistant'
 import {
   type AnyNode,
   type CollectionId,

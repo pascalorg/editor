@@ -4,7 +4,7 @@ import { useScene } from '@pascal-app/core'
 import {
   HomeAssistantInteractiveSystem,
   type HomeAssistantDeviceActionDispatch,
-} from '@pascal-app/home-assistant-runtime'
+} from '@pascal-app/home-assistant'
 import { Viewer, ViewerFitCameraControls, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { getArtifactBindings, getResourceEntityIds } from './artifact'
