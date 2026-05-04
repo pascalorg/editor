@@ -10,7 +10,9 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { ViewerHtml as Html, useViewer, useViewerFrame } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
+import { useFrame } from '@react-three/fiber'
+import { useViewer } from '@pascal-app/viewer'
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -778,7 +780,7 @@ export const RoomControlOverlay = ({
     })
   }
 
-  useViewerFrame(({ camera, size }) => {
+  useFrame(({ camera, size }) => {
     if (roomOverlayNodes.length === 0) {
       for (const refs of Object.values(domRefsRef.current)) {
         applyOverlayLayout(refs, {

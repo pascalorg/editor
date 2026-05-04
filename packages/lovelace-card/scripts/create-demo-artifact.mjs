@@ -422,7 +422,7 @@ async function main() {
   }
 
   const yaml = `type: custom:pascal-viewer-card
-scene_url: https://editor.pascal.app/lovelace/home.scene.json
+scene_url: /local/pascal/home.scene.json
 mode: overview
 show_header: true
 tap_action:

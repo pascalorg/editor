@@ -5,7 +5,7 @@ import {
   HomeAssistantInteractiveSystem,
   type HomeAssistantDeviceActionDispatch,
 } from '@pascal-app/home-assistant-runtime'
-import { Viewer, ViewerFitCameraControls, useViewer } from '@pascal-app/viewer'
+import { Viewer, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo } from 'react'
 import { getArtifactBindings } from './artifact'
 import { runHomeAssistantActionRequest } from './ha-actions'
@@ -15,6 +15,7 @@ import type {
   PascalLovelaceSceneArtifact,
   PascalViewerCardConfig,
 } from './types'
+import { ViewerFitCameraControls } from './viewer-fit-camera-controls'
 
 const cardShellStyle: React.CSSProperties = {
   background: 'var(--ha-card-background, var(--card-background-color, #111827))',
