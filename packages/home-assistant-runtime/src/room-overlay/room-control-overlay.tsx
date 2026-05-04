@@ -83,7 +83,6 @@ const PANEL_MAX_COLUMNS = 8
 const PANEL_PREFERRED_MAX_ROWS = 3
 const LINE_GAP = 4
 const LINE_END_MARGIN = 12
-const OFFSCREEN_MARGIN = 64
 const POSITIONED_SCREEN_STICK_HEIGHT = 72
 const WORLD_POSITIONED_LINE_VISIBLE_RATIO = 0.5
 const POSITION_EPSILON = 0.5
@@ -892,7 +891,7 @@ export const RoomControlOverlay = ({
         _projected.z >= -1 &&
         _projected.z <= 1 &&
         (!roomOverlayNode.worldPosition || (_groundProjected.z >= -1 && _groundProjected.z <= 1)) &&
-        isRoomPanelInsideViewportMargin(x, panelTop, metrics.width, metrics.height, size)
+        isRoomPanelFullyInsideViewport(x, panelTop, metrics.width, metrics.height, size)
 
       const layout: OverlayLayout = {
         opacity: 1,
@@ -3176,7 +3175,7 @@ const getOverlayZIndex = (isOpen: boolean, isEditing: boolean, iconOnly: boolean
   return isEditing ? zIndex.editing : isOpen ? zIndex.open : zIndex.closed
 }
 
-const isRoomPanelInsideViewportMargin = (
+const isRoomPanelFullyInsideViewport = (
   x: number,
   panelTop: number,
   panelWidth: number,
@@ -3188,10 +3187,10 @@ const isRoomPanelInsideViewportMargin = (
   const panelBottom = panelTop + panelHeight
 
   return (
-    panelRight >= -OFFSCREEN_MARGIN &&
-    panelLeft <= size.width + OFFSCREEN_MARGIN &&
-    panelBottom >= -OFFSCREEN_MARGIN &&
-    panelTop <= size.height + OFFSCREEN_MARGIN
+    panelLeft > 0 &&
+    panelRight < size.width &&
+    panelTop > 0 &&
+    panelBottom < size.height
   )
 }
 
