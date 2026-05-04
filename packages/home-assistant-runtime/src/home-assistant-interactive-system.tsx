@@ -38,7 +38,7 @@ export function HomeAssistantInteractiveSystem({
   const sceneNodes = useScene((state) => state.nodes)
   const sceneCollections = useScene((state) => state.collections ?? {})
   const setControlValue = useInteractive((state) => state.setControlValue)
-  const pendingCollectionActionTimeoutsRef = useRef<Record<string, number>>({})
+  const pendingActionTimeoutsRef = useRef<Record<string, number>>({})
 
   const homeAssistantBindings = useMemo(
     () => getHomeAssistantBindingNodeMap(sceneNodes),
@@ -62,10 +62,10 @@ export function HomeAssistantInteractiveSystem({
       if (typeof window === 'undefined') {
         return
       }
-      for (const timeoutId of Object.values(pendingCollectionActionTimeoutsRef.current)) {
+      for (const timeoutId of Object.values(pendingActionTimeoutsRef.current)) {
         window.clearTimeout(timeoutId)
       }
-      pendingCollectionActionTimeoutsRef.current = {}
+      pendingActionTimeoutsRef.current = {}
     },
     [],
   )
@@ -110,13 +110,14 @@ export function HomeAssistantInteractiveSystem({
         }
       }
 
-      const existingTimeoutId = pendingCollectionActionTimeoutsRef.current[member.collectionId]
+      const pendingActionKey = `${member.collectionId}:${member.id}:${source}`
+      const existingTimeoutId = pendingActionTimeoutsRef.current[pendingActionKey]
       if (existingTimeoutId) {
         window.clearTimeout(existingTimeoutId)
       }
 
       const delayMs = request.kind === 'range' ? 120 : 0
-      pendingCollectionActionTimeoutsRef.current[member.collectionId] = window.setTimeout(() => {
+      pendingActionTimeoutsRef.current[pendingActionKey] = window.setTimeout(() => {
         if (onHomeAssistantDeviceAction) {
           void Promise.resolve(
             onHomeAssistantDeviceAction({
@@ -134,7 +135,7 @@ export function HomeAssistantInteractiveSystem({
             }
           }, 220)
         }
-        delete pendingCollectionActionTimeoutsRef.current[member.collectionId]
+        delete pendingActionTimeoutsRef.current[pendingActionKey]
       }, delayMs)
     },
     [
