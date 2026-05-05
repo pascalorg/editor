@@ -10,12 +10,12 @@ import type {
   HomeAssistantCapabilityCategory,
   HomeAssistantDiscoveredDevice,
   HomeAssistantLink,
-} from '../../lib/home-assistant'
+} from '../home-assistant'
 import {
   getHomeAssistantAvailableActionPresentation,
   getHomeAssistantCapabilityCategory,
   toHomeAssistantLink,
-} from '../../lib/home-assistant'
+} from '../home-assistant'
 import {
   buildHomeAssistantActionServiceData,
   canRunHomeAssistantActionImmediately,
@@ -24,9 +24,9 @@ import {
   getHomeAssistantRenderableFields,
   type HomeAssistantFieldOption,
   normalizeHomeAssistantDiscoveredDevice,
-} from '../../lib/home-assistant-controls'
-import { cn } from '../../lib/utils'
-import { HomeAssistantActionIconView } from '../ui/home-assistant-action-icon'
+} from '../home-assistant-controls'
+import { cn } from '../utils'
+import { HomeAssistantActionIconView } from '../components/home-assistant-action-icon'
 
 type DeviceLoadState = 'idle' | 'loading' | 'ready' | 'error'
 

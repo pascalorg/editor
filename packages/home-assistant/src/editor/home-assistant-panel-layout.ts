@@ -1,11 +1,11 @@
-import type { HomeAssistantImportedResource } from '../../../lib/home-assistant-collections'
+import type { HomeAssistantImportedResource } from '../home-assistant-collections'
 import {
   compareGroupsBySpecificity,
   getResourceEntityId,
   isGroupResource,
   orderDeviceGroupsBySharedMembers,
   orderResourcesForNeighborGroups,
-} from '../../../lib/home-assistant-collections'
+} from '../home-assistant-collections'
 
 export type SmartHomePanelSize = {
   height: number

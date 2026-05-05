@@ -5,7 +5,7 @@ import {
   buildHomeAssistantOauthState,
   HOME_ASSISTANT_OAUTH_COOKIE,
   normalizeOptionalHomeAssistantUrl,
-} from '../../../../_lib/home-assistant-auth'
+} from '@pascal-app/home-assistant/server'
 
 export const runtime = 'nodejs'
 

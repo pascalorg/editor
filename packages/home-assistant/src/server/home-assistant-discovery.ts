@@ -8,11 +8,11 @@ import type {
   HomeAssistantCapabilityCategory,
   HomeAssistantDiscoveredDevice,
   HomeAssistantServiceTargetFilter,
-} from '../../../../packages/editor/src/lib/home-assistant'
+} from '../home-assistant'
 import {
   getHomeAssistantAvailableActionPresentation,
   getHomeAssistantCapabilityCategory,
-} from '../../../../packages/editor/src/lib/home-assistant'
+} from '../home-assistant'
 import {
   type HomeAssistantEntityState,
   type HomeAssistantServerConfig,

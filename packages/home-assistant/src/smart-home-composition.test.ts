@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type {
   CollectionId,
+} from '@pascal-app/core/schema'
+import type {
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
-} from '@pascal-app/core/schema'
-import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
+} from './home-assistant-binding'
+import { normalizeHomeAssistantCollectionBinding } from './home-assistant-binding'
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,
   getDurableSmartHomeRoomControlTileGroups,

@@ -7,6 +7,11 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
+import {
+  type HomeAssistantDeviceActionDispatch,
+  HomeAssistantInteractiveSystem,
+  HomeAssistantPlacementGroundSystem,
+} from '@pascal-app/home-assistant/editor'
 import { type HoverStyles, useViewer, Viewer } from '@pascal-app/viewer'
 import {
   memo,
@@ -61,11 +66,6 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
-import {
-  type HomeAssistantDeviceActionDispatch,
-  HomeAssistantInteractiveSystem,
-} from './home-assistant-interactive-system'
-import { HomeAssistantPlacementGroundSystem } from './home-assistant-placement-ground-system'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
@@ -596,6 +596,8 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isFirstPersonMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
+  const smartHomeOverlayVisibility = useEditor((s) => s.smartHomeOverlayVisibility)
+
   return (
     <>
       {!isFirstPersonMode && <SelectionManager />}
@@ -621,6 +623,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <HomeAssistantPlacementGroundSystem />
       <HomeAssistantInteractiveSystem
         onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
+        overlayVisibility={smartHomeOverlayVisibility}
       />
     </>
   )
@@ -968,6 +971,7 @@ export default function Editor({
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const smartHomeOverlayVisibility = useEditor((s) => s.smartHomeOverlayVisibility)
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
 
@@ -1093,6 +1097,7 @@ export default function Editor({
       <PresetThumbnailGenerator />
       <HomeAssistantInteractiveSystem
         onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
+        overlayVisibility={smartHomeOverlayVisibility}
       />
     </Viewer>
   )

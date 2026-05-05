@@ -44,6 +44,10 @@ function getStringArray(value: unknown) {
     : []
 }
 
+function isCollectionAttachmentNode(node: AnyNode) {
+  return Boolean(getCollectionAttachmentNodeCollectionId(node))
+}
+
 function normalizeInputRootNodeIds(
   rootNodeIds: unknown,
   nodes: Record<AnyNodeId, AnyNode>,
@@ -59,7 +63,7 @@ function normalizeInputRootNodeIds(
     }
 
     const node = nodes[nodeId as AnyNodeId]
-    if (!node || node.type === 'home-assistant-binding') {
+    if (!node || isCollectionAttachmentNode(node)) {
       return []
     }
 
@@ -444,7 +448,7 @@ function collectReachableNodeIds(
 }
 
 function isDetachedDurableNode(node: AnyNode) {
-  return node.type === 'home-assistant-binding'
+  return isCollectionAttachmentNode(node)
 }
 
 export type SceneState = {
@@ -507,12 +511,6 @@ function getCollectionIdsReferencedByAttachmentNodes(nodes: Record<AnyNodeId, An
     const collectionId = getCollectionAttachmentNodeCollectionId(node)
     if (collectionId) {
       referencedCollectionIds.add(collectionId)
-    }
-    if (
-      node.type === 'home-assistant-binding' &&
-      typeof (node as { collectionId?: unknown }).collectionId === 'string'
-    ) {
-      referencedCollectionIds.add((node as { collectionId: CollectionId }).collectionId)
     }
   }
 
@@ -577,7 +575,7 @@ function normalizeCollectionAttachmentNodes(
   let changed = false
 
   for (const [storedNodeId, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
-    if (node.type === 'home-assistant-binding') {
+    if (isCollectionAttachmentNode(node)) {
       continue
     }
 
@@ -655,7 +653,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         const cleanedNodes = { ...patchedNodes }
         for (const node of Object.values(cleanedNodes)) {
           if (
-            node.type !== 'home-assistant-binding' &&
+            !isCollectionAttachmentNode(node) &&
             node.parentId &&
             !cleanedNodes[node.parentId]
           ) {

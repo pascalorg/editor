@@ -10,9 +10,11 @@
     "./collections": "./src/home-assistant-collections.ts",
     "./connect": "./src/home-assistant-connect.ts",
     "./controls": "./src/home-assistant-controls.ts",
+    "./editor": "./src/editor/index.ts",
     "./lovelace-export": "./src/home-assistant-lovelace-export.ts",
     "./placement-ground": "./src/home-assistant-placement-ground.ts",
     "./runtime": "./src/index.ts",
+    "./server": "./src/server/index.ts",
     "./smart-home-composition": "./src/smart-home-composition.ts"
   },
   "scripts": {
@@ -31,9 +33,11 @@
     "@pascal-app/core": "^0.6.0",
     "@pascal-app/viewer": "^0.6.0",
     "@pascal/typescript-config": "*",
+    "@types/node": "^22.19.12",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/three": "^0.184.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "zod": "^4.3.5"
   }
 }

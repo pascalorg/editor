@@ -3,11 +3,11 @@ import { promisify } from 'node:util'
 import type {
   HomeAssistantActionRequest,
   HomeAssistantCollectionBinding,
-} from '@pascal-app/core/schema'
+} from '../home-assistant-binding'
 import type {
   HomeAssistantActionKind,
   HomeAssistantLink,
-} from '../../../../packages/editor/src/lib/home-assistant'
+} from '../home-assistant'
 import { refreshHomeAssistantAccessToken } from './home-assistant-auth'
 import {
   clearLinkedHomeAssistantProfile,

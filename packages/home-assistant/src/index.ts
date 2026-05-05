@@ -25,6 +25,7 @@ export {
   selectRoomControlGroupSource,
 } from './room-overlay/room-control-model'
 export type { SmartHomeOverlayVisibility } from './types'
+export * from './home-assistant-binding'
 
 export * from './home-assistant'
 export * from './home-assistant-binding-presentation'

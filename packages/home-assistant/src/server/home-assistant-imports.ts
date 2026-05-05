@@ -2,12 +2,12 @@ import type {
   HomeAssistantAction,
   HomeAssistantCollectionCapability,
   HomeAssistantResourceKind,
-} from '@pascal-app/core/schema'
-import type { HomeAssistantImportedResource } from '../../../../packages/editor/src/lib/home-assistant-collections'
+} from '../home-assistant-binding'
+import type { HomeAssistantImportedResource } from '../home-assistant-collections'
 import {
   isHiddenHomeAssistantGroupResourceId,
   toImportedEntityResource,
-} from '../../../../packages/editor/src/lib/home-assistant-collections'
+} from '../home-assistant-collections'
 import { discoverHomeAssistantDevices } from './home-assistant-discovery'
 import type { HomeAssistantEntityState, HomeAssistantServerConfig } from './home-assistant-server'
 import { listEntityStates } from './home-assistant-server'

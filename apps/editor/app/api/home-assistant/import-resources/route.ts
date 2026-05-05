@@ -1,8 +1,8 @@
-import { listImportableHomeAssistantResources } from '../../../_lib/home-assistant-imports'
+import { listImportableHomeAssistantResources } from '@pascal-app/home-assistant/server'
 import {
   hasHomeAssistantServerConfig,
   resolveHomeAssistantServerConfig,
-} from '../../../_lib/home-assistant-server'
+} from '@pascal-app/home-assistant/server'
 
 export const runtime = 'nodejs'
 

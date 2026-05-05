@@ -1,13 +1,13 @@
 import type {
   HomeAssistantActionRequest,
   HomeAssistantCollectionBinding,
-} from '@pascal-app/core/schema'
-import { getHomeAssistantLink } from '../../../../../../packages/editor/src/lib/home-assistant'
+} from '@pascal-app/home-assistant'
+import { getHomeAssistantLink } from '@pascal-app/home-assistant'
 import {
   resolveHomeAssistantServerConfig,
   runHomeAssistantCollectionAction,
   runHomeAssistantDeviceAction,
-} from '../../../_lib/home-assistant-server'
+} from '@pascal-app/home-assistant/server'
 
 export const runtime = 'nodejs'
 

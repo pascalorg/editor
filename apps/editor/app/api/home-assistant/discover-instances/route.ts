@@ -1,4 +1,4 @@
-import { discoverHomeAssistantInstances } from '../../../_lib/home-assistant-instance-discovery'
+import { discoverHomeAssistantInstances } from '@pascal-app/home-assistant/server'
 
 export const runtime = 'nodejs'
 

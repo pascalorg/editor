@@ -1,10 +1,12 @@
 import type {
   CollectionId,
+} from '@pascal-app/core/schema'
+import type {
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
   HomeAssistantRoomControlComposition,
-} from '@pascal-app/core/schema'
-import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
+} from './home-assistant-binding'
+import { normalizeHomeAssistantCollectionBinding } from './home-assistant-binding'
 
 type SmartHomeBindingPresentationWithLegacy = HomeAssistantCollectionBinding['presentation'] & {
   rtsExcludedResourceIds?: string[]

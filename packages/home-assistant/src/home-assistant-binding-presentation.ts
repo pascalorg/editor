@@ -2,8 +2,8 @@ import type { AnyNode, CollectionId } from '@pascal-app/core'
 import type {
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
-} from '@pascal-app/core/schema'
-import { normalizeHomeAssistantCollectionBinding } from '@pascal-app/core/schema'
+} from './home-assistant-binding'
+import { normalizeHomeAssistantCollectionBinding } from './home-assistant-binding'
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,
   cloneSmartHomeResourceBinding,

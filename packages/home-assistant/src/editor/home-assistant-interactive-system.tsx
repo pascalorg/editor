@@ -25,9 +25,9 @@ import {
   getBindingAfterDeviceResourceCopyToGroup,
   getBindingAfterDeviceResourceRemovalFromGroup,
   getBindingAfterRoomGrouping,
-} from '../../lib/home-assistant-binding-presentation'
-import { requestSceneImmediateSave } from '../../lib/scene'
-import useEditor from '../../store/use-editor'
+} from '../home-assistant-binding-presentation'
+import { requestSceneImmediateSave } from './editor-panel-adapter'
+import { DEFAULT_SMART_HOME_OVERLAY_VISIBILITY, type SmartHomeOverlayVisibility } from '../types'
 
 export type HomeAssistantDeviceActionDispatch = {
   binding: HomeAssistantCollectionBinding
@@ -37,17 +37,18 @@ export type HomeAssistantDeviceActionDispatch = {
 
 type HomeAssistantInteractiveSystemProps = {
   onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
+  overlayVisibility?: SmartHomeOverlayVisibility
 }
 
 export function HomeAssistantInteractiveSystem({
   onHomeAssistantDeviceAction,
+  overlayVisibility = DEFAULT_SMART_HOME_OVERLAY_VISIBILITY,
 }: HomeAssistantInteractiveSystemProps = {}) {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const sceneNodes = useScene((state) => state.nodes)
   const sceneCollections = useScene((state) => state.collections ?? {})
   const updateNode = useScene((state) => state.updateNode)
   const setControlValue = useInteractive((state) => state.setControlValue)
-  const smartHomeOverlayVisibility = useEditor((state) => state.smartHomeOverlayVisibility)
   const pendingCollectionActionTimeoutsRef = useRef<Record<string, number>>({})
 
   const homeAssistantBindings = useMemo(
@@ -62,14 +63,14 @@ export function HomeAssistantInteractiveSystem({
         collections: sceneCollections,
         sceneNodes,
         selectedLevelId,
-        visibility: smartHomeOverlayVisibility,
+        visibility: overlayVisibility,
       }),
     [
       homeAssistantBindings,
       sceneCollections,
       sceneNodes,
       selectedLevelId,
-      smartHomeOverlayVisibility,
+      overlayVisibility,
     ],
   )
 

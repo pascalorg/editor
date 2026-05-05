@@ -18,18 +18,18 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { HomeAssistantConnectivityPanel } from '@pascal-app/home-assistant/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { getHomeAssistantLink } from '../../lib/home-assistant'
+import { getHomeAssistantLink } from '@pascal-app/home-assistant'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
-import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [

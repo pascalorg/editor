@@ -5,7 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Plane, Vector2, Vector3 } from 'three'
-import { registerHomeAssistantGroundResolver } from '../../lib/home-assistant-placement-ground'
+import { registerHomeAssistantGroundResolver } from '../home-assistant-placement-ground'
 
 export function HomeAssistantPlacementGroundSystem() {
   const camera = useThree((state) => state.camera)

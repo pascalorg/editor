@@ -40,6 +40,7 @@ import {
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
+import { HomeAssistantConnectivityPanel } from '@pascal-app/home-assistant/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Command } from 'lucide-react'
 import {
@@ -60,7 +61,7 @@ import {
   rotatePlanVector as rotateSharedPlanVector,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
 } from '../../lib/floorplan'
-import { getHomeAssistantLink } from '../../lib/home-assistant'
+import { getHomeAssistantLink } from '@pascal-app/home-assistant'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -102,7 +103,6 @@ import {
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
-import { HomeAssistantConnectivityPanel } from './home-assistant-connectivity-panel'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
 import { useFloorplanSceneData } from './use-floorplan-scene-data'

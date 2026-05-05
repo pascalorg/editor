@@ -1,10 +1,10 @@
 'use client'
 
 import { Icon } from '@iconify/react'
+import type { HomeAssistantActionIcon } from '@pascal-app/home-assistant'
+import { HomeAssistantActionIconView } from '@pascal-app/home-assistant/editor'
 import { Copy, Move, Spline, Trash2 } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
-import type { HomeAssistantActionIcon } from '../../lib/home-assistant'
-import { HomeAssistantActionIconView } from '../ui/home-assistant-action-icon'
 
 type NodeActionMenuProps = {
   extraActionIcon?: HomeAssistantActionIcon | 'connectivity'

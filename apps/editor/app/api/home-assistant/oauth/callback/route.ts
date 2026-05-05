@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server'
 import {
   exchangeAuthorizationCode,
   HOME_ASSISTANT_OAUTH_COOKIE,
-} from '../../../../_lib/home-assistant-auth'
-import { writeLinkedHomeAssistantProfile } from '../../../../_lib/home-assistant-linked-profile'
+} from '@pascal-app/home-assistant/server'
+import { writeLinkedHomeAssistantProfile } from '@pascal-app/home-assistant/server'
 
 export const runtime = 'nodejs'
 

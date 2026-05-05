@@ -1,4 +1,4 @@
-import { clearLinkedHomeAssistantProfile } from '../../../_lib/home-assistant-linked-profile'
+import { clearLinkedHomeAssistantProfile } from '@pascal-app/home-assistant/server'
 
 export const runtime = 'nodejs'
 

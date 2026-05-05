@@ -50,7 +50,7 @@ import {
   WindArrowDown,
 } from 'lucide-react'
 import type { ComponentProps } from 'react'
-import type { HomeAssistantActionIcon } from '../../lib/home-assistant'
+import type { HomeAssistantActionIcon } from '../home-assistant'
 
 type HomeAssistantActionIconProps = {
   className?: string

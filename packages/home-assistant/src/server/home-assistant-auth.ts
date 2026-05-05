@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import type { NextRequest } from 'next/server'
 
 export const HOME_ASSISTANT_OAUTH_COOKIE = 'pascal_ha_oauth'
 
@@ -16,6 +15,15 @@ export type HomeAssistantTokenResponse = {
   expires_in: number
   refresh_token?: string
   token_type: string
+}
+
+type HomeAssistantRequestLike = {
+  headers: {
+    get(name: string): string | null
+  }
+  nextUrl: {
+    origin: string
+  }
 }
 
 function normalizeUrlValue(value: string) {
@@ -38,7 +46,7 @@ export function normalizeOptionalHomeAssistantUrl(value: string | null | undefin
   return normalizeHomeAssistantUrl(value)
 }
 
-export function getRequestOrigin(request: NextRequest) {
+export function getRequestOrigin(request: HomeAssistantRequestLike) {
   const forwardedHost = request.headers.get('x-forwarded-host')
   const forwardedProto = request.headers.get('x-forwarded-proto')
   if (forwardedHost && forwardedProto) {
@@ -48,7 +56,7 @@ export function getRequestOrigin(request: NextRequest) {
 }
 
 export function buildHomeAssistantOauthState(
-  request: NextRequest,
+  request: HomeAssistantRequestLike,
   instanceUrl: string,
   externalUrl: string | null,
 ): HomeAssistantOauthCookieState {

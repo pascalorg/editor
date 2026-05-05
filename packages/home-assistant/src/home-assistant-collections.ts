@@ -3,18 +3,18 @@ import type {
   AnyNodeId,
   Collection,
   CollectionId,
+  ItemNode,
+} from '@pascal-app/core/schema'
+import { normalizeCollection } from '@pascal-app/core/schema'
+import type {
   HomeAssistantAction,
   HomeAssistantActionField,
   HomeAssistantBindingPresentation,
   HomeAssistantCollectionBinding,
   HomeAssistantCollectionCapability,
   HomeAssistantResourceBinding,
-  ItemNode,
-} from '@pascal-app/core/schema'
-import {
-  normalizeCollection,
-  normalizeHomeAssistantCollectionBinding,
-} from '@pascal-app/core/schema'
+} from './home-assistant-binding'
+import { normalizeHomeAssistantCollectionBinding } from './home-assistant-binding'
 import type {
   HomeAssistantAvailableAction,
   HomeAssistantAvailableActionField,
