@@ -49,6 +49,7 @@ export type GroupIntensitySegment = {
 
 export type RoomOverlayNode = {
   anchorNodeIds: AnyNodeId[]
+  collectionId?: CollectionId
   controlGroups: RoomControlGroup[]
   id: string
   iconOnly?: boolean
@@ -76,6 +77,7 @@ export type RoomControlOverlayProps = {
   onCopyRoomControlToRoom?: (
     sourceCollectionId: CollectionId,
     targetCollectionId: CollectionId,
+    sourceResourceId?: string,
   ) => void
   onRemoveRoomControlFromRoom?: (member: RoomControlTile) => void
   onRoomControlChange?: (payload: RoomControlChange) => void

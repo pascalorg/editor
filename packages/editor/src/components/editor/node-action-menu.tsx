@@ -1,13 +1,11 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import type { HomeAssistantActionIcon } from '@pascal-app/home-assistant'
-import { HomeAssistantActionIconView } from '@pascal-app/home-assistant/editor'
 import { Copy, Move, Spline, Trash2 } from 'lucide-react'
-import type { MouseEventHandler, PointerEventHandler } from 'react'
+import type { MouseEventHandler, PointerEventHandler, ReactNode } from 'react'
 
 type NodeActionMenuProps = {
-  extraActionIcon?: HomeAssistantActionIcon | 'connectivity'
+  extraActionIcon?: ReactNode
   extraActionLabel?: string
   onAddHole?: MouseEventHandler<HTMLButtonElement>
   onDelete?: MouseEventHandler<HTMLButtonElement>
@@ -85,7 +83,7 @@ export function NodeActionMenu({
           title={extraActionLabel}
           type="button"
         >
-          <HomeAssistantActionIconView icon={extraActionIcon ?? 'connectivity'} />
+          {extraActionIcon}
         </button>
       )}
       {onAddHole && (

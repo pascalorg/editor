@@ -5,11 +5,7 @@ import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
-import {
-  generateCollectionId,
-  getCollectionAttachmentNodeCollectionId,
-  normalizeCollection,
-} from '../schema/collections'
+import { generateCollectionId } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -42,39 +38,6 @@ function getStringArray(value: unknown) {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : []
-}
-
-function isCollectionAttachmentNode(node: AnyNode) {
-  return Boolean(getCollectionAttachmentNodeCollectionId(node))
-}
-
-function normalizeInputRootNodeIds(
-  rootNodeIds: unknown,
-  nodes: Record<AnyNodeId, AnyNode>,
-): AnyNodeId[] {
-  if (!Array.isArray(rootNodeIds)) {
-    return []
-  }
-
-  const seen = new Set<AnyNodeId>()
-  return rootNodeIds.flatMap((nodeId) => {
-    if (typeof nodeId !== 'string') {
-      return []
-    }
-
-    const node = nodes[nodeId as AnyNodeId]
-    if (!node || isCollectionAttachmentNode(node)) {
-      return []
-    }
-
-    const typedNodeId = nodeId as AnyNodeId
-    if (seen.has(typedNodeId)) {
-      return []
-    }
-
-    seen.add(typedNodeId)
-    return [typedNodeId]
-  })
 }
 
 function getVector3(value: unknown, fallback: [number, number, number]): [number, number, number] {
@@ -448,7 +411,7 @@ function collectReachableNodeIds(
 }
 
 function isDetachedDurableNode(node: AnyNode) {
-  return isCollectionAttachmentNode(node)
+  return (node as { type?: string }).type === 'home-assistant-binding'
 }
 
 export type SceneState = {
@@ -472,11 +435,7 @@ export type SceneState = {
   loadScene: () => void
   clearScene: () => void
   unloadScene: () => void
-  setScene: (
-    nodes: Record<AnyNodeId, AnyNode>,
-    rootNodeIds: AnyNodeId[],
-    collections?: Record<CollectionId, Collection>,
-  ) => void
+  setScene: (nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -502,114 +461,6 @@ export type SceneState = {
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
-}
-
-function getCollectionIdsReferencedByAttachmentNodes(nodes: Record<AnyNodeId, AnyNode>) {
-  const referencedCollectionIds = new Set<CollectionId>()
-
-  for (const node of Object.values(nodes)) {
-    const collectionId = getCollectionAttachmentNodeCollectionId(node)
-    if (collectionId) {
-      referencedCollectionIds.add(collectionId)
-    }
-  }
-
-  return referencedCollectionIds
-}
-
-function normalizeCollectionsRecord(
-  collections: Record<CollectionId, Collection> | undefined,
-  nodes: Record<AnyNodeId, AnyNode>,
-) {
-  const referencedCollectionIds = getCollectionIdsReferencedByAttachmentNodes(nodes)
-
-  const normalizedCollections = Object.fromEntries(
-    Object.entries(collections ?? {}).flatMap(([id, collection]) => {
-      const normalizedNodeIds = Array.from(
-        new Set(collection.nodeIds.filter((nodeId) => Boolean(nodes[nodeId]))),
-      ) as AnyNodeId[]
-
-      if (normalizedNodeIds.length === 0 && !referencedCollectionIds.has(id as CollectionId)) {
-        return []
-      }
-
-      return [
-        [id as CollectionId, normalizeCollection({ ...collection, nodeIds: normalizedNodeIds })],
-      ]
-    }),
-  ) as Record<CollectionId, Collection>
-
-  if (Object.keys(normalizedCollections).length === 0) {
-    return normalizedCollections
-  }
-
-  for (const [collectionId, collection] of Object.entries(normalizedCollections)) {
-    for (const nodeId of collection.nodeIds) {
-      const node = nodes[nodeId]
-      if (!(node && node.type === 'item')) {
-        continue
-      }
-
-      const existingIds = Array.isArray(node.collectionIds) ? node.collectionIds : []
-      if (existingIds.includes(collectionId as CollectionId)) {
-        continue
-      }
-
-      nodes[nodeId] = {
-        ...node,
-        collectionIds: [...existingIds, collectionId as CollectionId],
-      } as AnyNode
-    }
-  }
-
-  return normalizedCollections
-}
-
-function normalizeCollectionAttachmentNodes(
-  nodes: Record<AnyNodeId, AnyNode>,
-  collections: Record<CollectionId, Collection>,
-  rootNodeIds: AnyNodeId[],
-) {
-  const nextNodes = { ...nodes }
-  const nextRootNodeIds = [...rootNodeIds]
-  let changed = false
-
-  for (const [storedNodeId, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
-    if (isCollectionAttachmentNode(node)) {
-      continue
-    }
-
-    const collectionId = getCollectionAttachmentNodeCollectionId(node)
-    if (!collectionId) {
-      continue
-    }
-
-    if (node.id !== storedNodeId) {
-      nextNodes[storedNodeId] = { ...node, id: storedNodeId } as AnyNode
-      changed = true
-    }
-
-    const resources = (node as { resources?: unknown[] }).resources ?? []
-    const hasCollection = Boolean(collections[collectionId])
-    const hasResources = resources.length > 0
-
-    if (!(hasCollection && hasResources)) {
-      delete nextNodes[storedNodeId]
-      const rootIndex = nextRootNodeIds.indexOf(storedNodeId)
-      if (rootIndex >= 0) {
-        nextRootNodeIds.splice(rootIndex, 1)
-      }
-      changed = true
-      continue
-    }
-
-    if (!nextRootNodeIds.includes(storedNodeId)) {
-      nextRootNodeIds.push(storedNodeId)
-      changed = true
-    }
-  }
-
-  return changed ? { nodes: nextNodes, rootNodeIds: nextRootNodeIds } : { nodes, rootNodeIds }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -645,18 +496,14 @@ const useScene: UseSceneStore = create<SceneState>()(
         get().loadScene() // Default scene
       },
 
-      setScene: (nodes, rootNodeIds, collections) => {
+      setScene: (nodes, rootNodeIds) => {
         // Apply backward compatibility migrations
         const patchedNodes = migrateNodes(nodes)
 
         // Remove orphans: nodes whose parentId points to a non-existent node
         const cleanedNodes = { ...patchedNodes }
         for (const node of Object.values(cleanedNodes)) {
-          if (
-            !isCollectionAttachmentNode(node) &&
-            node.parentId &&
-            !cleanedNodes[node.parentId]
-          ) {
+          if (!isDetachedDurableNode(node) && node.parentId && !cleanedNodes[node.parentId]) {
             console.warn(
               '[Scene] Removing orphan node',
               node.id,
@@ -668,36 +515,25 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
-        const inputRootNodeIds = normalizeInputRootNodeIds(rootNodeIds, cleanedNodes)
-        const normalizedCollections = normalizeCollectionsRecord(collections, cleanedNodes)
-        const normalizedScene = normalizeCollectionAttachmentNodes(
-          cleanedNodes,
-          normalizedCollections,
-          inputRootNodeIds,
-        )
-        const normalizedRootNodeIds = normalizeRootNodeIds(
-          normalizedScene.nodes,
-          normalizedScene.rootNodeIds,
-        )
-        const normalizedNodes = { ...normalizedScene.nodes }
-        const reachableNodeIds = collectReachableNodeIds(normalizedNodes, normalizedRootNodeIds)
+        const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
+        const reachableNodeIds = collectReachableNodeIds(cleanedNodes, normalizedRootNodeIds)
         if (normalizedRootNodeIds.length > 0) {
-          for (const node of Object.values(normalizedNodes)) {
+          for (const node of Object.values(cleanedNodes)) {
             if (reachableNodeIds.has(node.id as AnyNodeId)) continue
             if (isDetachedDurableNode(node)) continue
             console.warn('[Scene] Removing unreachable node', node.id)
-            delete normalizedNodes[node.id]
+            delete cleanedNodes[node.id]
           }
         }
 
         set({
-          nodes: normalizedNodes,
+          nodes: cleanedNodes,
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
-          collections: normalizedCollections,
+          collections: {},
         })
         // Mark all nodes as dirty to trigger re-validation
-        Object.values(normalizedNodes).forEach((node) => {
+        Object.values(cleanedNodes).forEach((node) => {
           get().markDirty(node.id)
         })
       },
@@ -763,7 +599,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       createCollection: (name, nodeIds = []) => {
         if (get().readOnly) return '' as CollectionId
         const id = generateCollectionId()
-        const collection = normalizeCollection({ id, name, nodeIds })
+        const collection: Collection = { id, name, nodeIds }
         set((state) => {
           const nextCollections = { ...state.collections, [id]: collection }
           // Denormalize: stamp collectionId onto each node
@@ -788,7 +624,6 @@ const useScene: UseSceneStore = create<SceneState>()(
           delete nextCollections[id]
           // Remove collectionId from all member nodes
           const nextNodes = { ...state.nodes }
-          let nextRootIds = [...state.rootNodeIds]
           for (const nodeId of col?.nodeIds ?? []) {
             const node = nextNodes[nodeId]
             if (!(node && 'collectionIds' in node)) continue
@@ -797,17 +632,7 @@ const useScene: UseSceneStore = create<SceneState>()(
               collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
             } as AnyNode
           }
-
-          for (const node of Object.values(nextNodes)) {
-            if (getCollectionAttachmentNodeCollectionId(node) !== id) {
-              continue
-            }
-
-            delete nextNodes[node.id]
-            nextRootIds = nextRootIds.filter((rootId) => rootId !== node.id)
-          }
-
-          return { collections: nextCollections, nodes: nextNodes, rootNodeIds: nextRootIds }
+          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
@@ -816,12 +641,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         set((state) => {
           const col = state.collections[id]
           if (!col) return state
-          return {
-            collections: {
-              ...state.collections,
-              [id]: normalizeCollection({ ...col, ...data }),
-            },
-          }
+          return { collections: { ...state.collections, [id]: { ...col, ...data } } }
         })
       },
 
@@ -832,7 +652,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           if (!col || col.nodeIds.includes(nodeId)) return state
           const nextCollections = {
             ...state.collections,
-            [id]: normalizeCollection({ ...col, nodeIds: [...col.nodeIds, nodeId] }),
+            [id]: { ...col, nodeIds: [...col.nodeIds, nodeId] },
           }
           const node = state.nodes[nodeId]
           if (!node) return { collections: nextCollections }
@@ -853,7 +673,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           if (!col) return state
           const nextCollections = {
             ...state.collections,
-            [id]: normalizeCollection({ ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) }),
+            [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
           }
           const node = state.nodes[nodeId]
           if (!(node && 'collectionIds' in node)) return { collections: nextCollections }

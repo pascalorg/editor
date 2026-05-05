@@ -22,21 +22,6 @@ export type SceneGraph = {
   rootNodeIds: string[]
 }
 
-export const SCENE_IMMEDIATE_SAVE_EVENT = 'pascal:scene-immediate-save'
-
-export function requestSceneImmediateSave() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const { collections, nodes, rootNodeIds } = useScene.getState()
-  window.dispatchEvent(
-    new CustomEvent(SCENE_IMMEDIATE_SAVE_EVENT, {
-      detail: { collections, nodes, rootNodeIds },
-    }),
-  )
-}
-
 type PersistedSelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
@@ -400,7 +385,10 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   if (hasUsableSceneGraph(sceneGraph)) {
     const { collections, nodes, rootNodeIds } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any, collections as any)
+    useScene.getState().setScene(nodes as any, rootNodeIds as any)
+    if (collections) {
+      useScene.setState({ collections: collections as any })
+    }
   } else {
     useScene.getState().clearScene()
   }
@@ -410,82 +398,8 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'
 
-function getUserManagedHomeAssistantCollectionIds(scene: SceneGraph | null | undefined) {
-  const collectionIds = new Set<string>()
-  if (!scene?.nodes) {
-    return collectionIds
-  }
-
-  for (const node of Object.values(scene.nodes)) {
-    if (!(node && typeof node === 'object')) {
-      continue
-    }
-
-    const record = node as {
-      collectionId?: unknown
-      presentation?: { rtsRoomControls?: { mode?: unknown } }
-      type?: unknown
-    }
-    if (
-      record.type === 'home-assistant-binding' &&
-      typeof record.collectionId === 'string' &&
-      record.presentation?.rtsRoomControls?.mode === 'user-managed'
-    ) {
-      collectionIds.add(record.collectionId)
-    }
-  }
-
-  return collectionIds
-}
-
-function homeAssistantCollectionIsUserManaged(scene: SceneGraph, collectionId: string) {
-  return Object.values(scene.nodes ?? {}).some((node) => {
-    if (!(node && typeof node === 'object')) {
-      return false
-    }
-
-    const record = node as {
-      collectionId?: unknown
-      presentation?: { rtsRoomControls?: { mode?: unknown } }
-      type?: unknown
-    }
-
-    return (
-      record.type === 'home-assistant-binding' &&
-      record.collectionId === collectionId &&
-      record.presentation?.rtsRoomControls?.mode === 'user-managed'
-    )
-  })
-}
-
-function wouldDowngradeStoredHomeAssistantRoomControls(scene: SceneGraph) {
-  const rawStoredScene = localStorage.getItem(LOCAL_STORAGE_KEY)
-  if (!rawStoredScene) {
-    return false
-  }
-
-  let storedScene: SceneGraph | null = null
-  try {
-    storedScene = JSON.parse(rawStoredScene) as SceneGraph
-  } catch {
-    return false
-  }
-
-  for (const collectionId of getUserManagedHomeAssistantCollectionIds(storedScene)) {
-    if (!homeAssistantCollectionIsUserManaged(scene, collectionId)) {
-      return true
-    }
-  }
-
-  return false
-}
-
 export function saveSceneToLocalStorage(scene: SceneGraph): void {
   try {
-    if (wouldDowngradeStoredHomeAssistantRoomControls(scene)) {
-      return
-    }
-
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scene))
   } catch {
     // Swallow storage quota errors

@@ -8,9 +8,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  type HomeAssistantDeviceActionDispatch,
-  HomeAssistantInteractiveSystem,
-  HomeAssistantPlacementGroundSystem,
+  dispatchHomeAssistantEditorDeviceAction,
+  HomeAssistantEditorSystems,
 } from '@pascal-app/home-assistant/editor'
 import { type HoverStyles, useViewer, Viewer } from '@pascal-app/viewer'
 import {
@@ -39,6 +38,7 @@ import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-sel
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
+import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
@@ -573,16 +573,6 @@ function PaintCursorBadge({
   )
 }
 
-function dispatchHomeAssistantDeviceAction(payload: HomeAssistantDeviceActionDispatch) {
-  void fetch('/api/home-assistant/device-action', {
-    body: JSON.stringify(payload),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    method: 'POST',
-  }).catch(() => {})
-}
-
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
 
 const ViewerSceneContent = memo(function ViewerSceneContent({
@@ -596,14 +586,12 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isFirstPersonMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
-  const smartHomeOverlayVisibility = useEditor((s) => s.smartHomeOverlayVisibility)
-
   return (
     <>
       {!isFirstPersonMode && <SelectionManager />}
-      {!isVersionPreviewMode && !isFirstPersonMode && <BoxSelectTool />}
-      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingActionMenu />}
-      {!isVersionPreviewMode && !isFirstPersonMode && <FloatingBuildingActionMenu />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
@@ -611,20 +599,16 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <CeilingSelectionAffordanceSystem />
       <RoofEditSystem />
       <StairEditSystem />
-      {!isLoading && !isFirstPersonMode && (
+      {!(isLoading || isFirstPersonMode) && (
         <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
       )}
-      {!(isLoading || isVersionPreviewMode) && !isFirstPersonMode && <ToolManager />}
+      {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
-      <HomeAssistantPlacementGroundSystem />
-      <HomeAssistantInteractiveSystem
-        onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
-        overlayVisibility={smartHomeOverlayVisibility}
-      />
+      <HomeAssistantEditorSystems onDeviceAction={dispatchHomeAssistantEditorDeviceAction} />
     </>
   )
 })
@@ -930,6 +914,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           </Viewer>
         </div>
       </div>
+      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
@@ -971,7 +956,6 @@ export default function Editor({
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
-  const smartHomeOverlayVisibility = useEditor((s) => s.smartHomeOverlayVisibility)
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
 
@@ -1095,9 +1079,9 @@ export default function Editor({
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      <HomeAssistantInteractiveSystem
-        onHomeAssistantDeviceAction={dispatchHomeAssistantDeviceAction}
-        overlayVisibility={smartHomeOverlayVisibility}
+      <HomeAssistantEditorSystems
+        firstPerson
+        onDeviceAction={dispatchHomeAssistantEditorDeviceAction}
       />
     </Viewer>
   )
@@ -1190,7 +1174,7 @@ export default function Editor({
             />
             {/* First-person overlay — rendered on top of normal layout */}
             {isFirstPersonMode && (
-              <div className="fixed inset-0 z-50 pointer-events-none">
+              <div className="pointer-events-none fixed inset-0 z-50">
                 <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
               </div>
             )}

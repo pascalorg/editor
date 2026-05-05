@@ -1,6 +1,5 @@
 import type {
   AnyNode,
-  AnyNodeId,
   BaseNode,
   BuildingNode,
   LevelNode,
@@ -17,10 +16,6 @@ type Outliner = {
   selectedObjects: Object3D[]
   hoveredObjects: Object3D[]
 }
-export type ItemTriggerEffect = {
-  fadeInMs: number
-  startedAtMs: number
-}
 type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
@@ -30,15 +25,10 @@ type ViewerState = {
   suppressNodeEvents: (durationMs?: number) => void
   interactiveOverlayActive: boolean
   setInteractiveOverlayActive: (active: boolean) => void
-  itemTriggerEffects: Record<AnyNodeId, ItemTriggerEffect>
-  triggerItemEffect: (itemId: AnyNodeId, fadeInMs?: number) => void
-  clearItemEffect: (itemId: AnyNodeId) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
-  hoveredIds: Array<AnyNode['id'] | ZoneNode['id']>
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
-  setHoveredIds: (ids: Array<AnyNode['id'] | ZoneNode['id']>) => void
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'

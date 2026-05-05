@@ -81,6 +81,11 @@ export function getSmartHomeRoomControlTileGroups({
   presentation: HomeAssistantCollectionBinding['presentation']
 }) {
   const legacyPresentation = presentation as SmartHomeBindingPresentationWithLegacy | undefined
+  const tileGroups = normalizeSmartHomeStringGroups(presentation?.rtsRoomControls?.tileGroups)
+  if (tileGroups.length > 0) {
+    return tileGroups
+  }
+
   const resourceGroups = getSmartHomeRoomControlResourceGroups(presentation)
   if (resourceGroups.length > 0) {
     return resourceGroups.map((group) =>
@@ -135,8 +140,9 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
     })
     .filter((group) => group.memberResourceIds.length > 0)
   const excluded = Array.from(new Set(excludedResourceIds))
+  const tileGroups = normalizeSmartHomeStringGroups(groups)
 
-  if (resourceGroups.length === 0 && excluded.length === 0 && !mode) {
+  if (resourceGroups.length === 0 && tileGroups.length === 0 && excluded.length === 0 && !mode) {
     return undefined
   }
 
@@ -144,6 +150,7 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
     ...(excluded.length > 0 ? { excludedResourceIds: excluded } : {}),
     ...(resourceGroups.length > 0 ? { groups: resourceGroups } : {}),
     ...(mode ? { mode } : {}),
+    ...(tileGroups.length > 0 ? { tileGroups } : {}),
   }
 }
 
@@ -157,9 +164,16 @@ export function getDurableSmartHomeRoomControlTileGroups({
   groups: unknown
 }) {
   const aliases = new Map<string, string>()
+  const resourceUseCounts = new Map<string, number>()
 
   for (const control of controls) {
-    const durableId = control.resourceId
+    if (control.resourceId) {
+      resourceUseCounts.set(control.resourceId, (resourceUseCounts.get(control.resourceId) ?? 0) + 1)
+    }
+  }
+
+  for (const control of controls) {
+    const durableId = control.resourceId && resourceUseCounts.get(control.resourceId) === 1
       ? getSmartHomeRoomControlTileId(collectionId, control.resourceId)
       : control.id
     aliases.set(control.id, durableId)

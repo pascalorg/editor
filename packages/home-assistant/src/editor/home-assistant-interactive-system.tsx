@@ -9,25 +9,30 @@ import {
   buildHomeAssistantRoomOverlayNodes,
   getActionBindingForMember,
   getCollectionDisplayName,
+  homeAssistantItemEffects,
+  HomeAssistantItemEffects,
 } from '@pascal-app/home-assistant'
 import {
   type AnyNode,
+  type AnyNodeId,
   type CollectionId,
-  getHomeAssistantBindingNodeMap,
-  type HomeAssistantActionRequest,
-  type HomeAssistantCollectionBinding,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { InteractiveSystem, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
+  getHomeAssistantBindingNodeMap,
+  type HomeAssistantActionRequest,
+  type HomeAssistantCollectionBinding,
+} from '../home-assistant-binding'
+import {
   getBindingAfterDeviceResourceCopyToGroup,
   getBindingAfterDeviceResourceRemovalFromGroup,
   getBindingAfterRoomGrouping,
 } from '../home-assistant-binding-presentation'
 import { requestSceneImmediateSave } from './editor-panel-adapter'
-import { DEFAULT_SMART_HOME_OVERLAY_VISIBILITY, type SmartHomeOverlayVisibility } from '../types'
+import { useHomeAssistantEditorStore } from './home-assistant-editor-store'
 
 export type HomeAssistantDeviceActionDispatch = {
   binding: HomeAssistantCollectionBinding
@@ -37,13 +42,12 @@ export type HomeAssistantDeviceActionDispatch = {
 
 type HomeAssistantInteractiveSystemProps = {
   onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
-  overlayVisibility?: SmartHomeOverlayVisibility
 }
 
 export function HomeAssistantInteractiveSystem({
   onHomeAssistantDeviceAction,
-  overlayVisibility = DEFAULT_SMART_HOME_OVERLAY_VISIBILITY,
 }: HomeAssistantInteractiveSystemProps = {}) {
+  const overlayVisibility = useHomeAssistantEditorStore((state) => state.overlayVisibility)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const sceneNodes = useScene((state) => state.nodes)
   const sceneCollections = useScene((state) => state.collections ?? {})
@@ -108,7 +112,7 @@ export function HomeAssistantInteractiveSystem({
         return
       }
 
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
+      updateNode(bindingNode.id as AnyNodeId, nextBinding as Partial<AnyNode>)
       requestSceneImmediateSave()
     },
     [homeAssistantBindings, roomOverlayNodes, updateNode],
@@ -135,7 +139,7 @@ export function HomeAssistantInteractiveSystem({
         return
       }
 
-      updateNode(targetBindingNode.id, nextBinding as Partial<AnyNode>)
+      updateNode(targetBindingNode.id as AnyNodeId, nextBinding as Partial<AnyNode>)
       requestSceneImmediateSave()
     },
     [homeAssistantBindings, updateNode],
@@ -161,7 +165,7 @@ export function HomeAssistantInteractiveSystem({
         return
       }
 
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
+      updateNode(bindingNode.id as AnyNodeId, nextBinding as Partial<AnyNode>)
       requestSceneImmediateSave()
     },
     [updateNode],
@@ -195,15 +199,14 @@ export function HomeAssistantInteractiveSystem({
         member.itemKind === 'tv' &&
         sceneNodes[visualItemId]?.type === 'item'
       ) {
-        const viewer = useViewer.getState()
         if (request.kind === 'toggle') {
           if (request.value) {
-            viewer.triggerItemEffect(visualItemId)
+            homeAssistantItemEffects.trigger(visualItemId)
           } else {
-            viewer.clearItemEffect(visualItemId)
+            homeAssistantItemEffects.clear(visualItemId)
           }
         } else if (request.kind === 'trigger') {
-          viewer.triggerItemEffect(visualItemId)
+          homeAssistantItemEffects.trigger(visualItemId)
         }
       }
 
@@ -246,6 +249,7 @@ export function HomeAssistantInteractiveSystem({
   return (
     <>
       <InteractiveSystem />
+      <HomeAssistantItemEffects />
       <RoomControlOverlay
         onApplyRoomGrouping={applyRoomGroupingToCollection}
         onCopyRoomControlToRoom={copyDeviceResourceToGroup}

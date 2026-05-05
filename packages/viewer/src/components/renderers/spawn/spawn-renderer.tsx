@@ -54,13 +54,13 @@ export const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
         <meshStandardMaterial {...materialProps} />
       </mesh>
 
-      <mesh position={[0, 0.36, 0]} {...handlers}>
-        <cylinderGeometry args={[0.08, 0.08, 0.54, 24]} />
+      <mesh position={[0, 0.41, 0]} {...handlers}>
+        <boxGeometry args={[0.3, 0.54, 0.16]} />
         <meshStandardMaterial {...materialProps} />
       </mesh>
 
-      <mesh position={[0, 0.68, 0]} {...handlers}>
-        <sphereGeometry args={[0.16, 24, 16]} />
+      <mesh position={[0, 0.83, 0]} {...handlers}>
+        <boxGeometry args={[0.18, 0.18, 0.18]} />
         <meshStandardMaterial {...materialProps} />
       </mesh>
     </group>

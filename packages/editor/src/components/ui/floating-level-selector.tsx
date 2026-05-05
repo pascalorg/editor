@@ -1,6 +1,24 @@
 'use client'
 
 import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
@@ -8,8 +26,15 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, MoreVertical, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Copy, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
+import {
+  type ButtonHTMLAttributes,
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   buildLevelDuplicateCreateOps,
@@ -96,12 +121,18 @@ function LevelInlineRename({
 function LevelRow({
   level,
   isSelected,
+  isDragging,
+  dragHandleProps,
+  dragHandleRef,
   onSelect,
   onDuplicate,
   onRequestDelete,
 }: {
   level: LevelNode
   isSelected: boolean
+  isDragging?: boolean
+  dragHandleProps?: ButtonHTMLAttributes<HTMLButtonElement>
+  dragHandleRef?: (element: HTMLButtonElement | null) => void
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onRequestDelete: () => void
@@ -121,13 +152,32 @@ function LevelRow({
         <div
           className={cn(
             'flex items-center rounded-lg transition-colors',
+            isDragging && 'bg-white/10 text-foreground shadow-lg',
             isSelected
               ? 'bg-white/10 text-foreground'
               : 'text-muted-foreground/70 hover:bg-white/5 hover:text-muted-foreground',
           )}
         >
           <button
-            className="flex min-w-0 flex-1 items-center justify-start px-2.5 py-1.5 font-medium text-xs"
+            {...dragHandleProps}
+            aria-label={`Reorder ${getLevelDisplayLabel(level)}`}
+            className={cn(
+              'ml-0.5 flex h-6 w-4 shrink-0 touch-none cursor-grab items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
+              isDragging && 'cursor-grabbing opacity-100',
+            )}
+            onClick={(e) => {
+              e.stopPropagation()
+              dragHandleProps?.onClick?.(e)
+            }}
+            ref={dragHandleRef}
+            title="Drag to reorder"
+            type="button"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+
+          <button
+            className="flex min-w-0 flex-1 items-center justify-start py-1.5 pr-2 pl-1 font-medium text-xs"
             onClick={onSelect}
             onDoubleClick={(e) => {
               e.stopPropagation()
@@ -201,6 +251,53 @@ function LevelRow({
   )
 }
 
+function SortableLevelRow({
+  level,
+  isSelected,
+  onSelect,
+  onDuplicate,
+  onRequestDelete,
+}: {
+  level: LevelNode
+  isSelected: boolean
+  onSelect: () => void
+  onDuplicate: (preset?: LevelDuplicatePreset) => void
+  onRequestDelete: () => void
+}) {
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: level.id })
+
+  const style: CSSProperties = {
+    opacity: isDragging ? 0.86 : undefined,
+    position: 'relative',
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 30 : undefined,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <LevelRow
+        dragHandleProps={{ ...attributes, ...listeners }}
+        dragHandleRef={setActivatorNodeRef}
+        isDragging={isDragging}
+        isSelected={isSelected}
+        level={level}
+        onDuplicate={onDuplicate}
+        onRequestDelete={onRequestDelete}
+        onSelect={onSelect}
+      />
+    </div>
+  )
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function FloatingLevelSelector() {
@@ -212,6 +309,15 @@ export function FloatingLevelSelector() {
   const updateNodes = useScene((s) => s.updateNodes)
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
+  const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 4 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
 
   const resolvedBuildingId = useScene((state) => {
     if (selectedBuildingId) return selectedBuildingId
@@ -318,9 +424,52 @@ export function FloatingLevelSelector() {
     [createNodes, levels, resolvedBuildingId, setSelection, updateNodes],
   )
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setDraggingLevelId(String(event.active.id))
+  }, [])
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setDraggingLevelId(null)
+
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+
+      const visualLevels = [...levels].reverse()
+      const oldIndex = visualLevels.findIndex((level) => level.id === active.id)
+      const newIndex = visualLevels.findIndex((level) => level.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return
+
+      const reorderedVisualLevels = arrayMove(visualLevels, oldIndex, newIndex)
+      const levelNumbersDescending = levels.map((level) => level.level).sort((a, b) => b - a)
+
+      const updates = reorderedVisualLevels
+        .map((level, index) => ({
+          id: level.id as AnyNodeId,
+          nextLevel: levelNumbersDescending[index],
+          data: { level: levelNumbersDescending[index] } as Partial<AnyNode>,
+        }))
+        .filter(({ id, nextLevel }) => {
+          const currentLevel = levels.find((level) => level.id === id)
+          return currentLevel?.level !== nextLevel
+        })
+        .map(({ id, data }) => ({ id, data }))
+
+      if (updates.length > 0) {
+        updateNodes(updates)
+      }
+    },
+    [levels, updateNodes],
+  )
+
+  const handleDragCancel = useCallback(() => {
+    setDraggingLevelId(null)
+  }, [])
+
   if (levels.length === 0) return null
 
   const reversedLevels = [...levels].reverse()
+  const sortableLevelIds = reversedLevels.map((level) => level.id)
 
   const addButtonClass =
     'absolute left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-neutral-800 text-muted-foreground/60 shadow-md transition-colors hover:bg-neutral-700 hover:text-foreground'
@@ -330,62 +479,76 @@ export function FloatingLevelSelector() {
       <div className="pointer-events-auto absolute top-14 left-3 z-20">
         <div className="relative">
           {/* Floating + at top edge */}
-          <button
-            className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
-            onClick={handleAddAbove}
-            title="Add level above"
-            type="button"
-          >
-            <Plus className="h-2.5 w-2.5" />
-          </button>
+          {!draggingLevelId && (
+            <button
+              className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
+              onClick={handleAddAbove}
+              title="Add level above"
+              type="button"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+          )}
 
           {/* Floating + at bottom edge */}
-          <button
-            className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
-            onClick={handleAddBelow}
-            title="Add level below"
-            type="button"
-          >
-            <Plus className="h-2.5 w-2.5" />
-          </button>
+          {!draggingLevelId && (
+            <button
+              className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
+              onClick={handleAddBelow}
+              title="Add level below"
+              type="button"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+          )}
 
           {/* Level list */}
-          <div className="flex flex-col gap-0.5 rounded-xl border border-border bg-background/90 p-1 shadow-2xl backdrop-blur-md">
-            {reversedLevels.map((level, i) => {
-              const isSelected = level.id === levelId
-              const sortedIndex = levels.indexOf(level)
-              const showGapBelow = i < reversedLevels.length - 1
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragCancel={handleDragCancel}
+            onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
+            sensors={sensors}
+          >
+            <SortableContext items={sortableLevelIds} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-0.5 rounded-xl border border-border bg-background/90 p-1 shadow-2xl backdrop-blur-md">
+                {reversedLevels.map((level, i) => {
+                  const isSelected = level.id === levelId
+                  const sortedIndex = levels.indexOf(level)
+                  const showGapBelow = i < reversedLevels.length - 1
 
-              return (
-                <div className="relative" key={level.id}>
-                  <LevelRow
-                    isSelected={isSelected}
-                    level={level}
-                    onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
-                    onRequestDelete={() => setDeletingLevel(level)}
-                    onSelect={() =>
-                      setSelection(
-                        resolvedBuildingId
-                          ? { buildingId: resolvedBuildingId, levelId: level.id }
-                          : { levelId: level.id },
-                      )
-                    }
-                  />
+                  return (
+                    <div className="relative" key={level.id}>
+                      <SortableLevelRow
+                        isSelected={isSelected}
+                        level={level}
+                        onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
+                        onRequestDelete={() => setDeletingLevel(level)}
+                        onSelect={() =>
+                          setSelection(
+                            resolvedBuildingId
+                              ? { buildingId: resolvedBuildingId, levelId: level.id }
+                              : { levelId: level.id },
+                          )
+                        }
+                      />
 
-                  {showGapBelow && (
-                    <button
-                      className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
-                      onClick={() => handleInsertBetween(sortedIndex - 1)}
-                      title="Insert level here"
-                      type="button"
-                    >
-                      <Plus className="h-2.5 w-2.5" />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                      {showGapBelow && !draggingLevelId && (
+                        <button
+                          className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
+                          onClick={() => handleInsertBetween(sortedIndex - 1)}
+                          title="Insert level here"
+                          type="button"
+                        >
+                          <Plus className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
 

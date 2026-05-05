@@ -8,7 +8,7 @@ import type {
   HomeAssistantActionRequest,
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
-} from '@pascal-app/core'
+} from '@pascal-app/home-assistant'
 import { getResourceEntityIds, summarizeResourceState } from './artifact'
 
 type CardActionTarget = {

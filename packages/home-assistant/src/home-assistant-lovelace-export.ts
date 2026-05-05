@@ -3,8 +3,8 @@ import type {
   AnyNodeId,
   Collection,
   CollectionId,
-  HomeAssistantCollectionBinding,
 } from '@pascal-app/core'
+import type { HomeAssistantCollectionBinding } from './home-assistant-binding'
 
 export type PascalLovelaceSceneArtifact = {
   version: 1

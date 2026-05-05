@@ -10,10 +10,11 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import { getScaledDimensions, sceneRegistry, useScene } from '@pascal-app/core'
-import { Vector3 } from 'three'
+import { Euler, Quaternion, Vector3 } from 'three'
 import {
   calculateCursorRotation,
   calculateItemRotation,
+  getGridAlignedDimensions,
   getSideFromNormal,
   isValidWallSideFace,
   snapToGrid,
@@ -43,9 +44,10 @@ export const floorStrategy = {
   move(ctx: PlacementContext, event: GridEvent): PlacementResult | null {
     if (ctx.state.surface !== 'floor') return null
 
-    const dims = ctx.draftItem
+    const rawDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    const dims = getGridAlignedDimensions(rawDims, ctx.asset.attachTo)
     const [dimX, , dimZ] = dims
     const rotY = ctx.draftItem?.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
@@ -80,7 +82,7 @@ export const floorStrategy = {
     const valid = validators.canPlaceOnFloor(
       ctx.levelId,
       pos,
-      getScaledDimensions(ctx.draftItem),
+      getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.rotation,
       [ctx.draftItem.id],
     ).valid
@@ -133,14 +135,15 @@ export const wallStrategy = {
     const z = snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
+    const rawDims = ctx.draftItem
+      ? getScaledDimensions(ctx.draftItem)
+      : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     const validation = validators.canPlaceOnWall(
       ctx.levelId,
       event.node.id,
       x,
       y,
-      ctx.draftItem
-        ? getScaledDimensions(ctx.draftItem)
-        : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS),
+      getGridAlignedDimensions(rawDims, attachTo),
       attachTo,
       side,
       [],
@@ -195,7 +198,7 @@ export const wallStrategy = {
       event.node.id,
       snappedX,
       snappedY,
-      getScaledDimensions(ctx.draftItem),
+      getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
       side,
       [ctx.draftItem.id],
@@ -239,7 +242,7 @@ export const wallStrategy = {
       ctx.state.wallId as WallNode['id'],
       ctx.gridPosition.x,
       ctx.gridPosition.y,
-      getScaledDimensions(ctx.draftItem),
+      getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
       ctx.draftItem.side,
       [ctx.draftItem.id],
@@ -301,11 +304,12 @@ export const ceilingStrategy = {
     const ceilingLevelId = resolveLevelId(event.node, nodes)
     if (ctx.levelId !== ceilingLevelId) return null
 
-    const dims = ctx.draftItem
+    const rawDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    const dims = getGridAlignedDimensions(rawDims, ctx.asset.attachTo)
     const [dimX, , dimZ] = dims
-    const itemHeight = dims[1]
+    const itemHeight = rawDims[1]
     const rotY = ctx.draftItem?.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
 
@@ -335,9 +339,10 @@ export const ceilingStrategy = {
     if (ctx.state.surface !== 'ceiling') return null
     if (!ctx.draftItem) return null
 
-    const dims = getScaledDimensions(ctx.draftItem)
+    const rawDims = getScaledDimensions(ctx.draftItem)
+    const dims = getGridAlignedDimensions(rawDims, ctx.draftItem.asset.attachTo)
     const [dimX, , dimZ] = dims
-    const itemHeight = dims[1]
+    const itemHeight = rawDims[1]
     const rotY = ctx.draftItem.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
 
@@ -375,7 +380,7 @@ export const ceilingStrategy = {
     const valid = validators.canPlaceOnCeiling(
       ctx.state.ceilingId as CeilingNode['id'],
       pos,
-      getScaledDimensions(ctx.draftItem),
+      getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.rotation,
       [ctx.draftItem.id],
     ).valid
@@ -453,8 +458,21 @@ export const itemSurfaceStrategy = {
 
     return {
       stateUpdate: { surface: 'item-surface', surfaceItemId: surfaceItem.id },
-      nodeUpdate: { position: [x, y, z], parentId: surfaceItem.id },
-      cursorRotationY: 0,
+      nodeUpdate: {
+        position: [x, y, z],
+        parentId: surfaceItem.id,
+        rotation: [
+          (ctx.draftItem?.rotation ?? [0, 0, 0])[0],
+          (() => {
+            const surfaceQuat = new Quaternion()
+            surfaceMesh.getWorldQuaternion(surfaceQuat)
+            const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
+            return ctx.currentCursorRotationY - surfaceWorldY
+          })(),
+          (ctx.draftItem?.rotation ?? [0, 0, 0])[2],
+        ] as [number, number, number],
+      },
+      cursorRotationY: ctx.currentCursorRotationY,
       gridPosition: [x, y, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       stopPropagation: true,
@@ -488,7 +506,7 @@ export const itemSurfaceStrategy = {
     return {
       gridPosition: [x, y, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
-      cursorRotationY: 0,
+      cursorRotationY: ctx.currentCursorRotationY,
       nodeUpdate: { position: [x, y, z] },
       stopPropagation: true,
       dirtyNodeId: null,
@@ -532,12 +550,14 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
 
   const attachTo = ctx.draftItem.asset.attachTo
 
+  const alignedDims = getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), attachTo)
+
   if (attachTo === 'ceiling') {
     if (ctx.state.surface !== 'ceiling' || !ctx.state.ceilingId) return false
     return validators.canPlaceOnCeiling(
       ctx.state.ceilingId as CeilingNode['id'],
       [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
-      getScaledDimensions(ctx.draftItem),
+      alignedDims,
       ctx.draftItem.rotation,
       [ctx.draftItem.id],
     ).valid
@@ -550,7 +570,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
       ctx.state.wallId as WallNode['id'],
       ctx.gridPosition.x,
       ctx.gridPosition.y,
-      getScaledDimensions(ctx.draftItem),
+      alignedDims,
       attachTo,
       ctx.draftItem.side,
       [ctx.draftItem.id],
@@ -561,7 +581,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   return validators.canPlaceOnFloor(
     ctx.levelId,
     [ctx.gridPosition.x, 0, ctx.gridPosition.z],
-    getScaledDimensions(ctx.draftItem),
+    alignedDims,
     ctx.draftItem.rotation,
     [ctx.draftItem.id],
   ).valid

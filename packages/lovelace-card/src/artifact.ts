@@ -4,11 +4,11 @@ import type {
   PascalLovelaceSceneArtifact,
   ResourceStateSummary,
 } from './types'
+import type { Collection } from '@pascal-app/core'
 import type {
-  Collection,
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
-} from '@pascal-app/core'
+} from '@pascal-app/home-assistant'
 
 export type ArtifactParseResult =
   | { artifact: PascalLovelaceSceneArtifact; error: null }

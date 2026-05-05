@@ -73,8 +73,9 @@ export const ZoneSystem = () => {
         obj.userData.__raycastDisabled = true
       }
 
-      // Keep the built-in zone labels hidden while the room-button HUD owns room naming.
-      const labelOpacity = '0'
+      // Labels: always visible on the current level (regardless of mode)
+      const showLabel = !!selectedLevelId && isOnSelectedLevel
+      const labelOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${zoneId}-label`)
       if (labelEl && labelEl.style.opacity !== labelOpacity) {
         labelEl.style.opacity = labelOpacity

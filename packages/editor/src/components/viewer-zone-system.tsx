@@ -34,8 +34,9 @@ export const ViewerZoneSystem = () => {
         }
       })
 
-      // Keep the built-in zone labels hidden while the room-button HUD owns room naming.
-      const targetOpacity = '0'
+      // Labels: always visible on the current level (regardless of mode or zone selection)
+      const showLabel = !!levelId && isOnSelectedLevel
+      const targetOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${id}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {
         labelEl.style.opacity = targetOpacity

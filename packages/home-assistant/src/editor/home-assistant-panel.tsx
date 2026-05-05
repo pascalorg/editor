@@ -105,6 +105,7 @@ import {
   downloadPascalLovelaceCardConfig,
 } from '../home-assistant-lovelace-export'
 import { requestSceneImmediateSave } from './editor-panel-adapter'
+import { useHomeAssistantEditorStore } from './home-assistant-editor-store'
 import { cn } from '../utils'
 import {
   clampSmartHomePanelSize,
@@ -147,17 +148,6 @@ type ActivePanel =
   | null
 
 export type HomeAssistantPanelProps = {
-  homeAssistantPairingResourceId: string | null
-  homeAssistantPairingTargetItemId: AnyNodeId | null
-  isSmartHomePanelOpen: boolean
-  setHomeAssistantPairingResourceId: (resourceId: string | null) => void
-  setHomeAssistantPairingTargetItemId: (itemId: AnyNodeId | null) => void
-  setSmartHomeOverlaySectionVisible: (
-    section: keyof SmartHomeOverlayVisibility,
-    visible: boolean,
-  ) => void
-  setSmartHomePanelOpen: (open: boolean) => void
-  smartHomeOverlayVisibility: SmartHomeOverlayVisibility
 }
 
 type ImportSectionKey = 'actions' | 'devices' | 'groups'
@@ -344,21 +334,32 @@ function getDeviceCategoryIcon(category: DeviceCategoryKey) {
   return <Link2 className="h-4 w-4" />
 }
 
-export function HomeAssistantPanel({
-  homeAssistantPairingResourceId,
-  homeAssistantPairingTargetItemId,
-  isSmartHomePanelOpen,
-  setHomeAssistantPairingResourceId,
-  setHomeAssistantPairingTargetItemId,
-  setSmartHomeOverlaySectionVisible,
-  setSmartHomePanelOpen,
-  smartHomeOverlayVisibility,
-}: HomeAssistantPanelProps) {
+export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
+  const homeAssistantPairingResourceId = useHomeAssistantEditorStore(
+    (state) => state.pairingResourceId,
+  )
+  const homeAssistantPairingTargetItemId = useHomeAssistantEditorStore(
+    (state) => state.pairingTargetItemId,
+  )
+  const isSmartHomePanelOpen = useHomeAssistantEditorStore((state) => state.isPanelOpen)
+  const setHomeAssistantPairingResourceId = useHomeAssistantEditorStore(
+    (state) => state.setPairingResourceId,
+  )
+  const setHomeAssistantPairingTargetItemId = useHomeAssistantEditorStore(
+    (state) => state.setPairingTargetItemId,
+  )
+  const setSmartHomeOverlaySectionVisible = useHomeAssistantEditorStore(
+    (state) => state.setOverlaySectionVisible,
+  )
+  const setSmartHomePanelOpen = useHomeAssistantEditorStore((state) => state.setPanelOpen)
+  const smartHomeOverlayVisibility = useHomeAssistantEditorStore(
+    (state) => state.overlayVisibility,
+  )
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const theme = useViewer((state) => state.theme)
   const setHoveredId = useViewer((state) => state.setHoveredId)
-  const setHoveredIds = useViewer((state) => state.setHoveredIds)
+  const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const nodes = useScene((state) => state.nodes)
   const collections = useScene((state) => state.collections)
   const createCollection = useScene((state) => state.createCollection)
@@ -367,6 +368,10 @@ export function HomeAssistantPanel({
   const createNode = useScene((state) => state.createNode)
   const updateNode = useScene((state) => state.updateNode)
   const deleteNode = useScene((state) => state.deleteNode)
+  const createHomeAssistantNode = (node: unknown) => createNode(node as AnyNode)
+  const updateHomeAssistantNode = (id: string, data: unknown) =>
+    updateNode(id as AnyNodeId, data as Partial<AnyNode>)
+  const deleteHomeAssistantNode = (id: string) => deleteNode(id as AnyNodeId)
 
   const pairingResourceId = homeAssistantPairingResourceId
   const pairingTargetItemId = homeAssistantPairingTargetItemId
@@ -952,17 +957,17 @@ export function HomeAssistantPanel({
         presentation: mergedPresentation,
         primaryResourceId: nextPrimaryResourceId,
         resources: mergedResources,
-      } as Partial<AnyNode>
+      }
 
       if (homeAssistantNodePatchMatches(existingBindingNode, nodePatch)) {
         return
       }
 
-      updateNode(existingBindingNode.id, nodePatch)
+      updateHomeAssistantNode(existingBindingNode.id, nodePatch)
       return
     }
 
-    createNode({
+    createHomeAssistantNode({
       ...nextNode,
     })
   }
@@ -991,9 +996,9 @@ export function HomeAssistantPanel({
           bindingNode.resources,
         )
         if (nextPresentation !== bindingNode.presentation) {
-          updateNode(bindingNode.id, {
+          updateHomeAssistantNode(bindingNode.id, {
             presentation: nextPresentation,
-          } as Partial<AnyNode>)
+          })
           requestSceneImmediateSave()
         }
         continue
@@ -1013,7 +1018,7 @@ export function HomeAssistantPanel({
       )
 
       if (!collection || nextResources.length === 0) {
-        deleteNode(bindingNode.id)
+        deleteHomeAssistantNode(bindingNode.id)
         requestSceneImmediateSave()
         continue
       }
@@ -1035,11 +1040,11 @@ export function HomeAssistantPanel({
       })
 
       if (!nextBinding) {
-        deleteNode(bindingNode.id)
+        deleteHomeAssistantNode(bindingNode.id)
         requestSceneImmediateSave()
         continue
       }
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
+      updateHomeAssistantNode(bindingNode.id, nextBinding)
       requestSceneImmediateSave()
     }
   }
@@ -1095,7 +1100,7 @@ export function HomeAssistantPanel({
       nextResources,
     )
     if (nextResources.length === 0) {
-      deleteNode(existingBindingNode.id)
+      deleteHomeAssistantNode(existingBindingNode.id)
       requestSceneImmediateSave()
       return
     }
@@ -1117,12 +1122,12 @@ export function HomeAssistantPanel({
     })
 
     if (!nextBinding) {
-      deleteNode(existingBindingNode.id)
+      deleteHomeAssistantNode(existingBindingNode.id)
       requestSceneImmediateSave()
       return
     }
 
-    updateNode(existingBindingNode.id, nextBinding as Partial<AnyNode>)
+    updateHomeAssistantNode(existingBindingNode.id, nextBinding)
     requestSceneImmediateSave()
   }
 
@@ -1157,7 +1162,7 @@ export function HomeAssistantPanel({
       return
     }
 
-    updateNode(existingBindingNode.id, hiddenBinding as Partial<AnyNode>)
+    updateHomeAssistantNode(existingBindingNode.id, hiddenBinding)
     requestSceneImmediateSave()
   }
 
@@ -1354,7 +1359,7 @@ export function HomeAssistantPanel({
         continue
       }
 
-      deleteNode(bindingNode.id)
+      deleteHomeAssistantNode(bindingNode.id)
       if (useScene.getState().collections[bindingNode.collectionId]) {
         deleteCollection(bindingNode.collectionId)
       }
@@ -1398,7 +1403,7 @@ export function HomeAssistantPanel({
       }
 
       if (nextResources.length === 0) {
-        deleteNode(bindingNode.id)
+        deleteHomeAssistantNode(bindingNode.id)
         continue
       }
 
@@ -1424,7 +1429,7 @@ export function HomeAssistantPanel({
         continue
       }
 
-      updateNode(bindingNode.id, nextBinding as Partial<AnyNode>)
+      updateHomeAssistantNode(bindingNode.id, nextBinding)
     }
   }, [deviceImports, homeAssistantBindings, updateNode])
 
@@ -1783,13 +1788,13 @@ export function HomeAssistantPanel({
     }
 
     setHoveredId(focusNodeId)
-    setHoveredIds(targetNodeIds as AnyNodeId[])
+    setPreviewSelectedIds(targetNodeIds as AnyNodeId[])
     emitter.emit('camera-controls:focus', { nodeId: focusNodeId })
   }
 
   const clearPreviewedCollection = () => {
     setHoveredId(null)
-    setHoveredIds([])
+    setPreviewSelectedIds([])
   }
 
   const handlePanelResizePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1944,7 +1949,7 @@ export function HomeAssistantPanel({
                 if (targetNodeIds.length > 0) {
                   const focusNodeId = ownerCollection.controlNodeId ?? targetNodeIds[0]
                   setHoveredId((focusNodeId as AnyNodeId | undefined) ?? null)
-                  setHoveredIds(targetNodeIds as AnyNodeId[])
+                  setPreviewSelectedIds(targetNodeIds as AnyNodeId[])
                 }
               }
             }}
@@ -2727,7 +2732,7 @@ export function HomeAssistantPanel({
                                         const focusNodeId =
                                           ownerCollection.controlNodeId ?? targetNodeIds[0]
                                         setHoveredId((focusNodeId as AnyNodeId | undefined) ?? null)
-                                        setHoveredIds(targetNodeIds as AnyNodeId[])
+                                        setPreviewSelectedIds(targetNodeIds as AnyNodeId[])
                                       }
                                     }
                                   }}

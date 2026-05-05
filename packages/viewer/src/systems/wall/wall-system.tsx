@@ -2,27 +2,40 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
-import useScene from '../../store/use-scene'
-import { getWallCurveFrameAt, getWallSurfacePolygon, isCurvedWall } from './wall-curve'
-import { DEFAULT_WALL_HEIGHT, getWallPlanFootprint, getWallThickness } from './wall-footprint'
 import {
   calculateLevelMiters,
+  type AnyNode,
+  type AnyNodeId,
+  type DoorNode,
   getAdjacentWallIds,
+  DEFAULT_WALL_HEIGHT,
+  getWallCurveFrameAt,
   getWallMiterBoundaryPoints,
+  getWallPlanFootprint,
+  getWallSurfacePolygon,
+  getWallThickness,
+  isCurvedWall,
   type Point2D,
   pointToKey,
+  resolveLevelId,
+  sceneRegistry,
+  spatialGridManager,
+  useScene,
+  type WallNode,
   type WallMiterData,
-} from './wall-mitering'
+  type WindowNode,
+} from '@pascal-app/core'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
 const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
 const WALL_FACE_NORMAL_Y_EPSILON = 0.6
 const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
+
+function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
+  ;(geometry as any).computeBoundsTree = computeBoundsTree
+  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+}
 
 type WallBoundaryEdgeTag = 'front' | 'back' | 'base'
 
@@ -495,8 +508,7 @@ export function generateExtrudedWall(
 
   // Create wall brush from geometry
   // Pre-compute BVH with new API to avoid deprecation warning
-  geometry.computeBoundsTree = computeBoundsTree
-  geometry.computeBoundsTree({ maxLeafSize: 10 })
+  computeGeometryBoundsTree(geometry)
 
   const wallBrush = new Brush(geometry)
   wallBrush.updateMatrixWorld()
@@ -546,6 +558,14 @@ function collectCutoutBrushes(
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
+    if (
+      (child.type === 'door' && child.openingKind === 'opening') ||
+      (child.type === 'window' && child.openingKind === 'opening')
+    ) {
+      brushes.push(createShapedOpeningCutoutBrush(child, wallThickness))
+      continue
+    }
+
     const childMesh = sceneRegistry.nodes.get(child.id)
     if (!childMesh) continue
 
@@ -591,12 +611,192 @@ function collectCutoutBrushes(
     )
 
     // Pre-compute BVH with new API to avoid deprecation warning
-    boxGeo.computeBoundsTree = computeBoundsTree
-    boxGeo.computeBoundsTree({ maxLeafSize: 10 })
+    computeGeometryBoundsTree(boxGeo)
 
     const brush = new Brush(boxGeo)
     brushes.push(brush)
   }
 
   return brushes
+}
+
+type ShapedOpeningNode = DoorNode | WindowNode
+type CornerRadii = {
+  topLeft: number
+  topRight: number
+  bottomRight: number
+  bottomLeft: number
+}
+
+function createShapedOpeningCutoutBrush(opening: ShapedOpeningNode, wallThickness: number): Brush {
+  const shape = createShapedOpeningCutoutShape(opening)
+  const depth = wallThickness * 2
+  const bevelSize =
+    opening.openingShape === 'rounded'
+      ? Math.min(
+          Math.max(opening.openingRevealRadius ?? 0.025, 0),
+          Math.max(wallThickness * 0.45, 0.001),
+          Math.max((opening.cornerRadius ?? 0.15) * 0.45, 0.001),
+        )
+      : 0
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: bevelSize > 0,
+    bevelSegments: bevelSize > 0 ? 8 : 0,
+    bevelSize,
+    bevelThickness: bevelSize,
+    curveSegments: 24,
+  })
+
+  geometry.translate(0, 0, -depth / 2)
+  computeGeometryBoundsTree(geometry)
+
+  return new Brush(geometry)
+}
+
+function createShapedOpeningCutoutShape(opening: ShapedOpeningNode): THREE.Shape {
+  const halfWidth = opening.width / 2
+  const bottom = opening.position[1] - opening.height / 2
+  const top = opening.position[1] + opening.height / 2
+  const centerX = opening.position[0]
+  const left = centerX - halfWidth
+  const right = centerX + halfWidth
+  const width = Math.max(opening.width, 1e-6)
+  const height = Math.max(opening.height, 1e-6)
+  const shape = new THREE.Shape()
+
+  if (opening.openingShape === 'arch') {
+    const archHeight = Math.min(Math.max(opening.archHeight ?? width / 2, 0.01), height)
+    const springY = top - archHeight
+
+    shape.moveTo(left, bottom)
+    shape.lineTo(right, bottom)
+    shape.lineTo(right, springY)
+    shape.quadraticCurveTo(centerX, top, left, springY)
+    shape.lineTo(left, bottom)
+    shape.closePath()
+    return shape
+  }
+
+  if (opening.openingShape === 'rounded') {
+    const radii = getRoundedOpeningRadii(opening, width, height)
+    applyRoundedOpeningShape(shape, left, right, bottom, top, radii)
+    return shape
+  }
+
+  shape.moveTo(left, bottom)
+  shape.lineTo(right, bottom)
+  shape.lineTo(right, top)
+  shape.lineTo(left, top)
+  shape.closePath()
+  return shape
+}
+
+function getRoundedOpeningRadii(
+  opening: ShapedOpeningNode,
+  width: number,
+  height: number,
+): CornerRadii {
+  if (opening.type !== 'window') {
+    if (opening.openingRadiusMode === 'individual') {
+      const [topLeft = 0, topRight = 0] = opening.openingTopRadii ?? [0.15, 0.15]
+
+      return normalizeCornerRadii(
+        {
+          topLeft: Math.max(topLeft, 0),
+          topRight: Math.max(topRight, 0),
+          bottomRight: 0,
+          bottomLeft: 0,
+        },
+        width,
+        height,
+      )
+    }
+
+    const maxRadius = Math.min(width / 2, height)
+    const radius = Math.min(Math.max(opening.cornerRadius ?? 0.15, 0), maxRadius)
+    return { topLeft: radius, topRight: radius, bottomRight: 0, bottomLeft: 0 }
+  }
+
+  if (opening.openingRadiusMode === 'individual') {
+    const [topLeft = 0, topRight = 0, bottomRight = 0, bottomLeft = 0] =
+      opening.openingCornerRadii ?? [0.15, 0.15, 0.15, 0.15]
+
+    return normalizeCornerRadii(
+      {
+        topLeft: Math.max(topLeft, 0),
+        topRight: Math.max(topRight, 0),
+        bottomRight: Math.max(bottomRight, 0),
+        bottomLeft: Math.max(bottomLeft, 0),
+      },
+      width,
+      height,
+    )
+  }
+
+  const maxRadius = Math.min(width / 2, height / 2)
+  const radius = Math.min(Math.max(opening.cornerRadius ?? 0.15, 0), maxRadius)
+  return { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius }
+}
+
+function normalizeCornerRadii(radii: CornerRadii, width: number, height: number): CornerRadii {
+  const next = { ...radii }
+  const maxScale = Math.min(
+    1,
+    width / Math.max(next.topLeft + next.topRight, 1e-6),
+    width / Math.max(next.bottomLeft + next.bottomRight, 1e-6),
+    height / Math.max(next.topLeft + next.bottomLeft, 1e-6),
+    height / Math.max(next.topRight + next.bottomRight, 1e-6),
+  )
+
+  if (maxScale < 1) {
+    next.topLeft *= maxScale
+    next.topRight *= maxScale
+    next.bottomRight *= maxScale
+    next.bottomLeft *= maxScale
+  }
+
+  return next
+}
+
+function applyRoundedOpeningShape(
+  shape: THREE.Shape,
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  radii: CornerRadii,
+) {
+  const { topLeft, topRight, bottomRight, bottomLeft } = radii
+
+  shape.moveTo(left + bottomLeft, bottom)
+  shape.lineTo(right - bottomRight, bottom)
+  if (bottomRight > 1e-6) {
+    shape.absarc(right - bottomRight, bottom + bottomRight, bottomRight, -Math.PI / 2, 0, false)
+  } else {
+    shape.lineTo(right, bottom)
+  }
+
+  shape.lineTo(right, top - topRight)
+  if (topRight > 1e-6) {
+    shape.absarc(right - topRight, top - topRight, topRight, 0, Math.PI / 2, false)
+  } else {
+    shape.lineTo(right, top)
+  }
+
+  shape.lineTo(left + topLeft, top)
+  if (topLeft > 1e-6) {
+    shape.absarc(left + topLeft, top - topLeft, topLeft, Math.PI / 2, Math.PI, false)
+  } else {
+    shape.lineTo(left, top)
+  }
+
+  shape.lineTo(left, bottom + bottomLeft)
+  if (bottomLeft > 1e-6) {
+    shape.absarc(left + bottomLeft, bottom + bottomLeft, bottomLeft, Math.PI, Math.PI * 1.5, false)
+  } else {
+    shape.lineTo(left, bottom)
+  }
+
+  shape.closePath()
 }

@@ -5,10 +5,11 @@ import {
   HomeAssistantInteractiveSystem,
   type HomeAssistantDeviceActionDispatch,
 } from '@pascal-app/home-assistant'
-import { Viewer, ViewerFitCameraControls, useViewer } from '@pascal-app/viewer'
+import { Viewer, useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { getArtifactBindings, getResourceEntityIds } from './artifact'
 import { runHomeAssistantActionRequest } from './ha-actions'
+import { LovelaceFitCameraControls } from './lovelace-fit-camera-controls'
 import { PascalLovelaceHomeAssistantSystem } from './pascal-lovelace-system'
 import type {
   HomeAssistantLike,
@@ -221,7 +222,8 @@ export function PascalViewerRuntime({
   useEffect(() => {
     const scene = useScene.getState()
     scene.setReadOnly(false)
-    scene.setScene(artifact.scene.nodes, artifact.scene.rootNodeIds, artifact.scene.collections)
+    scene.setScene(artifact.scene.nodes as never, artifact.scene.rootNodeIds as never)
+    useScene.setState({ collections: artifact.scene.collections ?? {} })
     scene.setReadOnly(true)
     applyViewerDefaults(artifact, config)
 
@@ -241,7 +243,7 @@ export function PascalViewerRuntime({
       <PascalLovelaceHeader artifact={artifact} config={config} hass={hass} />
       <div style={viewerWrapStyle}>
         <Viewer selectionManager="custom">
-          <ViewerFitCameraControls center={sceneBounds.center} radius={sceneBounds.radius} />
+          <LovelaceFitCameraControls center={sceneBounds.center} radius={sceneBounds.radius} />
           <PascalLovelaceHomeAssistantSystem
             hass={hass}
             pendingStateRef={pendingHomeAssistantStateRef}

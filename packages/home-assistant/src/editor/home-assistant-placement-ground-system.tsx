@@ -1,10 +1,11 @@
 'use client'
 
-import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT, sceneRegistry } from '@pascal-app/core'
+import { sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Plane, Vector2, Vector3 } from 'three'
+import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT } from '../home-assistant-binding'
 import { registerHomeAssistantGroundResolver } from '../home-assistant-placement-ground'
 
 export function HomeAssistantPlacementGroundSystem() {

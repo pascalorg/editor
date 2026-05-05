@@ -32,6 +32,15 @@ export const DoorNode = BaseNode.extend({
   width: z.number().default(0.9),
   height: z.number().default(2.1),
 
+  // Opening mode
+  openingKind: z.enum(['door', 'opening']).default('door'),
+  openingShape: z.enum(['rectangle', 'rounded', 'arch']).default('rectangle'),
+  openingRadiusMode: z.enum(['all', 'individual']).default('all'),
+  openingTopRadii: z.tuple([z.number(), z.number()]).default([0.15, 0.15]),
+  cornerRadius: z.number().min(0).default(0.15),
+  archHeight: z.number().min(0).default(0.45),
+  openingRevealRadius: z.number().min(0).default(0.025),
+
   // Frame
   frameThickness: z.number().default(0.05),
   frameDepth: z.number().default(0.07),
@@ -41,6 +50,11 @@ export const DoorNode = BaseNode.extend({
   // Swing
   hingesSide: z.enum(['left', 'right']).default('left'),
   swingDirection: z.enum(['inward', 'outward']).default('inward'),
+  swingAngle: z
+    .number()
+    .min(0)
+    .max(Math.PI / 2)
+    .default(0),
 
   // Leaf segments — stacked top to bottom, each with its own column split
   segments: z.array(DoorSegment).default([
@@ -76,9 +90,10 @@ export const DoorNode = BaseNode.extend({
   panicBarHeight: z.number().default(1.0),
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
+  - openingKind/openingShape: hinged door or frameless wall opening shape
   - segments: rows stacked top to bottom, each defining its own columnRatios
   - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
-  - hingesSide/swingDirection: which way the door opens
+  - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
   - doorCloser/panicBar: commercial and emergency hardware options
 `)
 

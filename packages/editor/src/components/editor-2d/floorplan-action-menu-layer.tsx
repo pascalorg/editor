@@ -24,6 +24,7 @@ export type FloorplanActionMenuEntry = {
   extraActionLabel?: string
   onDelete: FloorplanActionMenuHandler
   onMove: FloorplanActionMenuHandler
+  onAddHole?: FloorplanActionMenuHandler
   onDuplicate?: FloorplanActionMenuHandler
   onExtraAction?: FloorplanActionMenuHandler
 }
@@ -91,6 +92,7 @@ export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
               <NodeActionMenu
                 extraActionIcon={entry.extraActionIcon}
                 extraActionLabel={entry.extraActionLabel}
+                onAddHole={entry.onAddHole}
                 onDelete={entry.onDelete}
                 onDuplicate={entry.onDuplicate}
                 onExtraAction={entry.onExtraAction}

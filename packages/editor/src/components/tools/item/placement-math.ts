@@ -1,4 +1,4 @@
-import { isObject } from '@pascal-app/core'
+import { type AssetInput, isObject } from '@pascal-app/core'
 import useEditor from '../../../store/use-editor'
 
 function getGridSnapStep(): number {
@@ -25,6 +25,35 @@ export function snapToGrid(position: number, dimension: number, step = getGridSn
  */
 export function snapToHalf(value: number, step = getGridSnapStep()): number {
   return Math.round(value / step) * step
+}
+
+/**
+ * Round a value up to the next multiple of `step`, with a minimum of `step`.
+ */
+export function snapUpToGridStep(value: number, step = getGridSnapStep()): number {
+  return Math.max(step, Math.ceil(value / step) * step)
+}
+
+/**
+ * Expand an item's scaled dimensions up to the active grid step on the axes
+ * the placement grid covers. Used for the placement wireframe, snap math, and
+ * collision against the draft so a small item visually reserves a full grid
+ * cell.
+ *
+ * - Floor / ceiling / item-surface: X + Z (footprint) expand; Y stays exact.
+ * - Wall / wall-side: X (along wall) + Y (height) expand; Z (depth) stays exact
+ *   so wall-thickness offsets aren't disturbed.
+ */
+export function getGridAlignedDimensions(
+  scaledDims: [number, number, number],
+  attachTo: AssetInput['attachTo'] | null | undefined,
+  step = getGridSnapStep(),
+): [number, number, number] {
+  const [w, h, d] = scaledDims
+  if (attachTo === 'wall' || attachTo === 'wall-side') {
+    return [snapUpToGridStep(w, step), snapUpToGridStep(h, step), d]
+  }
+  return [snapUpToGridStep(w, step), h, snapUpToGridStep(d, step)]
 }
 
 /**

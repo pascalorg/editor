@@ -5,7 +5,6 @@ import type {
   CollectionId,
   ItemNode,
 } from '@pascal-app/core/schema'
-import { normalizeCollection } from '@pascal-app/core/schema'
 import type {
   HomeAssistantAction,
   HomeAssistantActionField,
@@ -37,6 +36,21 @@ export type HomeAssistantImportedResource = HomeAssistantResourceBinding & {
 }
 
 const PASCAL_GROUP_RESOURCE_PREFIX = 'pascal-group'
+
+function normalizeCollection(collection: Collection): Collection {
+  const nodeIds = Array.from(
+    new Set(collection.nodeIds.filter((nodeId): nodeId is AnyNodeId => typeof nodeId === 'string')),
+  )
+
+  return {
+    ...collection,
+    controlNodeId:
+      typeof collection.controlNodeId === 'string' && nodeIds.includes(collection.controlNodeId)
+        ? collection.controlNodeId
+        : nodeIds[0],
+    nodeIds,
+  }
+}
 
 export const HIDDEN_HOME_ASSISTANT_GROUP_RESOURCE_IDS = new Set([
   'light.pascal_kitchen_perimeter_lights_group',

@@ -5,6 +5,10 @@ import {
   type CollectionId,
   type Control,
   type ControlValue,
+  type ItemNode,
+  resolveLevelId,
+} from '@pascal-app/core'
+import {
   getHomeAssistantBindingCapabilities,
   getHomeAssistantBindingDisplayLabel,
   type HomeAssistantActionRequest,
@@ -13,10 +17,8 @@ import {
   type HomeAssistantCollectionCapability,
   type HomeAssistantResourceBinding,
   hasHomeAssistantBinding,
-  type ItemNode,
   isHomeAssistantTriggerBinding,
-  resolveLevelId,
-} from '@pascal-app/core'
+} from '../home-assistant-binding'
 import {
   getLegacySmartHomeRoomControlTileId,
   getSmartHomeBindingControlResources,
@@ -590,12 +592,23 @@ const buildCollectionRoomControlTiles = (
   selectedLevelId: AnyNodeId | null = null,
 ): RoomControlTile[] => {
   const collectionLabel = getHomeAssistantBindingDisplayLabel(binding, collection.name)
+  const controlResources = getSmartHomeBindingControlResources(binding?.resources ?? [])
   const itemNodes = Array.from(
     new Map(
       getCollectionItemNodes(collection, sceneNodes)
         .filter((item) => itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId))
         .map((node) => [node.id, node] as const),
     ).values(),
+  )
+  const linkedResourceItemNodes = controlResources.flatMap((resource) =>
+    getResourceLinkedItemNodes(
+      resource,
+      collection.id,
+      collections,
+      bindings,
+      sceneNodes,
+      selectedLevelId,
+    ),
   )
   const fallbackControlNode =
     collection.controlNodeId &&
@@ -607,10 +620,15 @@ const buildCollectionRoomControlTiles = (
     )
       ? (sceneNodes[collection.controlNodeId] as ItemNode)
       : null
-  const controlSourceNodes =
-    itemNodes.length > 0 ? itemNodes : fallbackControlNode ? [fallbackControlNode] : []
+  const controlSourceNodes = Array.from(
+    new Map(
+      [
+        ...(itemNodes.length > 0 ? itemNodes : fallbackControlNode ? [fallbackControlNode] : []),
+        ...linkedResourceItemNodes,
+      ].map((node) => [node.id, node] as const),
+    ).values(),
+  )
 
-  const controlResources = getSmartHomeBindingControlResources(binding?.resources ?? [])
   if (
     hasPositionedPill &&
     (controlSourceNodes.length === 0 ||
@@ -687,10 +705,12 @@ const buildCollectionRoomControlTiles = (
   }
 
   const primaryResource = deviceResources[0] ?? null
+  const pairsByIndex = deviceResources.length === controlSourceNodes.length
+
   return controlSourceNodes.map((itemNode, index) => {
     const itemResource =
       resourceByLinkedItemId.get(itemNode.id) ??
-      (deviceResources.length === controlSourceNodes.length ? deviceResources[index] : null) ??
+      (pairsByIndex ? deviceResources[index] : null) ??
       primaryResource
     const disabled = !isSmartHomeDeviceComponentResource(itemResource)
     const controls = itemNode.asset.interactive?.controls ?? []
@@ -855,7 +875,7 @@ export function buildHomeAssistantRoomOverlayNodes({
       )
     })
     .sort((left, right) => compareCollectionsForRoom(left, right, bindings))
-    .map((collection) => {
+    .flatMap((collection) => {
       const binding = bindings[collection.id]
       const iconOnly = isIconOnlyDeviceCollection(collection, binding, selectedLevelId)
       const derivedWorldPosition = selectedLevelId
@@ -908,21 +928,30 @@ export function buildHomeAssistantRoomOverlayNodes({
         getSmartHomeRoomControlMode(binding?.presentation) === 'user-managed'
           ? presentationGroups
           : storedGroups
-      return {
+      const roomName = getCollectionDisplayName(collection, bindings)
+      const overlayNode: RoomOverlayNode = {
         anchorNodeIds: getCollectionAnchorNodeIds(
           collection,
           roomControls,
           sceneNodes,
           selectedLevelId,
         ),
+        collectionId: collection.id,
         controlGroups: buildRoomControlGroups(roomControls, controlGroups),
         iconOnly,
         id: collection.id,
-        roomName: getCollectionDisplayName(collection, bindings),
+        roomName,
         screenPosition: selectedLevelId ? undefined : binding?.presentation?.rtsScreenPosition,
         totalSlotCount: roomControls.length,
         worldPosition,
       }
+      const localDeviceOverlayNodes = buildLocalDeviceOverlayNodes(
+        collection,
+        roomControls,
+        sceneNodes,
+      )
+
+      return [overlayNode, ...localDeviceOverlayNodes]
     })
     .filter(
       (overlayNode) =>
@@ -930,4 +959,34 @@ export function buildHomeAssistantRoomOverlayNodes({
         overlayNode.totalSlotCount > 0 ||
         Boolean(overlayNode.worldPosition || overlayNode.screenPosition),
     )
+}
+
+const buildLocalDeviceOverlayNodes = (
+  collection: Collection,
+  roomControls: RoomControlTile[],
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+): RoomOverlayNode[] => {
+  if (roomControls.length <= 1) {
+    return []
+  }
+
+  return roomControls.flatMap((control) => {
+    const anchorNodeId = control.linkedItemId ?? control.itemId
+    const anchorNode = sceneNodes[anchorNodeId]
+    if (anchorNode?.type !== 'item') {
+      return []
+    }
+
+    return [
+      {
+        anchorNodeIds: [anchorNodeId],
+        collectionId: collection.id,
+        controlGroups: buildRoomControlGroups([control], [[control.id]]),
+        iconOnly: true,
+        id: `${collection.id}:local:${control.id}`,
+        roomName: control.itemName,
+        totalSlotCount: 1,
+      },
+    ]
+  })
 }

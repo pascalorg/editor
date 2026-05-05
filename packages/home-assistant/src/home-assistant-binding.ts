@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '@pascal-app/core/schema'
 import type { CollectionId } from '@pascal-app/core/schema'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import type { AnyNodeId } from '@pascal-app/core/schema'
 
 export const HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT = 3.5
 
@@ -86,6 +86,7 @@ const homeAssistantRoomControlCompositionSchema = z.object({
   excludedResourceIds: z.array(z.string()).optional(),
   groups: z.array(homeAssistantRoomControlGroupSchema).optional(),
   mode: z.enum(['ha-derived', 'user-managed']).optional(),
+  tileGroups: z.array(z.array(z.string())).optional(),
 })
 
 const homeAssistantBindingPresentationSchema = z.object({
@@ -310,9 +311,12 @@ const normalizeRoomControlComposition = ({
     resourceAliases.set(legacyMemberId, resource.id)
   }
   const existingComposition = presentation?.rtsRoomControls
+  const tileGroups = normalizeStringGroups(
+    existingComposition?.tileGroups ?? presentation?.rtsGroups,
+  ) ?? []
   const rawGroups =
     existingComposition?.groups?.map((group) => group.memberResourceIds) ??
-    normalizeStringGroups(presentation?.rtsGroups) ??
+    tileGroups ??
     []
   const groups = rawGroups
     .map((group, index) => {
@@ -347,7 +351,7 @@ const normalizeRoomControlComposition = ({
       ? existingComposition.mode
       : undefined
 
-  if (groups.length === 0 && excludedResourceIds.length === 0 && !mode) {
+  if (groups.length === 0 && tileGroups.length === 0 && excludedResourceIds.length === 0 && !mode) {
     return undefined
   }
 
@@ -355,6 +359,7 @@ const normalizeRoomControlComposition = ({
     ...(excludedResourceIds.length > 0 ? { excludedResourceIds } : {}),
     ...(groups.length > 0 ? { groups } : {}),
     ...(mode ? { mode } : {}),
+    ...(tileGroups.length > 0 ? { tileGroups } : {}),
   }
 }
 
@@ -454,16 +459,17 @@ export const createHomeAssistantBindingNode = ({
 }
 
 export const isHomeAssistantBindingNode = (
-  node: AnyNode | null | undefined,
-): node is HomeAssistantBindingNode => node?.type === 'home-assistant-binding'
+  node: unknown,
+): node is HomeAssistantBindingNode =>
+  Boolean(node && typeof node === 'object' && (node as { type?: unknown }).type === 'home-assistant-binding')
 
-export const getHomeAssistantBindingNodes = (nodes: Record<AnyNodeId, AnyNode>) =>
+export const getHomeAssistantBindingNodes = (nodes: Record<string, unknown>) =>
   Object.values(nodes).filter((node): node is HomeAssistantBindingNode =>
     isHomeAssistantBindingNode(node),
   )
 
 export const getHomeAssistantBindingNodeMap = (
-  nodes: Record<AnyNodeId, AnyNode>,
+  nodes: Record<string, unknown>,
 ): HomeAssistantBindingNodeMap =>
   Object.fromEntries(
     getHomeAssistantBindingNodes(nodes).flatMap((node) =>
@@ -472,12 +478,12 @@ export const getHomeAssistantBindingNodeMap = (
   ) as HomeAssistantBindingNodeMap
 
 export const getHomeAssistantBindingNodeForCollection = (
-  nodes: Record<AnyNodeId, AnyNode>,
+  nodes: Record<string, unknown>,
   collectionId: CollectionId,
 ) => getHomeAssistantBindingNodes(nodes).find((node) => node.collectionId === collectionId) ?? null
 
 export const getHomeAssistantBindingNodeIdForCollection = (
-  nodes: Record<AnyNodeId, AnyNode>,
+  nodes: Record<string, unknown>,
   collectionId: CollectionId,
 ) => getHomeAssistantBindingNodeForCollection(nodes, collectionId)?.id ?? null
 

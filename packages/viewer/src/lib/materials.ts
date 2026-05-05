@@ -7,6 +7,22 @@ import {
   resolveMaterial,
 } from '@pascal-app/core'
 import * as THREE from 'three'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
+
+export const baseMaterial = new MeshStandardNodeMaterial({
+  color: '#f2f0ed',
+  roughness: 0.5,
+  metalness: 0.0,
+})
+
+export const glassMaterial = new MeshStandardNodeMaterial({
+  color: '#e0f2fe',
+  roughness: 0.05,
+  metalness: 0.0,
+  transparent: true,
+  opacity: 0.35,
+  side: THREE.DoubleSide,
+})
 
 const sideMap: Record<MaterialProperties['side'], THREE.Side> = {
   front: THREE.FrontSide,

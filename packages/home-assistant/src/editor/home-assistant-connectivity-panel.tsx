@@ -1,7 +1,6 @@
 'use client'
 
 import type { ItemNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { ArrowLeft, Check, LoaderCircle, Power, RefreshCw, Tv } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type {
@@ -27,6 +26,7 @@ import {
 } from '../home-assistant-controls'
 import { cn } from '../utils'
 import { HomeAssistantActionIconView } from '../components/home-assistant-action-icon'
+import { homeAssistantItemEffects } from '../home-assistant-item-effects'
 
 type DeviceLoadState = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -342,11 +342,10 @@ export function HomeAssistantConnectivityPanel({
       setActionResult(null)
       setStatusMessage(`Running ${actionToRun.label} on ${device.name}...`)
       if (isTelevisionItem(item)) {
-        const viewer = useViewer.getState()
         if (isHomeAssistantOffAction(actionToRun, actionLink)) {
-          viewer.clearItemEffect(item.id)
+          homeAssistantItemEffects.clear(item.id)
         } else if (!isDeferredHomeAssistantPowerToggle(actionToRun, actionLink)) {
-          viewer.triggerItemEffect(item.id)
+          homeAssistantItemEffects.trigger(item.id)
         }
       }
 
@@ -368,11 +367,10 @@ export function HomeAssistantConnectivityPanel({
 
       setActionResult(payload)
       if (isTelevisionItem(item)) {
-        const viewer = useViewer.getState()
         if (isHomeAssistantOffState(payload.finalState)) {
-          viewer.clearItemEffect(item.id)
+          homeAssistantItemEffects.clear(item.id)
         } else {
-          viewer.triggerItemEffect(item.id)
+          homeAssistantItemEffects.trigger(item.id)
         }
       }
       setStatusMessage(payload.message)

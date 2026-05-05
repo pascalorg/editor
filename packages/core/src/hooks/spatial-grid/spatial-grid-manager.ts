@@ -66,7 +66,7 @@ type ItemParentAabb = {
   maxZ: number
 }
 
-function getFallbackItemLocalBounds(item: ItemNode): ItemLocalBounds {
+function getItemLocalBounds(item: ItemNode): ItemLocalBounds {
   const [width, height, depth] = getScaledDimensions(item)
   const minZ = item.asset.attachTo === 'wall-side' ? -depth : -depth / 2
   const maxZ = item.asset.attachTo === 'wall-side' ? 0 : depth / 2
@@ -74,41 +74,6 @@ function getFallbackItemLocalBounds(item: ItemNode): ItemLocalBounds {
     min: [-width / 2, 0, minZ],
     max: [width / 2, height, maxZ],
   }
-}
-
-function getItemLocalBounds(item: ItemNode): ItemLocalBounds {
-  const metadata =
-    typeof item.metadata === 'object' && item.metadata !== null && !Array.isArray(item.metadata)
-      ? (item.metadata as Record<string, unknown>)
-      : null
-  const rawBounds =
-    typeof metadata?.meshLocalBounds === 'object' &&
-    metadata.meshLocalBounds !== null &&
-    !Array.isArray(metadata.meshLocalBounds)
-      ? (metadata.meshLocalBounds as Record<string, unknown>)
-      : null
-  const min = rawBounds?.min
-  const max = rawBounds?.max
-
-  if (
-    Array.isArray(min) &&
-    min.length >= 3 &&
-    Array.isArray(max) &&
-    max.length >= 3 &&
-    typeof min[0] === 'number' &&
-    typeof min[1] === 'number' &&
-    typeof min[2] === 'number' &&
-    typeof max[0] === 'number' &&
-    typeof max[1] === 'number' &&
-    typeof max[2] === 'number'
-  ) {
-    return {
-      min: [min[0], min[1], min[2]],
-      max: [max[0], max[1], max[2]],
-    }
-  }
-
-  return getFallbackItemLocalBounds(item)
 }
 
 function getItemParentAabb(item: ItemNode): ItemParentAabb {

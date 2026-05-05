@@ -39,7 +39,8 @@ import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { snapToGrid } from './placement-math'
+import useEditor from '../../../store/use-editor'
+import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
 import {
   ceilingStrategy,
   checkCanPlace,
@@ -68,6 +69,54 @@ type PreviewBounds = {
   max: [number, number, number]
   dimensions: [number, number, number]
   center: [number, number, number]
+}
+
+/**
+ * Expand `bounds` outward so each axis is rounded up to the active grid step.
+ * The wireframe stays centered on the original bounds centre on each axis we
+ * expand, so an off-centre mesh bbox stays off-centre. Wall-side items keep
+ * `max.z = 0` (flush with the wall plane); the bottom (`min.y`) is preserved
+ * so the box still sits on the floor / attachment plane.
+ *
+ * Floor / ceiling / item-surface: X and Z expand; Y stays exact.
+ * Wall / wall-side: X and Y expand; Z stays exact.
+ */
+function expandBoundsToGrid(
+  bounds: PreviewBounds,
+  attachTo: AssetInput['attachTo'] | null | undefined,
+  step: number,
+): PreviewBounds {
+  const [w, h, d] = bounds.dimensions
+  const [cx, , cz] = bounds.center
+  const onWall = attachTo === 'wall' || attachTo === 'wall-side'
+  const expandedW = snapUpToGridStep(w, step)
+  const expandedH = onWall ? snapUpToGridStep(h, step) : h
+  const expandedD = onWall ? d : snapUpToGridStep(d, step)
+
+  const minX = cx - expandedW / 2
+  const maxX = cx + expandedW / 2
+  const minY = bounds.min[1]
+  const maxY = minY + expandedH
+
+  let minZ: number
+  let maxZ: number
+  let newCz: number
+  if (attachTo === 'wall-side') {
+    maxZ = 0
+    minZ = -expandedD
+    newCz = -expandedD / 2
+  } else {
+    minZ = cz - expandedD / 2
+    maxZ = cz + expandedD / 2
+    newCz = cz
+  }
+
+  return {
+    min: [minX, minY, minZ],
+    max: [maxX, maxY, maxZ],
+    dimensions: [expandedW, expandedH, expandedD],
+    center: [cx, (minY + maxY) / 2, newCz],
+  }
 }
 
 function getPreviewBoundsFromObject(object: Object3D | null): PreviewBounds | null {
@@ -233,7 +282,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling } = useSpatialQuery()
   const { asset, draftNode } = config
   const unit = useViewer((state) => state.unit)
-
+  const gridSnapStep = useEditor((s) => s.gridSnapStep)
   const updatePreviewGeometry = (bounds: PreviewBounds) => {
     const [width, height, depth] = bounds.dimensions
     const [centerX, centerY, centerZ] = bounds.center
@@ -373,6 +422,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftItem: draftNode.current,
       gridPosition: gridPosition.current,
       state: { ...placementState.current },
+      currentCursorRotationY: cursorGroupRef.current.rotation.y,
     })
 
     const getActiveValidators = () =>
@@ -791,9 +841,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
 
-      // Transition back to floor using building-local position
-      const wx = Math.round(event.localPosition[0] * 2) / 2
-      const wz = Math.round(event.localPosition[2] * 2) / 2
+      // `event.localPosition` from useNodeEvents is in the LEAVING item's
+      // local space (the sofa/table the draft is detaching from), not
+      // building-local. Convert from world via worldToBuildingLocal instead,
+      // otherwise the wireframe jumps to a surface-local-coordinate ghost
+      // position until the next mouse move.
+      const buildingLocalLeave = worldToBuildingLocal(
+        event.position[0],
+        event.position[1],
+        event.position[2],
+      )
+      const wx = Math.round(buildingLocalLeave.x * 2) / 2
+      const wz = Math.round(buildingLocalLeave.z * 2) / 2
       const floorPos: [number, number, number] = [wx, 0, wz]
 
       Object.assign(placementState.current, { surface: 'floor', surfaceItemId: null })
@@ -1083,11 +1142,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Bounding box geometry ----
 
     const draft = draftNode.current
-    const fallbackBounds = getFallbackPreviewBounds(draft, asset, asset.attachTo)
+    const fallbackBounds = expandBoundsToGrid(
+      getFallbackPreviewBounds(draft, asset, asset.attachTo),
+      asset.attachTo,
+      gridSnapStep,
+    )
     updatePreviewGeometry(
       draft
-        ? (getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null) ??
-          fallbackBounds)
+        ? (expandBoundsToGrid(
+            getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null) ?? getFallbackPreviewBounds(draft, asset, asset.attachTo),
+            asset.attachTo,
+            gridSnapStep,
+          ))
         : fallbackBounds,
     )
     updateDimensionGuides(fallbackBounds)
@@ -1163,7 +1229,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
   }, [asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
 
-  // Reparent floor draft to the new level when the user switches levels mid-placement.
+  // Refresh wireframe when the grid step changes mid-placement so the green/red
+  // box snaps to the new cell size right away.
+  useEffect(() => {
+    if (!asset) return
+    const draft = draftNode.current
+    const fallbackBounds = expandBoundsToGrid(
+      getFallbackPreviewBounds(draft, asset, asset.attachTo),
+      asset.attachTo,
+      gridSnapStep,
+    )
+    const meshBounds = draft
+      ? getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null)
+      : null
+    updatePreviewGeometry(
+      meshBounds ? expandBoundsToGrid(meshBounds, asset.attachTo, gridSnapStep) : fallbackBounds,
+    )
+    updateDimensionGuides(fallbackBounds)
+  }, [gridSnapStep, asset, draftNode])
   // Wall/ceiling items are managed by their own surface entry events (ensureDraft / reparent).
   const viewerLevelId = useViewer((s) => s.selection.levelId)
   useEffect(() => {
@@ -1190,7 +1273,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (!meshPreviewAppliedRef.current) {
       const previewBounds = getPreviewBoundsFromObject(mesh)
       if (previewBounds) {
-        updatePreviewGeometry(previewBounds)
+        updatePreviewGeometry(
+            expandBoundsToGrid(previewBounds, asset.attachTo, useEditor.getState().gridSnapStep),
+          )
         meshPreviewAppliedRef.current = true
       }
     }
@@ -1217,7 +1302,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const slabElevation = spatialGridManager.getSlabElevationForItem(
           levelId,
           [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-          getScaledDimensions(draftNode.current),
+          getGridAlignedDimensions(
+            getScaledDimensions(draftNode.current),
+            draftNode.current.asset.attachTo,
+          ),
           draftNode.current.rotation,
         )
         mesh.position.y = slabElevation
@@ -1226,18 +1314,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   })
 
   const initialDraft = draftNode.current
-  const dims = initialDraft
+  const initialAttachTo = config.asset?.attachTo
+  const rawDims = initialDraft
     ? getScaledDimensions(initialDraft)
     : (config.asset?.dimensions ?? DEFAULT_DIMENSIONS)
+  const dims = getGridAlignedDimensions(rawDims, initialAttachTo, gridSnapStep)
   const initialBoxGeometry = new BoxGeometry(dims[0], dims[1], dims[2])
-  const wallSideZOffset = config.asset?.attachTo === 'wall-side' ? -dims[2] / 2 : 0
+  const wallSideZOffset = initialAttachTo === 'wall-side' ? -dims[2] / 2 : 0
   initialBoxGeometry.translate(0, dims[1] / 2, wallSideZOffset)
 
   // Base plane geometry (colored rectangle on the ground)
   const basePlaneGeometry = new PlaneGeometry(dims[0], dims[2])
   basePlaneGeometry.rotateX(-Math.PI / 2) // Make it horizontal
   basePlaneGeometry.translate(0, 0.01, wallSideZOffset) // Slightly above ground to avoid z-fighting
-  const initialDimensionBounds = getFallbackPreviewBounds(initialDraft, config.asset!, config.asset?.attachTo)
+  const initialDimensionBounds = expandBoundsToGrid(
+    getFallbackPreviewBounds(initialDraft, config.asset!, initialAttachTo),
+    initialAttachTo,
+    gridSnapStep,
+  )
   const widthLabel = formatMeasurement(initialDimensionBounds.dimensions[0], unit)
   const depthLabel = formatMeasurement(initialDimensionBounds.dimensions[2], unit)
   const heightLabel = formatMeasurement(initialDimensionBounds.dimensions[1], unit)
@@ -1287,7 +1381,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       >
         <bufferGeometry />
       </lineSegments>
-      <Html center position={widthLabelPosition}>
+      <Html center position={widthLabelPosition} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             background: 'rgba(15, 23, 42, 0.86)',
@@ -1299,13 +1393,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             fontWeight: 600,
             lineHeight: 1,
             padding: '4px 8px',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >
           {widthLabel}
         </div>
       </Html>
-      <Html center position={depthLabelPosition}>
+      <Html center position={depthLabelPosition} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             background: 'rgba(15, 23, 42, 0.86)',
@@ -1317,13 +1412,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             fontWeight: 600,
             lineHeight: 1,
             padding: '4px 8px',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >
           {depthLabel}
         </div>
       </Html>
-      <Html center position={heightLabelPosition}>
+      <Html center position={heightLabelPosition} style={{ pointerEvents: 'none' }}>
         <div
           style={{
             background: 'rgba(15, 23, 42, 0.86)',
@@ -1335,6 +1431,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             fontWeight: 600,
             lineHeight: 1,
             padding: '4px 8px',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >

@@ -5,10 +5,8 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
 
-const demoScenePath = path.join(repoRoot, 'apps/editor/public/demos/demo_1.json')
 const resourceLogPath = path.join(repoRoot, '.codex/runtime-logs/ha-import-resources-latest.json')
 const outDir = path.join(repoRoot, 'docs/examples/lovelace')
-const editorPublicOutDir = path.join(repoRoot, 'apps/editor/public/lovelace')
 
 const PASCAL_ASSET_PREFIX = '/items'
 
@@ -88,99 +86,17 @@ const assets = {
     attachTo: 'ceiling',
     category: 'appliance',
     dimensions: [1.4, 0.45, 1.4],
-    floorPlanUrl: `${PASCAL_ASSET_PREFIX}/ceiling-fan/floor-plan.png`,
+    floorPlanUrl: `${SUPABASE_ITEM_BASE}/ceiling-fan/floor-plan.png`,
     id: 'ceiling-fan',
     interactive: interactivePower,
     name: 'Ceiling Fan',
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    src: `${PASCAL_ASSET_PREFIX}/ceiling-fan/model.glb`,
+    src: `${SUPABASE_ITEM_BASE}/ceiling-fan/model.glb`,
     tags: ['fan', 'ceiling', 'air'],
-    thumbnail: `${PASCAL_ASSET_PREFIX}/ceiling-fan/thumbnail.png`,
+    thumbnail: `${SUPABASE_ITEM_BASE}/ceiling-fan/thumbnail.png`,
   },
-}
-
-function rewriteLocalAssetUrls(scene) {
-  for (const node of Object.values(scene.nodes)) {
-    if (node?.type !== 'item' || !node.asset) {
-      continue
-    }
-    for (const key of ['floorPlanUrl', 'src', 'thumbnail']) {
-      const value = node.asset[key]
-      if (typeof value === 'string' && value.startsWith('/items/')) {
-        node.asset[key] = value
-      }
-    }
-  }
-}
-
-function pruneOrphanNodes(scene) {
-  let removedAny = true
-
-  while (removedAny) {
-    removedAny = false
-
-    for (const [nodeId, node] of Object.entries(scene.nodes)) {
-      if (node?.parentId && !scene.nodes[node.parentId]) {
-        delete scene.nodes[nodeId]
-        removedAny = true
-      }
-    }
-  }
-
-  for (const node of Object.values(scene.nodes)) {
-    if (Array.isArray(node?.children)) {
-      node.children = node.children.filter((childId) => scene.nodes[childId])
-    }
-  }
-
-  for (const collection of Object.values(scene.collections ?? {})) {
-    if (Array.isArray(collection?.nodeIds)) {
-      collection.nodeIds = collection.nodeIds.filter((nodeId) => scene.nodes[nodeId])
-    }
-    if (collection?.controlNodeId && !scene.nodes[collection.controlNodeId]) {
-      collection.controlNodeId = collection.nodeIds?.[0] ?? null
-    }
-  }
-}
-
-function removeAuthoringReferenceNodes(scene) {
-  const removedNodeIds = new Set()
-  for (const [nodeId, node] of Object.entries(scene.nodes)) {
-    if (node?.type === 'guide' || node?.type === 'scan') {
-      delete scene.nodes[nodeId]
-      removedNodeIds.add(nodeId)
-    }
-  }
-
-  if (removedNodeIds.size === 0) {
-    return
-  }
-
-  scene.rootNodeIds = (scene.rootNodeIds ?? []).filter((nodeId) => !removedNodeIds.has(nodeId))
-
-  for (const node of Object.values(scene.nodes)) {
-    if (Array.isArray(node?.children)) {
-      node.children = node.children.filter((childId) => !removedNodeIds.has(childId))
-    }
-  }
-
-  for (const collection of Object.values(scene.collections ?? {})) {
-    if (Array.isArray(collection?.nodeIds)) {
-      collection.nodeIds = collection.nodeIds.filter((nodeId) => !removedNodeIds.has(nodeId))
-    }
-    if (collection?.controlNodeId && removedNodeIds.has(collection.controlNodeId)) {
-      collection.controlNodeId = collection.nodeIds?.[0] ?? null
-    }
-  }
-}
-
-function ensureRootNode(scene, nodeId) {
-  scene.rootNodeIds = Array.isArray(scene.rootNodeIds) ? scene.rootNodeIds : []
-  if (scene.nodes[nodeId] && !scene.rootNodeIds.includes(nodeId)) {
-    scene.rootNodeIds.push(nodeId)
-  }
 }
 
 function addItem(scene, levelId, node) {
@@ -199,6 +115,132 @@ function addItem(scene, levelId, node) {
   const level = scene.nodes[levelId]
   if (level?.children && !level.children.includes(node.id)) {
     level.children.push(node.id)
+  }
+}
+
+function createSimpleScene(defaultLevelId) {
+  const buildingId = 'building_pascal_lovelace_demo'
+  const slabId = 'slab_pascal_lovelace_main'
+  const zoneId = 'zone_pascal_lovelace_main'
+  const wallIds = [
+    'wall_pascal_lovelace_north',
+    'wall_pascal_lovelace_east',
+    'wall_pascal_lovelace_south',
+    'wall_pascal_lovelace_west',
+  ]
+
+  return {
+    collections: {},
+    nodes: {
+      [buildingId]: {
+        children: [defaultLevelId],
+        id: buildingId,
+        metadata: {},
+        object: 'node',
+        parentId: null,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        type: 'building',
+        visible: true,
+      },
+      [defaultLevelId]: {
+        camera: {
+          mode: 'perspective',
+          position: [4, 8.4, 9.2],
+          target: [4, 0, 3],
+        },
+        children: [slabId, zoneId, ...wallIds],
+        id: defaultLevelId,
+        level: 0,
+        metadata: {},
+        object: 'node',
+        parentId: buildingId,
+        type: 'level',
+        visible: true,
+      },
+      [slabId]: {
+        elevation: 0.05,
+        id: slabId,
+        metadata: {},
+        name: 'Main Room Floor',
+        object: 'node',
+        parentId: defaultLevelId,
+        polygon: [
+          [0, 0],
+          [8, 0],
+          [8, 6],
+          [0, 6],
+        ],
+        type: 'slab',
+        visible: true,
+      },
+      [zoneId]: {
+        camera: {
+          mode: 'perspective',
+          position: [4, 8.4, 9.2],
+          target: [4, 0, 3],
+        },
+        color: '#2563eb',
+        id: zoneId,
+        metadata: {},
+        name: 'Living Room',
+        object: 'node',
+        parentId: defaultLevelId,
+        polygon: [
+          [0, 0],
+          [8, 0],
+          [8, 6],
+          [0, 6],
+        ],
+        type: 'zone',
+        visible: true,
+      },
+      wall_pascal_lovelace_north: {
+        children: [],
+        end: [8, 0],
+        id: 'wall_pascal_lovelace_north',
+        metadata: {},
+        object: 'node',
+        parentId: defaultLevelId,
+        start: [0, 0],
+        type: 'wall',
+        visible: true,
+      },
+      wall_pascal_lovelace_east: {
+        children: [],
+        end: [8, 6],
+        id: 'wall_pascal_lovelace_east',
+        metadata: {},
+        object: 'node',
+        parentId: defaultLevelId,
+        start: [8, 0],
+        type: 'wall',
+        visible: true,
+      },
+      wall_pascal_lovelace_south: {
+        children: [],
+        end: [0, 6],
+        id: 'wall_pascal_lovelace_south',
+        metadata: {},
+        object: 'node',
+        parentId: defaultLevelId,
+        start: [8, 6],
+        type: 'wall',
+        visible: true,
+      },
+      wall_pascal_lovelace_west: {
+        children: [],
+        end: [0, 0],
+        id: 'wall_pascal_lovelace_west',
+        metadata: {},
+        object: 'node',
+        parentId: defaultLevelId,
+        start: [0, 6],
+        type: 'wall',
+        visible: true,
+      },
+    },
+    rootNodeIds: [buildingId],
   }
 }
 
@@ -263,21 +305,26 @@ async function readImportedResources() {
     // an import log at .codex/runtime-logs/ha-import-resources-latest.json.
   }
 
+  try {
+    const artifact = JSON.parse(await readFile(path.join(outDir, 'home.scene.json'), 'utf8'))
+    const resources = artifact.homeAssistant?.bindings?.flatMap((binding) => binding.resources ?? [])
+    if (Array.isArray(resources) && resources.length > 0) {
+      return resources
+    }
+  } catch {
+    // Existing demo artifacts carry enough resource metadata to refresh the
+    // layout without depending on workstation-local runtime logs.
+  }
+
   throw new Error(
-    'Missing Home Assistant import resource log. Run an HA import first or provide .codex/runtime-logs/ha-import-resources-latest.json.',
+    'Missing Home Assistant resources. Run an HA import or keep docs/examples/lovelace/home.scene.json available.',
   )
 }
 
 async function main() {
-  const scene = JSON.parse(await readFile(demoScenePath, 'utf8'))
   const resources = await readImportedResources()
-  scene.collections = scene.collections ?? {}
-  rewriteLocalAssetUrls(scene)
-  pruneOrphanNodes(scene)
-  removeAuthoringReferenceNodes(scene)
-
-  const defaultLevelId = 'level_pojp0mw3qssu110w'
-  ensureRootNode(scene, defaultLevelId)
+  const defaultLevelId = 'level_pascal_lovelace_main'
+  const scene = createSimpleScene(defaultLevelId)
 
   const bindings = []
 
@@ -285,7 +332,7 @@ async function main() {
     asset: assets.television,
     id: 'item_pascal_lovelace_family_room_tv',
     name: 'Family Room TV',
-    position: [5.6, 0, 8.1],
+    position: [4, 0, 0.65],
     rotation: [0, Math.PI, 0],
   })
   createCollection(
@@ -308,15 +355,15 @@ async function main() {
   addItem(scene, defaultLevelId, {
     asset: assets.floorLamp,
     id: 'item_pascal_lovelace_living_lamp_1',
-    name: 'Living Room Lamp 1',
-    position: [7.15, 0, 6.8],
+    name: 'Left Lamp',
+    position: [1.2, 0, 5.1],
     rotation: [0, 0, 0],
   })
   addItem(scene, defaultLevelId, {
     asset: assets.floorLamp,
     id: 'item_pascal_lovelace_living_lamp_2',
-    name: 'Living Room Lamp 2',
-    position: [2.75, 0, 6.8],
+    name: 'Right Lamp',
+    position: [6.8, 0, 5.1],
     rotation: [0, 0, 0],
   })
   createCollection(
@@ -337,64 +384,16 @@ async function main() {
   )
 
   addItem(scene, defaultLevelId, {
-    asset: assets.recessedLight,
-    id: 'item_pascal_lovelace_kitchen_lights',
-    name: 'Kitchen Lights',
-    position: [12.9, 2.6, 7.1],
-    rotation: [0, 0, 0],
-  })
-  createCollection(
-    scene,
-    'collection_pascal_lovelace_kitchen_lights',
-    'Kitchen Lights',
-    ['item_pascal_lovelace_kitchen_lights'],
-    '#10b981',
-  )
-  bindings.push(
-    createBindingNode(
-      scene,
-      'ha-binding_pascal_lovelace_kitchen_lights',
-      'collection_pascal_lovelace_kitchen_lights',
-      findResource(resources, 'light.pascal_kitchen_lights_group'),
-      { aggregation: 'any_on', icon: 'mdi:light-recessed', label: 'Kitchen Lights' },
-    ),
-  )
-
-  addItem(scene, defaultLevelId, {
-    asset: assets.recessedLight,
-    id: 'item_pascal_lovelace_master_lights',
-    name: 'Master Lights',
-    position: [18.1, 2.6, 10.6],
-    rotation: [0, 0, 0],
-  })
-  createCollection(
-    scene,
-    'collection_pascal_lovelace_master_lights',
-    'Master Lights',
-    ['item_pascal_lovelace_master_lights'],
-    '#8b5cf6',
-  )
-  bindings.push(
-    createBindingNode(
-      scene,
-      'ha-binding_pascal_lovelace_master_lights',
-      'collection_pascal_lovelace_master_lights',
-      findResource(resources, 'light.pascal_master_bedroom_lights_group'),
-      { aggregation: 'any_on', icon: 'mdi:light-recessed', label: 'Master Lights' },
-    ),
-  )
-
-  addItem(scene, defaultLevelId, {
     asset: assets.ceilingFan,
     id: 'item_pascal_lovelace_master_fan',
-    name: 'Master Fan',
-    position: [17.1, 2.7, 11.2],
+    name: 'Ceiling Fan',
+    position: [5.8, 2.75, 3.35],
     rotation: [0, 0, 0],
   })
   createCollection(
     scene,
     'collection_pascal_lovelace_master_fan',
-    'Master Fan',
+    'Ceiling Fan',
     ['item_pascal_lovelace_master_fan'],
     '#06b6d4',
   )
@@ -404,7 +403,7 @@ async function main() {
       'ha-binding_pascal_lovelace_master_fan',
       'collection_pascal_lovelace_master_fan',
       findResource(resources, 'fan.pascal_master_bedroom_fan'),
-      { icon: 'mdi:fan', label: 'Master Fan' },
+      { icon: 'mdi:fan', label: 'Ceiling Fan' },
     ),
   )
 
@@ -430,10 +429,8 @@ tap_action:
 `
 
   await mkdir(outDir, { recursive: true })
-  await mkdir(editorPublicOutDir, { recursive: true })
   const artifactText = `${JSON.stringify(artifact, null, 2)}\n`
   await writeFile(path.join(outDir, 'home.scene.json'), artifactText)
-  await writeFile(path.join(editorPublicOutDir, 'home.scene.json'), artifactText)
   await writeFile(path.join(outDir, 'custom-card.yaml'), yaml)
 }
 

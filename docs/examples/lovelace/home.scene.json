@@ -265,270 +265,11 @@
         ]
       },
       {
-        "aggregation": "any_on",
-        "collectionId": "collection_pascal_lovelace_kitchen_lights",
-        "presentation": {
-          "icon": "mdi:light-recessed",
-          "label": "Kitchen Lights",
-          "rtsHidden": false
-        },
-        "primaryResourceId": "light.pascal_kitchen_lights_group",
-        "resources": [
-          {
-            "actions": [
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_step_pct",
-                    "label": "Brightness Step Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": -100,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_on",
-                "label": "Turn On",
-                "service": "turn_on"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_off",
-                "label": "Turn Off",
-                "service": "turn_off"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.toggle",
-                "label": "Toggle",
-                "service": "toggle"
-              }
-            ],
-            "capabilities": [
-              "power",
-              "brightness"
-            ],
-            "defaultActionKey": "light.toggle",
-            "description": "Smart Light via Home Assistant; 7 grouped HA entities",
-            "domain": "light",
-            "entityId": "light.pascal_kitchen_lights_group",
-            "id": "light.pascal_kitchen_lights_group",
-            "kind": "entity",
-            "label": "Kitchen",
-            "state": null,
-            "isGroup": true,
-            "memberEntityIds": [
-              "light.pascal_kitchen_table_pendant_1",
-              "light.pascal_kitchen_table_pendant_2",
-              "light.pascal_kitchen_perimeter_light_1",
-              "light.pascal_kitchen_perimeter_light_2",
-              "light.pascal_kitchen_perimeter_light_3",
-              "light.pascal_kitchen_perimeter_light_4",
-              "light.pascal_kitchen_perimeter_light_5"
-            ]
-          }
-        ]
-      },
-      {
-        "aggregation": "any_on",
-        "collectionId": "collection_pascal_lovelace_master_lights",
-        "presentation": {
-          "icon": "mdi:light-recessed",
-          "label": "Master Lights",
-          "rtsHidden": false
-        },
-        "primaryResourceId": "light.pascal_master_bedroom_lights_group",
-        "resources": [
-          {
-            "actions": [
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_step_pct",
-                    "label": "Brightness Step Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": -100,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_on",
-                "label": "Turn On",
-                "service": "turn_on"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_off",
-                "label": "Turn Off",
-                "service": "turn_off"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.toggle",
-                "label": "Toggle",
-                "service": "toggle"
-              }
-            ],
-            "capabilities": [
-              "power",
-              "brightness"
-            ],
-            "defaultActionKey": "light.toggle",
-            "description": "Smart Light via Home Assistant; 4 grouped HA entities",
-            "domain": "light",
-            "entityId": "light.pascal_master_bedroom_lights_group",
-            "id": "light.pascal_master_bedroom_lights_group",
-            "kind": "entity",
-            "label": "Master",
-            "state": null,
-            "isGroup": true,
-            "memberEntityIds": [
-              "light.pascal_master_bedroom_recessed_light_1",
-              "light.pascal_master_bedroom_recessed_light_2",
-              "light.pascal_master_bedroom_recessed_light_3",
-              "light.pascal_master_bedroom_recessed_light_4"
-            ]
-          }
-        ]
-      },
-      {
         "aggregation": "single",
         "collectionId": "collection_pascal_lovelace_master_fan",
         "presentation": {
           "icon": "mdi:fan",
-          "label": "Master Fan",
+          "label": "Ceiling Fan",
           "rtsHidden": false
         },
         "primaryResourceId": "fan.pascal_master_bedroom_fan",
@@ -667,18 +408,45 @@
     ]
   },
   "scene": {
+    "collections": {
+      "collection_pascal_lovelace_family_room_tv": {
+        "color": "#2563eb",
+        "controlNodeId": "item_pascal_lovelace_family_room_tv",
+        "id": "collection_pascal_lovelace_family_room_tv",
+        "name": "Family Room TV",
+        "nodeIds": [
+          "item_pascal_lovelace_family_room_tv"
+        ]
+      },
+      "collection_pascal_lovelace_living_lamps": {
+        "color": "#f59e0b",
+        "controlNodeId": "item_pascal_lovelace_living_lamp_1",
+        "id": "collection_pascal_lovelace_living_lamps",
+        "name": "Living Lamps",
+        "nodeIds": [
+          "item_pascal_lovelace_living_lamp_1",
+          "item_pascal_lovelace_living_lamp_2"
+        ]
+      },
+      "collection_pascal_lovelace_master_fan": {
+        "color": "#06b6d4",
+        "controlNodeId": "item_pascal_lovelace_master_fan",
+        "id": "collection_pascal_lovelace_master_fan",
+        "name": "Ceiling Fan",
+        "nodeIds": [
+          "item_pascal_lovelace_master_fan"
+        ]
+      }
+    },
     "nodes": {
-      "building_bv4ilcjivnxn8wkd": {
-        "object": "node",
-        "id": "building_bv4ilcjivnxn8wkd",
-        "type": "building",
-        "parentId": null,
-        "visible": true,
-        "metadata": {},
+      "building_pascal_lovelace_demo": {
         "children": [
-          "level_pojp0mw3qssu110w",
-          "level_bbyvfs9qwzh4arjf"
+          "level_pascal_lovelace_main"
         ],
+        "id": "building_pascal_lovelace_demo",
+        "metadata": {},
+        "object": "node",
+        "parentId": null,
         "position": [
           0,
           0,
@@ -688,2389 +456,180 @@
           0,
           0,
           0
-        ]
+        ],
+        "type": "building",
+        "visible": true
       },
-      "level_pojp0mw3qssu110w": {
-        "object": "node",
-        "id": "level_pojp0mw3qssu110w",
-        "type": "level",
-        "parentId": null,
-        "visible": true,
-        "metadata": {},
+      "level_pascal_lovelace_main": {
+        "camera": {
+          "mode": "perspective",
+          "position": [
+            4,
+            8.4,
+            9.2
+          ],
+          "target": [
+            4,
+            0,
+            3
+          ]
+        },
         "children": [
-          "slab_gr6zxi4915gqwjbn",
-          "zone_iozx54yy1hmmoads",
-          "item_ketiyaswru3k7vub",
-          "item_8zi2layxh9s8erc1",
-          "item_t29aoosaypbiwkq2",
-          "item_ycf4n2wudq423w5g",
-          "wall_0j28n7nskm2sst7m",
-          "wall_3wwt9bjqrdc5w09s",
-          "wall_785y11hb3nztn1ua",
-          "wall_g4h1v4vm9ou0wryc",
-          "item_4vch778zg55nfmgb",
-          "item_vqk00ajqdznqsygs",
-          "wall_ejrf1znv4twbeszy",
-          "wall_9l64ckn6p3yzmfxf",
-          "item_e3bxmnrhz9eclzgw",
-          "item_vf8hqhemi33y4n0w",
-          "item_k2zexryozzwgokox",
-          "item_6p3y4rva0zv24s1t",
-          "item_r7idtbazaf6482kq",
-          "item_0x8hjyork26n4g2m",
-          "item_tmprvzxa85izusug",
-          "item_g6219gs7mrpg7bzd",
-          "item_dts7f41ictd7hah4",
-          "item_in5trmidft4sglhx",
-          "zone_c7k2ssvmbv5d1xlm",
-          "item_0e9paq67kdbm5ux0",
-          "item_iyu7knyxqe82c3yg",
-          "item_nwe34qk8vzs1vag7",
-          "item_oay55zmjjo76s1fs",
-          "item_g060bhthvcra992w",
-          "item_38kt7s45alt2vrjg",
-          "item_n10cp9ke7n9hxl96",
-          "item_nt5fxip4a03cmaoi",
-          "item_1quoil3ytsuuarni",
-          "item_e1w89kkg2pql1v45",
-          "item_3akotmiffzdr8ule",
-          "item_1b3tinfswueb6gr8",
-          "item_y164oe3lxfx9qefg",
-          "roof_ui8zhim41alg6lq4",
+          "slab_pascal_lovelace_main",
+          "zone_pascal_lovelace_main",
+          "wall_pascal_lovelace_north",
+          "wall_pascal_lovelace_east",
+          "wall_pascal_lovelace_south",
+          "wall_pascal_lovelace_west",
           "item_pascal_lovelace_family_room_tv",
           "item_pascal_lovelace_living_lamp_1",
           "item_pascal_lovelace_living_lamp_2",
-          "item_pascal_lovelace_kitchen_lights",
-          "item_pascal_lovelace_master_lights",
           "item_pascal_lovelace_master_fan"
         ],
+        "id": "level_pascal_lovelace_main",
         "level": 0,
-        "camera": {
-          "position": [
-            32.19770918094574,
-            13.355189178183336,
-            32.63027548275616
-          ],
-          "target": [
-            4.8501257048479305,
-            -6.656412040461838e-16,
-            7.3634421472590255
-          ],
-          "mode": "perspective"
-        }
-      },
-      "slab_gr6zxi4915gqwjbn": {
-        "object": "node",
-        "id": "slab_gr6zxi4915gqwjbn",
-        "type": "slab",
-        "name": "Plancher",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
         "metadata": {},
-        "polygon": [
-          [
-            13,
-            6
-          ],
-          [
-            9,
-            6
-          ],
-          [
-            9,
-            0
-          ],
-          [
-            13,
-            0
-          ]
-        ],
-        "elevation": 0.05
-      },
-      "level_bbyvfs9qwzh4arjf": {
         "object": "node",
-        "id": "level_bbyvfs9qwzh4arjf",
+        "parentId": "building_pascal_lovelace_demo",
         "type": "level",
-        "parentId": "building_bv4ilcjivnxn8wkd",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "roof_jxd8tc6rcuaujl25"
-        ],
-        "level": 1,
-        "camera": {
-          "position": [
-            11.709072311989358,
-            25.635955613557638,
-            50.59653427090403
-          ],
-          "target": [
-            6.9995635873796855,
-            2.4999999999999996,
-            0.6911898255966076
-          ],
-          "mode": "perspective"
-        }
+        "visible": true
       },
-      "roof_jxd8tc6rcuaujl25": {
-        "object": "node",
-        "id": "roof_jxd8tc6rcuaujl25",
-        "type": "roof",
-        "name": "Roof 1",
-        "parentId": "level_bbyvfs9qwzh4arjf",
-        "visible": true,
+      "slab_pascal_lovelace_main": {
+        "elevation": 0.05,
+        "id": "slab_pascal_lovelace_main",
         "metadata": {},
-        "position": [
-          10.25,
-          0,
-          3.5
-        ],
-        "rotation": 0,
-        "length": 5.5,
-        "height": 1.6,
-        "leftWidth": 4.7,
-        "rightWidth": 2.7
-      },
-      "zone_iozx54yy1hmmoads": {
+        "name": "Main Room Floor",
         "object": "node",
-        "id": "zone_iozx54yy1hmmoads",
-        "type": "zone",
-        "name": "Wawa Zone",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
+        "parentId": "level_pascal_lovelace_main",
         "polygon": [
           [
-            9,
+            0,
+            0
+          ],
+          [
+            8,
+            0
+          ],
+          [
+            8,
             6
           ],
           [
-            9,
-            0
-          ],
-          [
-            13,
-            0
-          ],
-          [
-            13,
+            0,
             6
           ]
         ],
-        "color": "#3b82f6",
+        "type": "slab",
+        "visible": true
+      },
+      "zone_pascal_lovelace_main": {
         "camera": {
+          "mode": "perspective",
           "position": [
-            18.715003971902778,
-            18.8254836683251,
-            12.086656976691291
+            4,
+            8.4,
+            9.2
           ],
           "target": [
-            6.9995635873796855,
-            1.6971845387795204e-17,
-            0.6911898255966076
-          ],
-          "mode": "perspective"
-        }
-      },
-      "item_ketiyaswru3k7vub": {
-        "object": "node",
-        "id": "item_ketiyaswru3k7vub",
-        "type": "item",
-        "name": "lounge-chair",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          9.5,
-          0,
-          6.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "lounge-chair",
-          "category": "furniture",
-          "name": "lounge-chair",
-          "thumbnail": "/items/lounge-chair/thumbnail.webp",
-          "src": "/items/lounge-chair/model.glb",
-          "dimensions": [
-            1,
-            1.1,
-            1.5
-          ],
-          "offset": [
+            4,
             0,
-            0,
-            0.09
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
+            3
           ]
-        }
-      },
-      "item_8zi2layxh9s8erc1": {
-        "object": "node",
-        "id": "item_8zi2layxh9s8erc1",
-        "type": "item",
-        "name": "Lounge Chair 2",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
+        },
+        "color": "#2563eb",
+        "id": "zone_pascal_lovelace_main",
         "metadata": {},
-        "position": [
-          12,
-          0,
-          6.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "lounge-chair",
-          "category": "furniture",
-          "name": "lounge-chair",
-          "thumbnail": "/items/lounge-chair/thumbnail.webp",
-          "src": "/items/lounge-chair/model.glb",
-          "dimensions": [
-            1,
-            1.1,
-            1.5
-          ],
-          "offset": [
-            0,
-            0,
-            0.09
-          ],
-          "rotation": [
-            0,
+        "name": "Living Room",
+        "object": "node",
+        "parentId": "level_pascal_lovelace_main",
+        "polygon": [
+          [
             0,
             0
           ],
-          "scale": [
-            1,
-            1,
-            1
+          [
+            8,
+            0
+          ],
+          [
+            8,
+            6
+          ],
+          [
+            0,
+            6
           ]
-        }
+        ],
+        "type": "zone",
+        "visible": true
       },
-      "item_t29aoosaypbiwkq2": {
-        "object": "node",
-        "id": "item_t29aoosaypbiwkq2",
-        "type": "item",
-        "name": "trash-bin",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          8.25,
-          0,
-          6.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "trash-bin",
-          "category": "furniture",
-          "name": "trash-bin",
-          "thumbnail": "/items/trash-bin/thumbnail.webp",
-          "src": "/items/trash-bin/model.glb",
-          "dimensions": [
-            0.5,
-            0.6,
-            0.5
-          ],
-          "offset": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_ycf4n2wudq423w5g": {
-        "object": "node",
-        "id": "item_ycf4n2wudq423w5g",
-        "type": "item",
-        "name": "toy",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          7.25,
-          0,
-          6.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "toy",
-          "category": "furniture",
-          "name": "toy",
-          "thumbnail": "/items/toy/thumbnail.webp",
-          "src": "/items/toy/model.glb",
-          "dimensions": [
-            0.5,
-            0.5,
-            0.5
-          ],
-          "offset": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "wall_0j28n7nskm2sst7m": {
-        "object": "node",
-        "id": "wall_0j28n7nskm2sst7m",
-        "type": "wall",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "item_53okxjgbe9htx0yb",
-          "item_u94w6z7xl4a8icgn"
-        ],
-        "start": [
-          9,
-          0
-        ],
+      "wall_pascal_lovelace_north": {
+        "children": [],
         "end": [
-          13,
-          0
-        ]
-      },
-      "wall_3wwt9bjqrdc5w09s": {
-        "object": "node",
-        "id": "wall_3wwt9bjqrdc5w09s",
-        "type": "wall",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "item_4g68nbqcpnzrqpsa",
-          "item_b5xi5dwyufh17763"
-        ],
-        "start": [
-          13,
-          0
-        ],
-        "end": [
-          13,
-          6
-        ]
-      },
-      "item_b5xi5dwyufh17763": {
-        "object": "node",
-        "id": "item_b5xi5dwyufh17763",
-        "type": "item",
-        "name": "Window-simple",
-        "parentId": "wall_3wwt9bjqrdc5w09s",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          1.5,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "window-simple",
-          "category": "window",
-          "name": "Window-simple",
-          "thumbnail": "/items/window-simple/thumbnail.webp",
-          "src": "/items/window-simple/model.glb",
-          "dimensions": [
-            1.5,
-            2,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            1.06,
-            -0.35,
-            0.05
-          ],
-          "rotation": [
-            0,
-            3.14,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_53okxjgbe9htx0yb": {
-        "object": "node",
-        "id": "item_53okxjgbe9htx0yb",
-        "type": "item",
-        "name": "Window-double",
-        "parentId": "wall_0j28n7nskm2sst7m",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          2.5,
-          0.5,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "window-double",
-          "category": "window",
-          "name": "Window-double",
-          "thumbnail": "/items/window-double/thumbnail.webp",
-          "src": "/items/window-double/model.glb",
-          "dimensions": [
-            1.5,
-            2,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            0,
-            -0.38,
-            0.02
-          ],
-          "rotation": [
-            0,
-            3.14,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_4g68nbqcpnzrqpsa": {
-        "object": "node",
-        "id": "item_4g68nbqcpnzrqpsa",
-        "type": "item",
-        "name": "Window-rectangle",
-        "parentId": "wall_3wwt9bjqrdc5w09s",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          4,
-          0.5,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "window-rectangle",
-          "category": "window",
-          "name": "Window-rectangle",
-          "thumbnail": "/items/window-rectangle/thumbnail.webp",
-          "src": "/items/window-rectangle/model.glb",
-          "dimensions": [
-            3,
-            2,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            -1.65,
-            -0.34,
-            0.1
-          ],
-          "rotation": [
-            0,
-            3.14,
-            0
-          ],
-          "scale": [
-            0.95,
-            1,
-            1
-          ]
-        }
-      },
-      "item_u94w6z7xl4a8icgn": {
-        "object": "node",
-        "id": "item_u94w6z7xl4a8icgn",
-        "type": "item",
-        "name": "Window-square",
-        "parentId": "wall_0j28n7nskm2sst7m",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          1,
-          1,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "window-square",
-          "category": "window",
-          "name": "Window-square",
-          "thumbnail": "/items/window-square/thumbnail.webp",
-          "src": "/items/window-square/model.glb",
-          "dimensions": [
-            1,
-            1.5,
-            0.3
-          ],
-          "attachTo": "wall",
-          "offset": [
-            0,
-            0.72,
-            0
-          ],
-          "rotation": [
-            0,
-            3.141592653589793,
-            0
-          ],
-          "scale": [
-            0.5,
-            0.5,
-            0.5
-          ]
-        }
-      },
-      "wall_785y11hb3nztn1ua": {
-        "object": "node",
-        "id": "wall_785y11hb3nztn1ua",
-        "type": "wall",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "item_d7yqucsv4neczzyc"
-        ],
-        "start": [
-          8.5,
-          0
-        ],
-        "end": [
-          6,
-          0
-        ]
-      },
-      "item_d7yqucsv4neczzyc": {
-        "object": "node",
-        "id": "item_d7yqucsv4neczzyc",
-        "type": "item",
-        "name": "door-bar",
-        "parentId": "wall_785y11hb3nztn1ua",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          1,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "door-bar",
-          "category": "door",
-          "name": "door-bar",
-          "thumbnail": "/items/door-bar/thumbnail.webp",
-          "src": "/items/door-bar/model.glb",
-          "dimensions": [
-            1.5,
-            2.5,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            -0.48,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "wall_g4h1v4vm9ou0wryc": {
-        "object": "node",
-        "id": "wall_g4h1v4vm9ou0wryc",
-        "type": "wall",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "item_mslnrvkv4302epxo",
-          "item_xurqne401l2bdtd1"
-        ],
-        "start": [
-          6,
-          0
-        ],
-        "end": [
-          0,
-          0
-        ]
-      },
-      "item_mslnrvkv4302epxo": {
-        "object": "node",
-        "id": "item_mslnrvkv4302epxo",
-        "type": "item",
-        "name": "glass-door",
-        "parentId": "wall_g4h1v4vm9ou0wryc",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          2,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "glass-door",
-          "category": "door",
-          "name": "glass-door",
-          "thumbnail": "/items/glass-door/thumbnail.webp",
-          "src": "/items/glass-door/model.glb",
-          "dimensions": [
-            1.5,
-            2.5,
-            0.4
-          ],
-          "attachTo": "wall",
-          "offset": [
-            -0.52,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.9,
-            0.9,
-            0.9
-          ]
-        }
-      },
-      "item_xurqne401l2bdtd1": {
-        "object": "node",
-        "id": "item_xurqne401l2bdtd1",
-        "type": "item",
-        "name": "door",
-        "parentId": "wall_g4h1v4vm9ou0wryc",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          4.5,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "door",
-          "category": "door",
-          "name": "door",
-          "thumbnail": "/items/door/thumbnail.webp",
-          "src": "/items/door/model.glb",
-          "dimensions": [
-            1.5,
-            2.5,
-            0.4
-          ],
-          "attachTo": "wall",
-          "offset": [
-            -0.43,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.9,
-            0.9,
-            0.9
-          ]
-        }
-      },
-      "item_4vch778zg55nfmgb": {
-        "object": "node",
-        "id": "item_4vch778zg55nfmgb",
-        "type": "item",
-        "name": "lounge-chair",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          2.5,
-          0,
-          20.75
-        ],
-        "rotation": [
-          0,
-          -1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "lounge-chair",
-          "category": "furniture",
-          "name": "lounge-chair",
-          "thumbnail": "/items/lounge-chair/thumbnail.webp",
-          "src": "/items/lounge-chair/model.glb",
-          "dimensions": [
-            1,
-            1.1,
-            1.5
-          ],
-          "offset": [
-            0,
-            0,
-            0.09
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_vqk00ajqdznqsygs": {
-        "object": "node",
-        "id": "item_vqk00ajqdznqsygs",
-        "type": "item",
-        "name": "tv-stand",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          3,
-          0,
-          19.25
-        ],
-        "rotation": [
-          0,
-          -1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "tv-stand",
-          "category": "furniture",
-          "name": "tv-stand",
-          "thumbnail": "/items/tv-stand/thumbnail.webp",
-          "src": "/items/tv-stand/model.glb",
-          "dimensions": [
-            2,
-            0.4,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.21,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "wall_ejrf1znv4twbeszy": {
-        "object": "node",
-        "id": "wall_ejrf1znv4twbeszy",
-        "type": "wall",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "item_s9fs055u0ilri7pi",
-          "item_0173tdywhm704hah",
-          "item_7ykyzy2yre3761dq",
-          "item_4dehdkm4vx6r4ghv"
-        ],
-        "start": [
-          1,
-          13
-        ],
-        "end": [
-          1,
-          0.5
-        ]
-      },
-      "item_s9fs055u0ilri7pi": {
-        "object": "node",
-        "id": "item_s9fs055u0ilri7pi",
-        "type": "item",
-        "name": "Window-double",
-        "parentId": "wall_ejrf1znv4twbeszy",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          10.5,
-          0.5,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "window-double",
-          "category": "window",
-          "name": "Window-double",
-          "thumbnail": "/items/window-double/thumbnail.webp",
-          "src": "/items/window-double/model.glb",
-          "dimensions": [
-            1.5,
-            1.5,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            0,
-            -0.18,
-            0.02
-          ],
-          "rotation": [
-            0,
-            3.14,
-            0
-          ],
-          "scale": [
-            0.75,
-            0.75,
-            0.75
-          ]
-        }
-      },
-      "item_4dehdkm4vx6r4ghv": {
-        "object": "node",
-        "id": "item_4dehdkm4vx6r4ghv",
-        "type": "item",
-        "name": "Window-double",
-        "parentId": "wall_ejrf1znv4twbeszy",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          8.5,
-          0.5,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "window-double",
-          "category": "window",
-          "name": "Window-double",
-          "thumbnail": "/items/window-double/thumbnail.webp",
-          "src": "/items/window-double/model.glb",
-          "dimensions": [
-            1.5,
-            1.5,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            0,
-            -0.18,
-            0.02
-          ],
-          "rotation": [
-            0,
-            3.14,
-            0
-          ],
-          "scale": [
-            0.75,
-            0.75,
-            0.75
-          ]
-        }
-      },
-      "item_0173tdywhm704hah": {
-        "object": "node",
-        "id": "item_0173tdywhm704hah",
-        "type": "item",
-        "name": "door",
-        "parentId": "wall_ejrf1znv4twbeszy",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          6.5,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "door",
-          "category": "door",
-          "name": "door",
-          "thumbnail": "/items/door/thumbnail.webp",
-          "src": "/items/door/model.glb",
-          "dimensions": [
-            1.5,
-            2,
-            0.4
-          ],
-          "attachTo": "wall",
-          "offset": [
-            -0.43,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.8,
-            0.8,
-            0.8
-          ]
-        }
-      },
-      "item_7ykyzy2yre3761dq": {
-        "object": "node",
-        "id": "item_7ykyzy2yre3761dq",
-        "type": "item",
-        "name": "air-conditioning",
-        "parentId": "wall_ejrf1znv4twbeszy",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          4,
-          1.5,
-          0
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "side": "front",
-        "asset": {
-          "id": "air-conditioning",
-          "category": "appliance",
-          "name": "air-conditioning",
-          "thumbnail": "/items/air-conditioning/thumbnail.webp",
-          "src": "/items/air-conditioning/model.glb",
-          "dimensions": [
-            2,
-            1,
-            0.9
-          ],
-          "attachTo": "wall-side",
-          "offset": [
-            0,
-            0.37,
-            0.21
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "wall_9l64ckn6p3yzmfxf": {
-        "object": "node",
-        "id": "wall_9l64ckn6p3yzmfxf",
-        "type": "wall",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "children": [
-          "item_7x3elrsxyvoubfbi",
-          "item_ii6ymw4nrg64bw8h",
-          "item_bt8uiq7mb9w3m0up"
-        ],
-        "start": [
-          -4.5,
-          4
-        ],
-        "end": [
-          -4.5,
-          -2.5
-        ]
-      },
-      "item_7x3elrsxyvoubfbi": {
-        "object": "node",
-        "id": "item_7x3elrsxyvoubfbi",
-        "type": "item",
-        "name": "Window-simple",
-        "parentId": "wall_9l64ckn6p3yzmfxf",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          4.5,
-          0,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "window-simple",
-          "category": "window",
-          "name": "Window-simple",
-          "thumbnail": "/items/window-simple/thumbnail.webp",
-          "src": "/items/window-simple/model.glb",
-          "dimensions": [
-            1.5,
-            2,
-            0.5
-          ],
-          "attachTo": "wall",
-          "offset": [
-            1.06,
-            0,
-            0.05
-          ],
-          "rotation": [
-            0,
-            3.14,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_ii6ymw4nrg64bw8h": {
-        "object": "node",
-        "id": "item_ii6ymw4nrg64bw8h",
-        "type": "item",
-        "name": "Window-square",
-        "parentId": "wall_9l64ckn6p3yzmfxf",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          1,
-          0.5,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "window-square",
-          "category": "window",
-          "name": "Window-square",
-          "thumbnail": "/items/window-square/thumbnail.webp",
-          "src": "/items/window-square/model.glb",
-          "dimensions": [
-            1,
-            1.5,
-            0.3
-          ],
-          "attachTo": "wall",
-          "offset": [
-            0,
-            0.72,
-            0
-          ],
-          "rotation": [
-            0,
-            3.141592653589793,
-            0
-          ],
-          "scale": [
-            0.5,
-            0.5,
-            0.5
-          ]
-        }
-      },
-      "item_bt8uiq7mb9w3m0up": {
-        "object": "node",
-        "id": "item_bt8uiq7mb9w3m0up",
-        "type": "item",
-        "name": "Window-square",
-        "parentId": "wall_9l64ckn6p3yzmfxf",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          2.5,
-          0.5,
-          0
-        ],
-        "rotation": [
-          0,
-          3.141592653589793,
-          0
-        ],
-        "side": "back",
-        "asset": {
-          "id": "window-square",
-          "category": "window",
-          "name": "Window-square",
-          "thumbnail": "/items/window-square/thumbnail.webp",
-          "src": "/items/window-square/model.glb",
-          "dimensions": [
-            1,
-            1.5,
-            0.3
-          ],
-          "attachTo": "wall",
-          "offset": [
-            0,
-            0.72,
-            0
-          ],
-          "rotation": [
-            0,
-            3.141592653589793,
-            0
-          ],
-          "scale": [
-            0.5,
-            0.5,
-            0.5
-          ]
-        }
-      },
-      "item_e3bxmnrhz9eclzgw": {
-        "object": "node",
-        "id": "item_e3bxmnrhz9eclzgw",
-        "type": "item",
-        "name": "low-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          12,
-          0,
-          12.25
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "low-fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_vf8hqhemi33y4n0w": {
-        "object": "node",
-        "id": "item_vf8hqhemi33y4n0w",
-        "type": "item",
-        "name": "low-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          10,
-          0,
-          12.25
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "low-fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_k2zexryozzwgokox": {
-        "object": "node",
-        "id": "item_k2zexryozzwgokox",
-        "type": "item",
-        "name": "low-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
           8,
-          0,
-          12.25
+          0
         ],
-        "rotation": [
-          0,
+        "id": "wall_pascal_lovelace_north",
+        "metadata": {},
+        "object": "node",
+        "parentId": "level_pascal_lovelace_main",
+        "start": [
           0,
           0
         ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "low-fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
+        "type": "wall",
+        "visible": true
       },
-      "item_6p3y4rva0zv24s1t": {
-        "object": "node",
-        "id": "item_6p3y4rva0zv24s1t",
-        "type": "item",
-        "name": "parking-spot",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          7.5,
-          0,
-          14.25
+      "wall_pascal_lovelace_east": {
+        "children": [],
+        "end": [
+          8,
+          6
         ],
-        "rotation": [
+        "id": "wall_pascal_lovelace_east",
+        "metadata": {},
+        "object": "node",
+        "parentId": "level_pascal_lovelace_main",
+        "start": [
+          8,
+          0
+        ],
+        "type": "wall",
+        "visible": true
+      },
+      "wall_pascal_lovelace_south": {
+        "children": [],
+        "end": [
           0,
+          6
+        ],
+        "id": "wall_pascal_lovelace_south",
+        "metadata": {},
+        "object": "node",
+        "parentId": "level_pascal_lovelace_main",
+        "start": [
+          8,
+          6
+        ],
+        "type": "wall",
+        "visible": true
+      },
+      "wall_pascal_lovelace_west": {
+        "children": [],
+        "end": [
           0,
           0
         ],
-        "asset": {
-          "id": "parking-spot",
-          "category": "outdoor",
-          "name": "parking-spot",
-          "thumbnail": "/items/parking-spot/thumbnail.webp",
-          "src": "/items/parking-spot/model.glb",
-          "dimensions": [
-            5,
-            1,
-            2.5
-          ],
-          "offset": [
-            0,
-            0,
-            0.01
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.9,
-            1,
-            0.78
-          ]
-        }
-      },
-      "item_r7idtbazaf6482kq": {
-        "object": "node",
-        "id": "item_r7idtbazaf6482kq",
-        "type": "item",
-        "name": "fir-tree",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
+        "id": "wall_pascal_lovelace_west",
         "metadata": {},
-        "position": [
-          5.75,
-          0,
-          11.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "fir-tree",
-          "category": "outdoor",
-          "name": "fir-tree",
-          "thumbnail": "/items/fir-tree/thumbnail.webp",
-          "src": "/items/fir-tree/model.glb",
-          "dimensions": [
-            1.5,
-            3.2,
-            1.5
-          ],
-          "offset": [
-            -0.09,
-            0.05,
-            0.03
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_0x8hjyork26n4g2m": {
         "object": "node",
-        "id": "item_0x8hjyork26n4g2m",
-        "type": "item",
-        "name": "tree",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          12,
+        "parentId": "level_pascal_lovelace_main",
+        "start": [
           0,
-          16
+          6
         ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "tree",
-          "category": "outdoor",
-          "name": "tree",
-          "thumbnail": "/items/tree/thumbnail.webp",
-          "src": "/items/tree/model.glb",
-          "dimensions": [
-            4,
-            5,
-            4
-          ],
-          "offset": [
-            0.09,
-            0.17,
-            0.06
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.65,
-            0.65,
-            0.65
-          ]
-        }
-      },
-      "item_tmprvzxa85izusug": {
-        "object": "node",
-        "id": "item_tmprvzxa85izusug",
-        "type": "item",
-        "name": "pillar",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          3.75,
-          0,
-          13.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "pillar",
-          "category": "outdoor",
-          "name": "pillar",
-          "thumbnail": "/items/pillar/thumbnail.webp",
-          "src": "/items/pillar/model.glb",
-          "dimensions": [
-            0.5,
-            1.3,
-            0.5
-          ],
-          "offset": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_g6219gs7mrpg7bzd": {
-        "object": "node",
-        "id": "item_g6219gs7mrpg7bzd",
-        "type": "item",
-        "name": "pillar",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          6.75,
-          0,
-          12.25
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "pillar",
-          "category": "outdoor",
-          "name": "pillar",
-          "thumbnail": "/items/pillar/thumbnail.webp",
-          "src": "/items/pillar/model.glb",
-          "dimensions": [
-            0.5,
-            1.3,
-            0.5
-          ],
-          "offset": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_dts7f41ictd7hah4": {
-        "object": "node",
-        "id": "item_dts7f41ictd7hah4",
-        "type": "item",
-        "name": "low-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          13,
-          0,
-          11.25
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "low-fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_in5trmidft4sglhx": {
-        "object": "node",
-        "id": "item_in5trmidft4sglhx",
-        "type": "item",
-        "name": "low-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          13,
-          0,
-          9.25
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "low-fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "zone_c7k2ssvmbv5d1xlm": {
-        "object": "node",
-        "id": "zone_c7k2ssvmbv5d1xlm",
-        "type": "zone",
-        "name": "Relax Zone",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "polygon": [
-          [
-            3,
-            15.5
-          ],
-          [
-            3,
-            0
-          ],
-          [
-            9,
-            0
-          ],
-          [
-            9,
-            6
-          ],
-          [
-            13,
-            6
-          ],
-          [
-            16,
-            6
-          ],
-          [
-            16,
-            15.5
-          ]
-        ],
-        "color": "#22c55e",
-        "camera": {
-          "position": [
-            -6.654332076100337,
-            17.996846152830106,
-            22.501743052051737
-          ],
-          "target": [
-            5.317880378107912,
-            -2.779128022959309e-17,
-            10.080522989431769
-          ],
-          "mode": "perspective"
-        }
-      },
-      "item_0e9paq67kdbm5ux0": {
-        "object": "node",
-        "id": "item_0e9paq67kdbm5ux0",
-        "type": "item",
-        "name": "high-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          17,
-          0,
-          6.25
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "high-fence",
-          "category": "outdoor",
-          "name": "high-fence",
-          "thumbnail": "/items/high-fence/thumbnail.webp",
-          "src": "/items/high-fence/model.glb",
-          "dimensions": [
-            4,
-            4.1,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_iyu7knyxqe82c3yg": {
-        "object": "node",
-        "id": "item_iyu7knyxqe82c3yg",
-        "type": "item",
-        "name": "high-fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          21,
-          0,
-          6.25
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "high-fence",
-          "category": "outdoor",
-          "name": "high-fence",
-          "thumbnail": "/items/high-fence/thumbnail.webp",
-          "src": "/items/high-fence/model.glb",
-          "dimensions": [
-            4,
-            4.1,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_nwe34qk8vzs1vag7": {
-        "object": "node",
-        "id": "item_nwe34qk8vzs1vag7",
-        "type": "item",
-        "name": "tree",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          16.5,
-          0,
-          9
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "tree",
-          "category": "outdoor",
-          "name": "tree",
-          "thumbnail": "/items/tree/thumbnail.webp",
-          "src": "/items/tree/model.glb",
-          "dimensions": [
-            4,
-            5,
-            4
-          ],
-          "offset": [
-            0.09,
-            0.17,
-            0.06
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.65,
-            0.65,
-            0.65
-          ]
-        }
-      },
-      "item_oay55zmjjo76s1fs": {
-        "object": "node",
-        "id": "item_oay55zmjjo76s1fs",
-        "type": "item",
-        "name": "High Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          23,
-          0,
-          4.25
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "high-fence",
-          "category": "outdoor",
-          "name": "High Fence",
-          "thumbnail": "/items/high-fence/thumbnail.webp",
-          "src": "/items/high-fence/model.glb",
-          "dimensions": [
-            4,
-            4.1,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_g060bhthvcra992w": {
-        "object": "node",
-        "id": "item_g060bhthvcra992w",
-        "type": "item",
-        "name": "Medium Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          23,
-          0,
-          -1.25
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "medium-fence",
-          "category": "outdoor",
-          "name": "Medium Fence",
-          "thumbnail": "/items/medium-fence/thumbnail.webp",
-          "src": "/items/medium-fence/model.glb",
-          "dimensions": [
-            2,
-            2,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.49,
-            0.49,
-            0.49
-          ]
-        }
-      },
-      "item_38kt7s45alt2vrjg": {
-        "object": "node",
-        "id": "item_38kt7s45alt2vrjg",
-        "type": "item",
-        "name": "Medium Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          22,
-          0,
-          -2.25
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "medium-fence",
-          "category": "outdoor",
-          "name": "Medium Fence",
-          "thumbnail": "/items/medium-fence/thumbnail.webp",
-          "src": "/items/medium-fence/model.glb",
-          "dimensions": [
-            2,
-            2,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.49,
-            0.49,
-            0.49
-          ]
-        }
-      },
-      "item_n10cp9ke7n9hxl96": {
-        "object": "node",
-        "id": "item_n10cp9ke7n9hxl96",
-        "type": "item",
-        "name": "Low Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          23,
-          0,
-          -4.75
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "Low Fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_nt5fxip4a03cmaoi": {
-        "object": "node",
-        "id": "item_nt5fxip4a03cmaoi",
-        "type": "item",
-        "name": "Low Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          22,
-          0,
-          -5.75
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "low-fence",
-          "category": "outdoor",
-          "name": "Low Fence",
-          "thumbnail": "/items/low-fence/thumbnail.webp",
-          "src": "/items/low-fence/model.glb",
-          "dimensions": [
-            2,
-            0.8,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_1quoil3ytsuuarni": {
-        "object": "node",
-        "id": "item_1quoil3ytsuuarni",
-        "type": "item",
-        "name": "High Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          15,
-          0,
-          4.25
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "high-fence",
-          "category": "outdoor",
-          "name": "High Fence",
-          "thumbnail": "/items/high-fence/thumbnail.webp",
-          "src": "/items/high-fence/model.glb",
-          "dimensions": [
-            4,
-            4.1,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ]
-        }
-      },
-      "item_e1w89kkg2pql1v45": {
-        "object": "node",
-        "id": "item_e1w89kkg2pql1v45",
-        "type": "item",
-        "name": "Medium Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          17,
-          0,
-          0.25
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "medium-fence",
-          "category": "outdoor",
-          "name": "Medium Fence",
-          "thumbnail": "/items/medium-fence/thumbnail.webp",
-          "src": "/items/medium-fence/model.glb",
-          "dimensions": [
-            2,
-            2,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.49,
-            0.49,
-            0.49
-          ]
-        }
-      },
-      "item_3akotmiffzdr8ule": {
-        "object": "node",
-        "id": "item_3akotmiffzdr8ule",
-        "type": "item",
-        "name": "Medium Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          17,
-          0,
-          -1.75
-        ],
-        "rotation": [
-          0,
-          1.5707963267948966,
-          0
-        ],
-        "asset": {
-          "id": "medium-fence",
-          "category": "outdoor",
-          "name": "Medium Fence",
-          "thumbnail": "/items/medium-fence/thumbnail.webp",
-          "src": "/items/medium-fence/model.glb",
-          "dimensions": [
-            2,
-            2,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.49,
-            0.49,
-            0.49
-          ]
-        }
-      },
-      "item_1b3tinfswueb6gr8": {
-        "object": "node",
-        "id": "item_1b3tinfswueb6gr8",
-        "type": "item",
-        "name": "Medium Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          17,
-          0,
-          -4.75
-        ],
-        "rotation": [
-          0,
-          4.71238898038469,
-          0
-        ],
-        "asset": {
-          "id": "medium-fence",
-          "category": "outdoor",
-          "name": "Medium Fence",
-          "thumbnail": "/items/medium-fence/thumbnail.webp",
-          "src": "/items/medium-fence/model.glb",
-          "dimensions": [
-            2,
-            2,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.49,
-            0.49,
-            0.49
-          ]
-        }
-      },
-      "item_y164oe3lxfx9qefg": {
-        "object": "node",
-        "id": "item_y164oe3lxfx9qefg",
-        "type": "item",
-        "name": "Medium Fence",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          17,
-          0,
-          -6.75
-        ],
-        "rotation": [
-          0,
-          4.71238898038469,
-          0
-        ],
-        "asset": {
-          "id": "medium-fence",
-          "category": "outdoor",
-          "name": "Medium Fence",
-          "thumbnail": "/items/medium-fence/thumbnail.webp",
-          "src": "/items/medium-fence/model.glb",
-          "dimensions": [
-            2,
-            2,
-            0.5
-          ],
-          "offset": [
-            0,
-            0.01,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            0.49,
-            0.49,
-            0.49
-          ]
-        }
-      },
-      "roof_ui8zhim41alg6lq4": {
-        "object": "node",
-        "id": "roof_ui8zhim41alg6lq4",
-        "type": "roof",
-        "name": "Roof 2",
-        "parentId": "level_pojp0mw3qssu110w",
-        "visible": true,
-        "metadata": {},
-        "position": [
-          1,
-          0,
-          -5.5
-        ],
-        "rotation": 0,
-        "length": 0.5,
-        "height": 1.5,
-        "leftWidth": 12.1,
-        "rightWidth": 1
+        "type": "wall",
+        "visible": true
       },
       "item_pascal_lovelace_family_room_tv": {
         "children": [],
@@ -3079,7 +638,7 @@
         ],
         "metadata": {},
         "object": "node",
-        "parentId": "level_pojp0mw3qssu110w",
+        "parentId": "level_pascal_lovelace_main",
         "scale": [
           1,
           1,
@@ -3132,13 +691,13 @@
         "id": "item_pascal_lovelace_family_room_tv",
         "name": "Family Room TV",
         "position": [
-          5.6,
+          4,
           0,
-          8.1
+          0.65
         ],
         "rotation": [
           0,
-          3.141592653589793,
+          0,
           0
         ],
         "type": "item"
@@ -3298,7 +857,7 @@
         ],
         "metadata": {},
         "object": "node",
-        "parentId": "level_pojp0mw3qssu110w",
+        "parentId": "level_pascal_lovelace_main",
         "scale": [
           1,
           1,
@@ -3373,11 +932,11 @@
           "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/floor-lamp/thumbnail.png"
         },
         "id": "item_pascal_lovelace_living_lamp_1",
-        "name": "Living Room Lamp 1",
+        "name": "Left Lamp",
         "position": [
-          7.15,
+          1.2,
           0,
-          6.8
+          5.1
         ],
         "rotation": [
           0,
@@ -3393,7 +952,7 @@
         ],
         "metadata": {},
         "object": "node",
-        "parentId": "level_pojp0mw3qssu110w",
+        "parentId": "level_pascal_lovelace_main",
         "scale": [
           1,
           1,
@@ -3468,11 +1027,11 @@
           "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/floor-lamp/thumbnail.png"
         },
         "id": "item_pascal_lovelace_living_lamp_2",
-        "name": "Living Room Lamp 2",
+        "name": "Right Lamp",
         "position": [
-          2.75,
+          6.8,
           0,
-          6.8
+          5.1
         ],
         "rotation": [
           0,
@@ -3608,469 +1167,6 @@
         "type": "home-assistant-binding",
         "visible": false
       },
-      "item_pascal_lovelace_kitchen_lights": {
-        "children": [],
-        "collectionIds": [
-          "collection_pascal_lovelace_kitchen_lights"
-        ],
-        "metadata": {},
-        "object": "node",
-        "parentId": "level_pojp0mw3qssu110w",
-        "scale": [
-          1,
-          1,
-          1
-        ],
-        "visible": true,
-        "asset": {
-          "attachTo": "ceiling",
-          "category": "furniture",
-          "dimensions": [
-            0.5,
-            0.1,
-            0.5
-          ],
-          "floorPlanUrl": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/recessed-light/floor-plan.png",
-          "id": "recessed-light",
-          "interactive": {
-            "controls": [
-              {
-                "default": false,
-                "kind": "toggle",
-                "label": "Power"
-              },
-              {
-                "default": 100,
-                "displayMode": "dial",
-                "kind": "slider",
-                "label": "Intensity",
-                "max": 100,
-                "min": 0,
-                "step": 1,
-                "unit": "%"
-              }
-            ],
-            "effects": [
-              {
-                "color": "#ffffff",
-                "intensityRange": [
-                  0,
-                  2
-                ],
-                "kind": "light",
-                "offset": [
-                  0,
-                  -0.1,
-                  0
-                ]
-              }
-            ]
-          },
-          "name": "Recessed Light",
-          "offset": [
-            0,
-            0.094,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ],
-          "src": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/recessed-light/model.glb",
-          "tags": [
-            "recessed",
-            "downlight",
-            "light"
-          ],
-          "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/recessed-light/thumbnail.png"
-        },
-        "id": "item_pascal_lovelace_kitchen_lights",
-        "name": "Kitchen Lights",
-        "position": [
-          12.9,
-          2.6,
-          7.1
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "type": "item"
-      },
-      "ha-binding_pascal_lovelace_kitchen_lights": {
-        "aggregation": "any_on",
-        "collectionId": "collection_pascal_lovelace_kitchen_lights",
-        "presentation": {
-          "icon": "mdi:light-recessed",
-          "label": "Kitchen Lights",
-          "rtsHidden": false
-        },
-        "primaryResourceId": "light.pascal_kitchen_lights_group",
-        "resources": [
-          {
-            "actions": [
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_step_pct",
-                    "label": "Brightness Step Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": -100,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_on",
-                "label": "Turn On",
-                "service": "turn_on"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_off",
-                "label": "Turn Off",
-                "service": "turn_off"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.toggle",
-                "label": "Toggle",
-                "service": "toggle"
-              }
-            ],
-            "capabilities": [
-              "power",
-              "brightness"
-            ],
-            "defaultActionKey": "light.toggle",
-            "description": "Smart Light via Home Assistant; 7 grouped HA entities",
-            "domain": "light",
-            "entityId": "light.pascal_kitchen_lights_group",
-            "id": "light.pascal_kitchen_lights_group",
-            "kind": "entity",
-            "label": "Kitchen",
-            "state": null,
-            "isGroup": true,
-            "memberEntityIds": [
-              "light.pascal_kitchen_table_pendant_1",
-              "light.pascal_kitchen_table_pendant_2",
-              "light.pascal_kitchen_perimeter_light_1",
-              "light.pascal_kitchen_perimeter_light_2",
-              "light.pascal_kitchen_perimeter_light_3",
-              "light.pascal_kitchen_perimeter_light_4",
-              "light.pascal_kitchen_perimeter_light_5"
-            ]
-          }
-        ],
-        "id": "ha-binding_pascal_lovelace_kitchen_lights",
-        "metadata": {},
-        "object": "node",
-        "parentId": null,
-        "type": "home-assistant-binding",
-        "visible": false
-      },
-      "item_pascal_lovelace_master_lights": {
-        "children": [],
-        "collectionIds": [
-          "collection_pascal_lovelace_master_lights"
-        ],
-        "metadata": {},
-        "object": "node",
-        "parentId": "level_pojp0mw3qssu110w",
-        "scale": [
-          1,
-          1,
-          1
-        ],
-        "visible": true,
-        "asset": {
-          "attachTo": "ceiling",
-          "category": "furniture",
-          "dimensions": [
-            0.5,
-            0.1,
-            0.5
-          ],
-          "floorPlanUrl": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/recessed-light/floor-plan.png",
-          "id": "recessed-light",
-          "interactive": {
-            "controls": [
-              {
-                "default": false,
-                "kind": "toggle",
-                "label": "Power"
-              },
-              {
-                "default": 100,
-                "displayMode": "dial",
-                "kind": "slider",
-                "label": "Intensity",
-                "max": 100,
-                "min": 0,
-                "step": 1,
-                "unit": "%"
-              }
-            ],
-            "effects": [
-              {
-                "color": "#ffffff",
-                "intensityRange": [
-                  0,
-                  2
-                ],
-                "kind": "light",
-                "offset": [
-                  0,
-                  -0.1,
-                  0
-                ]
-              }
-            ]
-          },
-          "name": "Recessed Light",
-          "offset": [
-            0,
-            0.094,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ],
-          "src": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/recessed-light/model.glb",
-          "tags": [
-            "recessed",
-            "downlight",
-            "light"
-          ],
-          "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/recessed-light/thumbnail.png"
-        },
-        "id": "item_pascal_lovelace_master_lights",
-        "name": "Master Lights",
-        "position": [
-          18.1,
-          2.6,
-          10.6
-        ],
-        "rotation": [
-          0,
-          0,
-          0
-        ],
-        "type": "item"
-      },
-      "ha-binding_pascal_lovelace_master_lights": {
-        "aggregation": "any_on",
-        "collectionId": "collection_pascal_lovelace_master_lights",
-        "presentation": {
-          "icon": "mdi:light-recessed",
-          "label": "Master Lights",
-          "rtsHidden": false
-        },
-        "primaryResourceId": "light.pascal_master_bedroom_lights_group",
-        "resources": [
-          {
-            "actions": [
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_step_pct",
-                    "label": "Brightness Step Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": -100,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_on",
-                "label": "Turn On",
-                "service": "turn_on"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.turn_off",
-                "label": "Turn Off",
-                "service": "turn_off"
-              },
-              {
-                "capability": "power",
-                "domain": "light",
-                "fields": [
-                  {
-                    "defaultValue": null,
-                    "key": "brightness_pct",
-                    "label": "Brightness Pct",
-                    "required": false,
-                    "selector": {
-                      "number": {
-                        "min": 0,
-                        "max": 100,
-                        "unit_of_measurement": "%",
-                        "step": 1,
-                        "mode": "slider"
-                      }
-                    }
-                  },
-                  {
-                    "defaultValue": null,
-                    "key": "advanced_fields",
-                    "label": "Advanced Fields",
-                    "required": false,
-                    "selector": null
-                  }
-                ],
-                "key": "light.toggle",
-                "label": "Toggle",
-                "service": "toggle"
-              }
-            ],
-            "capabilities": [
-              "power",
-              "brightness"
-            ],
-            "defaultActionKey": "light.toggle",
-            "description": "Smart Light via Home Assistant; 4 grouped HA entities",
-            "domain": "light",
-            "entityId": "light.pascal_master_bedroom_lights_group",
-            "id": "light.pascal_master_bedroom_lights_group",
-            "kind": "entity",
-            "label": "Master",
-            "state": null,
-            "isGroup": true,
-            "memberEntityIds": [
-              "light.pascal_master_bedroom_recessed_light_1",
-              "light.pascal_master_bedroom_recessed_light_2",
-              "light.pascal_master_bedroom_recessed_light_3",
-              "light.pascal_master_bedroom_recessed_light_4"
-            ]
-          }
-        ],
-        "id": "ha-binding_pascal_lovelace_master_lights",
-        "metadata": {},
-        "object": "node",
-        "parentId": null,
-        "type": "home-assistant-binding",
-        "visible": false
-      },
       "item_pascal_lovelace_master_fan": {
         "children": [],
         "collectionIds": [
@@ -4078,7 +1174,7 @@
         ],
         "metadata": {},
         "object": "node",
-        "parentId": "level_pojp0mw3qssu110w",
+        "parentId": "level_pascal_lovelace_main",
         "scale": [
           1,
           1,
@@ -4093,7 +1189,7 @@
             0.45,
             1.4
           ],
-          "floorPlanUrl": "/items/ceiling-fan/floor-plan.png",
+          "floorPlanUrl": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/ceiling-fan/floor-plan.png",
           "id": "ceiling-fan",
           "interactive": {
             "controls": [
@@ -4103,7 +1199,14 @@
                 "label": "Power"
               }
             ],
-            "effects": []
+            "effects": [
+              {
+                "clips": {
+                  "on": "On"
+                },
+                "kind": "animation"
+              }
+            ]
           },
           "name": "Ceiling Fan",
           "offset": [
@@ -4121,20 +1224,20 @@
             1,
             1
           ],
-          "src": "/items/ceiling-fan/model.glb",
+          "src": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/ceiling-fan/model.glb",
           "tags": [
             "fan",
             "ceiling",
             "air"
           ],
-          "thumbnail": "/items/ceiling-fan/thumbnail.png"
+          "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/ceiling-fan/thumbnail.png"
         },
         "id": "item_pascal_lovelace_master_fan",
-        "name": "Master Fan",
+        "name": "Ceiling Fan",
         "position": [
-          17.1,
-          2.7,
-          11.2
+          5.8,
+          2.75,
+          3.35
         ],
         "rotation": [
           0,
@@ -4148,7 +1251,7 @@
         "collectionId": "collection_pascal_lovelace_master_fan",
         "presentation": {
           "icon": "mdi:fan",
-          "label": "Master Fan",
+          "label": "Ceiling Fan",
           "rtsHidden": false
         },
         "primaryResourceId": "fan.pascal_master_bedroom_fan",
@@ -4292,61 +1395,12 @@
       }
     },
     "rootNodeIds": [
-      "building_bv4ilcjivnxn8wkd",
-      "level_pojp0mw3qssu110w"
-    ],
-    "collections": {
-      "collection_pascal_lovelace_family_room_tv": {
-        "color": "#2563eb",
-        "controlNodeId": "item_pascal_lovelace_family_room_tv",
-        "id": "collection_pascal_lovelace_family_room_tv",
-        "name": "Family Room TV",
-        "nodeIds": [
-          "item_pascal_lovelace_family_room_tv"
-        ]
-      },
-      "collection_pascal_lovelace_living_lamps": {
-        "color": "#f59e0b",
-        "controlNodeId": "item_pascal_lovelace_living_lamp_1",
-        "id": "collection_pascal_lovelace_living_lamps",
-        "name": "Living Lamps",
-        "nodeIds": [
-          "item_pascal_lovelace_living_lamp_1",
-          "item_pascal_lovelace_living_lamp_2"
-        ]
-      },
-      "collection_pascal_lovelace_kitchen_lights": {
-        "color": "#10b981",
-        "controlNodeId": "item_pascal_lovelace_kitchen_lights",
-        "id": "collection_pascal_lovelace_kitchen_lights",
-        "name": "Kitchen Lights",
-        "nodeIds": [
-          "item_pascal_lovelace_kitchen_lights"
-        ]
-      },
-      "collection_pascal_lovelace_master_lights": {
-        "color": "#8b5cf6",
-        "controlNodeId": "item_pascal_lovelace_master_lights",
-        "id": "collection_pascal_lovelace_master_lights",
-        "name": "Master Lights",
-        "nodeIds": [
-          "item_pascal_lovelace_master_lights"
-        ]
-      },
-      "collection_pascal_lovelace_master_fan": {
-        "color": "#06b6d4",
-        "controlNodeId": "item_pascal_lovelace_master_fan",
-        "id": "collection_pascal_lovelace_master_fan",
-        "name": "Master Fan",
-        "nodeIds": [
-          "item_pascal_lovelace_master_fan"
-        ]
-      }
-    }
+      "building_pascal_lovelace_demo"
+    ]
   },
   "version": 1,
   "viewer": {
-    "defaultLevelId": "level_pojp0mw3qssu110w",
+    "defaultLevelId": "level_pascal_lovelace_main",
     "defaultMode": "overview",
     "levelMode": "solo",
     "viewMode": "3d",

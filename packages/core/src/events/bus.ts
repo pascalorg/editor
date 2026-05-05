@@ -6,6 +6,7 @@ import type {
   CeilingNode,
   DoorNode,
   FenceNode,
+  GuideNode,
   ItemNode,
   LevelNode,
   RoofNode,
@@ -130,6 +131,12 @@ type ToolEvents = {
   'tool:cancel': undefined
 }
 
+type GuideEvents = {
+  'guide:set-reference-scale': { guideId: GuideNode['id'] }
+  'guide:cancel-reference-scale': undefined
+  'guide:deleted': { guideId: GuideNode['id'] }
+}
+
 type PresetEvents = {
   'preset:generate-thumbnail': { presetId: string; nodeId: string }
   'preset:thumbnail-updated': { presetId: string; thumbnailUrl: string }
@@ -170,6 +177,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'door', DoorEvent> &
   CameraControlEvents &
   ToolEvents &
+  GuideEvents &
   PresetEvents &
   ThumbnailEvents &
   SnapshotEvents &

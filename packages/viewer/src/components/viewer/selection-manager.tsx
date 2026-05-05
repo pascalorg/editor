@@ -395,7 +395,6 @@ const PointerMissedHandler = ({
 const OutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const hoveredId = useViewer((s) => s.hoveredId)
-  const hoveredIds = useViewer((s) => s.hoveredIds)
   const outliner = useViewer((s) => s.outliner)
   const nodes = useScene((s) => s.nodes)
 
@@ -411,15 +410,13 @@ const OutlinerSync = () => {
 
     // Sync hovered objects
     outliner.hoveredObjects.length = 0
-    for (const id of new Set([hoveredId, ...hoveredIds].filter(Boolean))) {
-      const hoveredNode = nodes[id as AnyNodeId]
-      if (hoveredNode?.type === 'slab') {
-        continue
-      }
-      const obj = sceneRegistry.nodes.get(id as string)
+    if (hoveredId) {
+      const hoveredNode = nodes[hoveredId as AnyNodeId]
+      if (hoveredNode?.type === 'slab') return
+      const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [selection, hoveredId, hoveredIds, outliner, nodes])
+  }, [selection, hoveredId, outliner, nodes])
 
   return null
 }

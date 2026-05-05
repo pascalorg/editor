@@ -4,14 +4,17 @@ import {
   type AnyNode,
   type AnyNodeId,
   type Collection,
-  type HomeAssistantCollectionBinding,
-  type HomeAssistantResourceBinding,
-  getHomeAssistantBindingNodeMap,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { useEffect, useMemo } from 'react'
-import { useViewer } from '@pascal-app/viewer'
+import {
+  getHomeAssistantBindingNodeMap,
+  type HomeAssistantCollectionBinding,
+  homeAssistantItemEffects,
+  HomeAssistantItemEffects,
+  type HomeAssistantResourceBinding,
+} from '@pascal-app/home-assistant'
 import { getResourceEntityIds, summarizeResourceState } from './artifact'
 import type { HomeAssistantLike, PendingHomeAssistantState, ResourceStateSummary } from './types'
 
@@ -193,7 +196,6 @@ export function PascalLovelaceHomeAssistantSystem({
   const bindings = useMemo(() => getHomeAssistantBindingNodeMap(sceneNodes), [sceneNodes])
 
   useEffect(() => {
-    const viewer = useViewer.getState()
     for (const binding of Object.values(bindings)) {
       for (const resource of binding.resources) {
         if (resource.kind !== 'entity') {
@@ -228,9 +230,9 @@ export function PascalLovelaceHomeAssistantSystem({
 
           if (domain === 'media_player' || ACTIVE_DOMAINS.has(domain ?? '')) {
             if (state.isOn) {
-              viewer.triggerItemEffect(itemId)
+              homeAssistantItemEffects.trigger(itemId)
             } else {
-              viewer.clearItemEffect(itemId)
+              homeAssistantItemEffects.clear(itemId)
             }
           }
         }
@@ -238,5 +240,5 @@ export function PascalLovelaceHomeAssistantSystem({
     }
   }, [bindings, collections, hass, pendingStateRef, sceneNodes, setControlValue])
 
-  return null
+  return <HomeAssistantItemEffects />
 }

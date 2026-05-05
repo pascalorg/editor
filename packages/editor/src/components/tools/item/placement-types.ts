@@ -38,6 +38,13 @@ export interface PlacementContext {
   draftItem: ItemNode | null
   gridPosition: Vector3
   state: PlacementState
+  /**
+   * Current world Y rotation of the placement cursor — the user's intended
+   * orientation, preserved across surface transitions. Strategies that
+   * re-parent the draft (e.g. floor → item-surface) read this to compute the
+   * matching parent-local rotation so the world orientation doesn't jump.
+   */
+  currentCursorRotationY: number
 }
 
 // ============================================================================

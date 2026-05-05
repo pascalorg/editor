@@ -12,7 +12,6 @@ import {
   getSmartHomeExcludedResourceIds,
   getSmartHomeRoomControlTileGroups,
   getSmartHomeRoomControlTileId,
-  hasSmartHomeGroupResource,
   isSmartHomeDeviceComponentResource,
   normalizeSmartHomeStringGroups,
 } from './smart-home-composition'
@@ -169,18 +168,21 @@ export function getBindingAfterRoomGrouping({
 
 export function getBindingAfterDeviceResourceCopyToGroup({
   sourceBinding,
+  sourceResourceId,
   targetBinding,
   targetCollectionId = targetBinding.collectionId,
 }: {
   sourceBinding: HomeAssistantCollectionBinding
+  sourceResourceId?: string
   targetBinding: HomeAssistantCollectionBinding
   targetCollectionId?: CollectionId | string
 }) {
-  if (!hasSmartHomeGroupResource(targetBinding)) {
-    return null
-  }
-
-  const sourceResource = sourceBinding.resources.find(isSmartHomeDeviceComponentResource)
+  const sourceResource = sourceResourceId
+    ? sourceBinding.resources.find(
+        (resource) =>
+          resource.id === sourceResourceId && isSmartHomeDeviceComponentResource(resource),
+      )
+    : sourceBinding.resources.find(isSmartHomeDeviceComponentResource)
   if (!sourceResource) {
     return null
   }
@@ -246,10 +248,6 @@ export function getBindingAfterDeviceResourceRemovalFromGroup(
   binding: HomeAssistantCollectionBinding,
   resourceId: string,
 ) {
-  if (!hasSmartHomeGroupResource(binding)) {
-    return null
-  }
-
   const removedResource = binding.resources.find((resource) => resource.id === resourceId)
   if (!isSmartHomeDeviceComponentResource(removedResource)) {
     return null
@@ -302,7 +300,7 @@ export function homeAssistantBindingsAreEqual(
   return valuesAreEqual(left ?? null, right ?? null)
 }
 
-export function homeAssistantNodePatchMatches(node: AnyNode, patch: Partial<AnyNode>) {
+export function homeAssistantNodePatchMatches(node: unknown, patch: Record<string, unknown>) {
   const currentNode = node as Record<string, unknown>
   return Object.entries(patch).every(([key, value]) => valuesAreEqual(currentNode[key], value))
 }

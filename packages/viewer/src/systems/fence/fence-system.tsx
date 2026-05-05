@@ -1,10 +1,14 @@
 import { useFrame } from '@react-three/fiber'
+import {
+  type AnyNodeId,
+  type FenceNode,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { sceneRegistry } from '../../hooks/scene-registry/scene-registry'
-import type { AnyNodeId, FenceNode } from '../../schema'
-import useScene from '../../store/use-scene'
-import { getWallCurveFrameAt, getWallCurveLength } from '../wall/wall-curve'
 
 type FencePart = {
   position: [number, number, number]

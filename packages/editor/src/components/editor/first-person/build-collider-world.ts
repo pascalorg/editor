@@ -1,11 +1,7 @@
-import { sceneRegistry, useScene } from '@pascal-app/core'
-import {
-  acceleratedRaycast,
-  computeBoundsTree,
-  disposeBoundsTree,
-} from 'three-mesh-bvh'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { type AnyNodeId, type DoorNode, sceneRegistry, useScene } from '@pascal-app/core'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 
 const COLLIDER_NODE_TYPES = [
   'wall',
@@ -16,6 +12,7 @@ const COLLIDER_NODE_TYPES = [
   'roof',
   'roof-segment',
   'door',
+  'window',
   'item',
 ] as const
 
@@ -25,6 +22,7 @@ const DOWN = new THREE.Vector3(0, -1, 0)
 const UP = new THREE.Vector3(0, 1, 0)
 const SPAWN_EYE_HEIGHT = 1.65
 const RAYCAST_CLEARANCE = 25
+const DOOR_LEAF_COLLIDER_DEPTH = 0.06
 
 export const FIRST_PERSON_SPAWN_EYE_HEIGHT = SPAWN_EYE_HEIGHT
 
@@ -45,12 +43,18 @@ function isMesh(object: THREE.Object3D): object is THREE.Mesh {
   return 'isMesh' in object && (object as THREE.Mesh).isMesh
 }
 
+function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) {
+  return Array.isArray(material) ? material.some((entry) => entry.visible) : material.visible
+}
+
 function cloneWorldGeometry(mesh: THREE.Mesh) {
   const sourceGeometry = mesh.geometry
   const position = sourceGeometry.getAttribute('position')
   if (!position || position.count < 3) return null
 
-  const workingGeometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry.clone()
+  const workingGeometry = sourceGeometry.index
+    ? sourceGeometry.toNonIndexed()
+    : sourceGeometry.clone()
   const cleanGeometry = new THREE.BufferGeometry()
   cleanGeometry.setAttribute('position', workingGeometry.getAttribute('position').clone())
 
@@ -74,14 +78,57 @@ function cloneWorldGeometry(mesh: THREE.Mesh) {
 }
 
 function shouldSkipColliderNode(nodeId: string, type: (typeof COLLIDER_NODE_TYPES)[number]) {
+  if (type === 'window') {
+    const node = useScene.getState().nodes[nodeId as AnyNodeId]
+    return node?.type === 'window' && node.openingKind === 'opening'
+  }
+
   if (type !== 'door') return false
 
-  const node = useScene.getState().nodes[nodeId]
+  const node = useScene.getState().nodes[nodeId as AnyNodeId]
   if (!node || node.type !== 'door') return false
+
+  if (node.openingKind === 'opening') return true
 
   if (!node.segments.length) return true
 
   return node.segments.every((segment) => segment.type === 'empty')
+}
+
+function createDoorLeafColliderGeometry(root: THREE.Object3D, node: DoorNode) {
+  const hasLeafContent = node.segments.some((segment) => segment.type !== 'empty')
+  if (!hasLeafContent) return null
+
+  const leafW = node.width - 2 * node.frameThickness
+  const leafH = node.height - node.frameThickness
+  if (leafW <= 0 || leafH <= 0) return null
+
+  const leafCenterY = -node.frameThickness / 2
+  const hingeX = node.hingesSide === 'right' ? leafW / 2 : -leafW / 2
+  const swingDirectionSign = node.swingDirection === 'inward' ? 1 : -1
+  const hingeDirectionSign = node.hingesSide === 'right' ? 1 : -1
+  const clampedSwingAngle = Math.max(0, Math.min(Math.PI / 2, node.swingAngle ?? 0))
+  const leafSwingRotation = clampedSwingAngle * swingDirectionSign * hingeDirectionSign
+
+  root.updateWorldMatrix(true, false)
+
+  const sourceGeometry = new THREE.BoxGeometry(
+    leafW,
+    leafH,
+    DOOR_LEAF_COLLIDER_DEPTH,
+  ).toNonIndexed()
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', sourceGeometry.getAttribute('position').clone())
+  geometry.setAttribute('normal', sourceGeometry.getAttribute('normal').clone())
+  sourceGeometry.dispose()
+  const matrix = root.matrixWorld
+    .clone()
+    .multiply(new THREE.Matrix4().makeTranslation(hingeX, 0, 0))
+    .multiply(new THREE.Matrix4().makeRotationY(leafSwingRotation))
+    .multiply(new THREE.Matrix4().makeTranslation(-hingeX, leafCenterY, 0))
+
+  geometry.applyMatrix4(matrix)
+  return geometry
 }
 
 function buildRegisteredNodeTypeLookup() {
@@ -109,7 +156,12 @@ function collectColliderGeometriesFromNode(
     if (visitedMeshes.has(object)) return
     visitedMeshes.add(object)
 
-    if (isMesh(object) && object.visible && !SKIPPED_MESH_NAMES.has(object.name)) {
+    if (
+      isMesh(object) &&
+      object.visible &&
+      isColliderMaterialVisible(object.material) &&
+      !SKIPPED_MESH_NAMES.has(object.name)
+    ) {
       const geometry = cloneWorldGeometry(object)
       if (geometry) {
         geometries.push(geometry)
@@ -151,6 +203,17 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
       const root = sceneRegistry.nodes.get(nodeId)
       if (!root) continue
 
+      if (type === 'door') {
+        const node = useScene.getState().nodes[nodeId as AnyNodeId]
+        if (node?.type !== 'door') continue
+
+        const doorGeometry = createDoorLeafColliderGeometry(root, node)
+        if (doorGeometry) {
+          geometries.push(doorGeometry)
+        }
+        continue
+      }
+
       root.updateMatrixWorld(true)
       geometries.push(
         ...collectColliderGeometriesFromNode(
@@ -169,7 +232,9 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
   }
 
   const mergedGeometry = mergeGeometries(geometries, false)
-  geometries.forEach((geometry) => geometry.dispose())
+  geometries.forEach((geometry) => {
+    geometry.dispose()
+  })
 
   if (!mergedGeometry || mergedGeometry.getAttribute('position') == null) {
     mergedGeometry?.dispose()
@@ -234,7 +299,8 @@ export function deriveFirstPersonSpawn(
   }
 
   for (const [x, z] of candidates) {
-    const topY = Math.max(world.bounds?.max.y ?? camera.position.y, camera.position.y) + RAYCAST_CLEARANCE
+    const topY =
+      Math.max(world.bounds?.max.y ?? camera.position.y, camera.position.y) + RAYCAST_CLEARANCE
     raycaster.set(new THREE.Vector3(x, topY, z), DOWN)
     const intersections = raycaster.intersectObject(world.mesh, false)
     const hit = intersections.find((intersection) => {
@@ -252,11 +318,7 @@ export function deriveFirstPersonSpawn(
   }
 
   return {
-    position: [
-      camera.position.x,
-      Math.max(camera.position.y, SPAWN_EYE_HEIGHT),
-      camera.position.z,
-    ],
+    position: [camera.position.x, Math.max(camera.position.y, SPAWN_EYE_HEIGHT), camera.position.z],
     yaw,
   }
 }

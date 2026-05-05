@@ -4,15 +4,16 @@ import {
   type AnyNodeId,
   type CollectionId,
   type ControlValue,
-  HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT,
   type ItemNode,
   sceneRegistry,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { ViewerHtml as Html, useViewer, useViewerFrame } from '@pascal-app/viewer'
+import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT } from '../home-assistant-binding'
 import {
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -95,6 +96,7 @@ const ROOM_PANEL_NODE_EVENT_SUPPRESS_MS = 260
 const ROOM_PANEL_LONG_PRESS_NODE_EVENT_SUPPRESS_MS =
   GROUP_EXPAND_HOLD_MS + ROOM_PANEL_NODE_EVENT_SUPPRESS_MS
 const DEVICE_ICON_DRAG_THRESHOLD_PX = 8
+const DEVICE_MOUSE_DRAG_POINTER_ID = -1
 const COLLAPSED_PILL_SINGLE_CLICK_DELAY_MS = 220
 const EXPANDED_GROUP_PADDING = 6
 const EDIT_GROUP_GRID_ROW_HEIGHT = CONTROL_ICON_BUTTON_SIZE + EXPANDED_GROUP_PADDING * 2
@@ -128,6 +130,7 @@ const overlayRootStyle: CSSProperties = {
   left: 0,
   overflow: 'hidden',
   pointerEvents: 'none',
+  zIndex: 300,
 }
 
 const overlayItemStyle: CSSProperties = {
@@ -492,6 +495,7 @@ type DragState = {
 type DeviceIconDragState = {
   dragging: boolean
   member: RoomControlTile
+  sourceMembers: RoomControlTile[]
   pointerId: number
   pointerX: number
   pointerY: number
@@ -557,12 +561,33 @@ const isPointInsideElement = (clientX: number, clientY: number, element: Element
   )
 }
 
+const queryRoomControlElementsDeep = (selector: string) => {
+  if (typeof document === 'undefined') {
+    return []
+  }
+
+  const matches: HTMLElement[] = []
+  const visitRoot = (root: Document | ShadowRoot) => {
+    for (const element of root.querySelectorAll<HTMLElement>(selector)) {
+      matches.push(element)
+    }
+    for (const element of root.querySelectorAll<HTMLElement>('*')) {
+      if (element.shadowRoot) {
+        visitRoot(element.shadowRoot)
+      }
+    }
+  }
+
+  visitRoot(document)
+  return matches
+}
+
 const findRoomControlGroupElement = (groupId: string) => {
   if (typeof document === 'undefined') {
     return null
   }
 
-  for (const element of document.querySelectorAll<HTMLElement>('[data-room-control-group-id]')) {
+  for (const element of queryRoomControlElementsDeep('[data-room-control-group-id]')) {
     if (element.dataset.roomControlGroupId === groupId) {
       return element
     }
@@ -608,7 +633,7 @@ export const RoomControlOverlay = ({
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setHoveredId = useViewer((state) => state.setHoveredId)
-  const setHoveredIds = useViewer((state) => state.setHoveredIds)
+  const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const sceneNodes = useScene((state) => state.nodes)
   const interactiveState = useInteractive((state) => state.items)
   const initItem = useInteractive((state) => state.initItem)
@@ -691,9 +716,9 @@ export const RoomControlOverlay = ({
   useEffect(
     () => () => {
       setHoveredId(null)
-      setHoveredIds([])
+      setPreviewSelectedIds([])
     },
-    [setHoveredId, setHoveredIds],
+    [setHoveredId, setPreviewSelectedIds],
   )
 
   useEffect(() => {
@@ -726,12 +751,12 @@ export const RoomControlOverlay = ({
       setOpenRoomId(null)
       setEditingRoomId(null)
       setHoveredId(null)
-      setHoveredIds([])
+      setPreviewSelectedIds([])
     }
 
     window.addEventListener('pointerdown', handlePointerDown)
     return () => window.removeEventListener('pointerdown', handlePointerDown)
-  }, [openRoomId, setHoveredId, setHoveredIds])
+  }, [openRoomId, setHoveredId, setPreviewSelectedIds])
 
   const roomControlMemberLookup = useMemo(() => {
     const lookup = new Map<string, RoomControlLookupEntry>()
@@ -923,12 +948,12 @@ export const RoomControlOverlay = ({
   const setHoveredItemTargets = (itemIds: AnyNodeId[]) => {
     const uniqueIds = Array.from(new Set(itemIds)).filter((itemId) => Boolean(sceneNodes[itemId]))
     setHoveredId(uniqueIds[0] ?? null)
-    setHoveredIds(uniqueIds)
+    setPreviewSelectedIds(uniqueIds)
   }
 
   const clearHoveredItemTargets = () => {
     setHoveredId(null)
-    setHoveredIds([])
+    setPreviewSelectedIds([])
   }
 
   return (
@@ -960,6 +985,7 @@ export const RoomControlOverlay = ({
               style={theme === 'dark' ? nightEndpointStyle : endpointStyle}
             />
             <RoomPanel
+              collectionId={roomOverlayNode.collectionId}
               clearHoveredItemTargets={clearHoveredItemTargets}
               controlGroups={roomOverlayNode.controlGroups}
               controlValues={interactiveState}
@@ -967,12 +993,13 @@ export const RoomControlOverlay = ({
               expandedGroupId={expandedEditGroupByRoomId[roomOverlayNode.id] ?? null}
               isOpen={openRoomId === roomOverlayNode.id}
               onApplyGrouping={(nextGroups) =>
-                onApplyRoomGrouping?.(roomOverlayNode.id, nextGroups)
+                onApplyRoomGrouping?.(roomOverlayNode.collectionId ?? roomOverlayNode.id, nextGroups)
               }
               onChange={handleCollectionControlChange}
-              onCopyDeviceToGroup={(sourceCollectionId, targetCollectionId) =>
-                onCopyRoomControlToRoom?.(sourceCollectionId, targetCollectionId)
-              }
+              onCopyDeviceToGroup={(sourceCollectionId, targetCollectionId, sourceResourceId) => {
+                onCopyRoomControlToRoom?.(sourceCollectionId, targetCollectionId, sourceResourceId)
+                setOpenRoomId(targetCollectionId)
+              }}
               onOpenIntoEdit={() => {
                 setOpenRoomId(roomOverlayNode.id)
                 setEditingRoomId(roomOverlayNode.id)
@@ -1019,6 +1046,7 @@ export const RoomControlOverlay = ({
 }
 
 const RoomPanel = ({
+  collectionId,
   clearHoveredItemTargets,
   controlGroups,
   controlValues,
@@ -1040,6 +1068,7 @@ const RoomPanel = ({
   totalSlotCount,
   setHoveredItemTargets,
 }: {
+  collectionId?: CollectionId
   clearHoveredItemTargets: () => void
   controlGroups: RoomControlGroup[]
   controlValues: Record<AnyNodeId, { controlValues: ControlValue[] }>
@@ -1049,7 +1078,11 @@ const RoomPanel = ({
   isOpen: boolean
   onApplyGrouping: (nextGroups: string[][]) => void
   onChange: (itemId: AnyNodeId, controlIndex: number, nextValue: ControlValue) => void
-  onCopyDeviceToGroup: (sourceCollectionId: CollectionId, targetCollectionId: CollectionId) => void
+  onCopyDeviceToGroup: (
+    sourceCollectionId: CollectionId,
+    targetCollectionId: CollectionId,
+    sourceResourceId?: string,
+  ) => void
   onOpenIntoEdit: () => void
   onRemoveDeviceFromGroup: (member: RoomControlTile) => void
   onSetEditing: (editing: boolean) => void
@@ -1069,6 +1102,7 @@ const RoomPanel = ({
   const [pendingExpand, setPendingExpand] = useState<PendingExpandState | null>(null)
   const dragStateRef = useRef<DragState | null>(null)
   const collapsedClickTimeoutRef = useRef<number | null>(null)
+  const deviceIconDragCleanupRef = useRef<(() => void) | null>(null)
   const deviceIconDragStateRef = useRef<DeviceIconDragState | null>(null)
   const iconOnlyClickSuppressedUntilRef = useRef(0)
   const longPressRef = useRef<PendingLongPressState | null>(null)
@@ -1238,7 +1272,7 @@ const RoomPanel = ({
   }
 
   const startLongPress = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
     key: string,
     action: LongPressAction,
     dragGroupId: string | null = null,
@@ -1246,14 +1280,19 @@ const RoomPanel = ({
     if (action === 'edit' && editing) {
       return
     }
-    if (event.pointerType === 'mouse' && event.button !== 0) {
+    if (event.button !== 0) {
+      return
+    }
+    if (longPressRef.current?.key === key) {
       return
     }
 
     clearLongPress()
     clearSuppressedClick()
-    const pointerId = event.pointerId
-    event.currentTarget.setPointerCapture?.(pointerId)
+    const pointerId = 'pointerId' in event ? event.pointerId : DEVICE_MOUSE_DRAG_POINTER_ID
+    if ('pointerId' in event) {
+      event.currentTarget.setPointerCapture?.(pointerId)
+    }
     const nextPendingLongPress = {
       action,
       dragGroupId,
@@ -1282,12 +1321,16 @@ const RoomPanel = ({
     }
   }
 
-  const continueLongPress = (event: ReactPointerEvent<HTMLButtonElement>, key: string) => {
+  const continueLongPress = (
+    event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
+    key: string,
+  ) => {
+    const pointerId = 'pointerId' in event ? event.pointerId : DEVICE_MOUSE_DRAG_POINTER_ID
     const activeLongPress = longPressRef.current
     if (
       !activeLongPress ||
       activeLongPress.key !== key ||
-      activeLongPress.pointerId !== event.pointerId
+      activeLongPress.pointerId !== pointerId
     ) {
       return
     }
@@ -1304,15 +1347,19 @@ const RoomPanel = ({
     }
   }
 
-  const endLongPress = (event: ReactPointerEvent<HTMLButtonElement>, key: string) => {
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+  const endLongPress = (
+    event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
+    key: string,
+  ) => {
+    const pointerId = 'pointerId' in event ? event.pointerId : DEVICE_MOUSE_DRAG_POINTER_ID
+    if ('pointerId' in event && event.currentTarget.hasPointerCapture?.(pointerId)) {
+      event.currentTarget.releasePointerCapture(pointerId)
     }
     const activeLongPress = longPressRef.current
     if (
       !activeLongPress ||
       activeLongPress.key !== key ||
-      activeLongPress.pointerId !== event.pointerId
+      activeLongPress.pointerId !== pointerId
     ) {
       return
     }
@@ -1378,14 +1425,93 @@ const RoomPanel = ({
     [clearPendingExpand],
   )
 
+  const clearDeviceIconDragListeners = useCallback(() => {
+    deviceIconDragCleanupRef.current?.()
+    deviceIconDragCleanupRef.current = null
+  }, [])
+
+  const updateDeviceIconDrag = useCallback(
+    (clientX: number, clientY: number, preventDefault: () => void) => {
+      const current = deviceIconDragStateRef.current
+      if (!current) {
+        return
+      }
+
+      const distance = Math.hypot(clientX - current.startX, clientY - current.startY)
+      const dragging = current.dragging || distance >= DEVICE_ICON_DRAG_THRESHOLD_PX
+      const targetCollectionId = dragging
+        ? getDeviceDropTargetCollectionId(clientX, clientY, current.sourceCollectionId)
+        : null
+      const nextState = {
+        ...current,
+        dragging,
+        pointerX: clientX,
+        pointerY: clientY,
+        targetCollectionId,
+      }
+
+      deviceIconDragStateRef.current = nextState
+      setDeviceIconDragState(nextState)
+      if (dragging) {
+        preventDefault()
+      }
+    },
+    [],
+  )
+
+  const finishDeviceIconDrag = useCallback(
+    (clientX: number, clientY: number, preventDefault: () => void) => {
+      const current = deviceIconDragStateRef.current
+      if (!current) {
+        return
+      }
+
+      if (current.dragging) {
+        preventDefault()
+        suppressRoomPanelNodeEvents()
+        iconOnlyClickSuppressedUntilRef.current = Date.now() + EDIT_EXIT_ACTION_SUPPRESS_MS
+        const targetCollectionId =
+          current.targetCollectionId ??
+          getDeviceDropTargetCollectionId(clientX, clientY, current.sourceCollectionId)
+        if (targetCollectionId) {
+          const copiedSourceKeys = new Set<string>()
+          for (const sourceMember of current.sourceMembers) {
+            const sourceKey = `${sourceMember.collectionId}:${sourceMember.resourceId ?? ''}`
+            if (copiedSourceKeys.has(sourceKey)) {
+              continue
+            }
+            copiedSourceKeys.add(sourceKey)
+            onCopyDeviceToGroup(
+              sourceMember.collectionId,
+              targetCollectionId,
+              sourceMember.resourceId,
+            )
+          }
+        }
+      }
+
+      clearDeviceIconDragListeners()
+      deviceIconDragStateRef.current = null
+      setDeviceIconDragState(null)
+    },
+    [clearDeviceIconDragListeners, onCopyDeviceToGroup],
+  )
+
   const startDeviceIconDrag = (
     member: RoomControlTile,
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
+    sourceMembers: RoomControlTile[] = [member],
   ) => {
+    if (deviceIconDragStateRef.current) {
+      return
+    }
+    clearDeviceIconDragListeners()
+    const pointerId = 'pointerId' in event ? event.pointerId : DEVICE_MOUSE_DRAG_POINTER_ID
     const nextState = {
       dragging: false,
       member,
-      pointerId: event.pointerId,
+      sourceMembers,
+      pointerId,
       pointerX: event.clientX,
       pointerY: event.clientY,
       sourceCollectionId: member.collectionId,
@@ -1395,6 +1521,47 @@ const RoomPanel = ({
     }
     deviceIconDragStateRef.current = nextState
     setDeviceIconDragState(nextState)
+    const handlePointerMove = (event: PointerEvent) => {
+      const current = deviceIconDragStateRef.current
+      if (!current || event.pointerId !== current.pointerId) {
+        return
+      }
+      updateDeviceIconDrag(event.clientX, event.clientY, () => event.preventDefault())
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const current = deviceIconDragStateRef.current
+      if (!current || event.pointerId !== current.pointerId) {
+        return
+      }
+      finishDeviceIconDrag(event.clientX, event.clientY, () => event.preventDefault())
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      updateDeviceIconDrag(event.clientX, event.clientY, () => event.preventDefault())
+    }
+
+    const handleMouseUp = (event: MouseEvent) => {
+      finishDeviceIconDrag(event.clientX, event.clientY, () => event.preventDefault())
+    }
+
+    if (pointerId === DEVICE_MOUSE_DRAG_POINTER_ID) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+      deviceIconDragCleanupRef.current = () => {
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
+      }
+    } else {
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', handlePointerUp)
+      window.addEventListener('pointercancel', handlePointerUp)
+      deviceIconDragCleanupRef.current = () => {
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', handlePointerUp)
+        window.removeEventListener('pointercancel', handlePointerUp)
+      }
+    }
   }
 
   const exitEditMode = useCallback(() => {
@@ -1438,77 +1605,14 @@ const RoomPanel = ({
   useEffect(
     () => () => {
       clearCollapsedClickTimeout()
+      clearDeviceIconDragListeners()
     },
-    [clearCollapsedClickTimeout],
+    [clearCollapsedClickTimeout, clearDeviceIconDragListeners],
   )
 
   useEffect(() => {
     pendingExpandRef.current = pendingExpand
   }, [pendingExpand])
-
-  useEffect(() => {
-    const pointerId = deviceIconDragState?.pointerId
-    if (pointerId === undefined) {
-      return
-    }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const current = deviceIconDragStateRef.current
-      if (!current || event.pointerId !== current.pointerId) {
-        return
-      }
-
-      const distance = Math.hypot(event.clientX - current.startX, event.clientY - current.startY)
-      const dragging = current.dragging || distance >= DEVICE_ICON_DRAG_THRESHOLD_PX
-      const targetCollectionId = dragging
-        ? getDeviceDropTargetCollectionId(event.clientX, event.clientY, current.sourceCollectionId)
-        : null
-      const nextState = {
-        ...current,
-        dragging,
-        pointerX: event.clientX,
-        pointerY: event.clientY,
-        targetCollectionId,
-      }
-
-      deviceIconDragStateRef.current = nextState
-      setDeviceIconDragState(nextState)
-      if (dragging) {
-        event.preventDefault()
-      }
-    }
-
-    const handlePointerUp = (event: PointerEvent) => {
-      const current = deviceIconDragStateRef.current
-      if (!current || event.pointerId !== current.pointerId) {
-        return
-      }
-
-      if (current.dragging) {
-        event.preventDefault()
-        suppressRoomPanelNodeEvents()
-        iconOnlyClickSuppressedUntilRef.current = Date.now() + EDIT_EXIT_ACTION_SUPPRESS_MS
-        const targetCollectionId =
-          current.targetCollectionId ??
-          getDeviceDropTargetCollectionId(event.clientX, event.clientY, current.sourceCollectionId)
-        if (targetCollectionId) {
-          onCopyDeviceToGroup(current.sourceCollectionId, targetCollectionId)
-        }
-      }
-
-      deviceIconDragStateRef.current = null
-      setDeviceIconDragState(null)
-    }
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-    window.addEventListener('pointercancel', handlePointerUp)
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-      window.removeEventListener('pointercancel', handlePointerUp)
-    }
-  }, [deviceIconDragState?.pointerId, onCopyDeviceToGroup])
 
   useEffect(() => {
     if (!(editing && pendingExpand)) {
@@ -1627,9 +1731,9 @@ const RoomPanel = ({
         return
       }
 
-      const hoveredElement = document
-        .elementFromPoint(event.clientX, event.clientY)
-        ?.closest('[data-room-control-group-id]') as HTMLElement | null
+      const hoveredElement = getElementFromPointDeep(event.clientX, event.clientY)?.closest(
+        '[data-room-control-group-id]',
+      ) as HTMLElement | null
       const targetGroupId = hoveredElement?.dataset.roomControlGroupId ?? null
       const sourceGroup = groupById.get(activeDragState.sourceGroupId)
       const sourceMember = activeDragState.sourceMemberId
@@ -1732,9 +1836,10 @@ const RoomPanel = ({
         event.clientY,
         panelElement ?? null,
       )
-      const hoveredGroupElement = document
-        .elementFromPoint(event.clientX, event.clientY)
-        ?.closest('[data-room-control-group-id]') as HTMLElement | null
+      const hoveredGroupElement = getElementFromPointDeep(
+        event.clientX,
+        event.clientY,
+      )?.closest('[data-room-control-group-id]') as HTMLElement | null
 
       if (sourceGroup && activeDragState.sourceMemberId) {
         const sourceMember = sourceGroup.members.find(
@@ -1985,6 +2090,12 @@ const RoomPanel = ({
     startLongPress(event, getGroupLongPressKey(groupId), 'edit', groupId)
   }
 
+  const handleControlMouseDown = (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    suppressRoomPanelNodeEvents(ROOM_PANEL_LONG_PRESS_NODE_EVENT_SUPPRESS_MS)
+    startLongPress(event, getGroupLongPressKey(groupId), 'edit', groupId)
+  }
+
   const handleControlPointerMove = (
     groupId: string,
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -1992,10 +2103,19 @@ const RoomPanel = ({
     continueLongPress(event, getGroupLongPressKey(groupId))
   }
 
+  const handleControlMouseMove = (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
+    continueLongPress(event, getGroupLongPressKey(groupId))
+  }
+
   const handleControlPointerEnd = (
     groupId: string,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => {
+    suppressRoomPanelNodeEvents()
+    endLongPress(event, getGroupLongPressKey(groupId))
+  }
+
+  const handleControlMouseEnd = (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     suppressRoomPanelNodeEvents()
     endLongPress(event, getGroupLongPressKey(groupId))
   }
@@ -2066,7 +2186,7 @@ const RoomPanel = ({
 
   return (
     <div
-      data-room-control-collection-id={roomId}
+      data-room-control-collection-id={collectionId ?? roomId}
       ref={(node) => setOverlayDomRef(refsStore, roomId, 'panel', node)}
       style={panelBaseStyle}
     >
@@ -2126,6 +2246,17 @@ const RoomPanel = ({
               return
             }
             onSetOpen(true)
+          }}
+          onMouseDown={(event) => {
+            if (deviceIconDragStateRef.current?.dragging) {
+              return
+            }
+            if (collapsedDirectControlMember && !collapsedDirectButtonDisabled) {
+              deviceIconDragStateRef.current = null
+              event.stopPropagation()
+              suppressRoomPanelNodeEvents()
+              startDeviceIconDrag(collapsedDirectControlMember, event)
+            }
           }}
           onPointerCancel={(event) => handleHeaderPointerEnd(event, openHeaderKey)}
           onPointerDown={(event) => {
@@ -2250,6 +2381,9 @@ const RoomPanel = ({
                   key={group.id}
                   onChange={onChange}
                   onHover={() => setHoveredItemTargets(group.itemIds)}
+                  onMouseDown={handleControlMouseDown}
+                  onMouseEnd={handleControlMouseEnd}
+                  onMouseMove={handleControlMouseMove}
                   onPointerDown={handleControlPointerDown}
                   onPointerEnd={handleControlPointerEnd}
                   onPointerMove={handleControlPointerMove}
@@ -2265,6 +2399,9 @@ const RoomPanel = ({
                   key={group.id}
                   onChange={onChange}
                   onHover={() => setHoveredItemTargets(group.itemIds)}
+                  onMouseDown={handleControlMouseDown}
+                  onMouseEnd={handleControlMouseEnd}
+                  onMouseMove={handleControlMouseMove}
                   onPointerDown={handleControlPointerDown}
                   onPointerEnd={handleControlPointerEnd}
                   onPointerMove={handleControlPointerMove}
@@ -2461,6 +2598,9 @@ const ToggleGroupTile = ({
   group,
   onChange,
   onHover,
+  onMouseDown,
+  onMouseEnd,
+  onMouseMove,
   onPointerDown,
   onPointerEnd,
   onPointerMove,
@@ -2473,6 +2613,9 @@ const ToggleGroupTile = ({
   group: RoomControlGroup
   onChange: (itemId: AnyNodeId, controlIndex: number, nextValue: ControlValue) => void
   onHover: () => void
+  onMouseDown: (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => void
+  onMouseEnd: (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => void
+  onMouseMove: (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => void
   onPointerDown: (groupId: string, event: ReactPointerEvent<HTMLButtonElement>) => void
   onPointerEnd: (groupId: string, event: ReactPointerEvent<HTMLButtonElement>) => void
   onPointerMove: (groupId: string, event: ReactPointerEvent<HTMLButtonElement>) => void
@@ -2513,6 +2656,10 @@ const ToggleGroupTile = ({
           onChange(member.itemId, member.controlIndex, nextValue)
         }
       }}
+      onMouseDown={(event) => onMouseDown(group.id, event)}
+      onMouseLeave={(event) => onMouseEnd(group.id, event)}
+      onMouseMove={(event) => onMouseMove(group.id, event)}
+      onMouseUp={(event) => onMouseEnd(group.id, event)}
       onPointerCancel={(event) => onPointerEnd(group.id, event)}
       onPointerDown={(event) => onPointerDown(group.id, event)}
       onPointerEnter={onHover}
@@ -2537,6 +2684,9 @@ const AdjustableGroupTile = ({
   group,
   onChange,
   onHover,
+  onMouseDown,
+  onMouseEnd,
+  onMouseMove,
   onPointerDown,
   onPointerEnd,
   onPointerMove,
@@ -2549,6 +2699,9 @@ const AdjustableGroupTile = ({
   group: RoomControlGroup
   onChange: (itemId: AnyNodeId, controlIndex: number, nextValue: ControlValue) => void
   onHover: () => void
+  onMouseDown: (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => void
+  onMouseEnd: (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => void
+  onMouseMove: (groupId: string, event: ReactMouseEvent<HTMLButtonElement>) => void
   onPointerDown: (groupId: string, event: ReactPointerEvent<HTMLButtonElement>) => void
   onPointerEnd: (groupId: string, event: ReactPointerEvent<HTMLButtonElement>) => void
   onPointerMove: (groupId: string, event: ReactPointerEvent<HTMLButtonElement>) => void
@@ -2579,6 +2732,10 @@ const AdjustableGroupTile = ({
         }
         applyNumericGroupDelta(group, controlValues, onChange, 1)
       }}
+      onMouseDown={(event) => onMouseDown(group.id, event)}
+      onMouseLeave={(event) => onMouseEnd(group.id, event)}
+      onMouseMove={(event) => onMouseMove(group.id, event)}
+      onMouseUp={(event) => onMouseEnd(group.id, event)}
       onContextMenu={(event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -3186,12 +3343,7 @@ const isRoomPanelFullyInsideViewport = (
   const panelRight = x + panelWidth / 2
   const panelBottom = panelTop + panelHeight
 
-  return (
-    panelLeft > 0 &&
-    panelRight < size.width &&
-    panelTop > 0 &&
-    panelBottom < size.height
-  )
+  return panelLeft > 0 && panelRight < size.width && panelTop > 0 && panelBottom < size.height
 }
 
 const getRoomPanelMetrics = (
@@ -3266,6 +3418,18 @@ const isPointerInMergeHotspot = (pointerX: number, pointerY: number, element: HT
   )
 }
 
+const getElementFromPointDeep = (pointerX: number, pointerY: number) => {
+  let pointedElement: Element | null = document.elementFromPoint(pointerX, pointerY)
+  while (pointedElement?.shadowRoot) {
+    const shadowElement = pointedElement.shadowRoot.elementFromPoint(pointerX, pointerY)
+    if (!shadowElement || shadowElement === pointedElement) {
+      break
+    }
+    pointedElement = shadowElement
+  }
+  return pointedElement
+}
+
 const getDeviceDropTargetCollectionId = (
   pointerX: number,
   pointerY: number,
@@ -3275,14 +3439,41 @@ const getDeviceDropTargetCollectionId = (
     return null
   }
 
-  const targetElement = document
-    .elementFromPoint(pointerX, pointerY)
-    ?.closest('[data-room-control-collection-id]') as HTMLElement | null
+  const targetElement = getElementFromPointDeep(pointerX, pointerY)?.closest(
+    '[data-room-control-collection-id]',
+  ) as HTMLElement | null
   const targetCollectionId = targetElement?.dataset.roomControlCollectionId as
     | CollectionId
     | undefined
 
-  return targetCollectionId && targetCollectionId !== sourceCollectionId ? targetCollectionId : null
+  if (targetCollectionId && targetCollectionId !== sourceCollectionId) {
+    return targetCollectionId
+  }
+
+  let smallestTarget: HTMLElement | null = null
+  let smallestTargetArea = Number.POSITIVE_INFINITY
+  for (const element of queryRoomControlElementsDeep('[data-room-control-collection-id]')) {
+    const collectionId = element.dataset.roomControlCollectionId as CollectionId | undefined
+    if (!collectionId || collectionId === sourceCollectionId) {
+      continue
+    }
+    const rect = element.getBoundingClientRect()
+    if (
+      pointerX < rect.left ||
+      pointerX > rect.right ||
+      pointerY < rect.top ||
+      pointerY > rect.bottom
+    ) {
+      continue
+    }
+    const area = rect.width * rect.height
+    if (area < smallestTargetArea) {
+      smallestTarget = element
+      smallestTargetArea = area
+    }
+  }
+
+  return (smallestTarget?.dataset.roomControlCollectionId as CollectionId | undefined) ?? null
 }
 
 const getSliderPointerRatio = (clientX: number, element: HTMLElement) => {

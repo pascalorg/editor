@@ -18,17 +18,16 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { HomeAssistantConnectivityPanel } from '@pascal-app/home-assistant/editor'
+import { useHomeAssistantItemControl } from '@pascal-app/home-assistant/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { getHomeAssistantLink } from '@pascal-app/home-assistant'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
-import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
+import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -62,8 +61,6 @@ export function FloatingActionMenu() {
   const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
-  const homeAssistantControlItemId = useEditor((s) => s.homeAssistantControlItemId)
-  const setHomeAssistantControlItemId = useEditor((s) => s.setHomeAssistantControlItemId)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
@@ -151,7 +148,10 @@ export function FloatingActionMenu() {
           node.type === 'wall'
             ? obj.localToWorld(
                 new THREE.Vector3(
-                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
+                  Math.hypot(
+                    segment.end[0] - segment.start[0],
+                    segment.end[1] - segment.start[1],
+                  ),
                   0,
                   0,
                 ),
@@ -336,7 +336,7 @@ export function FloatingActionMenu() {
         } else if (duplicate.type === 'stair') {
           setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
         }
-        if (duplicate.type !== 'stair') {
+        if (duplicate.type !== 'stair' && duplicate.type !== 'roof') {
           setSelection({ selectedIds: [] })
         }
       }
@@ -396,27 +396,7 @@ export function FloatingActionMenu() {
     },
     [node?.type, selectedId, setSelection],
   )
-  const handleExtraAction = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (node?.type !== 'item') {
-        return
-      }
-
-      const link = getHomeAssistantLink(node.metadata)
-      if (!link?.haEntityId) {
-        return
-      }
-
-      setHomeAssistantControlItemId(homeAssistantControlItemId === node.id ? null : String(node.id))
-    },
-    [homeAssistantControlItemId, node, setHomeAssistantControlItemId],
-  )
-  const linkedHomeAssistantItem =
-    node?.type === 'item' ? { item: node, link: getHomeAssistantLink(node.metadata) } : null
-  const isHomeAssistantControlOpen =
-    Boolean(linkedHomeAssistantItem?.link?.haEntityId) &&
-    homeAssistantControlItemId === linkedHomeAssistantItem?.item.id
+  const homeAssistantControl = useHomeAssistantItemControl(node?.type === 'item' ? node : null)
 
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
@@ -437,20 +417,12 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[100, 0]}
         >
-          {isHomeAssistantControlOpen && linkedHomeAssistantItem?.link ? (
-            <HomeAssistantConnectivityPanel
-              item={linkedHomeAssistantItem.item}
-              link={linkedHomeAssistantItem.link}
-              onClose={() => setHomeAssistantControlItemId(null)}
-            />
+          {homeAssistantControl.panel ? (
+            homeAssistantControl.panel
           ) : (
             <NodeActionMenu
-              extraActionIcon={
-                linkedHomeAssistantItem?.link?.haEntityId ? 'connectivity' : undefined
-              }
-              extraActionLabel={
-                linkedHomeAssistantItem?.link?.haEntityId ? 'Home Assistant' : undefined
-              }
+              extraActionIcon={homeAssistantControl.actionIcon}
+              extraActionLabel={homeAssistantControl.actionLabel}
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
               onCurve={
                 node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
@@ -466,9 +438,7 @@ export function FloatingActionMenu() {
                   ? handleDuplicate
                   : undefined
               }
-              onExtraAction={
-                linkedHomeAssistantItem?.link?.haEntityId ? handleExtraAction : undefined
-              }
+              onExtraAction={homeAssistantControl.onAction}
               onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}

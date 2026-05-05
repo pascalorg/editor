@@ -1,16 +1,13 @@
+import type { AnyNodeId, Collection, CollectionId } from '@pascal-app/core'
 import type {
-  AnyNode,
-  AnyNodeId,
-  Collection,
-  CollectionId,
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
-} from '@pascal-app/core'
+} from '@pascal-app/home-assistant'
 
 export type PascalLovelaceSceneArtifact = {
   version: 1
   scene: {
-    nodes: Record<AnyNodeId, AnyNode>
+    nodes: Record<string, any>
     rootNodeIds: AnyNodeId[]
     collections?: Record<CollectionId, Collection>
   }

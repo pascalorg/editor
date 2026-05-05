@@ -11,10 +11,10 @@ import {
   type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
-  type SpawnNode,
   type RoofSurfaceMaterialRole,
   type SlabNode,
   type Space,
+  type SpawnNode,
   type StairNode,
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
@@ -46,9 +46,6 @@ export type SplitOrientation = 'horizontal' | 'vertical'
 export type Phase = 'site' | 'structure' | 'furnish'
 
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
-
-export type SmartHomeOverlaySection = 'actions' | 'devices' | 'groups'
-export type SmartHomeOverlayVisibility = Record<SmartHomeOverlaySection, boolean>
 
 // Structure mode tools (building elements)
 export type StructureTool =
@@ -118,6 +115,11 @@ type MaterialPaintSelectionSnapshot = {
   activePaintMaterial: ActivePaintMaterial | null
 }
 
+export type GuideUiState = {
+  locked?: boolean
+  scaleReferenceVisible?: boolean
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -184,16 +186,10 @@ type EditorState = {
   setPaintPanelOpen: (open: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
-  homeAssistantControlItemId: string | null
-  setHomeAssistantControlItemId: (id: string | null) => void
-  homeAssistantPairingResourceId: string | null
-  setHomeAssistantPairingResourceId: (id: string | null) => void
-  homeAssistantPairingTargetItemId: AnyNodeId | null
-  setHomeAssistantPairingTargetItemId: (id: AnyNodeId | null) => void
-  isSmartHomePanelOpen: boolean
-  setSmartHomePanelOpen: (open: boolean) => void
-  smartHomeOverlayVisibility: SmartHomeOverlayVisibility
-  setSmartHomeOverlaySectionVisible: (section: SmartHomeOverlaySection, visible: boolean) => void
+  guideUi: Record<string, GuideUiState>
+  setGuideLocked: (guideId: string, locked: boolean) => void
+  setGuideScaleReferenceVisible: (guideId: string, visible: boolean) => void
+  clearGuideUi: (guideId: string) => void
   // Space detection for cutaway mode
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
@@ -218,6 +214,13 @@ type EditorState = {
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
+  showReferenceFloor: boolean
+  toggleReferenceFloor: () => void
+  setShowReferenceFloor: (show: boolean) => void
+  referenceFloorOffset: number
+  setReferenceFloorOffset: (offset: number) => void
+  referenceFloorOpacity: number
+  setReferenceFloorOpacity: (opacity: number) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
@@ -247,7 +250,9 @@ type PersistedEditorLayoutState = Pick<
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
-  | 'smartHomeOverlayVisibility'
+  | 'showReferenceFloor'
+  | 'referenceFloorOffset'
+  | 'referenceFloorOpacity'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -267,11 +272,9 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
-  smartHomeOverlayVisibility: {
-    actions: true,
-    devices: true,
-    groups: true,
-  },
+  showReferenceFloor: false,
+  referenceFloorOffset: 1,
+  referenceFloorOpacity: 0.35,
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -381,12 +384,16 @@ function normalizePersistedEditorLayoutState(
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
-    smartHomeOverlayVisibility: {
-      ...DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.smartHomeOverlayVisibility,
-      ...(state?.smartHomeOverlayVisibility && typeof state.smartHomeOverlayVisibility === 'object'
-        ? state.smartHomeOverlayVisibility
-        : {}),
-    },
+    showReferenceFloor: state?.showReferenceFloor === true,
+    referenceFloorOffset:
+      typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
+        ? Math.floor(state.referenceFloorOffset)
+        : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOffset,
+    referenceFloorOpacity:
+      typeof state?.referenceFloorOpacity === 'number' &&
+      Number.isFinite(state.referenceFloorOpacity)
+        ? Math.min(0.8, Math.max(0.1, state.referenceFloorOpacity))
+        : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
   }
 }
 
@@ -634,26 +641,36 @@ const useEditor = create<EditorState>()(
       setPaintPanelOpen: (open) => set({ isPaintPanelOpen: open }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
-      homeAssistantControlItemId: null,
-      setHomeAssistantControlItemId: (id) => set({ homeAssistantControlItemId: id }),
-      homeAssistantPairingResourceId: null,
-      setHomeAssistantPairingResourceId: (id) => set({ homeAssistantPairingResourceId: id }),
-      homeAssistantPairingTargetItemId: null,
-      setHomeAssistantPairingTargetItemId: (id) => set({ homeAssistantPairingTargetItemId: id }),
-      isSmartHomePanelOpen: false,
-      setSmartHomePanelOpen: (open) => set({ isSmartHomePanelOpen: open }),
-      smartHomeOverlayVisibility: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.smartHomeOverlayVisibility,
-      setSmartHomeOverlaySectionVisible: (section, visible) =>
-        set((state) =>
-          state.smartHomeOverlayVisibility[section] === visible
-            ? state
-            : {
-                smartHomeOverlayVisibility: {
-                  ...state.smartHomeOverlayVisibility,
-                  [section]: visible,
-                },
-              },
-        ),
+      guideUi: {},
+      setGuideLocked: (guideId, locked) =>
+        set((state) => ({
+          guideUi: {
+            ...state.guideUi,
+            [guideId]: {
+              ...state.guideUi[guideId],
+              locked,
+            },
+          },
+        })),
+      setGuideScaleReferenceVisible: (guideId, visible) =>
+        set((state) => ({
+          guideUi: {
+            ...state.guideUi,
+            [guideId]: {
+              ...state.guideUi[guideId],
+              scaleReferenceVisible: visible,
+            },
+          },
+        })),
+      clearGuideUi: (guideId) =>
+        set((state) => {
+          if (!state.guideUi[guideId]) {
+            return state
+          }
+          const guideUi = { ...state.guideUi }
+          delete guideUi[guideId]
+          return { guideUi }
+        }),
       spaces: {},
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,
@@ -685,6 +702,16 @@ const useEditor = create<EditorState>()(
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
+      showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
+      toggleReferenceFloor: () =>
+        set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
+      setShowReferenceFloor: (show) => set({ showReferenceFloor: show }),
+      referenceFloorOffset: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOffset,
+      setReferenceFloorOffset: (offset) =>
+        set({ referenceFloorOffset: Math.max(1, Math.floor(offset)) }),
+      referenceFloorOpacity: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
+      setReferenceFloorOpacity: (opacity) =>
+        set({ referenceFloorOpacity: Math.min(0.8, Math.max(0.1, opacity)) }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       isFirstPersonMode: false,
@@ -752,7 +779,9 @@ const useEditor = create<EditorState>()(
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
-        smartHomeOverlayVisibility: state.smartHomeOverlayVisibility,
+        showReferenceFloor: state.showReferenceFloor,
+        referenceFloorOffset: state.referenceFloorOffset,
+        referenceFloorOpacity: state.referenceFloorOpacity,
       }),
     },
   ),

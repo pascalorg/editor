@@ -19,7 +19,7 @@ export const GuideRenderer = ({ node }: { node: GuideNode }) => {
       position={node.position}
       ref={ref}
       rotation={[0, node.rotation[1], 0]}
-      visible={showGuides}
+      visible={showGuides && node.visible !== false}
     >
       {resolvedUrl && (
         <Suspense>
