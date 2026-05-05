@@ -354,7 +354,12 @@ async function probeHttpCandidate(url: string) {
 }
 
 async function discoverLoopbackInstances() {
-  const candidates = ['http://localhost:8123', 'http://127.0.0.1:8123']
+  const candidates = [
+    'http://localhost:8123',
+    'http://127.0.0.1:8123',
+    'http://localhost:8124',
+    'http://127.0.0.1:8124',
+  ]
   const discovered: HomeAssistantDiscoveredInstance[] = []
 
   for (const candidate of candidates) {

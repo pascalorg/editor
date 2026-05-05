@@ -26,7 +26,7 @@ export async function GET() {
         mode: 'unlinked',
         success: false,
       },
-      { status: 500 },
+      { status: 200 },
     )
   }
 }

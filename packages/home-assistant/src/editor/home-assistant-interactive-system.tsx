@@ -19,7 +19,7 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { InteractiveSystem, useViewer } from '@pascal-app/viewer'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   getHomeAssistantBindingNodeMap,
@@ -248,7 +248,6 @@ export function HomeAssistantInteractiveSystem({
 
   return (
     <>
-      <InteractiveSystem />
       <HomeAssistantItemEffects />
       <RoomControlOverlay
         onApplyRoomGrouping={applyRoomGroupingToCollection}

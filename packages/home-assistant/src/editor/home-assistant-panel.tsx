@@ -2159,8 +2159,11 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
         </div>
       )}
 
-      <div className="pointer-events-none fixed top-16 right-4 z-[320] flex items-start">
-      {isSmartHomePanelOpen && activePanel && (
+      <div
+        className="pointer-events-none fixed flex items-start"
+        style={{ right: '1rem', top: '4rem', zIndex: 320 }}
+      >
+        {isSmartHomePanelOpen && activePanel && (
         <section
           className="pointer-events-auto relative flex max-h-[calc(100vh-5rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/8 bg-[rgba(226,228,232,0.97)] p-3 text-zinc-900 shadow-[0_18px_50px_rgba(0,0,0,0.16)] backdrop-blur-xl transition-[height,width] duration-200 ease-out"
           ref={smartHomePanelRef}

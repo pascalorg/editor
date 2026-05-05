@@ -1175,7 +1175,9 @@ const RoomPanel = ({
   const collapsedMajorityItemKind = getMajorityItemKind(collapsedToggleMembers)
   const collapsedVisualActive = iconOnly
     ? Boolean(collapsedDirectControlValue)
-    : collapsedAnyToggleMemberOn
+    : collapsedToggleMembers.length > 1
+      ? collapsedAllToggleMembersOn
+      : collapsedAnyToggleMemberOn
   const collapsedHasToggleAction = collapsedToggleMembers.length > 0
   const collapsedGroupDisabled =
     !iconOnly &&
@@ -2132,6 +2134,10 @@ const RoomPanel = ({
     exitEditMode()
   }
 
+  const guardRoomPanelPointer = () => {
+    suppressRoomPanelNodeEvents(ROOM_PANEL_NODE_EVENT_SUPPRESS_MS)
+  }
+
   const runCollapsedPillPrimaryAction = () => {
     if (collapsedDirectButtonDisabled) {
       return
@@ -2187,6 +2193,9 @@ const RoomPanel = ({
   return (
     <div
       data-room-control-collection-id={collectionId ?? roomId}
+      onClickCapture={guardRoomPanelPointer}
+      onDoubleClickCapture={guardRoomPanelPointer}
+      onPointerDownCapture={guardRoomPanelPointer}
       ref={(node) => setOverlayDomRef(refsStore, roomId, 'panel', node)}
       style={panelBaseStyle}
     >
@@ -2242,7 +2251,7 @@ const RoomPanel = ({
             event.stopPropagation()
             suppressRoomPanelNodeEvents()
             clearCollapsedClickTimeout()
-            if (iconOnly || collapsedDirectButtonDisabled) {
+            if (collapsedDirectButtonDisabled) {
               return
             }
             onSetOpen(true)
@@ -2636,6 +2645,7 @@ const ToggleGroupTile = ({
   const allOn = !disabled && toggleValues.every(Boolean)
   const anyOn = !disabled && toggleValues.some(Boolean)
   const nextValue = !allOn
+  const renderActive = group.members.length > 1 ? allOn : anyOn
 
   return (
     <button
@@ -2666,11 +2676,18 @@ const ToggleGroupTile = ({
       onPointerLeave={clearHoveredItemTargets}
       onPointerMove={(event) => onPointerMove(group.id, event)}
       onPointerUp={(event) => onPointerEnd(group.id, event)}
-      style={getToggleTileStyle(group, panelColumns, allOn, anyOn, hasIntensity, disabled)}
+      style={getToggleTileStyle(
+        group,
+        panelColumns,
+        renderActive,
+        renderActive,
+        hasIntensity,
+        disabled,
+      )}
       type="button"
     >
       <span style={getControlGlyphContainerStyle(hasIntensity)}>
-        <GroupGlyphContent active={!disabled && (allOn || anyOn)} group={group} />
+        <GroupGlyphContent active={!disabled && renderActive} group={group} />
       </span>
       <GroupIntensityStrip controlValues={controlValues} group={group} onChange={onChange} />
     </button>
