@@ -3,10 +3,9 @@
 import './three-types'
 import { type AnyNodeId, type ItemNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewerFrame } from '@pascal-app/viewer'
-import { createPortal } from '@react-three/fiber'
-import { useRef, useState, useSyncExternalStore } from 'react'
-import type { MeshStandardMaterial, Object3D } from 'three'
-import { DoubleSide, MathUtils } from 'three'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import type { Object3D } from 'three'
+import { DoubleSide, Group, MathUtils, Mesh, MeshStandardMaterial, PlaneGeometry } from 'three'
 
 export type HomeAssistantItemTriggerEffect = {
   fadeInMs: number
@@ -55,13 +54,6 @@ function useHomeAssistantItemEffects() {
   )
 }
 
-function multiplyScales(
-  a: [number, number, number],
-  b: [number, number, number],
-): [number, number, number] {
-  return [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
-}
-
 function isTelevisionItem(node: ItemNode) {
   const assetId = node.asset.id.trim().toLowerCase()
   const assetName = node.asset.name.trim().toLowerCase()
@@ -80,14 +72,47 @@ function TelevisionScreenGlow({
   effect: HomeAssistantItemTriggerEffect
   node: ItemNode
 }) {
-  const materialRef = useRef<MeshStandardMaterial>(null!)
-  const [itemObject, setItemObject] = useState<Object3D | null>(null)
+  const parentRef = useRef<Object3D | null>(null)
+  const glow = useMemo(() => {
+    const group = new Group()
+    group.userData.pascalExcludeFromToolConeTarget = true
+
+    const geometry = new PlaneGeometry(1.4626, 0.7423)
+    const material = new MeshStandardMaterial({
+      color: '#ffffff',
+      depthWrite: false,
+      emissive: '#ffffff',
+      emissiveIntensity: 2.2,
+      opacity: 0,
+      side: DoubleSide,
+      transparent: true,
+    })
+    const mesh = new Mesh(geometry, material)
+    mesh.position.set(0, 0.6207, -0.025)
+    mesh.userData.pascalExcludeFromToolConeTarget = true
+    group.add(mesh)
+
+    return { geometry, group, material }
+  }, [])
 
   useViewerFrame(() => {
     const nextItemObject = sceneRegistry.nodes.get(node.id) ?? null
-    if (nextItemObject !== itemObject) {
-      setItemObject(nextItemObject)
+    if (nextItemObject !== parentRef.current) {
+      parentRef.current?.remove(glow.group)
+      parentRef.current = nextItemObject
+      nextItemObject?.add(glow.group)
     }
+
+    glow.group.visible = node.visible && Boolean(nextItemObject)
+    glow.group.position.fromArray(node.asset.offset)
+    glow.group.rotation.fromArray(node.asset.rotation)
+    const assetScale = node.asset.scale || [1, 1, 1]
+    const nodeScale = node.scale || [1, 1, 1]
+    glow.group.scale.set(
+      assetScale[0] * nodeScale[0],
+      assetScale[1] * nodeScale[1],
+      assetScale[2] * nodeScale[2],
+    )
 
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
     const progress = MathUtils.clamp(
@@ -95,39 +120,19 @@ function TelevisionScreenGlow({
       0,
       1,
     )
-    if (materialRef.current) {
-      materialRef.current.opacity = 0.92 * MathUtils.smootherstep(progress, 0, 1)
-    }
+    glow.material.opacity = 0.92 * MathUtils.smootherstep(progress, 0, 1)
   })
 
-  if (!(itemObject && node.visible)) {
-    return null
-  }
+  useEffect(() => {
+    return () => {
+      parentRef.current?.remove(glow.group)
+      parentRef.current = null
+      glow.geometry.dispose()
+      glow.material.dispose()
+    }
+  }, [glow])
 
-  return createPortal(
-    <>
-      <group
-        position={node.asset.offset}
-        rotation={node.asset.rotation}
-        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
-      >
-        <mesh position={[0, 0.6207, -0.025]} userData={{ pascalExcludeFromToolConeTarget: true }}>
-          <planeGeometry args={[1.4626, 0.7423]} />
-          <meshStandardMaterial
-            color="#ffffff"
-            depthWrite={false}
-            emissive="#ffffff"
-            emissiveIntensity={2.2}
-            opacity={0}
-            ref={materialRef}
-            side={DoubleSide}
-            transparent
-          />
-        </mesh>
-      </group>
-    </>,
-    itemObject,
-  )
+  return null
 }
 
 export function HomeAssistantItemEffects() {
