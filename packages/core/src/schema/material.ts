@@ -46,6 +46,7 @@ export const MaterialTarget = z.enum([
   'stair',
   'stair-segment',
   'fence',
+  'column',
   'slab',
   'ceiling',
   'door',

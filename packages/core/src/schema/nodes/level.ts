@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
+import { ColumnNode } from './column'
 import { FenceNode } from './fence'
 import { GuideNode } from './guide'
 import { ItemNode } from './item'
@@ -21,6 +22,7 @@ export const LevelNode = BaseNode.extend({
       z.union([
         WallNode.shape.id,
         FenceNode.shape.id,
+        ColumnNode.shape.id,
         ItemNode.shape.id,
         ZoneNode.shape.id,
         SlabNode.shape.id,

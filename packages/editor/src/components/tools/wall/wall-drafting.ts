@@ -3,7 +3,10 @@ import {
   type AnyNodeId,
   type DoorNode,
   getScaledDimensions,
+  getWallCurveFrameAt,
+  getWallCurveLength,
   type ItemNode,
+  isCurvedWall,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -62,10 +65,10 @@ export function snapPointTo45Degrees(
   const snappedAngle = Math.round(angle / angleStep) * angleStep
   const distance = Math.sqrt(dx * dx + dz * dz)
 
-  return snapPointToGrid([
-    start[0] + Math.cos(snappedAngle) * distance,
-    start[1] + Math.sin(snappedAngle) * distance,
-  ], step)
+  return snapPointToGrid(
+    [start[0] + Math.cos(snappedAngle) * distance, start[1] + Math.sin(snappedAngle) * distance],
+    step,
+  )
 }
 
 export function getWallAngleSnapStep(step = getWallGridStep()): number {
@@ -336,11 +339,17 @@ export function findWallSnapTarget(
       continue
     }
 
-    const candidates: Array<WallPlanPoint | null> = [
-      wall.start,
-      wall.end,
-      projectPointOntoWall(point, wall),
-    ]
+    const candidates: Array<WallPlanPoint | null> = [wall.start, wall.end]
+
+    if (isCurvedWall(wall)) {
+      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(wall) / 0.3))
+      for (let index = 0; index <= sampleCount; index += 1) {
+        const frame = getWallCurveFrameAt(wall, index / sampleCount)
+        candidates.push([frame.point.x, frame.point.y])
+      }
+    } else {
+      candidates.push(projectPointOntoWall(point, wall))
+    }
     for (const candidate of candidates) {
       if (!candidate) {
         continue

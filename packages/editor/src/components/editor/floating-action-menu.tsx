@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  ColumnNode,
   DoorNode,
   FenceNode,
   generateId,
@@ -26,8 +27,8 @@ import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
-import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -41,6 +42,7 @@ const ALLOWED_TYPES = [
   'stair-segment',
   'wall',
   'fence',
+  'column',
   'slab',
   'ceiling',
   'spawn',
@@ -148,10 +150,7 @@ export function FloatingActionMenu() {
           node.type === 'wall'
             ? obj.localToWorld(
                 new THREE.Vector3(
-                  Math.hypot(
-                    segment.end[0] - segment.start[0],
-                    segment.end[1] - segment.start[1],
-                  ),
+                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
                   0,
                   0,
                 ),
@@ -187,6 +186,7 @@ export function FloatingActionMenu() {
         node.type === 'door' ||
         node.type === 'wall' ||
         node.type === 'fence' ||
+        node.type === 'column' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
         node.type === 'spawn' ||
@@ -264,6 +264,8 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+        } else if (node.type === 'column') {
+          duplicate = ColumnNode.parse(duplicateInfo)
         } else if (node.type === 'wall') {
           duplicate = WallNode.parse(duplicateInfo)
         } else if (node.type === 'fence') {
@@ -324,6 +326,7 @@ export function FloatingActionMenu() {
         }
         if (
           duplicate.type === 'item' ||
+          duplicate.type === 'column' ||
           duplicate.type === 'wall' ||
           duplicate.type === 'fence' ||
           duplicate.type === 'window' ||
@@ -336,7 +339,7 @@ export function FloatingActionMenu() {
         } else if (duplicate.type === 'stair') {
           setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
         }
-        if (duplicate.type !== 'stair' && duplicate.type !== 'roof') {
+        if (duplicate.type !== 'stair') {
           setSelection({ selectedIds: [] })
         }
       }

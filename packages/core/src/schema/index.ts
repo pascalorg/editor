@@ -26,6 +26,20 @@ export {
 } from './material'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
+export {
+  COLUMN_PRESETS,
+  ColumnBaseStyle,
+  ColumnCapitalStyle,
+  ColumnCarvingPlacement,
+  ColumnCrossSection,
+  ColumnNode,
+  ColumnPanelShape,
+  type ColumnPresetId,
+  ColumnRingPlacement,
+  ColumnShaftDetail,
+  ColumnShaftProfile,
+  ColumnStyle,
+} from './nodes/column'
 export { DoorNode, DoorSegment } from './nodes/door'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
@@ -50,8 +64,8 @@ export { ScanNode } from './nodes/scan'
 // Nodes
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
-export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export { SpawnNode } from './nodes/spawn'
+export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {
   getEffectiveStairSurfaceMaterial,
   StairNode,

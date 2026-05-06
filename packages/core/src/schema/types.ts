@@ -1,6 +1,7 @@
 import z from 'zod'
 import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
+import { ColumnNode } from './nodes/column'
 import { DoorNode } from './nodes/door'
 import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
@@ -22,6 +23,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   SiteNode,
   BuildingNode,
   LevelNode,
+  ColumnNode,
   WallNode,
   FenceNode,
   ItemNode,

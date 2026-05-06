@@ -254,6 +254,7 @@ export function DoorPanel() {
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)
   const isOpening = node.openingKind === 'opening'
   const openingShape = node.openingShape ?? 'rectangle'
+  const doorShape = openingShape === 'arch' || openingShape === 'rounded' ? openingShape : 'rectangle'
   const openingRadiusMode = node.openingRadiusMode ?? 'all'
   const openingTopRadii = node.openingTopRadii ?? [0.15, 0.15]
   const cornerRadius = node.cornerRadius ?? 0.15
@@ -380,6 +381,108 @@ export function DoorPanel() {
         />
       </PanelSection>
 
+      {!isOpening && (
+        <PanelSection title="Top Shape">
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <SegmentedControl
+              onChange={(v) =>
+                handleUpdate({
+                  openingShape: v as DoorNode['openingShape'],
+                  ...(v === 'rounded'
+                    ? {
+                        openingRadiusMode,
+                        openingTopRadii,
+                        cornerRadius: Math.min(cornerRadius, maxRoundedRadius),
+                        openingRevealRadius,
+                      }
+                    : {}),
+                  ...(v === 'arch' ? { archHeight } : {}),
+                })
+              }
+              options={[
+                { label: 'Rect', value: 'rectangle' },
+                { label: 'Rounded', value: 'rounded' },
+                { label: 'Arch', value: 'arch' },
+              ]}
+              value={doorShape}
+            />
+          </div>
+          {doorShape === 'rounded' && (
+            <>
+              <div className="flex flex-col gap-2 px-1 pb-1">
+                <SegmentedControl
+                  onChange={(v) =>
+                    handleUpdate({ openingRadiusMode: v as DoorNode['openingRadiusMode'] })
+                  }
+                  options={[
+                    { label: 'All', value: 'all' },
+                    { label: 'Individual', value: 'individual' },
+                  ]}
+                  value={openingRadiusMode}
+                />
+              </div>
+              {openingRadiusMode === 'all' ? (
+                <SliderControl
+                  label="Corner Radius"
+                  max={maxRoundedRadius}
+                  min={0}
+                  onChange={(v) => previewDoorUpdate('cornerRadius', v)}
+                  onCommit={(v) => commitDoorPreview('cornerRadius', v)}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={Math.round(cornerRadius * 100) / 100}
+                />
+              ) : (
+                <>
+                  {[
+                    ['Top Left', 0],
+                    ['Top Right', 1],
+                  ].map(([label, index]) => (
+                    <SliderControl
+                      key={label}
+                      label={label}
+                      max={maxRoundedRadius}
+                      min={0}
+                      onChange={(v) => setOpeningTopRadius(index as number, v)}
+                      onCommit={(v) => setOpeningTopRadius(index as number, v, true)}
+                      precision={2}
+                      step={0.05}
+                      unit="m"
+                      value={Math.round((openingTopRadii[index as number] ?? 0) * 100) / 100}
+                    />
+                  ))}
+                </>
+              )}
+              <SliderControl
+                label="Reveal Radius"
+                max={0.08}
+                min={0}
+                onChange={(v) => previewDoorUpdate('openingRevealRadius', v)}
+                onCommit={(v) => commitDoorPreview('openingRevealRadius', v)}
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={Math.round(openingRevealRadius * 1000) / 1000}
+              />
+            </>
+          )}
+          {doorShape === 'arch' && (
+            <SliderControl
+              label="Arch Height"
+              max={node.height}
+              min={0.05}
+              onChange={(v) => handleUpdate({ archHeight: v })}
+              precision={2}
+              restoreOnCommit={false}
+              step={0.05}
+              unit="m"
+              value={Math.round(archHeight * 100) / 100}
+            />
+          )}
+        </PanelSection>
+      )}
+
       {isOpening && (
         <PanelSection title="Opening Shape">
           <div className="flex flex-col gap-2 px-1 pb-1">
@@ -468,6 +571,7 @@ export function DoorPanel() {
               min={0.05}
               onChange={(v) => handleUpdate({ archHeight: v })}
               precision={2}
+              restoreOnCommit={false}
               step={0.05}
               unit="m"
               value={Math.round(archHeight * 100) / 100}

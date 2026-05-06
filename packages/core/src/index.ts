@@ -3,6 +3,7 @@ export type {
   CameraControlEvent,
   CameraControlFitSceneEvent,
   CeilingEvent,
+  ColumnEvent,
   DoorEvent,
   EventSuffix,
   FenceEvent,

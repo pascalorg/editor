@@ -2,6 +2,7 @@
 
 import {
   type CeilingNode,
+  type ColumnNode,
   type FenceNode,
   getCatalogMaterialById,
   getEffectiveRoofSurfaceMaterial,
@@ -21,7 +22,7 @@ import {
 
 export type PaintableMaterialTarget = Extract<
   MaterialTarget,
-  'wall' | 'roof' | 'stair' | 'fence' | 'slab' | 'ceiling'
+  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling'
 >
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -131,10 +132,9 @@ export function buildStairSurfaceMaterialPatch(
   }
 }
 
-export function buildSingleSurfaceMaterialPatch<TNode extends FenceNode | SlabNode | CeilingNode>(
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<TNode> {
+export function buildSingleSurfaceMaterialPatch<
+  TNode extends FenceNode | ColumnNode | SlabNode | CeilingNode,
+>(material: MaterialSchema | undefined, materialPreset: string | undefined): Partial<TNode> {
   return {
     material,
     materialPreset,
@@ -170,7 +170,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'wall',
     })
-        ? {
+      ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
           sourceTarget: 'wall',
@@ -190,7 +190,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'roof',
     })
-        ? {
+      ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
           sourceTarget: 'roof',
@@ -210,7 +210,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       materialPreset: surface.materialPreset,
       sourceTarget: 'stair',
     })
-        ? {
+      ? {
           material: surface.material,
           materialPreset: surface.materialPreset,
           sourceTarget: 'stair',
@@ -220,6 +220,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
 
   if (
     (selectedNode.type === 'fence' ||
+      selectedNode.type === 'column' ||
       selectedNode.type === 'slab' ||
       selectedNode.type === 'ceiling') &&
     selectedMaterialTarget.role === 'surface'
@@ -265,6 +266,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'fence') {
     return 'fence'
+  }
+
+  if (selectedNode.type === 'column') {
+    return 'column'
   }
 
   if (selectedNode.type === 'slab') {

@@ -7,19 +7,129 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { Html } from '@react-three/drei'
+import { useEffect, useRef, useState } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
+  formatAngleRadians,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../shared/segment-angle'
+import {
   createFenceOnCurrentLevel,
-  snapFenceDraftPoint,
   type FencePlanPoint,
+  snapFenceDraftPoint,
 } from './fence-drafting'
 
 const FENCE_PREVIEW_HEIGHT = 1.8
+const DRAFT_LABEL_Y = FENCE_PREVIEW_HEIGHT + 0.22
+const DRAFT_ANGLE_LABEL_Y = 0.28
+
+type DraftAngleLabel = {
+  id: string
+  label: string
+  position: [number, number, number]
+}
+
+type DraftMeasurementState = {
+  lengthLabel: string
+  lengthPosition: [number, number, number]
+  angleLabels: DraftAngleLabel[]
+} | null
+
+type SegmentLike = {
+  id: string
+  start: FencePlanPoint
+  end: FencePlanPoint
+  curveOffset?: number
+}
+
+function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
+  if (unit === 'imperial') {
+    const feet = value * 3.280_84
+    const wholeFeet = Math.floor(feet)
+    const inches = Math.round((feet - wholeFeet) * 12)
+    if (inches === 12) return `${wholeFeet + 1}'0"`
+    return `${wholeFeet}'${inches}"`
+  }
+
+  return `${Number.parseFloat(value.toFixed(2))}m`
+}
+
+function getDraftAngleLabels(
+  start: FencePlanPoint,
+  end: FencePlanPoint,
+  segments: SegmentLike[],
+): DraftAngleLabel[] {
+  const draftFromStart: FencePlanPoint = [end[0] - start[0], end[1] - start[1]]
+  const draftFromEnd: FencePlanPoint = [start[0] - end[0], start[1] - end[1]]
+  const endpoints = [
+    { id: 'start', point: start, draftVector: draftFromStart },
+    { id: 'end', point: end, draftVector: draftFromEnd },
+  ]
+  const labels: DraftAngleLabel[] = []
+
+  for (const endpoint of endpoints) {
+    const connectedSegment = segments.find((segment) =>
+      Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, segment)),
+    )
+    if (!connectedSegment) continue
+
+    const connectedReference = getSegmentAngleReferenceAtPoint(endpoint.point, connectedSegment)
+    if (!connectedReference) continue
+
+    const angle = getAngleToSegmentReference(endpoint.draftVector, connectedReference)
+    if (angle === null) continue
+
+    labels.push({
+      id: endpoint.id,
+      label: formatAngleRadians(angle),
+      position: [endpoint.point[0], DRAFT_ANGLE_LABEL_Y, endpoint.point[1]],
+    })
+  }
+
+  return labels
+}
+
+function getDraftMeasurementState(
+  start: FencePlanPoint,
+  end: FencePlanPoint,
+  segments: SegmentLike[],
+  unit: 'metric' | 'imperial',
+): DraftMeasurementState {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const length = Math.hypot(dx, dz)
+
+  if (length < 0.01) return null
+
+  return {
+    lengthLabel: formatMeasurement(length, unit),
+    lengthPosition: [(start[0] + end[0]) / 2, DRAFT_LABEL_Y, (start[1] + end[1]) / 2],
+    angleLabels: getDraftAngleLabels(start, end, segments),
+  }
+}
+
+function getReferenceSegments(walls: WallNode[], fences: FenceNode[]): SegmentLike[] {
+  return [
+    ...walls.map((wall) => ({
+      id: wall.id,
+      start: wall.start,
+      end: wall.end,
+      curveOffset: wall.curveOffset,
+    })),
+    ...fences.map((fence) => ({
+      id: fence.id,
+      start: fence.start,
+      end: fence.end,
+      curveOffset: fence.curveOffset,
+    })),
+  ]
+}
 
 const updateFencePreview = (mesh: Mesh, start: Vector3, end: Vector3) => {
   const direction = new Vector3(end.x - start.x, 0, end.z - start.z)
@@ -70,12 +180,14 @@ const getCurrentLevelElements = (): { walls: WallNode[]; fences: FenceNode[] } =
 }
 
 export const FenceTool: React.FC = () => {
+  const unit = useViewer((state) => state.unit)
   const cursorRef = useRef<Group>(null)
   const previewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
+  const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
 
   useEffect(() => {
     let previousFenceEnd: [number, number] | null = null
@@ -107,9 +219,18 @@ export const FenceTool: React.FC = () => {
         previousFenceEnd = currentFenceEnd
 
         updateFencePreview(previewRef.current, startingPoint.current, endingPoint.current)
+        setDraftMeasurement(
+          getDraftMeasurementState(
+            [startingPoint.current.x, startingPoint.current.z],
+            snappedLocal,
+            getReferenceSegments(walls, fences),
+            unit,
+          ),
+        )
       } else {
         const snappedPoint = snapFenceDraftPoint({ point: localPoint, walls, fences })
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
+        setDraftMeasurement(null)
       }
     }
 
@@ -123,6 +244,7 @@ export const FenceTool: React.FC = () => {
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         previewRef.current.visible = true
+        setDraftMeasurement(null)
       } else {
         const snappedEnd = snapFenceDraftPoint({
           point: localClick,
@@ -137,6 +259,7 @@ export const FenceTool: React.FC = () => {
         createFenceOnCurrentLevel([startingPoint.current.x, startingPoint.current.z], snappedEnd)
         previewRef.current.visible = false
         buildingState.current = 0
+        setDraftMeasurement(null)
       }
     }
 
@@ -153,6 +276,7 @@ export const FenceTool: React.FC = () => {
         markToolCancelConsumed()
         buildingState.current = 0
         previewRef.current.visible = false
+        setDraftMeasurement(null)
       }
     }
 
@@ -169,7 +293,7 @@ export const FenceTool: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [])
+  }, [unit])
 
   return (
     <group>
@@ -185,6 +309,38 @@ export const FenceTool: React.FC = () => {
           transparent
         />
       </mesh>
+
+      {draftMeasurement && (
+        <>
+          <DraftMeasurementLabel
+            label={draftMeasurement.lengthLabel}
+            position={draftMeasurement.lengthPosition}
+          />
+          {draftMeasurement.angleLabels.map((angleLabel) => (
+            <DraftMeasurementLabel
+              key={angleLabel.id}
+              label={angleLabel.label}
+              position={angleLabel.position}
+            />
+          ))}
+        </>
+      )}
     </group>
+  )
+}
+
+function DraftMeasurementLabel({
+  label,
+  position,
+}: {
+  label: string
+  position: [number, number, number]
+}) {
+  return (
+    <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
+      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono text-[11px] font-semibold text-foreground shadow-lg backdrop-blur-md">
+        {label}
+      </div>
+    </Html>
   )
 }

@@ -5,6 +5,7 @@ import {
   type AssetInput,
   type BuildingNode,
   type CeilingNode,
+  type ColumnNode,
   type DoorNode,
   type FenceNode,
   type ItemNode,
@@ -139,6 +140,7 @@ type EditorState = {
     | DoorNode
     | FenceNode
     | CeilingNode
+    | ColumnNode
     | SlabNode
     | WallNode
     | RoofNode
@@ -155,6 +157,7 @@ type EditorState = {
       | DoorNode
       | FenceNode
       | CeilingNode
+      | ColumnNode
       | SlabNode
       | WallNode
       | RoofNode

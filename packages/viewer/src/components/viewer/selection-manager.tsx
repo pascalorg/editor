@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type ColumnNode,
   emitter,
   type ItemNode,
   type LevelNode,
@@ -32,6 +33,7 @@ type SelectableNodeType =
   | 'fence'
   | 'window'
   | 'door'
+  | 'column'
   | 'item'
   | 'slab'
   | 'ceiling'
@@ -132,6 +134,11 @@ const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean =
     return pointInPolygonWithTolerance(item.position[0], item.position[2], zone.polygon)
   }
 
+  if (node.type === 'column') {
+    const column = node as ColumnNode
+    return pointInPolygonWithTolerance(column.position[0], column.position[2], zone.polygon)
+  }
+
   if (node.type === 'wall') {
     const wall = node as WallNode
     const startIn = pointInPolygonWithTolerance(wall.start[0], wall.start[1], zone.polygon)
@@ -227,9 +234,20 @@ const getStrategy = (): SelectionStrategy | null => {
     }
   }
 
-  // Zone selected -> can select/hover contents (walls, items, slabs, ceilings, roofs, windows, doors)
+  // Zone selected -> can select/hover contents (walls, items, columns, slabs, ceilings, roofs, windows, doors)
   return {
-    types: ['wall', 'fence', 'item', 'slab', 'ceiling', 'roof', 'roof-segment', 'window', 'door'],
+    types: [
+      'wall',
+      'fence',
+      'item',
+      'column',
+      'slab',
+      'ceiling',
+      'roof',
+      'roof-segment',
+      'window',
+      'door',
+    ],
     handleClick: (node, nativeEvent) => {
       let nodeToSelect = node
       if (node.type === 'roof-segment' && node.parentId) {
@@ -258,6 +276,7 @@ const getStrategy = (): SelectionStrategy | null => {
         'wall',
         'fence',
         'item',
+        'column',
         'slab',
         'ceiling',
         'roof',
@@ -321,6 +340,7 @@ export const SelectionManager = () => {
       'wall',
       'fence',
       'item',
+      'column',
       'slab',
       'ceiling',
       'roof',

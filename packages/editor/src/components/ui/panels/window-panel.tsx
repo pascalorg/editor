@@ -64,7 +64,7 @@ function isSameRadiusTuple(
   current: [number, number, number, number],
   next: [number, number, number, number],
 ) {
-  return current.every((value, index) => Math.abs(value - next[index]) < 1e-6)
+  return current.every((value, index) => Math.abs(value - (next[index] ?? 0)) < 1e-6)
 }
 
 export function WindowPanel() {
@@ -267,6 +267,7 @@ export function WindowPanel() {
   const normRows = node.rowRatios.map((r) => r / rowSum)
   const isOpening = node.openingKind === 'opening'
   const openingShape = node.openingShape ?? 'rectangle'
+  const windowShape = openingShape === 'arch' || openingShape === 'rounded' ? openingShape : 'rectangle'
   const openingRadiusMode = node.openingRadiusMode ?? 'all'
   const openingCornerRadii = node.openingCornerRadii ?? [0.15, 0.15, 0.15, 0.15]
   const cornerRadius = node.cornerRadius ?? 0.15
@@ -457,6 +458,108 @@ export function WindowPanel() {
         />
       </PanelSection>
 
+      {!isOpening && (
+        <PanelSection title="Corner Shape">
+          <SegmentedControl
+            onChange={(value) =>
+              handleUpdate({
+                openingShape: value as WindowNode['openingShape'],
+                ...(value === 'rounded'
+                  ? {
+                      openingRadiusMode,
+                      openingCornerRadii,
+                      cornerRadius: Math.min(cornerRadius, maxRoundedRadius),
+                      openingRevealRadius,
+                    }
+                  : {}),
+                ...(value === 'arch' ? { archHeight } : {}),
+              })
+            }
+            options={[
+              { value: 'rectangle', label: 'Rect' },
+              { value: 'rounded', label: 'Rounded' },
+              { value: 'arch', label: 'Arch' },
+            ]}
+            value={windowShape}
+          />
+          {windowShape === 'rounded' && (
+            <div className="mt-2 flex flex-col gap-1">
+              <SegmentedControl
+                onChange={(value) =>
+                  handleUpdate({ openingRadiusMode: value as WindowNode['openingRadiusMode'] })
+                }
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'individual', label: 'Individual' },
+                ]}
+                value={openingRadiusMode}
+              />
+              {openingRadiusMode === 'all' ? (
+                <SliderControl
+                  label="Corner Radius"
+                  max={maxRoundedRadius}
+                  min={0}
+                  onChange={(value) => previewWindowUpdate('cornerRadius', value)}
+                  onCommit={(value) => commitWindowPreview('cornerRadius', value)}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={Math.round(cornerRadius * 100) / 100}
+                />
+              ) : (
+                <>
+                  {[
+                    ['Top Left', 0],
+                    ['Top Right', 1],
+                    ['Bottom Right', 2],
+                    ['Bottom Left', 3],
+                  ].map(([label, index]) => (
+                    <SliderControl
+                      key={label}
+                      label={label}
+                      max={maxRoundedRadius}
+                      min={0}
+                      onChange={(value) => setOpeningCornerRadius(index as number, value)}
+                      onCommit={(value) => setOpeningCornerRadius(index as number, value, true)}
+                      precision={2}
+                      step={0.05}
+                      unit="m"
+                      value={Math.round((openingCornerRadii[index as number] ?? 0) * 100) / 100}
+                    />
+                  ))}
+                </>
+              )}
+              <SliderControl
+                label="Reveal Radius"
+                max={0.08}
+                min={0}
+                onChange={(value) => previewWindowUpdate('openingRevealRadius', value)}
+                onCommit={(value) => commitWindowPreview('openingRevealRadius', value)}
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={Math.round(openingRevealRadius * 1000) / 1000}
+              />
+            </div>
+          )}
+          {windowShape === 'arch' && (
+            <div className="mt-2 flex flex-col gap-1">
+              <SliderControl
+                label="Arch Height"
+                max={Math.max(0.05, node.height)}
+                min={0.05}
+                onChange={(value) => handleUpdate({ archHeight: value })}
+                precision={2}
+                restoreOnCommit={false}
+                step={0.05}
+                unit="m"
+                value={Math.round(archHeight * 100) / 100}
+              />
+            </div>
+          )}
+        </PanelSection>
+      )}
+
       {isOpening && (
         <PanelSection title="Opening Shape">
           <SegmentedControl
@@ -538,6 +641,7 @@ export function WindowPanel() {
                 min={0.05}
                 onChange={(value) => handleUpdate({ archHeight: value })}
                 precision={2}
+                restoreOnCommit={false}
                 step={0.05}
                 unit="m"
                 value={Math.round(archHeight * 100) / 100}

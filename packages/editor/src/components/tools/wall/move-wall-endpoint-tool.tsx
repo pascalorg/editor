@@ -9,27 +9,87 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { Html } from '@react-three/drei'
 import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor, { type MovingWallEndpoint } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
-  isWallLongEnough,
-  snapWallDraftPoint,
-  type WallPlanPoint,
-} from './wall-drafting'
+  formatAngleRadians,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../shared/segment-angle'
+import { isWallLongEnough, snapWallDraftPoint, type WallPlanPoint } from './wall-drafting'
 
 function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
   return a[0] === b[0] && a[1] === b[1]
+}
+
+type WallSegmentLike = {
+  id: WallNode['id']
+  start: WallPlanPoint
+  end: WallPlanPoint
+  curveOffset?: number
+}
+
+type AngleLabelState = {
+  label: string
+  position: [number, number, number]
+} | null
+
+function getEndpointAngleLabel(args: {
+  preview: { start: WallPlanPoint; end: WallPlanPoint; curveOffset?: number }
+  walls: WallSegmentLike[]
+  nodeId: WallNode['id']
+}): AngleLabelState {
+  const { preview, walls, nodeId } = args
+  const endpoints = [
+    {
+      point: preview.start,
+    },
+    {
+      point: preview.end,
+    },
+  ]
+  const targetSegment: WallSegmentLike = {
+    id: nodeId,
+    start: preview.start,
+    end: preview.end,
+    curveOffset: preview.curveOffset,
+  }
+
+  for (const endpoint of endpoints) {
+    const targetReference = getSegmentAngleReferenceAtPoint(endpoint.point, targetSegment)
+    if (!targetReference) continue
+
+    const connectedWall = walls.find(
+      (wall) =>
+        wall.id !== nodeId && Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, wall)),
+    )
+    if (!connectedWall) continue
+
+    const connectedReference = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
+    if (!connectedReference) continue
+
+    const angle = getAngleToSegmentReference(targetReference.vector, connectedReference)
+    if (angle === null) continue
+
+    return {
+      label: formatAngleRadians(angle),
+      position: [endpoint.point[0], 0.34, endpoint.point[1]],
+    }
+  }
+
+  return null
 }
 
 type LinkedWallSnapshot = {
   id: WallNode['id']
   start: WallPlanPoint
   end: WallPlanPoint
+  curveOffset?: number
 }
 
 function getLinkedWallSnapshots(args: {
@@ -64,6 +124,7 @@ function getLinkedWallSnapshots(args: {
       id: node.id,
       start: [...node.start] as WallPlanPoint,
       end: [...node.end] as WallPlanPoint,
+      curveOffset: node.curveOffset,
     })
   }
 
@@ -79,6 +140,7 @@ function getLinkedWallUpdates(
 ) {
   return linkedWalls.map((wall) => ({
     id: wall.id,
+    curveOffset: wall.curveOffset,
     start: samePoint(wall.start, originalStart)
       ? nextStart
       : samePoint(wall.start, originalEnd)
@@ -114,6 +176,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }),
   )
   const previewRef = useRef<{ start: WallPlanPoint; end: WallPlanPoint } | null>(null)
+  const [angleLabel, setAngleLabel] = useState<AngleLabelState>(null)
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
     const point = target.endpoint === 'start' ? target.wall.start : target.wall.end
@@ -155,24 +218,43 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
+      const linkedUpdates = detachLinkedWalls
+        ? []
+        : getLinkedWallUpdates(
+            linkedOriginalsRef.current,
+            originalStart,
+            originalEnd,
+            nextStart,
+            nextEnd,
+          )
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
-      applyNodePreview([
-        { id: nodeId, start: nextStart, end: nextEnd },
-        ...(detachLinkedWalls
-          ? []
-          : getLinkedWallUpdates(
-              linkedOriginalsRef.current,
-              originalStart,
-              originalEnd,
-              nextStart,
-              nextEnd,
-            )),
-      ])
+      setAngleLabel(
+        getEndpointAngleLabel({
+          preview: { start: nextStart, end: nextEnd, curveOffset: target.wall.curveOffset },
+          walls: [
+            ...levelWalls.map((wall) => ({
+              id: wall.id,
+              start: wall.start,
+              end: wall.end,
+              curveOffset: wall.curveOffset,
+            })),
+            ...linkedUpdates,
+          ],
+          nodeId,
+        }),
+      )
+      applyNodePreview([{ id: nodeId, start: nextStart, end: nextEnd }, ...linkedUpdates])
     }
 
-    const restoreOriginal = () => {
-      applyNodePreview([{ id: nodeId, start: originalStart, end: originalEnd }, ...linkedOriginalsRef.current])
+    const restoreOriginal = (clearAngleLabel = true) => {
+      applyNodePreview([
+        { id: nodeId, start: originalStart, end: originalEnd },
+        ...linkedOriginalsRef.current,
+      ])
+      if (clearAngleLabel) {
+        setAngleLabel(null)
+      }
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -235,6 +317,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       }
 
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
+      setAngleLabel(null)
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
@@ -243,6 +326,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
+      setAngleLabel(null)
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -285,7 +369,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     return () => {
       if (!wasCommitted) {
-        restoreOriginal()
+        restoreOriginal(false)
       }
       resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
@@ -317,6 +401,23 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           </div>
         </div>
       </Html>
+      {angleLabel && <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />}
     </group>
+  )
+}
+
+function EndpointAngleLabel({
+  label,
+  position,
+}: {
+  label: string
+  position: [number, number, number]
+}) {
+  return (
+    <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
+      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono text-[11px] font-semibold text-foreground shadow-lg backdrop-blur-md">
+        {label}
+      </div>
+    </Html>
   )
 }

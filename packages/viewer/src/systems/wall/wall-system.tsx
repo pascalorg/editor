@@ -1,14 +1,10 @@
-import { useFrame } from '@react-three/fiber'
-import * as THREE from 'three'
-import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
-import { computeBoundsTree } from 'three-mesh-bvh'
 import {
-  calculateLevelMiters,
   type AnyNode,
   type AnyNodeId,
+  calculateLevelMiters,
+  DEFAULT_WALL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
-  DEFAULT_WALL_HEIGHT,
   getWallCurveFrameAt,
   getWallMiterBoundaryPoints,
   getWallPlanFootprint,
@@ -21,10 +17,14 @@ import {
   sceneRegistry,
   spatialGridManager,
   useScene,
-  type WallNode,
   type WallMiterData,
+  type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
+import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import { computeBoundsTree } from 'three-mesh-bvh'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
@@ -560,7 +560,13 @@ function collectCutoutBrushes(
 
     if (
       (child.type === 'door' && child.openingKind === 'opening') ||
-      (child.type === 'window' && child.openingKind === 'opening')
+      (child.type === 'door' &&
+        child.openingKind === 'door' &&
+        (child.openingShape === 'arch' || child.openingShape === 'rounded')) ||
+      (child.type === 'window' && child.openingKind === 'opening') ||
+      (child.type === 'window' &&
+        child.openingKind === 'window' &&
+        (child.openingShape === 'arch' || child.openingShape === 'rounded'))
     ) {
       brushes.push(createShapedOpeningCutoutBrush(child, wallThickness))
       continue
@@ -668,11 +674,17 @@ function createShapedOpeningCutoutShape(opening: ShapedOpeningNode): THREE.Shape
   if (opening.openingShape === 'arch') {
     const archHeight = Math.min(Math.max(opening.archHeight ?? width / 2, 0.01), height)
     const springY = top - archHeight
+    const segments = 32
 
     shape.moveTo(left, bottom)
     shape.lineTo(right, bottom)
     shape.lineTo(right, springY)
-    shape.quadraticCurveTo(centerX, top, left, springY)
+    for (let index = 1; index <= segments; index += 1) {
+      const x = right + (left - right) * (index / segments)
+      const normalizedX = Math.min(Math.abs((x - centerX) / halfWidth), 1)
+      const y = springY + archHeight * Math.sqrt(Math.max(1 - normalizedX * normalizedX, 0))
+      shape.lineTo(x, y)
+    }
     shape.lineTo(left, bottom)
     shape.closePath()
     return shape

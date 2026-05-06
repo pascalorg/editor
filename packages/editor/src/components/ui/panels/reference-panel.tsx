@@ -2,7 +2,6 @@
 
 import {
   type AnyNode,
-  emitter,
   type GuideNode,
   loadAssetUrl,
   saveAsset,
@@ -11,6 +10,7 @@ import {
 } from '@pascal-app/core'
 import { Eye, EyeOff, LocateFixed, Lock, RotateCcw, Ruler, Trash2, Unlock, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { guideEmitter } from '../../../lib/guide-events'
 import { getGuideImageName } from '../../../lib/local-guide-image'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -98,7 +98,7 @@ export function ReferencePanel() {
     }
 
     deleteNode(selectedReferenceId as AnyNode['id'])
-    emitter.emit('guide:deleted', { guideId: selectedReferenceId as GuideNode['id'] })
+    guideEmitter.emit('guide:deleted', { guideId: selectedReferenceId as GuideNode['id'] })
     clearGuideUi(selectedReferenceId)
     setSelectedReferenceId(null)
   }, [clearGuideUi, deleteNode, node?.type, selectedReferenceId, setSelectedReferenceId])
@@ -108,11 +108,11 @@ export function ReferencePanel() {
       return
     }
 
-    emitter.emit('guide:set-reference-scale', { guideId: node.id })
+    guideEmitter.emit('guide:set-reference-scale', { guideId: node.id })
   }, [node])
 
   const handleCancelScale = useCallback(() => {
-    emitter.emit('guide:cancel-reference-scale')
+    guideEmitter.emit('guide:cancel-reference-scale')
   }, [])
 
   useEffect(() => {

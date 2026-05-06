@@ -1,6 +1,7 @@
 import type {
   BuildingNode,
   CeilingNode,
+  ColumnNode,
   DoorNode,
   FenceNode,
   ItemNode,
@@ -18,6 +19,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { MoveBuildingContent } from '../building/move-building-tool'
 import { MoveCeilingTool } from '../ceiling/move-ceiling-tool'
+import { MoveColumnTool } from '../column/move-column-tool'
 import { MoveDoorTool } from '../door/move-door-tool'
 import { MoveFenceTool } from '../fence/move-fence-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
@@ -100,6 +102,7 @@ export const MoveTool: React.FC<{
   if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
   if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />
+  if (movingNode.type === 'column') return <MoveColumnTool node={movingNode as ColumnNode} />
   if (movingNode.type === 'slab') return <MoveSlabTool node={movingNode as SlabNode} />
   if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')

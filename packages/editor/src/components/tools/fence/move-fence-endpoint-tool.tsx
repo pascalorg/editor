@@ -2,32 +2,113 @@
 
 import {
   type AnyNodeId,
-  type FenceNode,
-  type WallNode,
   emitter,
+  type FenceNode,
   type GridEvent,
   pauseSceneHistory,
   resumeSceneHistory,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
-import { Html } from '@react-three/drei'
 import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor, { type MovingFenceEndpoint } from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { snapFenceDraftPoint, type FencePlanPoint } from './fence-drafting'
+import {
+  formatAngleRadians,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../shared/segment-angle'
 import { isWallLongEnough } from '../wall/wall-drafting'
+import { type FencePlanPoint, snapFenceDraftPoint } from './fence-drafting'
 
 function samePoint(a: FencePlanPoint, b: FencePlanPoint) {
   return a[0] === b[0] && a[1] === b[1]
+}
+
+type SegmentLike = {
+  id: string
+  start: FencePlanPoint
+  end: FencePlanPoint
+  curveOffset?: number
+}
+
+type AngleLabelState = {
+  label: string
+  position: [number, number, number]
+} | null
+
+function getEndpointAngleLabel(args: {
+  preview: { start: FencePlanPoint; end: FencePlanPoint; curveOffset?: number }
+  segments: SegmentLike[]
+  nodeId: FenceNode['id']
+}): AngleLabelState {
+  const { preview, segments, nodeId } = args
+  const endpoints = [
+    {
+      point: preview.start,
+    },
+    {
+      point: preview.end,
+    },
+  ]
+  const targetSegment: SegmentLike = {
+    id: nodeId,
+    start: preview.start,
+    end: preview.end,
+    curveOffset: preview.curveOffset,
+  }
+
+  for (const endpoint of endpoints) {
+    const targetReference = getSegmentAngleReferenceAtPoint(endpoint.point, targetSegment)
+    if (!targetReference) continue
+
+    const connectedSegment = segments.find(
+      (segment) =>
+        segment.id !== nodeId && Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, segment)),
+    )
+    if (!connectedSegment) continue
+
+    const connectedReference = getSegmentAngleReferenceAtPoint(endpoint.point, connectedSegment)
+    if (!connectedReference) continue
+
+    const angle = getAngleToSegmentReference(targetReference.vector, connectedReference)
+    if (angle === null) continue
+
+    return {
+      label: formatAngleRadians(angle),
+      position: [endpoint.point[0], 0.34, endpoint.point[1]],
+    }
+  }
+
+  return null
+}
+
+function getReferenceSegments(walls: WallNode[], fences: FenceNode[]): SegmentLike[] {
+  return [
+    ...walls.map((wall) => ({
+      id: wall.id,
+      start: wall.start,
+      end: wall.end,
+      curveOffset: wall.curveOffset,
+    })),
+    ...fences.map((fence) => ({
+      id: fence.id,
+      start: fence.start,
+      end: fence.end,
+      curveOffset: fence.curveOffset,
+    })),
+  ]
 }
 
 type LinkedFenceSnapshot = {
   id: FenceNode['id']
   start: FencePlanPoint
   end: FencePlanPoint
+  curveOffset?: number
 }
 
 function getLinkedFenceSnapshots(args: {
@@ -62,6 +143,7 @@ function getLinkedFenceSnapshots(args: {
       id: node.id,
       start: [...node.start] as FencePlanPoint,
       end: [...node.end] as FencePlanPoint,
+      curveOffset: node.curveOffset,
     })
   }
 
@@ -77,6 +159,7 @@ function getLinkedFenceUpdates(
 ) {
   return linkedFences.map((fence) => ({
     id: fence.id,
+    curveOffset: fence.curveOffset,
     start: samePoint(fence.start, originalStart)
       ? nextStart
       : samePoint(fence.start, originalEnd)
@@ -112,6 +195,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
     }),
   )
   const previewRef = useRef<{ start: FencePlanPoint; end: FencePlanPoint } | null>(null)
+  const [angleLabel, setAngleLabel] = useState<AngleLabelState>(null)
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
     const point = target.endpoint === 'start' ? target.fence.start : target.fence.end
@@ -158,27 +242,35 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
     const applyPreview = (movingPoint: FencePlanPoint, detachLinkedFences = false) => {
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
+      const linkedUpdates = detachLinkedFences
+        ? []
+        : getLinkedFenceUpdates(
+            linkedOriginalsRef.current,
+            originalStart,
+            originalEnd,
+            nextStart,
+            nextEnd,
+          )
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
-      applyNodePreview([
-        { id: nodeId, start: nextStart, end: nextEnd },
-        ...(detachLinkedFences
-          ? []
-          : getLinkedFenceUpdates(
-              linkedOriginalsRef.current,
-              originalStart,
-              originalEnd,
-              nextStart,
-              nextEnd,
-            )),
-      ])
+      setAngleLabel(
+        getEndpointAngleLabel({
+          preview: { start: nextStart, end: nextEnd, curveOffset: target.fence.curveOffset },
+          segments: [...getReferenceSegments(levelWalls, levelFences), ...linkedUpdates],
+          nodeId,
+        }),
+      )
+      applyNodePreview([{ id: nodeId, start: nextStart, end: nextEnd }, ...linkedUpdates])
     }
 
-    const restoreOriginal = () => {
+    const restoreOriginal = (clearAngleLabel = true) => {
       applyNodePreview([
         { id: nodeId, start: originalStart, end: originalEnd },
         ...linkedOriginalsRef.current,
       ])
+      if (clearAngleLabel) {
+        setAngleLabel(null)
+      }
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -240,6 +332,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       }
 
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
+      setAngleLabel(null)
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
@@ -248,6 +341,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
+      setAngleLabel(null)
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -290,7 +384,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
 
     return () => {
       if (!wasCommitted) {
-        restoreOriginal()
+        restoreOriginal(false)
       }
       resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
@@ -322,6 +416,23 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
           </div>
         </div>
       </Html>
+      {angleLabel && <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />}
     </group>
+  )
+}
+
+function EndpointAngleLabel({
+  label,
+  position,
+}: {
+  label: string
+  position: [number, number, number]
+}) {
+  return (
+    <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
+      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono text-[11px] font-semibold text-foreground shadow-lg backdrop-blur-md">
+        {label}
+      </div>
+    </Html>
   )
 }

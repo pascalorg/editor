@@ -3,6 +3,8 @@ import {
   type BuildingNode,
   type CeilingEvent,
   type CeilingNode,
+  type ColumnEvent,
+  type ColumnNode,
   type DoorEvent,
   type DoorNode,
   type EventSuffix,
@@ -48,6 +50,7 @@ type NodeConfig = {
   slab: { node: SlabNode; event: SlabEvent }
   spawn: { node: SpawnNode; event: SpawnEvent }
   ceiling: { node: CeilingNode; event: CeilingEvent }
+  column: { node: ColumnNode; event: ColumnEvent }
   roof: { node: RoofNode; event: RoofEvent }
   'roof-segment': { node: RoofSegmentNode; event: RoofSegmentEvent }
   stair: { node: StairNode; event: StairEvent }
