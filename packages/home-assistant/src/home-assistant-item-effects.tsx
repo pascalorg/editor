@@ -1,10 +1,11 @@
 'use client'
 
 import './three-types'
-import { type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type ItemNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewerFrame } from '@pascal-app/viewer'
-import { useRef, useSyncExternalStore } from 'react'
-import type { MeshStandardMaterial } from 'three'
+import { createPortal } from '@react-three/fiber'
+import { useRef, useState, useSyncExternalStore } from 'react'
+import type { MeshStandardMaterial, Object3D } from 'three'
 import { DoubleSide, MathUtils } from 'three'
 
 export type HomeAssistantItemTriggerEffect = {
@@ -80,8 +81,14 @@ function TelevisionScreenGlow({
   node: ItemNode
 }) {
   const materialRef = useRef<MeshStandardMaterial>(null!)
+  const [itemObject, setItemObject] = useState<Object3D | null>(null)
 
   useViewerFrame(() => {
+    const nextItemObject = sceneRegistry.nodes.get(node.id) ?? null
+    if (nextItemObject !== itemObject) {
+      setItemObject(nextItemObject)
+    }
+
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
     const progress = MathUtils.clamp(
       (now - effect.startedAtMs) / Math.max(1, effect.fadeInMs),
@@ -93,8 +100,12 @@ function TelevisionScreenGlow({
     }
   })
 
-  return (
-    <group position={node.position} rotation={node.rotation} visible={node.visible}>
+  if (!(itemObject && node.visible)) {
+    return null
+  }
+
+  return createPortal(
+    <>
       <group
         position={node.asset.offset}
         rotation={node.asset.rotation}
@@ -114,7 +125,8 @@ function TelevisionScreenGlow({
           />
         </mesh>
       </group>
-    </group>
+    </>,
+    itemObject,
   )
 }
 
