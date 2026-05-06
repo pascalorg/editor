@@ -189,7 +189,7 @@ type HomeAssistantDiscoveredInstance = {
   id: string
   instanceUrl: string
   label: string
-  source: 'known-host' | 'loopback' | 'zeroconf'
+  source: 'configured-url' | 'loopback' | 'zeroconf'
 }
 
 type ProviderDefinition = {
@@ -382,7 +382,7 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
   const [connectionState, setConnectionState] = useState<HomeAssistantConnectionResponse | null>(null)
   const [imports, setImports] = useState<HomeAssistantImportedResource[]>([])
   const [discoveredInstances, setDiscoveredInstances] = useState<HomeAssistantDiscoveredInstance[]>([])
-  const [instanceUrlInput, setInstanceUrlInput] = useState('http://homeassistant.local:8123')
+  const [instanceUrlInput, setInstanceUrlInput] = useState('')
   const [isRefreshingConnection, setIsRefreshingConnection] = useState(false)
   const [isRefreshingImports, setIsRefreshingImports] = useState(false)
   const [isDiscoveringInstances, setIsDiscoveringInstances] = useState(false)
@@ -2307,7 +2307,7 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
                     aria-label="Home Assistant URL"
                     className="rounded-xl border border-black/8 bg-white/62 px-3 py-2.5 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-500 focus:border-cyan-600/45"
                     onChange={(event) => setInstanceUrlInput(event.target.value)}
-                    placeholder="http://homeassistant.local:8123"
+                    placeholder="Home Assistant URL"
                     value={instanceUrlInput}
                   />
                   <button

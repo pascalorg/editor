@@ -8,7 +8,9 @@ import type { Collection } from '@pascal-app/core'
 import type {
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
+  PascalLovelaceSceneArtifact as HomeAssistantPascalLovelaceSceneArtifact,
 } from '@pascal-app/home-assistant'
+import { normalizePascalLovelaceArtifactAssetUrls } from '@pascal-app/home-assistant'
 
 export type ArtifactParseResult =
   | { artifact: PascalLovelaceSceneArtifact; error: null }
@@ -36,7 +38,12 @@ export function parsePascalLovelaceArtifact(input: unknown): ArtifactParseResult
     return { artifact: null, error: 'Scene artifact is missing scene.rootNodeIds.' }
   }
 
-  return { artifact, error: null }
+  return {
+    artifact: normalizePascalLovelaceArtifactAssetUrls(
+      artifact as HomeAssistantPascalLovelaceSceneArtifact,
+    ) as PascalLovelaceSceneArtifact,
+    error: null,
+  }
 }
 
 export async function loadPascalLovelaceArtifact(

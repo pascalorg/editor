@@ -5,17 +5,15 @@ export type HomeAssistantDiscoveredInstance = {
   id: string
   instanceUrl: string
   label: string
-  source: 'known-host' | 'loopback' | 'zeroconf'
+  source: 'configured-url' | 'loopback' | 'zeroconf'
 }
 
 const MDNS_GROUP = '224.0.0.251'
 const MDNS_PORT = 5353
 const DISCOVERY_TIMEOUT_MS = 1800
 const HOME_ASSISTANT_SERVICE_TYPE = '_home-assistant._tcp.local'
-const HOME_ASSISTANT_KNOWN_HOST_CANDIDATES = [
-  'http://homeassistant.local:8123',
-  'http://homeassistant:8123',
-]
+const CONFIGURED_DISCOVERY_URLS_ENV = 'PASCAL_HOME_ASSISTANT_DISCOVERY_URLS'
+const LOOPBACK_DISCOVERY_CANDIDATES = ['http://localhost:8123', 'http://127.0.0.1:8123']
 
 type MdnsRecord =
   | {
@@ -353,16 +351,42 @@ async function probeHttpCandidate(url: string) {
   }
 }
 
-async function discoverLoopbackInstances() {
-  const candidates = [
-    'http://localhost:8123',
-    'http://127.0.0.1:8123',
-    'http://localhost:8124',
-    'http://127.0.0.1:8124',
-  ]
+function getConfiguredDiscoveryUrls() {
+  return Array.from(
+    new Set(
+      (process.env[CONFIGURED_DISCOVERY_URLS_ENV] ?? '')
+        .split(',')
+        .map((candidate) => candidate.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+async function discoverConfiguredUrlInstances() {
   const discovered: HomeAssistantDiscoveredInstance[] = []
 
-  for (const candidate of candidates) {
+  for (const candidate of getConfiguredDiscoveryUrls()) {
+    const reachable = await probeHttpCandidate(candidate)
+    if (!reachable) {
+      continue
+    }
+
+    const url = new URL(candidate)
+    discovered.push({
+      id: `configured-url:${stableId([candidate])}`,
+      instanceUrl: candidate,
+      label: url.hostname,
+      source: 'configured-url',
+    })
+  }
+
+  return discovered
+}
+
+async function discoverLoopbackInstances() {
+  const discovered: HomeAssistantDiscoveredInstance[] = []
+
+  for (const candidate of LOOPBACK_DISCOVERY_CANDIDATES) {
     const reachable = await probeHttpCandidate(candidate)
     if (!reachable) {
       continue
@@ -373,27 +397,6 @@ async function discoverLoopbackInstances() {
       instanceUrl: candidate,
       label: 'This machine',
       source: 'loopback',
-    })
-  }
-
-  return discovered
-}
-
-async function discoverKnownHostInstances() {
-  const discovered: HomeAssistantDiscoveredInstance[] = []
-
-  for (const candidate of HOME_ASSISTANT_KNOWN_HOST_CANDIDATES) {
-    const reachable = await probeHttpCandidate(candidate)
-    if (!reachable) {
-      continue
-    }
-
-    const url = new URL(candidate)
-    discovered.push({
-      id: `known-host:${stableId([candidate])}`,
-      instanceUrl: candidate,
-      label: url.hostname,
-      source: 'known-host',
     })
   }
 
@@ -474,17 +477,15 @@ export async function discoverHomeAssistantInstances() {
     discovered.set(instance.instanceUrl, instance)
   }
 
-  for (const instance of await discoverKnownHostInstances()) {
+  for (const instance of await discoverConfiguredUrlInstances()) {
     if (!discovered.has(instance.instanceUrl)) {
       discovered.set(instance.instanceUrl, instance)
     }
   }
 
-  if (zeroconfInstances.length === 0) {
-    for (const instance of await discoverLoopbackInstances()) {
-      if (!discovered.has(instance.instanceUrl)) {
-        discovered.set(instance.instanceUrl, instance)
-      }
+  for (const instance of await discoverLoopbackInstances()) {
+    if (!discovered.has(instance.instanceUrl)) {
+      discovered.set(instance.instanceUrl, instance)
     }
   }
 

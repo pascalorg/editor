@@ -26,7 +26,13 @@ dist/pascal-viewer-card.js
 hacs.json
 ```
 
-Users add the Pascal repository as a HACS custom repository with category `Dashboard`, install the card, refresh the Home Assistant frontend, and add a manual Lovelace card.
+The package-level fresh-install guide lives in:
+
+```text
+packages/lovelace-card/README.md
+```
+
+At a high level, users install HACS, add the Pascal repository as a HACS custom repository with category `Dashboard`, install the card, refresh the Home Assistant frontend, and add a manual Lovelace card.
 
 Example card config:
 

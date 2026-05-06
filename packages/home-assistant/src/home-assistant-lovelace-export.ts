@@ -43,8 +43,79 @@ export type CreatePascalLovelaceArtifactInput = {
   wallMode?: 'up' | 'cutaway' | 'down'
 }
 
+const PASCAL_PUBLIC_ASSET_BASE_URL =
+  process.env.NEXT_PUBLIC_ASSETS_CDN_URL || 'https://editor.pascal.app'
+
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function toPortablePublicAssetUrl(url: unknown) {
+  if (typeof url !== 'string' || url.trim().length === 0) {
+    return url
+  }
+
+  const trimmed = url.trim()
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:image/') ||
+    trimmed.startsWith('/local/')
+  ) {
+    return trimmed
+  }
+
+  if (trimmed.startsWith('/')) {
+    return `${PASCAL_PUBLIC_ASSET_BASE_URL}${trimmed}`
+  }
+
+  return trimmed
+}
+
+function getPortableAssetProtocolFallback(asset: {
+  floorPlanUrl?: unknown
+  id?: unknown
+  src?: unknown
+  thumbnail?: unknown
+}) {
+  if (typeof asset.src !== 'string' || !asset.src.startsWith('asset://')) {
+    return asset.src
+  }
+
+  const portableReference =
+    typeof asset.thumbnail === 'string' && asset.thumbnail.includes('/items/')
+      ? asset.thumbnail
+      : typeof asset.floorPlanUrl === 'string' && asset.floorPlanUrl.includes('/items/')
+        ? asset.floorPlanUrl
+        : null
+  const match = portableReference?.match(/\/items\/([^/]+)\//)
+  const publicItemId =
+    match?.[1] ?? (typeof asset.id === 'string' && asset.id.trim().length > 0 ? asset.id : null)
+
+  return publicItemId ? `${PASCAL_PUBLIC_ASSET_BASE_URL}/items/${publicItemId}/model.glb` : asset.src
+}
+
+export function normalizePascalLovelaceArtifactAssetUrls<T extends PascalLovelaceSceneArtifact>(
+  artifact: T,
+): T {
+  const normalizedArtifact = cloneJson(artifact)
+
+  for (const node of Object.values(normalizedArtifact.scene.nodes)) {
+    if (node?.type !== 'item') {
+      continue
+    }
+
+    const asset = (node as { asset?: Record<string, unknown> }).asset
+    if (!asset) {
+      continue
+    }
+
+    asset.src = toPortablePublicAssetUrl(getPortableAssetProtocolFallback(asset))
+    asset.thumbnail = toPortablePublicAssetUrl(asset.thumbnail)
+    asset.floorPlanUrl = toPortablePublicAssetUrl(asset.floorPlanUrl)
+  }
+
+  return normalizedArtifact
 }
 
 function removeAuthoringReferenceNodes(scene: PascalLovelaceSceneArtifact['scene']) {
@@ -116,7 +187,7 @@ export function createPascalLovelaceArtifact({
   }
 
   removeAuthoringReferenceNodes(artifact.scene)
-  return artifact
+  return normalizePascalLovelaceArtifactAssetUrls(artifact)
 }
 
 export function createPascalLovelaceCardConfig(
