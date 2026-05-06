@@ -40,10 +40,16 @@ function isAllowedAssetUrl(url: string): boolean {
   if (url.startsWith('/')) return true // app-relative path
   try {
     const parsed = new URL(url)
-    if (parsed.protocol !== 'https:') return false
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+    // http is only permitted for localhost development
+    if (parsed.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(parsed.hostname)) {
+      return false
+    }
     // optional env-driven origin allowlist (only enforced for https URLs)
-    const allowlist = readAllowedOrigins()
-    if (allowlist) return allowlist.includes(parsed.origin)
+    if (parsed.protocol === 'https:') {
+      const allowlist = readAllowedOrigins()
+      if (allowlist) return allowlist.includes(parsed.origin)
+    }
     return true
   } catch {
     return false
@@ -57,12 +63,14 @@ function isAllowedAssetUrl(url: string): boolean {
  * - `data:image/…` inline images (not `data:text/html` or other types)
  * - `/…` app-relative paths
  * - `https://…` public URLs (optionally narrowed to an env allowlist)
+ * - `http://localhost[:port]/…` or `http://127.0.0.1/…` for local dev
  *
  * Rejects every other scheme, including `javascript:`, `file:`, `ftp:`,
  * and `data:text/html`, as well as empty strings and non-URL garbage.
  */
 export const AssetUrl = z.string().refine(isAllowedAssetUrl, {
-  message: 'URL must be asset://, blob:, data:image/, /path, or https://.',
+  message:
+    'URL must be asset://, blob:, data:image/, /path, or https://. http://localhost allowed for dev.',
 })
 
 export type AssetUrl = z.infer<typeof AssetUrl>

@@ -18,6 +18,9 @@ describe('AssetUrl', () => {
       ['blob:https://example.com/uuid-5678', 'blob URL with https inner'],
       ['https://cdn.example.com/a.glb', 'https CDN URL'],
       ['https://cdn.example.com/models/chair.glb?v=2', 'https URL with query string'],
+      ['http://localhost:3000/x', 'http localhost with port'],
+      ['http://localhost/x', 'http localhost without port'],
+      ['http://127.0.0.1:8080/texture.png', 'http 127.0.0.1 loopback'],
       ['/public/a.glb', 'app-relative path'],
       ['/material/wood1/albedoMap_basecolor.jpg', 'relative path deep'],
       ['data:image/png;base64,AAA', 'inline PNG data URL'],
@@ -38,9 +41,6 @@ describe('AssetUrl', () => {
       ['JAVASCRIPT:alert(1)', 'javascript scheme uppercase'],
       ['file:///etc/passwd', 'file scheme'],
       ['file://C:/Windows/System32/config', 'file scheme Windows'],
-      ['http://localhost:3000/x', 'http localhost with port'],
-      ['http://localhost/x', 'http localhost without port'],
-      ['http://127.0.0.1:8080/texture.png', 'http 127.0.0.1 loopback'],
       ['http://evil.com/', 'non-loopback http'],
       ['http://example.com:3000/x', 'http on non-loopback host'],
       ['http://169.254.169.254/latest/meta-data/', 'http on link-local (cloud metadata)'],
@@ -113,7 +113,7 @@ describe('AssetUrl', () => {
       expect(isValid('https://cdn.other.com/a.glb')).toBe(true)
     })
 
-    test('allowlist does not restrict non-http special schemes', () => {
+    test('allowlist does not restrict non-https schemes', () => {
       if (!g.process?.env) return
       g.process.env[ALLOWED_ORIGINS_ENV] = 'https://cdn.pascal.app'
       // these should still pass because they match earlier scheme-based branches
@@ -121,6 +121,7 @@ describe('AssetUrl', () => {
       expect(isValid('blob:https://example.com/abc')).toBe(true)
       expect(isValid('data:image/png;base64,AAA')).toBe(true)
       expect(isValid('/public/a.glb')).toBe(true)
+      expect(isValid('http://localhost:3000/x')).toBe(true)
     })
 
     test('allowlist rejects subdomain spoofing', () => {
