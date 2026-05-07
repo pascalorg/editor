@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
 
-const resourceLogPath = path.join(repoRoot, '.codex/runtime-logs/ha-import-resources-latest.json')
+const resourceFixturePath = process.env.PASCAL_HOME_ASSISTANT_RESOURCES_PATH
 const outDir = path.join(repoRoot, 'docs/examples/lovelace')
 
 const PASCAL_ASSET_PREFIX = '/items'
@@ -295,14 +295,17 @@ function findResource(resources, id) {
 }
 
 async function readImportedResources() {
-  try {
-    const imported = JSON.parse(await readFile(resourceLogPath, 'utf8'))
-    if (Array.isArray(imported.resources)) {
-      return imported.resources
+  if (resourceFixturePath) {
+    try {
+      const imported = JSON.parse(await readFile(resourceFixturePath, 'utf8'))
+      if (Array.isArray(imported.resources)) {
+        return imported.resources
+      }
+    } catch (error) {
+      throw new Error(
+        `Unable to read Home Assistant resources from PASCAL_HOME_ASSISTANT_RESOURCES_PATH: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
-  } catch {
-    // The demo generator can still be used outside this workstation by placing
-    // an import log at .codex/runtime-logs/ha-import-resources-latest.json.
   }
 
   try {
@@ -312,12 +315,11 @@ async function readImportedResources() {
       return resources
     }
   } catch {
-    // Existing demo artifacts carry enough resource metadata to refresh the
-    // layout without depending on workstation-local runtime logs.
+    // Fall through to the explicit missing-resources error below.
   }
 
   throw new Error(
-    'Missing Home Assistant resources. Run an HA import or keep docs/examples/lovelace/home.scene.json available.',
+    'Missing Home Assistant resources. Set PASCAL_HOME_ASSISTANT_RESOURCES_PATH or keep docs/examples/lovelace/home.scene.json available.',
   )
 }
 

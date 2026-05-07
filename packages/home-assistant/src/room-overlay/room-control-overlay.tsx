@@ -503,6 +503,12 @@ type DeviceIconDragState = {
   startX: number
   startY: number
   targetCollectionId: CollectionId | null
+  targetResourceId: string | null
+}
+
+type DeviceDropTarget = {
+  collectionId: CollectionId
+  resourceId: string | null
 }
 
 type LongPressAction = 'edit' | 'open-edit'
@@ -630,6 +636,7 @@ const getReorderPlacement = (
 export const RoomControlOverlay = ({
   onApplyRoomGrouping,
   onCopyRoomControlToRoom,
+  onMergeRoomControlDevices,
   onRemoveRoomControlFromRoom,
   onRoomControlChange,
   roomOverlayNodes = [],
@@ -1008,6 +1015,19 @@ export const RoomControlOverlay = ({
                 onCopyRoomControlToRoom?.(sourceCollectionId, targetCollectionId, sourceResourceId)
                 setOpenRoomId(targetCollectionId)
               }}
+              onMergeDevicesIntoGroup={(
+                sourceCollectionId,
+                targetCollectionId,
+                sourceResourceId,
+                targetResourceId,
+              ) => {
+                onMergeRoomControlDevices?.(
+                  sourceCollectionId,
+                  targetCollectionId,
+                  sourceResourceId,
+                  targetResourceId,
+                )
+              }}
               onOpenIntoEdit={() => {
                 setOpenRoomId(roomOverlayNode.id)
                 setEditingRoomId(roomOverlayNode.id)
@@ -1065,6 +1085,7 @@ const RoomPanel = ({
   onApplyGrouping,
   onChange,
   onCopyDeviceToGroup,
+  onMergeDevicesIntoGroup,
   onOpenIntoEdit,
   onRemoveDeviceFromGroup,
   onSetEditing,
@@ -1090,6 +1111,12 @@ const RoomPanel = ({
     sourceCollectionId: CollectionId,
     targetCollectionId: CollectionId,
     sourceResourceId?: string,
+  ) => void
+  onMergeDevicesIntoGroup: (
+    sourceCollectionId: CollectionId,
+    targetCollectionId: CollectionId,
+    sourceResourceId: string,
+    targetResourceId: string,
   ) => void
   onOpenIntoEdit: () => void
   onRemoveDeviceFromGroup: (member: RoomControlTile) => void
@@ -1470,15 +1497,16 @@ const RoomPanel = ({
 
       const distance = Math.hypot(clientX - current.startX, clientY - current.startY)
       const dragging = current.dragging || distance >= DEVICE_ICON_DRAG_THRESHOLD_PX
-      const targetCollectionId = dragging
-        ? getDeviceDropTargetCollectionId(clientX, clientY, current.sourceCollectionId)
+      const dropTarget = dragging
+        ? getDeviceDropTarget(clientX, clientY, current.sourceCollectionId)
         : null
       const nextState = {
         ...current,
         dragging,
         pointerX: clientX,
         pointerY: clientY,
-        targetCollectionId,
+        targetCollectionId: dropTarget?.collectionId ?? null,
+        targetResourceId: dropTarget?.resourceId ?? null,
       }
 
       deviceIconDragStateRef.current = nextState
@@ -1501,10 +1529,14 @@ const RoomPanel = ({
         preventDefault()
         suppressRoomPanelNodeEvents()
         iconOnlyClickSuppressedUntilRef.current = Date.now() + EDIT_EXIT_ACTION_SUPPRESS_MS
-        const targetCollectionId =
-          current.targetCollectionId ??
-          getDeviceDropTargetCollectionId(clientX, clientY, current.sourceCollectionId)
-        if (targetCollectionId) {
+        const dropTarget =
+          current.targetCollectionId !== null
+            ? {
+                collectionId: current.targetCollectionId,
+                resourceId: current.targetResourceId,
+              }
+            : getDeviceDropTarget(clientX, clientY, current.sourceCollectionId)
+        if (dropTarget) {
           const copiedSourceKeys = new Set<string>()
           for (const sourceMember of current.sourceMembers) {
             const sourceKey = `${sourceMember.collectionId}:${sourceMember.resourceId ?? ''}`
@@ -1512,11 +1544,24 @@ const RoomPanel = ({
               continue
             }
             copiedSourceKeys.add(sourceKey)
-            onCopyDeviceToGroup(
-              sourceMember.collectionId,
-              targetCollectionId,
-              sourceMember.resourceId,
-            )
+            if (
+              sourceMember.resourceId &&
+              dropTarget.resourceId &&
+              sourceMember.resourceId !== dropTarget.resourceId
+            ) {
+              onMergeDevicesIntoGroup(
+                sourceMember.collectionId,
+                dropTarget.collectionId,
+                sourceMember.resourceId,
+                dropTarget.resourceId,
+              )
+            } else {
+              onCopyDeviceToGroup(
+                sourceMember.collectionId,
+                dropTarget.collectionId,
+                sourceMember.resourceId,
+              )
+            }
           }
         }
       }
@@ -1525,7 +1570,7 @@ const RoomPanel = ({
       deviceIconDragStateRef.current = null
       setDeviceIconDragState(null)
     },
-    [clearDeviceIconDragListeners, onCopyDeviceToGroup],
+    [clearDeviceIconDragListeners, onCopyDeviceToGroup, onMergeDevicesIntoGroup],
   )
 
   const startDeviceIconDrag = (
@@ -1549,6 +1594,7 @@ const RoomPanel = ({
       startX: event.clientX,
       startY: event.clientY,
       targetCollectionId: null,
+      targetResourceId: null,
     }
     deviceIconDragStateRef.current = nextState
     setDeviceIconDragState(nextState)
@@ -2265,6 +2311,11 @@ const RoomPanel = ({
           aria-expanded={false}
           disabled={iconOnly ? collapsedDirectButtonDisabled : false}
           data-room-control-collection-id={collectionId ?? roomId}
+          data-room-control-resource-id={
+            iconOnly && !collapsedDirectButtonDisabled
+              ? (collapsedDirectControlMember?.resourceId ?? undefined)
+              : undefined
+          }
           onClick={(event) => {
             event.stopPropagation()
             suppressRoomPanelNodeEvents()
@@ -3491,11 +3542,11 @@ const getElementFromPointDeep = (pointerX: number, pointerY: number) => {
   return pointedElement
 }
 
-const getDeviceDropTargetCollectionId = (
+const getDeviceDropTarget = (
   pointerX: number,
   pointerY: number,
   sourceCollectionId: CollectionId,
-) => {
+): DeviceDropTarget | null => {
   if (typeof document === 'undefined') {
     return null
   }
@@ -3508,7 +3559,10 @@ const getDeviceDropTargetCollectionId = (
     | undefined
 
   if (targetCollectionId && targetCollectionId !== sourceCollectionId) {
-    return targetCollectionId
+    return {
+      collectionId: targetCollectionId,
+      resourceId: targetElement?.dataset.roomControlResourceId ?? null,
+    }
   }
 
   let smallestTarget: HTMLElement | null = null
@@ -3534,7 +3588,15 @@ const getDeviceDropTargetCollectionId = (
     }
   }
 
-  return (smallestTarget?.dataset.roomControlCollectionId as CollectionId | undefined) ?? null
+  const collectionId = smallestTarget?.dataset.roomControlCollectionId as
+    | CollectionId
+    | undefined
+  return collectionId
+    ? {
+        collectionId,
+        resourceId: smallestTarget?.dataset.roomControlResourceId ?? null,
+      }
+    : null
 }
 
 const getSliderPointerRatio = (clientX: number, element: HTMLElement) => {

@@ -29,6 +29,7 @@ import {
 import {
   getBindingAfterDeviceResourceCopyToGroup,
   getBindingAfterDeviceResourceRemovalFromGroup,
+  getBindingAfterDeviceResourcesMergeIntoGroup,
   getBindingAfterRoomGrouping,
 } from '../home-assistant-binding-presentation'
 import {
@@ -164,6 +165,40 @@ export function HomeAssistantInteractiveSystem({
     [homeAssistantBindings, updateNode],
   )
 
+  const mergeDeviceResourcesIntoGroup = useCallback(
+    (
+      sourceCollectionId: CollectionId,
+      targetCollectionId: CollectionId,
+      sourceResourceId: string,
+      targetResourceId: string,
+    ) => {
+      if (sourceCollectionId === targetCollectionId && sourceResourceId === targetResourceId) {
+        return
+      }
+
+      const sourceBinding = homeAssistantBindings[sourceCollectionId]
+      const targetBindingNode = homeAssistantBindings[targetCollectionId]
+      if (!(sourceBinding && targetBindingNode)) {
+        return
+      }
+
+      const nextBinding = getBindingAfterDeviceResourcesMergeIntoGroup({
+        sourceBinding,
+        sourceResourceId,
+        targetBinding: targetBindingNode,
+        targetCollectionId,
+        targetResourceId,
+      })
+      if (!nextBinding) {
+        return
+      }
+
+      updateNode(targetBindingNode.id as AnyNodeId, nextBinding as Partial<AnyNode>)
+      requestSceneImmediateSave()
+    },
+    [homeAssistantBindings, updateNode],
+  )
+
   const removeDeviceResourceFromGroup = useCallback(
     (member: RoomControlTile) => {
       const currentBindings = getHomeAssistantBindingNodeMap(useScene.getState().nodes)
@@ -272,6 +307,7 @@ export function HomeAssistantInteractiveSystem({
       <RoomControlOverlay
         onApplyRoomGrouping={applyRoomGroupingToCollection}
         onCopyRoomControlToRoom={copyDeviceResourceToGroup}
+        onMergeRoomControlDevices={mergeDeviceResourcesIntoGroup}
         onRemoveRoomControlFromRoom={removeDeviceResourceFromGroup}
         onRoomControlChange={handleRoomControlChange}
         roomOverlayNodes={roomOverlayNodes}

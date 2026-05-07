@@ -3,6 +3,7 @@ import type { CollectionId, HomeAssistantResourceBinding } from '@pascal-app/cor
 import {
   getBindingAfterDeviceResourceCopyToGroup,
   getBindingAfterDeviceResourceRemovalFromGroup,
+  getBindingAfterDeviceResourcesMergeIntoGroup,
   getBindingAfterRoomGrouping,
   getPresentationAfterResourceInclusion,
   getPresentationAfterResourceRemoval,
@@ -332,6 +333,37 @@ describe('home assistant binding presentation helpers', () => {
     })
 
     expect(nextBinding).toBeNull()
+  })
+
+  test('merging one device button onto another creates one two-device Pascal group', () => {
+    const sourceLight = light('light.master_2')
+    const targetLight = light('light.master_1')
+    const nextBinding = getBindingAfterDeviceResourcesMergeIntoGroup({
+      sourceBinding: {
+        aggregation: 'single',
+        collectionId: 'collection_mbrl2' as CollectionId,
+        primaryResourceId: sourceLight.id,
+        resources: [sourceLight],
+      },
+      sourceResourceId: sourceLight.id,
+      targetBinding: {
+        aggregation: 'single',
+        collectionId,
+        primaryResourceId: targetLight.id,
+        resources: [targetLight],
+      },
+      targetResourceId: targetLight.id,
+    })
+
+    expect(nextBinding?.resources.map((resource) => resource.id)).toEqual([
+      `pascal-group:${collectionId}`,
+      'light.master_1',
+      'light.master_2',
+    ])
+    expect(nextBinding?.presentation?.rtsRoomControls).toEqual({
+      groups: [{ memberResourceIds: ['light.master_1', 'light.master_2'] }],
+      mode: 'user-managed',
+    })
   })
 
   test('copying a device into an empty Pascal group enables it once and clears its exclusion', () => {

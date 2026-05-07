@@ -79,6 +79,12 @@ export type RoomControlOverlayProps = {
     targetCollectionId: CollectionId,
     sourceResourceId?: string,
   ) => void
+  onMergeRoomControlDevices?: (
+    sourceCollectionId: CollectionId,
+    targetCollectionId: CollectionId,
+    sourceResourceId: string,
+    targetResourceId: string,
+  ) => void
   onRemoveRoomControlFromRoom?: (member: RoomControlTile) => void
   onRoomControlChange?: (payload: RoomControlChange) => void
   roomOverlayNodes?: RoomOverlayNode[]

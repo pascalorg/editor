@@ -651,19 +651,23 @@ export function smartHomeBindingNeedsPascalGroupResource(binding: HomeAssistantC
 }
 
 export function promoteSmartHomeBindingToPascalGroupResource({
+  allowSingleDevice = false,
   binding,
   force = false,
   label,
 }: {
+  allowSingleDevice?: boolean
   binding: HomeAssistantCollectionBinding
   force?: boolean
   label: string
 }) {
+  const canForcePromote =
+    bindingHasSmartHomeLocalGroupIntent(binding) ||
+    (allowSingleDevice && binding.resources.some(isSmartHomeDeviceComponentResource))
+
   if (
     hasSmartHomeGroupResource(binding) ||
-    !(force
-      ? bindingHasSmartHomeLocalGroupIntent(binding)
-      : smartHomeBindingNeedsPascalGroupResource(binding))
+    !(force ? canForcePromote : smartHomeBindingNeedsPascalGroupResource(binding))
   ) {
     return binding
   }

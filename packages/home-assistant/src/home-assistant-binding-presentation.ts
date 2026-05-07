@@ -267,6 +267,116 @@ export function getBindingAfterDeviceResourceCopyToGroup({
   })
 }
 
+export function getBindingAfterDeviceResourcesMergeIntoGroup({
+  sourceBinding,
+  sourceResourceId,
+  targetBinding,
+  targetCollectionId = targetBinding.collectionId,
+  targetResourceId,
+}: {
+  sourceBinding: HomeAssistantCollectionBinding
+  sourceResourceId: string
+  targetBinding: HomeAssistantCollectionBinding
+  targetCollectionId?: CollectionId | string
+  targetResourceId: string
+}) {
+  const sourceResource = sourceBinding.resources.find(
+    (resource) =>
+      resource.id === sourceResourceId && isSmartHomeDeviceComponentResource(resource),
+  )
+  const targetResource = targetBinding.resources.find(
+    (resource) =>
+      resource.id === targetResourceId && isSmartHomeDeviceComponentResource(resource),
+  )
+  if (!sourceResource || !targetResource || sourceResource.id === targetResource.id) {
+    return null
+  }
+
+  const resolvedTargetBinding = hasSmartHomeGroupResource(targetBinding)
+    ? targetBinding
+    : promoteSmartHomeBindingToPascalGroupResource({
+        allowSingleDevice: true,
+        binding: targetBinding,
+        force: true,
+        label:
+          targetBinding.presentation?.label?.trim() ||
+          targetBinding.resources[0]?.label?.trim() ||
+          'Pascal group',
+      })
+
+  if (!hasSmartHomeGroupResource(resolvedTargetBinding)) {
+    return null
+  }
+
+  const resourcesById = new Map(
+    resolvedTargetBinding.resources.map((resource) => [resource.id, resource] as const),
+  )
+  resourcesById.set(sourceResource.id, cloneSmartHomeResourceBinding(sourceResource))
+  resourcesById.set(targetResource.id, cloneSmartHomeResourceBinding(targetResource))
+
+  const nextResources = resolvedTargetBinding.resources
+    .map((resource) => resourcesById.get(resource.id))
+    .filter((resource): resource is HomeAssistantResourceBinding => Boolean(resource))
+  if (!nextResources.some((resource) => resource.id === sourceResource.id)) {
+    nextResources.push(cloneSmartHomeResourceBinding(sourceResource))
+  }
+
+  const sourceMemberId = getSmartHomeRoomControlTileId(targetCollectionId, sourceResource.id)
+  const targetMemberId = getSmartHomeRoomControlTileId(targetCollectionId, targetResource.id)
+  const mergedMemberIds = [targetMemberId, sourceMemberId]
+  const mergedResourceIds = new Set([sourceResource.id, targetResource.id])
+  const existingGroups = normalizeSmartHomeStringGroups(
+    getSmartHomeRoomControlTileGroups({
+      collectionId: targetCollectionId,
+      presentation: resolvedTargetBinding.presentation,
+    }),
+  )
+  const nextGroups = [
+    ...existingGroups
+      .map((group) =>
+        group.filter(
+          (memberId) =>
+            !smartHomeRoomGroupMemberReferencesResource(
+              targetCollectionId,
+              memberId,
+              sourceResource.id,
+            ) &&
+            !smartHomeRoomGroupMemberReferencesResource(
+              targetCollectionId,
+              memberId,
+              targetResource.id,
+            ),
+        ),
+      )
+      .filter((group) => group.length > 0),
+    mergedMemberIds,
+  ]
+  const currentPrimaryResource = resolvedTargetBinding.resources.find(
+    (resource) => resource.id === resolvedTargetBinding.primaryResourceId,
+  )
+
+  return normalizeHomeAssistantCollectionBinding({
+    aggregation: 'all',
+    collectionId: resolvedTargetBinding.collectionId,
+    presentation: {
+      ...(resolvedTargetBinding.presentation ?? {}),
+      rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
+        collectionId: targetCollectionId,
+        excludedResourceIds: getSmartHomeExcludedResourceIds(
+          resolvedTargetBinding.presentation,
+        ).filter((resourceId) => !mergedResourceIds.has(resourceId)),
+        groups: nextGroups,
+        mode: 'user-managed',
+        resources: nextResources,
+      }),
+    },
+    primaryResourceId: isSmartHomeDeviceComponentResource(currentPrimaryResource)
+      ? (currentPrimaryResource?.id ?? targetResource.id)
+      : targetResource.id,
+    resources: nextResources,
+  })
+}
+
 export function getBindingAfterDeviceResourceRemovalFromGroup(
   binding: HomeAssistantCollectionBinding,
   resourceId: string,
