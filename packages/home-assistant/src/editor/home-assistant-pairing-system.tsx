@@ -2,7 +2,7 @@
 
 import { emitter, resolveLevelId, type AnyNodeId, type ItemEvent, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { homeAssistantEditorStore, useHomeAssistantEditorStore } from './home-assistant-editor-store'
 
 const HOME_ASSISTANT_PAIR_CURSOR =
@@ -28,6 +28,7 @@ function clearPairPreview() {
 
 export function HomeAssistantPairingSystem() {
   const pairingResourceId = useHomeAssistantEditorStore((state) => state.pairingResourceId)
+  const pairingOwnsInteractiveOverlayRef = useRef(false)
 
   useEffect(() => {
     const previousCursor = typeof document !== 'undefined' ? document.body.style.cursor : ''
@@ -35,13 +36,26 @@ export function HomeAssistantPairingSystem() {
       document.body.style.cursor = pairingResourceId ? HOME_ASSISTANT_PAIR_CURSOR : previousCursor
     }
 
-    if (!pairingResourceId) {
+    if (pairingResourceId) {
+      if (!useViewer.getState().interactiveOverlayActive) {
+        useViewer.getState().setInteractiveOverlayActive(true)
+        pairingOwnsInteractiveOverlayRef.current = true
+      }
+    } else {
+      if (pairingOwnsInteractiveOverlayRef.current) {
+        useViewer.getState().setInteractiveOverlayActive(false)
+        pairingOwnsInteractiveOverlayRef.current = false
+      }
       clearPairPreview()
     }
 
     return () => {
       if (typeof document !== 'undefined') {
         document.body.style.cursor = previousCursor
+      }
+      if (pairingOwnsInteractiveOverlayRef.current) {
+        useViewer.getState().setInteractiveOverlayActive(false)
+        pairingOwnsInteractiveOverlayRef.current = false
       }
     }
   }, [pairingResourceId])

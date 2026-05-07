@@ -20,6 +20,8 @@ import {
   isHomeAssistantTriggerBinding,
 } from '../home-assistant-binding'
 import {
+  bindingHasSmartHomeLocalGroupIntent,
+  createSmartHomePascalGroupResourceBinding,
   getLegacySmartHomeRoomControlTileId,
   getSmartHomeBindingControlResources,
   getSmartHomeRoomControlMode,
@@ -147,14 +149,10 @@ const collectionHasBoundResources = (
 const isIconOnlyDeviceCollection = (
   collection: Collection,
   binding: HomeAssistantCollectionBinding | null | undefined,
-  selectedLevelId: AnyNodeId | null = null,
 ) =>
   Boolean(
     binding &&
       !bindingHasGroupResource(binding) &&
-      (selectedLevelId ||
-        (!binding.presentation?.rtsWorldPosition && !binding.presentation?.rtsScreenPosition)) &&
-      collection.nodeIds.length === 1 &&
       getBindingDeviceComponentResources(binding).length === 1,
   )
 
@@ -162,6 +160,76 @@ export const getCollectionDisplayName = (
   collection: Collection,
   bindings: HomeAssistantCollectionBindingMap,
 ) => getHomeAssistantBindingDisplayLabel(bindings[collection.id], collection.name)
+
+const normalizeResourceMatchText = (value: string | null | undefined) =>
+  (value ?? '')
+    .toLowerCase()
+    .replace(/^[a-z_]+\./, '')
+    .replace(/[^a-z0-9]+/g, '')
+
+const titleCaseToken = (value: string) =>
+  value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : value
+
+const getResourceIdentifierLabel = (
+  resource: HomeAssistantResourceBinding | null | undefined,
+) => {
+  const rawTail = (resource?.entityId ?? resource?.id ?? '').split('.').pop()?.trim() ?? ''
+  if (!rawTail) {
+    return null
+  }
+
+  const compactMatch = rawTail.match(/^([a-z]{2,4})([a-z])(\d+)$/i)
+  if (compactMatch) {
+    return `${titleCaseToken(compactMatch[1]!)}${compactMatch[2]!.toUpperCase()}${
+      compactMatch[3]!
+    }`
+  }
+
+  const words = rawTail.split(/[_\s-]+/).filter(Boolean)
+  if (words.length === 0) {
+    return null
+  }
+
+  return words.map(titleCaseToken).join(' ')
+}
+
+const getResourceOverlayLabel = (
+  resource: HomeAssistantResourceBinding | null | undefined,
+  fallbackLabel: string,
+  linkedItemLabel?: string | null,
+) => {
+  const resourceLabel = resource?.label?.trim() ?? ''
+  const identifierLabel = getResourceIdentifierLabel(resource)
+  const normalizedResourceLabel = normalizeResourceMatchText(resourceLabel)
+  const duplicatesLocalLabel =
+    normalizedResourceLabel.length > 0 &&
+    normalizeResourceMatchText(linkedItemLabel) === normalizedResourceLabel
+
+  if (identifierLabel && (!resourceLabel || duplicatesLocalLabel)) {
+    return identifierLabel
+  }
+
+  return resourceLabel || identifierLabel || linkedItemLabel?.trim() || fallbackLabel
+}
+
+const getCollectionOverlayDisplayName = (
+  collection: Collection,
+  binding: HomeAssistantCollectionBinding | null | undefined,
+  bindings: HomeAssistantCollectionBindingMap,
+  roomControls: RoomControlTile[],
+) => {
+  const fallbackName = getCollectionDisplayName(collection, bindings)
+  const deviceResources = getBindingDeviceComponentResources(binding)
+  if (
+    !bindingHasGroupResource(binding) &&
+    deviceResources.length === 1 &&
+    roomControls.length === 1
+  ) {
+    return getResourceOverlayLabel(deviceResources[0], fallbackName, collection.name)
+  }
+
+  return fallbackName
+}
 
 const compareCollectionsForRoom = (
   left: Collection,
@@ -238,11 +306,14 @@ const getCollectionAnchorNodeIds = (
   controls: RoomControlTile[],
   sceneNodes: Record<AnyNodeId, AnyNode>,
   selectedLevelId: AnyNodeId | null = null,
+  includeFallbackItems = true,
 ) => {
   const controlItemIds = controls.map((control) => control.linkedItemId ?? control.itemId)
-  const fallbackItemIds = getCollectionItemNodes(collection, sceneNodes)
-    .filter((item) => itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId))
-    .map((node) => node.id)
+  const fallbackItemIds = includeFallbackItems
+    ? getCollectionItemNodes(collection, sceneNodes)
+        .filter((item) => itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId))
+        .map((node) => node.id)
+    : []
   const preferredIds = [...controlItemIds, ...fallbackItemIds]
 
   return Array.from(new Set(preferredIds)).filter((nodeId) => {
@@ -259,6 +330,95 @@ const getResourceIdentityKeys = (resource: HomeAssistantResourceBinding | null |
       ),
     ),
   )
+
+const resourceMatchesIdentityKeys = (
+  resource: HomeAssistantResourceBinding | null | undefined,
+  identityKeys: Set<string>,
+) => getResourceIdentityKeys(resource).some((key) => identityKeys.has(key))
+
+const getResourceDomain = (resource: HomeAssistantResourceBinding | null | undefined) =>
+  resource?.entityId?.split('.')[0] ?? resource?.actions[0]?.domain ?? null
+
+const getResourceItemMatchScore = (resource: HomeAssistantResourceBinding, item: ItemNode) => {
+  const itemName = normalizeResourceMatchText(item.asset.name?.trim() || item.name?.trim())
+  const resourceLabel = normalizeResourceMatchText(resource.label)
+  const resourceEntityTail = normalizeResourceMatchText(resource.entityId ?? resource.id)
+  const domain = getResourceDomain(resource)
+
+  if (!itemName) {
+    return 0
+  }
+
+  if (
+    (resourceLabel && resourceLabel === itemName) ||
+    (resourceEntityTail && resourceEntityTail === itemName)
+  ) {
+    return 100
+  }
+
+  if (
+    (resourceLabel.length > 2 &&
+      (itemName.includes(resourceLabel) || resourceLabel.includes(itemName))) ||
+    (resourceEntityTail.length > 2 &&
+      (itemName.includes(resourceEntityTail) || resourceEntityTail.includes(itemName)))
+  ) {
+    return 80
+  }
+
+  if (domain === 'fan' && itemName.includes('fan')) {
+    return 60
+  }
+
+  if (
+    domain === 'light' &&
+    (itemName.includes('light') || itemName.includes('lamp') || itemName.includes('recessed'))
+  ) {
+    return 40
+  }
+
+  if (domain === 'media_player' && (itemName.includes('tv') || itemName.includes('television'))) {
+    return 40
+  }
+
+  return 0
+}
+
+const assignDeviceResourcesToItems = (
+  resources: HomeAssistantResourceBinding[],
+  items: ItemNode[],
+  preassignedResourcesByItemId: Map<AnyNodeId, HomeAssistantResourceBinding>,
+) => {
+  const assigned = new Map(preassignedResourcesByItemId)
+  const usedResourceIds = new Set(Array.from(assigned.values()).map((resource) => resource.id))
+
+  for (const item of items) {
+    if (assigned.has(item.id)) {
+      continue
+    }
+
+    let bestResource: HomeAssistantResourceBinding | null = null
+    let bestScore = 0
+
+    for (const resource of resources) {
+      if (usedResourceIds.has(resource.id)) {
+        continue
+      }
+
+      const score = getResourceItemMatchScore(resource, item)
+      if (score > bestScore) {
+        bestResource = resource
+        bestScore = score
+      }
+    }
+
+    if (bestResource && bestScore > 0) {
+      assigned.set(item.id, bestResource)
+      usedResourceIds.add(bestResource.id)
+    }
+  }
+
+  return assigned
+}
 
 const getBindingGroupMemberEntityIds = (
   binding: HomeAssistantCollectionBinding | null | undefined,
@@ -324,6 +484,54 @@ const getRelatedGroupMemberItemNodes = (
   return Array.from(nodesById.values())
 }
 
+const getResourceMatchedItemNodesFromCollection = (
+  resource: HomeAssistantResourceBinding,
+  binding: HomeAssistantCollectionBinding,
+  collection: Collection,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null,
+) => {
+  const identityKeys = new Set(getResourceIdentityKeys(resource))
+  const itemNodes = getCollectionLinkedItemNodes(collection, sceneNodes).filter((item) =>
+    itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+  )
+  if (identityKeys.size === 0 || itemNodes.length === 0) {
+    return []
+  }
+
+  const deviceResources = getBindingDeviceComponentResources(binding)
+  const matchingResources = deviceResources.filter((candidate) =>
+    resourceMatchesIdentityKeys(candidate, identityKeys),
+  )
+  if (matchingResources.length === 0) {
+    return []
+  }
+
+  if (deviceResources.length === 1 || itemNodes.length === 1) {
+    return itemNodes
+  }
+
+  const assignedResources = assignDeviceResourcesToItems(deviceResources, itemNodes, new Map())
+  const matchedItems = itemNodes.filter((item) =>
+    resourceMatchesIdentityKeys(assignedResources.get(item.id), identityKeys),
+  )
+  if (matchedItems.length > 0) {
+    return matchedItems
+  }
+
+  let bestItem: ItemNode | null = null
+  let bestScore = 0
+  for (const item of itemNodes) {
+    const score = getResourceItemMatchScore(resource, item)
+    if (score > bestScore) {
+      bestItem = item
+      bestScore = score
+    }
+  }
+
+  return bestItem && bestScore > 0 ? [bestItem] : []
+}
+
 const getResourceLinkedItemNodes = (
   resource: HomeAssistantResourceBinding,
   collectionId: CollectionId,
@@ -351,14 +559,18 @@ const getResourceLinkedItemNodes = (
     const hasMatchingResource = binding.resources.some(
       (candidate) =>
         isSmartHomeDeviceComponentResource(candidate) &&
-        getResourceIdentityKeys(candidate).some((key) => identityKeys.has(key)),
+        resourceMatchesIdentityKeys(candidate, identityKeys),
     )
     if (!hasMatchingResource) {
       continue
     }
 
-    for (const anchorNode of getCollectionLinkedItemNodes(collection, sceneNodes).filter((item) =>
-      itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+    for (const anchorNode of getResourceMatchedItemNodesFromCollection(
+      resource,
+      binding,
+      collection,
+      sceneNodes,
+      selectedLevelId,
     )) {
       linkedItemNodes.push(anchorNode)
     }
@@ -483,7 +695,15 @@ const getCollectionRelatedGroupWorldPosition = (
     selectedLevelId,
   )
 
-  return getItemCenterWorldPosition(relatedItemNodes)
+  if (relatedItemNodes.length > 0) {
+    return getItemCenterWorldPosition(relatedItemNodes)
+  }
+
+  return getItemCenterWorldPosition(
+    getCollectionItemNodes(collection, sceneNodes).filter((item) =>
+      itemIsOnSelectedLevel(item, sceneNodes, selectedLevelId),
+    ),
+  )
 }
 
 const getCollectionSelectedLevelWorldPosition = (
@@ -580,6 +800,32 @@ const getDirectActionMode = (
   return null
 }
 
+const getSingleDeviceControlSourceNodes = (
+  resource: HomeAssistantResourceBinding,
+  controlSourceNodes: ItemNode[],
+  fallbackControlNode: ItemNode | null,
+) => {
+  if (controlSourceNodes.length <= 1) {
+    return controlSourceNodes
+  }
+
+  if (fallbackControlNode && controlSourceNodes.some((node) => node.id === fallbackControlNode.id)) {
+    return [fallbackControlNode]
+  }
+
+  let bestNode: ItemNode | null = null
+  let bestScore = 0
+  for (const node of controlSourceNodes) {
+    const score = getResourceItemMatchScore(resource, node)
+    if (score > bestScore) {
+      bestNode = node
+      bestScore = score
+    }
+  }
+
+  return [bestNode ?? controlSourceNodes[0]!]
+}
+
 const buildCollectionRoomControlTiles = (
   collection: Collection,
   binding: HomeAssistantCollectionBinding | null | undefined,
@@ -593,6 +839,21 @@ const buildCollectionRoomControlTiles = (
 ): RoomControlTile[] => {
   const collectionLabel = getHomeAssistantBindingDisplayLabel(binding, collection.name)
   const controlResources = getSmartHomeBindingControlResources(binding?.resources ?? [])
+  const deviceResources = getBindingDeviceComponentResources(binding)
+  const renderAsEmptyLocalGroup =
+    Boolean(binding && hasPositionedPill) &&
+    deviceResources.length === 0 &&
+    !controlResources.some(isSmartHomeGroupResource) &&
+    bindingHasSmartHomeLocalGroupIntent(binding!)
+  const resolvedControlResources =
+    renderAsEmptyLocalGroup && binding
+      ? [
+          createSmartHomePascalGroupResourceBinding({
+            collectionId: binding.collectionId,
+            label: collectionLabel,
+          }),
+        ]
+      : controlResources
   const itemNodes = Array.from(
     new Map(
       getCollectionItemNodes(collection, sceneNodes)
@@ -600,7 +861,7 @@ const buildCollectionRoomControlTiles = (
         .map((node) => [node.id, node] as const),
     ).values(),
   )
-  const linkedResourceItemNodes = controlResources.flatMap((resource) =>
+  const linkedResourceItemNodes = resolvedControlResources.flatMap((resource) =>
     getResourceLinkedItemNodes(
       resource,
       collection.id,
@@ -628,23 +889,38 @@ const buildCollectionRoomControlTiles = (
       ].map((node) => [node.id, node] as const),
     ).values(),
   )
+  const effectiveControlSourceNodes =
+    deviceResources.length === 1
+      ? getSingleDeviceControlSourceNodes(
+          deviceResources[0]!,
+          controlSourceNodes,
+          fallbackControlNode,
+        )
+      : controlSourceNodes
 
   if (
     hasPositionedPill &&
-    (controlSourceNodes.length === 0 ||
-      ((bindingHasGroupResource(binding) || controlResources.length > 1) &&
-        controlResources.length > controlSourceNodes.length))
+    (deviceResources.length === 0 ||
+      effectiveControlSourceNodes.length === 0 ||
+      (bindingHasGroupResource(binding)
+        ? resolvedControlResources.length !== effectiveControlSourceNodes.length
+        : resolvedControlResources.length > 1 &&
+          resolvedControlResources.length > effectiveControlSourceNodes.length))
   ) {
-    return controlResources
-      .filter((resource) =>
-        resourceHasLevelLocalLinkedItem(
-          resource,
-          collection.id,
-          collections,
-          bindings,
-          sceneNodes,
-          selectedLevelId,
-        ),
+    return resolvedControlResources
+      .filter(
+        (resource) =>
+          resourceHasLevelLocalLinkedItem(
+            resource,
+            collection.id,
+            collections,
+            bindings,
+            sceneNodes,
+            selectedLevelId,
+          ) ||
+          (hasPositionedPill &&
+            isSmartHomeGroupResource(resource) &&
+            (resource.memberEntityIds?.length ?? 0) === 0),
       )
       .map((resource, index) => {
         const disabled = !isSmartHomeControllableEntityResource(resource)
@@ -676,7 +952,11 @@ const buildCollectionRoomControlTiles = (
           intensityControlIndex: syntheticIntensityControl ? 1 : null,
           itemId: tileId as AnyNodeId,
           itemKind: getResourceItemKind(resource, collectionLabel),
-          itemName: resource.label ?? linkedItemNode?.asset.name?.trim() ?? collectionLabel,
+          itemName: getResourceOverlayLabel(
+            resource,
+            collectionLabel,
+            linkedItemNode?.asset.name?.trim(),
+          ),
           legacyIds:
             legacyTileId === tileId
               ? [`${tileId}:${index}`]
@@ -687,7 +967,6 @@ const buildCollectionRoomControlTiles = (
       })
   }
 
-  const deviceResources = getBindingDeviceComponentResources(binding)
   const resourceByLinkedItemId = new Map<AnyNodeId, HomeAssistantResourceBinding>()
 
   for (const resource of deviceResources) {
@@ -705,13 +984,23 @@ const buildCollectionRoomControlTiles = (
   }
 
   const primaryResource = deviceResources[0] ?? null
-  const pairsByIndex = deviceResources.length === controlSourceNodes.length
+  const pairsByIndex = deviceResources.length === effectiveControlSourceNodes.length
+  const resourceByControlItemId = assignDeviceResourcesToItems(
+    deviceResources,
+    effectiveControlSourceNodes,
+    resourceByLinkedItemId,
+  )
 
-  return controlSourceNodes.map((itemNode, index) => {
+  return effectiveControlSourceNodes.flatMap((itemNode, index) => {
     const itemResource =
-      resourceByLinkedItemId.get(itemNode.id) ??
+      resourceByControlItemId.get(itemNode.id) ??
       (pairsByIndex ? deviceResources[index] : null) ??
-      primaryResource
+      (deviceResources.length === 1 ? primaryResource : null)
+
+    if (deviceResources.length > 0 && !itemResource) {
+      return []
+    }
+
     const disabled = !isSmartHomeDeviceComponentResource(itemResource)
     const controls = itemNode.asset.interactive?.controls ?? []
     const selectedControl = getPrimaryRoomControl(controls)
@@ -728,37 +1017,149 @@ const buildCollectionRoomControlTiles = (
       ? getLegacySmartHomeRoomControlTileId(collection.id, itemResource.id)
       : null
 
-    return {
-      canDetachFromRoom: bindingHasGroupResource(binding),
-      collectionId: collection.id,
-      collectionLabel,
-      control,
-      controlIndex,
-      directActionMode: getDirectActionMode(binding, control, syntheticIntensityControl),
-      disabled,
-      id: `${collection.id}:${itemNode.id}:${controlIndex}`,
-      intensityControl: syntheticIntensityControl ?? null,
-      intensityControlIndex:
-        selectedControl?.intensityControlIndex ??
-        (syntheticIntensityControl ? controls.length : null),
-      itemId: itemNode.id,
-      itemKind: getResourceItemKind(
-        itemResource,
-        itemNode.asset.name?.trim() || collectionLabel || 'item',
-      ),
-      itemName: itemResource?.label ?? itemNode.asset.name?.trim() ?? collectionLabel ?? 'Item',
-      legacyIds: resourceTileId
-        ? [
-            resourceTileId,
-            `${resourceTileId}:${index}`,
-            ...(legacyResourceTileId && legacyResourceTileId !== resourceTileId
-              ? [legacyResourceTileId, `${legacyResourceTileId}:${index}`]
-              : []),
-          ]
-        : undefined,
-      resourceId: itemResource?.id,
-    }
+    return [
+      {
+        canDetachFromRoom: bindingHasGroupResource(binding),
+        collectionId: collection.id,
+        collectionLabel,
+        control,
+        controlIndex,
+        directActionMode: getDirectActionMode(binding, control, syntheticIntensityControl),
+        disabled,
+        id: `${collection.id}:${itemNode.id}:${controlIndex}`,
+        intensityControl: syntheticIntensityControl ?? null,
+        intensityControlIndex:
+          selectedControl?.intensityControlIndex ??
+          (syntheticIntensityControl ? controls.length : null),
+        itemId: itemNode.id,
+        itemKind: getResourceItemKind(
+          itemResource,
+          itemNode.asset.name?.trim() || collectionLabel || 'item',
+        ),
+        itemName: getResourceOverlayLabel(
+          itemResource,
+          collectionLabel || 'Item',
+          itemNode.asset.name?.trim(),
+        ),
+        legacyIds: resourceTileId
+          ? [
+              resourceTileId,
+              `${resourceTileId}:${index}`,
+              ...(legacyResourceTileId && legacyResourceTileId !== resourceTileId
+                ? [legacyResourceTileId, `${legacyResourceTileId}:${index}`]
+                : []),
+            ]
+          : undefined,
+        resourceId: itemResource?.id,
+      },
+    ]
   })
+}
+
+const getRoomControlConcreteAnchorNodeId = (
+  control: RoomControlTile,
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null,
+) => {
+  const candidateIds = [control.linkedItemId, control.itemId].filter(
+    (nodeId): nodeId is AnyNodeId => Boolean(nodeId),
+  )
+
+  for (const candidateId of candidateIds) {
+    const node = sceneNodes[candidateId]
+    if (node?.type === 'item' && itemIsOnSelectedLevel(node, sceneNodes, selectedLevelId)) {
+      return candidateId
+    }
+  }
+
+  return null
+}
+
+const buildLocalDeviceOverlayNodes = (
+  collection: Collection,
+  binding: HomeAssistantCollectionBinding | null | undefined,
+  bindings: HomeAssistantCollectionBindingMap,
+  roomControls: RoomControlTile[],
+  sceneNodes: Record<AnyNodeId, AnyNode>,
+  selectedLevelId: AnyNodeId | null,
+): RoomOverlayNode[] => {
+  const deviceResourceIds = new Set(
+    getBindingDeviceComponentResources(binding).map((resource) => resource.id),
+  )
+  if (deviceResourceIds.size === 0) {
+    return []
+  }
+
+  const seenKeys = new Set<string>()
+  const localNodes: RoomOverlayNode[] = []
+
+  for (const control of roomControls) {
+    if (
+      control.disabled ||
+      !control.resourceId ||
+      !deviceResourceIds.has(control.resourceId) ||
+      hasSeparateDirectDeviceOverlayBinding(control.resourceId, collection.id, bindings)
+    ) {
+      continue
+    }
+
+    const anchorNodeId = getRoomControlConcreteAnchorNodeId(control, sceneNodes, selectedLevelId)
+    if (!anchorNodeId) {
+      continue
+    }
+
+    const key = `${control.resourceId}:${anchorNodeId}`
+    if (seenKeys.has(key)) {
+      continue
+    }
+    seenKeys.add(key)
+
+    const localControl: RoomControlTile = {
+      ...control,
+      itemId: anchorNodeId,
+      linkedItemId: anchorNodeId,
+    }
+
+    localNodes.push({
+      anchorNodeIds: [anchorNodeId],
+      collectionId: collection.id,
+      controlGroups: buildRoomControlGroups([localControl], [[localControl.id]]),
+      iconOnly: true,
+      id: `${collection.id}:local:${control.resourceId}`,
+      roomName: localControl.itemName,
+      totalSlotCount: 1,
+    })
+  }
+
+  return localNodes
+}
+
+const hasSeparateDirectDeviceOverlayBinding = (
+  resourceId: string,
+  currentCollectionId: CollectionId,
+  bindings: HomeAssistantCollectionBindingMap,
+) => {
+  const identityKeys = new Set([resourceId])
+
+  for (const binding of Object.values(bindings)) {
+    if (binding.collectionId === currentCollectionId) {
+      continue
+    }
+    if (isSmartHomeBindingPresentationHidden(binding.presentation)) {
+      continue
+    }
+
+    const deviceResources = getBindingDeviceComponentResources(binding)
+    if (deviceResources.length !== 1) {
+      continue
+    }
+
+    if (resourceMatchesIdentityKeys(deviceResources[0], identityKeys)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 const getCollectionRangeCapability = (
@@ -841,9 +1242,12 @@ export function buildHomeAssistantRoomOverlayNodes({
   selectedLevelId,
   visibility,
 }: RoomOverlayNodeBuildInput): RoomOverlayNode[] {
-  return Object.values(collections)
+  const overlayNodes = Object.values(collections)
     .filter((collection) => {
       const binding = bindings[collection.id]
+      const bindingVisible =
+        isHomeAssistantOverlayBindingVisible(binding, visibility) ||
+        (visibility.devices && getBindingDeviceComponentResources(binding).length > 0)
       const derivedWorldPosition = selectedLevelId
         ? getCollectionSelectedLevelWorldPosition(
             collection,
@@ -862,10 +1266,10 @@ export function buildHomeAssistantRoomOverlayNodes({
           )
       return (
         collectionHasBoundResources(collection, bindings) &&
-        isHomeAssistantOverlayBindingVisible(binding, visibility) &&
+        bindingVisible &&
         (selectedLevelId
           ? isCollectionVisibleOnSelectedLevel(collection, binding, sceneNodes, selectedLevelId) ||
-            Boolean(derivedWorldPosition)
+            Boolean(derivedWorldPosition || binding?.presentation?.rtsWorldPosition)
           : isCollectionVisibleOnSelectedLevel(collection, binding, sceneNodes, selectedLevelId) ||
             Boolean(
               binding?.presentation?.rtsWorldPosition ||
@@ -877,7 +1281,7 @@ export function buildHomeAssistantRoomOverlayNodes({
     .sort((left, right) => compareCollectionsForRoom(left, right, bindings))
     .flatMap((collection) => {
       const binding = bindings[collection.id]
-      const iconOnly = isIconOnlyDeviceCollection(collection, binding, selectedLevelId)
+      const iconOnly = isIconOnlyDeviceCollection(collection, binding)
       const derivedWorldPosition = selectedLevelId
         ? getCollectionSelectedLevelWorldPosition(
             collection,
@@ -898,17 +1302,18 @@ export function buildHomeAssistantRoomOverlayNodes({
         iconOnly && selectedLevelId
           ? undefined
           : ((selectedLevelId ? derivedWorldPosition : null) ??
-            (!selectedLevelId ? binding?.presentation?.rtsWorldPosition : undefined) ??
+            binding?.presentation?.rtsWorldPosition ??
             (binding?.presentation?.rtsScreenPosition
               ? undefined
               : (derivedWorldPosition ?? undefined)))
+      const hasPositionedPill = !iconOnly && Boolean(worldPosition || binding?.presentation?.rtsScreenPosition)
       const roomControls = buildCollectionRoomControlTiles(
         collection,
         binding,
         sceneNodes,
         collections,
         bindings,
-        Boolean(worldPosition || binding?.presentation?.rtsScreenPosition),
+        hasPositionedPill,
         selectedLevelId,
       )
       const defaultGroups =
@@ -928,65 +1333,48 @@ export function buildHomeAssistantRoomOverlayNodes({
         getSmartHomeRoomControlMode(binding?.presentation) === 'user-managed'
           ? presentationGroups
           : storedGroups
-      const roomName = getCollectionDisplayName(collection, bindings)
+      const roomName = getCollectionOverlayDisplayName(collection, binding, bindings, roomControls)
       const overlayNode: RoomOverlayNode = {
         anchorNodeIds: getCollectionAnchorNodeIds(
           collection,
           roomControls,
           sceneNodes,
           selectedLevelId,
+          !iconOnly,
         ),
         collectionId: collection.id,
         controlGroups: buildRoomControlGroups(roomControls, controlGroups),
         iconOnly,
         id: collection.id,
         roomName,
-        screenPosition: selectedLevelId ? undefined : binding?.presentation?.rtsScreenPosition,
+        screenPosition: iconOnly || selectedLevelId ? undefined : binding?.presentation?.rtsScreenPosition,
         totalSlotCount: roomControls.length,
-        worldPosition,
+        worldPosition: iconOnly ? undefined : worldPosition,
       }
-      const localDeviceOverlayNodes = buildLocalDeviceOverlayNodes(
-        collection,
-        roomControls,
-        sceneNodes,
-      )
+      const nodes: RoomOverlayNode[] = isHomeAssistantOverlayBindingVisible(binding, visibility)
+        ? [overlayNode]
+        : []
 
-      return [overlayNode, ...localDeviceOverlayNodes]
+      if (!iconOnly && visibility.devices) {
+        nodes.push(
+          ...buildLocalDeviceOverlayNodes(
+            collection,
+            binding,
+            bindings,
+            roomControls,
+            sceneNodes,
+            selectedLevelId,
+          ),
+        )
+      }
+
+      return nodes
     })
-    .filter(
-      (overlayNode) =>
-        overlayNode.anchorNodeIds.length > 0 ||
-        overlayNode.totalSlotCount > 0 ||
-        Boolean(overlayNode.worldPosition || overlayNode.screenPosition),
-    )
-}
 
-const buildLocalDeviceOverlayNodes = (
-  collection: Collection,
-  roomControls: RoomControlTile[],
-  sceneNodes: Record<AnyNodeId, AnyNode>,
-): RoomOverlayNode[] => {
-  if (roomControls.length <= 1) {
-    return []
-  }
-
-  return roomControls.flatMap((control) => {
-    const anchorNodeId = control.linkedItemId ?? control.itemId
-    const anchorNode = sceneNodes[anchorNodeId]
-    if (anchorNode?.type !== 'item') {
-      return []
-    }
-
-    return [
-      {
-        anchorNodeIds: [anchorNodeId],
-        collectionId: collection.id,
-        controlGroups: buildRoomControlGroups([control], [[control.id]]),
-        iconOnly: true,
-        id: `${collection.id}:local:${control.id}`,
-        roomName: control.itemName,
-        totalSlotCount: 1,
-      },
-    ]
-  })
+  return overlayNodes.filter(
+    (overlayNode) =>
+      overlayNode.anchorNodeIds.length > 0 ||
+      overlayNode.totalSlotCount > 0 ||
+      Boolean(overlayNode.worldPosition || overlayNode.screenPosition),
+  )
 }

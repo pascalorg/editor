@@ -385,10 +385,7 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   if (hasUsableSceneGraph(sceneGraph)) {
     const { collections, nodes, rootNodeIds } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any)
-    if (collections) {
-      useScene.setState({ collections: collections as any })
-    }
+    useScene.getState().setScene(nodes as any, rootNodeIds as any, collections as any)
   } else {
     useScene.getState().clearScene()
   }

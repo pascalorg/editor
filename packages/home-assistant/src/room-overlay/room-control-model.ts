@@ -136,9 +136,16 @@ export const buildRoomControlGroups = (
   const groups: RoomControlGroup[] = []
 
   for (const storedGroup of storedGroups) {
-    const members = storedGroup
-      .map((controlId) => controlById.get(controlId))
-      .filter((member): member is RoomControlTile => Boolean(member))
+    const groupMemberIds = new Set<string>()
+    const members: RoomControlTile[] = []
+    for (const controlId of storedGroup) {
+      const member = controlById.get(controlId)
+      if (!member || groupMemberIds.has(member.id)) {
+        continue
+      }
+      groupMemberIds.add(member.id)
+      members.push(member)
+    }
     const compatibleMemberGroups = splitRoomControlMembersByKind(members)
 
     for (const compatibleMembers of compatibleMemberGroups) {

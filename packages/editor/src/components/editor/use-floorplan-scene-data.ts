@@ -23,6 +23,24 @@ type OpeningNode = WindowNode | DoorNode
 
 const DEFAULT_BUILDING_POSITION = [0, 0, 0] as const satisfies [number, number, number]
 
+type FloorplanSceneData = {
+  buildingPosition: [number, number, number]
+  buildingRotationY: number
+  currentBuildingId: BuildingNode['id'] | null
+  ceilings: CeilingNode[]
+  fences: FenceNode[]
+  floorplanLevels: LevelNode[]
+  levelDescendantNodes: AnyNode[]
+  levelGuides: GuideNode[]
+  levelNode: LevelNode | undefined
+  openings: OpeningNode[]
+  roofs: RoofNode[]
+  site: SiteNode | null
+  slabs: SlabNode[]
+  walls: WallNode[]
+  zones: ZoneNodeType[]
+}
+
 function useLevelChildren<TNode extends AnyNode>(
   levelId: LevelNode['id'] | null,
   typeGuard: (node: AnyNode | undefined) => node is TNode,
@@ -49,7 +67,7 @@ export function useFloorplanSceneData({
 }: {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
-}) {
+}): FloorplanSceneData {
   const levelNode = useScene((state) =>
     levelId ? (state.nodes[levelId] as LevelNode | undefined) : undefined,
   )

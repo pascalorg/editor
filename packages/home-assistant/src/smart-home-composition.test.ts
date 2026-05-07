@@ -9,13 +9,17 @@ import type {
 import { normalizeHomeAssistantCollectionBinding } from './home-assistant-binding'
 import {
   buildSmartHomeRoomControlCompositionFromTileGroups,
+  getSmartHomePascalGroupResourceId,
   getDurableSmartHomeRoomControlTileGroups,
   getLegacySmartHomeRoomControlTileId,
   getSmartHomeRoomControlTileId,
   isSmartHomeBindingPresentationHidden,
   mergeSmartHomeIncomingResourcesWithLocalDevices,
   normalizeSmartHomeRoomGroupsForBinding,
+  promoteSmartHomeBindingToPascalGroupResource,
   repairHomeAssistantBindingResourcesFromGroups,
+  refreshSmartHomeBindingResourcesFromImports,
+  smartHomeBindingNeedsPascalGroupResource,
 } from './smart-home-composition'
 
 const collectionId = 'collection_master' as CollectionId
@@ -51,6 +55,18 @@ function groupResource(id: string, memberEntityIds: string[]): HomeAssistantReso
     kind: 'entity',
     label: 'Master',
     memberEntityIds,
+  }
+}
+
+function placeholderResource(id: string, label = id): HomeAssistantResourceBinding {
+  return {
+    actions: [],
+    capabilities: ['power'],
+    defaultActionKey: null,
+    entityId: null,
+    id,
+    kind: 'entity',
+    label,
   }
 }
 
@@ -111,6 +127,36 @@ describe('smart home composition', () => {
       lights[2]!.id,
       lights[3]!.id,
     ])
+  })
+
+  test('hydrates stale user-managed HA group bindings before rendering controls', () => {
+    const allResourcesById = new Map(
+      lights.concat(masterGroup).map((resource) => [resource.id, resource]),
+    )
+    const repaired = repairHomeAssistantBindingResourcesFromGroups({
+      allResourcesById,
+      binding: normalizeHomeAssistantCollectionBinding({
+        ...binding([masterGroup]),
+        presentation: {
+          rtsRoomControls: { mode: 'user-managed' },
+          rtsWorldPosition: { x: 1, y: 0, z: 2 },
+        },
+        primaryResourceId: masterGroup.id,
+      })!,
+      rawGroups: [],
+    })
+
+    expect(repaired.resources.map((resource) => resource.id)).toEqual([
+      masterGroup.id,
+      lights[0]!.id,
+      lights[1]!.id,
+      lights[2]!.id,
+      lights[3]!.id,
+    ])
+    expect(repaired.presentation?.rtsRoomControls?.mode).toBe('user-managed')
+    expect(repaired.presentation?.rtsRoomControls?.excludedResourceIds ?? []).not.toContain(
+      masterGroup.id,
+    )
   })
 
   test('keeps detached HA group members excluded from automatic hydration', () => {
@@ -256,5 +302,90 @@ describe('smart home composition', () => {
       ...lights.map((resource) => resource.id),
       tv.id,
     ])
+  })
+
+  test('refreshes stale bound device metadata from current HA imports', () => {
+    const staleResource = entityResource(lights[0]!.id, 'Recessed Light')
+    const refreshed = refreshSmartHomeBindingResourcesFromImports({
+      availableResources: lights,
+      binding: binding([staleResource]),
+    })
+
+    expect(refreshed.resources).toHaveLength(1)
+    expect(refreshed.resources[0]?.label).toBe('MbrL1')
+    expect(refreshed.resources[0]?.actions[0]?.domain).toBe('light')
+    expect(refreshed.primaryResourceId).toBe(lights[0]!.id)
+  })
+
+  test('promotes existing multi-device scene pills into Pascal group resources', () => {
+    const rawBinding = binding(lights.slice(0, 2), [
+      [
+        getSmartHomeRoomControlTileId(collectionId, lights[0]!.id),
+        getSmartHomeRoomControlTileId(collectionId, lights[1]!.id),
+      ],
+    ])
+    const normalized = normalizeHomeAssistantCollectionBinding({
+      ...rawBinding,
+      presentation: {
+        ...(rawBinding.presentation ?? {}),
+        label: 'Recessed Light',
+        rtsWorldPosition: { x: 1, y: 2, z: 3 },
+      },
+    })!
+
+    expect(smartHomeBindingNeedsPascalGroupResource(normalized)).toBe(true)
+
+    const promoted = promoteSmartHomeBindingToPascalGroupResource({
+      binding: normalized,
+      label: 'Recessed Light',
+    })
+    const groupId = getSmartHomePascalGroupResourceId(collectionId)
+
+    expect(promoted.primaryResourceId).toBe(groupId)
+    expect(promoted.resources.map((resource) => resource.id)).toEqual([
+      groupId,
+      lights[0]!.id,
+      lights[1]!.id,
+    ])
+    expect(promoted.presentation?.label).toBe('Recessed Light')
+    expect(promoted.presentation?.rtsWorldPosition).toEqual({ x: 1, y: 2, z: 3 })
+  })
+
+  test('does not promote single-device scene pills into groups', () => {
+    const single = normalizeHomeAssistantCollectionBinding({
+      ...binding([lights[0]!]),
+      presentation: {
+        label: 'MbrL1',
+        rtsWorldPosition: { x: 1, y: 2, z: 3 },
+      },
+    })!
+
+    expect(smartHomeBindingNeedsPascalGroupResource(single)).toBe(false)
+    expect(promoteSmartHomeBindingToPascalGroupResource({ binding: single, label: 'MbrL1' })).toBe(
+      single,
+    )
+  })
+
+  test('promotes positioned non-device scene pills into Pascal groups', () => {
+    const placeholder = normalizeHomeAssistantCollectionBinding({
+      ...binding([placeholderResource('local.recessed_light', 'Recessed Light')]),
+      presentation: {
+        label: 'Recessed Light',
+        rtsWorldPosition: { x: 1, y: 2, z: 3 },
+      },
+    })!
+
+    expect(smartHomeBindingNeedsPascalGroupResource(placeholder)).toBe(true)
+
+    const promoted = promoteSmartHomeBindingToPascalGroupResource({
+      binding: placeholder,
+      label: 'Recessed Light',
+    })
+    const groupId = getSmartHomePascalGroupResourceId(collectionId)
+
+    expect(promoted.primaryResourceId).toBe(groupId)
+    expect(promoted.resources.map((resource) => resource.id)).toEqual([groupId])
+    expect(promoted.presentation?.label).toBe('Recessed Light')
+    expect(promoted.presentation?.rtsWorldPosition).toEqual({ x: 1, y: 2, z: 3 })
   })
 })

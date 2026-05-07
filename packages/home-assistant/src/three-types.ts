@@ -12,9 +12,3 @@ declare module 'react' {
     interface IntrinsicElements extends ThreeElements {}
   }
 }
-
-declare module 'react/jsx-runtime' {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
-  }
-}

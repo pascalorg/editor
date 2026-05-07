@@ -39,6 +39,7 @@ import {
 } from 'lucide-react'
 import {
   Fragment,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -62,7 +63,6 @@ import {
   getGroupMemberEntityIds,
   getNextPascalGroupLabel,
   getRoomGroupStem,
-  getScenePillResource,
   getSelectedItems,
   isDeviceResource,
   isGroupResource,
@@ -84,6 +84,10 @@ import {
   isSmartHomeGroupResource as isBindingGroupResource,
   mergeSmartHomeIncomingResourcesWithLocalDevices as mergeIncomingBindingResourcesWithLocalDevices,
   normalizeSmartHomeStringGroups,
+  promoteSmartHomeBindingToPascalGroupResource,
+  repairHomeAssistantBindingResourcesFromGroups,
+  refreshSmartHomeBindingResourcesFromImports,
+  smartHomeBindingNeedsPascalGroupResource,
 } from '../smart-home-composition'
 import {
   getPresentationAfterResourceInclusion,
@@ -105,6 +109,7 @@ import {
   downloadPascalLovelaceCardConfig,
 } from '../home-assistant-lovelace-export'
 import { requestSceneImmediateSave } from './editor-panel-adapter'
+import { buildHomeAssistantSmartHomeGraph } from './home-assistant-smart-home-graph'
 import { useHomeAssistantEditorStore } from './home-assistant-editor-store'
 import { cn } from '../utils'
 import {
@@ -236,43 +241,6 @@ const PROVIDERS: ProviderDefinition[] = [
     name: 'Home Assistant',
   },
 ]
-
-const SCENE_STORAGE_KEY = 'pascal-editor-scene'
-
-function storedSceneHasUserManagedBindingForGroupResource(groupResourceId: string) {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  try {
-    const rawScene = window.localStorage.getItem(SCENE_STORAGE_KEY)
-    if (!rawScene) {
-      return false
-    }
-
-    const scene = JSON.parse(rawScene) as { nodes?: Record<string, unknown> }
-    return Object.values(scene.nodes ?? {}).some((node) => {
-      if (!(node && typeof node === 'object')) {
-        return false
-      }
-
-      const record = node as {
-        presentation?: { rtsRoomControls?: { mode?: unknown } }
-        resources?: { id?: unknown }[]
-        type?: unknown
-      }
-
-      return (
-        record.type === 'home-assistant-binding' &&
-        record.presentation?.rtsRoomControls?.mode === 'user-managed' &&
-        Array.isArray(record.resources) &&
-        record.resources.some((resource) => resource?.id === groupResourceId)
-      )
-    })
-  } catch {
-    return false
-  }
-}
 
 function ensureHomeAssistantResourceCollection(
   resource: HomeAssistantImportedResource,
@@ -484,29 +452,18 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     [collections, selectedItems],
   )
 
-  const resourceOwners = useMemo(() => {
-    const owners = new Map<string, { collectionId: CollectionId; collectionName: string }>()
+  const smartHomeGraph = useMemo(
+    () =>
+      buildHomeAssistantSmartHomeGraph({
+        bindings: homeAssistantBindings,
+        collections,
+        hiddenGroupResourceIds,
+        imports,
+      }),
+    [collections, hiddenGroupResourceIds, homeAssistantBindings, imports],
+  )
 
-    for (const bindingNode of Object.values(homeAssistantBindings)) {
-      if (isSmartHomeBindingPresentationHidden(bindingNode.presentation)) {
-        continue
-      }
-
-      const collection = collections[bindingNode.collectionId]
-      for (const resource of bindingNode.resources) {
-        owners.set(resource.id, {
-          collectionId: bindingNode.collectionId,
-          collectionName:
-            bindingNode.presentation?.label?.trim() ||
-            collection?.name?.trim() ||
-            bindingNode.name?.trim() ||
-            'Collection',
-        })
-      }
-    }
-
-    return owners
-  }, [collections, homeAssistantBindings])
+  const resourceOwners = smartHomeGraph.resourceOwners
 
   const deviceImports = useMemo(
     () => imports.filter((resource) => isDeviceResource(resource)),
@@ -516,44 +473,7 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     () => getDeviceCategoryGroups(deviceImports),
     [deviceImports],
   )
-  const groupImports = useMemo(() => {
-    const resourcesById = new Map<string, HomeAssistantImportedResource>()
-
-    for (const resource of imports.filter((entry) => isGroupResource(entry))) {
-      if (hiddenGroupResourceIds.has(resource.id)) {
-        continue
-      }
-
-      resourcesById.set(resource.id, resource)
-    }
-
-    for (const bindingNode of Object.values(homeAssistantBindings)) {
-      if (
-        !bindingHasGroupResource(bindingNode) ||
-        isSmartHomeBindingPresentationHidden(bindingNode.presentation)
-      ) {
-        continue
-      }
-
-      const collection = collections[bindingNode.collectionId]
-      const hasScenePill =
-        Boolean(
-          bindingNode.presentation?.rtsWorldPosition ||
-            bindingNode.presentation?.rtsScreenPosition,
-        ) || Boolean(collection?.nodeIds.length)
-
-      if (!hasScenePill) {
-        continue
-      }
-
-      const scenePillResource = getScenePillResource(bindingNode, collection)
-      if (scenePillResource && !hiddenGroupResourceIds.has(scenePillResource.id)) {
-        resourcesById.set(scenePillResource.id, scenePillResource)
-      }
-    }
-
-    return Array.from(resourcesById.values())
-  }, [collections, hiddenGroupResourceIds, homeAssistantBindings, imports])
+  const groupImports = smartHomeGraph.groupImports
   const groupColorById = useMemo(() => getGroupColorById(groupImports), [groupImports])
   const deviceGroupMemberships = useMemo(
     () => getDeviceGroupMemberships(deviceImports, groupImports),
@@ -972,6 +892,44 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     })
   }
 
+  useEffect(() => {
+    if (imports.length === 0) {
+      return
+    }
+
+    const availableResources = imports.map((resource) => toResourceBinding(resource))
+    let changed = false
+
+    for (const bindingNode of Object.values(homeAssistantBindings)) {
+      const existingBinding = toCollectionBinding(bindingNode)
+      if (!existingBinding) {
+        continue
+      }
+
+      const refreshedBinding = refreshSmartHomeBindingResourcesFromImports({
+        availableResources,
+        binding: existingBinding,
+      })
+
+      if (homeAssistantBindingsAreEqual(existingBinding, refreshedBinding)) {
+        continue
+      }
+
+      updateHomeAssistantNode(bindingNode.id, {
+        aggregation: refreshedBinding.aggregation,
+        collectionId: refreshedBinding.collectionId,
+        presentation: refreshedBinding.presentation,
+        primaryResourceId: refreshedBinding.primaryResourceId,
+        resources: refreshedBinding.resources,
+      })
+      changed = true
+    }
+
+    if (changed) {
+      requestSceneImmediateSave()
+    }
+  }, [homeAssistantBindings, imports])
+
   const removeResourceFromOtherCollections = (
     resource: HomeAssistantImportedResource,
     targetCollectionId: CollectionId,
@@ -1081,6 +1039,7 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
         })
 
     upsertBindingNode(collection, nextBinding)
+    requestSceneImmediateSave()
   }
 
   const unbindResourceFromCollection = (collection: Collection, resourceId: string) => {
@@ -1352,6 +1311,28 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     let changed = false
 
     for (const bindingNode of Object.values(homeAssistantBindings)) {
+      const collection = useScene.getState().collections[bindingNode.collectionId]
+      const bindingLabel =
+        bindingNode.presentation?.label?.trim() ||
+        collection?.name?.trim() ||
+        bindingNode.name?.trim() ||
+        ''
+
+      if (smartHomeBindingNeedsPascalGroupResource(bindingNode)) {
+        const nextBinding = promoteSmartHomeBindingToPascalGroupResource({
+          binding: bindingNode,
+          label:
+            bindingLabel ||
+            'Pascal group',
+        })
+
+        if (!homeAssistantBindingsAreEqual(nextBinding, bindingNode)) {
+          updateHomeAssistantNode(bindingNode.id, nextBinding)
+          changed = true
+          continue
+        }
+      }
+
       const hasHiddenGroupResource = bindingNode.resources.some((resource) =>
         isHiddenHomeAssistantGroupResourceId(resource.id),
       )
@@ -1452,6 +1433,16 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
       }
 
       const memberEntityIds = getGroupMemberEntityIds(groupResource)
+      const memberLabels = new Set(
+        imports
+          .filter(
+            (resource) =>
+              memberEntityIds.has(resource.id) ||
+              memberEntityIds.has(resource.entityId ?? ''),
+          )
+          .map((resource) => resource.label.trim().toLowerCase())
+          .filter(Boolean),
+      )
       const groupStem = getRoomGroupStem(groupResource)
       const boundMemberItemIds = new Set<AnyNodeId>()
       const boundMemberResources = new Map<string, HomeAssistantResourceBinding>()
@@ -1465,7 +1456,8 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
         const matchingMemberResources = bindingNode.resources.filter(
           (resource): resource is HomeAssistantResourceBinding =>
             isBindingDeviceResource(resource) &&
-            bindingResourceMatchesGroup(resource, memberEntityIds, groupStem),
+            (bindingResourceMatchesGroup(resource, memberEntityIds, groupStem) ||
+              memberLabels.has(resource.label.trim().toLowerCase())),
         )
         if (matchingMemberResources.length === 0) {
           continue
@@ -1485,17 +1477,10 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
         }
       }
 
-      if (boundMemberItemIds.size === 0) {
-        continue
-      }
-
       const existingBindingNode = Object.values(currentBindings).find((bindingNode) =>
         bindingNode.resources.some((entry) => entry.id === groupResource.id),
       )
-      if (
-        !existingBindingNode &&
-        storedSceneHasUserManagedBindingForGroupResource(groupResource.id)
-      ) {
+      if (boundMemberItemIds.size === 0 && !existingBindingNode) {
         continue
       }
       let collection = existingBindingNode
@@ -1612,11 +1597,36 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
         resources: nextResources,
       })
 
-      if (!nextBinding || homeAssistantBindingsAreEqual(existingBinding, nextBinding)) {
+      if (!nextBinding) {
         continue
       }
 
-      upsertBindingNode(collection, nextBinding)
+      const allResourcesById = new Map<string, HomeAssistantResourceBinding>()
+      for (const resource of imports) {
+        const bindingResource = toResourceBinding(resource)
+        allResourcesById.set(bindingResource.id, bindingResource)
+      }
+      for (const resource of nextResources) {
+        allResourcesById.set(resource.id, cloneResourceBinding(resource))
+      }
+      for (const resource of boundMemberResources.values()) {
+        allResourcesById.set(resource.id, cloneResourceBinding(resource))
+      }
+      const repairedBinding = repairHomeAssistantBindingResourcesFromGroups({
+        allResourcesById,
+        binding: nextBinding,
+        detachedResourceIds,
+        rawGroups: getSmartHomeRoomControlTileGroups({
+          collectionId: collection.id,
+          presentation: nextBinding.presentation,
+        }),
+      })
+
+      if (homeAssistantBindingsAreEqual(existingBinding, repairedBinding)) {
+        continue
+      }
+
+      upsertBindingNode(collection, repairedBinding)
       requestSceneImmediateSave()
     }
   }, [createCollection, hiddenGroupResourceIds, imports, homeAssistantBindings])
@@ -1731,6 +1741,7 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     }
 
     bindResourceToItems(pairingResource, [pairingTargetNode])
+    useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
     setPairingTargetItemId(null)
     setPairingResourceId(null)
     setSmartHomePanelOpen(true)
@@ -1772,17 +1783,33 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     }))
   }
 
+  const getCollectionPreviewNodeIds = useCallback(
+    (collection: Collection | null | undefined) => {
+      if (!collection) {
+        return []
+      }
+
+      return collection.nodeIds.filter(
+        (nodeId): nodeId is AnyNodeId => sceneNodes[nodeId as AnyNodeId]?.type === 'item',
+      )
+    },
+    [sceneNodes],
+  )
+
   const previewCollection = (collection: Collection | null | undefined) => {
     if (!collection) {
       return
     }
 
-    const targetNodeIds = collection.nodeIds.filter((nodeId) => Boolean(sceneNodes[nodeId as AnyNodeId]))
+    const targetNodeIds = getCollectionPreviewNodeIds(collection)
     if (targetNodeIds.length === 0) {
       return
     }
 
-    const focusNodeId = (collection.controlNodeId ?? targetNodeIds[0]) as AnyNodeId | undefined
+    const focusNodeId =
+      collection.controlNodeId && targetNodeIds.includes(collection.controlNodeId)
+        ? collection.controlNodeId
+        : targetNodeIds[0]
     if (!focusNodeId) {
       return
     }
@@ -1792,10 +1819,20 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
     emitter.emit('camera-controls:focus', { nodeId: focusNodeId })
   }
 
-  const clearPreviewedCollection = () => {
+  const clearPreviewedCollection = useCallback(() => {
     setHoveredId(null)
     setPreviewSelectedIds([])
-  }
+  }, [setHoveredId, setPreviewSelectedIds])
+
+  useEffect(() => {
+    if (!isSmartHomePanelOpen || activePanel?.kind !== 'config') {
+      clearPreviewedCollection()
+    }
+
+    return () => {
+      clearPreviewedCollection()
+    }
+  }, [activePanel?.kind, clearPreviewedCollection, isSmartHomePanelOpen])
 
   const handlePanelResizePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault()
@@ -1943,12 +1980,14 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
             disabled={!isClickable}
             onMouseEnter={() => {
               if (ownerCollection && canBind) {
-                const targetNodeIds = ownerCollection.nodeIds.filter((nodeId) =>
-                  Boolean(sceneNodes[nodeId as AnyNodeId]),
-                )
+                const targetNodeIds = getCollectionPreviewNodeIds(ownerCollection)
                 if (targetNodeIds.length > 0) {
-                  const focusNodeId = ownerCollection.controlNodeId ?? targetNodeIds[0]
-                  setHoveredId((focusNodeId as AnyNodeId | undefined) ?? null)
+                  const focusNodeId =
+                    ownerCollection.controlNodeId &&
+                    targetNodeIds.includes(ownerCollection.controlNodeId)
+                      ? ownerCollection.controlNodeId
+                      : targetNodeIds[0]
+                  setHoveredId(focusNodeId ?? null)
                   setPreviewSelectedIds(targetNodeIds as AnyNodeId[])
                 }
               }

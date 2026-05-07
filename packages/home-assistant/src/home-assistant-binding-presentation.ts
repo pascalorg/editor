@@ -1,4 +1,4 @@
-import type { AnyNode, CollectionId } from '@pascal-app/core'
+import type { CollectionId } from '@pascal-app/core'
 import type {
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
@@ -12,8 +12,11 @@ import {
   getSmartHomeExcludedResourceIds,
   getSmartHomeRoomControlTileGroups,
   getSmartHomeRoomControlTileId,
+  hasSmartHomeGroupResource,
   isSmartHomeDeviceComponentResource,
   normalizeSmartHomeStringGroups,
+  promoteSmartHomeBindingToPascalGroupResource,
+  smartHomeRoomGroupMemberReferencesResource,
 } from './smart-home-composition'
 
 type HomeAssistantRoomControlAlias = {
@@ -177,6 +180,21 @@ export function getBindingAfterDeviceResourceCopyToGroup({
   targetBinding: HomeAssistantCollectionBinding
   targetCollectionId?: CollectionId | string
 }) {
+  const resolvedTargetBinding = hasSmartHomeGroupResource(targetBinding)
+    ? targetBinding
+    : promoteSmartHomeBindingToPascalGroupResource({
+        binding: targetBinding,
+        force: true,
+        label:
+          targetBinding.presentation?.label?.trim() ||
+          targetBinding.resources[0]?.label?.trim() ||
+          'Pascal group',
+      })
+
+  if (!hasSmartHomeGroupResource(resolvedTargetBinding)) {
+    return null
+  }
+
   const sourceResource = sourceResourceId
     ? sourceBinding.resources.find(
         (resource) =>
@@ -187,17 +205,19 @@ export function getBindingAfterDeviceResourceCopyToGroup({
     return null
   }
 
-  if (targetBinding.resources.some((resource) => resource.id === sourceResource.id)) {
+  if (resolvedTargetBinding.resources.some((resource) => resource.id === sourceResource.id)) {
     return null
   }
 
   const existingGroups = normalizeSmartHomeStringGroups(
     getSmartHomeRoomControlTileGroups({
       collectionId: targetCollectionId,
-      presentation: targetBinding.presentation,
+      presentation: resolvedTargetBinding.presentation,
     }),
   )
-  const targetDeviceResources = targetBinding.resources.filter(isSmartHomeDeviceComponentResource)
+  const targetDeviceResources = resolvedTargetBinding.resources.filter(
+    isSmartHomeDeviceComponentResource,
+  )
   const existingCombinedGroup =
     targetDeviceResources.length > 0
       ? targetDeviceResources.map((resource) =>
@@ -217,21 +237,24 @@ export function getBindingAfterDeviceResourceCopyToGroup({
       .filter((group) => group.length > 0),
     [copiedMemberId],
   ]
-  const currentPrimaryResource = targetBinding.resources.find(
-    (resource) => resource.id === targetBinding.primaryResourceId,
+  const currentPrimaryResource = resolvedTargetBinding.resources.find(
+    (resource) => resource.id === resolvedTargetBinding.primaryResourceId,
   )
-  const nextResources = [...targetBinding.resources, cloneSmartHomeResourceBinding(sourceResource)]
+  const nextResources = [
+    ...resolvedTargetBinding.resources,
+    cloneSmartHomeResourceBinding(sourceResource),
+  ]
 
   return normalizeHomeAssistantCollectionBinding({
     aggregation: 'all',
-    collectionId: targetBinding.collectionId,
+    collectionId: resolvedTargetBinding.collectionId,
     presentation: {
-      ...(targetBinding.presentation ?? {}),
+      ...(resolvedTargetBinding.presentation ?? {}),
       rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
         collectionId: targetCollectionId,
-        excludedResourceIds: getSmartHomeExcludedResourceIds(targetBinding.presentation).filter(
-          (resourceId) => resourceId !== sourceResource.id,
-        ),
+        excludedResourceIds: getSmartHomeExcludedResourceIds(
+          resolvedTargetBinding.presentation,
+        ).filter((resourceId) => resourceId !== sourceResource.id),
         groups: nextGroups,
         mode: 'user-managed',
         resources: nextResources,
@@ -248,20 +271,37 @@ export function getBindingAfterDeviceResourceRemovalFromGroup(
   binding: HomeAssistantCollectionBinding,
   resourceId: string,
 ) {
-  const removedResource = binding.resources.find((resource) => resource.id === resourceId)
-  if (!isSmartHomeDeviceComponentResource(removedResource)) {
+  if (!hasSmartHomeGroupResource(binding)) {
     return null
   }
 
-  const nextResources = binding.resources.filter((resource) => resource.id !== removedResource.id)
+  const removedResource = binding.resources.find((resource) => resource.id === resourceId)
+  if (removedResource && !isSmartHomeDeviceComponentResource(removedResource)) {
+    return null
+  }
+
+  const nextResources = removedResource
+    ? binding.resources.filter((resource) => resource.id !== removedResource.id)
+    : binding.resources
   const nextDeviceResources = nextResources.filter(isSmartHomeDeviceComponentResource)
   const nextPrimaryResourceId =
-    binding.primaryResourceId === removedResource.id
+    removedResource && binding.primaryResourceId === removedResource.id
       ? (nextDeviceResources[0]?.id ?? nextResources[0]?.id ?? null)
       : (binding.primaryResourceId ?? nextDeviceResources[0]?.id ?? nextResources[0]?.id ?? null)
   const nextExcludedResourceIds = Array.from(
-    new Set([...getSmartHomeExcludedResourceIds(binding.presentation), removedResource.id]),
+    new Set([...getSmartHomeExcludedResourceIds(binding.presentation), resourceId]),
   )
+  const nextGroups = getSmartHomeRoomControlTileGroups({
+    collectionId: binding.collectionId,
+    presentation: binding.presentation,
+  })
+    .map((group) =>
+      group.filter(
+        (memberId) =>
+          !smartHomeRoomGroupMemberReferencesResource(binding.collectionId, memberId, resourceId),
+      ),
+    )
+    .filter((group) => group.length > 0)
 
   return normalizeHomeAssistantCollectionBinding({
     aggregation: nextResources.some((resource) => resource.kind !== 'entity')
@@ -275,15 +315,7 @@ export function getBindingAfterDeviceResourceRemovalFromGroup(
       rtsRoomControls: buildSmartHomeRoomControlCompositionFromTileGroups({
         collectionId: binding.collectionId,
         excludedResourceIds: nextExcludedResourceIds,
-        groups: getSmartHomeRoomControlTileGroups({
-          collectionId: binding.collectionId,
-          presentation: binding.presentation,
-        }).map((group) =>
-          group.filter(
-            (memberId) =>
-              memberId !== getSmartHomeRoomControlTileId(binding.collectionId, removedResource.id),
-          ),
-        ),
+        groups: nextGroups,
         mode: 'user-managed',
         resources: nextResources,
       }),

@@ -550,6 +550,11 @@ const isQuickEditTap = (
   Date.now() - startedAt < GROUP_EXPAND_HOLD_MS &&
   Math.hypot(pointerX - startX, pointerY - startY) < GROUP_EXPAND_DRAG_THRESHOLD_PX
 
+const isDisabledPlaceholderRoomControlGroup = (group: RoomControlGroup) => {
+  const member = group.members[0]
+  return group.members.length === 1 && member?.disabled === true
+}
+
 const isPointInsideElement = (clientX: number, clientY: number, element: Element | null) => {
   if (!(element instanceof HTMLElement)) {
     return false
@@ -993,7 +998,10 @@ export const RoomControlOverlay = ({
               expandedGroupId={expandedEditGroupByRoomId[roomOverlayNode.id] ?? null}
               isOpen={openRoomId === roomOverlayNode.id}
               onApplyGrouping={(nextGroups) =>
-                onApplyRoomGrouping?.(roomOverlayNode.collectionId ?? roomOverlayNode.id, nextGroups)
+                onApplyRoomGrouping?.(
+                  roomOverlayNode.collectionId ?? roomOverlayNode.id,
+                  nextGroups,
+                )
               }
               onChange={handleCollectionControlChange}
               onCopyDeviceToGroup={(sourceCollectionId, targetCollectionId, sourceResourceId) => {
@@ -1182,10 +1190,31 @@ const RoomPanel = ({
   const collapsedGroupDisabled =
     !iconOnly &&
     displayedGroups.length > 0 &&
-    displayedGroups.every((group) => group.members.every((member) => member.disabled))
+    displayedGroups.every(
+      (group) =>
+        isDisabledPlaceholderRoomControlGroup(group) ||
+        group.members.every((member) => member.disabled),
+    )
   const collapsedDirectButtonDisabled = iconOnly
-    ? collapsedDirectControlDisabled || !collapsedDirectActionMode
+    ? collapsedDirectControlDisabled
     : collapsedGroupDisabled
+  const collapsedDisplayName =
+    collapsedDirectControlMember &&
+    !collapsedDirectControlMember.canDetachFromRoom &&
+    collapsedDirectControlMember.itemName.trim()
+      ? collapsedDirectControlMember.itemName.trim()
+      : roomName
+
+  useEffect(() => {
+    if (
+      isOpen &&
+      !editing &&
+      displayedGroups.length > 0 &&
+      displayedGroups.every(isDisabledPlaceholderRoomControlGroup)
+    ) {
+      onSetOpen(false)
+    }
+  }, [displayedGroups, editing, isOpen, onSetOpen])
 
   const clearLongPress = useCallback(() => {
     if (typeof window !== 'undefined' && longPressTimeoutRef.current !== null) {
@@ -1838,10 +1867,9 @@ const RoomPanel = ({
         event.clientY,
         panelElement ?? null,
       )
-      const hoveredGroupElement = getElementFromPointDeep(
-        event.clientX,
-        event.clientY,
-      )?.closest('[data-room-control-group-id]') as HTMLElement | null
+      const hoveredGroupElement = getElementFromPointDeep(event.clientX, event.clientY)?.closest(
+        '[data-room-control-group-id]',
+      ) as HTMLElement | null
 
       if (sourceGroup && activeDragState.sourceMemberId) {
         const sourceMember = sourceGroup.members.find(
@@ -2150,7 +2178,10 @@ const RoomPanel = ({
           collapsedDirectControlMember.controlIndex,
           !collapsedDirectControlValue,
         )
+        return
       }
+
+      onSetOpen(true)
       return
     }
 
@@ -2176,19 +2207,19 @@ const RoomPanel = ({
     }, COLLAPSED_PILL_SINGLE_CLICK_DELAY_MS)
   }
 
-  const collapsedDirectAriaLabel = collapsedDirectControlDisabled
-    ? `${roomName} is not linked to a controllable device`
+  const collapsedDirectAriaLabel = collapsedDirectButtonDisabled
+    ? `${collapsedDisplayName} is not linked to a controllable device`
     : iconOnly && !collapsedDirectActionMode
-      ? `${roomName} has no direct action`
+      ? `Open ${collapsedDisplayName} controls`
       : iconOnly
         ? collapsedDirectActionMode === 'trigger'
-          ? `Run ${roomName}`
-          : `Toggle ${roomName}`
+          ? `Run ${collapsedDisplayName}`
+          : `Toggle ${collapsedDisplayName}`
         : collapsedHasToggleAction
-          ? `Toggle ${roomName}`
+          ? `Toggle ${collapsedDisplayName}`
           : collapsedDirectActionMode === 'trigger'
-            ? `Run ${roomName}`
-            : `Open ${roomName} controls`
+            ? `Run ${collapsedDisplayName}`
+            : `Open ${collapsedDisplayName} controls`
 
   return (
     <div
@@ -2229,9 +2260,11 @@ const RoomPanel = ({
         </div>
       ) : (
         <button
+          aria-disabled={collapsedDirectButtonDisabled || undefined}
           aria-label={collapsedDirectAriaLabel}
           aria-expanded={false}
-          disabled={collapsedDirectButtonDisabled}
+          disabled={iconOnly ? collapsedDirectButtonDisabled : false}
+          data-room-control-collection-id={collectionId ?? roomId}
           onClick={(event) => {
             event.stopPropagation()
             suppressRoomPanelNodeEvents()
@@ -2298,7 +2331,7 @@ const RoomPanel = ({
               <ControlGlyph itemKind={collapsedDirectControlMember.itemKind} />
             </span>
           ) : (
-            <span style={headerNameStyle}>{roomName}</span>
+            <span style={headerNameStyle}>{collapsedDisplayName}</span>
           )}
         </button>
       )}
@@ -2381,6 +2414,17 @@ const RoomPanel = ({
                     panelColumns={panelColumns}
                   />
                 )
+              ) : isDisabledPlaceholderRoomControlGroup(group) ? (
+                <div
+                  data-room-control-group-id={group.id}
+                  key={group.id}
+                  style={{
+                    ...emptyStateStyle,
+                    ...getGroupPanelFootprintStyle(group, panelColumns),
+                  }}
+                >
+                  No controls
+                </div>
               ) : group.controlKind === 'numeric' ? (
                 <AdjustableGroupTile
                   clearHoveredItemTargets={clearHoveredItemTargets}

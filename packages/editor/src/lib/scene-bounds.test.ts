@@ -1,3 +1,4 @@
+// @ts-expect-error - bun:test is provided by the Bun runtime; editor tsc does not include its ambient types.
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core/schema'
 import { computeSceneBoundsXZ } from './scene-bounds'

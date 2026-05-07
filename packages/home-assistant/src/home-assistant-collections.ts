@@ -593,7 +593,9 @@ export function getScenePillResource(
   binding: HomeAssistantCollectionBinding,
   collection: Collection | null | undefined,
 ) {
+  const groupResource = binding.resources.find(isSmartHomeGroupResource)
   const primaryResource =
+    groupResource ??
     binding.resources.find((resource) => resource.id === binding.primaryResourceId) ??
     binding.resources[0]
 

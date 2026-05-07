@@ -1,6 +1,4 @@
-import type {
-  CollectionId,
-} from '@pascal-app/core/schema'
+import type { CollectionId } from '@pascal-app/core/schema'
 import type {
   HomeAssistantCollectionBinding,
   HomeAssistantResourceBinding,
@@ -17,6 +15,41 @@ type SmartHomeRoomControlAlias = {
   id: string
   legacyIds?: readonly string[]
   resourceId?: string | null
+}
+
+const SMART_HOME_PASCAL_GROUP_RESOURCE_PREFIX = 'pascal-group'
+
+export function getSmartHomePascalGroupResourceId(collectionId: CollectionId | string) {
+  return `${SMART_HOME_PASCAL_GROUP_RESOURCE_PREFIX}:${collectionId}`
+}
+
+export function createSmartHomePascalGroupResourceBinding({
+  collectionId,
+  label,
+}: {
+  collectionId: CollectionId | string
+  label: string
+}): HomeAssistantResourceBinding {
+  return {
+    actions: [],
+    capabilities: ['power'],
+    defaultActionKey: null,
+    entityId: null,
+    id: getSmartHomePascalGroupResourceId(collectionId),
+    isGroup: true,
+    kind: 'entity',
+    label: label.trim() || 'Pascal group',
+    memberEntityIds: [],
+  }
+}
+
+export function isSmartHomePascalGroupResource(
+  resource: HomeAssistantResourceBinding | null | undefined,
+) {
+  return Boolean(
+    isSmartHomeGroupResource(resource) &&
+      resource?.id.startsWith(`${SMART_HOME_PASCAL_GROUP_RESOURCE_PREFIX}:`),
+  )
 }
 
 export function getSmartHomeRoomControlTileId(
@@ -150,7 +183,7 @@ export function buildSmartHomeRoomControlCompositionFromTileGroups({
     ...(excluded.length > 0 ? { excludedResourceIds: excluded } : {}),
     ...(resourceGroups.length > 0 ? { groups: resourceGroups } : {}),
     ...(mode ? { mode } : {}),
-    ...(tileGroups.length > 0 ? { tileGroups } : {}),
+    ...(resourceGroups.length === 0 && tileGroups.length > 0 ? { tileGroups } : {}),
   }
 }
 
@@ -168,14 +201,18 @@ export function getDurableSmartHomeRoomControlTileGroups({
 
   for (const control of controls) {
     if (control.resourceId) {
-      resourceUseCounts.set(control.resourceId, (resourceUseCounts.get(control.resourceId) ?? 0) + 1)
+      resourceUseCounts.set(
+        control.resourceId,
+        (resourceUseCounts.get(control.resourceId) ?? 0) + 1,
+      )
     }
   }
 
   for (const control of controls) {
-    const durableId = control.resourceId && resourceUseCounts.get(control.resourceId) === 1
-      ? getSmartHomeRoomControlTileId(collectionId, control.resourceId)
-      : control.id
+    const durableId =
+      control.resourceId && resourceUseCounts.get(control.resourceId) === 1
+        ? getSmartHomeRoomControlTileId(collectionId, control.resourceId)
+        : control.id
     aliases.set(control.id, durableId)
     for (const legacyId of control.legacyIds ?? []) {
       aliases.set(legacyId, durableId)
@@ -506,7 +543,9 @@ export function repairHomeAssistantBindingResourcesFromGroups({
   }
 
   const currentControlResourceIds = new Set(
-    getSmartHomeBindingControlResources(binding.resources).map((resource) => resource.id),
+    getSmartHomeBindingControlResources(binding.resources)
+      .filter(isSmartHomeDeviceComponentResource)
+      .map((resource) => resource.id),
   )
   const nextResourcesById = new Map<string, HomeAssistantResourceBinding>()
 
@@ -578,6 +617,86 @@ export function hasSmartHomeGroupResource(binding: HomeAssistantCollectionBindin
   return binding.resources.some(isSmartHomeGroupResource)
 }
 
+export function bindingHasSmartHomeLocalGroupIntent(binding: HomeAssistantCollectionBinding) {
+  if (hasSmartHomeGroupResource(binding)) {
+    return true
+  }
+
+  const deviceResources = binding.resources.filter(isSmartHomeDeviceComponentResource)
+  if (deviceResources.length >= 2) {
+    return true
+  }
+
+  return Boolean(
+    deviceResources.length === 0 &&
+      binding.resources.some((resource) => resource.kind === 'entity'),
+  )
+}
+
+export function smartHomeBindingNeedsPascalGroupResource(binding: HomeAssistantCollectionBinding) {
+  if (hasSmartHomeGroupResource(binding)) {
+    return false
+  }
+
+  const hasPositionedOrGroupedPresentation = Boolean(
+    binding.presentation?.rtsWorldPosition ||
+      binding.presentation?.rtsScreenPosition ||
+      getSmartHomeRoomControlTileGroups({
+        collectionId: binding.collectionId,
+        presentation: binding.presentation,
+      }).length > 0,
+  )
+
+  return hasPositionedOrGroupedPresentation && bindingHasSmartHomeLocalGroupIntent(binding)
+}
+
+export function promoteSmartHomeBindingToPascalGroupResource({
+  binding,
+  force = false,
+  label,
+}: {
+  binding: HomeAssistantCollectionBinding
+  force?: boolean
+  label: string
+}) {
+  if (
+    hasSmartHomeGroupResource(binding) ||
+    !(force
+      ? bindingHasSmartHomeLocalGroupIntent(binding)
+      : smartHomeBindingNeedsPascalGroupResource(binding))
+  ) {
+    return binding
+  }
+
+  const groupResource = createSmartHomePascalGroupResourceBinding({
+    collectionId: binding.collectionId,
+    label,
+  })
+  const resources = [
+    groupResource,
+    ...binding.resources.filter(
+      (resource) =>
+        resource.id !== groupResource.id && isSmartHomeDeviceComponentResource(resource),
+    ),
+  ]
+  const nextBinding = normalizeHomeAssistantCollectionBinding({
+    ...binding,
+    aggregation: resources.some((resource) => resource.kind !== 'entity')
+      ? 'trigger_only'
+      : resources.filter(isSmartHomeDeviceComponentResource).length > 1
+        ? 'all'
+        : 'single',
+    presentation: {
+      ...(binding.presentation ?? {}),
+      label: label.trim() || binding.presentation?.label,
+    },
+    primaryResourceId: groupResource.id,
+    resources,
+  })
+
+  return nextBinding ?? binding
+}
+
 export function mergeSmartHomeIncomingResourcesWithLocalDevices(
   incomingResources: HomeAssistantResourceBinding[],
   existingResources: HomeAssistantResourceBinding[],
@@ -606,4 +725,41 @@ export function mergeSmartHomeIncomingResourcesWithLocalDevices(
   }
 
   return Array.from(resourcesById.values())
+}
+
+export function refreshSmartHomeBindingResourcesFromImports({
+  availableResources,
+  binding,
+}: {
+  availableResources: HomeAssistantResourceBinding[]
+  binding: HomeAssistantCollectionBinding
+}) {
+  if (availableResources.length === 0 || binding.resources.length === 0) {
+    return binding
+  }
+
+  const resourcesById = new Map<string, HomeAssistantResourceBinding>()
+  const resourcesByEntityId = new Map<string, HomeAssistantResourceBinding>()
+
+  for (const resource of availableResources) {
+    resourcesById.set(resource.id, resource)
+    if (resource.entityId) {
+      resourcesByEntityId.set(resource.entityId, resource)
+    }
+  }
+
+  const nextResources = binding.resources.map((resource) => {
+    const importedResource =
+      resourcesById.get(resource.id) ??
+      (resource.entityId ? resourcesByEntityId.get(resource.entityId) : undefined)
+
+    return cloneSmartHomeResourceBinding(importedResource ?? resource)
+  })
+
+  return (
+    normalizeHomeAssistantCollectionBinding({
+      ...binding,
+      resources: nextResources,
+    }) ?? binding
+  )
 }

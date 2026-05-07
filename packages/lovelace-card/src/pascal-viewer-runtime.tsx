@@ -222,8 +222,11 @@ export function PascalViewerRuntime({
   useEffect(() => {
     const scene = useScene.getState()
     scene.setReadOnly(false)
-    scene.setScene(artifact.scene.nodes as never, artifact.scene.rootNodeIds as never)
-    useScene.setState({ collections: artifact.scene.collections ?? {} })
+    scene.setScene(
+      artifact.scene.nodes as never,
+      artifact.scene.rootNodeIds as never,
+      artifact.scene.collections as never,
+    )
     scene.setReadOnly(true)
     applyViewerDefaults(artifact, config)
 

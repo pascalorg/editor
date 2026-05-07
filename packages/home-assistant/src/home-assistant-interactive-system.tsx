@@ -20,6 +20,10 @@ import {
   getBindingAfterDeviceResourceRemovalFromGroup,
   getBindingAfterRoomGrouping,
 } from './home-assistant-binding-presentation'
+import {
+  getSmartHomeRoomGroupMemberResourceId,
+  smartHomeRoomGroupMemberReferencesResource,
+} from './smart-home-composition'
 import type {
   RoomControlChange,
   RoomControlTile,
@@ -128,6 +132,16 @@ export function HomeAssistantInteractiveSystem({
     [homeAssistantBindings, roomOverlayNodes, updateBindingNode],
   )
 
+  const resolveRoomControlMemberResourceId = useCallback(
+    (member: RoomControlTile, binding: HomeAssistantCollectionBinding) =>
+      member.resourceId ??
+      binding.resources.find((resource) =>
+        smartHomeRoomGroupMemberReferencesResource(member.collectionId, member.id, resource.id),
+      )?.id ??
+      getSmartHomeRoomGroupMemberResourceId(member.collectionId, member.id),
+    [],
+  )
+
   const copyDeviceResourceToGroup = useCallback(
     (
       sourceCollectionId: CollectionId,
@@ -162,19 +176,20 @@ export function HomeAssistantInteractiveSystem({
 
   const removeDeviceResourceFromGroup = useCallback(
     (member: RoomControlTile) => {
-      if (!member.resourceId) {
-        return
-      }
-
       const currentBindings = getHomeAssistantBindingNodeMap(useScene.getState().nodes)
       const bindingNode = currentBindings[member.collectionId]
       if (!bindingNode) {
         return
       }
 
+      const resourceId = resolveRoomControlMemberResourceId(member, bindingNode)
+      if (!resourceId) {
+        return
+      }
+
       const nextBinding = getBindingAfterDeviceResourceRemovalFromGroup(
         bindingNode,
-        member.resourceId,
+        resourceId,
       )
       if (!nextBinding) {
         return
@@ -182,7 +197,7 @@ export function HomeAssistantInteractiveSystem({
 
       updateBindingNode(bindingNode, nextBinding)
     },
-    [updateBindingNode],
+    [resolveRoomControlMemberResourceId, updateBindingNode],
   )
 
   const handleRoomControlChange = useCallback(
