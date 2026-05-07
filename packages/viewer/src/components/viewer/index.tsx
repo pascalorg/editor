@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
+import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
 import { DoorSystem } from '../../systems/door/door-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
@@ -18,6 +19,7 @@ import { SlabSystem } from '../../systems/slab/slab-system'
 import { StairSystem } from '../../systems/stair/stair-system'
 import { WallCutout } from '../../systems/wall/wall-cutout'
 import { WallSystem } from '../../systems/wall/wall-system'
+import { WindowAnimationSystem } from '../../systems/window/window-animation-system'
 import { WindowSystem } from '../../systems/window/window-system'
 import { ZoneSystem } from '../../systems/zone/zone-system'
 import { ErrorBoundary } from '../error-boundary'
@@ -225,6 +227,8 @@ const Viewer: React.FC<ViewerProps> = ({
         <WallCutout />
         {/* Core systems */}
         <CeilingSystem />
+        <DoorAnimationSystem />
+        <WindowAnimationSystem />
         <DoorSystem />
         <FenceSystem />
         <ItemSystem />

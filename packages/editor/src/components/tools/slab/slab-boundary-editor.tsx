@@ -31,6 +31,7 @@ export const SlabBoundaryEditor: React.FC<SlabBoundaryEditorProps> = ({ slabId }
 
   return (
     <PolygonEditor
+      allowEdgeMove
       color="#a3a3a3"
       levelId={resolveLevelId(slab, useScene.getState().nodes)}
       minVertices={3}

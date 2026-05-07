@@ -10,8 +10,10 @@ const Y_OFFSET = 0.02
 
 type DragState = {
   isDragging: boolean
-  mode: 'vertex' | 'polygon'
+  mode: 'vertex' | 'polygon' | 'edge'
   vertexIndex: number | null
+  edgeIndex?: number
+  edgeNormal?: [number, number]
   initialPosition: [number, number]
   initialPolygon: Array<[number, number]>
   pointerId: number
@@ -28,6 +30,8 @@ export interface PolygonEditorProps {
   surfaceHeight?: number
   /** Whether to show the center handle that moves the entire polygon. */
   allowPolygonMove?: boolean
+  /** Whether polygon edges can be dragged along their perpendicular normal. */
+  allowEdgeMove?: boolean
 }
 
 /**
@@ -35,6 +39,17 @@ export interface PolygonEditorProps {
  * Used by zone and site boundary editors
  */
 const MIN_HANDLE_HEIGHT = 0.15
+const EDGE_HANDLE_HEIGHT = 0.06
+const EDGE_HANDLE_THICKNESS = 0.12
+
+function getEdgeNormal(start: [number, number], end: [number, number]): [number, number] | null {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-6) return null
+
+  return [-dz / length, dx / length]
+}
 
 export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   polygon,
@@ -44,6 +59,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   levelId,
   surfaceHeight = 0,
   allowPolygonMove = false,
+  allowEdgeMove = false,
 }) => {
   const [levelNode, setLevelNode] = useState<Object3D | null>(() =>
     levelId ? (sceneRegistry.nodes.get(levelId) ?? null) : null,
@@ -89,6 +105,11 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const previewPolygonRef = useRef<Array<[number, number]> | null>(null)
 
+  const updatePreviewPolygon = useCallback((nextPolygon: Array<[number, number]> | null) => {
+    previewPolygonRef.current = nextPolygon
+    setPreviewPolygon(nextPolygon)
+  }, [])
+
   // Keep ref in sync
   useEffect(() => {
     previewPolygonRef.current = previewPolygon
@@ -96,6 +117,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const [hoveredVertex, setHoveredVertex] = useState<number | null>(null)
   const [hoveredMidpoint, setHoveredMidpoint] = useState<number | null>(null)
+  const [hoveredEdge, setHoveredEdge] = useState<number | null>(null)
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
 
   const lineRef = useRef<Line>(null!)
@@ -106,7 +128,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   if (polygon !== lastPolygonRef.current) {
     lastPolygonRef.current = polygon
     // External change (e.g. undo/redo) — clear any stale preview/drag state
-    if (previewPolygon) setPreviewPolygon(null)
+    if (previewPolygon) updatePreviewPolygon(null)
     if (dragState) setDragState(null)
   }
 
@@ -134,17 +156,37 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     })
   }, [displayPolygon])
 
+  const edgeHandles = useMemo(() => {
+    if (displayPolygon.length < 2) return []
+
+    return displayPolygon.flatMap(([x1, z1], index) => {
+      const nextIndex = (index + 1) % displayPolygon.length
+      const [x2, z2] = displayPolygon[nextIndex]!
+      const dx = x2 - x1
+      const dz = z2 - z1
+      const length = Math.hypot(dx, dz)
+      if (length < 1e-6) return []
+
+      return [
+        {
+          index,
+          length,
+          midpoint: [(x1 + x2) / 2, (z1 + z2) / 2] as [number, number],
+          rotationY: -Math.atan2(dz, dx),
+        },
+      ]
+    })
+  }, [displayPolygon])
+
   // Update vertex position using grid cursor position
   const handleVertexDrag = useCallback(
     (vertexIndex: number, position: [number, number]) => {
-      setPreviewPolygon((prev) => {
-        const basePolygon = prev ?? polygon
-        const newPolygon = [...basePolygon]
-        newPolygon[vertexIndex] = position
-        return newPolygon
-      })
+      const basePolygon = previewPolygonRef.current ?? polygon
+      const newPolygon = [...basePolygon]
+      newPolygon[vertexIndex] = position
+      updatePreviewPolygon(newPolygon)
     },
-    [polygon],
+    [polygon, updatePreviewPolygon],
   )
 
   // Commit polygon changes
@@ -152,9 +194,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     if (previewPolygonRef.current) {
       onPolygonChange(previewPolygonRef.current)
     }
-    setPreviewPolygon(null)
+    updatePreviewPolygon(null)
     setDragState(null)
-  }, [onPolygonChange])
+  }, [onPolygonChange, updatePreviewPolygon])
 
   // Handle adding a new vertex at midpoint
   const handleAddVertex = useCallback(
@@ -166,10 +208,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         ...basePolygon.slice(afterIndex + 1),
       ]
 
-      setPreviewPolygon(newPolygon)
-      return afterIndex + 1 // Return new vertex index
+      updatePreviewPolygon(newPolygon)
+      return {
+        polygon: newPolygon,
+        vertexIndex: afterIndex + 1,
+      }
     },
-    [polygon, previewPolygon],
+    [polygon, previewPolygon, updatePreviewPolygon],
   )
 
   // Handle deleting a vertex
@@ -180,9 +225,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
       const newPolygon = basePolygon.filter((_, i) => i !== index)
       onPolygonChange(newPolygon)
-      setPreviewPolygon(null)
+      updatePreviewPolygon(null)
     },
-    [polygon, previewPolygon, onPolygonChange, minVertices],
+    [polygon, previewPolygon, onPolygonChange, minVertices, updatePreviewPolygon],
   )
 
   // Listen to grid:move events to track cursor position
@@ -212,9 +257,31 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         } else if (dragState.mode === 'polygon') {
           const deltaX = newPosition[0] - dragState.initialPosition[0]
           const deltaZ = newPosition[1] - dragState.initialPosition[1]
-          setPreviewPolygon(
+          updatePreviewPolygon(
             dragState.initialPolygon.map(([x, z]) => [x + deltaX, z + deltaZ] as [number, number]),
           )
+        } else if (
+          dragState.mode === 'edge' &&
+          dragState.edgeIndex !== undefined &&
+          dragState.edgeNormal
+        ) {
+          const [normalX, normalZ] = dragState.edgeNormal
+          const pointerDeltaX = newPosition[0] - dragState.initialPosition[0]
+          const pointerDeltaZ = newPosition[1] - dragState.initialPosition[1]
+          const normalDistance = pointerDeltaX * normalX + pointerDeltaZ * normalZ
+          const edgeStartIndex = dragState.edgeIndex
+          const edgeEndIndex = (edgeStartIndex + 1) % dragState.initialPolygon.length
+          const nextPolygon = dragState.initialPolygon.map((point, index) => {
+            if (index !== edgeStartIndex && index !== edgeEndIndex) {
+              return point
+            }
+
+            return [point[0] + normalX * normalDistance, point[1] + normalZ * normalDistance] as [
+              number,
+              number,
+            ]
+          })
+          updatePreviewPolygon(nextPolygon)
         }
       }
     }
@@ -223,7 +290,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     return () => {
       emitter.off('grid:move', onGridMove)
     }
-  }, [dragState, handleVertexDrag])
+  }, [dragState, handleVertexDrag, updatePreviewPolygon])
 
   // Set up pointer up listener for ending drag
   useEffect(() => {
@@ -288,6 +355,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   if (displayPolygon.length < minVertices) return null
 
   const canDelete = displayPolygon.length > minVertices
+  const handleHeight = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
+  const edgeHandleY = editY + handleHeight - EDGE_HANDLE_HEIGHT / 2
 
   const editorContent = (
     <group>
@@ -316,7 +385,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         const isHovered = hoveredVertex === index
         const isDragging = dragState?.mode === 'vertex' && dragState.vertexIndex === index
         const radius = 0.1
-        const height = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
+        const height = handleHeight
 
         return (
           <mesh
@@ -337,6 +406,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             onPointerDown={(e) => {
               if (e.button !== 0) return
               e.stopPropagation()
+              setHoveredEdge(null)
               setDragState({
                 isDragging: true,
                 mode: 'vertex',
@@ -375,6 +445,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           onPointerDown={(e) => {
             if (e.button !== 0) return
             e.stopPropagation()
+            setHoveredEdge(null)
             setDragState({
               isDragging: true,
               mode: 'polygon',
@@ -384,23 +455,75 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               pointerId: e.pointerId,
             })
           }}
-          position={[
-            polygonCenter[0],
-            editY + Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02) + 0.08,
-            polygonCenter[1],
-          ]}
+          position={[polygonCenter[0], editY + handleHeight + 0.08, polygonCenter[1]]}
         >
           <sphereGeometry args={[0.09, 20, 20]} />
           <meshStandardMaterial color={dragState?.mode === 'polygon' ? '#22c55e' : '#f59e0b'} />
         </mesh>
       )}
 
+      {allowEdgeMove &&
+        edgeHandles.map(({ index, length, midpoint, rotationY }) => {
+          const isHovered = hoveredEdge === index
+          const isDragging = dragState?.mode === 'edge' && dragState.edgeIndex === index
+
+          return (
+            <mesh
+              key={`edge-${index}`}
+              layers={EDITOR_LAYER}
+              onClick={(e) => {
+                if (e.button !== 0) return
+                e.stopPropagation()
+              }}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return
+                e.stopPropagation()
+                const start = displayPolygon[index]
+                const end = displayPolygon[(index + 1) % displayPolygon.length]
+                if (!(start && end)) return
+
+                const edgeNormal = getEdgeNormal(start, end)
+                if (!edgeNormal) return
+
+                setHoveredEdge(null)
+                setDragState({
+                  isDragging: true,
+                  mode: 'edge',
+                  vertexIndex: null,
+                  edgeIndex: index,
+                  edgeNormal,
+                  initialPosition: cursorPosition,
+                  initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
+                  pointerId: e.pointerId,
+                })
+              }}
+              onPointerEnter={(e) => {
+                e.stopPropagation()
+                setHoveredEdge(index)
+              }}
+              onPointerLeave={(e) => {
+                e.stopPropagation()
+                setHoveredEdge(null)
+              }}
+              position={[midpoint[0], edgeHandleY, midpoint[1]]}
+              rotation={[0, rotationY, 0]}
+            >
+              <boxGeometry args={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]} />
+              <meshStandardMaterial
+                color={isDragging ? '#22c55e' : '#94a3b8'}
+                opacity={isDragging ? 0.5 : isHovered ? 0.38 : 0.14}
+                transparent
+              />
+            </mesh>
+          )
+        })}
+
       {/* Midpoint handles - smaller green cylinders for adding vertices (hidden while dragging) */}
       {!dragState &&
         midpoints.map(([x, z], index) => {
           const isHovered = hoveredMidpoint === index
           const radius = 0.06
-          const height = Math.max(MIN_HANDLE_HEIGHT, surfaceHeight + 0.02)
+          const height = handleHeight
 
           return (
             <mesh
@@ -413,14 +536,14 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               onPointerDown={(e) => {
                 if (e.button !== 0) return
                 e.stopPropagation()
-                const newVertexIndex = handleAddVertex(index, [x!, z!])
-                if (newVertexIndex >= 0) {
+                const insertedVertex = handleAddVertex(index, [x!, z!])
+                if (insertedVertex.vertexIndex >= 0) {
                   setDragState({
                     isDragging: true,
                     mode: 'vertex',
-                    vertexIndex: newVertexIndex,
+                    vertexIndex: insertedVertex.vertexIndex,
                     initialPosition: [x!, z!],
-                    initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
+                    initialPolygon: insertedVertex.polygon,
                     pointerId: e.pointerId,
                   })
                   setHoveredMidpoint(null)

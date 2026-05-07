@@ -1,5 +1,5 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
-import { getScaledDimensions } from '../../schema'
+import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import useScene from '../../store/use-scene'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
@@ -582,6 +582,7 @@ export class SpatialGridManager {
       if (node.type !== 'item') continue
       const item = node as ItemNode
       if (item.asset.attachTo) continue
+      if (isLowProfileItemSurface(item)) continue
       if (ignoreSet.has(item.id)) continue
       if (resolveNodeLevelId(item, nodes) !== levelId) continue
 

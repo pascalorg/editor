@@ -31,6 +31,7 @@ export const CeilingBoundaryEditor: React.FC<CeilingBoundaryEditorProps> = ({ ce
 
   return (
     <PolygonEditor
+      allowEdgeMove
       color="#d4d4d4"
       levelId={resolveLevelId(ceiling, useScene.getState().nodes)}
       minVertices={3}

@@ -1,12 +1,23 @@
 'use client'
 
 import '../../three-types'
-import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { KeyboardControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box3, Euler, Matrix4, Ray, Raycaster, Vector2, Vector3 } from 'three'
+import {
+  closeDoorOpenState,
+  DOOR_SWING_OPEN_ANGLE,
+  isOperationDoorType,
+  toggleDoorOpenState,
+} from '../../lib/door-interaction'
+import {
+  closeWindowOpenState,
+  isOperableWindowType,
+  toggleWindowOpenState,
+} from '../../lib/window-interaction'
 import useEditor from '../../store/use-editor'
 import {
   buildFirstPersonColliderWorldFromRegistry,
@@ -22,7 +33,6 @@ const CAMERA_EYE_OFFSET = 0.45
 const LOOK_SENSITIVITY = 0.002
 const CONTROLLER_CENTER_FROM_EYE = 0.85
 const DOOR_INTERACTION_DISTANCE = 2.5
-const DOOR_SWING_OPEN_ANGLE = Math.PI / 2
 const DOOR_LEAF_INTERACTION_DEPTH = 0.08
 const keyboardMap = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
@@ -43,8 +53,20 @@ const doorLeafLocalHit = new Vector3()
 const doorLeafLocalRay = new Ray()
 const doorLeafMatrix = new Matrix4()
 const doorLeafWorldHit = new Vector3()
+const doorOpeningBox = new Box3()
+const doorOpeningInverseMatrix = new Matrix4()
+const doorOpeningLocalHit = new Vector3()
+const doorOpeningLocalRay = new Ray()
+const doorOpeningMatrix = new Matrix4()
+const doorOpeningWorldHit = new Vector3()
 const spawnWorldPosition = new Vector3()
 const spawnWorldEuler = new Euler(0, 0, 0, 'YXZ')
+const windowInteractionRaycaster = new Raycaster()
+
+type FirstPersonInteractableTarget = {
+  id: AnyNodeId
+  type: 'door' | 'window'
+}
 
 const resolvePlacedSpawnNode = (
   nodes: ReturnType<typeof useScene.getState>['nodes'],
@@ -63,7 +85,7 @@ export const FirstPersonControls = () => {
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
   const yawRef = useRef(0)
   const pitchRef = useRef(0)
-  const interactableDoorIdRef = useRef<AnyNodeId | null>(null)
+  const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
   const worldRef = useRef<FirstPersonColliderWorld | null>(null)
   const [world, setWorld] = useState<FirstPersonColliderWorld | null>(null)
   const [controllerStart, setControllerStart] = useState<{
@@ -113,10 +135,45 @@ export const FirstPersonControls = () => {
       if (leafW <= 0 || leafH <= 0) continue
 
       const leafCenterY = -node.frameThickness / 2
+
+      if (isOperationDoorType(node.doorType)) {
+        doorOpeningMatrix
+          .copy(object.matrixWorld)
+          .multiply(new Matrix4().makeTranslation(0, leafCenterY, 0))
+        doorOpeningInverseMatrix.copy(doorOpeningMatrix).invert()
+        doorOpeningBox.min.set(-leafW / 2, -leafH / 2, -DOOR_LEAF_INTERACTION_DEPTH / 2)
+        doorOpeningBox.max.set(leafW / 2, leafH / 2, DOOR_LEAF_INTERACTION_DEPTH / 2)
+        doorOpeningLocalRay
+          .copy(doorInteractionRaycaster.ray)
+          .applyMatrix4(doorOpeningInverseMatrix)
+
+        const localOpeningHit = doorOpeningLocalRay.intersectBox(
+          doorOpeningBox,
+          doorOpeningLocalHit,
+        )
+        if (!localOpeningHit) continue
+
+        doorOpeningWorldHit.copy(localOpeningHit).applyMatrix4(doorOpeningMatrix)
+        const openingHitDistance = doorOpeningWorldHit.distanceTo(
+          doorInteractionRaycaster.ray.origin,
+        )
+
+        if (
+          openingHitDistance <= DOOR_INTERACTION_DISTANCE &&
+          openingHitDistance < closestDistance
+        ) {
+          closestDoorId = doorId as AnyNodeId
+          closestDistance = openingHitDistance
+        }
+        continue
+      }
+
       const hingeX = node.hingesSide === 'right' ? leafW / 2 : -leafW / 2
       const swingDirectionSign = node.swingDirection === 'inward' ? 1 : -1
       const hingeDirectionSign = node.hingesSide === 'right' ? 1 : -1
-      const clampedSwingAngle = Math.max(0, Math.min(DOOR_SWING_OPEN_ANGLE, node.swingAngle ?? 0))
+      const currentSwingAngle =
+        useInteractive.getState().doors[doorId as AnyNodeId]?.swingAngle ?? node.swingAngle ?? 0
+      const clampedSwingAngle = Math.max(0, Math.min(DOOR_SWING_OPEN_ANGLE, currentSwingAngle))
       const leafSwingRotation = clampedSwingAngle * swingDirectionSign * hingeDirectionSign
 
       doorLeafMatrix
@@ -144,20 +201,94 @@ export const FirstPersonControls = () => {
     return closestDoorId
   }, [camera])
 
-  const toggleInteractableDoor = useCallback(() => {
-    const doorId = interactableDoorIdRef.current ?? resolveInteractableDoorId()
-    if (!doorId) return
+  const resolveInteractableWindowId = useCallback((): AnyNodeId | null => {
+    const nodes = useScene.getState().nodes
+    camera.updateMatrixWorld(true)
+    windowInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
+
+    let closestWindowId: AnyNodeId | null = null
+    let closestDistance = DOOR_INTERACTION_DISTANCE
+
+    for (const windowId of sceneRegistry.byType.window) {
+      const node = nodes[windowId as AnyNodeId]
+      if (node?.type !== 'window') continue
+      if (node.openingKind === 'opening') continue
+      if (!isOperableWindowType(node.windowType)) continue
+
+      const object = sceneRegistry.nodes.get(windowId)
+      if (!object) continue
+
+      const hit = windowInteractionRaycaster
+        .intersectObject(object, true)
+        .find((intersection) => intersection.distance <= DOOR_INTERACTION_DISTANCE)
+      if (!(hit && hit.distance < closestDistance)) continue
+
+      closestWindowId = windowId as AnyNodeId
+      closestDistance = hit.distance
+    }
+
+    return closestWindowId
+  }, [camera])
+
+  const resolveInteractableTarget = useCallback((): FirstPersonInteractableTarget | null => {
+    const doorId = resolveInteractableDoorId()
+    if (doorId) return { id: doorId, type: 'door' }
+
+    const windowId = resolveInteractableWindowId()
+    if (windowId) return { id: windowId, type: 'window' }
+
+    return null
+  }, [resolveInteractableDoorId, resolveInteractableWindowId])
+
+  const toggleInteractableTarget = useCallback(() => {
+    const target = interactableTargetRef.current ?? resolveInteractableTarget()
+    if (!target) return
+
+    if (target.type === 'window') {
+      const node = useScene.getState().nodes[target.id]
+      if (
+        node?.type !== 'window' ||
+        node.openingKind === 'opening' ||
+        !isOperableWindowType(node.windowType)
+      ) {
+        return
+      }
+
+      toggleWindowOpenState(target.id, { persist: false })
+      return
+    }
+
+    const doorId = target.id
 
     const node = useScene.getState().nodes[doorId]
     if (node?.type !== 'door' || node.openingKind === 'opening') return
 
-    const currentSwingAngle = node.swingAngle ?? 0
-    useScene.getState().updateNode(doorId, {
-      swingAngle: currentSwingAngle >= DOOR_SWING_OPEN_ANGLE / 2 ? 0 : DOOR_SWING_OPEN_ANGLE,
-    })
+    toggleDoorOpenState(doorId, { persist: false })
+  }, [resolveInteractableTarget])
 
-    requestAnimationFrame(rebuildColliderWorld)
-  }, [rebuildColliderWorld, resolveInteractableDoorId])
+  const closeInteractableTarget = useCallback(() => {
+    const target = interactableTargetRef.current ?? resolveInteractableTarget()
+    if (!target) return
+
+    if (target.type === 'window') {
+      const node = useScene.getState().nodes[target.id]
+      if (
+        node?.type !== 'window' ||
+        node.openingKind === 'opening' ||
+        !isOperableWindowType(node.windowType)
+      ) {
+        return
+      }
+
+      closeWindowOpenState(target.id, { persist: false })
+      return
+    }
+
+    const node = useScene.getState().nodes[target.id]
+    if (node?.type !== 'door' || node.openingKind === 'opening') return
+
+    closeDoorOpenState(target.id, { persist: false })
+  }, [resolveInteractableTarget])
 
   const placedSpawn = useMemo<FirstPersonSpawn | null>(() => {
     if (!(placedSpawnNode && placedSpawnNode.type === 'spawn')) return null
@@ -195,6 +326,15 @@ export const FirstPersonControls = () => {
       worldRef.current?.dispose()
       worldRef.current = null
       setWorld(null)
+    }
+  }, [rebuildColliderWorld])
+
+  useEffect(() => {
+    emitter.on('door:animation-completed', rebuildColliderWorld)
+    emitter.on('window:animation-completed', rebuildColliderWorld)
+    return () => {
+      emitter.off('door:animation-completed', rebuildColliderWorld)
+      emitter.off('window:animation-completed', rebuildColliderWorld)
     }
   }, [rebuildColliderWorld])
 
@@ -260,10 +400,14 @@ export const FirstPersonControls = () => {
           document.exitPointerLock()
         }
         useEditor.getState().setFirstPersonMode(false)
-      } else if (event.code === 'KeyE') {
+      } else if (event.code === 'KeyE' || event.code === 'KeyR') {
         event.preventDefault()
         event.stopPropagation()
-        toggleInteractableDoor()
+        toggleInteractableTarget()
+      } else if (event.code === 'KeyT') {
+        event.preventDefault()
+        event.stopPropagation()
+        closeInteractableTarget()
       }
     }
 
@@ -271,7 +415,7 @@ export const FirstPersonControls = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
     }
-  }, [gl, toggleInteractableDoor])
+  }, [closeInteractableTarget, gl, toggleInteractableTarget])
 
   useFrame((_, delta) => {
     if (!controllerRef.current?.group) return
@@ -283,16 +427,20 @@ export const FirstPersonControls = () => {
     camera.quaternion.setFromEuler(cameraEuler)
     camera.updateMatrixWorld(true)
 
-    const nextInteractableDoorId = resolveInteractableDoorId()
-    if (interactableDoorIdRef.current !== nextInteractableDoorId) {
-      interactableDoorIdRef.current = nextInteractableDoorId
-      useViewer.getState().setHoveredId(nextInteractableDoorId)
+    const nextInteractableTarget = resolveInteractableTarget()
+    const previousInteractableTarget = interactableTargetRef.current
+    if (
+      previousInteractableTarget?.id !== nextInteractableTarget?.id ||
+      previousInteractableTarget?.type !== nextInteractableTarget?.type
+    ) {
+      interactableTargetRef.current = nextInteractableTarget
+      useViewer.getState().setHoveredId(nextInteractableTarget?.id ?? null)
     }
   })
 
   useEffect(() => {
     return () => {
-      if (useViewer.getState().hoveredId === interactableDoorIdRef.current) {
+      if (useViewer.getState().hoveredId === interactableTargetRef.current?.id) {
         useViewer.getState().setHoveredId(null)
       }
     }
@@ -407,6 +555,8 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
             <div className="h-px w-full bg-border/30" />
             <InlineControlHint label="Jump" keyLabel="Space" />
             <InlineControlHint label="Sprint" keyLabel="Shift" />
+            <InlineControlHint label="Interact" keyLabel="E / R" />
+            <InlineControlHint label="Close" keyLabel="T" />
             <div className="h-px w-full bg-border/30" />
             <span className="text-center text-muted-foreground/60 text-xs">
               Click to look around

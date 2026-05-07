@@ -135,6 +135,20 @@ export const ItemNode = BaseNode.extend({
 
 export type ItemNode = z.infer<typeof ItemNode>
 
+export const LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT = 0.1
+
+/**
+ * Low, floor-resting items like rugs and parking mats can receive items visually,
+ * but should not become item parents or block normal floor placement.
+ */
+export function isLowProfileItemSurface(item: ItemNode): boolean {
+  if (item.asset.attachTo) return false
+  const surfaceHeight = item.asset.surface
+    ? item.asset.surface.height * item.scale[1]
+    : getScaledDimensions(item)[1]
+  return surfaceHeight <= LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT
+}
+
 /**
  * Returns the effective world-space dimensions of an item after applying its scale.
  * Use this everywhere item.asset.dimensions is used for spatial calculations.

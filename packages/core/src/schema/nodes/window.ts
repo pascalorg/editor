@@ -3,6 +3,20 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const WindowType = z.enum([
+  'fixed',
+  'sliding',
+  'casement',
+  'awning',
+  'hopper',
+  'single-hung',
+  'double-hung',
+  'bay',
+  'bow',
+  'louvered',
+])
+export type WindowType = z.infer<typeof WindowType>
+
 export const WindowNode = BaseNode.extend({
   id: objectId('window'),
   type: nodeType('window'),
@@ -21,6 +35,13 @@ export const WindowNode = BaseNode.extend({
 
   // Opening mode - when set to "opening", the window is only a shaped cutout
   openingKind: z.enum(['window', 'opening']).default('window'),
+
+  // Window family
+  windowType: WindowType.default('fixed'),
+  operationState: z.number().min(0).max(1).default(0),
+  awningDirection: z.enum(['up', 'down']).default('up'),
+  casementStyle: z.enum(['single', 'french']).default('single'),
+  hingesSide: z.enum(['left', 'right']).default('left'),
   openingShape: z.enum(['rectangle', 'rounded', 'arch']).default('rectangle'),
   openingRadiusMode: z.enum(['all', 'individual']).default('all'),
   openingCornerRadii: z
@@ -50,6 +71,7 @@ export const WindowNode = BaseNode.extend({
 }).describe(dedent`Window node - a parametric window placed on a wall
   - position: center of the window in wall-local coordinate system
   - width/height: overall outer dimensions
+  - windowType: explicit window family, defaulting old windows to fixed
   - frameThickness: width of the frame members
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios

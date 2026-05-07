@@ -55,7 +55,12 @@ export type {
   TemperatureControl,
   ToggleControl,
 } from './nodes/item'
-export { getScaledDimensions, ItemNode } from './nodes/item'
+export {
+  getScaledDimensions,
+  ItemNode,
+  isLowProfileItemSurface,
+  LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
+} from './nodes/item'
 export { LevelNode } from './nodes/level'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
@@ -82,7 +87,7 @@ export {
   getWallSurfaceMaterialSignature,
   WallNode,
 } from './nodes/wall'
-export { WindowNode } from './nodes/window'
+export { WindowNode, WindowType } from './nodes/window'
 export { ZoneNode } from './nodes/zone'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types

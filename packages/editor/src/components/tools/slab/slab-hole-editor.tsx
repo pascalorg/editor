@@ -36,6 +36,7 @@ export const SlabHoleEditor: React.FC<SlabHoleEditorProps> = ({ slabId, holeInde
 
   return (
     <PolygonEditor
+      allowEdgeMove
       allowPolygonMove
       color="#ef4444"
       levelId={resolveLevelId(slab, useScene.getState().nodes)} // red for holes

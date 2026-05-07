@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   calculateLevelMiters,
   DEFAULT_WALL_HEIGHT,
-  getScaledDimensions,
   getWallCurveLength,
   getWallMiterBoundaryPoints,
   getWallPlanFootprint,
@@ -428,30 +427,6 @@ function buildMeasurementGuide(
   }
 }
 
-type HeightGuide = {
-  start: Vec3
-  end: Vec3
-  labelPosition: Vec3
-}
-
-function buildItemHeightGuide(item: ItemNode): { guide: HeightGuide; height: number } | null {
-  const [width, height, depth] = getScaledDimensions(item)
-
-  if (!Number.isFinite(height) || height < 0.01) return null
-
-  const x = Number.isFinite(width) ? width / 2 + 0.18 : 0.18
-  const z = Number.isFinite(depth) ? depth / 2 + 0.18 : 0.18
-
-  return {
-    height,
-    guide: {
-      start: [x, 0, z],
-      end: [x, height, z],
-      labelPosition: [x, height / 2, z],
-    },
-  }
-}
-
 function MeasurementBar({ start, end, color }: { start: Vec3; end: Vec3; color: string }) {
   const segment = useMemo(() => {
     const startVector = new THREE.Vector3(...start)
@@ -535,7 +510,7 @@ function SelectedMeasurementAnnotation({ node }: { node: WallNode | ItemNode }) 
     return <WallMeasurementAnnotation wall={node} />
   }
 
-  return <ItemHeightMeasurementAnnotation item={node} />
+  return null
 }
 
 function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
@@ -595,30 +570,6 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
         color={color}
         label={heightLabel}
         position={guide.heightLabelPosition}
-        shadowColor={shadowColor}
-      />
-    </group>
-  )
-}
-
-function ItemHeightMeasurementAnnotation({ item }: { item: ItemNode }) {
-  const theme = useViewer((state) => state.theme)
-  const unit = useViewer((state) => state.unit)
-  const isNight = theme === 'dark'
-  const color = isNight ? '#ffffff' : '#111111'
-  const shadowColor = isNight ? '#111111' : '#ffffff'
-
-  const measurement = useMemo(() => buildItemHeightGuide(item), [item])
-
-  if (!measurement) return null
-
-  return (
-    <group>
-      <MeasurementBar color={color} end={measurement.guide.end} start={measurement.guide.start} />
-      <MeasurementLabel
-        color={color}
-        label={`H ${formatMeasurement(measurement.height, unit)}`}
-        position={measurement.guide.labelPosition}
         shadowColor={shadowColor}
       />
     </group>

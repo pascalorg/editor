@@ -34,6 +34,13 @@ export {
 } from './hooks/spatial-grid/spatial-grid-sync'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export {
+  clampDoorOperationState,
+  getDoorRenderOpenAmount,
+  getGarageVisibleOpeningRatio,
+  isOperationDoorType,
+  SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
+} from './lib/door-operation'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
   detectSpacesForLevel,
@@ -62,8 +69,12 @@ export {
 } from './store/history-control'
 export {
   type ControlValue,
+  type DoorAnimationState,
+  type DoorInteractiveState,
   type ItemInteractiveState,
   useInteractive,
+  type WindowAnimationState,
+  type WindowInteractiveState,
 } from './store/use-interactive'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'

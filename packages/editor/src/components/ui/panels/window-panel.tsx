@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   emitter,
+  useInteractive,
   useScene,
   WindowNode,
 } from '@pascal-app/core'
@@ -11,6 +12,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { usePresetsAdapter } from '../../../contexts/presets-context'
+import { cn } from '../../../lib/utils'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -66,6 +68,26 @@ function isSameRadiusTuple(
 ) {
   return current.every((value, index) => Math.abs(value - (next[index] ?? 0)) < 1e-6)
 }
+
+const windowTypeOptions: Array<{ label: string; value: WindowNode['windowType'] }> = [
+  { label: 'Fixed', value: 'fixed' },
+  { label: 'Sliding', value: 'sliding' },
+  { label: 'Casement', value: 'casement' },
+  { label: 'Awning', value: 'awning' },
+  { label: 'Single Hung', value: 'single-hung' },
+  { label: 'Double Hung', value: 'double-hung' },
+  { label: 'Bay', value: 'bay' },
+  { label: 'Bow', value: 'bow' },
+  { label: 'Louvered', value: 'louvered' },
+]
+
+const rectangleOnlyWindowTypes = new Set<WindowNode['windowType']>([
+  'sliding',
+  'single-hung',
+  'double-hung',
+  'bay',
+  'bow',
+])
 
 export function WindowPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -182,6 +204,11 @@ export function WindowPanel() {
       parentId: node.parentId,
       width: node.width,
       height: node.height,
+      windowType: node.windowType,
+      operationState: node.operationState,
+      awningDirection: node.awningDirection,
+      casementStyle: node.casementStyle,
+      hingesSide: node.hingesSide,
       frameThickness: node.frameThickness,
       frameDepth: node.frameDepth,
       openingKind: node.openingKind,
@@ -210,6 +237,11 @@ export function WindowPanel() {
     return {
       width: node.width,
       height: node.height,
+      windowType: node.windowType,
+      operationState: node.operationState,
+      awningDirection: node.awningDirection,
+      casementStyle: node.casementStyle,
+      hingesSide: node.hingesSide,
       frameThickness: node.frameThickness,
       frameDepth: node.frameDepth,
       openingKind: node.openingKind,
@@ -274,6 +306,22 @@ export function WindowPanel() {
   const archHeight = node.archHeight ?? 0.35
   const openingRevealRadius = node.openingRevealRadius ?? 0.025
   const maxRoundedRadius = Math.max(0.01, getMaxSharedWindowRadius(node.width, node.height))
+  const displayedWindowType = node.windowType === 'hopper' ? 'awning' : (node.windowType ?? 'fixed')
+  const awningDirection = node.windowType === 'hopper' ? 'down' : (node.awningDirection ?? 'up')
+  const isOperableWindow =
+    node.windowType === 'sliding' ||
+    node.windowType === 'casement' ||
+    node.windowType === 'awning' ||
+    node.windowType === 'hopper' ||
+    node.windowType === 'single-hung' ||
+    node.windowType === 'double-hung' ||
+    node.windowType === 'louvered'
+
+  const setOperationState = (value: number) => {
+    useInteractive.getState().cancelWindowAnimation(node.id)
+    useInteractive.getState().removeWindowOpenState(node.id)
+    handleUpdate({ operationState: Math.max(0, Math.min(1, value)) })
+  }
 
   const getDimensionUpdates = (updates: Partial<Pick<WindowNode, 'width' | 'height'>>) => {
     const nextWidth = updates.width ?? node.width
@@ -398,6 +446,97 @@ export function WindowPanel() {
         />
       </PanelSection>
 
+      {!isOpening && (
+        <PanelSection title="Window Type">
+          <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+            {windowTypeOptions.map((option) => {
+              const isSelected = displayedWindowType === option.value
+              return (
+                <button
+                  className={cn(
+                    'flex min-h-12 items-center rounded-lg border px-2.5 text-left text-xs transition-colors',
+                    isSelected
+                      ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                      : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                  )}
+                  key={option.value}
+                  onClick={() =>
+                    handleUpdate({
+                      windowType: option.value,
+                      ...(option.value === 'awning' ? { awningDirection } : {}),
+                      ...(rectangleOnlyWindowTypes.has(option.value)
+                        ? { openingShape: 'rectangle' }
+                        : {}),
+                      ...(option.value === 'bay' || option.value === 'bow' ? { sill: false } : {}),
+                    })
+                  }
+                  type="button"
+                >
+                  <span className="truncate font-medium">{option.label}</span>
+                </button>
+              )
+            })}
+          </div>
+          {displayedWindowType === 'awning' && (
+            <div className="mt-2">
+              <SegmentedControl
+                onChange={(value) =>
+                  handleUpdate({
+                    windowType: 'awning',
+                    awningDirection: value as WindowNode['awningDirection'],
+                  })
+                }
+                options={[
+                  { value: 'up', label: 'Up' },
+                  { value: 'down', label: 'Down' },
+                ]}
+                value={awningDirection}
+              />
+            </div>
+          )}
+          {node.windowType === 'casement' && (
+            <div className="mt-2 space-y-2">
+              <SegmentedControl
+                onChange={(value) =>
+                  handleUpdate({ casementStyle: value as WindowNode['casementStyle'] })
+                }
+                options={[
+                  { value: 'single', label: 'Single' },
+                  { value: 'french', label: 'French' },
+                ]}
+                value={node.casementStyle ?? 'single'}
+              />
+              {(node.casementStyle ?? 'single') === 'single' && (
+                <SegmentedControl
+                  onChange={(value) =>
+                    handleUpdate({ hingesSide: value as WindowNode['hingesSide'] })
+                  }
+                  options={[
+                    { value: 'left', label: 'Left' },
+                    { value: 'right', label: 'Right' },
+                  ]}
+                  value={node.hingesSide ?? 'left'}
+                />
+              )}
+            </div>
+          )}
+          {isOperableWindow && (
+            <div className="mt-2">
+              <SliderControl
+                label="Open"
+                max={1}
+                min={0}
+                onChange={setOperationState}
+                precision={2}
+                restoreOnCommit={false}
+                step={0.05}
+                value={Math.round((node.operationState ?? 0) * 100) / 100}
+              />
+            </div>
+          )}
+        </PanelSection>
+      )}
+
       <PanelSection title="Position">
         <SliderControl
           label={
@@ -458,7 +597,7 @@ export function WindowPanel() {
         />
       </PanelSection>
 
-      {!isOpening && (
+      {!isOpening && !rectangleOnlyWindowTypes.has(node.windowType) && (
         <PanelSection title="Corner Shape">
           <SegmentedControl
             onChange={(value) =>
@@ -470,6 +609,7 @@ export function WindowPanel() {
                       openingCornerRadii,
                       cornerRadius: Math.min(cornerRadius, maxRoundedRadius),
                       openingRevealRadius,
+                      sill: false,
                     }
                   : {}),
                 ...(value === 'arch' ? { archHeight } : {}),

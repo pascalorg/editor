@@ -98,6 +98,18 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
     }
 
+    const getPlacementOrientation = (event: WallEvent) => {
+      const faceSide = getSideFromNormal(event.normal)
+      const side = movingDoorNode.side ?? faceSide
+      const rotationOffset = side !== faceSide ? Math.PI : 0
+      return {
+        side,
+        itemRotation: calculateItemRotation(event.normal) + rotationOffset,
+        cursorRotation:
+          calculateCursorRotation(event.normal, event.node.start, event.node.end) + rotationOffset,
+      }
+    }
+
     const onWallEnter = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) {
@@ -106,9 +118,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       }
       if (event.node.parentId !== getLevelId()) return
 
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+      const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
 
       const localX = snapToHalf(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
@@ -167,9 +177,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       }
       if (event.node.parentId !== getLevelId()) return
 
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
-      const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+      const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
 
       const localX = snapToHalf(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
@@ -234,8 +242,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       if (isCurvedWall(event.node)) return
       if (event.node.parentId !== getLevelId()) return
 
-      const side = getSideFromNormal(event.normal)
-      const itemRotation = calculateItemRotation(event.normal)
+      const { side, itemRotation } = getPlacementOrientation(event)
 
       const localX = snapToHalf(event.localPosition[0])
       const { clampedX, clampedY } = clampToWall(
