@@ -18,6 +18,13 @@ interface OriginalState {
   metadata: ItemNode['metadata']
 }
 
+type DraftNodeOptions = {
+  id?: ItemNode['id']
+  metadata?: ItemNode['metadata']
+  name?: string
+  parentId?: string | null
+}
+
 export interface DraftNodeHandle {
   /** Current draft item, or null */
   readonly current: ItemNode | null
@@ -29,6 +36,7 @@ export interface DraftNodeHandle {
     asset: AssetInput,
     rotation?: [number, number, number],
     scale?: [number, number, number],
+    options?: DraftNodeOptions,
   ) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
@@ -57,21 +65,23 @@ export function useDraftNode(): DraftNodeHandle {
       asset: AssetInput,
       rotation?: [number, number, number],
       scale?: [number, number, number],
+      options?: DraftNodeOptions,
     ): ItemNode | null => {
-      const currentLevelId = useViewer.getState().selection.levelId
+      const currentLevelId = options?.parentId ?? useViewer.getState().selection.levelId
       if (!currentLevelId) return null
 
       const node = ItemNode.parse({
+        id: options?.id,
         position: [gridPosition.x, gridPosition.y, gridPosition.z],
         rotation: rotation ?? [0, 0, 0],
         scale: scale ?? [1, 1, 1],
-        name: asset.name,
+        name: options?.name ?? asset.name,
         asset,
         parentId: currentLevelId,
-        metadata: { isTransient: true },
+        metadata: { ...(options?.metadata as Record<string, unknown> | undefined), isTransient: true },
       })
 
-      useScene.getState().createNode(node, currentLevelId)
+      useScene.getState().createNode(node, currentLevelId as AnyNodeId)
       draftRef.current = node
       adoptedRef.current = false
       originalStateRef.current = null

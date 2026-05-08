@@ -159,6 +159,12 @@ export interface EditorProps {
 
   // Command palette fallback when no commands match
   commandPaletteEmptyAction?: CommandPaletteEmptyAction
+
+  // Feature extension slot
+  renderViewer?: (
+    children: ReactNode,
+    props: { hoverStyles: HoverStyles; selectionManager: 'custom' | 'default' },
+  ) => ReactNode
 }
 
 function EditorSceneCrashFallback() {
@@ -794,6 +800,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   hasLoadedInitialScene,
   showLoader,
   onThumbnailCapture,
+  renderViewer,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -801,6 +808,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
   hasLoadedInitialScene: boolean
   showLoader: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  renderViewer?: (
+    children: ReactNode,
+    props: { hoverStyles: HoverStyles; selectionManager: 'custom' | 'default' },
+  ) => ReactNode
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -854,6 +865,15 @@ const ViewerCanvas = memo(function ViewerCanvas({
 
   const show2d = viewMode === '2d' || viewMode === 'split'
   const show3d = viewMode === '3d' || viewMode === 'split'
+  const selectionManager = isFirstPersonMode ? 'default' : 'custom'
+  const viewerChildren = (
+    <ViewerSceneContent
+      isFirstPersonMode={isFirstPersonMode}
+      isLoading={isLoading}
+      isVersionPreviewMode={isVersionPreviewMode}
+      onThumbnailCapture={onThumbnailCapture}
+    />
+  )
 
   return (
     <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
@@ -900,17 +920,13 @@ const ViewerCanvas = memo(function ViewerCanvas({
             />
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
-          <Viewer
-            hoverStyles={EDITOR_HOVER_STYLES}
-            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
-          >
-            <ViewerSceneContent
-              isFirstPersonMode={isFirstPersonMode}
-              isLoading={isLoading}
-              isVersionPreviewMode={isVersionPreviewMode}
-              onThumbnailCapture={onThumbnailCapture}
-            />
-          </Viewer>
+          {renderViewer ? (
+            renderViewer(viewerChildren, { hoverStyles: EDITOR_HOVER_STYLES, selectionManager })
+          ) : (
+            <Viewer hoverStyles={EDITOR_HOVER_STYLES} selectionManager={selectionManager}>
+              {viewerChildren}
+            </Viewer>
+          )}
         </div>
       </div>
       {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
@@ -942,6 +958,7 @@ export default function Editor({
   extraSidebarPanels,
   presetsAdapter,
   commandPaletteEmptyAction,
+  renderViewer,
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
 
@@ -1093,6 +1110,7 @@ export default function Editor({
       isLoading={isLoading}
       isVersionPreviewMode={isVersionPreviewMode}
       onThumbnailCapture={onThumbnailCapture}
+      renderViewer={renderViewer}
       showLoader={showLoader}
     />
   )

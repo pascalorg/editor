@@ -15,6 +15,7 @@ import type {
   WindowNode,
 } from '@pascal-app/core'
 import { Vector3 } from 'three'
+import { useItemMoveExtension } from '../../../robot-adapter'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { MoveBuildingContent } from '../building/move-building-tool'
@@ -53,9 +54,13 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
       ? (movingNode.metadata as Record<string, unknown>)
       : {}
   const isNew = !!meta.isNew
+  const itemMoveExtension = useItemMoveExtension({ draftNode, isNew, meta, movingNode })
 
   const cursor = usePlacementCoordinator({
     asset: movingNode.asset,
+    disabled: itemMoveExtension?.disabled,
+    ignoreItemIds: itemMoveExtension?.ignoreItemIds,
+    isDisabled: itemMoveExtension?.isDisabled,
     draftNode,
     // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft
     initialState: isNew
@@ -64,6 +69,9 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
     // Preserve the original item's scale so Y-position calculations use the correct height
     defaultScale: isNew ? movingNode.scale : undefined,
     initDraft: (gridPosition) => {
+      if (itemMoveExtension?.initDraft?.(gridPosition)) {
+        return
+      }
       if (isNew) {
         // Duplicate: use the same create() path as ItemTool so ghost rendering works correctly.
         // Floor items get a draft immediately; wall/ceiling items are created lazily on surface entry.
@@ -76,15 +84,20 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
         gridPosition.copy(new Vector3(...movingNode.position))
       }
     },
+    onCommitRequested: itemMoveExtension?.onCommitRequested,
     onCommitted: () => {
+      itemMoveExtension?.onCommitted?.()
       sfxEmitter.emit('sfx:item-place')
       useEditor.getState().setMovingNode(null)
       return false
     },
     onCancel: () => {
+      itemMoveExtension?.onCancel?.()
       draftNode.destroy()
       useEditor.getState().setMovingNode(null)
     },
+    preserveDraftOnUnmount: itemMoveExtension?.preserveDraftOnUnmount,
+    surfaceMode: itemMoveExtension?.surfaceMode,
   })
 
   return <>{cursor}</>

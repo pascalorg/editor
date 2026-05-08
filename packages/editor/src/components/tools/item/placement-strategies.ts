@@ -129,7 +129,7 @@ export const floorStrategy = {
       pos,
       getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.rotation,
-      [ctx.draftItem.id],
+      ctx.ignoredItemIds ?? [ctx.draftItem.id],
     ).valid
 
     if (!valid) return null
@@ -246,7 +246,7 @@ export const wallStrategy = {
       getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
       side,
-      [ctx.draftItem.id],
+      ctx.ignoredItemIds ?? [ctx.draftItem.id],
     )
 
     const adjustedY = validation.adjustedY ?? snappedY
@@ -290,7 +290,7 @@ export const wallStrategy = {
       getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
       ctx.draftItem.side,
-      [ctx.draftItem.id],
+      ctx.ignoredItemIds ?? [ctx.draftItem.id],
     ).valid
 
     if (!valid) return null
@@ -427,7 +427,7 @@ export const ceilingStrategy = {
       pos,
       getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
       ctx.draftItem.rotation,
-      [ctx.draftItem.id],
+      ctx.ignoredItemIds ?? [ctx.draftItem.id],
     ).valid
 
     if (!valid) return null
@@ -614,7 +614,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
       [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
       alignedDims,
       ctx.draftItem.rotation,
-      [ctx.draftItem.id],
+      ctx.ignoredItemIds ?? [ctx.draftItem.id],
     ).valid
   }
 
@@ -628,7 +628,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
       alignedDims,
       attachTo,
       ctx.draftItem.side,
-      [ctx.draftItem.id],
+      ctx.ignoredItemIds ?? [ctx.draftItem.id],
     ).valid
   }
 
@@ -638,6 +638,6 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
     [ctx.gridPosition.x, 0, ctx.gridPosition.z],
     alignedDims,
     ctx.draftItem.rotation,
-    [ctx.draftItem.id],
+    ctx.ignoredItemIds ?? [ctx.draftItem.id],
   ).valid
 }

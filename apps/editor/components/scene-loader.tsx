@@ -6,6 +6,13 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
+import {
+  NavigationPanel,
+  NavigationToolbarButton,
+  NavigationViewerFrame,
+  prepareNavigationSceneGraph,
+} from '@pascal-app/robot/editor'
+import { shouldPauseNavigationAutoSave, useNavigation } from '@pascal-app/robot'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -29,6 +36,11 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     id: 'site',
     label: 'Scene',
     component: () => null, // Built-in SitePanel handles this
+  },
+  {
+    id: 'robot',
+    label: 'Robot',
+    component: NavigationPanel,
   },
 ]
 
@@ -60,13 +72,17 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
+  const robotMode = useNavigation((state) => state.robotMode)
   const versionRef = useRef(meta.version)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const handleLoad = useCallback(async () => initialScene, [initialScene])
+  const handleLoad = useCallback(
+    async () => prepareNavigationSceneGraph(initialScene) ?? initialScene,
+    [initialScene],
+  )
 
   const handleSave = useCallback(
     async (graph: SceneGraph) => {
@@ -123,9 +139,10 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       if (payload.version <= versionRef.current) return
 
       versionRef.current = payload.version
-      lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
+      const graph = prepareNavigationSceneGraph(payload.graph) ?? payload.graph
+      lastRemoteGraphJsonRef.current = sceneGraphSignature(graph)
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
-      applySceneGraphToEditor(payload.graph)
+      applySceneGraphToEditor(graph)
       setConflict(false)
       setSaveError(null)
     })
@@ -193,14 +210,19 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </Link>
       </div>
       <Editor
+        editorInteractionsDisabled={robotMode !== null}
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
+        renderViewer={(children, props) => (
+          <NavigationViewerFrame {...props}>{children}</NavigationViewerFrame>
+        )}
+        shouldPauseAutoSave={shouldPauseNavigationAutoSave}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerToolbarRight={<CommunityViewerToolbarRight before={<NavigationToolbarButton />} />}
       />
     </div>
   )

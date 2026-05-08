@@ -4,6 +4,11 @@ import { type AnyNode, getScaledDimensions, ItemNode, useScene } from '@pascal-a
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
+import {
+  decorateItemDuplicate,
+  notifyItemDuplicateDraft,
+  requestExternalItemDelete,
+} from '../../../robot-adapter'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -55,7 +60,7 @@ export function ItemPanel() {
   const handleDuplicate = useCallback(() => {
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
-    const proto = ItemNode.parse({
+    const duplicateInfo = {
       position: [...node.position] as [number, number, number],
       rotation: [...node.rotation] as [number, number, number],
       name: node.name,
@@ -63,17 +68,21 @@ export function ItemPanel() {
       parentId: node.parentId,
       side: node.side,
       metadata: { isNew: true },
-    })
+    }
+    decorateItemDuplicate(node, duplicateInfo)
+    const proto = ItemNode.parse(duplicateInfo)
+    notifyItemDuplicateDraft(node, proto)
     setMovingNode(proto)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
-    if (!selectedId) return
+    if (!(selectedId && node)) return
+    if (requestExternalItemDelete(node)) return
     sfxEmitter.emit('sfx:item-delete')
     deleteNode(selectedId as AnyNode['id'])
     setSelection({ selectedIds: [] })
-  }, [selectedId, deleteNode, setSelection])
+  }, [node, selectedId, deleteNode, setSelection])
 
   if (!(node && node.type === 'item' && selectedId)) return null
 

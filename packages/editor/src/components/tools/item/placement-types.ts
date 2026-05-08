@@ -37,6 +37,7 @@ export interface PlacementContext {
   levelId: LevelNode['id'] | null
   draftItem: ItemNode | null
   gridPosition: Vector3
+  ignoredItemIds?: string[]
   state: PlacementState
   /**
    * Current world Y rotation of the placement cursor — the user's intended
