@@ -21,7 +21,7 @@ export const CeilingNode = BaseNode.extend({
   Ceiling node - used to represent a ceiling in the building
   - polygon: array of [x, z] points defining the ceiling boundary
   - holes: array of polygons representing holes in the ceiling
-  - holeMetadata: metadata parallel to holes, used to preserve manual and stair-managed cutouts
+  - holeMetadata: metadata parallel to holes, used to preserve manual and auto-managed cutouts
   - autoFromWalls: whether the ceiling is automatically generated from a closed wall loop
   `,
 )

@@ -39,8 +39,10 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
 
   const handleAddLevel = (e: React.MouseEvent) => {
     e.stopPropagation()
+    const nodes = useScene.getState().nodes
+    const levelCount = children.filter((childId) => nodes[childId]?.type === 'level').length
     const newLevel = LevelNode.parse({
-      level: children.length,
+      level: levelCount,
       children: [],
       parentId: nodeId,
     })

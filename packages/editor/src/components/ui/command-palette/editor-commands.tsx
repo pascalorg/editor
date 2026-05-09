@@ -190,8 +190,11 @@ export function EditorCommands() {
             const { nodes } = useScene.getState()
             const building = Object.values(nodes).find((n) => n.type === 'building')
             if (!building) return
+            const levelCount = building.children.filter(
+              (childId) => nodes[childId as keyof typeof nodes]?.type === 'level',
+            ).length
             const newLevel = LevelNode.parse({
-              level: building.children.length,
+              level: levelCount,
               children: [],
               parentId: building.id,
             })

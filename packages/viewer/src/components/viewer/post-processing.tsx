@@ -174,21 +174,8 @@ const PostProcessingPasses = ({
     void pipelineVersion
 
     if (!(renderer && scene && camera)) {
-      console.warn('[viewer/post-processing] Skipping pipeline build — missing dependency.', {
-        hasRenderer: !!renderer,
-        hasScene: !!scene,
-        hasCamera: !!camera,
-      })
       return
     }
-
-    console.log('[viewer/post-processing] Building pipeline', {
-      version: pipelineVersion,
-      ssgi: SSGI_PARAMS.enabled,
-      hoverHighlightMode,
-      projectId,
-      rendererCtor: (renderer as any).constructor?.name,
-    })
 
     hasPipelineErrorRef.current = false
 
@@ -202,9 +189,6 @@ const PostProcessingPasses = ({
     // exclusively and never attempts the TSL pipeline.
     const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
     if (!hasWebGPU) {
-      console.warn(
-        '[viewer] WebGPU unavailable — rendering without post-processing (SSGI, outlines, denoise).',
-      )
       hasPipelineErrorRef.current = true
       renderPipelineRef.current = null
       return
@@ -331,7 +315,6 @@ const PostProcessingPasses = ({
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
-      console.log('[viewer/post-processing] Pipeline built OK', { version: pipelineVersion })
     } catch (error) {
       hasPipelineErrorRef.current = true
       console.error(
@@ -410,9 +393,6 @@ const PostProcessingPasses = ({
       if (retryCountRef.current < MAX_PIPELINE_RETRIES) {
         // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit
         retryCountRef.current++
-        console.warn(
-          `[viewer/post-processing] Scheduling pipeline rebuild (attempt ${retryCountRef.current}/${MAX_PIPELINE_RETRIES})`,
-        )
         if (rebuildTimeoutRef.current !== null) {
           clearTimeout(rebuildTimeoutRef.current)
         }

@@ -5,6 +5,7 @@ export type {
   CeilingEvent,
   ColumnEvent,
   DoorEvent,
+  ElevatorEvent,
   EventSuffix,
   FenceEvent,
   GridEvent,
@@ -71,13 +72,25 @@ export {
   type ControlValue,
   type DoorAnimationState,
   type DoorInteractiveState,
+  type ElevatorInteractiveState,
+  type ElevatorPhase,
   type ItemInteractiveState,
   useInteractive,
   type WindowAnimationState,
   type WindowInteractiveState,
 } from './store/use-interactive'
+export {
+  default as useLiveNodeOverrides,
+  type LiveNodeOverrides,
+} from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
+export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
+export {
+  resolveElevatorBuildingLevels,
+  resolveElevatorServiceLevelIds,
+  resolveElevatorServiceLevels,
+} from './systems/elevator/elevator-service'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export {
   getClampedWallCurveOffset,

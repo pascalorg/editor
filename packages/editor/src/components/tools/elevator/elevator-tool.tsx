@@ -1,0 +1,201 @@
+import {
+  type AnyNodeId,
+  type BuildingNode,
+  ElevatorNode,
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  useScene,
+} from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
+import { sfxEmitter } from '../../../lib/sfx-bus'
+import { CursorSphere } from '../shared/cursor-sphere'
+import {
+  DEFAULT_ELEVATOR_CAB_HEIGHT,
+  DEFAULT_ELEVATOR_DEPTH,
+  DEFAULT_ELEVATOR_DOOR_DURATION_MS,
+  DEFAULT_ELEVATOR_DOOR_HEIGHT,
+  DEFAULT_ELEVATOR_DOOR_WIDTH,
+  DEFAULT_ELEVATOR_DWELL_MS,
+  DEFAULT_ELEVATOR_SPEED,
+  DEFAULT_ELEVATOR_WIDTH,
+} from './elevator-defaults'
+
+const GRID_OFFSET = 0.02
+
+function resolveCurrentBuildingId(): BuildingNode['id'] | null {
+  const { buildingId, levelId } = useViewer.getState().selection
+  if (buildingId) return buildingId as BuildingNode['id']
+  if (!levelId) return null
+
+  const level = useScene.getState().nodes[levelId as AnyNodeId]
+  if (level?.type === 'level' && level.parentId) {
+    return level.parentId as BuildingNode['id']
+  }
+
+  return null
+}
+
+function resolveDefaultServiceRange(buildingId: BuildingNode['id']): {
+  defaultLevelId: LevelNode['id'] | null
+  fromLevelId: LevelNode['id'] | null
+  toLevelId: LevelNode['id'] | null
+} {
+  const { levelId } = useViewer.getState().selection
+  const nodes = useScene.getState().nodes
+  const building = nodes[buildingId as AnyNodeId]
+  if (building?.type !== 'building') {
+    return { defaultLevelId: null, fromLevelId: null, toLevelId: null }
+  }
+
+  const levels = building.children
+    .map((childId) => nodes[childId as AnyNodeId])
+    .filter((node): node is LevelNode => node?.type === 'level')
+    .sort((left, right) => left.level - right.level)
+  const selectedLevelIndex = levels.findIndex((level) => level.id === levelId)
+  const fromIndex = selectedLevelIndex >= 0 ? selectedLevelIndex : 0
+  const fromLevel = levels[fromIndex]
+  const toLevel = levels[Math.min(fromIndex + 1, levels.length - 1)] ?? fromLevel
+
+  return {
+    defaultLevelId: fromLevel?.id ?? null,
+    fromLevelId: fromLevel?.id ?? null,
+    toLevelId: toLevel?.id ?? fromLevel?.id ?? null,
+  }
+}
+
+function createElevatorPreviewGeometry(): THREE.BufferGeometry {
+  return new THREE.BoxGeometry(
+    DEFAULT_ELEVATOR_WIDTH,
+    DEFAULT_ELEVATOR_CAB_HEIGHT,
+    DEFAULT_ELEVATOR_DEPTH,
+  )
+}
+
+function commitElevatorPlacement(
+  buildingId: BuildingNode['id'],
+  position: [number, number, number],
+  rotation: number,
+): void {
+  const { createNode, nodes } = useScene.getState()
+  const elevatorCount = Object.values(nodes).filter((node) => node.type === 'elevator').length
+  const serviceRange = resolveDefaultServiceRange(buildingId)
+  const elevator = ElevatorNode.parse({
+    name: `Elevator ${elevatorCount + 1}`,
+    parentId: buildingId,
+    position,
+    rotation,
+    width: DEFAULT_ELEVATOR_WIDTH,
+    depth: DEFAULT_ELEVATOR_DEPTH,
+    cabHeight: DEFAULT_ELEVATOR_CAB_HEIGHT,
+    doorWidth: DEFAULT_ELEVATOR_DOOR_WIDTH,
+    doorHeight: DEFAULT_ELEVATOR_DOOR_HEIGHT,
+    ...serviceRange,
+    speed: DEFAULT_ELEVATOR_SPEED,
+    doorDurationMs: DEFAULT_ELEVATOR_DOOR_DURATION_MS,
+    dwellMs: DEFAULT_ELEVATOR_DWELL_MS,
+  })
+
+  createNode(elevator, buildingId)
+  useViewer.getState().setSelection({ buildingId, selectedIds: [elevator.id] })
+  sfxEmitter.emit('sfx:structure-build')
+}
+
+export const ElevatorTool: React.FC = () => {
+  const cursorRef = useRef<THREE.Group>(null)
+  const previewRef = useRef<THREE.Group>(null)
+  const rotationRef = useRef(0)
+  const previousGridPosRef = useRef<[number, number] | null>(null)
+  const buildingId = useViewer((state) => state.selection.buildingId)
+  const levelId = useViewer((state) => state.selection.levelId)
+  const previewGeometry = useMemo(() => createElevatorPreviewGeometry(), [])
+
+  useEffect(() => {
+    const currentBuildingId =
+      (buildingId as BuildingNode['id'] | null) ??
+      (levelId
+        ? (() => {
+            const level = useScene.getState().nodes[levelId as AnyNodeId]
+            return level?.type === 'level' && level.parentId
+              ? (level.parentId as BuildingNode['id'])
+              : null
+          })()
+        : null)
+    if (!currentBuildingId) return
+
+    rotationRef.current = 0
+    if (previewRef.current) previewRef.current.rotation.y = 0
+
+    const onGridMove = (event: GridEvent) => {
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const y = event.localPosition[1]
+
+      cursorRef.current?.position.set(gridX, y + GRID_OFFSET, gridZ)
+      previewRef.current?.position.set(gridX, y + DEFAULT_ELEVATOR_CAB_HEIGHT / 2, gridZ)
+
+      if (
+        previousGridPosRef.current &&
+        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
+      ) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      previousGridPosRef.current = [gridX, gridZ]
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      const latestBuildingId = resolveCurrentBuildingId()
+      if (!latestBuildingId) return
+
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      commitElevatorPlacement(latestBuildingId, [gridX, 0, gridZ], rotationRef.current)
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      const ROTATION_STEP = Math.PI / 4
+      let rotationDelta = 0
+      if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
+      else if (event.key === 't' || event.key === 'T') rotationDelta = -ROTATION_STEP
+
+      if (rotationDelta !== 0) {
+        event.preventDefault()
+        sfxEmitter.emit('sfx:item-rotate')
+        rotationRef.current += rotationDelta
+        if (previewRef.current) previewRef.current.rotation.y = rotationRef.current
+      }
+    }
+
+    emitter.on('grid:move', onGridMove)
+    emitter.on('grid:click', onGridClick)
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      emitter.off('grid:move', onGridMove)
+      emitter.off('grid:click', onGridClick)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [buildingId, levelId])
+
+  return (
+    <group>
+      <CursorSphere ref={cursorRef} />
+      <group ref={previewRef}>
+        <mesh castShadow geometry={previewGeometry}>
+          <meshStandardMaterial color="#38bdf8" depthWrite={false} opacity={0.32} transparent />
+        </mesh>
+        <mesh position={[0, DEFAULT_ELEVATOR_CAB_HEIGHT / 2, -DEFAULT_ELEVATOR_DEPTH / 2 - 0.03]}>
+          <boxGeometry args={[DEFAULT_ELEVATOR_DOOR_WIDTH, DEFAULT_ELEVATOR_DOOR_HEIGHT, 0.035]} />
+          <meshStandardMaterial color="#e5e7eb" depthWrite={false} opacity={0.45} transparent />
+        </mesh>
+      </group>
+    </group>
+  )
+}

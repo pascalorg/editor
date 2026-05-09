@@ -1,6 +1,7 @@
-import { useLiveTransforms, useScene } from '@pascal-app/core'
+import { useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
 
 function refreshSceneAfterHistoryJump() {
+  useLiveNodeOverrides.getState().clearAll()
   useLiveTransforms.getState().clearAll()
 
   const state = useScene.getState()

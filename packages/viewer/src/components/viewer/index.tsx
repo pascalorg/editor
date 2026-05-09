@@ -8,6 +8,8 @@ import useViewer from '../../store/use-viewer'
 import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
 import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
 import { DoorSystem } from '../../systems/door/door-system'
+import { ElevatorAnimationSystem } from '../../systems/elevator/elevator-animation-system'
+import { ElevatorOpeningSystem } from '../../systems/elevator/elevator-opening-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemSystem } from '../../systems/item/item-system'
@@ -94,8 +96,6 @@ type WebGPUDeviceLossInfo = {
 
 type WebGPUDeviceLike = {
   lost: Promise<WebGPUDeviceLossInfo>
-  label?: string
-  features?: Set<string>
   addEventListener?: (type: string, listener: EventListener) => void
   removeEventListener?: (type: string, listener: EventListener) => void
 }
@@ -108,17 +108,8 @@ function GPUDeviceWatcher() {
     const device = backend?.device as WebGPUDeviceLike | undefined
 
     if (!device) {
-      console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
-        backend: backend?.constructor?.name ?? 'unknown',
-        rendererType: (gl as any).constructor?.name ?? 'unknown',
-      })
       return
     }
-
-    console.log('[viewer] WebGPU device ready', {
-      label: device.label,
-      features: device.features ? Array.from(device.features) : [],
-    })
 
     device.lost.then((info: WebGPUDeviceLossInfo) => {
       console.error(
@@ -167,24 +158,12 @@ const Viewer: React.FC<ViewerProps> = ({
           const canvas = props.canvas
           const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
           if (cached) return cached
-          // Surface the env we're about to ask WebGPU for — catches "no
-          // navigator.gpu" / "adapter request failed" silently failing in
-          // mobile WebViews where WebGPU is gated behind flags.
-          const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator
-          console.log('[viewer] Creating WebGPURenderer', {
-            hasNavigatorGPU: hasGpu,
-            ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
-          })
           const promise = (async () => {
             try {
               const renderer = new THREE.WebGPURenderer(props as any)
               renderer.toneMapping = THREE.ACESFilmicToneMapping
               renderer.toneMappingExposure = 0.9
               await renderer.init()
-              console.log('[viewer] WebGPURenderer ready', {
-                backend: (renderer as any).backend?.constructor?.name,
-                isWebGPU: (renderer as any).isWebGPURenderer === true,
-              })
               return renderer
             } catch (err) {
               // Drop the failed promise from the cache so a future Canvas
@@ -228,6 +207,8 @@ const Viewer: React.FC<ViewerProps> = ({
         {/* Core systems */}
         <CeilingSystem />
         <DoorAnimationSystem />
+        <ElevatorAnimationSystem />
+        <ElevatorOpeningSystem />
         <WindowAnimationSystem />
         <DoorSystem />
         <FenceSystem />

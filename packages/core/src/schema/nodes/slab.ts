@@ -19,7 +19,7 @@ export const SlabNode = BaseNode.extend({
   Slab node - used to represent a slab/floor in the building
   - polygon: array of [x, z] points defining the slab boundary
   - holes: array of [x, z] polygons representing cutouts in the slab
-  - holeMetadata: metadata parallel to holes, used to preserve manual and stair-managed cutouts
+  - holeMetadata: metadata parallel to holes, used to preserve manual and auto-managed cutouts
   - elevation: elevation in meters
   - autoFromWalls: whether the slab is automatically generated from a closed wall loop
   `,

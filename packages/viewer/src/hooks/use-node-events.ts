@@ -7,6 +7,8 @@ import {
   type ColumnNode,
   type DoorEvent,
   type DoorNode,
+  type ElevatorEvent,
+  type ElevatorNode,
   type EventSuffix,
   emitter,
   type FenceEvent,
@@ -57,6 +59,7 @@ type NodeConfig = {
   'stair-segment': { node: StairSegmentNode; event: StairSegmentEvent }
   window: { node: WindowNode; event: WindowEvent }
   door: { node: DoorNode; event: DoorEvent }
+  elevator: { node: ElevatorNode; event: ElevatorEvent }
 }
 
 type NodeType = keyof NodeConfig

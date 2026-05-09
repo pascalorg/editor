@@ -3,6 +3,7 @@ import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
 import { ColumnNode } from './nodes/column'
 import { DoorNode } from './nodes/door'
+import { ElevatorNode } from './nodes/elevator'
 import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
 import { ItemNode } from './nodes/item'
@@ -22,6 +23,7 @@ import { ZoneNode } from './nodes/zone'
 export const AnyNode = z.discriminatedUnion('type', [
   SiteNode,
   BuildingNode,
+  ElevatorNode,
   LevelNode,
   ColumnNode,
   WallNode,

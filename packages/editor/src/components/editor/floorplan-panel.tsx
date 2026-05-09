@@ -14175,7 +14175,10 @@ export function FloorplanPanel() {
       }
 
       const currentHoles = slab.holes ?? []
-      if (!currentHoles[holeIndex] || slab.holeMetadata?.[holeIndex]?.source === 'stair') {
+      if (
+        !currentHoles[holeIndex] ||
+        (slab.holeMetadata?.[holeIndex]?.source ?? 'manual') !== 'manual'
+      ) {
         return
       }
 
@@ -14310,7 +14313,10 @@ export function FloorplanPanel() {
       }
 
       const currentHoles = ceiling.holes ?? []
-      if (!currentHoles[holeIndex] || ceiling.holeMetadata?.[holeIndex]?.source === 'stair') {
+      if (
+        !currentHoles[holeIndex] ||
+        (ceiling.holeMetadata?.[holeIndex]?.source ?? 'manual') !== 'manual'
+      ) {
         return
       }
 

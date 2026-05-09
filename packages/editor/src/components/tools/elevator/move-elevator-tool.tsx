@@ -1,0 +1,209 @@
+import {
+  type AnyNodeId,
+  type ElevatorNode,
+  ElevatorNode as ElevatorNodeSchema,
+  emitter,
+  type GridEvent,
+  sceneRegistry,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
+import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
+import { CursorSphere } from '../shared/cursor-sphere'
+
+function stripMoveMetadata(metadata: ElevatorNode['metadata']) {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+    return metadata
+  }
+
+  const nextMeta = { ...(metadata as Record<string, unknown>) }
+  delete nextMeta.isNew
+  delete nextMeta.isTransient
+  return nextMeta as ElevatorNode['metadata']
+}
+
+export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
+  const previousGridPosRef = useRef<[number, number] | null>(null)
+  const previewPositionRef = useRef<ElevatorNode['position']>([
+    movingNode.position[0],
+    movingNode.position[1],
+    movingNode.position[2],
+  ])
+  const [cursorPosition, setCursorPosition] = useState<[number, number, number]>(() => [
+    movingNode.position[0],
+    movingNode.position[1],
+    movingNode.position[2],
+  ])
+
+  const exitMoveMode = useCallback(() => {
+    useEditor.getState().setMovingNode(null)
+  }, [])
+
+  useEffect(() => {
+    useScene.temporal.getState().pause()
+    const movingNodeId = (movingNode as { id?: ElevatorNode['id'] }).id
+
+    const meta =
+      typeof movingNode.metadata === 'object' && movingNode.metadata !== null
+        ? (movingNode.metadata as Record<string, unknown>)
+        : {}
+    const isNew = !!meta.isNew
+    const committedMeta = stripMoveMetadata(movingNode.metadata)
+    const original = {
+      position: [...movingNode.position] as ElevatorNode['position'],
+      rotation: movingNode.rotation,
+      metadata: movingNode.metadata,
+    }
+
+    let wasCommitted = false
+    let wasCancelled = false
+    let pendingRotation = movingNode.rotation
+
+    const applyPreview = (
+      position: ElevatorNode['position'],
+      rotation: ElevatorNode['rotation'],
+    ) => {
+      if (movingNodeId) {
+        useLiveTransforms.getState().set(movingNodeId, { position, rotation })
+      }
+
+      const object = movingNodeId ? sceneRegistry.nodes.get(movingNodeId) : null
+      if (object) {
+        object.position.set(position[0], position[1], position[2])
+        object.rotation.y = rotation
+      }
+    }
+
+    const resetObject = (
+      position: ElevatorNode['position'],
+      rotation: ElevatorNode['rotation'],
+    ) => {
+      const object = movingNodeId ? sceneRegistry.nodes.get(movingNodeId) : null
+      if (object) {
+        object.position.set(position[0], position[1], position[2])
+        object.rotation.y = rotation
+      }
+    }
+
+    const clearPreview = () => {
+      if (movingNodeId) {
+        useLiveTransforms.getState().clear(movingNodeId)
+      }
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const y = event.localPosition[1]
+
+      if (
+        previousGridPosRef.current &&
+        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
+      ) {
+        sfxEmitter.emit('sfx:grid-snap')
+      }
+
+      previousGridPosRef.current = [gridX, gridZ]
+      setCursorPosition([gridX, y, gridZ])
+      previewPositionRef.current = [gridX, movingNode.position[1], gridZ]
+      applyPreview(previewPositionRef.current, pendingRotation)
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      const gridX = Math.round(event.localPosition[0] * 2) / 2
+      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+
+      wasCommitted = true
+      clearPreview()
+      useScene.temporal.getState().resume()
+      if (movingNodeId && useScene.getState().nodes[movingNodeId as AnyNodeId]) {
+        useScene.getState().updateNode(movingNodeId as AnyNodeId, {
+          position: [gridX, movingNode.position[1], gridZ],
+          rotation: pendingRotation,
+          metadata: committedMeta,
+        })
+        useViewer.getState().setSelection({ selectedIds: [movingNodeId] })
+      } else if (movingNode.parentId) {
+        const elevator = ElevatorNodeSchema.parse({
+          ...movingNode,
+          id: undefined,
+          position: [gridX, movingNode.position[1], gridZ],
+          rotation: pendingRotation,
+          metadata: committedMeta,
+        })
+        useScene.getState().createNode(elevator, movingNode.parentId as AnyNodeId)
+        useViewer.getState().setSelection({ selectedIds: [elevator.id] })
+      }
+
+      sfxEmitter.emit('sfx:item-place')
+      exitMoveMode()
+      event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onCancel = () => {
+      wasCancelled = true
+      clearPreview()
+      if (isNew && movingNodeId) {
+        useScene.getState().deleteNode(movingNodeId as AnyNodeId)
+      } else {
+        if (movingNodeId) {
+          useScene.getState().updateNode(movingNodeId as AnyNodeId, {
+            position: original.position,
+            rotation: original.rotation,
+            metadata: original.metadata,
+          })
+        }
+      }
+      resetObject(original.position, original.rotation)
+      useScene.temporal.getState().resume()
+      markToolCancelConsumed()
+      exitMoveMode()
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      const ROTATION_STEP = Math.PI / 4
+      let rotationDelta = 0
+      if (event.key === 'r' || event.key === 'R') rotationDelta = ROTATION_STEP
+      else if (event.key === 't' || event.key === 'T') rotationDelta = -ROTATION_STEP
+
+      if (rotationDelta !== 0) {
+        event.preventDefault()
+        sfxEmitter.emit('sfx:item-rotate')
+        pendingRotation += rotationDelta
+        applyPreview(previewPositionRef.current, pendingRotation)
+      }
+    }
+
+    emitter.on('grid:move', onGridMove)
+    emitter.on('grid:click', onGridClick)
+    emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      clearPreview()
+      if (!(wasCommitted || wasCancelled || isNew) && movingNodeId) {
+        useScene.getState().updateNode(movingNodeId as AnyNodeId, {
+          position: original.position,
+          rotation: original.rotation,
+          metadata: original.metadata,
+        })
+        resetObject(original.position, original.rotation)
+      }
+      useScene.temporal.getState().resume()
+      emitter.off('grid:move', onGridMove)
+      emitter.off('grid:click', onGridClick)
+      emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [movingNode, exitMoveMode])
+
+  return <CursorSphere position={cursorPosition} showTooltip={false} />
+}

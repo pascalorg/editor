@@ -1,8 +1,9 @@
 import { z } from 'zod'
 
 export const SurfaceHoleMetadata = z.object({
-  source: z.enum(['manual', 'stair']).default('manual'),
+  source: z.enum(['manual', 'stair', 'elevator']).default('manual'),
   stairId: z.string().optional(),
+  elevatorId: z.string().optional(),
 })
 
 export type SurfaceHoleMetadata = z.infer<typeof SurfaceHoleMetadata>

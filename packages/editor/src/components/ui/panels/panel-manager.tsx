@@ -7,6 +7,7 @@ import {
   type CeilingNode,
   type ColumnNode,
   type DoorNode,
+  type ElevatorNode,
   type FenceNode,
   type ItemNode,
   type RoofNode,
@@ -26,6 +27,7 @@ import useEditor from '../../../store/use-editor'
 import { CeilingPanel } from './ceiling-panel'
 import { ColumnPanel } from './column-panel'
 import { DoorPanel } from './door-panel'
+import { ElevatorPanel } from './elevator-panel'
 import { FencePanel } from './fence-panel'
 import { ItemPanel } from './item-panel'
 import { MobilePanelSheet } from './mobile-panel-sheet'
@@ -46,6 +48,7 @@ type MovableNode =
   | ItemNode
   | WindowNode
   | DoorNode
+  | ElevatorNode
   | CeilingNode
   | ColumnNode
   | SlabNode
@@ -61,6 +64,7 @@ const MOVABLE_TYPES = new Set<string>([
   'item',
   'window',
   'door',
+  'elevator',
   'ceiling',
   'column',
   'slab',
@@ -102,6 +106,8 @@ function panelForType(type: string | null) {
       return <FencePanel />
     case 'door':
       return <DoorPanel />
+    case 'elevator':
+      return <ElevatorPanel />
     case 'window':
       return <WindowPanel />
     default:
@@ -264,6 +270,8 @@ export function PanelManager() {
         return <FencePanel />
       case 'door':
         return <DoorPanel />
+      case 'elevator':
+        return <ElevatorPanel />
       case 'window':
         return <WindowPanel />
     }

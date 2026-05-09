@@ -13,6 +13,7 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   slab: { icon: '/icons/floor.png', label: 'Slab' },
   ceiling: { icon: '/icons/ceiling.png', label: 'Ceiling' },
   column: { icon: '/icons/column.png', label: 'Column' },
+  elevator: { icon: '/icons/elevator.svg', label: 'Elevator' },
   fence: { icon: '/icons/fence.png', label: 'Fence' },
   roof: { icon: '/icons/roof.png', label: 'Roof' },
   'roof-segment': { icon: '/icons/roof.png', label: 'Roof segment' },

@@ -12,6 +12,7 @@ import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { ColumnTool } from './column/column-tool'
 import { DoorTool } from './door/door-tool'
+import { ElevatorTool } from './elevator/elevator-tool'
 import { CurveFenceTool } from './fence/curve-fence-tool'
 import { FenceTool } from './fence/fence-tool'
 import { MoveFenceEndpointTool } from './fence/move-fence-endpoint-tool'
@@ -41,6 +42,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     slab: SlabTool,
     ceiling: CeilingTool,
     roof: RoofTool,
+    elevator: ElevatorTool,
     stair: StairTool,
     door: DoorTool,
     item: ItemTool,

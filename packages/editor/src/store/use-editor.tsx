@@ -7,6 +7,7 @@ import {
   type CeilingNode,
   type ColumnNode,
   type DoorNode,
+  type ElevatorNode,
   type FenceNode,
   type ItemNode,
   type LevelNode,
@@ -58,6 +59,7 @@ export type StructureTool =
   | 'ceiling'
   | 'roof'
   | 'column'
+  | 'elevator'
   | 'stair'
   | 'item'
   | 'zone'
@@ -138,6 +140,7 @@ type EditorState = {
     | ItemNode
     | WindowNode
     | DoorNode
+    | ElevatorNode
     | FenceNode
     | CeilingNode
     | ColumnNode
@@ -155,6 +158,7 @@ type EditorState = {
       | ItemNode
       | WindowNode
       | DoorNode
+      | ElevatorNode
       | FenceNode
       | CeilingNode
       | ColumnNode
@@ -449,9 +453,14 @@ export function selectDefaultBuildingAndLevel() {
     })
     if (level0Id) {
       viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
-    } else if (buildingNode.children[0]) {
+    } else {
       // Fallback to first level if level 0 doesn't exist
-      viewer.setSelection({ levelId: buildingNode.children[0] as LevelNode['id'] })
+      const firstLevelId = buildingNode.children.find(
+        (childId) => scene.nodes[childId]?.type === 'level',
+      )
+      if (firstLevelId) {
+        viewer.setSelection({ levelId: firstLevelId as LevelNode['id'] })
+      }
     }
   }
 }
@@ -580,6 +589,7 @@ const useEditor = create<EditorState>()(
         | ItemNode
         | WindowNode
         | DoorNode
+        | ElevatorNode
         | FenceNode
         | CeilingNode
         | SlabNode
