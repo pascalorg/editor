@@ -19,6 +19,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { useHomeAssistantEditorStore } from '@pascal-app/home-assistant/editor'
 import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -193,6 +194,8 @@ function MobilePanelLayer({
 export function PanelManager() {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const interactiveOverlayActive = useViewer((s) => s.interactiveOverlayActive)
+  const homeAssistantPairingResourceId = useHomeAssistantEditorStore((s) => s.pairingResourceId)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const isPaintPanelOpen = useEditor((s) => s.isPaintPanelOpen)
   const mode = useEditor((s) => s.mode)
@@ -226,6 +229,10 @@ export function PanelManager() {
   // Show reference panel if a reference is selected
   if (selectedReferenceId) {
     return <ReferencePanel />
+  }
+
+  if (interactiveOverlayActive || homeAssistantPairingResourceId) {
+    return null
   }
 
   if (

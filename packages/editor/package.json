@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx"
+    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./home-assistant": "./src/components/editor/home-assistant-interactive-system.tsx",
+    "./home-assistant-runtime": "./src/components/editor/home-assistant-interactive-system.tsx"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
@@ -21,6 +23,7 @@
     "three": "^0.184"
   },
   "dependencies": {
+    "@pascal-app/home-assistant": "*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

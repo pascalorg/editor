@@ -94,6 +94,18 @@ function findLevelBuildingId(nodes: Record<AnyNodeId, AnyNode>, levelId: AnyNode
   return undefined
 }
 
+type LevelDuplicateCreateOps = {
+  createOps: Array<{
+    node: AnyNode
+    parentId: AnyNodeId | undefined
+  }>
+  newLevelId: AnyNodeId
+  shiftedLevels: Array<{
+    id: LevelNode['id']
+    level: number
+  }>
+}
+
 export function buildLevelDuplicateCreateOps({
   nodes,
   level,
@@ -104,7 +116,7 @@ export function buildLevelDuplicateCreateOps({
   level: LevelNode
   levels: LevelNode[]
   preset: LevelDuplicatePreset
-}) {
+}): LevelDuplicateCreateOps {
   const { clonedNodes, newLevelId } = cloneLevelSubtree(nodes, level.id)
   const parentBuildingId =
     (level.parentId as AnyNodeId | null) ?? findLevelBuildingId(nodes, level.id)

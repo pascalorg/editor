@@ -202,9 +202,9 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
           transparent
         />
       </mesh>
-      <line geometry={previewOutlineGeometry} position={[0, (node.height ?? 2.5) + 0.02, 0]}>
+      <threeLine geometry={previewOutlineGeometry} position={[0, (node.height ?? 2.5) + 0.02, 0]}>
         <lineBasicMaterial color="#ffffff" depthWrite={false} opacity={0.95} transparent />
-      </line>
+      </threeLine>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
     </group>
   )

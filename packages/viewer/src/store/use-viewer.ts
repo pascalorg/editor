@@ -1,6 +1,12 @@
 'use client'
 
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import type { Object3D } from 'three'
 
 import { create } from 'zustand'
@@ -22,11 +28,15 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  nodeEventsSuppressed: boolean
+  nodeEventsSuppressedUntil: number
+  suppressNodeEvents: (durationMs?: number) => void
+  interactiveOverlayActive: boolean
+  setInteractiveOverlayActive: (active: boolean) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
-
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
@@ -84,6 +94,15 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      nodeEventsSuppressed: false,
+      nodeEventsSuppressedUntil: 0,
+      suppressNodeEvents: (durationMs = 250) =>
+        set({
+          nodeEventsSuppressedUntil:
+            (typeof performance !== 'undefined' ? performance.now() : Date.now()) + durationMs,
+        }),
+      interactiveOverlayActive: false,
+      setInteractiveOverlayActive: (interactiveOverlayActive) => set({ interactiveOverlayActive }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),

@@ -1,4 +1,6 @@
 export { default as Viewer } from './components/viewer'
+export { Html as ViewerHtml } from '@react-three/drei'
+export { useFrame as useViewerFrame } from '@react-three/fiber'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,

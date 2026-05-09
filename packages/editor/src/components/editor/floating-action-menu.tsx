@@ -19,6 +19,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { useHomeAssistantItemControl } from '@pascal-app/home-assistant/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
@@ -398,6 +399,7 @@ export function FloatingActionMenu() {
     },
     [node?.type, selectedId, setSelection],
   )
+  const homeAssistantControl = useHomeAssistantItemControl(node?.type === 'item' ? node : null)
 
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
@@ -418,26 +420,33 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[100, 0]}
         >
-          <NodeActionMenu
-            onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-            onCurve={
-              node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
-                ? handleCurve
-                : undefined
-            }
-            onDelete={handleDelete}
-            onDuplicate={
-              node &&
-              node.type !== 'spawn' &&
-              !DELETE_ONLY_TYPES.includes(node.type) &&
-              !HOLE_TYPES.includes(node.type)
-                ? handleDuplicate
-                : undefined
-            }
-            onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-          />
+          {homeAssistantControl.panel ? (
+            homeAssistantControl.panel
+          ) : (
+            <NodeActionMenu
+              extraActionIcon={homeAssistantControl.actionIcon}
+              extraActionLabel={homeAssistantControl.actionLabel}
+              onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+              onCurve={
+                node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
+                  ? handleCurve
+                  : undefined
+              }
+              onDelete={handleDelete}
+              onDuplicate={
+                node &&
+                node.type !== 'spawn' &&
+                !DELETE_ONLY_TYPES.includes(node.type) &&
+                !HOLE_TYPES.includes(node.type)
+                  ? handleDuplicate
+                  : undefined
+              }
+              onExtraAction={homeAssistantControl.onAction}
+              onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+            />
+          )}
         </Html>
       </group>
       {(node?.type === 'wall' || node?.type === 'fence') && (

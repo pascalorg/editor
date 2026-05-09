@@ -1057,6 +1057,7 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
+      if (useViewer.getState().interactiveOverlayActive) return
 
       const node = event.node
       let currentPhase = useEditor.getState().phase
@@ -1179,6 +1180,7 @@ export const SelectionManager = () => {
     })
 
     const onGridClick = () => {
+      if (useViewer.getState().interactiveOverlayActive) return
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
       const { phase, structureLayer } = useEditor.getState()
@@ -1208,6 +1210,7 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const node = event.node
       const currentPhase = useEditor.getState().phase
 
@@ -1242,6 +1245,7 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const node = event.node
       const currentPhase = useEditor.getState().phase
 

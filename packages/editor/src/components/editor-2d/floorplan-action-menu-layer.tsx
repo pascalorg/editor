@@ -1,6 +1,11 @@
 'use client'
 
-import { memo, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  type ComponentProps,
+  memo,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from '../editor/node-action-menu'
 
@@ -10,13 +15,18 @@ type SvgPoint = {
 }
 
 export type FloorplanActionMenuHandler = (event: ReactMouseEvent<HTMLButtonElement>) => void
+type NodeActionMenuProps = ComponentProps<typeof NodeActionMenu>
 
 export type FloorplanActionMenuEntry = {
   position: SvgPoint | null
+  customContent?: ReactNode
+  extraActionIcon?: NodeActionMenuProps['extraActionIcon']
+  extraActionLabel?: string
   onDelete: FloorplanActionMenuHandler
   onMove: FloorplanActionMenuHandler
   onAddHole?: FloorplanActionMenuHandler
   onDuplicate?: FloorplanActionMenuHandler
+  onExtraAction?: FloorplanActionMenuHandler
 }
 
 type FloorplanActionMenuLayerProps = {
@@ -79,14 +89,21 @@ export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
               transform: `translate(-50%, calc(-100% - ${offsetY}px))`,
             }}
           >
-            <NodeActionMenu
-              onAddHole={entry.onAddHole}
-              onDelete={entry.onDelete}
-              onDuplicate={entry.onDuplicate}
-              onMove={entry.onMove}
-              onPointerDown={(event) => event.stopPropagation()}
-              onPointerUp={(event) => event.stopPropagation()}
-            />
+            {entry.customContent ? (
+              entry.customContent
+            ) : (
+              <NodeActionMenu
+                extraActionIcon={entry.extraActionIcon}
+                extraActionLabel={entry.extraActionLabel}
+                onAddHole={entry.onAddHole}
+                onDelete={entry.onDelete}
+                onDuplicate={entry.onDuplicate}
+                onExtraAction={entry.onExtraAction}
+                onMove={entry.onMove}
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => event.stopPropagation()}
+              />
+            )}
           </div>
         ) : null,
       )}

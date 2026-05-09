@@ -44,6 +44,7 @@ import {
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
+import { useHomeAssistantItemControl } from '@pascal-app/home-assistant/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
@@ -8556,6 +8557,7 @@ export function FloorplanPanel() {
 
     return floorplanSpawnEntries.find(({ spawn }) => spawn.id === selectedIds[0]) ?? null
   }, [floorplanSpawnEntries, selectedIds])
+  const homeAssistantControl = useHomeAssistantItemControl(selectedItemEntry?.item)
   const selectedItemClearanceMeasurements = useMemo(() => {
     if (!selectedItemEntry) {
       return [] as LinearMeasurementOverlay[]
@@ -16130,7 +16132,11 @@ export function FloorplanPanel() {
             position: selectedItemActionMenuPosition,
             onDelete: handleSelectedItemDelete,
             onDuplicate: handleSelectedItemDuplicate,
+            onExtraAction: homeAssistantControl.onAction,
             onMove: handleSelectedItemMove,
+            extraActionIcon: homeAssistantControl.actionIcon,
+            extraActionLabel: homeAssistantControl.actionLabel,
+            customContent: homeAssistantControl.panel,
           }}
           opening={{
             position: selectedOpeningActionMenuPosition,

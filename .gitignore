@@ -15,6 +15,7 @@ package-lock.json
 
 # Testing
 coverage
+test-results/
 
 # Turbo
 .turbo
@@ -30,7 +31,9 @@ supabase/.temp/
 .next/
 out/
 build
-dist
+**/dist/
+!/dist/
+!/dist/pascal-viewer-card.js
 *.tsbuildinfo
 
 

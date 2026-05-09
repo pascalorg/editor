@@ -2,12 +2,15 @@
 
 import { Icon } from '@iconify/react'
 import { Copy, Move, Spline, Trash2 } from 'lucide-react'
-import type { MouseEventHandler, PointerEventHandler } from 'react'
+import type { MouseEventHandler, PointerEventHandler, ReactNode } from 'react'
 
 type NodeActionMenuProps = {
+  extraActionIcon?: ReactNode
+  extraActionLabel?: string
   onAddHole?: MouseEventHandler<HTMLButtonElement>
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
+  onExtraAction?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
   onCurve?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
@@ -17,9 +20,12 @@ type NodeActionMenuProps = {
 }
 
 export function NodeActionMenu({
+  extraActionIcon,
+  extraActionLabel,
   onAddHole,
   onDelete,
   onDuplicate,
+  onExtraAction,
   onMove,
   onCurve,
   onPointerDown,
@@ -66,6 +72,18 @@ export function NodeActionMenu({
           type="button"
         >
           <Copy className="h-4 w-4" />
+        </button>
+      )}
+      {onExtraAction && extraActionLabel && (
+        <button
+          aria-label={extraActionLabel}
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          data-testid="node-action-extra"
+          onClick={onExtraAction}
+          title={extraActionLabel}
+          type="button"
+        >
+          {extraActionIcon}
         </button>
       )}
       {onAddHole && (

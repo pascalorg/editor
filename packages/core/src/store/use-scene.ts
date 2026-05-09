@@ -5,7 +5,11 @@ import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
-import { generateCollectionId } from '../schema/collections'
+import {
+  generateCollectionId,
+  getCollectionAttachmentNodeCollectionId,
+  normalizeCollection,
+} from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
@@ -32,6 +36,35 @@ function getEnumValue<T extends readonly string[]>(
 
 function getNullableString(value: unknown) {
   return typeof value === 'string' ? value : null
+}
+
+function normalizeInputRootNodeIds(
+  rootNodeIds: unknown,
+  nodes: Record<AnyNodeId, AnyNode>,
+): AnyNodeId[] {
+  if (!Array.isArray(rootNodeIds)) {
+    return []
+  }
+
+  const seen = new Set<AnyNodeId>()
+  return rootNodeIds.flatMap((nodeId) => {
+    if (typeof nodeId !== 'string') {
+      return []
+    }
+
+    const typedNodeId = nodeId as AnyNodeId
+    const node = nodes[typedNodeId]
+    if (!node || getCollectionAttachmentNodeCollectionId(node)) {
+      return []
+    }
+
+    if (seen.has(typedNodeId)) {
+      return []
+    }
+
+    seen.add(typedNodeId)
+    return [typedNodeId]
+  })
 }
 
 function getStringArray(value: unknown) {
@@ -410,6 +443,10 @@ function collectReachableNodeIds(
   return reachable
 }
 
+function isDetachedDurableNode(node: AnyNode) {
+  return (node as { type?: string }).type === 'home-assistant-binding'
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -431,7 +468,11 @@ export type SceneState = {
   loadScene: () => void
   clearScene: () => void
   unloadScene: () => void
-  setScene: (nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]) => void
+  setScene: (
+    nodes: Record<AnyNodeId, AnyNode>,
+    rootNodeIds: AnyNodeId[],
+    collections?: Record<CollectionId, Collection>,
+  ) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -457,6 +498,110 @@ export type SceneState = {
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>>>
+}
+
+function getCollectionIdsReferencedByAttachmentNodes(nodes: Record<AnyNodeId, AnyNode>) {
+  const referencedCollectionIds = new Set<CollectionId>()
+
+  for (const node of Object.values(nodes)) {
+    const collectionId = getCollectionAttachmentNodeCollectionId(node)
+    if (collectionId) {
+      referencedCollectionIds.add(collectionId)
+    }
+  }
+
+  return referencedCollectionIds
+}
+
+function normalizeCollectionsRecord(
+  collections: Record<CollectionId, Collection> | undefined,
+  nodes: Record<AnyNodeId, AnyNode>,
+) {
+  const referencedCollectionIds = getCollectionIdsReferencedByAttachmentNodes(nodes)
+
+  const normalizedCollections = Object.fromEntries(
+    Object.entries(collections ?? {}).flatMap(([id, collection]) => {
+      const normalizedNodeIds = Array.from(
+        new Set(collection.nodeIds.filter((nodeId) => Boolean(nodes[nodeId]))),
+      ) as AnyNodeId[]
+
+      if (normalizedNodeIds.length === 0 && !referencedCollectionIds.has(id as CollectionId)) {
+        return []
+      }
+
+      return [
+        [id as CollectionId, normalizeCollection({ ...collection, nodeIds: normalizedNodeIds })],
+      ]
+    }),
+  ) as Record<CollectionId, Collection>
+
+  if (Object.keys(normalizedCollections).length === 0) {
+    return normalizedCollections
+  }
+
+  for (const [collectionId, collection] of Object.entries(normalizedCollections)) {
+    for (const nodeId of collection.nodeIds) {
+      const node = nodes[nodeId]
+      if (!(node && node.type === 'item')) {
+        continue
+      }
+
+      const existingIds = Array.isArray(node.collectionIds) ? node.collectionIds : []
+      if (existingIds.includes(collectionId as CollectionId)) {
+        continue
+      }
+
+      nodes[nodeId] = {
+        ...node,
+        collectionIds: [...existingIds, collectionId as CollectionId],
+      } as AnyNode
+    }
+  }
+
+  return normalizedCollections
+}
+
+function normalizeCollectionAttachmentNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  collections: Record<CollectionId, Collection>,
+  rootNodeIds: AnyNodeId[],
+) {
+  const nextNodes = { ...nodes }
+  const nextRootNodeIds = [...rootNodeIds]
+  let changed = false
+
+  for (const [storedNodeId, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
+    const collectionId = getCollectionAttachmentNodeCollectionId(node)
+    if (!collectionId) {
+      continue
+    }
+
+    if (node.id !== storedNodeId) {
+      nextNodes[storedNodeId] = { ...node, id: storedNodeId } as AnyNode
+      changed = true
+    }
+
+    const resources = (node as { resources?: unknown[] }).resources ?? []
+    const hasCollection = Boolean(collections[collectionId])
+    const hasResources = resources.length > 0
+
+    if (!(hasCollection && hasResources)) {
+      delete nextNodes[storedNodeId]
+      const rootIndex = nextRootNodeIds.indexOf(storedNodeId)
+      if (rootIndex >= 0) {
+        nextRootNodeIds.splice(rootIndex, 1)
+      }
+      changed = true
+      continue
+    }
+
+    if (!nextRootNodeIds.includes(storedNodeId)) {
+      nextRootNodeIds.push(storedNodeId)
+      changed = true
+    }
+  }
+
+  return changed ? { nodes: nextNodes, rootNodeIds: nextRootNodeIds } : { nodes, rootNodeIds }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -492,14 +637,14 @@ const useScene: UseSceneStore = create<SceneState>()(
         get().loadScene() // Default scene
       },
 
-      setScene: (nodes, rootNodeIds) => {
+      setScene: (nodes, rootNodeIds, collections) => {
         // Apply backward compatibility migrations
         const patchedNodes = migrateNodes(nodes)
 
         // Remove orphans: nodes whose parentId points to a non-existent node
         const cleanedNodes = { ...patchedNodes }
         for (const node of Object.values(cleanedNodes)) {
-          if (node.parentId && !cleanedNodes[node.parentId]) {
+          if (!isDetachedDurableNode(node) && node.parentId && !cleanedNodes[node.parentId]) {
             console.warn(
               '[Scene] Removing orphan node',
               node.id,
@@ -511,24 +656,36 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
-        const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
-        const reachableNodeIds = collectReachableNodeIds(cleanedNodes, normalizedRootNodeIds)
+        const inputRootNodeIds = normalizeInputRootNodeIds(rootNodeIds, cleanedNodes)
+        const normalizedCollections = normalizeCollectionsRecord(collections, cleanedNodes)
+        const normalizedScene = normalizeCollectionAttachmentNodes(
+          cleanedNodes,
+          normalizedCollections,
+          inputRootNodeIds,
+        )
+        const normalizedRootNodeIds = normalizeRootNodeIds(
+          normalizedScene.nodes,
+          normalizedScene.rootNodeIds,
+        )
+        const normalizedNodes = { ...normalizedScene.nodes }
+        const reachableNodeIds = collectReachableNodeIds(normalizedNodes, normalizedRootNodeIds)
         if (normalizedRootNodeIds.length > 0) {
-          for (const node of Object.values(cleanedNodes)) {
+          for (const node of Object.values(normalizedNodes)) {
             if (reachableNodeIds.has(node.id as AnyNodeId)) continue
+            if (isDetachedDurableNode(node)) continue
             console.warn('[Scene] Removing unreachable node', node.id)
-            delete cleanedNodes[node.id]
+            delete normalizedNodes[node.id]
           }
         }
 
         set({
-          nodes: cleanedNodes,
+          nodes: normalizedNodes,
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
-          collections: {},
+          collections: normalizedCollections,
         })
         // Mark all nodes as dirty to trigger re-validation
-        Object.values(cleanedNodes).forEach((node) => {
+        Object.values(normalizedNodes).forEach((node) => {
           get().markDirty(node.id)
         })
       },

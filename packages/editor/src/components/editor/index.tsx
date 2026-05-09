@@ -7,7 +7,11 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  dispatchHomeAssistantEditorDeviceAction,
+  HomeAssistantEditorSystems,
+} from '@pascal-app/home-assistant/editor'
+import { type HoverStyles, useViewer, Viewer } from '@pascal-app/viewer'
 import {
   memo,
   type ReactNode,
@@ -43,6 +47,7 @@ import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-pa
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
 import { HelperManager } from '../ui/helpers/helper-manager'
+import { HomeAssistantPanel } from '../ui/panels/home-assistant-panel'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -603,7 +608,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
-      {isFirstPersonMode && <InteractiveSystem />}
+      <HomeAssistantEditorSystems onDeviceAction={dispatchHomeAssistantEditorDeviceAction} />
     </>
   )
 })
@@ -1074,7 +1079,10 @@ export default function Editor({
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
-      <InteractiveSystem />
+      <HomeAssistantEditorSystems
+        firstPerson
+        onDeviceAction={dispatchHomeAssistantEditorDeviceAction}
+      />
     </Viewer>
   )
 
@@ -1144,6 +1152,11 @@ export default function Editor({
                   {!isVersionPreviewMode && (
                     <div className="pointer-events-auto">
                       <PanelManager />
+                    </div>
+                  )}
+                  {!isVersionPreviewMode && (
+                    <div className="pointer-events-auto">
+                      <HomeAssistantPanel />
                     </div>
                   )}
                   <div className="pointer-events-auto">
@@ -1217,6 +1230,9 @@ export default function Editor({
               </div>
               <div className="pointer-events-auto">
                 <PanelManager />
+              </div>
+              <div className="pointer-events-auto">
+                <HomeAssistantPanel />
               </div>
               <div className="pointer-events-auto">
                 <HelperManager />

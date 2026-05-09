@@ -1,6 +1,10 @@
-import type { NextConfig } from 'next'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const nextConfig: NextConfig = {
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -12,12 +16,21 @@ const nextConfig: NextConfig = {
     '@pascal-app/mcp',
   ],
   turbopack: {
+    root: path.resolve(__dirname, '../..'),
     resolveAlias: {
-      react: './node_modules/react',
-      three: './node_modules/three',
       '@react-three/fiber': './node_modules/@react-three/fiber',
       '@react-three/drei': './node_modules/@react-three/drei',
     },
+  },
+  webpack: (config) => {
+    config.resolve ??= {}
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      '@react-three/fiber': path.resolve(__dirname, 'node_modules/@react-three/fiber'),
+      '@react-three/drei': path.resolve(__dirname, 'node_modules/@react-three/drei'),
+    }
+
+    return config
   },
   experimental: {
     serverActions: {

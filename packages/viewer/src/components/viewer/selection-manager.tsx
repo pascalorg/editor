@@ -296,6 +296,7 @@ export const SelectionManager = () => {
 
   useEffect(() => {
     const onEnter = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const strategy = getStrategy()
       if (!strategy) return
       if (strategy.isValid(event.node)) {
@@ -309,6 +310,7 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const strategy = getStrategy()
       if (!strategy) return
       if (strategy.isValid(event.node)) {
@@ -318,6 +320,7 @@ export const SelectionManager = () => {
     }
 
     const onClick = (event: NodeEvent) => {
+      if (useViewer.getState().interactiveOverlayActive) return
       const strategy = getStrategy()
       if (!strategy) return
       if (!strategy.isValid(event.node)) return
@@ -379,6 +382,7 @@ const PointerMissedHandler = ({
     const handleClick = (event: MouseEvent) => {
       // Only handle left clicks
       if (useViewer.getState().cameraDragging) return
+      if (useViewer.getState().interactiveOverlayActive) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers

@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
+import { useHomeAssistantEditorStore } from '@pascal-app/home-assistant/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
   Check,
@@ -11,6 +12,7 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  HouseWifi,
   Moon,
   Sun,
 } from 'lucide-react'
@@ -393,6 +395,7 @@ function PreviewButton() {
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          aria-label="Preview mode"
           className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
           onClick={() => useEditor.getState().setPreviewMode(true)}
           type="button"
@@ -407,6 +410,28 @@ function PreviewButton() {
 }
 
 // ── Composed toolbar sections ───────────────────────────────────────────────
+
+function SmartHomeButton() {
+  const isSmartHomePanelOpen = useHomeAssistantEditorStore((s) => s.isPanelOpen)
+  const setSmartHomePanelOpen = useHomeAssistantEditorStore((s) => s.setPanelOpen)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          aria-label="Open smart home panel"
+          aria-pressed={isSmartHomePanelOpen}
+          className={cn(TOOLBAR_BTN, isSmartHomePanelOpen && 'bg-white/10 text-foreground/90')}
+          onClick={() => setSmartHomePanelOpen(!isSmartHomePanelOpen)}
+          type="button"
+        >
+          <HouseWifi className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Smart Home</TooltipContent>
+    </Tooltip>
+  )
+}
 
 export function ViewerToolbarLeft() {
   return (
@@ -430,6 +455,7 @@ export function ViewerToolbarRight() {
       <CameraModeToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
+      <SmartHomeButton />
       <PreviewButton />
     </div>
   )

@@ -151,10 +151,11 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   }, [scene])
 
   const interactive = interactiveRef.current
-  const animEffect =
-    interactive?.effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
-  const lightEffects =
-    interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
+  const controls = interactive?.controls ?? []
+  const effects = interactive?.effects ?? []
+  const animEffect = effects.find((e): e is AnimationEffect => e.kind === 'animation') ?? null
+  const lightEffects = effects.filter((e): e is LightEffect => e.kind === 'light')
+  const renderScale = multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])
 
   return (
     <>
@@ -163,7 +164,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         position={node.asset.offset}
         ref={ref}
         rotation={node.asset.rotation}
-        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
+        scale={renderScale}
         {...handlers}
       />
       {animations.length > 0 && (
@@ -171,7 +172,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
           actions={actions}
           animations={animations}
           animEffect={animEffect}
-          interactive={interactive ?? null}
+          controls={controls}
           nodeId={node.id}
         />
       )}
@@ -191,13 +192,13 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 const ItemAnimation = ({
   nodeId,
   animEffect,
-  interactive,
+  controls,
   actions,
   animations,
 }: {
   nodeId: AnyNodeId
   animEffect: AnimationEffect | null
-  interactive: Interactive | null
+  controls: Interactive['controls']
   actions: Record<string, AnimationAction | null>
   animations: { name: string }[]
 }) => {
@@ -208,7 +209,7 @@ const ItemAnimation = ({
   const targetClip = useInteractive((s) => {
     const values = s.items[nodeId]?.controlValues
     if (!animEffect) return animations[0]?.name ?? null
-    const toggleIndex = interactive!.controls.findIndex((c) => c.kind === 'toggle')
+    const toggleIndex = controls.findIndex((c) => c.kind === 'toggle')
     const isOn = toggleIndex >= 0 ? Boolean(values?.[toggleIndex]) : false
     return isOn
       ? (animEffect.clips.on ?? null)

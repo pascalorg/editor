@@ -20,6 +20,11 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  nodeEventsSuppressed: boolean
+  nodeEventsSuppressedUntil: number
+  suppressNodeEvents: (durationMs?: number) => void
+  interactiveOverlayActive: boolean
+  setInteractiveOverlayActive: (active: boolean) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
