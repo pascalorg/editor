@@ -3,12 +3,21 @@ import {
   type ElevatorNode,
   useInteractive,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
-import type { Group } from 'three'
+import { type ThreeEvent, useFrame } from '@react-three/fiber'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  type Group,
+  type InstancedMesh,
+  MeshStandardMaterial,
+  Object3D,
+  TorusGeometry,
+} from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { resolveElevatorLevels } from '../../../systems/elevator/elevator-utils'
@@ -20,6 +29,177 @@ const CAB_COLOR = '#d7dde5'
 const GLASS_COLOR = '#f8fafc'
 const DOOR_COLOR = '#8e98a6'
 const PANEL_COLOR = '#1f2937'
+
+type Vector3Tuple = [number, number, number]
+
+const UNIT_BOX_GEOMETRY = new BoxGeometry(1, 1, 1)
+const BUTTON_FACE_GEOMETRY = new CylinderGeometry(1, 0.92, 1, 24)
+const BUTTON_GLOW_GEOMETRY = new CylinderGeometry(1.42, 1.42, 1, 24)
+const BUTTON_RING_GEOMETRY = new TorusGeometry(1.12, 0.12, 8, 24)
+const LABEL_MATRIX_DUMMY = new Object3D()
+const SHAFT_TOP_FRAME_CLEARANCE = 0.006
+
+const SHAFT_WALL_MATERIAL = new MeshStandardMaterial({
+  color: SHAFT_WALL_COLOR,
+  metalness: 0.08,
+  roughness: 0.56,
+})
+const SHAFT_SIDE_MATERIAL = new MeshStandardMaterial({
+  color: SHAFT_SIDE_COLOR,
+  metalness: 0.12,
+  roughness: 0.58,
+})
+const SHAFT_TRIM_MATERIAL = new MeshStandardMaterial({
+  color: SHAFT_TRIM_COLOR,
+  metalness: 0.2,
+  roughness: 0.38,
+})
+const CAB_MATERIAL = new MeshStandardMaterial({
+  color: CAB_COLOR,
+  metalness: 0.2,
+  roughness: 0.48,
+})
+const DOOR_MATERIAL = new MeshStandardMaterial({
+  color: DOOR_COLOR,
+  metalness: 0.34,
+  roughness: 0.34,
+})
+const GLASS_MATERIAL = new MeshStandardMaterial({
+  color: GLASS_COLOR,
+  depthWrite: false,
+  metalness: 0,
+  opacity: 0.2,
+  roughness: 0.08,
+  transparent: true,
+})
+const PANEL_MATERIAL = new MeshStandardMaterial({
+  color: PANEL_COLOR,
+  metalness: 0.32,
+  roughness: 0.36,
+})
+const LANDING_PANEL_MATERIAL = new MeshStandardMaterial({
+  color: PANEL_COLOR,
+  metalness: 0.25,
+  roughness: 0.4,
+})
+const INDICATOR_SCREEN_MATERIALS = {
+  active: new MeshStandardMaterial({
+    color: '#041f2f',
+    emissive: '#0ea5e9',
+    emissiveIntensity: 0.16,
+    metalness: 0.12,
+    roughness: 0.38,
+  }),
+  idle: new MeshStandardMaterial({
+    color: '#111827',
+    metalness: 0.12,
+    roughness: 0.38,
+  }),
+}
+const INDICATOR_GLYPH_MATERIALS = {
+  active: new MeshStandardMaterial({
+    color: '#38bdf8',
+    emissive: '#38bdf8',
+    emissiveIntensity: 0.36,
+    metalness: 0.08,
+    roughness: 0.32,
+  }),
+  idle: new MeshStandardMaterial({
+    color: '#94a3b8',
+    emissive: '#94a3b8',
+    emissiveIntensity: 0.18,
+    metalness: 0.08,
+    roughness: 0.32,
+  }),
+}
+const BUTTON_FACE_MATERIALS = {
+  active: new MeshStandardMaterial({
+    color: '#38bdf8',
+    emissive: '#38bdf8',
+    emissiveIntensity: 0.28,
+    metalness: 0.22,
+    roughness: 0.3,
+  }),
+  queued: new MeshStandardMaterial({
+    color: '#fbbf24',
+    emissive: '#fbbf24',
+    emissiveIntensity: 0.18,
+    metalness: 0.22,
+    roughness: 0.3,
+  }),
+  idle: new MeshStandardMaterial({
+    color: '#d6dde7',
+    metalness: 0.22,
+    roughness: 0.3,
+  }),
+}
+const BUTTON_RING_MATERIALS = {
+  active: new MeshStandardMaterial({
+    color: '#0ea5e9',
+    emissive: '#0ea5e9',
+    emissiveIntensity: 0.16,
+    metalness: 0.48,
+    roughness: 0.28,
+  }),
+  queued: new MeshStandardMaterial({
+    color: '#f59e0b',
+    emissive: '#f59e0b',
+    emissiveIntensity: 0.1,
+    metalness: 0.48,
+    roughness: 0.28,
+  }),
+  idle: new MeshStandardMaterial({
+    color: '#64748b',
+    metalness: 0.48,
+    roughness: 0.28,
+  }),
+}
+const BUTTON_GLOW_MATERIALS = {
+  active: new MeshStandardMaterial({
+    color: '#38bdf8',
+    depthWrite: false,
+    emissive: '#38bdf8',
+    emissiveIntensity: 0.28,
+    opacity: 0.58,
+    transparent: true,
+  }),
+  queued: new MeshStandardMaterial({
+    color: '#fbbf24',
+    depthWrite: false,
+    emissive: '#fbbf24',
+    emissiveIntensity: 0.18,
+    opacity: 0.58,
+    transparent: true,
+  }),
+}
+const BUTTON_LABEL_MATERIALS = {
+  lit: new MeshStandardMaterial({
+    color: '#111827',
+    metalness: 0.12,
+    roughness: 0.34,
+  }),
+  idle: new MeshStandardMaterial({
+    color: '#334155',
+    metalness: 0.12,
+    roughness: 0.34,
+  }),
+}
+const QUEUE_STRIP_MATERIALS = {
+  queued: new MeshStandardMaterial({
+    color: '#fbbf24',
+    emissive: '#fbbf24',
+    emissiveIntensity: 0.16,
+    metalness: 0.18,
+    roughness: 0.42,
+  }),
+  idle: new MeshStandardMaterial({
+    color: '#64748b',
+    metalness: 0.18,
+    roughness: 0.42,
+  }),
+}
+
+type ElevatorButtonAction = 'open-door' | 'request-level'
 
 type SegmentName =
   | 'bottom'
@@ -57,97 +237,138 @@ const SEGMENT_PROPS: Record<
   upperRight: { position: [0.32, 0.22, 0], size: [0.11, 0.42, 0.018] },
 }
 
+function BoxPrimitive({
+  castShadow = false,
+  material,
+  position,
+  receiveShadow = false,
+  rotation,
+  scale,
+}: {
+  castShadow?: boolean
+  material: MeshStandardMaterial
+  position?: Vector3Tuple
+  receiveShadow?: boolean
+  rotation?: Vector3Tuple
+  scale: Vector3Tuple
+}) {
+  return (
+    <mesh
+      castShadow={castShadow}
+      dispose={null}
+      geometry={UNIT_BOX_GEOMETRY}
+      material={material}
+      position={position}
+      receiveShadow={receiveShadow}
+      rotation={rotation}
+      scale={scale}
+    />
+  )
+}
+
 function MeshButtonLabel({
-  color,
   label,
+  material,
   position,
   scale,
 }: {
-  color: string
   label: string
+  material: MeshStandardMaterial
   position: [number, number, number]
   scale: number
 }) {
-  const characters = label.split('').filter((character) => DIGIT_SEGMENTS[character])
-  const spacing = 0.72 * scale
-  const startX = -((characters.length - 1) * spacing) / 2
+  const ref = useRef<InstancedMesh>(null)
+  const instances = useMemo(() => {
+    const characters = label.split('').filter((character) => DIGIT_SEGMENTS[character])
+    const spacing = 0.72 * scale
+    const startX = -((characters.length - 1) * spacing) / 2
 
-  if (characters.length === 0) return null
+    return characters.flatMap((character, charIndex) =>
+      (DIGIT_SEGMENTS[character] ?? []).map((segment) => {
+        const props = SEGMENT_PROPS[segment]
+        return {
+          position: [
+            startX + charIndex * spacing + props.position[0] * scale,
+            props.position[1] * scale,
+            props.position[2],
+          ] as Vector3Tuple,
+          scale: [props.size[0] * scale, props.size[1] * scale, props.size[2]] as Vector3Tuple,
+        }
+      }),
+    )
+  }, [label, scale])
+
+  const applyInstanceMatrices = useCallback(
+    (mesh: InstancedMesh) => {
+      for (let index = 0; index < instances.length; index += 1) {
+        const instance = instances[index]
+        if (!instance) continue
+        LABEL_MATRIX_DUMMY.position.set(...instance.position)
+        LABEL_MATRIX_DUMMY.rotation.set(0, 0, 0)
+        LABEL_MATRIX_DUMMY.scale.set(...instance.scale)
+        LABEL_MATRIX_DUMMY.updateMatrix()
+        mesh.setMatrixAt(index, LABEL_MATRIX_DUMMY.matrix)
+      }
+      mesh.instanceMatrix.needsUpdate = true
+    },
+    [instances],
+  )
+
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    applyInstanceMatrices(mesh)
+  }, [applyInstanceMatrices])
+
+  if (instances.length === 0) return null
 
   return (
-    <group position={position}>
-      {characters.map((character, charIndex) => (
-        <group key={`${character}-${charIndex}`} position={[startX + charIndex * spacing, 0, 0]}>
-          {(DIGIT_SEGMENTS[character] ?? []).map((segment) => {
-            const props = SEGMENT_PROPS[segment]
-            return (
-              <mesh
-                key={segment}
-                position={[props.position[0] * scale, props.position[1] * scale, props.position[2]]}
-              >
-                <boxGeometry args={[props.size[0] * scale, props.size[1] * scale, props.size[2]]} />
-                <meshStandardMaterial color={color} metalness={0.12} roughness={0.34} />
-              </mesh>
-            )
-          })}
-        </group>
-      ))}
-    </group>
+    <instancedMesh
+      args={[UNIT_BOX_GEOMETRY, material, instances.length]}
+      dispose={null}
+      onUpdate={applyInstanceMatrices}
+      position={position}
+      ref={ref}
+    />
   )
 }
 
 function ElevatorDirectionGlyph({
-  color,
   direction,
+  material,
   position,
   scale,
 }: {
-  color: string
   direction: 'down' | 'up' | null
+  material: MeshStandardMaterial
   position: [number, number, number]
   scale: number
 }) {
   if (!direction) {
     return (
-      <mesh position={position}>
-        <boxGeometry args={[0.08 * scale, 0.08 * scale, 0.018]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.28}
-          metalness={0.08}
-          roughness={0.32}
-        />
-      </mesh>
+      <BoxPrimitive
+        material={material}
+        position={position}
+        scale={[0.08 * scale, 0.08 * scale, 0.018]}
+      />
     )
   }
 
   const ySign = direction === 'up' ? 1 : -1
   return (
     <group position={position}>
-      <mesh
+      <BoxPrimitive
+        material={material}
         position={[-0.04 * scale, -0.02 * ySign * scale, 0]}
-        rotation-z={(-ySign * Math.PI) / 4}
-      >
-        <boxGeometry args={[0.16 * scale, 0.035 * scale, 0.018]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.36}
-          metalness={0.08}
-          roughness={0.32}
-        />
-      </mesh>
-      <mesh position={[0.04 * scale, -0.02 * ySign * scale, 0]} rotation-z={(ySign * Math.PI) / 4}>
-        <boxGeometry args={[0.16 * scale, 0.035 * scale, 0.018]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.36}
-          metalness={0.08}
-          roughness={0.32}
-        />
-      </mesh>
+        rotation={[0, 0, (-ySign * Math.PI) / 4]}
+        scale={[0.16 * scale, 0.035 * scale, 0.018]}
+      />
+      <BoxPrimitive
+        material={material}
+        position={[0.04 * scale, -0.02 * ySign * scale, 0]}
+        rotation={[0, 0, (ySign * Math.PI) / 4]}
+        scale={[0.16 * scale, 0.035 * scale, 0.018]}
+      />
     </group>
   )
 }
@@ -159,6 +380,7 @@ function ElevatorFloorIndicator({
   label,
   position,
   scale = 1,
+  showReadout = true,
 }: {
   active: boolean
   direction: 'down' | 'up' | null
@@ -166,131 +388,195 @@ function ElevatorFloorIndicator({
   label: string
   position: [number, number, number]
   scale?: number
+  showReadout?: boolean
 }) {
-  const glowColor = active ? '#38bdf8' : '#94a3b8'
-  const screenColor = active ? '#041f2f' : '#111827'
+  const glyphMaterial = active ? INDICATOR_GLYPH_MATERIALS.active : INDICATOR_GLYPH_MATERIALS.idle
+  const screenMaterial = active
+    ? INDICATOR_SCREEN_MATERIALS.active
+    : INDICATOR_SCREEN_MATERIALS.idle
   const displayLabel = label || '-'
   const screenZ = faceSign * 0.026 * scale
   const glyphZ = faceSign * 0.041 * scale
 
   return (
     <group position={position}>
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[0.42 * scale, 0.16 * scale, 0.045 * scale]} />
-        <meshStandardMaterial color={PANEL_COLOR} metalness={0.36} roughness={0.34} />
-      </mesh>
-      <mesh position={[0, 0, screenZ]}>
-        <boxGeometry args={[0.34 * scale, 0.095 * scale, 0.012 * scale]} />
-        <meshStandardMaterial
-          color={screenColor}
-          emissive={active ? '#0ea5e9' : '#000000'}
-          emissiveIntensity={active ? 0.16 : 0}
-          metalness={0.12}
-          roughness={0.38}
-        />
-      </mesh>
-      <ElevatorDirectionGlyph
-        color={glowColor}
-        direction={direction}
-        position={[-0.115 * scale, 0, glyphZ]}
-        scale={scale}
+      <BoxPrimitive
+        castShadow
+        material={PANEL_MATERIAL}
+        receiveShadow
+        scale={[0.42 * scale, 0.16 * scale, 0.045 * scale]}
       />
-      <MeshButtonLabel
-        color={glowColor}
-        label={displayLabel}
-        position={[0.075 * scale, 0, glyphZ]}
-        scale={0.055 * scale}
+      <BoxPrimitive
+        material={screenMaterial}
+        position={[0, 0, screenZ]}
+        scale={[0.34 * scale, 0.095 * scale, 0.012 * scale]}
+      />
+      {showReadout ? (
+        <>
+          <ElevatorDirectionGlyph
+            direction={direction}
+            material={glyphMaterial}
+            position={[-0.115 * scale, 0, glyphZ]}
+            scale={scale}
+          />
+          <MeshButtonLabel
+            label={displayLabel}
+            material={glyphMaterial}
+            position={[0.075 * scale, 0, glyphZ]}
+            scale={0.055 * scale}
+          />
+        </>
+      ) : (
+        <BoxPrimitive
+          material={glyphMaterial}
+          position={[0, 0, glyphZ]}
+          scale={[0.13 * scale, 0.018 * scale, 0.018]}
+        />
+      )}
+    </group>
+  )
+}
+
+function DoorOpenGlyph({
+  material,
+  positionZ,
+  scale,
+}: {
+  material: MeshStandardMaterial
+  positionZ: number
+  scale: number
+}) {
+  return (
+    <group position={[0, 0, positionZ]}>
+      <BoxPrimitive
+        material={material}
+        position={[-0.014 * scale, 0, 0]}
+        scale={[0.006 * scale, 0.052 * scale, 0.012]}
+      />
+      <BoxPrimitive
+        material={material}
+        position={[0.014 * scale, 0, 0]}
+        scale={[0.006 * scale, 0.052 * scale, 0.012]}
+      />
+      <BoxPrimitive
+        material={material}
+        position={[-0.033 * scale, 0, 0]}
+        rotation={[0, 0, Math.PI / 4]}
+        scale={[0.026 * scale, 0.005 * scale, 0.012]}
+      />
+      <BoxPrimitive
+        material={material}
+        position={[-0.033 * scale, 0, 0]}
+        rotation={[0, 0, -Math.PI / 4]}
+        scale={[0.026 * scale, 0.005 * scale, 0.012]}
+      />
+      <BoxPrimitive
+        material={material}
+        position={[0.033 * scale, 0, 0]}
+        rotation={[0, 0, Math.PI / 4]}
+        scale={[0.026 * scale, 0.005 * scale, 0.012]}
+      />
+      <BoxPrimitive
+        material={material}
+        position={[0.033 * scale, 0, 0]}
+        rotation={[0, 0, -Math.PI / 4]}
+        scale={[0.026 * scale, 0.005 * scale, 0.012]}
       />
     </group>
   )
 }
 
 function ElevatorMeshButton({
+  action = 'request-level',
   active,
   buttonKind,
   elevatorId,
   faceSign = -1,
+  glyph,
   label,
   levelId,
-  onRequest,
   position,
   queued,
   radius = 0.055,
 }: {
+  action?: ElevatorButtonAction
   active: boolean
   buttonKind: 'cab' | 'landing'
   elevatorId: AnyNodeId
   faceSign?: -1 | 1
+  glyph?: 'door-open'
   label?: string
-  levelId: AnyNodeId
-  onRequest: () => void
+  levelId?: AnyNodeId
   position: [number, number, number]
   queued: boolean
   radius?: number
 }) {
-  const buttonColor = active ? '#38bdf8' : queued ? '#fbbf24' : '#d6dde7'
-  const labelColor = active || queued ? '#111827' : '#334155'
-  const ringColor = active ? '#0ea5e9' : queued ? '#f59e0b' : '#64748b'
+  const state = active ? 'active' : queued ? 'queued' : 'idle'
   const depth = active ? 0.028 : 0.04
   const faceZ = faceSign * (depth / 2 + 0.004)
+  const labelMaterial = active || queued ? BUTTON_LABEL_MATERIALS.lit : BUTTON_LABEL_MATERIALS.idle
   const userData = useMemo(
     () => ({
       elevatorButton: {
+        action,
         elevatorId,
         kind: buttonKind,
         levelId,
       },
     }),
-    [buttonKind, elevatorId, levelId],
+    [action, buttonKind, elevatorId, levelId],
   )
 
   const press = (event: ThreeEvent<PointerEvent>) => {
     if (event.button !== 0) return
-    onRequest()
+    if (action === 'open-door') {
+      useInteractive.getState().openElevatorDoor(elevatorId)
+      return
+    }
+    if (levelId) useInteractive.getState().requestElevator(elevatorId, levelId)
   }
 
   return (
     <group onPointerDown={press} position={position} userData={userData}>
       {(active || queued) && (
-        <mesh position={[0, 0, faceSign * (depth + 0.004)]} receiveShadow rotation-x={Math.PI / 2}>
-          <cylinderGeometry args={[radius * 1.42, radius * 1.42, 0.012, 32]} />
-          <meshStandardMaterial
-            color={buttonColor}
-            depthWrite={false}
-            emissive={buttonColor}
-            emissiveIntensity={active ? 0.28 : 0.18}
-            opacity={0.58}
-            transparent
-          />
-        </mesh>
+        <mesh
+          dispose={null}
+          geometry={BUTTON_GLOW_GEOMETRY}
+          material={active ? BUTTON_GLOW_MATERIALS.active : BUTTON_GLOW_MATERIALS.queued}
+          position={[0, 0, faceSign * (depth + 0.004)]}
+          receiveShadow
+          rotation-x={Math.PI / 2}
+          scale={[radius, 0.012, radius]}
+        />
       )}
-      <mesh castShadow position={[0, 0, faceSign * (depth / 2 + 0.003)]} receiveShadow>
-        <torusGeometry args={[radius * 1.12, radius * 0.12, 8, 32]} />
-        <meshStandardMaterial
-          color={ringColor}
-          emissive={active || queued ? ringColor : '#000000'}
-          emissiveIntensity={active ? 0.16 : queued ? 0.1 : 0}
-          metalness={0.48}
-          roughness={0.28}
-        />
-      </mesh>
-      <mesh castShadow receiveShadow rotation-x={Math.PI / 2}>
-        <cylinderGeometry args={[radius, radius * 0.92, depth, 32]} />
-        <meshStandardMaterial
-          color={buttonColor}
-          emissive={active || queued ? buttonColor : '#000000'}
-          emissiveIntensity={active ? 0.28 : queued ? 0.18 : 0}
-          metalness={0.22}
-          roughness={0.3}
-        />
-      </mesh>
+      <mesh
+        castShadow
+        dispose={null}
+        geometry={BUTTON_RING_GEOMETRY}
+        material={BUTTON_RING_MATERIALS[state]}
+        position={[0, 0, faceSign * (depth / 2 + 0.003)]}
+        receiveShadow
+        scale={[radius, radius, radius]}
+      />
+      <mesh
+        castShadow
+        dispose={null}
+        geometry={BUTTON_FACE_GEOMETRY}
+        material={BUTTON_FACE_MATERIALS[state]}
+        receiveShadow
+        rotation-x={Math.PI / 2}
+        scale={[radius, depth, radius]}
+      />
       {label && (
         <MeshButtonLabel
-          color={labelColor}
           label={label}
+          material={labelMaterial}
           position={[0, 0, faceZ]}
           scale={radius * 0.72}
         />
+      )}
+      {glyph === 'door-open' && (
+        <DoorOpenGlyph material={labelMaterial} positionZ={faceZ} scale={radius / 0.055} />
       )}
     </group>
   )
@@ -345,33 +631,39 @@ function DoorLeaf({
 
   return (
     <group ref={ref} position={[getLeafX(doorOpen), y + height / 2, z]}>
-      <mesh castShadow position={[0, height / 2 - railHeight / 2, 0]} receiveShadow>
-        <boxGeometry args={[leafWidth, railHeight, 0.05]} />
-        <meshStandardMaterial color={DOOR_COLOR} metalness={0.34} roughness={0.34} />
-      </mesh>
-      <mesh castShadow position={[0, -height / 2 + railHeight / 2, 0]} receiveShadow>
-        <boxGeometry args={[leafWidth, railHeight, 0.05]} />
-        <meshStandardMaterial color={DOOR_COLOR} metalness={0.34} roughness={0.34} />
-      </mesh>
-      <mesh castShadow position={[-leafWidth / 2 + stileWidth / 2, 0, 0]} receiveShadow>
-        <boxGeometry args={[stileWidth, height, 0.05]} />
-        <meshStandardMaterial color={DOOR_COLOR} metalness={0.34} roughness={0.34} />
-      </mesh>
-      <mesh castShadow position={[leafWidth / 2 - stileWidth / 2, 0, 0]} receiveShadow>
-        <boxGeometry args={[stileWidth, height, 0.05]} />
-        <meshStandardMaterial color={DOOR_COLOR} metalness={0.34} roughness={0.34} />
-      </mesh>
-      <mesh position={[0, 0, -0.004]}>
-        <boxGeometry args={[glassWidth, glassHeight, 0.012]} />
-        <meshStandardMaterial
-          color={GLASS_COLOR}
-          depthWrite={false}
-          metalness={0}
-          opacity={0.2}
-          roughness={0.08}
-          transparent
-        />
-      </mesh>
+      <BoxPrimitive
+        castShadow
+        material={DOOR_MATERIAL}
+        position={[0, height / 2 - railHeight / 2, 0]}
+        receiveShadow
+        scale={[leafWidth, railHeight, 0.05]}
+      />
+      <BoxPrimitive
+        castShadow
+        material={DOOR_MATERIAL}
+        position={[0, -height / 2 + railHeight / 2, 0]}
+        receiveShadow
+        scale={[leafWidth, railHeight, 0.05]}
+      />
+      <BoxPrimitive
+        castShadow
+        material={DOOR_MATERIAL}
+        position={[-leafWidth / 2 + stileWidth / 2, 0, 0]}
+        receiveShadow
+        scale={[stileWidth, height, 0.05]}
+      />
+      <BoxPrimitive
+        castShadow
+        material={DOOR_MATERIAL}
+        position={[leafWidth / 2 - stileWidth / 2, 0, 0]}
+        receiveShadow
+        scale={[stileWidth, height, 0.05]}
+      />
+      <BoxPrimitive
+        material={GLASS_MATERIAL}
+        position={[0, 0, -0.004]}
+        scale={[glassWidth, glassHeight, 0.012]}
+      />
     </group>
   )
 }
@@ -392,50 +684,65 @@ function LandingDoorFrame({
   z: number
 }) {
   const wallDepth = 0.09
-  const levelHeight = Math.max(levelTopY - levelY, doorHeight + 0.24)
+  const levelHeight = Math.max(levelTopY - levelY, 0.01)
   const jambWidth = Math.max((shaftWidth - doorWidth) / 2, 0.08)
   const jambCenterOffset = doorWidth / 2 + jambWidth / 2
-  const headerHeight = Math.max(levelHeight - doorHeight, 0.14)
+  const headerHeight = Math.max(levelTopY - (levelY + doorHeight), 0)
   const trim = 0.055
 
   return (
     <>
-      <mesh castShadow position={[-jambCenterOffset, levelY + levelHeight / 2, z]} receiveShadow>
-        <boxGeometry args={[jambWidth, levelHeight, wallDepth]} />
-        <meshStandardMaterial color={SHAFT_WALL_COLOR} metalness={0.08} roughness={0.56} />
-      </mesh>
-      <mesh castShadow position={[jambCenterOffset, levelY + levelHeight / 2, z]} receiveShadow>
-        <boxGeometry args={[jambWidth, levelHeight, wallDepth]} />
-        <meshStandardMaterial color={SHAFT_WALL_COLOR} metalness={0.08} roughness={0.56} />
-      </mesh>
-      <mesh castShadow position={[0, levelY + doorHeight + headerHeight / 2, z]} receiveShadow>
-        <boxGeometry args={[shaftWidth, headerHeight, wallDepth]} />
-        <meshStandardMaterial color={SHAFT_WALL_COLOR} metalness={0.08} roughness={0.56} />
-      </mesh>
-      <mesh castShadow position={[0, levelY + trim / 2, z - 0.006]} receiveShadow>
-        <boxGeometry args={[doorWidth + trim * 2, trim, wallDepth * 1.12]} />
-        <meshStandardMaterial color={SHAFT_TRIM_COLOR} metalness={0.2} roughness={0.38} />
-      </mesh>
-      <mesh
+      <BoxPrimitive
         castShadow
+        material={SHAFT_WALL_MATERIAL}
+        position={[-jambCenterOffset, levelY + levelHeight / 2, z]}
+        receiveShadow
+        scale={[jambWidth, levelHeight, wallDepth]}
+      />
+      <BoxPrimitive
+        castShadow
+        material={SHAFT_WALL_MATERIAL}
+        position={[jambCenterOffset, levelY + levelHeight / 2, z]}
+        receiveShadow
+        scale={[jambWidth, levelHeight, wallDepth]}
+      />
+      {headerHeight > 0.01 && (
+        <BoxPrimitive
+          castShadow
+          material={SHAFT_WALL_MATERIAL}
+          position={[0, levelY + doorHeight + headerHeight / 2, z]}
+          receiveShadow
+          scale={[shaftWidth, headerHeight, wallDepth]}
+        />
+      )}
+      <BoxPrimitive
+        castShadow
+        material={SHAFT_TRIM_MATERIAL}
+        position={[0, levelY + trim / 2, z - 0.006]}
+        receiveShadow
+        scale={[doorWidth + trim * 2, trim, wallDepth * 1.12]}
+      />
+      <BoxPrimitive
+        castShadow
+        material={SHAFT_TRIM_MATERIAL}
         position={[-doorWidth / 2 - trim / 2, levelY + doorHeight / 2, z - 0.006]}
         receiveShadow
-      >
-        <boxGeometry args={[trim, doorHeight, wallDepth * 1.12]} />
-        <meshStandardMaterial color={SHAFT_TRIM_COLOR} metalness={0.2} roughness={0.38} />
-      </mesh>
-      <mesh
+        scale={[trim, doorHeight, wallDepth * 1.12]}
+      />
+      <BoxPrimitive
         castShadow
+        material={SHAFT_TRIM_MATERIAL}
         position={[doorWidth / 2 + trim / 2, levelY + doorHeight / 2, z - 0.006]}
         receiveShadow
-      >
-        <boxGeometry args={[trim, doorHeight, wallDepth * 1.12]} />
-        <meshStandardMaterial color={SHAFT_TRIM_COLOR} metalness={0.2} roughness={0.38} />
-      </mesh>
-      <mesh castShadow position={[0, levelY + doorHeight + trim / 2, z - 0.006]} receiveShadow>
-        <boxGeometry args={[doorWidth + trim * 2, trim, wallDepth * 1.12]} />
-        <meshStandardMaterial color={SHAFT_TRIM_COLOR} metalness={0.2} roughness={0.38} />
-      </mesh>
+        scale={[trim, doorHeight, wallDepth * 1.12]}
+      />
+      <BoxPrimitive
+        castShadow
+        material={SHAFT_TRIM_MATERIAL}
+        position={[0, levelY + doorHeight + trim / 2, z - 0.006]}
+        receiveShadow
+        scale={[doorWidth + trim * 2, trim, wallDepth * 1.12]}
+      />
     </>
   )
 }
@@ -489,6 +796,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const nodes = useScene((state) => state.nodes)
   const handlers = useNodeEvents(node, 'elevator')
   const liveOverrides = useLiveNodeOverrides((state) => state.get(node.id))
+  const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const renderNode = useMemo(
     () => (liveOverrides ? ({ ...node, ...liveOverrides } as ElevatorNode) : node),
     [liveOverrides, node],
@@ -496,7 +804,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
 
   useRegistry(node.id, 'elevator', ref)
 
-  const { entries, defaultEntry, shaftBaseY, shaftTopY, totalHeight } = useMemo(
+  const { entries, defaultEntry, shaftBaseY, totalHeight } = useMemo(
     () => resolveElevatorLevels(renderNode, nodes),
     [renderNode, nodes],
   )
@@ -554,8 +862,11 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const doorWidth = Math.min(Math.max(renderNode.doorWidth, 0.45), shaftWidth - 0.18)
   const doorHeight = Math.min(Math.max(renderNode.doorHeight, 1.2), cabHeight - 0.1)
   const shaftHeight = Math.max(totalHeight, cabHeight + 0.3)
-  const resolvedShaftTopY = Math.max(shaftTopY, shaftBaseY + shaftHeight)
   const shaftWallThickness = 0.09
+  const shaftBodyHeight = Math.max(shaftHeight - shaftWallThickness, 0.01)
+  const shaftBodyCenterY = shaftBaseY + shaftBodyHeight / 2
+  const shaftTopCapBottomY = shaftBaseY + shaftHeight - shaftWallThickness
+  const shaftFrameTopY = Math.max(shaftBaseY, shaftTopCapBottomY - SHAFT_TOP_FRAME_CLEARANCE)
   const runtimeSnapshot = useInteractive.getState().elevators[elevatorId]
   const cabBaseY = runtimeSnapshot?.carY ?? defaultEntry?.baseY ?? 0
   const activeLevelId =
@@ -583,13 +894,25 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
       runtimeStatus?.phase === 'opening' ||
       runtimeSnapshot?.phase === 'opening',
   )
-  const queuedLevelIds = new Set<string>()
-  for (const levelId of runtimeStatus?.queue ?? runtimeSnapshot?.queue ?? [])
-    queuedLevelIds.add(levelId)
-  if (runtimeStatus?.targetLevelId ?? runtimeSnapshot?.targetLevelId) {
-    queuedLevelIds.add((runtimeStatus?.targetLevelId ?? runtimeSnapshot?.targetLevelId)!)
-  }
+  const queuedLevelIds = useMemo(() => {
+    const next = new Set<string>()
+    for (const levelId of runtimeStatus?.queue ?? runtimeSnapshot?.queue ?? []) next.add(levelId)
+    const targetLevelId = runtimeStatus?.targetLevelId ?? runtimeSnapshot?.targetLevelId
+    if (targetLevelId) next.add(targetLevelId)
+    return next
+  }, [
+    runtimeSnapshot?.queue,
+    runtimeSnapshot?.targetLevelId,
+    runtimeStatus?.queue,
+    runtimeStatus?.targetLevelId,
+  ])
   const doorOpen = runtimeSnapshot?.doorOpen ?? 0
+  const doorOpenButtonActive =
+    doorOpen > 0.12 ||
+    runtimeStatus?.phase === 'opening' ||
+    runtimeSnapshot?.phase === 'opening' ||
+    runtimeStatus?.phase === 'open' ||
+    runtimeSnapshot?.phase === 'open'
   const frontWallZ = -shaftDepth / 2 - shaftWallThickness / 2
   const frontZ = frontWallZ - shaftWallThickness / 2 - 0.018
   const landingPanelX = Math.min(shaftWidth / 2 - 0.16, doorWidth / 2 + 0.18)
@@ -599,99 +922,111 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const cabButtonRows = Math.max(1, Math.ceil(entries.length / cabButtonColumns))
   const cabButtonSpacingX = 0.14
   const cabButtonSpacingY = 0.15
-  const cabPanelWidth = cabButtonColumns * cabButtonSpacingX + 0.13
+  const cabDoorButtonOffsetX = 0.17
+  const cabFloorButtonOffsetX = entries.length > 0 ? -cabDoorButtonOffsetX / 2 : 0
+  const cabDoorButtonX =
+    cabFloorButtonOffsetX + ((cabButtonColumns - 1) / 2) * cabButtonSpacingX + cabDoorButtonOffsetX
+  const cabDoorButtonY = -((cabButtonRows - 1) / 2) * cabButtonSpacingY
+  const cabPanelWidth = cabButtonColumns * cabButtonSpacingX + 0.13 + cabDoorButtonOffsetX
   const cabPanelHeight = cabButtonRows * cabButtonSpacingY + 0.12
   const panelRelativeY = Math.min(Math.max(doorHeight * 0.6, 0.95), cabHeight - 0.35)
   const cabPanelY = panelRelativeY
-  const entrySpans = entries.map((entry, index) => {
-    const nextEntry = entries[index + 1]
-    return {
-      entry,
-      levelTopY: Math.max(nextEntry?.baseY ?? resolvedShaftTopY, entry.baseY + doorHeight + 0.24),
-    }
-  })
-  const requestLevel = (levelId: AnyNodeId) => {
-    useInteractive.getState().requestElevator(elevatorId, levelId)
-  }
+  const entrySpans = useMemo(
+    () =>
+      entries.map((entry, index) => {
+        const nextEntry = entries[index + 1]
+        const minDoorFrameTopY = entry.baseY + doorHeight + 0.12
+        const targetTopY = Math.max(nextEntry?.baseY ?? shaftFrameTopY, minDoorFrameTopY)
+
+        return {
+          entry,
+          levelTopY: nextEntry ? targetTopY : Math.min(targetTopY, shaftFrameTopY),
+        }
+      }),
+    [doorHeight, entries, shaftFrameTopY],
+  )
 
   return (
     <group
-      position={renderNode.position}
+      position={liveTransform?.position ?? renderNode.position}
       ref={ref}
-      rotation-y={renderNode.rotation}
+      rotation-y={liveTransform?.rotation ?? renderNode.rotation}
       visible={renderNode.visible}
       {...handlers}
     >
-      <mesh
+      <BoxPrimitive
         castShadow
-        position={[0, shaftBaseY + shaftHeight / 2, shaftDepth / 2 + shaftWallThickness / 2]}
+        material={SHAFT_SIDE_MATERIAL}
+        position={[0, shaftBodyCenterY, shaftDepth / 2 + shaftWallThickness / 2]}
         receiveShadow
-      >
-        <boxGeometry
-          args={[shaftWidth + shaftWallThickness * 2, shaftHeight, shaftWallThickness]}
-        />
-        <meshStandardMaterial color={SHAFT_SIDE_COLOR} metalness={0.12} roughness={0.58} />
-      </mesh>
-      <mesh
+        scale={[shaftWidth + shaftWallThickness * 2, shaftBodyHeight, shaftWallThickness]}
+      />
+      <BoxPrimitive
         castShadow
-        position={[-shaftWidth / 2 - shaftWallThickness / 2, shaftBaseY + shaftHeight / 2, 0]}
+        material={SHAFT_SIDE_MATERIAL}
+        position={[-shaftWidth / 2 - shaftWallThickness / 2, shaftBodyCenterY, 0]}
         receiveShadow
-      >
-        <boxGeometry
-          args={[shaftWallThickness, shaftHeight, shaftDepth + shaftWallThickness * 2]}
-        />
-        <meshStandardMaterial color={SHAFT_SIDE_COLOR} metalness={0.12} roughness={0.58} />
-      </mesh>
-      <mesh
+        scale={[shaftWallThickness, shaftBodyHeight, shaftDepth + shaftWallThickness * 2]}
+      />
+      <BoxPrimitive
         castShadow
-        position={[shaftWidth / 2 + shaftWallThickness / 2, shaftBaseY + shaftHeight / 2, 0]}
+        material={SHAFT_SIDE_MATERIAL}
+        position={[shaftWidth / 2 + shaftWallThickness / 2, shaftBodyCenterY, 0]}
         receiveShadow
-      >
-        <boxGeometry
-          args={[shaftWallThickness, shaftHeight, shaftDepth + shaftWallThickness * 2]}
-        />
-        <meshStandardMaterial color={SHAFT_SIDE_COLOR} metalness={0.12} roughness={0.58} />
-      </mesh>
-      <mesh
+        scale={[shaftWallThickness, shaftBodyHeight, shaftDepth + shaftWallThickness * 2]}
+      />
+      <BoxPrimitive
         castShadow
+        material={SHAFT_SIDE_MATERIAL}
         position={[0, shaftBaseY + shaftHeight - shaftWallThickness / 2, 0]}
         receiveShadow
-      >
-        <boxGeometry
-          args={[
-            shaftWidth + shaftWallThickness * 2,
-            shaftWallThickness,
-            shaftDepth + shaftWallThickness * 2,
-          ]}
-        />
-        <meshStandardMaterial color={SHAFT_SIDE_COLOR} metalness={0.12} roughness={0.58} />
-      </mesh>
+        scale={[
+          shaftWidth + shaftWallThickness * 2,
+          shaftWallThickness,
+          shaftDepth + shaftWallThickness * 2,
+        ]}
+      />
 
       <group ref={cabRef} position={[0, cabBaseY, 0]}>
-        <mesh castShadow position={[0, 0.04, 0]} receiveShadow>
-          <boxGeometry args={[shaftWidth, 0.08, shaftDepth]} />
-          <meshStandardMaterial color={CAB_COLOR} metalness={0.18} roughness={0.45} />
-        </mesh>
+        <BoxPrimitive
+          castShadow
+          material={CAB_MATERIAL}
+          position={[0, 0.04, 0]}
+          receiveShadow
+          scale={[shaftWidth, 0.08, shaftDepth]}
+        />
 
-        <mesh castShadow position={[0, cabHeight - 0.04, 0]} receiveShadow>
-          <boxGeometry args={[shaftWidth, 0.08, shaftDepth]} />
-          <meshStandardMaterial color={CAB_COLOR} metalness={0.18} roughness={0.45} />
-        </mesh>
+        <BoxPrimitive
+          castShadow
+          material={CAB_MATERIAL}
+          position={[0, cabHeight - 0.04, 0]}
+          receiveShadow
+          scale={[shaftWidth, 0.08, shaftDepth]}
+        />
 
-        <mesh castShadow position={[0, cabHeight / 2, shaftDepth / 2 - 0.04]} receiveShadow>
-          <boxGeometry args={[shaftWidth, cabHeight, 0.08]} />
-          <meshStandardMaterial color={CAB_COLOR} metalness={0.2} roughness={0.48} />
-        </mesh>
+        <BoxPrimitive
+          castShadow
+          material={CAB_MATERIAL}
+          position={[0, cabHeight / 2, shaftDepth / 2 - 0.04]}
+          receiveShadow
+          scale={[shaftWidth, cabHeight, 0.08]}
+        />
 
-        <mesh castShadow position={[-shaftWidth / 2 + 0.04, cabHeight / 2, 0]} receiveShadow>
-          <boxGeometry args={[0.08, cabHeight, shaftDepth]} />
-          <meshStandardMaterial color={CAB_COLOR} metalness={0.2} roughness={0.48} />
-        </mesh>
+        <BoxPrimitive
+          castShadow
+          material={CAB_MATERIAL}
+          position={[-shaftWidth / 2 + 0.04, cabHeight / 2, 0]}
+          receiveShadow
+          scale={[0.08, cabHeight, shaftDepth]}
+        />
 
-        <mesh castShadow position={[shaftWidth / 2 - 0.04, cabHeight / 2, 0]} receiveShadow>
-          <boxGeometry args={[0.08, cabHeight, shaftDepth]} />
-          <meshStandardMaterial color={CAB_COLOR} metalness={0.2} roughness={0.48} />
-        </mesh>
+        <BoxPrimitive
+          castShadow
+          material={CAB_MATERIAL}
+          position={[shaftWidth / 2 - 0.04, cabHeight / 2, 0]}
+          receiveShadow
+          scale={[0.08, cabHeight, shaftDepth]}
+        />
 
         <DoorLeaf
           animated={{ elevatorId, kind: 'cab' }}
@@ -722,16 +1057,19 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
         />
 
         <group position={[cabPanelX, cabPanelY, cabPanelZ]} rotation-y={-Math.PI / 2}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[cabPanelWidth, cabPanelHeight, 0.045]} />
-            <meshStandardMaterial color={PANEL_COLOR} metalness={0.32} roughness={0.36} />
-          </mesh>
+          <BoxPrimitive
+            castShadow
+            material={PANEL_MATERIAL}
+            receiveShadow
+            scale={[cabPanelWidth, cabPanelHeight, 0.045]}
+          />
 
           {entries.map((entry, index) => {
             const column = index % cabButtonColumns
             const row = Math.floor(index / cabButtonColumns)
-            const x = (column - (cabButtonColumns - 1) / 2) * cabButtonSpacingX
-            const y = ((cabButtonRows - 1) / 2 - row) * cabButtonSpacingY
+            const x =
+              cabFloorButtonOffsetX + (column - (cabButtonColumns - 1) / 2) * cabButtonSpacingX
+            const y = (row - (cabButtonRows - 1) / 2) * cabButtonSpacingY
 
             return (
               <ElevatorMeshButton
@@ -742,70 +1080,84 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                 key={entry.id}
                 label={entry.label}
                 levelId={entry.id as AnyNodeId}
-                onRequest={() => requestLevel(entry.id as AnyNodeId)}
                 position={[x, y, 0.045]}
                 queued={queuedLevelIds.has(entry.id)}
               />
             )
           })}
+          <ElevatorMeshButton
+            action="open-door"
+            active={doorOpenButtonActive}
+            buttonKind="cab"
+            elevatorId={elevatorId}
+            faceSign={1}
+            glyph="door-open"
+            position={[cabDoorButtonX, cabDoorButtonY, 0.045]}
+            queued={false}
+            radius={0.047}
+          />
         </group>
       </group>
 
-      {entrySpans.map(({ entry, levelTopY }) => (
-        <group key={entry.id}>
-          <LandingDoorFrame
-            doorHeight={doorHeight}
-            doorWidth={doorWidth}
-            levelTopY={levelTopY}
-            levelY={entry.baseY}
-            shaftWidth={shaftWidth}
-            z={frontWallZ}
-          />
-          <LandingDoor
-            animated={activeLevelId === entry.id}
-            elevatorId={elevatorId}
-            doorHeight={doorHeight}
-            doorOpen={activeLevelId === entry.id ? doorOpen : 0}
-            doorWidth={doorWidth}
-            levelId={entry.id as AnyNodeId}
-            levelY={entry.baseY}
-            z={frontZ - 0.02}
-          />
-          <ElevatorFloorIndicator
-            active={indicatorActive || activeLevelId === entry.id || queuedLevelIds.has(entry.id)}
-            direction={indicatorDirection}
-            label={indicatorEntry?.label ?? entry.label}
-            position={[0, entry.baseY + doorHeight + 0.16, frontZ - 0.055]}
-            scale={0.62}
-          />
-          <group position={[landingPanelX, entry.baseY + panelRelativeY, frontZ - 0.035]}>
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={[0.18, 0.42, 0.04]} />
-              <meshStandardMaterial color={PANEL_COLOR} metalness={0.25} roughness={0.4} />
-            </mesh>
-            <ElevatorMeshButton
-              active={activeLevelId === entry.id && doorOpen > 0.5}
-              buttonKind="landing"
-              elevatorId={elevatorId}
-              levelId={entry.id as AnyNodeId}
-              onRequest={() => requestLevel(entry.id as AnyNodeId)}
-              position={[0, 0.06, -0.045]}
-              queued={queuedLevelIds.has(entry.id)}
-              radius={0.045}
+      {entrySpans.map(({ entry, levelTopY }) => {
+        const isCurrentLevel = activeLevelId === entry.id
+        const isQueuedLevel = queuedLevelIds.has(entry.id)
+        const isPendingLevel = pendingLevelId === entry.id
+        const showLandingReadout = isCurrentLevel || isPendingLevel || isQueuedLevel
+
+        return (
+          <group key={entry.id}>
+            <LandingDoorFrame
+              doorHeight={doorHeight}
+              doorWidth={doorWidth}
+              levelTopY={levelTopY}
+              levelY={entry.baseY}
+              shaftWidth={shaftWidth}
+              z={frontWallZ}
             />
-            <mesh position={[0, -0.12, -0.035]}>
-              <boxGeometry args={[0.095, 0.025, 0.012]} />
-              <meshStandardMaterial
-                color={queuedLevelIds.has(entry.id) ? '#fbbf24' : '#64748b'}
-                emissive={queuedLevelIds.has(entry.id) ? '#fbbf24' : '#000000'}
-                emissiveIntensity={queuedLevelIds.has(entry.id) ? 0.16 : 0}
-                metalness={0.18}
-                roughness={0.42}
+            <LandingDoor
+              animated={isCurrentLevel}
+              elevatorId={elevatorId}
+              doorHeight={doorHeight}
+              doorOpen={isCurrentLevel ? doorOpen : 0}
+              doorWidth={doorWidth}
+              levelId={entry.id as AnyNodeId}
+              levelY={entry.baseY}
+              z={frontZ - 0.02}
+            />
+            <ElevatorFloorIndicator
+              active={showLandingReadout}
+              direction={showLandingReadout ? indicatorDirection : null}
+              label={entry.label}
+              position={[0, entry.baseY + doorHeight + 0.16, frontZ - 0.055]}
+              scale={0.62}
+              showReadout={showLandingReadout}
+            />
+            <group position={[landingPanelX, entry.baseY + panelRelativeY, frontZ - 0.035]}>
+              <BoxPrimitive
+                castShadow
+                material={LANDING_PANEL_MATERIAL}
+                receiveShadow
+                scale={[0.18, 0.42, 0.04]}
               />
-            </mesh>
+              <ElevatorMeshButton
+                active={isCurrentLevel && doorOpen > 0.5}
+                buttonKind="landing"
+                elevatorId={elevatorId}
+                levelId={entry.id as AnyNodeId}
+                position={[0, 0.06, -0.045]}
+                queued={isQueuedLevel}
+                radius={0.045}
+              />
+              <BoxPrimitive
+                material={isQueuedLevel ? QUEUE_STRIP_MATERIALS.queued : QUEUE_STRIP_MATERIALS.idle}
+                position={[0, -0.12, -0.035]}
+                scale={[0.095, 0.025, 0.012]}
+              />
+            </group>
           </group>
-        </group>
-      ))}
+        )
+      })}
     </group>
   )
 }

@@ -1,9 +1,11 @@
 import {
   type AnyNodeId,
+  type BuildingNode,
   type ElevatorNode,
   ElevatorNode as ElevatorNodeSchema,
   emitter,
   type GridEvent,
+  type LevelNode,
   sceneRegistry,
   useLiveTransforms,
   useScene,
@@ -11,6 +13,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
+import { resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -62,6 +65,10 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
     let wasCommitted = false
     let wasCancelled = false
     let pendingRotation = movingNode.rotation
+    const supportBuildingId = movingNode.parentId as BuildingNode['id'] | null | undefined
+    const supportLevelId = (movingNode.fromLevelId ?? movingNode.defaultLevelId) as
+      | LevelNode['id']
+      | null
 
     const applyPreview = (
       position: ElevatorNode['position'],
@@ -98,7 +105,12 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
     const onGridMove = (event: GridEvent) => {
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const y = event.localPosition[1]
+      const supportY = resolveElevatorSupportY({
+        buildingId: supportBuildingId,
+        preferredLevelId: supportLevelId,
+        x: gridX,
+        z: gridZ,
+      })
 
       if (
         previousGridPosRef.current &&
@@ -108,21 +120,28 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
       }
 
       previousGridPosRef.current = [gridX, gridZ]
-      setCursorPosition([gridX, y, gridZ])
-      previewPositionRef.current = [gridX, movingNode.position[1], gridZ]
+      setCursorPosition([gridX, supportY, gridZ])
+      previewPositionRef.current = [gridX, supportY, gridZ]
       applyPreview(previewPositionRef.current, pendingRotation)
     }
 
     const onGridClick = (event: GridEvent) => {
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const supportY = resolveElevatorSupportY({
+        buildingId: supportBuildingId,
+        preferredLevelId: supportLevelId,
+        x: gridX,
+        z: gridZ,
+      })
+      const nextPosition: ElevatorNode['position'] = [gridX, supportY, gridZ]
 
       wasCommitted = true
       clearPreview()
       useScene.temporal.getState().resume()
       if (movingNodeId && useScene.getState().nodes[movingNodeId as AnyNodeId]) {
         useScene.getState().updateNode(movingNodeId as AnyNodeId, {
-          position: [gridX, movingNode.position[1], gridZ],
+          position: nextPosition,
           rotation: pendingRotation,
           metadata: committedMeta,
         })
@@ -131,7 +150,7 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
         const elevator = ElevatorNodeSchema.parse({
           ...movingNode,
           id: undefined,
-          position: [gridX, movingNode.position[1], gridZ],
+          position: nextPosition,
           rotation: pendingRotation,
           metadata: committedMeta,
         })

@@ -17,8 +17,8 @@ import { KeyboardControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BoxGeometry,
   Box3,
+  BoxGeometry,
   Euler,
   type Group,
   Matrix4,
@@ -142,16 +142,18 @@ type FirstPersonInteractableTarget =
       type: 'door' | 'window'
     }
   | {
+      action: 'open-door' | 'request-level'
       buttonKind: 'cab' | 'landing'
       id: AnyNodeId
-      levelId: AnyNodeId
+      levelId?: AnyNodeId
       type: 'elevator'
     }
 
 type ElevatorButtonTarget = {
+  action: 'open-door' | 'request-level'
   buttonKind: 'cab' | 'landing'
   elevatorId: AnyNodeId
-  levelId: AnyNodeId
+  levelId?: AnyNodeId
 }
 
 function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | null {
@@ -161,6 +163,7 @@ function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | n
     const candidate = (
       current.userData as {
         elevatorButton?: {
+          action?: unknown
           elevatorId?: unknown
           kind?: unknown
           levelId?: unknown
@@ -168,12 +171,24 @@ function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | n
       }
     ).elevatorButton
 
+    if (typeof candidate?.elevatorId === 'string' && candidate.kind === 'cab') {
+      const action = candidate.action === 'open-door' ? 'open-door' : 'request-level'
+      if (action === 'open-door') {
+        return {
+          action,
+          buttonKind: candidate.kind,
+          elevatorId: candidate.elevatorId as AnyNodeId,
+        }
+      }
+    }
+
     if (
       typeof candidate?.elevatorId === 'string' &&
       typeof candidate.levelId === 'string' &&
       (candidate.kind === 'cab' || candidate.kind === 'landing')
     ) {
       return {
+        action: 'request-level',
         buttonKind: candidate.kind,
         elevatorId: candidate.elevatorId as AnyNodeId,
         levelId: candidate.levelId as AnyNodeId,
@@ -712,10 +727,13 @@ export const FirstPersonControls = () => {
 
           const target = resolveElevatorButtonTarget(intersection.object)
           if (!target || target.elevatorId !== elevatorId) continue
-          if (nodes[target.levelId]?.type !== 'level') continue
+          if (target.action === 'request-level') {
+            if (!target.levelId || nodes[target.levelId]?.type !== 'level') continue
+          }
           if (target.buttonKind === 'cab' && !canUseCabButtons) continue
 
           closestTarget = {
+            action: target.action,
             buttonKind: target.buttonKind,
             id: target.elevatorId,
             levelId: target.levelId,
@@ -756,7 +774,11 @@ export const FirstPersonControls = () => {
           }
         }
       }
-      useInteractive.getState().requestElevator(target.id, target.levelId)
+      if (target.action === 'open-door') {
+        useInteractive.getState().openElevatorDoor(target.id)
+        return
+      }
+      if (target.levelId) useInteractive.getState().requestElevator(target.id, target.levelId)
       return
     }
 

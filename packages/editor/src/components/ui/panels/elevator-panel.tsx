@@ -8,12 +8,14 @@ import {
   type LevelNode,
   useInteractive,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Send, Trash2 } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { resolveElevatorNodeSupportY, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -90,6 +92,18 @@ function stripDuplicateFlags(metadata: ElevatorNode['metadata']) {
 
 type ElevatorMetricKey = 'width' | 'depth' | 'cabHeight' | 'doorWidth' | 'doorHeight'
 
+function roundMeters(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+function radiansToDegrees(radians: number) {
+  return Math.round((radians * 180) / Math.PI)
+}
+
+function degreesToRadians(degrees: number) {
+  return (degrees * Math.PI) / 180
+}
+
 export function ElevatorPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
@@ -115,10 +129,15 @@ export function ElevatorPanel() {
   const liveOverrides = useLiveNodeOverrides((s) =>
     selectedId ? s.get(selectedId as AnyNodeId) : undefined,
   )
+  const liveTransform = useLiveTransforms((s) =>
+    selectedId ? s.get(selectedId as AnyNodeId) : undefined,
+  )
 
   useEffect(() => {
     return () => {
-      if (selectedId) useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
+      if (!selectedId) return
+      useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
+      useLiveTransforms.getState().clear(selectedId as AnyNodeId)
     }
   }, [selectedId])
 
@@ -143,8 +162,31 @@ export function ElevatorPanel() {
   )
 
   const clearLivePreview = useCallback(() => {
-    if (selectedId) useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
+    if (!selectedId) return
+    useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
+    useLiveTransforms.getState().clear(selectedId as AnyNodeId)
   }, [selectedId])
+
+  useEffect(() => {
+    if (!(selectedId && node?.type === 'elevator')) return
+    const supportY = resolveElevatorNodeSupportY(node)
+    if (node.position[1] >= supportY - 1e-4) return
+
+    updateNode(selectedId as AnyNode['id'], {
+      position: [node.position[0], supportY, node.position[2]],
+    })
+  }, [
+    node?.defaultLevelId,
+    node?.fromLevelId,
+    node?.id,
+    node?.parentId,
+    node?.position[0],
+    node?.position[1],
+    node?.position[2],
+    node?.type,
+    selectedId,
+    updateNode,
+  ])
 
   const previewMetric = useCallback(
     <K extends ElevatorMetricKey>(key: K, value: ElevatorNode[K]) => {
@@ -165,6 +207,43 @@ export function ElevatorPanel() {
       useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
     },
     [node, selectedId, updateNode],
+  )
+
+  const previewTransform = useCallback(
+    (position: ElevatorNode['position'], rotation: ElevatorNode['rotation']) => {
+      if (!selectedId) return
+      useLiveTransforms.getState().set(selectedId as AnyNodeId, { position, rotation })
+    },
+    [selectedId],
+  )
+
+  const commitTransform = useCallback(
+    (position: ElevatorNode['position'], rotation: ElevatorNode['rotation']) => {
+      if (!(selectedId && node)) return
+      useLiveTransforms.getState().clear(selectedId as AnyNodeId)
+      const positionChanged = node.position.some(
+        (value, index) => Math.abs(value - position[index]!) > 1e-6,
+      )
+      const rotationChanged = Math.abs(node.rotation - rotation) > 1e-6
+      if (positionChanged || rotationChanged) {
+        updateNode(selectedId as AnyNode['id'], { position, rotation })
+      }
+    },
+    [node, selectedId, updateNode],
+  )
+
+  const getSupportedPosition = useCallback(
+    (x: number, z: number): ElevatorNode['position'] => {
+      if (!node) return [x, 0, z]
+      const supportY = resolveElevatorSupportY({
+        buildingId: node.parentId,
+        preferredLevelId: node.fromLevelId ?? node.defaultLevelId,
+        x,
+        z,
+      })
+      return [x, supportY, z]
+    },
+    [node],
   )
 
   const handleClose = useCallback(() => {
@@ -231,6 +310,20 @@ export function ElevatorPanel() {
         defaultLevelId: currentDefaultIsServed
           ? node.defaultLevelId
           : nextFromLevelId || nextServedLevels[0]?.id || null,
+        ...(field === 'fromLevelId'
+          ? {
+              position: [
+                node.position[0],
+                resolveElevatorSupportY({
+                  buildingId: node.parentId,
+                  preferredLevelId: nextFromLevelId,
+                  x: node.position[0],
+                  z: node.position[2],
+                }),
+                node.position[2],
+              ] as ElevatorNode['position'],
+            }
+          : {}),
         servedLevelIds: undefined,
       } as Partial<ElevatorNode>)
     },
@@ -240,6 +333,9 @@ export function ElevatorPanel() {
   if (!(node && node.type === 'elevator' && selectedId && selectedCount === 1)) return null
 
   const displayNode = liveOverrides ? ({ ...node, ...liveOverrides } as ElevatorNode) : node
+  const displayPosition = liveTransform?.position ?? displayNode.position
+  const displayRotation = liveTransform?.rotation ?? displayNode.rotation
+  const displayRotationDegrees = radiansToDegrees(displayRotation)
   const fromLevelId = getResolvedFromLevelId(node, levels)
   const toLevelId = getResolvedToLevelId(node, levels, fromLevelId)
   const servedLevels = getServiceLevels(levels, fromLevelId, toLevelId)
@@ -255,9 +351,15 @@ export function ElevatorPanel() {
       ? node.defaultLevelId
       : fromLevelId || levels[0]?.id) ??
     null
-  const queuedLevelIds = new Set<string>()
-  for (const levelId of runtime?.queue ?? []) queuedLevelIds.add(levelId)
-  if (runtime?.targetLevelId) queuedLevelIds.add(runtime.targetLevelId)
+  const destinationOrderByLevelId = new Map<string, number>()
+  const orderedDestinationIds: string[] = []
+  if (runtime?.targetLevelId) orderedDestinationIds.push(runtime.targetLevelId)
+  for (const levelId of runtime?.queue ?? []) {
+    if (!orderedDestinationIds.includes(levelId)) orderedDestinationIds.push(levelId)
+  }
+  orderedDestinationIds.forEach((levelId, index) => {
+    destinationOrderByLevelId.set(levelId, index + 1)
+  })
 
   return (
     <PanelWrapper
@@ -281,6 +383,102 @@ export function ElevatorPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
+      </PanelSection>
+
+      <PanelSection title="Position">
+        <SliderControl
+          label="X"
+          max={50}
+          min={-50}
+          onChange={(value) => {
+            const position = getSupportedPosition(value, displayPosition[2])
+            previewTransform(position, displayRotation)
+          }}
+          onCommit={(value) => {
+            const position = getSupportedPosition(value, displayPosition[2])
+            commitTransform(position, displayRotation)
+          }}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={roundMeters(displayPosition[0])}
+        />
+        <SliderControl
+          label="Y"
+          max={50}
+          min={-50}
+          onChange={(value) => {
+            const position: ElevatorNode['position'] = [
+              displayPosition[0],
+              value,
+              displayPosition[2],
+            ]
+            previewTransform(position, displayRotation)
+          }}
+          onCommit={(value) => {
+            const position: ElevatorNode['position'] = [
+              displayPosition[0],
+              value,
+              displayPosition[2],
+            ]
+            commitTransform(position, displayRotation)
+          }}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={roundMeters(displayPosition[1])}
+        />
+        <SliderControl
+          label="Z"
+          max={50}
+          min={-50}
+          onChange={(value) => {
+            const position = getSupportedPosition(displayPosition[0], value)
+            previewTransform(position, displayRotation)
+          }}
+          onCommit={(value) => {
+            const position = getSupportedPosition(displayPosition[0], value)
+            commitTransform(position, displayRotation)
+          }}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={roundMeters(displayPosition[2])}
+        />
+      </PanelSection>
+
+      <PanelSection title="Rotation">
+        <SliderControl
+          label="Yaw"
+          max={180}
+          min={-180}
+          onChange={(degrees) => previewTransform(displayPosition, degreesToRadians(degrees))}
+          onCommit={(degrees) => commitTransform(displayPosition, degreesToRadians(degrees))}
+          precision={0}
+          restoreOnCommit={false}
+          step={1}
+          unit="°"
+          value={displayRotationDegrees}
+        />
+        <div className="flex gap-1.5 px-1 pt-2 pb-1">
+          <ActionButton
+            label="-45°"
+            onClick={() => {
+              sfxEmitter.emit('sfx:item-rotate')
+              commitTransform(displayPosition, displayRotation - Math.PI / 4)
+            }}
+          />
+          <ActionButton
+            label="+45°"
+            onClick={() => {
+              sfxEmitter.emit('sfx:item-rotate')
+              commitTransform(displayPosition, displayRotation + Math.PI / 4)
+            }}
+          />
+        </div>
       </PanelSection>
 
       <PanelSection title="Cab">
@@ -410,25 +608,32 @@ export function ElevatorPanel() {
         <div className="grid grid-cols-2 gap-1.5">
           {servedLevels.map((level) => {
             const isActive = activeLevelId === level.id
-            const isQueued = queuedLevelIds.has(level.id)
+            const stopOrder = destinationOrderByLevelId.get(level.id)
             return (
               <button
                 className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 text-left transition-colors ${
                   isActive
-                    ? 'border-sky-400/45 bg-sky-400/15 text-sky-100'
-                    : isQueued
-                      ? 'border-amber-300/45 bg-amber-300/15 text-amber-100'
-                      : 'border-border/50 bg-[#2C2C2E] text-foreground hover:bg-[#3e3e3e]'
+                    ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-100'
+                    : 'border-border/50 bg-[#2C2C2E] text-foreground hover:bg-[#3e3e3e]'
                 }`}
                 key={level.id}
                 onClick={() => requestLevel(level.id)}
                 type="button"
               >
-                <span className="min-w-0 truncate text-xs">
-                  {level.name || `Level ${level.level}`}
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-xs">{level.name || `Level ${level.level}`}</span>
+                  {stopOrder && (
+                    <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
+                      Stop {stopOrder}
+                    </span>
+                  )}
                 </span>
-                <span className="flex h-6 min-w-6 items-center justify-center rounded-full border border-white/15 bg-black/20">
-                  <Send className="h-3 w-3" />
+                <span
+                  className={`flex h-6 min-w-6 items-center justify-center rounded-full border border-white/15 bg-black/20 ${
+                    stopOrder ? 'px-1.5 font-mono text-[11px] font-semibold' : ''
+                  }`}
+                >
+                  {stopOrder ?? <Send className="h-3 w-3" />}
                 </span>
               </button>
             )

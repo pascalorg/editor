@@ -10,6 +10,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
@@ -76,16 +77,23 @@ function createElevatorPreviewGeometry(): THREE.BufferGeometry {
 
 function commitElevatorPlacement(
   buildingId: BuildingNode['id'],
-  position: [number, number, number],
+  x: number,
+  z: number,
   rotation: number,
 ): void {
   const { createNode, nodes } = useScene.getState()
   const elevatorCount = Object.values(nodes).filter((node) => node.type === 'elevator').length
   const serviceRange = resolveDefaultServiceRange(buildingId)
+  const supportY = resolveElevatorSupportY({
+    buildingId,
+    preferredLevelId: serviceRange.fromLevelId ?? serviceRange.defaultLevelId,
+    x,
+    z,
+  })
   const elevator = ElevatorNode.parse({
     name: `Elevator ${elevatorCount + 1}`,
     parentId: buildingId,
-    position,
+    position: [x, supportY, z],
     rotation,
     width: DEFAULT_ELEVATOR_WIDTH,
     depth: DEFAULT_ELEVATOR_DEPTH,
@@ -131,10 +139,15 @@ export const ElevatorTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const y = event.localPosition[1]
+      const supportY = resolveElevatorSupportY({
+        buildingId: currentBuildingId,
+        preferredLevelId: levelId as LevelNode['id'] | null,
+        x: gridX,
+        z: gridZ,
+      })
 
-      cursorRef.current?.position.set(gridX, y + GRID_OFFSET, gridZ)
-      previewRef.current?.position.set(gridX, y + DEFAULT_ELEVATOR_CAB_HEIGHT / 2, gridZ)
+      cursorRef.current?.position.set(gridX, supportY + GRID_OFFSET, gridZ)
+      previewRef.current?.position.set(gridX, supportY + DEFAULT_ELEVATOR_CAB_HEIGHT / 2, gridZ)
 
       if (
         previousGridPosRef.current &&
@@ -152,7 +165,7 @@ export const ElevatorTool: React.FC = () => {
 
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      commitElevatorPlacement(latestBuildingId, [gridX, 0, gridZ], rotationRef.current)
+      commitElevatorPlacement(latestBuildingId, gridX, gridZ, rotationRef.current)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
