@@ -1,4 +1,5 @@
 import type {
+  AnyNodeId,
   BuildingNode,
   CeilingNode,
   ColumnNode,
@@ -93,15 +94,17 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
 }
 
 export const MoveTool: React.FC<{
+  onNodeMoved?: (nodeId: AnyNodeId) => void
   onSpawnMoved?: (nodeId: SpawnNode['id']) => void
-}> = ({ onSpawnMoved }) => {
+}> = ({ onNodeMoved, onSpawnMoved }) => {
   const movingNode = useEditor((state) => state.movingNode)
 
   if (!movingNode) return null
   if (movingNode.type === 'building')
     return <MoveBuildingContent node={movingNode as BuildingNode} />
   if (movingNode.type === 'door') return <MoveDoorTool node={movingNode as DoorNode} />
-  if (movingNode.type === 'elevator') return <MoveElevatorTool node={movingNode as ElevatorNode} />
+  if (movingNode.type === 'elevator')
+    return <MoveElevatorTool node={movingNode as ElevatorNode} onCommitted={onNodeMoved} />
   if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
   if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />

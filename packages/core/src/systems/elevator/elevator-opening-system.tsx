@@ -1,5 +1,7 @@
-import { type AnyNode, syncAutoElevatorOpenings, useScene } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
+import type { AnyNode } from '../../schema'
+import useScene from '../../store/use-scene'
+import { syncAutoElevatorOpenings } from './elevator-opening-sync'
 
 function isOpeningRelevantNode(node: AnyNode | undefined) {
   return (

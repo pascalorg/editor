@@ -22,6 +22,13 @@ export function ElevatorAnimationSystem() {
     const nodes = useScene.getState().nodes
     const now = clock.getElapsedTime() * 1000
 
+    for (const elevatorId of Object.keys(interactive.elevators)) {
+      const typedElevatorId = elevatorId as AnyNodeId
+      if (nodes[typedElevatorId]?.type !== 'elevator') {
+        interactive.removeElevator(typedElevatorId)
+      }
+    }
+
     for (const elevatorId of sceneRegistry.byType.elevator) {
       const typedElevatorId = elevatorId as AnyNodeId
       const node = nodes[typedElevatorId]

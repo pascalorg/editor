@@ -1,15 +1,15 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   type ElevatorNode,
-  resolveElevatorDispatchTarget,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { type ThreeEvent, useFrame } from '@react-three/fiber'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
   CylinderGeometry,
@@ -561,29 +561,8 @@ function ElevatorMeshButton({
     [action, buttonKind, disabled, elevatorId, levelId],
   )
 
-  const press = (event: ThreeEvent<PointerEvent>) => {
-    if (event.button !== 0) return
-    if (disabled) return
-    if (action === 'open-door') {
-      useInteractive.getState().openElevatorDoor(elevatorId)
-      return
-    }
-    if (levelId) {
-      const targetElevatorId =
-        buttonKind === 'landing'
-          ? resolveElevatorDispatchTarget({
-              elevators: useInteractive.getState().elevators,
-              levelId,
-              nodes: useScene.getState().nodes,
-              requestedElevatorId: elevatorId,
-            })
-          : elevatorId
-      useInteractive.getState().requestElevator(targetElevatorId, levelId)
-    }
-  }
-
   return (
-    <group onPointerDown={press} position={position} userData={userData}>
+    <group position={position} userData={userData}>
       {!disabled && (active || queued) && (
         <mesh
           dispose={null}
@@ -698,6 +677,32 @@ function getElevatorShaftWidth(node: ElevatorNode, cabWidth = getElevatorCabWidt
 
 function getElevatorShaftDepth(node: ElevatorNode, cabDepth = getElevatorCabDepth(node)) {
   return Math.max(node.shaftDepth ?? cabDepth, cabDepth, 0.8)
+}
+
+function getElevatorLevelContextNodes(
+  elevator: ElevatorNode,
+  nodes: ReturnType<typeof useScene.getState>['nodes'],
+): Record<AnyNodeId, AnyNode> {
+  const result: Record<string, AnyNode> = {}
+  const building = elevator.parentId ? nodes[elevator.parentId as AnyNodeId] : null
+  if (building?.type !== 'building') return result as Record<AnyNodeId, AnyNode>
+
+  result[building.id] = building
+
+  for (const childId of building.children) {
+    const level = nodes[childId as AnyNodeId]
+    if (level?.type !== 'level') continue
+
+    result[level.id] = level
+    for (const levelChildId of level.children) {
+      const child = nodes[levelChildId as AnyNodeId]
+      if (child?.type === 'ceiling' || child?.type === 'wall') {
+        result[child.id] = child
+      }
+    }
+  }
+
+  return result as Record<AnyNodeId, AnyNode>
 }
 
 function DoorLeaf({
@@ -1000,7 +1005,6 @@ function LandingDoor({
 export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const ref = useRef<Group>(null!)
   const cabRef = useRef<Group>(null)
-  const nodes = useScene((state) => state.nodes)
   const handlers = useNodeEvents(node, 'elevator')
   const liveOverrides = useLiveNodeOverrides((state) => state.get(node.id))
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
@@ -1008,12 +1012,15 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
     () => (liveOverrides ? ({ ...node, ...liveOverrides } as ElevatorNode) : node),
     [liveOverrides, node],
   )
+  const levelContextNodes = useScene(
+    useShallow((state) => getElevatorLevelContextNodes(renderNode, state.nodes)),
+  )
 
   useRegistry(node.id, 'elevator', ref)
 
   const { entries, defaultEntry, shaftBaseY, totalHeight } = useMemo(
-    () => resolveElevatorLevels(renderNode, nodes),
-    [renderNode, nodes],
+    () => resolveElevatorLevels(renderNode, levelContextNodes),
+    [renderNode, levelContextNodes],
   )
   const elevatorId = node.id as AnyNodeId
   const runtimeStatus = useInteractive(
@@ -1028,33 +1035,6 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
       }
     }),
   )
-
-  useEffect(() => {
-    if (!defaultEntry) return
-
-    const elevatorId = node.id as AnyNodeId
-    const interactive = useInteractive.getState()
-    const current = interactive.elevators[elevatorId]
-    if (!current) {
-      interactive.initElevator(elevatorId, defaultEntry.id as AnyNodeId, defaultEntry.baseY)
-    } else if (!entries.some((entry) => entry.id === current.currentLevelId)) {
-      interactive.setElevatorState(elevatorId, {
-        carY: defaultEntry.baseY,
-        currentLevelId: defaultEntry.id as AnyNodeId,
-        doorOpen: 0,
-        phase: 'idle',
-        phaseStartedAt: null,
-        queue: [],
-        targetLevelId: null,
-      })
-    }
-  }, [defaultEntry, entries, node.id])
-
-  useEffect(() => {
-    return () => {
-      useInteractive.getState().removeElevator(elevatorId)
-    }
-  }, [elevatorId])
 
   useFrame(() => {
     if (!cabRef.current) return

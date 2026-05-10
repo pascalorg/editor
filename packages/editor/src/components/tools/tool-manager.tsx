@@ -42,7 +42,6 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     slab: SlabTool,
     ceiling: CeilingTool,
     roof: RoofTool,
-    elevator: ElevatorTool,
     stair: StairTool,
     door: DoorTool,
     item: ItemTool,
@@ -132,12 +131,20 @@ export const ToolManager: React.FC = () => {
   const handlePlacedNodeSelected = (nodeId: AnyNodeId) => {
     setSelection({ selectedIds: [nodeId] })
   }
+  const handlePlacedElevatorSelected = (
+    nodeId: AnyNodeId,
+    elevatorBuildingId: BuildingNode['id'],
+  ) => {
+    setSelection({ buildingId: elevatorBuildingId, selectedIds: [nodeId] })
+  }
 
   return (
     <>
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
-      {movingNode?.type === 'building' && <MoveTool onSpawnMoved={handlePlacedNodeSelected} />}
+      {movingNode?.type === 'building' && (
+        <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
+      )}
 
       {/* Building-local group: all other tools are relative to the selected building.
           Cursor visuals set positions in building-local space; this group applies the
@@ -162,7 +169,10 @@ export const ToolManager: React.FC = () => {
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {curvingFence && <CurveFenceTool node={curvingFence} />}
         {movingNode && movingNode.type !== 'building' && (
-          <MoveTool onSpawnMoved={handlePlacedNodeSelected} />
+          <MoveTool
+            onNodeMoved={handlePlacedNodeSelected}
+            onSpawnMoved={handlePlacedNodeSelected}
+          />
         )}
         {!movingNode && showBuildTool && tool === 'spawn' && (
           <SpawnTool currentLevelId={selectedLevelId} onPlaced={handlePlacedNodeSelected} />
@@ -170,7 +180,16 @@ export const ToolManager: React.FC = () => {
         {!movingNode && showBuildTool && tool === 'column' && (
           <ColumnTool currentLevelId={selectedLevelId} onPlaced={handlePlacedNodeSelected} />
         )}
-        {!movingNode && BuildToolComponent && tool !== 'column' && <BuildToolComponent />}
+        {!movingNode && showBuildTool && tool === 'elevator' && (
+          <ElevatorTool
+            buildingId={buildingId as BuildingNode['id'] | null}
+            levelId={selectedLevelId}
+            onPlaced={handlePlacedElevatorSelected}
+          />
+        )}
+        {!movingNode && BuildToolComponent && tool !== 'column' && tool !== 'elevator' && (
+          <BuildToolComponent />
+        )}
       </group>
     </>
   )

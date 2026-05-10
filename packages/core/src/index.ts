@@ -87,6 +87,7 @@ export { default as useLiveTransforms, type LiveTransform } from './store/use-li
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
+export { ElevatorOpeningSystem } from './systems/elevator/elevator-opening-system'
 export {
   resolveElevatorBuildingLevels,
   resolveElevatorServiceLevelIds,

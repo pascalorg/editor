@@ -1,5 +1,6 @@
 'use client'
 
+import { ElevatorOpeningSystem } from '@pascal-app/core'
 import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
@@ -9,7 +10,7 @@ import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
 import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
 import { DoorSystem } from '../../systems/door/door-system'
 import { ElevatorAnimationSystem } from '../../systems/elevator/elevator-animation-system'
-import { ElevatorOpeningSystem } from '../../systems/elevator/elevator-opening-system'
+import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemSystem } from '../../systems/item/item-system'
@@ -208,6 +209,7 @@ const Viewer: React.FC<ViewerProps> = ({
         <CeilingSystem />
         <DoorAnimationSystem />
         <ElevatorAnimationSystem />
+        <ElevatorInteractionSystem />
         <ElevatorOpeningSystem />
         <WindowAnimationSystem />
         <DoorSystem />

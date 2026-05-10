@@ -10,7 +10,6 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { resolveElevatorSupportY } from '../../../lib/elevator-support'
@@ -29,7 +28,14 @@ function stripMoveMetadata(metadata: ElevatorNode['metadata']) {
   return nextMeta as ElevatorNode['metadata']
 }
 
-export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
+export function MoveElevatorTool({
+  node: movingNode,
+  onCommitted,
+}: {
+  node: ElevatorNode
+  onCommitted?: (nodeId: AnyNodeId) => void
+}) {
+  const onCommittedRef = useRef(onCommitted)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const previewPositionRef = useRef<ElevatorNode['position']>([
     movingNode.position[0],
@@ -45,6 +51,10 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
+
+  useEffect(() => {
+    onCommittedRef.current = onCommitted
+  }, [onCommitted])
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -145,7 +155,7 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
           rotation: pendingRotation,
           metadata: committedMeta,
         })
-        useViewer.getState().setSelection({ selectedIds: [movingNodeId] })
+        onCommittedRef.current?.(movingNodeId as AnyNodeId)
       } else if (movingNode.parentId) {
         const elevator = ElevatorNodeSchema.parse({
           ...movingNode,
@@ -155,7 +165,7 @@ export function MoveElevatorTool({ node: movingNode }: { node: ElevatorNode }) {
           metadata: committedMeta,
         })
         useScene.getState().createNode(elevator, movingNode.parentId as AnyNodeId)
-        useViewer.getState().setSelection({ selectedIds: [elevator.id] })
+        onCommittedRef.current?.(elevator.id as AnyNodeId)
       }
 
       sfxEmitter.emit('sfx:item-place')

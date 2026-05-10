@@ -7,7 +7,6 @@ import {
   type LevelNode,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveElevatorSupportY } from '../../../lib/elevator-support'
@@ -26,8 +25,16 @@ import {
 
 const GRID_OFFSET = 0.02
 
-function resolveCurrentBuildingId(): BuildingNode['id'] | null {
-  const { buildingId, levelId } = useViewer.getState().selection
+type ElevatorToolProps = {
+  buildingId: BuildingNode['id'] | null
+  levelId: LevelNode['id'] | null
+  onPlaced?: (elevatorId: AnyNodeId, buildingId: BuildingNode['id']) => void
+}
+
+function resolveCurrentBuildingId(
+  buildingId: BuildingNode['id'] | null,
+  levelId: LevelNode['id'] | null,
+): BuildingNode['id'] | null {
   if (buildingId) return buildingId as BuildingNode['id']
   if (!levelId) return null
 
@@ -39,12 +46,14 @@ function resolveCurrentBuildingId(): BuildingNode['id'] | null {
   return null
 }
 
-function resolveDefaultServiceRange(buildingId: BuildingNode['id']): {
+function resolveDefaultServiceRange(
+  buildingId: BuildingNode['id'],
+  selectedLevelId: LevelNode['id'] | null,
+): {
   defaultLevelId: LevelNode['id'] | null
   fromLevelId: LevelNode['id'] | null
   toLevelId: LevelNode['id'] | null
 } {
-  const { levelId } = useViewer.getState().selection
   const nodes = useScene.getState().nodes
   const building = nodes[buildingId as AnyNodeId]
   if (building?.type !== 'building') {
@@ -55,7 +64,7 @@ function resolveDefaultServiceRange(buildingId: BuildingNode['id']): {
     .map((childId) => nodes[childId as AnyNodeId])
     .filter((node): node is LevelNode => node?.type === 'level')
     .sort((left, right) => left.level - right.level)
-  const selectedLevelIndex = levels.findIndex((level) => level.id === levelId)
+  const selectedLevelIndex = levels.findIndex((level) => level.id === selectedLevelId)
   const fromIndex = selectedLevelIndex >= 0 ? selectedLevelIndex : 0
   const fromLevel = levels[fromIndex]
   const toLevel = levels[Math.min(fromIndex + 1, levels.length - 1)] ?? fromLevel
@@ -77,13 +86,15 @@ function createElevatorPreviewGeometry(): THREE.BufferGeometry {
 
 function commitElevatorPlacement(
   buildingId: BuildingNode['id'],
+  selectedLevelId: LevelNode['id'] | null,
   x: number,
   z: number,
   rotation: number,
+  onPlaced: ElevatorToolProps['onPlaced'],
 ): void {
   const { createNode, nodes } = useScene.getState()
   const elevatorCount = Object.values(nodes).filter((node) => node.type === 'elevator').length
-  const serviceRange = resolveDefaultServiceRange(buildingId)
+  const serviceRange = resolveDefaultServiceRange(buildingId, selectedLevelId)
   const supportY = resolveElevatorSupportY({
     buildingId,
     preferredLevelId: serviceRange.fromLevelId ?? serviceRange.defaultLevelId,
@@ -107,30 +118,19 @@ function commitElevatorPlacement(
   })
 
   createNode(elevator, buildingId)
-  useViewer.getState().setSelection({ buildingId, selectedIds: [elevator.id] })
+  onPlaced?.(elevator.id as AnyNodeId, buildingId)
   sfxEmitter.emit('sfx:structure-build')
 }
 
-export const ElevatorTool: React.FC = () => {
+export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId, onPlaced }) => {
   const cursorRef = useRef<THREE.Group>(null)
   const previewRef = useRef<THREE.Group>(null)
   const rotationRef = useRef(0)
   const previousGridPosRef = useRef<[number, number] | null>(null)
-  const buildingId = useViewer((state) => state.selection.buildingId)
-  const levelId = useViewer((state) => state.selection.levelId)
   const previewGeometry = useMemo(() => createElevatorPreviewGeometry(), [])
 
   useEffect(() => {
-    const currentBuildingId =
-      (buildingId as BuildingNode['id'] | null) ??
-      (levelId
-        ? (() => {
-            const level = useScene.getState().nodes[levelId as AnyNodeId]
-            return level?.type === 'level' && level.parentId
-              ? (level.parentId as BuildingNode['id'])
-              : null
-          })()
-        : null)
+    const currentBuildingId = resolveCurrentBuildingId(buildingId, levelId)
     if (!currentBuildingId) return
 
     rotationRef.current = 0
@@ -160,12 +160,19 @@ export const ElevatorTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
-      const latestBuildingId = resolveCurrentBuildingId()
+      const latestBuildingId = resolveCurrentBuildingId(buildingId, levelId)
       if (!latestBuildingId) return
 
       const gridX = Math.round(event.localPosition[0] * 2) / 2
       const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      commitElevatorPlacement(latestBuildingId, gridX, gridZ, rotationRef.current)
+      commitElevatorPlacement(
+        latestBuildingId,
+        levelId,
+        gridX,
+        gridZ,
+        rotationRef.current,
+        onPlaced,
+      )
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -195,7 +202,7 @@ export const ElevatorTool: React.FC = () => {
       emitter.off('grid:click', onGridClick)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [buildingId, levelId])
+  }, [buildingId, levelId, onPlaced])
 
   return (
     <group>
