@@ -5,6 +5,7 @@ import type {
   CeilingNode,
   ColumnNode,
   DoorNode,
+  ElevatorNode,
   ItemNode,
   Point2D,
   RoofNode,
@@ -52,6 +53,11 @@ type ColumnPolygonEntry = {
   polygon: Point2D[]
 }
 
+type ElevatorPolygonEntry = {
+  elevator: ElevatorNode
+  polygon: Point2D[]
+}
+
 type FloorplanRoofEntry = {
   roof: RoofNode
   segments: Array<{
@@ -81,6 +87,7 @@ type UseFloorplanHitTestingArgs = {
   columnPolygons: ColumnPolygonEntry[]
   displaySlabPolygons: SlabPolygonEntry[]
   displayWallPolygons: WallPolygonEntry[]
+  floorplanElevatorEntries: ElevatorPolygonEntry[]
   floorplanItemEntries: FloorplanItemEntry[]
   floorplanOpeningHitTolerance: number
   floorplanRoofEntries: FloorplanRoofEntry[]
@@ -98,6 +105,7 @@ export function useFloorplanHitTesting({
   columnPolygons,
   displaySlabPolygons,
   displayWallPolygons,
+  floorplanElevatorEntries,
   floorplanItemEntries,
   floorplanOpeningHitTolerance,
   floorplanRoofEntries,
@@ -121,6 +129,7 @@ export function useFloorplanHitTesting({
         openings: openingsPolygons,
         roofs: floorplanRoofEntries,
         stairs: floorplanStairEntries,
+        elevators: floorplanElevatorEntries,
         walls: displayWallPolygons,
         slabs: displaySlabPolygons,
         openingHitTolerance: floorplanOpeningHitTolerance,
@@ -135,6 +144,7 @@ export function useFloorplanHitTesting({
       displaySlabPolygons,
       displayWallPolygons,
       floorplanItemEntries,
+      floorplanElevatorEntries,
       floorplanOpeningHitTolerance,
       floorplanRoofEntries,
       floorplanStairEntries,
@@ -160,6 +170,7 @@ export function useFloorplanHitTesting({
         roofs: floorplanRoofEntries,
         slabs: displaySlabPolygons,
         columns: columnPolygons,
+        elevators: floorplanElevatorEntries,
         stairs: floorplanStairEntries,
       }),
     [
@@ -168,6 +179,7 @@ export function useFloorplanHitTesting({
       displaySlabPolygons,
       displayWallPolygons,
       floorplanItemEntries,
+      floorplanElevatorEntries,
       floorplanRoofEntries,
       floorplanStairEntries,
       isFloorplanItemContextActive,

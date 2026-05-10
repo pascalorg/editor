@@ -9,6 +9,7 @@ import {
   type ColumnNode,
   calculateLevelMiters,
   DoorNode,
+  type ElevatorNode,
   emitter,
   type FenceNode,
   type GridEvent,
@@ -28,6 +29,7 @@ import {
   type Point2D,
   type RoofNode,
   type RoofSegmentNode,
+  resolveElevatorServiceLevelIds,
   type SiteNode,
   SlabNode,
   type SpawnNode,
@@ -37,6 +39,7 @@ import {
   StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
+  useInteractive,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -627,6 +630,18 @@ type FloorplanSpawnEntry = {
 
 type FloorplanColumnEntry = {
   column: ColumnNode
+  points: string
+  polygon: Point2D[]
+}
+
+type FloorplanElevatorEntry = {
+  center: Point2D
+  elevator: ElevatorNode
+  frontEdge: FloorplanLineSegment
+  frontNormal: Point2D
+  isCarOnLevel: boolean
+  isQueuedLevel: boolean
+  isTargetLevel: boolean
   points: string
   polygon: Point2D[]
 }
@@ -6006,6 +6021,167 @@ const FloorplanFenceLayer = memo(function FloorplanFenceLayer({
   )
 })
 
+const FloorplanElevatorLayer = memo(function FloorplanElevatorLayer({
+  canSelectElevators,
+  elevatorEntries,
+  highlightedIdSet,
+  hoveredElevatorId,
+  isDeleteMode,
+  onElevatorHoverChange,
+  onElevatorHoverEnter,
+  onElevatorSelect,
+  palette,
+  selectedIdSet,
+  wallSelectionHatchId,
+}: {
+  canSelectElevators: boolean
+  elevatorEntries: FloorplanElevatorEntry[]
+  highlightedIdSet: ReadonlySet<string>
+  hoveredElevatorId: ElevatorNode['id'] | null
+  isDeleteMode: boolean
+  onElevatorHoverChange: (elevatorId: ElevatorNode['id'] | null) => void
+  onElevatorHoverEnter: (elevatorId: ElevatorNode['id']) => void
+  onElevatorSelect: (elevator: ElevatorNode, event: ReactMouseEvent<SVGElement>) => void
+  palette: FloorplanPalette
+  selectedIdSet: ReadonlySet<string>
+  wallSelectionHatchId: string
+}) {
+  if (elevatorEntries.length === 0) {
+    return null
+  }
+
+  return (
+    <g className="floorplan-elevator-layer">
+      {elevatorEntries.map((entry) => {
+        const { elevator } = entry
+        const isSelected = selectedIdSet.has(elevator.id)
+        const isHighlighted = highlightedIdSet.has(elevator.id)
+        const isHovered = hoveredElevatorId === elevator.id
+        const isDeleteHovered = isDeleteMode && isHovered
+        const isActive = isSelected || isHighlighted
+        const showChrome = isActive || isHovered
+        const fill = isDeleteHovered
+          ? palette.deleteFill
+          : isActive
+            ? `url(#${wallSelectionHatchId})`
+            : '#dbeafe'
+        const fillOpacity = isDeleteHovered ? 0.38 : isActive ? 0.84 : isHovered ? 0.78 : 0.64
+        const stroke = isDeleteHovered
+          ? palette.deleteStroke
+          : isActive
+            ? palette.selectedStroke
+            : isHovered
+              ? palette.wallHoverStroke
+              : '#2563eb'
+        const doorStroke = isDeleteHovered
+          ? palette.deleteStroke
+          : isActive
+            ? palette.selectedStroke
+            : '#0284c7'
+        const centerX = toSvgX(entry.center.x)
+        const centerY = toSvgY(entry.center.y)
+        const frontCenter = {
+          x: (entry.frontEdge.start.x + entry.frontEdge.end.x) / 2,
+          y: (entry.frontEdge.start.y + entry.frontEdge.end.y) / 2,
+        }
+        const doorIndicatorEnd = {
+          x: frontCenter.x + entry.frontNormal.x * 0.34,
+          y: frontCenter.y + entry.frontNormal.y * 0.34,
+        }
+        const showCarMarker = entry.isCarOnLevel || entry.isTargetLevel || entry.isQueuedLevel
+        const carFill = entry.isCarOnLevel ? '#22c55e' : '#ffffff'
+        const carStroke = entry.isCarOnLevel ? '#15803d' : '#0ea5e9'
+
+        return (
+          <g
+            key={elevator.id}
+            onPointerEnter={
+              canSelectElevators ? () => onElevatorHoverEnter(elevator.id) : undefined
+            }
+            onPointerLeave={canSelectElevators ? () => onElevatorHoverChange(null) : undefined}
+          >
+            {showChrome ? (
+              <polygon
+                fill="none"
+                points={entry.points}
+                pointerEvents="none"
+                stroke={isDeleteHovered ? palette.deleteStroke : palette.selectedStroke}
+                strokeOpacity={isDeleteHovered ? 0.18 : isActive ? 0.22 : 0.16}
+                strokeLinejoin="round"
+                strokeWidth={isActive ? '9' : '7'}
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
+            <polygon
+              fill={fill}
+              fillOpacity={fillOpacity}
+              points={entry.points}
+              pointerEvents="none"
+              stroke={stroke}
+              strokeLinejoin="round"
+              strokeWidth={isActive ? '2.4' : isHovered ? '2.1' : '1.45'}
+              vectorEffect="non-scaling-stroke"
+            />
+            <line
+              pointerEvents="none"
+              stroke={doorStroke}
+              strokeLinecap="round"
+              strokeWidth={isActive ? '3.2' : '2.4'}
+              vectorEffect="non-scaling-stroke"
+              x1={toSvgX(entry.frontEdge.start.x)}
+              x2={toSvgX(entry.frontEdge.end.x)}
+              y1={toSvgY(entry.frontEdge.start.y)}
+              y2={toSvgY(entry.frontEdge.end.y)}
+            />
+            <line
+              pointerEvents="none"
+              stroke={doorStroke}
+              strokeLinecap="round"
+              strokeOpacity={0.84}
+              strokeWidth="1.7"
+              vectorEffect="non-scaling-stroke"
+              x1={toSvgX(frontCenter.x)}
+              x2={toSvgX(doorIndicatorEnd.x)}
+              y1={toSvgY(frontCenter.y)}
+              y2={toSvgY(doorIndicatorEnd.y)}
+            />
+            {showCarMarker ? (
+              <circle
+                cx={centerX}
+                cy={centerY}
+                fill={carFill}
+                fillOpacity={entry.isCarOnLevel ? 0.92 : 0.82}
+                pointerEvents="none"
+                r={entry.isCarOnLevel ? 0.14 : 0.11}
+                stroke={carStroke}
+                strokeDasharray={entry.isCarOnLevel ? undefined : '3 2'}
+                strokeWidth="1.8"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
+            <polygon
+              fill="transparent"
+              onClick={
+                canSelectElevators
+                  ? (event) => {
+                      event.stopPropagation()
+                      onElevatorSelect(elevator, event)
+                    }
+                  : undefined
+              }
+              points={entry.points}
+              pointerEvents={canSelectElevators ? 'all' : 'none'}
+              style={canSelectElevators ? { cursor: EDITOR_CURSOR } : undefined}
+            >
+              <title>{elevator.name || 'Elevator'}</title>
+            </polygon>
+          </g>
+        )
+      })}
+    </g>
+  )
+})
+
 // Renders an item's 2D floor-plan image (top-down view, object-fit:contain)
 // inside its footprint rectangle. Placed at the same scene position/rotation
 // as the polygon so it lines up exactly.
@@ -7574,6 +7750,19 @@ export function FloorplanPanel() {
     walls,
     zones,
   } = useFloorplanSceneData({ buildingId, levelId })
+  const elevators = useScene(
+    useShallow((state) => {
+      const building = currentBuildingId ? state.nodes[currentBuildingId] : null
+      if (!building || building.type !== 'building') {
+        return [] as ElevatorNode[]
+      }
+
+      return building.children.flatMap((childId) => {
+        const node = state.nodes[childId]
+        return node?.type === 'elevator' && node.visible !== false ? [node] : []
+      })
+    }),
+  )
   const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
   const floorplanSceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - buildingRotationDeg
 
@@ -7631,6 +7820,7 @@ export function FloorplanPanel() {
   const [hoveredItemId, setHoveredItemId] = useState<ItemNode['id'] | null>(null)
   const [hoveredSpawnId, setHoveredSpawnId] = useState<SpawnNode['id'] | null>(null)
   const [hoveredStairId, setHoveredStairId] = useState<StairNode['id'] | null>(null)
+  const [hoveredElevatorId, setHoveredElevatorId] = useState<ElevatorNode['id'] | null>(null)
   const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
   const [hoveredEndpointId, setHoveredEndpointId] = useState<string | null>(null)
   const [hoveredWallCurveHandleId, setHoveredWallCurveHandleId] = useState<string | null>(null)
@@ -7655,6 +7845,29 @@ export function FloorplanPanel() {
   const [rotationModifierPressed, setRotationModifierPressed] = useState(false)
   const [movingFloorplanNodeRevision, setMovingFloorplanNodeRevision] = useState(0)
   const movingFloorplanNodeRefreshFrameRef = useRef<number | null>(null)
+  const elevatorIds = useMemo(() => elevators.map((elevator) => elevator.id), [elevators])
+  const elevatorRuntimeKey = useInteractive(
+    useCallback(
+      (state) =>
+        elevatorIds
+          .map((elevatorId) => {
+            const runtime = state.elevators[elevatorId]
+            if (!runtime) {
+              return `${elevatorId}:`
+            }
+
+            return [
+              elevatorId,
+              runtime.currentLevelId ?? '',
+              runtime.targetLevelId ?? '',
+              runtime.phase,
+              runtime.queue.join(','),
+            ].join(':')
+          })
+          .join('|'),
+      [elevatorIds],
+    ),
+  )
   const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
   const [isPanning, setIsPanning] = useState(false)
@@ -8281,6 +8494,68 @@ export function FloorplanPanel() {
       ]
     })
   }, [cursorPoint, floorplanItems, levelDescendantNodeById, movingFloorplanNodeRevision])
+  const floorplanElevatorEntries = useMemo<FloorplanElevatorEntry[]>(() => {
+    if (!levelNode) {
+      return []
+    }
+
+    const nodes = useScene.getState().nodes
+    const interactiveElevators = useInteractive.getState().elevators
+
+    return elevators.flatMap((elevator) => {
+      const serviceLevelIds = resolveElevatorServiceLevelIds(elevator, nodes)
+      if (!serviceLevelIds.includes(levelNode.id)) {
+        return []
+      }
+
+      const live = useLiveTransforms.getState().get(elevator.id)
+      const position = live?.position ?? elevator.position
+      const rotation = live?.rotation ?? elevator.rotation
+      const center = { x: position[0], y: position[2] }
+      const halfWidth = Math.max(0.1, elevator.width / 2)
+      const halfDepth = Math.max(0.1, elevator.depth / 2)
+      const footprintCorners: Array<readonly [number, number]> = [
+        [-halfWidth, -halfDepth],
+        [halfWidth, -halfDepth],
+        [halfWidth, halfDepth],
+        [-halfWidth, halfDepth],
+      ]
+      const polygon = footprintCorners.map(([localX, localY]) => {
+        const [offsetX, offsetY] = rotatePlanVector(localX, localY, rotation)
+        return {
+          x: center.x + offsetX,
+          y: center.y + offsetY,
+        }
+      })
+      const frontStart = polygon[0]
+      const frontEnd = polygon[1]
+      if (!(frontStart && frontEnd)) {
+        return []
+      }
+      const [frontNormalX, frontNormalY] = rotatePlanVector(0, -1, rotation)
+      const runtime = interactiveElevators[elevator.id]
+
+      return [
+        {
+          center,
+          elevator,
+          frontEdge: {
+            start: frontStart,
+            end: frontEnd,
+          },
+          frontNormal: {
+            x: frontNormalX,
+            y: frontNormalY,
+          },
+          isCarOnLevel: runtime?.currentLevelId === levelNode.id,
+          isQueuedLevel: runtime?.queue.includes(levelNode.id) ?? false,
+          isTargetLevel: runtime?.targetLevelId === levelNode.id,
+          points: formatPolygonPoints(polygon),
+          polygon,
+        },
+      ]
+    })
+  }, [elevatorRuntimeKey, elevators, levelNode, movingFloorplanNodeRevision])
   const referenceFloorLevel = useMemo(() => {
     if (!(showReferenceFloor && levelNode)) {
       return null
@@ -9114,6 +9389,7 @@ export function FloorplanPanel() {
       !movingFenceEndpoint &&
       isFloorplanStructureContextActive) ||
     isDeleteMode
+  const canSelectFloorplanElevators = canSelectFloorplanStairs
   const canSelectFloorplanSpawns = canSelectFloorplanStairs
   const canSelectFloorplanItems =
     (mode === 'select' &&
@@ -9788,6 +10064,7 @@ export function FloorplanPanel() {
       ...(visibleSitePolygon ? visibleSitePolygon.polygon : []),
       ...displayCeilingPolygons.flatMap((entry) => entry.polygon),
       ...displaySlabPolygons.flatMap((entry) => entry.polygon),
+      ...floorplanElevatorEntries.flatMap((entry) => entry.polygon),
       ...floorplanFenceEntries.flatMap((entry) => entry.centerline),
       ...floorplanItemEntries.flatMap((entry) => entry.polygon),
       ...floorplanRoofEntries.flatMap((entry) =>
@@ -9835,6 +10112,7 @@ export function FloorplanPanel() {
   }, [
     displayCeilingPolygons,
     displaySlabPolygons,
+    floorplanElevatorEntries,
     floorplanFenceEntries,
     floorplanItemEntries,
     floorplanRoofEntries,
@@ -13047,6 +13325,7 @@ export function FloorplanPanel() {
     columnPolygons: floorplanColumnEntries,
     displaySlabPolygons,
     displayWallPolygons,
+    floorplanElevatorEntries,
     floorplanItemEntries,
     floorplanOpeningHitTolerance,
     floorplanRoofEntries,
@@ -13425,6 +13704,14 @@ export function FloorplanPanel() {
     [syncDeleteHoveredId],
   )
 
+  const handleElevatorHoverChange = useCallback(
+    (elevatorId: ElevatorNode['id'] | null) => {
+      setHoveredElevatorId(elevatorId)
+      syncDeleteHoveredId(elevatorId)
+    },
+    [syncDeleteHoveredId],
+  )
+
   const handleZoneHoverChange = useCallback(
     (zoneId: ZoneNodeType['id'] | null) => {
       setHoveredZoneId(zoneId)
@@ -13440,11 +13727,13 @@ export function FloorplanPanel() {
       handleSlabHoverChange(null)
       handleCeilingHoverChange(null)
       handleStairHoverChange(null)
+      handleElevatorHoverChange(null)
       handleSpawnHoverChange(null)
       handleZoneHoverChange(null)
       handleItemHoverChange(itemId)
     },
     [
+      handleElevatorHoverChange,
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
@@ -13464,11 +13753,13 @@ export function FloorplanPanel() {
       handleSlabHoverChange(null)
       handleCeilingHoverChange(null)
       handleStairHoverChange(null)
+      handleElevatorHoverChange(null)
       handleSpawnHoverChange(null)
       handleZoneHoverChange(null)
       handleFenceHoverChange(fenceId)
     },
     [
+      handleElevatorHoverChange,
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
@@ -13489,10 +13780,12 @@ export function FloorplanPanel() {
       handleCeilingHoverChange(null)
       handleWallHoverChange(null)
       handleSpawnHoverChange(null)
+      handleElevatorHoverChange(null)
       handleZoneHoverChange(null)
       handleStairHoverChange(stairId)
     },
     [
+      handleElevatorHoverChange,
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
@@ -13513,11 +13806,39 @@ export function FloorplanPanel() {
       handleCeilingHoverChange(null)
       handleWallHoverChange(null)
       handleStairHoverChange(null)
+      handleElevatorHoverChange(null)
       handleZoneHoverChange(null)
       handleSpawnHoverChange(spawnId)
     },
     [
       handleCeilingHoverChange,
+      handleElevatorHoverChange,
+      handleFenceHoverChange,
+      handleItemHoverChange,
+      handleOpeningHoverChange,
+      handleSlabHoverChange,
+      handleSpawnHoverChange,
+      handleStairHoverChange,
+      handleWallHoverChange,
+      handleZoneHoverChange,
+    ],
+  )
+  const handleFloorplanElevatorHoverEnter = useCallback(
+    (elevatorId: ElevatorNode['id']) => {
+      handleItemHoverChange(null)
+      handleFenceHoverChange(null)
+      handleOpeningHoverChange(null)
+      handleSlabHoverChange(null)
+      handleCeilingHoverChange(null)
+      handleWallHoverChange(null)
+      handleStairHoverChange(null)
+      handleSpawnHoverChange(null)
+      handleZoneHoverChange(null)
+      handleElevatorHoverChange(elevatorId)
+    },
+    [
+      handleCeilingHoverChange,
+      handleElevatorHoverChange,
       handleFenceHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
@@ -13615,6 +13936,7 @@ export function FloorplanPanel() {
         | OpeningNode['id']
         | SlabNode['id']
         | CeilingNode['id']
+        | ElevatorNode['id']
         | SpawnNode['id']
         | StairNode['id']
         | ZoneNodeType['id'],
@@ -13629,6 +13951,7 @@ export function FloorplanPanel() {
             node.type === 'ceiling' ||
             node.type === 'door' ||
             node.type === 'window' ||
+            node.type === 'elevator' ||
             node.type === 'item' ||
             node.type === 'spawn' ||
             node.type === 'stair' ||
@@ -13849,6 +14172,12 @@ export function FloorplanPanel() {
   const handleStairSelect = useCallback(
     (stairId: StairNode['id'], event: ReactMouseEvent<SVGElement>) => {
       emitFloorplanNodeClick(stairId, 'click', event)
+    },
+    [emitFloorplanNodeClick],
+  )
+  const handleElevatorSelect = useCallback(
+    (elevator: ElevatorNode, event: ReactMouseEvent<SVGElement>) => {
+      emitFloorplanNodeClick(elevator.id, 'click', event)
     },
     [emitFloorplanNodeClick],
   )
@@ -15648,6 +15977,7 @@ export function FloorplanPanel() {
     handleCeilingHoverChange(null)
     handleSpawnHoverChange(null)
     handleStairHoverChange(null)
+    handleElevatorHoverChange(null)
     handleZoneHoverChange(null)
     setHoveredEndpointId(null)
     setHoveredSiteHandleId(null)
@@ -15661,6 +15991,7 @@ export function FloorplanPanel() {
   }, [
     emitFloorplanWallLeave,
     handleCeilingHoverChange,
+    handleElevatorHoverChange,
     handleItemHoverChange,
     handleOpeningHoverChange,
     handleSlabHoverChange,
@@ -15772,6 +16103,7 @@ export function FloorplanPanel() {
       handleSlabHoverChange(null)
       handleSpawnHoverChange(null)
       handleStairHoverChange(null)
+      handleElevatorHoverChange(null)
       handleZoneHoverChange(null)
       setHoveredEndpointId(null)
       floorplanMarqueeSnapPointRef.current = snappedPoint
@@ -15788,6 +16120,7 @@ export function FloorplanPanel() {
     },
     [
       getPlanPointFromClientPoint,
+      handleElevatorHoverChange,
       handleItemHoverChange,
       handleOpeningHoverChange,
       handleSlabHoverChange,
@@ -16526,6 +16859,20 @@ export function FloorplanPanel() {
                 palette={palette}
                 selectedZoneId={selectedZoneId}
                 zonePolygons={visibleZonePolygons}
+              />
+
+              <FloorplanElevatorLayer
+                canSelectElevators={canSelectFloorplanElevators}
+                elevatorEntries={floorplanElevatorEntries}
+                highlightedIdSet={highlightedFloorplanIdSet}
+                hoveredElevatorId={hoveredElevatorId}
+                isDeleteMode={isDeleteMode}
+                onElevatorHoverChange={handleElevatorHoverChange}
+                onElevatorHoverEnter={handleFloorplanElevatorHoverEnter}
+                onElevatorSelect={handleElevatorSelect}
+                palette={palette}
+                selectedIdSet={selectedIdSet}
+                wallSelectionHatchId={wallSelectionHatchId}
               />
 
               <FloorplanNodeLayer
