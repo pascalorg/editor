@@ -85,6 +85,7 @@ export {
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
+export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
 export {
   resolveElevatorBuildingLevels,

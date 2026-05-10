@@ -40,6 +40,7 @@ import {
   sampleWallCenterline,
   sceneRegistry,
   useInteractive,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -346,6 +347,21 @@ type PendingFenceDragState = {
   startClientY: number
 }
 
+type ElevatorResizeHandle =
+  | 'width-negative'
+  | 'width-positive'
+  | 'depth-negative'
+  | 'depth-positive'
+
+type ElevatorResizeDragState = {
+  center: Point2D
+  elevatorId: ElevatorNode['id']
+  handle: ElevatorResizeHandle
+  pointerId: number
+  rotation: number
+  shaftWallThickness: number
+}
+
 const GUIDE_CORNERS = ['nw', 'ne', 'se', 'sw'] as const
 
 type GuideCorner = (typeof GUIDE_CORNERS)[number]
@@ -634,16 +650,38 @@ type FloorplanColumnEntry = {
   polygon: Point2D[]
 }
 
+type FloorplanElevatorServedLevel = {
+  id: LevelNode['id']
+  isCurrent: boolean
+  isDisabled: boolean
+  isQueued: boolean
+  isServiceOnly: boolean
+  isTarget: boolean
+  label: string
+}
+
 type FloorplanElevatorEntry = {
+  cabCenterLocalY: number
+  cabDepth: number
+  cabWidth: number
   center: Point2D
+  doorStyle: ElevatorNode['doorStyle']
+  doorWidth: number
   elevator: ElevatorNode
   frontEdge: FloorplanLineSegment
   frontNormal: Point2D
   isCarOnLevel: boolean
   isQueuedLevel: boolean
   isTargetLevel: boolean
+  outerHalfDepth: number
+  outerHalfWidth: number
   points: string
   polygon: Point2D[]
+  rotation: number
+  servedLevels: FloorplanElevatorServedLevel[]
+  shaftDepth: number
+  shaftWallThickness: number
+  shaftWidth: number
 }
 
 type ReferenceFloorData = {
@@ -820,6 +858,18 @@ const oppositeGuideCorner: Record<GuideCorner, GuideCorner> = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
+}
+
+function roundPlanMeters(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+function getElevatorResizeAxis(handle: ElevatorResizeHandle) {
+  return handle.startsWith('width') ? 'width' : 'depth'
+}
+
+function getElevatorResizeSign(handle: ElevatorResizeHandle) {
+  return handle.endsWith('positive') ? 1 : -1
 }
 
 function getSelectionModifierKeys(event?: { metaKey?: boolean; ctrlKey?: boolean }) {
@@ -6029,6 +6079,10 @@ const FloorplanElevatorLayer = memo(function FloorplanElevatorLayer({
   isDeleteMode,
   onElevatorHoverChange,
   onElevatorHoverEnter,
+  onElevatorPointerDown,
+  onElevatorResizePointerDown,
+  onElevatorResizePointerMove,
+  onElevatorResizePointerUp,
   onElevatorSelect,
   palette,
   selectedIdSet,
@@ -6041,6 +6095,17 @@ const FloorplanElevatorLayer = memo(function FloorplanElevatorLayer({
   isDeleteMode: boolean
   onElevatorHoverChange: (elevatorId: ElevatorNode['id'] | null) => void
   onElevatorHoverEnter: (elevatorId: ElevatorNode['id']) => void
+  onElevatorPointerDown: (
+    elevatorId: ElevatorNode['id'],
+    event: ReactPointerEvent<SVGElement>,
+  ) => void
+  onElevatorResizePointerDown: (
+    entry: FloorplanElevatorEntry,
+    handle: ElevatorResizeHandle,
+    event: ReactPointerEvent<SVGCircleElement>,
+  ) => void
+  onElevatorResizePointerMove: (event: ReactPointerEvent<SVGCircleElement>) => void
+  onElevatorResizePointerUp: (event: ReactPointerEvent<SVGCircleElement>) => void
   onElevatorSelect: (elevator: ElevatorNode, event: ReactMouseEvent<SVGElement>) => void
   palette: FloorplanPalette
   selectedIdSet: ReadonlySet<string>
@@ -6060,37 +6125,100 @@ const FloorplanElevatorLayer = memo(function FloorplanElevatorLayer({
         const isDeleteHovered = isDeleteMode && isHovered
         const isActive = isSelected || isHighlighted
         const showChrome = isActive || isHovered
-        const fill = isDeleteHovered
+        const isGlassShaft = elevator.shaftStyle === 'glass'
+        const shaftShellFill = isDeleteHovered
           ? palette.deleteFill
           : isActive
             ? `url(#${wallSelectionHatchId})`
-            : '#dbeafe'
-        const fillOpacity = isDeleteHovered ? 0.38 : isActive ? 0.84 : isHovered ? 0.78 : 0.64
+            : isGlassShaft
+              ? '#dff6ff'
+              : '#e5e7eb'
+        const shaftClearFill = isGlassShaft ? '#ecfeff' : '#f8fafc'
+        const shaftShellOpacity = isDeleteHovered ? 0.38 : isActive ? 0.9 : isHovered ? 0.86 : 0.76
         const stroke = isDeleteHovered
           ? palette.deleteStroke
           : isActive
             ? palette.selectedStroke
             : isHovered
               ? palette.wallHoverStroke
-              : '#2563eb'
+              : isGlassShaft
+                ? '#0891b2'
+                : '#475569'
         const doorStroke = isDeleteHovered
           ? palette.deleteStroke
           : isActive
             ? palette.selectedStroke
-            : '#0284c7'
+            : '#0369a1'
         const centerX = toSvgX(entry.center.x)
         const centerY = toSvgY(entry.center.y)
-        const frontCenter = {
-          x: (entry.frontEdge.start.x + entry.frontEdge.end.x) / 2,
-          y: (entry.frontEdge.start.y + entry.frontEdge.end.y) / 2,
-        }
-        const doorIndicatorEnd = {
-          x: frontCenter.x + entry.frontNormal.x * 0.34,
-          y: frontCenter.y + entry.frontNormal.y * 0.34,
-        }
+        const rotationDeg = (-entry.rotation * 180) / Math.PI
+        const shaftWidth = entry.outerHalfWidth * 2
+        const shaftDepth = entry.outerHalfDepth * 2
+        const shaftClearX = -entry.shaftWidth / 2
+        const shaftClearY = -entry.shaftDepth / 2
+        const cabX = -entry.cabWidth / 2
+        const cabY = entry.cabCenterLocalY - entry.cabDepth / 2
+        const frontLocalY = -entry.outerHalfDepth
+        const doorHalfWidth = entry.doorWidth / 2
+        const doorTrackY = frontLocalY - 0.075
+        const callStationX = Math.min(entry.outerHalfWidth - 0.12, doorHalfWidth + 0.2)
+        const callStationY = frontLocalY - 0.16
+        const cabFill = entry.isCarOnLevel
+          ? '#dcfce7'
+          : entry.isTargetLevel || entry.isQueuedLevel
+            ? '#e0f2fe'
+            : '#f8fafc'
+        const cabStroke = entry.isCarOnLevel
+          ? '#16a34a'
+          : entry.isTargetLevel || entry.isQueuedLevel
+            ? '#0ea5e9'
+            : '#64748b'
         const showCarMarker = entry.isCarOnLevel || entry.isTargetLevel || entry.isQueuedLevel
         const carFill = entry.isCarOnLevel ? '#22c55e' : '#ffffff'
         const carStroke = entry.isCarOnLevel ? '#15803d' : '#0ea5e9'
+        const resizeHandles = [
+          {
+            cursor: 'ew-resize',
+            handle: 'width-negative' as const,
+            localX: -entry.outerHalfWidth,
+            localY: 0,
+          },
+          {
+            cursor: 'ew-resize',
+            handle: 'width-positive' as const,
+            localX: entry.outerHalfWidth,
+            localY: 0,
+          },
+          {
+            cursor: 'ns-resize',
+            handle: 'depth-negative' as const,
+            localX: 0,
+            localY: -entry.outerHalfDepth,
+          },
+          {
+            cursor: 'ns-resize',
+            handle: 'depth-positive' as const,
+            localX: 0,
+            localY: entry.outerHalfDepth,
+          },
+        ].map((handle) => {
+          const [offsetX, offsetY] = rotatePlanVector(handle.localX, handle.localY, entry.rotation)
+          return {
+            ...handle,
+            x: entry.center.x + offsetX,
+            y: entry.center.y + offsetY,
+          }
+        })
+        const rangeStep = 0.18
+        const rangeHeight = Math.max(0, (entry.servedLevels.length - 1) * rangeStep)
+        const [rangeOffsetX, rangeOffsetY] = rotatePlanVector(
+          entry.outerHalfWidth + 0.38,
+          0,
+          entry.rotation,
+        )
+        const rangeX = entry.center.x + rangeOffsetX
+        const rangeTopY = entry.center.y + rangeOffsetY - rangeHeight / 2
+        const rangeBottomY = entry.center.y + rangeOffsetY + rangeHeight / 2
 
         return (
           <g
@@ -6112,53 +6240,154 @@ const FloorplanElevatorLayer = memo(function FloorplanElevatorLayer({
                 vectorEffect="non-scaling-stroke"
               />
             ) : null}
-            <polygon
-              fill={fill}
-              fillOpacity={fillOpacity}
-              points={entry.points}
+            <g
               pointerEvents="none"
-              stroke={stroke}
-              strokeLinejoin="round"
-              strokeWidth={isActive ? '2.4' : isHovered ? '2.1' : '1.45'}
-              vectorEffect="non-scaling-stroke"
-            />
-            <line
-              pointerEvents="none"
-              stroke={doorStroke}
-              strokeLinecap="round"
-              strokeWidth={isActive ? '3.2' : '2.4'}
-              vectorEffect="non-scaling-stroke"
-              x1={toSvgX(entry.frontEdge.start.x)}
-              x2={toSvgX(entry.frontEdge.end.x)}
-              y1={toSvgY(entry.frontEdge.start.y)}
-              y2={toSvgY(entry.frontEdge.end.y)}
-            />
-            <line
-              pointerEvents="none"
-              stroke={doorStroke}
-              strokeLinecap="round"
-              strokeOpacity={0.84}
-              strokeWidth="1.7"
-              vectorEffect="non-scaling-stroke"
-              x1={toSvgX(frontCenter.x)}
-              x2={toSvgX(doorIndicatorEnd.x)}
-              y1={toSvgY(frontCenter.y)}
-              y2={toSvgY(doorIndicatorEnd.y)}
-            />
-            {showCarMarker ? (
+              transform={`translate(${centerX} ${centerY}) rotate(${rotationDeg})`}
+            >
+              <rect
+                fill={shaftShellFill}
+                fillOpacity={shaftShellOpacity}
+                height={shaftDepth}
+                stroke={stroke}
+                strokeLinejoin="round"
+                strokeWidth={isActive ? '2.4' : isHovered ? '2.1' : '1.45'}
+                vectorEffect="non-scaling-stroke"
+                width={shaftWidth}
+                x={-entry.outerHalfWidth}
+                y={-entry.outerHalfDepth}
+              />
+              <rect
+                fill={shaftClearFill}
+                fillOpacity={isGlassShaft ? 0.46 : 0.94}
+                height={entry.shaftDepth}
+                stroke={isGlassShaft ? '#67e8f9' : '#cbd5e1'}
+                strokeDasharray={isGlassShaft ? '2 2' : undefined}
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+                width={entry.shaftWidth}
+                x={shaftClearX}
+                y={shaftClearY}
+              />
+              <rect
+                fill={cabFill}
+                fillOpacity={0.96}
+                height={entry.cabDepth}
+                stroke={cabStroke}
+                strokeDasharray={entry.isTargetLevel && !entry.isCarOnLevel ? '3 2' : undefined}
+                strokeWidth={entry.isCarOnLevel ? '1.7' : '1.25'}
+                vectorEffect="non-scaling-stroke"
+                width={entry.cabWidth}
+                x={cabX}
+                y={cabY}
+              />
+              <line
+                stroke="#94a3b8"
+                strokeLinecap="round"
+                strokeOpacity={0.7}
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+                x1={cabX + 0.12}
+                x2={cabX + entry.cabWidth - 0.12}
+                y1={cabY + entry.cabDepth - 0.12}
+                y2={cabY + entry.cabDepth - 0.12}
+              />
+              <line
+                stroke={stroke}
+                strokeLinecap="round"
+                strokeWidth={isActive ? '3.2' : '2.7'}
+                vectorEffect="non-scaling-stroke"
+                x1={-entry.outerHalfWidth}
+                x2={-doorHalfWidth}
+                y1={frontLocalY}
+                y2={frontLocalY}
+              />
+              <line
+                stroke={stroke}
+                strokeLinecap="round"
+                strokeWidth={isActive ? '3.2' : '2.7'}
+                vectorEffect="non-scaling-stroke"
+                x1={doorHalfWidth}
+                x2={entry.outerHalfWidth}
+                y1={frontLocalY}
+                y2={frontLocalY}
+              />
+              <line
+                stroke={doorStroke}
+                strokeLinecap="round"
+                strokeOpacity={0.92}
+                strokeWidth="1.75"
+                vectorEffect="non-scaling-stroke"
+                x1={-doorHalfWidth}
+                x2={doorHalfWidth}
+                y1={doorTrackY}
+                y2={doorTrackY}
+              />
+              {entry.doorStyle === 'center-opening' ? (
+                <>
+                  <path
+                    d={`M ${-doorHalfWidth + 0.06} ${doorTrackY - 0.055} L ${-0.05} ${doorTrackY - 0.055}`}
+                    fill="none"
+                    stroke={doorStroke}
+                    strokeLinecap="round"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <path
+                    d={`M ${doorHalfWidth - 0.06} ${doorTrackY - 0.055} L ${0.05} ${doorTrackY - 0.055}`}
+                    fill="none"
+                    stroke={doorStroke}
+                    strokeLinecap="round"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </>
+              ) : (
+                <path
+                  d={
+                    entry.doorStyle === 'single-left'
+                      ? `M ${doorHalfWidth - 0.06} ${doorTrackY - 0.055} L ${-doorHalfWidth + 0.06} ${doorTrackY - 0.055}`
+                      : `M ${-doorHalfWidth + 0.06} ${doorTrackY - 0.055} L ${doorHalfWidth - 0.06} ${doorTrackY - 0.055}`
+                  }
+                  fill="none"
+                  stroke={doorStroke}
+                  strokeLinecap="round"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              <rect
+                fill="#111827"
+                height={0.16}
+                stroke={isDeleteHovered ? palette.deleteStroke : '#334155'}
+                strokeWidth="0.7"
+                vectorEffect="non-scaling-stroke"
+                width={0.1}
+                x={callStationX - 0.05}
+                y={callStationY - 0.08}
+              />
               <circle
-                cx={centerX}
-                cy={centerY}
-                fill={carFill}
-                fillOpacity={entry.isCarOnLevel ? 0.92 : 0.82}
-                pointerEvents="none"
-                r={entry.isCarOnLevel ? 0.14 : 0.11}
-                stroke={carStroke}
-                strokeDasharray={entry.isCarOnLevel ? undefined : '3 2'}
-                strokeWidth="1.8"
+                cx={callStationX}
+                cy={callStationY - 0.025}
+                fill={entry.isQueuedLevel || entry.isTargetLevel ? '#22c55e' : '#e2e8f0'}
+                r={0.025}
+                stroke="#f8fafc"
+                strokeWidth="0.5"
                 vectorEffect="non-scaling-stroke"
               />
-            ) : null}
+              {showCarMarker ? (
+                <circle
+                  cx={0}
+                  cy={entry.cabCenterLocalY}
+                  fill={carFill}
+                  fillOpacity={entry.isCarOnLevel ? 0.96 : 0.84}
+                  r={entry.isCarOnLevel ? 0.13 : 0.1}
+                  stroke={carStroke}
+                  strokeDasharray={entry.isCarOnLevel ? undefined : '3 2'}
+                  strokeWidth="1.7"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ) : null}
+            </g>
             <polygon
               fill="transparent"
               onClick={
@@ -6169,12 +6398,95 @@ const FloorplanElevatorLayer = memo(function FloorplanElevatorLayer({
                     }
                   : undefined
               }
+              onPointerDown={
+                canSelectElevators && isSelected
+                  ? (event) => {
+                      if (event.button === 0) {
+                        onElevatorPointerDown(elevator.id, event)
+                      }
+                    }
+                  : undefined
+              }
               points={entry.points}
               pointerEvents={canSelectElevators ? 'all' : 'none'}
               style={canSelectElevators ? { cursor: EDITOR_CURSOR } : undefined}
             >
               <title>{elevator.name || 'Elevator'}</title>
             </polygon>
+            {isSelected && entry.servedLevels.length > 1 ? (
+              <g pointerEvents="none">
+                <line
+                  stroke="#0ea5e9"
+                  strokeLinecap="round"
+                  strokeOpacity={0.52}
+                  strokeWidth="1.6"
+                  vectorEffect="non-scaling-stroke"
+                  x1={toSvgX(rangeX)}
+                  x2={toSvgX(rangeX)}
+                  y1={toSvgY(rangeTopY)}
+                  y2={toSvgY(rangeBottomY)}
+                />
+                {entry.servedLevels.map((level, index) => {
+                  const y = rangeBottomY - index * rangeStep
+                  const isUnavailable = level.isDisabled || level.isServiceOnly
+                  const markerFill = level.isCurrent
+                    ? '#22c55e'
+                    : level.isTarget || level.isQueued
+                      ? '#38bdf8'
+                      : isUnavailable
+                        ? '#94a3b8'
+                        : '#ffffff'
+                  const markerStroke = isUnavailable ? '#64748b' : '#0369a1'
+
+                  return (
+                    <g key={level.id}>
+                      <circle
+                        cx={toSvgX(rangeX)}
+                        cy={toSvgY(y)}
+                        fill={markerFill}
+                        fillOpacity={isUnavailable ? 0.72 : 0.95}
+                        r={0.055}
+                        stroke={markerStroke}
+                        strokeWidth="1.2"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <text
+                        dominantBaseline="middle"
+                        fill={isUnavailable ? '#64748b' : '#075985'}
+                        fontSize="0.13"
+                        fontWeight={700}
+                        textAnchor="start"
+                        x={toSvgX(rangeX + 0.11)}
+                        y={toSvgY(y)}
+                      >
+                        {index + 1}
+                      </text>
+                    </g>
+                  )
+                })}
+              </g>
+            ) : null}
+            {isSelected && canSelectElevators && !isDeleteMode
+              ? resizeHandles.map((handle) => (
+                  <circle
+                    cx={toSvgX(handle.x)}
+                    cy={toSvgY(handle.y)}
+                    fill="#ffffff"
+                    key={handle.handle}
+                    onPointerCancel={onElevatorResizePointerUp}
+                    onPointerDown={(event) =>
+                      onElevatorResizePointerDown(entry, handle.handle, event)
+                    }
+                    onPointerMove={onElevatorResizePointerMove}
+                    onPointerUp={onElevatorResizePointerUp}
+                    r={0.075}
+                    stroke="#0284c7"
+                    strokeWidth="1.7"
+                    style={{ cursor: handle.cursor }}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))
+              : null}
           </g>
         )
       })}
@@ -7821,6 +8133,8 @@ export function FloorplanPanel() {
   const [hoveredSpawnId, setHoveredSpawnId] = useState<SpawnNode['id'] | null>(null)
   const [hoveredStairId, setHoveredStairId] = useState<StairNode['id'] | null>(null)
   const [hoveredElevatorId, setHoveredElevatorId] = useState<ElevatorNode['id'] | null>(null)
+  const [elevatorResizeDragState, setElevatorResizeDragState] =
+    useState<ElevatorResizeDragState | null>(null)
   const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
   const [hoveredEndpointId, setHoveredEndpointId] = useState<string | null>(null)
   const [hoveredWallCurveHandleId, setHoveredWallCurveHandleId] = useState<string | null>(null)
@@ -7862,6 +8176,29 @@ export function FloorplanPanel() {
               runtime.targetLevelId ?? '',
               runtime.phase,
               runtime.queue.join(','),
+            ].join(':')
+          })
+          .join('|'),
+      [elevatorIds],
+    ),
+  )
+  const elevatorLiveOverrideKey = useLiveNodeOverrides(
+    useCallback(
+      (state) =>
+        elevatorIds
+          .map((elevatorId) => {
+            const overrides = state.overrides.get(elevatorId)
+            if (!overrides) {
+              return `${elevatorId}:`
+            }
+
+            return [
+              elevatorId,
+              overrides.width ?? '',
+              overrides.depth ?? '',
+              overrides.shaftWidth ?? '',
+              overrides.shaftDepth ?? '',
+              overrides.shaftWallThickness ?? '',
             ].join(':')
           })
           .join('|'),
@@ -8495,6 +8832,11 @@ export function FloorplanPanel() {
     })
   }, [cursorPoint, floorplanItems, levelDescendantNodeById, movingFloorplanNodeRevision])
   const floorplanElevatorEntries = useMemo<FloorplanElevatorEntry[]>(() => {
+    // These keys subscribe the memo to imperative floorplan stores read with getState().
+    void elevatorLiveOverrideKey
+    void elevatorRuntimeKey
+    void movingFloorplanNodeRevision
+
     if (!levelNode) {
       return []
     }
@@ -8503,17 +8845,39 @@ export function FloorplanPanel() {
     const interactiveElevators = useInteractive.getState().elevators
 
     return elevators.flatMap((elevator) => {
-      const serviceLevelIds = resolveElevatorServiceLevelIds(elevator, nodes)
+      const liveOverrides = useLiveNodeOverrides.getState().get(elevator.id)
+      const displayElevator = liveOverrides
+        ? ({ ...elevator, ...liveOverrides } as ElevatorNode)
+        : elevator
+      const serviceLevelIds = resolveElevatorServiceLevelIds(displayElevator, nodes)
       if (!serviceLevelIds.includes(levelNode.id)) {
         return []
       }
 
-      const live = useLiveTransforms.getState().get(elevator.id)
-      const position = live?.position ?? elevator.position
-      const rotation = live?.rotation ?? elevator.rotation
+      const live = useLiveTransforms.getState().get(displayElevator.id)
+      const position = live?.position ?? displayElevator.position
+      const rotation = live?.rotation ?? displayElevator.rotation
       const center = { x: position[0], y: position[2] }
-      const halfWidth = Math.max(0.1, elevator.width / 2)
-      const halfDepth = Math.max(0.1, elevator.depth / 2)
+      const wallThickness = Math.max(displayElevator.shaftWallThickness ?? 0.09, 0.04)
+      const cabWidth = Math.max(displayElevator.width, 0.8)
+      const cabDepth = Math.max(displayElevator.depth, 0.8)
+      const shaftWidth = Math.max(
+        displayElevator.shaftWidth ?? displayElevator.width,
+        cabWidth,
+        0.8,
+      )
+      const shaftDepth = Math.max(
+        displayElevator.shaftDepth ?? displayElevator.depth,
+        cabDepth,
+        0.8,
+      )
+      const doorWidth = Math.min(
+        Math.max(displayElevator.doorWidth, 0.45),
+        cabWidth - 0.18,
+        shaftWidth - 0.18,
+      )
+      const halfWidth = Math.max(0.1, shaftWidth / 2 + wallThickness)
+      const halfDepth = Math.max(0.1, shaftDepth / 2 + wallThickness)
       const footprintCorners: Array<readonly [number, number]> = [
         [-halfWidth, -halfDepth],
         [halfWidth, -halfDepth],
@@ -8533,12 +8897,37 @@ export function FloorplanPanel() {
         return []
       }
       const [frontNormalX, frontNormalY] = rotatePlanVector(0, -1, rotation)
-      const runtime = interactiveElevators[elevator.id]
+      const runtime = interactiveElevators[displayElevator.id]
+      const disabledLevelIds = new Set(displayElevator.disabledLevelIds ?? [])
+      const serviceOnlyLevelIds = new Set(displayElevator.serviceOnlyLevelIds ?? [])
+      const servedLevels = serviceLevelIds.flatMap((levelId) => {
+        const level = nodes[levelId as AnyNodeId]
+        if (level?.type !== 'level') {
+          return []
+        }
+
+        return [
+          {
+            id: level.id,
+            isCurrent: runtime?.currentLevelId === level.id,
+            isDisabled: disabledLevelIds.has(level.id),
+            isQueued: runtime?.queue.includes(level.id) ?? false,
+            isServiceOnly: serviceOnlyLevelIds.has(level.id),
+            isTarget: runtime?.targetLevelId === level.id,
+            label: level.name || `L${level.level}`,
+          },
+        ]
+      })
 
       return [
         {
+          cabCenterLocalY: -shaftDepth / 2 + cabDepth / 2,
+          cabDepth,
+          cabWidth,
           center,
-          elevator,
+          doorStyle: displayElevator.doorStyle ?? 'center-opening',
+          doorWidth,
+          elevator: displayElevator,
           frontEdge: {
             start: frontStart,
             end: frontEnd,
@@ -8550,12 +8939,25 @@ export function FloorplanPanel() {
           isCarOnLevel: runtime?.currentLevelId === levelNode.id,
           isQueuedLevel: runtime?.queue.includes(levelNode.id) ?? false,
           isTargetLevel: runtime?.targetLevelId === levelNode.id,
+          outerHalfDepth: halfDepth,
+          outerHalfWidth: halfWidth,
           points: formatPolygonPoints(polygon),
           polygon,
+          rotation,
+          servedLevels,
+          shaftDepth,
+          shaftWallThickness: wallThickness,
+          shaftWidth,
         },
       ]
     })
-  }, [elevatorRuntimeKey, elevators, levelNode, movingFloorplanNodeRevision])
+  }, [
+    elevatorLiveOverrideKey,
+    elevatorRuntimeKey,
+    elevators,
+    levelNode,
+    movingFloorplanNodeRevision,
+  ])
   const referenceFloorLevel = useMemo(() => {
     if (!(showReferenceFloor && levelNode)) {
       return null
@@ -8915,6 +9317,13 @@ export function FloorplanPanel() {
 
     return floorplanSpawnEntries.find(({ spawn }) => spawn.id === selectedIds[0]) ?? null
   }, [floorplanSpawnEntries, selectedIds])
+  const selectedElevatorEntry = useMemo(() => {
+    if (selectedIds.length !== 1) {
+      return null
+    }
+
+    return floorplanElevatorEntries.find(({ elevator }) => elevator.id === selectedIds[0]) ?? null
+  }, [floorplanElevatorEntries, selectedIds])
   const selectedItemClearanceMeasurements = useMemo(() => {
     if (!selectedItemEntry) {
       return [] as LinearMeasurementOverlay[]
@@ -9249,6 +9658,7 @@ export function FloorplanPanel() {
   const isFenceMoveActive = movingNode?.type === 'fence'
   const isWallMoveActive = movingNode?.type === 'wall'
   const isSpawnMoveActive = movingNode?.type === 'spawn'
+  const isElevatorMoveActive = movingNode?.type === 'elevator'
   const isWallCurveActive = curvingWall?.type === 'wall'
   const isFenceCurveActive = curvingFence?.type === 'fence'
   const isFenceEndpointMoveActive = movingFenceEndpoint !== null
@@ -9268,6 +9678,7 @@ export function FloorplanPanel() {
     isFenceMoveActive ||
     isWallMoveActive ||
     isSpawnMoveActive ||
+    isElevatorMoveActive ||
     isWallCurveActive ||
     isFenceCurveActive ||
     isFenceEndpointMoveActive ||
@@ -10328,6 +10739,18 @@ export function FloorplanPanel() {
       floorplanSceneRotationDeg,
     )
   }, [floorplanSceneRotationDeg, selectedSpawnEntry, surfaceSize, viewBox])
+  const selectedElevatorActionMenuPosition = useMemo(
+    () =>
+      selectedElevatorEntry
+        ? getFloorplanActionMenuPosition(
+            selectedElevatorEntry.polygon,
+            viewBox,
+            surfaceSize,
+            floorplanSceneRotationDeg,
+          )
+        : null,
+    [floorplanSceneRotationDeg, selectedElevatorEntry, surfaceSize, viewBox],
+  )
   const selectedSlabActionMenuPosition = useMemo(() => {
     if (slabHoleMoveDraft) {
       return null
@@ -10899,6 +11322,115 @@ export function FloorplanPanel() {
     },
     [getSvgPointFromClientPoint, buildingRotationY],
   )
+
+  const previewElevatorResize = useCallback(
+    (dragState: ElevatorResizeDragState, planPoint: WallPlanPoint) => {
+      const localDeltaX = planPoint[0] - dragState.center.x
+      const localDeltaY = planPoint[1] - dragState.center.y
+      const [localX, localY] = rotatePlanVector(localDeltaX, localDeltaY, -dragState.rotation)
+      const axis = getElevatorResizeAxis(dragState.handle)
+      const sign = getElevatorResizeSign(dragState.handle)
+      const localDistance = sign * (axis === 'width' ? localX : localY)
+      const nextOuterSize = Math.max(0.1, localDistance) * 2
+
+      if (axis === 'width') {
+        const nextShaftWidth = roundPlanMeters(
+          Math.max(0.8, nextOuterSize - dragState.shaftWallThickness * 2),
+        )
+        const nextCabWidth = nextShaftWidth
+        useLiveNodeOverrides
+          .getState()
+          .set(dragState.elevatorId, { shaftWidth: nextShaftWidth, width: nextCabWidth })
+        setCursorPoint(planPoint)
+        return { shaftWidth: nextShaftWidth, width: nextCabWidth } satisfies Partial<ElevatorNode>
+      }
+
+      const nextShaftDepth = roundPlanMeters(
+        Math.max(0.8, nextOuterSize - dragState.shaftWallThickness * 2),
+      )
+      const nextCabDepth = nextShaftDepth
+      useLiveNodeOverrides
+        .getState()
+        .set(dragState.elevatorId, { depth: nextCabDepth, shaftDepth: nextShaftDepth })
+      setCursorPoint(planPoint)
+      return { depth: nextCabDepth, shaftDepth: nextShaftDepth } satisfies Partial<ElevatorNode>
+    },
+    [],
+  )
+
+  const handleElevatorResizePointerDown = useCallback(
+    (
+      entry: FloorplanElevatorEntry,
+      handle: ElevatorResizeHandle,
+      event: ReactPointerEvent<SVGCircleElement>,
+    ) => {
+      if (event.button !== 0 || mode !== 'select') {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      setHoveredElevatorId(null)
+      setSelection({ selectedIds: [entry.elevator.id] })
+
+      setElevatorResizeDragState({
+        center: entry.center,
+        elevatorId: entry.elevator.id,
+        handle,
+        pointerId: event.pointerId,
+        rotation: entry.rotation,
+        shaftWallThickness: entry.shaftWallThickness,
+      })
+    },
+    [mode, setSelection],
+  )
+
+  const handleElevatorResizePointerMove = useCallback(
+    (event: ReactPointerEvent<SVGCircleElement>) => {
+      const dragState = elevatorResizeDragState
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return
+      }
+
+      const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
+      if (!planPoint) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      previewElevatorResize(dragState, planPoint)
+    },
+    [elevatorResizeDragState, getPlanPointFromClientPoint, previewElevatorResize],
+  )
+
+  const handleElevatorResizePointerUp = useCallback(
+    (event: ReactPointerEvent<SVGCircleElement>) => {
+      const dragState = elevatorResizeDragState
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return
+      }
+
+      const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
+      const updates = planPoint ? previewElevatorResize(dragState, planPoint) : {}
+
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+
+      useLiveNodeOverrides.getState().clear(dragState.elevatorId)
+      if (Object.keys(updates).length > 0) {
+        updateNode(dragState.elevatorId as AnyNodeId, updates)
+      }
+      setElevatorResizeDragState(null)
+      setCursorPoint(null)
+    },
+    [elevatorResizeDragState, getPlanPointFromClientPoint, previewElevatorResize, updateNode],
+  )
+
   useEffect(() => {
     siteBoundaryDraftRef.current = siteBoundaryDraft
   }, [siteBoundaryDraft])
@@ -12916,6 +13448,10 @@ export function FloorplanPanel() {
         return
       }
 
+      if (elevatorResizeDragState?.pointerId === event.pointerId) {
+        return
+      }
+
       if (wallEndpointDragRef.current?.pointerId === event.pointerId) {
         return
       }
@@ -13152,6 +13688,7 @@ export function FloorplanPanel() {
       ceilingHoleMoveDraft,
       ceilingHoleVertexDragState,
       ceilingVertexDragState,
+      elevatorResizeDragState,
       siteVertexDragState,
       slabHoleMoveDraft,
       slabHoleVertexDragState,
@@ -14181,6 +14718,36 @@ export function FloorplanPanel() {
     },
     [emitFloorplanNodeClick],
   )
+  const handleElevatorPointerDown = useCallback(
+    (elevatorId: ElevatorNode['id'], event: ReactPointerEvent<SVGElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      const elevator = selectedElevatorEntry?.elevator
+      if (!elevator || elevator.id !== elevatorId) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const suppressClick = (clickEvent: MouseEvent) => {
+        clickEvent.stopImmediatePropagation()
+        clickEvent.preventDefault()
+        window.removeEventListener('click', suppressClick, true)
+      }
+      window.addEventListener('click', suppressClick, true)
+      requestAnimationFrame(() => {
+        window.removeEventListener('click', suppressClick, true)
+      })
+
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(elevator)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedElevatorEntry, setMovingNode, setSelection],
+  )
   const handleZoneLabelClick = useCallback(
     (zoneId: ZoneNodeType['id'], _event: ReactMouseEvent<SVGElement>) => {
       const currentZoneId = useViewer.getState().selection.zoneId
@@ -14279,6 +14846,36 @@ export function FloorplanPanel() {
       setSelection({ selectedIds: [] })
     },
     [deleteNode, selectedSpawnEntry, setSelection],
+  )
+  const handleSelectedElevatorMove = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const elevator = selectedElevatorEntry?.elevator
+      if (!elevator) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(elevator)
+      setSelection({ selectedIds: [] })
+    },
+    [selectedElevatorEntry, setMovingNode, setSelection],
+  )
+  const handleSelectedElevatorDelete = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const elevator = selectedElevatorEntry?.elevator
+      if (!elevator) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-delete')
+      deleteNode(elevator.id as AnyNodeId)
+      setSelection({ selectedIds: [] })
+    },
+    [deleteNode, selectedElevatorEntry, setSelection],
   )
   const handleItemPointerDown = useCallback(
     (itemId: ItemNode['id'], event: ReactPointerEvent<SVGElement>) => {
@@ -16025,6 +16622,7 @@ export function FloorplanPanel() {
         hasFloorplanCursorIndicator &&
         !panStateRef.current &&
         !guideInteractionRef.current &&
+        !elevatorResizeDragState &&
         !wallEndpointDragRef.current &&
         !ceilingVertexDragState &&
         !ceilingHoleMoveDraft &&
@@ -16061,6 +16659,7 @@ export function FloorplanPanel() {
       ceilingVertexDragState,
       ceilingHoleMoveDraft,
       ceilingHoleVertexDragState,
+      elevatorResizeDragState,
       siteVertexDragState,
       slabHoleMoveDraft,
       slabHoleVertexDragState,
@@ -16535,6 +17134,11 @@ export function FloorplanPanel() {
           />
         )}
         <Editor2dFloorplanActionMenuLayer
+          elevator={{
+            position: selectedElevatorActionMenuPosition,
+            onDelete: handleSelectedElevatorDelete,
+            onMove: handleSelectedElevatorMove,
+          }}
           ceiling={{
             position: selectedCeilingActionMenuPosition,
             onAddHole: selectedCeilingEditingHole ? undefined : handleSelectedCeilingAddHole,
@@ -16869,6 +17473,10 @@ export function FloorplanPanel() {
                 isDeleteMode={isDeleteMode}
                 onElevatorHoverChange={handleElevatorHoverChange}
                 onElevatorHoverEnter={handleFloorplanElevatorHoverEnter}
+                onElevatorPointerDown={handleElevatorPointerDown}
+                onElevatorResizePointerDown={handleElevatorResizePointerDown}
+                onElevatorResizePointerMove={handleElevatorResizePointerMove}
+                onElevatorResizePointerUp={handleElevatorResizePointerUp}
                 onElevatorSelect={handleElevatorSelect}
                 palette={palette}
                 selectedIdSet={selectedIdSet}

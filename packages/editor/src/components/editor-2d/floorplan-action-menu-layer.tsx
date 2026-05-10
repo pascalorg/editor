@@ -20,6 +20,7 @@ export type FloorplanActionMenuEntry = {
 }
 
 type FloorplanActionMenuLayerProps = {
+  elevator: FloorplanActionMenuEntry
   item: FloorplanActionMenuEntry
   wall: FloorplanActionMenuEntry
   fence: FloorplanActionMenuEntry
@@ -33,6 +34,7 @@ type FloorplanActionMenuLayerProps = {
 }
 
 export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
+  elevator,
   item,
   wall,
   fence,
@@ -55,6 +57,7 @@ export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
   }
 
   const entries: FloorplanActionMenuEntry[] = [
+    elevator,
     item,
     wall,
     fence,

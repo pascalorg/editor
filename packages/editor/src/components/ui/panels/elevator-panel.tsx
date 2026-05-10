@@ -90,10 +90,58 @@ function stripDuplicateFlags(metadata: ElevatorNode['metadata']) {
   return nextMeta as ElevatorNode['metadata']
 }
 
-type ElevatorMetricKey = 'width' | 'depth' | 'cabHeight' | 'doorWidth' | 'doorHeight'
+type ElevatorMetricKey =
+  | 'width'
+  | 'depth'
+  | 'shaftWidth'
+  | 'shaftDepth'
+  | 'shaftWallThickness'
+  | 'cabHeight'
+  | 'doorWidth'
+  | 'doorHeight'
+
+type ElevatorAccessField = 'disabledLevelIds' | 'serviceOnlyLevelIds'
+
+const DOOR_STYLE_OPTIONS: Array<{
+  label: string
+  value: ElevatorNode['doorStyle']
+}> = [
+  { label: 'Center opening', value: 'center-opening' },
+  { label: 'Single left', value: 'single-left' },
+  { label: 'Single right', value: 'single-right' },
+]
+
+const DOOR_PANEL_STYLE_OPTIONS: Array<{
+  label: string
+  value: ElevatorNode['doorPanelStyle']
+}> = [
+  { label: 'Glass frame', value: 'glass-frame' },
+  { label: 'Solid panel', value: 'solid-panel' },
+  { label: 'Segmented panel', value: 'segmented-panel' },
+]
+
+const SHAFT_STYLE_OPTIONS: Array<{
+  label: string
+  value: ElevatorNode['shaftStyle']
+}> = [
+  { label: 'Solid', value: 'solid' },
+  { label: 'Glass', value: 'glass' },
+]
 
 function roundMeters(value: number) {
   return Math.round(value * 100) / 100
+}
+
+function getResolvedShaftWidth(node: ElevatorNode) {
+  return Math.max(node.shaftWidth ?? node.width, node.width, 0.8)
+}
+
+function getResolvedShaftDepth(node: ElevatorNode) {
+  return Math.max(node.shaftDepth ?? node.depth, node.depth, 0.8)
+}
+
+function getResolvedShaftWallThickness(node: ElevatorNode) {
+  return Math.max(node.shaftWallThickness ?? 0.09, 0.04)
 }
 
 function radiansToDegrees(radians: number) {
@@ -288,9 +336,51 @@ export function ElevatorPanel() {
   const requestLevel = useCallback(
     (levelId: LevelNode['id']) => {
       if (!node) return
+      if ((node.disabledLevelIds ?? []).includes(levelId)) return
       useInteractive.getState().requestElevator(node.id as AnyNodeId, levelId as AnyNodeId)
     },
     [node],
+  )
+
+  const toggleLevelAccess = useCallback(
+    (field: ElevatorAccessField, levelId: LevelNode['id']) => {
+      if (!node) return
+      const disabledIds = new Set(node.disabledLevelIds ?? [])
+      const serviceOnlyIds = new Set(node.serviceOnlyLevelIds ?? [])
+      const targetSet = field === 'disabledLevelIds' ? disabledIds : serviceOnlyIds
+
+      if (targetSet.has(levelId)) {
+        targetSet.delete(levelId)
+      } else {
+        targetSet.add(levelId)
+      }
+
+      if (field === 'disabledLevelIds' && disabledIds.has(levelId)) {
+        serviceOnlyIds.delete(levelId)
+      }
+      if (field === 'serviceOnlyLevelIds' && serviceOnlyIds.has(levelId)) {
+        disabledIds.delete(levelId)
+      }
+
+      const nextServiceLevels = getServiceLevels(
+        levels,
+        getResolvedFromLevelId(node, levels),
+        getResolvedToLevelId(node, levels, getResolvedFromLevelId(node, levels)),
+      )
+      const nextDefaultLevelId =
+        node.defaultLevelId && !disabledIds.has(node.defaultLevelId)
+          ? node.defaultLevelId
+          : (nextServiceLevels.find((level) => !disabledIds.has(level.id))?.id ??
+            nextServiceLevels[0]?.id ??
+            null)
+
+      handleUpdate({
+        defaultLevelId: nextDefaultLevelId,
+        disabledLevelIds: Array.from(disabledIds),
+        serviceOnlyLevelIds: Array.from(serviceOnlyIds),
+      })
+    },
+    [handleUpdate, levels, node],
   )
 
   const handleServiceBoundaryChange = useCallback(
@@ -336,10 +426,22 @@ export function ElevatorPanel() {
   const displayPosition = liveTransform?.position ?? displayNode.position
   const displayRotation = liveTransform?.rotation ?? displayNode.rotation
   const displayRotationDegrees = radiansToDegrees(displayRotation)
+  const displayShaftWidth = getResolvedShaftWidth(displayNode)
+  const displayShaftDepth = getResolvedShaftDepth(displayNode)
+  const displayShaftWallThickness = getResolvedShaftWallThickness(displayNode)
   const fromLevelId = getResolvedFromLevelId(node, levels)
   const toLevelId = getResolvedToLevelId(node, levels, fromLevelId)
   const servedLevels = getServiceLevels(levels, fromLevelId, toLevelId)
-  const defaultLevelOptions = servedLevels.length > 0 ? servedLevels : levels
+  const servedLevelIdSet = new Set<string>(servedLevels.map((level) => level.id))
+  const disabledLevelIds = new Set(
+    (node.disabledLevelIds ?? []).filter((levelId) => servedLevelIdSet.has(levelId)),
+  )
+  const serviceOnlyLevelIds = new Set(
+    (node.serviceOnlyLevelIds ?? []).filter((levelId) => servedLevelIdSet.has(levelId)),
+  )
+  const enabledServedLevels = servedLevels.filter((level) => !disabledLevelIds.has(level.id))
+  const defaultLevelOptions =
+    enabledServedLevels.length > 0 ? enabledServedLevels : servedLevels.length > 0 ? servedLevels : levels
   const selectedDefaultLevelId = defaultLevelOptions.some(
     (level) => level.id === node.defaultLevelId,
   )
@@ -520,7 +622,102 @@ export function ElevatorPanel() {
         />
       </PanelSection>
 
+      <PanelSection title="Shaft">
+        <div className="space-y-1.5">
+          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            Shaft Style
+          </div>
+          <select
+            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            onChange={(event) =>
+              handleUpdate({ shaftStyle: event.target.value as ElevatorNode['shaftStyle'] })
+            }
+            value={displayNode.shaftStyle ?? 'solid'}
+          >
+            {SHAFT_STYLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <MetricControl
+          label="Shaft Width"
+          max={5}
+          min={displayNode.width}
+          onChange={(value) => previewMetric('shaftWidth', Math.max(value, displayNode.width))}
+          onCommit={(value) => commitMetric('shaftWidth', Math.max(value, displayNode.width))}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={displayShaftWidth}
+        />
+        <MetricControl
+          label="Shaft Depth"
+          max={5}
+          min={displayNode.depth}
+          onChange={(value) => previewMetric('shaftDepth', Math.max(value, displayNode.depth))}
+          onCommit={(value) => commitMetric('shaftDepth', Math.max(value, displayNode.depth))}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={displayShaftDepth}
+        />
+        <MetricControl
+          label="Wall Thickness"
+          max={0.4}
+          min={0.04}
+          onChange={(value) => previewMetric('shaftWallThickness', value)}
+          onCommit={(value) => commitMetric('shaftWallThickness', value)}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.01}
+          unit="m"
+          value={displayShaftWallThickness}
+        />
+      </PanelSection>
+
       <PanelSection title="Doors">
+        <div className="space-y-1.5">
+          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            Opening Style
+          </div>
+          <select
+            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            onChange={(event) =>
+              handleUpdate({ doorStyle: event.target.value as ElevatorNode['doorStyle'] })
+            }
+            value={displayNode.doorStyle ?? 'center-opening'}
+          >
+            {DOOR_STYLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            Door Type
+          </div>
+          <select
+            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            onChange={(event) =>
+              handleUpdate({
+                doorPanelStyle: event.target.value as ElevatorNode['doorPanelStyle'],
+              })
+            }
+            value={displayNode.doorPanelStyle ?? 'glass-frame'}
+          >
+            {DOOR_PANEL_STYLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <MetricControl
           label="Door Width"
           max={Math.max(displayNode.width - 0.1, 0.5)}
@@ -604,28 +801,88 @@ export function ElevatorPanel() {
         </div>
       </PanelSection>
 
+      <PanelSection title="Access">
+        <div className="space-y-2">
+          {servedLevels.map((level) => {
+            const isDisabled = disabledLevelIds.has(level.id)
+            const isServiceOnly = serviceOnlyLevelIds.has(level.id)
+
+            return (
+              <div
+                className="flex items-center justify-between gap-2 rounded-lg border border-border/45 bg-[#2C2C2E] px-2.5 py-2"
+                key={level.id}
+              >
+                <span className="min-w-0 truncate text-sm">
+                  {level.name || `Level ${level.level}`}
+                </span>
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                      isServiceOnly
+                        ? 'border-sky-300/45 bg-sky-400/15 text-sky-100'
+                        : 'border-border/50 bg-black/15 text-muted-foreground hover:text-foreground'
+                    } ${isDisabled ? 'cursor-not-allowed opacity-45' : ''}`}
+                    disabled={isDisabled}
+                    onClick={() => toggleLevelAccess('serviceOnlyLevelIds', level.id)}
+                    type="button"
+                  >
+                    Service
+                  </button>
+                  <button
+                    className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                      isDisabled
+                        ? 'border-red-300/45 bg-red-400/15 text-red-100'
+                        : 'border-border/50 bg-black/15 text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => toggleLevelAccess('disabledLevelIds', level.id)}
+                    type="button"
+                  >
+                    Disabled
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </PanelSection>
+
       <PanelSection title="Destination">
         <div className="grid grid-cols-2 gap-1.5">
           {servedLevels.map((level) => {
             const isActive = activeLevelId === level.id
             const stopOrder = destinationOrderByLevelId.get(level.id)
+            const isDisabled = disabledLevelIds.has(level.id)
+            const isServiceOnly = serviceOnlyLevelIds.has(level.id)
             return (
               <button
                 className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-2.5 text-left transition-colors ${
-                  isActive
-                    ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-100'
-                    : 'border-border/50 bg-[#2C2C2E] text-foreground hover:bg-[#3e3e3e]'
+                  isDisabled
+                    ? 'cursor-not-allowed border-border/35 bg-[#202024] text-muted-foreground/55'
+                    : isActive
+                      ? 'border-emerald-400/45 bg-emerald-400/15 text-emerald-100'
+                      : 'border-border/50 bg-[#2C2C2E] text-foreground hover:bg-[#3e3e3e]'
                 }`}
+                disabled={isDisabled}
                 key={level.id}
                 onClick={() => requestLevel(level.id)}
                 type="button"
               >
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-xs">{level.name || `Level ${level.level}`}</span>
-                  {stopOrder && (
+                  {isDisabled ? (
                     <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                      Stop {stopOrder}
+                      Disabled
                     </span>
+                  ) : isServiceOnly ? (
+                    <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
+                      Service
+                    </span>
+                  ) : (
+                    stopOrder && (
+                      <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
+                        Stop {stopOrder}
+                      </span>
+                    )
                   )}
                 </span>
                 <span
@@ -633,7 +890,7 @@ export function ElevatorPanel() {
                     stopOrder ? 'px-1.5 font-mono text-[11px] font-semibold' : ''
                   }`}
                 >
-                  {stopOrder ?? <Send className="h-3 w-3" />}
+                  {isDisabled ? '×' : (stopOrder ?? <Send className="h-3 w-3" />)}
                 </span>
               </button>
             )

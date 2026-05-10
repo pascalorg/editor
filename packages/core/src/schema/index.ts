@@ -42,7 +42,12 @@ export {
   ColumnSupportStyle,
 } from './nodes/column'
 export { DoorNode, DoorSegment } from './nodes/door'
-export { ElevatorDoorStyle, ElevatorNode } from './nodes/elevator'
+export {
+  ElevatorDoorPanelStyle,
+  ElevatorDoorStyle,
+  ElevatorNode,
+  ElevatorShaftStyle,
+} from './nodes/elevator'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export type {

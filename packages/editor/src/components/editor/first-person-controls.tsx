@@ -7,6 +7,7 @@ import {
   type ElevatorNode,
   emitter,
   resolveElevatorBuildingLevels,
+  resolveElevatorDispatchTarget,
   resolveElevatorServiceLevels,
   sceneRegistry,
   useInteractive,
@@ -129,8 +130,11 @@ type ElevatorColliderUserData = {
   levelId?: AnyNodeId
   localPosition: [number, number, number]
   matrixInitialized?: boolean
-  side?: 'left' | 'right'
+  side?: ElevatorDoorSide
 }
+
+type ElevatorDoorSide = 'left' | 'right'
+type ElevatorDoorStyleValue = ElevatorNode['doorStyle']
 
 type ElevatorColliderMesh = Mesh & {
   userData: Mesh['userData'] & ElevatorColliderUserData
@@ -164,12 +168,17 @@ function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | n
       current.userData as {
         elevatorButton?: {
           action?: unknown
+          disabled?: unknown
           elevatorId?: unknown
           kind?: unknown
           levelId?: unknown
         }
       }
     ).elevatorButton
+
+    if (candidate?.disabled === true) {
+      return null
+    }
 
     if (typeof candidate?.elevatorId === 'string' && candidate.kind === 'cab') {
       const action = candidate.action === 'open-door' ? 'open-door' : 'request-level'
@@ -208,9 +217,65 @@ function getInteractableTargetKey(target: FirstPersonInteractableTarget | null) 
     : `${target.type}:${target.id}`
 }
 
-function getElevatorDoorLeafX(side: 'left' | 'right', width: number, doorOpen: number) {
-  const direction = side === 'left' ? -1 : 1
-  return direction * (width / 4 + doorOpen * width * 0.34)
+function getResolvedElevatorDoorStyle(
+  doorStyle: ElevatorDoorStyleValue | undefined,
+): ElevatorDoorStyleValue {
+  return doorStyle ?? 'center-opening'
+}
+
+function getElevatorDoorLeafSides(
+  doorStyle: ElevatorDoorStyleValue | undefined,
+): ElevatorDoorSide[] {
+  const resolvedDoorStyle = getResolvedElevatorDoorStyle(doorStyle)
+  if (resolvedDoorStyle === 'single-left') return ['left']
+  if (resolvedDoorStyle === 'single-right') return ['right']
+  return ['left', 'right']
+}
+
+function getElevatorDoorLeafWidth(width: number, doorStyle: ElevatorDoorStyleValue | undefined) {
+  return getResolvedElevatorDoorStyle(doorStyle) === 'center-opening'
+    ? Math.max(width / 2 - 0.018, 0.12)
+    : Math.max(width - 0.018, 0.18)
+}
+
+function getElevatorDoorLeafX(
+  side: ElevatorDoorSide,
+  width: number,
+  doorOpen: number,
+  doorStyle: ElevatorDoorStyleValue | undefined,
+) {
+  const resolvedDoorStyle = getResolvedElevatorDoorStyle(doorStyle)
+  if (resolvedDoorStyle === 'center-opening') {
+    const direction = side === 'left' ? -1 : 1
+    return direction * (width / 4 + doorOpen * width * 0.34)
+  }
+
+  const direction = resolvedDoorStyle === 'single-left' ? -1 : 1
+  return direction * doorOpen * width * 0.68
+}
+
+function getElevatorCabWidth(elevator: ElevatorNode) {
+  return Math.max(elevator.width, 0.8)
+}
+
+function getElevatorCabDepth(elevator: ElevatorNode) {
+  return Math.max(elevator.depth, 0.8)
+}
+
+function getElevatorShaftWallThickness(elevator: ElevatorNode) {
+  return Math.max(elevator.shaftWallThickness ?? ELEVATOR_COLLIDER_WALL_THICKNESS, 0.04)
+}
+
+function getElevatorShaftWidth(elevator: ElevatorNode, cabWidth = getElevatorCabWidth(elevator)) {
+  return Math.max(elevator.shaftWidth ?? cabWidth, cabWidth, 0.8)
+}
+
+function getElevatorShaftDepth(elevator: ElevatorNode, cabDepth = getElevatorCabDepth(elevator)) {
+  return Math.max(elevator.shaftDepth ?? cabDepth, cabDepth, 0.8)
+}
+
+function getElevatorCabCenterZ(elevator: ElevatorNode) {
+  return -getElevatorShaftDepth(elevator) / 2 + getElevatorCabDepth(elevator) / 2
 }
 
 function isDynamicElevatorCollider(kind: ElevatorColliderKind) {
@@ -222,13 +287,14 @@ function isInsideElevatorCab(
   runtime: NonNullable<ReturnType<typeof useInteractive.getState>['elevators'][AnyNodeId]>,
   localEyePosition: Vector3,
 ) {
-  const halfWidth = Math.max(elevator.width, 0.8) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
-  const halfDepth = Math.max(elevator.depth, 0.8) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
+  const halfWidth = getElevatorCabWidth(elevator) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
+  const halfDepth = getElevatorCabDepth(elevator) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
+  const cabCenterZ = getElevatorCabCenterZ(elevator)
   const cabHeight = Math.max(elevator.cabHeight, 1.4)
 
   return (
     Math.abs(localEyePosition.x) <= Math.max(halfWidth, 0.24) &&
-    Math.abs(localEyePosition.z) <= Math.max(halfDepth, 0.24) &&
+    Math.abs(localEyePosition.z - cabCenterZ) <= Math.max(halfDepth, 0.24) &&
     localEyePosition.y >= runtime.carY + 0.35 &&
     localEyePosition.y <= runtime.carY + cabHeight + 0.7
   )
@@ -347,18 +413,23 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
       node,
       nodes,
     )
-    const shaftWidth = Math.max(node.width, 0.8)
-    const shaftDepth = Math.max(node.depth, 0.8)
+    const cabWidth = getElevatorCabWidth(node)
+    const cabDepth = getElevatorCabDepth(node)
+    const shaftWidth = getElevatorShaftWidth(node, cabWidth)
+    const shaftDepth = getElevatorShaftDepth(node, cabDepth)
     const cabHeight = Math.max(node.cabHeight, 1.4)
-    const doorWidth = Math.min(Math.max(node.doorWidth, 0.45), shaftWidth - 0.18)
+    const doorWidth = Math.min(Math.max(node.doorWidth, 0.45), cabWidth - 0.18, shaftWidth - 0.18)
     const doorHeight = Math.min(Math.max(node.doorHeight, 1.2), cabHeight - 0.1)
+    const doorStyle = getResolvedElevatorDoorStyle(node.doorStyle)
     const shaftHeight = Math.max(totalHeight, cabHeight + 0.3)
-    const wallThickness = ELEVATOR_COLLIDER_WALL_THICKNESS
-    const cabFloorWidth = Math.max(shaftWidth - ELEVATOR_COLLIDER_HORIZONTAL_PADDING * 2, 0.48)
-    const cabFloorDepth = Math.max(shaftDepth - ELEVATOR_COLLIDER_HORIZONTAL_PADDING * 2, 0.48)
+    const wallThickness = getElevatorShaftWallThickness(node)
+    const cabFloorWidth = Math.max(cabWidth - ELEVATOR_COLLIDER_HORIZONTAL_PADDING * 2, 0.48)
+    const cabFloorDepth = Math.max(cabDepth - ELEVATOR_COLLIDER_HORIZONTAL_PADDING * 2, 0.48)
     const frontWallZ = -shaftDepth / 2 - wallThickness / 2
     const frontZ = frontWallZ - wallThickness / 2 - 0.018
-    const leafWidth = Math.max(doorWidth / 2 - 0.018, 0.12)
+    const cabCenterZ = -shaftDepth / 2 + cabDepth / 2
+    const leafWidth = getElevatorDoorLeafWidth(doorWidth, doorStyle)
+    const doorLeafSides = getElevatorDoorLeafSides(doorStyle)
     const resolvedShaftTopY = Math.max(shaftTopY, shaftBaseY + shaftHeight)
 
     meshes.push(
@@ -390,38 +461,31 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
         typedElevatorId,
         'cab-floor',
         [cabFloorWidth, ELEVATOR_COLLIDER_FLOOR_THICKNESS, cabFloorDepth],
-        [0, ELEVATOR_COLLIDER_FLOOR_THICKNESS / 2, 0],
+        [0, ELEVATOR_COLLIDER_FLOOR_THICKNESS / 2, cabCenterZ],
       ),
       createElevatorColliderMesh(
         typedElevatorId,
         'cab-ceiling',
-        [shaftWidth, wallThickness, shaftDepth],
-        [0, cabHeight - wallThickness / 2, 0],
+        [cabWidth, wallThickness, cabDepth],
+        [0, cabHeight - wallThickness / 2, cabCenterZ],
       ),
       createElevatorColliderMesh(
         typedElevatorId,
         'cab-back',
-        [shaftWidth, cabHeight, wallThickness],
-        [0, cabHeight / 2, shaftDepth / 2 - wallThickness / 2],
+        [cabWidth, cabHeight, wallThickness],
+        [0, cabHeight / 2, cabCenterZ + cabDepth / 2 - wallThickness / 2],
       ),
       createElevatorColliderMesh(
         typedElevatorId,
         'cab-left',
-        [wallThickness, cabHeight, shaftDepth],
-        [-shaftWidth / 2 + wallThickness / 2, cabHeight / 2, 0],
+        [wallThickness, cabHeight, cabDepth],
+        [-cabWidth / 2 + wallThickness / 2, cabHeight / 2, cabCenterZ],
       ),
       createElevatorColliderMesh(
         typedElevatorId,
         'cab-right',
-        [wallThickness, cabHeight, shaftDepth],
-        [shaftWidth / 2 - wallThickness / 2, cabHeight / 2, 0],
-      ),
-      createElevatorColliderMesh(
-        typedElevatorId,
-        'cab-door-left',
-        [leafWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
-        [0, doorHeight / 2, frontZ],
-        { doorWidth, side: 'left' },
+        [wallThickness, cabHeight, cabDepth],
+        [cabWidth / 2 - wallThickness / 2, cabHeight / 2, cabCenterZ],
       ),
       createElevatorColliderMesh(
         typedElevatorId,
@@ -430,12 +494,14 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
         [0, doorHeight / 2, frontZ],
         { doorWidth },
       ),
-      createElevatorColliderMesh(
-        typedElevatorId,
-        'cab-door-right',
-        [leafWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
-        [0, doorHeight / 2, frontZ],
-        { doorWidth, side: 'right' },
+      ...doorLeafSides.map((side) =>
+        createElevatorColliderMesh(
+          typedElevatorId,
+          side === 'left' ? 'cab-door-left' : 'cab-door-right',
+          [leafWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
+          [0, doorHeight / 2, frontZ],
+          { doorWidth, side },
+        ),
       ),
     )
 
@@ -475,24 +541,19 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
         ),
         createElevatorColliderMesh(
           typedElevatorId,
-          'landing-door-left',
-          [leafWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
-          [0, entry.baseY + doorHeight / 2, frontZ - 0.02],
-          { doorWidth, levelId: entry.id, side: 'left' },
-        ),
-        createElevatorColliderMesh(
-          typedElevatorId,
           'landing-door-gate',
           [doorWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
           [0, entry.baseY + doorHeight / 2, frontZ - 0.02],
           { doorWidth, levelId: entry.id },
         ),
-        createElevatorColliderMesh(
-          typedElevatorId,
-          'landing-door-right',
-          [leafWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
-          [0, entry.baseY + doorHeight / 2, frontZ - 0.02],
-          { doorWidth, levelId: entry.id, side: 'right' },
+        ...doorLeafSides.map((side) =>
+          createElevatorColliderMesh(
+            typedElevatorId,
+            side === 'left' ? 'landing-door-left' : 'landing-door-right',
+            [leafWidth, doorHeight, ELEVATOR_COLLIDER_DOOR_DEPTH],
+            [0, entry.baseY + doorHeight / 2, frontZ - 0.02],
+            { doorWidth, levelId: entry.id, side },
+          ),
         ),
       )
     }
@@ -778,7 +839,18 @@ export const FirstPersonControls = () => {
         useInteractive.getState().openElevatorDoor(target.id)
         return
       }
-      if (target.levelId) useInteractive.getState().requestElevator(target.id, target.levelId)
+      if (target.levelId) {
+        const targetElevatorId =
+          target.buttonKind === 'landing'
+            ? resolveElevatorDispatchTarget({
+                elevators: useInteractive.getState().elevators,
+                levelId: target.levelId,
+                nodes: useScene.getState().nodes,
+                requestedElevatorId: target.id,
+              })
+            : target.id
+        useInteractive.getState().requestElevator(targetElevatorId, target.levelId)
+      }
       return
     }
 
@@ -1004,7 +1076,12 @@ export const FirstPersonControls = () => {
           mesh.visible = false
           continue
         }
-        localX = getElevatorDoorLeafX(side ?? 'left', doorWidth ?? node.doorWidth, runtime.doorOpen)
+        localX = getElevatorDoorLeafX(
+          side ?? 'left',
+          doorWidth ?? node.doorWidth,
+          runtime.doorOpen,
+          node.doorStyle,
+        )
         mesh.visible = true
       } else if (isCabDoorGate) {
         if (!runtime) {
@@ -1014,7 +1091,12 @@ export const FirstPersonControls = () => {
         mesh.visible = runtime.doorOpen < ELEVATOR_ENTRY_DOOR_OPEN_THRESHOLD
       } else if (isDoorCollider) {
         const doorOpen = runtime?.currentLevelId === levelId ? (runtime?.doorOpen ?? 0) : 0
-        localX = getElevatorDoorLeafX(side ?? 'left', doorWidth ?? node.doorWidth, doorOpen)
+        localX = getElevatorDoorLeafX(
+          side ?? 'left',
+          doorWidth ?? node.doorWidth,
+          doorOpen,
+          node.doorStyle,
+        )
         mesh.visible = true
       } else if (isLandingDoorGate) {
         const doorOpen = runtime?.currentLevelId === levelId ? (runtime?.doorOpen ?? 0) : 0
@@ -1045,6 +1127,7 @@ export const FirstPersonControls = () => {
       const activeRide = ridingElevatorRef.current
       let nextRide: {
         cabHeight: number
+        cabCenterZ: number
         carY: number
         doorOpen: number
         elevatorId: AnyNodeId
@@ -1076,12 +1159,13 @@ export const FirstPersonControls = () => {
         elevatorLocalEyePosition.copy(camera.position)
         object.worldToLocal(elevatorLocalEyePosition)
 
-        const halfWidth = Math.max(node.width, 0.8) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
-        const halfDepth = Math.max(node.depth, 0.8) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
+        const halfWidth = getElevatorCabWidth(node) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
+        const halfDepth = getElevatorCabDepth(node) / 2 - ELEVATOR_RIDE_HORIZONTAL_PADDING
+        const cabCenterZ = getElevatorCabCenterZ(node)
         const cabHeight = Math.max(node.cabHeight, 1.4)
         const insideFootprint =
           Math.abs(elevatorLocalEyePosition.x) <= Math.max(halfWidth, 0.24) &&
-          Math.abs(elevatorLocalEyePosition.z) <= Math.max(halfDepth, 0.24)
+          Math.abs(elevatorLocalEyePosition.z - cabCenterZ) <= Math.max(halfDepth, 0.24)
         const insideCabHeight =
           elevatorLocalEyePosition.y >= runtime.carY + 0.35 &&
           elevatorLocalEyePosition.y <= runtime.carY + cabHeight + 0.7
@@ -1094,6 +1178,7 @@ export const FirstPersonControls = () => {
         if ((insideFootprint && insideCabHeight) || continuingRide) {
           nextRide = {
             cabHeight,
+            cabCenterZ,
             carY: runtime.carY,
             doorOpen: runtime.doorOpen,
             elevatorId: typedElevatorId,
@@ -1151,8 +1236,8 @@ export const FirstPersonControls = () => {
           Math.min(nextRide.halfWidth, elevatorLocalControllerPosition.x),
         )
         const clampedZ = Math.max(
-          -nextRide.halfDepth,
-          Math.min(nextRide.halfDepth, elevatorLocalControllerPosition.z),
+          nextRide.cabCenterZ - nextRide.halfDepth,
+          Math.min(nextRide.cabCenterZ + nextRide.halfDepth, elevatorLocalControllerPosition.z),
         )
 
         if (

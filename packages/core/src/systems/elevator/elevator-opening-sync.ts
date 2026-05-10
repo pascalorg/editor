@@ -11,6 +11,7 @@ type SurfaceHoleMetadata = {
 }
 
 const ELEVATOR_OPENING_PADDING = 0.08
+const DEFAULT_ELEVATOR_SHAFT_WALL_THICKNESS = 0.09
 
 function pointsEqual(a: Point2D, b: Point2D, tolerance = 1e-5) {
   const dx = a[0] - b[0]
@@ -141,8 +142,14 @@ function shouldApplyElevatorToCeiling(
 }
 
 function getElevatorOpeningPolygon(elevator: ElevatorNode): Point2D[] {
-  const halfWidth = Math.max(elevator.width, 0.8) / 2 + ELEVATOR_OPENING_PADDING
-  const halfDepth = Math.max(elevator.depth, 0.8) / 2 + ELEVATOR_OPENING_PADDING
+  const wallThickness = Math.max(
+    elevator.shaftWallThickness ?? DEFAULT_ELEVATOR_SHAFT_WALL_THICKNESS,
+    0.04,
+  )
+  const shaftWidth = Math.max(elevator.shaftWidth ?? elevator.width, elevator.width, 0.8)
+  const shaftDepth = Math.max(elevator.shaftDepth ?? elevator.depth, elevator.depth, 0.8)
+  const halfWidth = shaftWidth / 2 + wallThickness + ELEVATOR_OPENING_PADDING
+  const halfDepth = shaftDepth / 2 + wallThickness + ELEVATOR_OPENING_PADDING
   const corners: Point2D[] = [
     [-halfWidth, -halfDepth],
     [halfWidth, -halfDepth],
