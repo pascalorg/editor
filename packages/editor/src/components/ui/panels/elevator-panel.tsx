@@ -6,6 +6,7 @@ import {
   type ElevatorNode,
   ElevatorNode as ElevatorNodeSchema,
   type LevelNode,
+  requestElevatorLevel,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -337,7 +338,7 @@ export function ElevatorPanel() {
     (levelId: LevelNode['id']) => {
       if (!node) return
       if ((node.disabledLevelIds ?? []).includes(levelId)) return
-      useInteractive.getState().requestElevator(node.id as AnyNodeId, levelId as AnyNodeId)
+      requestElevatorLevel(node.id as AnyNodeId, levelId as AnyNodeId)
     },
     [node],
   )

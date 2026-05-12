@@ -1,4 +1,12 @@
-import type { AnyNode, AnyNodeId, ElevatorNode, LevelNode } from '../../schema'
+import type { AnyNode, AnyNodeId, CeilingNode, ElevatorNode, LevelNode, WallNode } from '../../schema'
+
+export const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
+
+export type ElevatorLevelEntry = {
+  id: LevelNode['id']
+  label: string
+  baseY: number
+}
 
 function getBuildingLevels(elevator: ElevatorNode, nodes: Record<string, AnyNode>): LevelNode[] {
   const building =
@@ -64,4 +72,79 @@ export function resolveElevatorServiceLevels(
   const maxIndex = Math.max(fromIndex, resolvedToIndex)
 
   return levels.slice(minIndex, maxIndex + 1)
+}
+
+export function getElevatorLevelHeight(levelId: string, nodes: Record<string, AnyNode>): number {
+  const level = nodes[levelId as AnyNodeId] as LevelNode | undefined
+  if (!level || level.type !== 'level') return DEFAULT_ELEVATOR_LEVEL_HEIGHT
+
+  let maxTop = 0
+
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!child) continue
+
+    if (child.type === 'ceiling') {
+      const height = (child as CeilingNode).height ?? DEFAULT_ELEVATOR_LEVEL_HEIGHT
+      if (height > maxTop) maxTop = height
+    } else if (child.type === 'wall') {
+      const height = (child as WallNode).height ?? DEFAULT_ELEVATOR_LEVEL_HEIGHT
+      if (height > maxTop) maxTop = height
+    }
+  }
+
+  return maxTop > 0 ? maxTop : DEFAULT_ELEVATOR_LEVEL_HEIGHT
+}
+
+export function resolveElevatorLevels(
+  elevator: ElevatorNode,
+  nodes: Record<string, AnyNode>,
+): {
+  entries: ElevatorLevelEntry[]
+  defaultEntry: ElevatorLevelEntry | null
+  shaftBaseY: number
+  shaftTopY: number
+  totalHeight: number
+} {
+  const allLevels = resolveElevatorBuildingLevels(elevator, nodes)
+
+  const baseYByLevelId = new Map<string, number>()
+  let cumulativeY = 0
+  for (const level of allLevels) {
+    baseYByLevelId.set(level.id, cumulativeY)
+    cumulativeY += getElevatorLevelHeight(level.id, nodes)
+  }
+
+  const serviceLevels = resolveElevatorServiceLevels(elevator, nodes)
+  const entries = serviceLevels.map((level) => ({
+    id: level.id,
+    label: String(level.level),
+    baseY: baseYByLevelId.get(level.id) ?? 0,
+  }))
+
+  const defaultEntry =
+    entries.find((entry) => entry.id === elevator.defaultLevelId) ??
+    entries.find((entry) => entry.id === elevator.fromLevelId) ??
+    entries[0] ??
+    null
+  const firstServedLevel = serviceLevels[0] ?? null
+  const lastServedLevel = serviceLevels[serviceLevels.length - 1] ?? null
+  const shaftBaseY = firstServedLevel ? (baseYByLevelId.get(firstServedLevel.id) ?? 0) : 0
+  const lastServedIndex = lastServedLevel
+    ? allLevels.findIndex((level) => level.id === lastServedLevel.id)
+    : -1
+  const nextLevel = lastServedIndex >= 0 ? allLevels[lastServedIndex + 1] : null
+  const shaftTopY = nextLevel
+    ? (baseYByLevelId.get(nextLevel.id) ?? cumulativeY)
+    : lastServedLevel
+      ? cumulativeY
+      : elevator.cabHeight + 0.3
+
+  return {
+    entries,
+    defaultEntry,
+    shaftBaseY,
+    shaftTopY,
+    totalHeight: Math.max(shaftTopY - shaftBaseY, elevator.cabHeight + 0.3),
+  }
 }

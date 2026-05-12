@@ -1,6 +1,8 @@
 import {
   type AnyNodeId,
+  openElevatorDoor,
   resolveElevatorDispatchTarget,
+  requestElevatorLevel,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
@@ -62,7 +64,7 @@ export function ElevatorInteractionSystem() {
       event.stopPropagation()
 
       if (button.action === 'open-door') {
-        useInteractive.getState().openElevatorDoor(button.elevatorId)
+        openElevatorDoor(button.elevatorId)
         return
       }
 
@@ -78,7 +80,7 @@ export function ElevatorInteractionSystem() {
             })
           : button.elevatorId
 
-      useInteractive.getState().requestElevator(targetElevatorId, button.levelId)
+      requestElevatorLevel(targetElevatorId, button.levelId)
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown, true)

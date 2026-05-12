@@ -1,7 +1,20 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type ElevatorDoorSide,
   type ElevatorNode,
+  getElevatorCabDepth,
+  getElevatorCabWidth,
+  getElevatorDoorLeafSides,
+  getElevatorDoorLeafWidth,
+  getElevatorDoorLeafX,
+  getElevatorShaftDepth,
+  getElevatorShaftWallThickness,
+  getElevatorShaftWidth,
+  getResolvedElevatorDoorPanelStyle as getResolvedDoorPanelStyle,
+  getResolvedElevatorDoorStyle as getResolvedDoorStyle,
+  getResolvedElevatorShaftStyle as getResolvedShaftStyle,
+  resolveElevatorLevels,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -21,7 +34,6 @@ import {
 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useNodeEvents } from '../../../hooks/use-node-events'
-import { resolveElevatorLevels } from '../../../systems/elevator/elevator-utils'
 
 const SHAFT_WALL_COLOR = '#d7dce4'
 const SHAFT_SIDE_COLOR = '#4b5563'
@@ -30,7 +42,6 @@ const CAB_COLOR = '#d7dde5'
 const GLASS_COLOR = '#f8fafc'
 const DOOR_COLOR = '#8e98a6'
 const PANEL_COLOR = '#1f2937'
-const DEFAULT_SHAFT_WALL_THICKNESS = 0.09
 
 type Vector3Tuple = [number, number, number]
 
@@ -41,10 +52,8 @@ const BUTTON_RING_GEOMETRY = new TorusGeometry(1.12, 0.12, 8, 24)
 const LABEL_MATRIX_DUMMY = new Object3D()
 const SHAFT_TOP_FRAME_CLEARANCE = 0.006
 
-type ElevatorDoorSide = 'left' | 'right'
 type ElevatorDoorPanelStyleValue = ElevatorNode['doorPanelStyle']
 type ElevatorDoorStyleValue = ElevatorNode['doorStyle']
-type ElevatorShaftStyleValue = ElevatorNode['shaftStyle']
 
 const SHAFT_WALL_MATERIAL = new MeshStandardMaterial({
   color: SHAFT_WALL_COLOR,
@@ -609,78 +618,6 @@ function ElevatorMeshButton({
       )}
     </group>
   )
-}
-
-function getResolvedDoorStyle(
-  doorStyle: ElevatorDoorStyleValue | undefined,
-): ElevatorDoorStyleValue {
-  return doorStyle ?? 'center-opening'
-}
-
-function getResolvedDoorPanelStyle(
-  doorPanelStyle: ElevatorDoorPanelStyleValue | undefined,
-): ElevatorDoorPanelStyleValue {
-  return doorPanelStyle ?? 'glass-frame'
-}
-
-function getResolvedShaftStyle(
-  shaftStyle: ElevatorShaftStyleValue | undefined,
-): ElevatorShaftStyleValue {
-  return shaftStyle ?? 'solid'
-}
-
-function getElevatorDoorLeafSides(
-  doorStyle: ElevatorDoorStyleValue | undefined,
-): ElevatorDoorSide[] {
-  const resolvedDoorStyle = getResolvedDoorStyle(doorStyle)
-  if (resolvedDoorStyle === 'single-left') return ['left']
-  if (resolvedDoorStyle === 'single-right') return ['right']
-  return ['left', 'right']
-}
-
-function getElevatorDoorLeafX(
-  side: ElevatorDoorSide,
-  openingWidth: number,
-  doorOpen: number,
-  doorStyle: ElevatorDoorStyleValue | undefined,
-) {
-  const resolvedDoorStyle = getResolvedDoorStyle(doorStyle)
-  if (resolvedDoorStyle === 'center-opening') {
-    const direction = side === 'left' ? -1 : 1
-    return direction * (openingWidth / 4 + doorOpen * openingWidth * 0.34)
-  }
-
-  const direction = resolvedDoorStyle === 'single-left' ? -1 : 1
-  return direction * doorOpen * openingWidth * 0.68
-}
-
-function getElevatorDoorLeafWidth(
-  openingWidth: number,
-  doorStyle: ElevatorDoorStyleValue | undefined,
-) {
-  return getResolvedDoorStyle(doorStyle) === 'center-opening'
-    ? Math.max(openingWidth / 2 - 0.018, 0.12)
-    : Math.max(openingWidth - 0.018, 0.18)
-}
-
-function getElevatorCabWidth(node: ElevatorNode) {
-  return Math.max(node.width, 0.8)
-}
-
-function getElevatorCabDepth(node: ElevatorNode) {
-  return Math.max(node.depth, 0.8)
-}
-
-function getElevatorShaftWallThickness(node: ElevatorNode) {
-  return Math.max(node.shaftWallThickness ?? DEFAULT_SHAFT_WALL_THICKNESS, 0.04)
-}
-
-function getElevatorShaftWidth(node: ElevatorNode, cabWidth = getElevatorCabWidth(node)) {
-  return Math.max(node.shaftWidth ?? cabWidth, cabWidth, 0.8)
-}
-
-function getElevatorShaftDepth(node: ElevatorNode, cabDepth = getElevatorCabDepth(node)) {
-  return Math.max(node.shaftDepth ?? cabDepth, cabDepth, 0.8)
 }
 
 function getElevatorLevelContextNodes(

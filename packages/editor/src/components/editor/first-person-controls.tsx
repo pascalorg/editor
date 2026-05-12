@@ -5,10 +5,23 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ElevatorNode,
+  type ElevatorDoorSide,
   emitter,
+  getElevatorCabCenterZ,
+  getElevatorCabDepth,
+  getElevatorCabWidth,
+  getElevatorDoorLeafSides,
+  getElevatorDoorLeafWidth,
+  getElevatorDoorLeafX,
+  getElevatorShaftDepth,
+  getElevatorShaftWallThickness,
+  getElevatorShaftWidth,
+  getResolvedElevatorDoorStyle,
+  openElevatorDoor,
   resolveElevatorBuildingLevels,
   resolveElevatorDispatchTarget,
   resolveElevatorServiceLevels,
+  requestElevatorLevel,
   sceneRegistry,
   useInteractive,
   useScene,
@@ -62,7 +75,6 @@ const DOOR_LEAF_INTERACTION_DEPTH = 0.08
 const ELEVATOR_RIDE_HORIZONTAL_PADDING = 0.18
 const ELEVATOR_COLLIDER_HORIZONTAL_PADDING = 0.14
 const ELEVATOR_COLLIDER_FLOOR_THICKNESS = 0.08
-const ELEVATOR_COLLIDER_WALL_THICKNESS = 0.16
 const ELEVATOR_COLLIDER_DOOR_DEPTH = 0.12
 const ELEVATOR_ENTRY_DOOR_OPEN_THRESHOLD = 0.72
 const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
@@ -132,9 +144,6 @@ type ElevatorColliderUserData = {
   matrixInitialized?: boolean
   side?: ElevatorDoorSide
 }
-
-type ElevatorDoorSide = 'left' | 'right'
-type ElevatorDoorStyleValue = ElevatorNode['doorStyle']
 
 type ElevatorColliderMesh = Mesh & {
   userData: Mesh['userData'] & ElevatorColliderUserData
@@ -215,67 +224,6 @@ function getInteractableTargetKey(target: FirstPersonInteractableTarget | null) 
   return target.type === 'elevator'
     ? `${target.type}:${target.id}:${target.levelId}`
     : `${target.type}:${target.id}`
-}
-
-function getResolvedElevatorDoorStyle(
-  doorStyle: ElevatorDoorStyleValue | undefined,
-): ElevatorDoorStyleValue {
-  return doorStyle ?? 'center-opening'
-}
-
-function getElevatorDoorLeafSides(
-  doorStyle: ElevatorDoorStyleValue | undefined,
-): ElevatorDoorSide[] {
-  const resolvedDoorStyle = getResolvedElevatorDoorStyle(doorStyle)
-  if (resolvedDoorStyle === 'single-left') return ['left']
-  if (resolvedDoorStyle === 'single-right') return ['right']
-  return ['left', 'right']
-}
-
-function getElevatorDoorLeafWidth(width: number, doorStyle: ElevatorDoorStyleValue | undefined) {
-  return getResolvedElevatorDoorStyle(doorStyle) === 'center-opening'
-    ? Math.max(width / 2 - 0.018, 0.12)
-    : Math.max(width - 0.018, 0.18)
-}
-
-function getElevatorDoorLeafX(
-  side: ElevatorDoorSide,
-  width: number,
-  doorOpen: number,
-  doorStyle: ElevatorDoorStyleValue | undefined,
-) {
-  const resolvedDoorStyle = getResolvedElevatorDoorStyle(doorStyle)
-  if (resolvedDoorStyle === 'center-opening') {
-    const direction = side === 'left' ? -1 : 1
-    return direction * (width / 4 + doorOpen * width * 0.34)
-  }
-
-  const direction = resolvedDoorStyle === 'single-left' ? -1 : 1
-  return direction * doorOpen * width * 0.68
-}
-
-function getElevatorCabWidth(elevator: ElevatorNode) {
-  return Math.max(elevator.width, 0.8)
-}
-
-function getElevatorCabDepth(elevator: ElevatorNode) {
-  return Math.max(elevator.depth, 0.8)
-}
-
-function getElevatorShaftWallThickness(elevator: ElevatorNode) {
-  return Math.max(elevator.shaftWallThickness ?? ELEVATOR_COLLIDER_WALL_THICKNESS, 0.04)
-}
-
-function getElevatorShaftWidth(elevator: ElevatorNode, cabWidth = getElevatorCabWidth(elevator)) {
-  return Math.max(elevator.shaftWidth ?? cabWidth, cabWidth, 0.8)
-}
-
-function getElevatorShaftDepth(elevator: ElevatorNode, cabDepth = getElevatorCabDepth(elevator)) {
-  return Math.max(elevator.shaftDepth ?? cabDepth, cabDepth, 0.8)
-}
-
-function getElevatorCabCenterZ(elevator: ElevatorNode) {
-  return -getElevatorShaftDepth(elevator) / 2 + getElevatorCabDepth(elevator) / 2
 }
 
 function isDynamicElevatorCollider(kind: ElevatorColliderKind) {
@@ -836,7 +784,7 @@ export const FirstPersonControls = () => {
         }
       }
       if (target.action === 'open-door') {
-        useInteractive.getState().openElevatorDoor(target.id)
+        openElevatorDoor(target.id)
         return
       }
       if (target.levelId) {
@@ -849,7 +797,7 @@ export const FirstPersonControls = () => {
                 requestedElevatorId: target.id,
               })
             : target.id
-        useInteractive.getState().requestElevator(targetElevatorId, target.levelId)
+        requestElevatorLevel(targetElevatorId, target.levelId)
       }
       return
     }

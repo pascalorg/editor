@@ -95,12 +95,6 @@ type InteractiveStore = {
   /** Initialize an elevator's runtime state from its default served level. */
   initElevator: (elevatorId: AnyNodeId, levelId: AnyNodeId, carY: number) => void
 
-  /** Queue a request for an elevator to travel to a level. */
-  requestElevator: (elevatorId: AnyNodeId, levelId: AnyNodeId) => void
-
-  /** Open the elevator doors at the current level when the car is not moving. */
-  openElevatorDoor: (elevatorId: AnyNodeId) => void
-
   /** Merge runtime elevator state. */
   setElevatorState: (elevatorId: AnyNodeId, value: Partial<ElevatorInteractiveState>) => void
 
@@ -250,49 +244,6 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
         },
       },
     }))
-  },
-
-  requestElevator: (elevatorId, levelId) => {
-    set((state) => {
-      const elevator = state.elevators[elevatorId] ?? {
-        currentLevelId: null,
-        targetLevelId: null,
-        carY: 0,
-        doorOpen: 0,
-        phase: 'idle' as const,
-        phaseStartedAt: null,
-        queue: [],
-      }
-      const isAlreadyQueued = elevator.queue.includes(levelId) || elevator.targetLevelId === levelId
-
-      return {
-        elevators: {
-          ...state.elevators,
-          [elevatorId]: {
-            ...elevator,
-            queue: isAlreadyQueued ? elevator.queue : [...elevator.queue, levelId],
-          },
-        },
-      }
-    })
-  },
-
-  openElevatorDoor: (elevatorId) => {
-    set((state) => {
-      const elevator = state.elevators[elevatorId]
-      if (!elevator?.currentLevelId || elevator.phase === 'moving') return state
-
-      return {
-        elevators: {
-          ...state.elevators,
-          [elevatorId]: {
-            ...elevator,
-            phase: 'opening',
-            phaseStartedAt: null,
-          },
-        },
-      }
-    })
   },
 
   setElevatorState: (elevatorId, value) => {
