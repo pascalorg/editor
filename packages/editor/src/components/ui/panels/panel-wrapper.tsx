@@ -33,7 +33,14 @@ export function PanelWrapper({
       className={cn(
         isMobile
           ? 'flex h-full w-full flex-col overflow-hidden bg-transparent dark:text-foreground'
-          : 'pointer-events-auto fixed top-20 right-4 z-50 flex max-h-[calc(100dvh-100px)] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground',
+          // Cap height at `100dvh - 154px` so a tall panel's bottom edge
+          // aligns flush with the top of the floating bottom action bar.
+          // Combined with `top-20` (80px), the panel's bottom sits at
+          // `100dvh - 74px` — just clearing the bar without leaving a
+          // visible gap. The inner `flex-1 overflow-y-auto` content area
+          // (below) handles vertical scrolling when content exceeds the
+          // cap.
+          : 'pointer-events-auto fixed top-20 right-4 z-50 flex max-h-[calc(100dvh-154px)] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground',
         className,
       )}
       style={isMobile ? undefined : { width }}
