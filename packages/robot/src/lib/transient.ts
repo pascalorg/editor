@@ -1,4 +1,10 @@
-const TRANSIENT_METADATA_KEYS = new Set(['robotCopySourceId'])
+import { ITEM_MOVE_VISUAL_METADATA_KEY } from './item-move-visuals'
+
+const TRANSIENT_METADATA_KEYS = new Set([
+  ITEM_MOVE_VISUAL_METADATA_KEY,
+  'isTransient',
+  'robotCopySourceId',
+])
 
 export function stripTransientMetadata<T>(metadata: T): T {
   if (!metadata || typeof metadata !== 'object') {

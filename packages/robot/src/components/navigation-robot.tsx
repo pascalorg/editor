@@ -350,6 +350,7 @@ type NavigationRobotProps = {
   toolConeColor?: string | null
   toolCarryItemId?: string | null
   toolCarryItemIdRef?: MutableRefObject<string | null> | undefined
+  toolConeResetToken?: number | string | null
   toolInteractionPhaseRef?: MutableRefObject<NavigationRobotToolInteractionPhase | null> | undefined
   toolInteractionTargetItemIdRef?: MutableRefObject<string | null> | undefined
 }
@@ -1768,6 +1769,7 @@ export function NavigationRobot({
   toolConeColor = null,
   toolCarryItemId = null,
   toolCarryItemIdRef,
+  toolConeResetToken = null,
   toolInteractionPhaseRef,
   toolInteractionTargetItemIdRef,
 }: NavigationRobotProps) {
@@ -2244,6 +2246,29 @@ export function NavigationRobot({
   const toolConeRenderMissStreakFramesRef = useRef(0)
   const toolConeHullProjectedPointScratchRef = useRef(new Vector3())
   const toolConeRenderedWorldPointScratchRef = useRef(new Vector3())
+
+  useEffect(() => {
+    toolConeFrozenHullTargetItemIdRef.current = null
+    toolConeFrozenHullPointsRef.current = []
+    toolConeFollowReleaseBlendRef.current = 0
+    toolConeFollowReleasePoseReadyRef.current = false
+    toolConeLogicExpectedFrameIdRef.current = null
+    toolConeVisibleFrameIdRef.current = null
+    toolConeSubmittedAnyFrameIdRef.current = null
+    toolConeSubmittedMainFrameIdRef.current = null
+    toolConeSubmittedInwardGlowFrameIdRef.current = null
+    toolConeSubmittedOutwardGlowFrameIdRef.current = null
+    toolConeFailureStreakFramesRef.current = 0
+    toolConeGeometryMissStreakFramesRef.current = 0
+    toolConeRenderMissStreakFramesRef.current = 0
+    for (const toolConeRenderable of leftToolConeRenderables) {
+      toolConeRenderable.mainMesh.visible = false
+      toolConeRenderable.inwardGlowMesh.visible = false
+      toolConeRenderable.outlineMesh.visible = false
+      toolConeRenderable.outwardGlowMesh.visible = false
+    }
+    setToolConeIsolatedOverlay(null)
+  }, [leftToolConeRenderables, toolConeResetToken])
   const shoulderAimBoneWorldPositionRef = useRef(new Vector3())
   const shoulderAimParentWorldQuaternionRef = useRef(new Quaternion())
   const shoulderAimTargetDirectionParentRef = useRef(new Vector3())

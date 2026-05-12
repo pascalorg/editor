@@ -1,7 +1,6 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor/robot-adapter'
 import { useViewer } from '@pascal-app/viewer'
 import { Power } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -13,21 +12,6 @@ const PANEL_BUTTON_CLASS =
   'flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45'
 
 export function NavigationPanel() {
-  const {
-    setEditingHole,
-    setFloorplanSelectionTool,
-    setMode,
-    setSelectedReferenceId,
-    setTool,
-  } = useEditor(
-    useShallow((state) => ({
-      setEditingHole: state.setEditingHole,
-      setFloorplanSelectionTool: state.setFloorplanSelectionTool,
-      setMode: state.setMode,
-      setSelectedReferenceId: state.setSelectedReferenceId,
-      setTool: state.setTool,
-    })),
-  )
   const { robotMode, setRobotMode } = useNavigation(
     useShallow((state) => ({
       robotMode: state.robotMode,
@@ -48,12 +32,7 @@ export function NavigationPanel() {
   const handleRobotOff = () => {
     emitter.emit('tool:cancel')
     clearViewerSelectionState()
-    setEditingHole(null)
-    setFloorplanSelectionTool('click')
-    setMode('select')
-    setSelectedReferenceId(null)
     setSelection({ selectedIds: [], zoneId: null })
-    setTool(null)
     setRobotMode(null)
   }
 

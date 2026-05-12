@@ -267,6 +267,7 @@ basePlaneMaterial.opacityNode = radialOpacity
 
 export interface PlacementCoordinatorConfig {
   asset: AssetInput | null
+  disabled?: boolean
   draftNode: DraftNodeHandle
   ignoreItemIds?: string[]
   initDraft: (gridPosition: Vector3) => void
@@ -461,7 +462,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       state: { ...placementState.current },
       currentCursorRotationY: cursorGroupRef.current.rotation.y,
     })
-    const isDisabled = () => Boolean(configRef.current.isDisabled?.())
+    const isDisabled = () => Boolean(configRef.current.disabled || configRef.current.isDisabled?.())
     const shouldCommit = (nodeUpdate: Partial<ItemNode>) =>
       configRef.current.onCommitRequested?.({ nodeUpdate, surface: placementState.current.surface }) ?? true
 
@@ -1242,12 +1243,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (tearingDown) return
       const draft = draftNode.current
       if (draft === null) return
+      if (draftNode.mode === 'clone') return
       if (draft.id in state.nodes) return
 
       queueMicrotask(() => {
         if (tearingDown) return
         const draft = draftNode.current
         if (draft === null) return
+        if (draftNode.mode === 'clone') return
         if (draft.id in useScene.getState().nodes) return
         // Temporal is paused during placement, createNode won't be tracked
         useScene.getState().createNode(draft, draft.parentId as AnyNodeId)

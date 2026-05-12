@@ -139,6 +139,10 @@ export interface EditorProps {
   previewScene?: SceneGraph
   isVersionPreviewMode?: boolean
 
+  // External modes can pause editor-owned interactions while preserving viewer/app composition.
+  editorInteractionsDisabled?: boolean
+  shouldPauseAutoSave?: () => boolean
+
   // Loading indicator (e.g. project fetching in community mode)
   isLoading?: boolean
 
@@ -165,6 +169,34 @@ export interface EditorProps {
     children: ReactNode,
     props: { hoverStyles: HoverStyles; selectionManager: 'custom' | 'default' },
   ) => ReactNode
+}
+
+function resetEditorInteractionState() {
+  const viewer = useViewer.getState()
+  viewer.setHoveredId(null)
+  viewer.setPreviewSelectedIds([])
+  viewer.setSelection({
+    buildingId: viewer.selection.buildingId,
+    levelId: viewer.selection.levelId,
+    selectedIds: [],
+    zoneId: null,
+  })
+  viewer.setHoverHighlightMode('default')
+  viewer.outliner.selectedObjects.length = 0
+  viewer.outliner.hoveredObjects.length = 0
+
+  const editor = useEditor.getState()
+  editor.setMovingNode(null)
+  editor.setMovingWallEndpoint(null)
+  editor.setMovingFenceEndpoint(null)
+  editor.setCurvingWall(null)
+  editor.setCurvingFence(null)
+  editor.setSelectedMaterialTarget(null)
+  editor.setSelectedReferenceId(null)
+  editor.setEditingHole(null)
+  editor.setFloorplanSelectionTool('click')
+  editor.setMode('select')
+  editor.setTool(null)
 }
 
 function EditorSceneCrashFallback() {
@@ -583,20 +615,30 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  editorInteractionsDisabled,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  editorInteractionsDisabled: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   return (
     <>
-      {!isFirstPersonMode && <SelectionManager />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
+      {!(isFirstPersonMode || editorInteractionsDisabled) && <SelectionManager />}
+      {!(isVersionPreviewMode || isFirstPersonMode || editorInteractionsDisabled) && (
+        <BoxSelectTool />
+      )}
+      {!(isVersionPreviewMode || isFirstPersonMode || editorInteractionsDisabled) && (
+        <WallMoveSideHandles />
+      )}
+      {!(isVersionPreviewMode || isFirstPersonMode || editorInteractionsDisabled) && (
+        <FloatingActionMenu />
+      )}
+      {!(isVersionPreviewMode || isFirstPersonMode || editorInteractionsDisabled) && (
+        <FloatingBuildingActionMenu />
+      )}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
@@ -607,7 +649,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || isFirstPersonMode) && (
         <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
       )}
-      {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
+      {!(isLoading || isVersionPreviewMode || isFirstPersonMode || editorInteractionsDisabled) && (
+        <ToolManager />
+      )}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
@@ -624,13 +668,15 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
 function DeleteCursorLayer({
   containerRef,
   isVersionPreviewMode,
+  editorInteractionsDisabled,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>
   isVersionPreviewMode: boolean
+  editorInteractionsDisabled: boolean
 }) {
   const mode = useEditor((s) => s.mode)
   const badgeRef = useRef<HTMLDivElement>(null)
-  const active = mode === 'delete' && !isVersionPreviewMode
+  const active = mode === 'delete' && !(isVersionPreviewMode || editorInteractionsDisabled)
 
   useEffect(() => {
     if (!active) {
@@ -698,15 +744,17 @@ function DeleteCursorLayer({
 function PaintCursorLayer({
   containerRef,
   isVersionPreviewMode,
+  editorInteractionsDisabled,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>
   isVersionPreviewMode: boolean
+  editorInteractionsDisabled: boolean
 }) {
   const mode = useEditor((s) => s.mode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
   const activePaintTarget = useEditor((s) => s.activePaintTarget)
   const badgeRef = useRef<HTMLDivElement>(null)
-  const active = mode === 'material-paint' && !isVersionPreviewMode
+  const active = mode === 'material-paint' && !(isVersionPreviewMode || editorInteractionsDisabled)
 
   useEffect(() => {
     if (!active) {
@@ -797,6 +845,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  editorInteractionsDisabled,
   hasLoadedInitialScene,
   showLoader,
   onThumbnailCapture,
@@ -805,6 +854,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  editorInteractionsDisabled: boolean
   hasLoadedInitialScene: boolean
   showLoader: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
@@ -868,6 +918,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const selectionManager = isFirstPersonMode ? 'default' : 'custom'
   const viewerChildren = (
     <ViewerSceneContent
+      editorInteractionsDisabled={editorInteractionsDisabled}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
       isVersionPreviewMode={isVersionPreviewMode}
@@ -907,10 +958,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
         >
           <DeleteCursorLayer
             containerRef={viewer3dRef}
+            editorInteractionsDisabled={editorInteractionsDisabled}
             isVersionPreviewMode={isVersionPreviewMode}
           />
           <PaintCursorLayer
             containerRef={viewer3dRef}
+            editorInteractionsDisabled={editorInteractionsDisabled}
             isVersionPreviewMode={isVersionPreviewMode}
           />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
@@ -929,7 +982,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
           )}
         </div>
       </div>
-      {!(isLoading || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
+      {!(isLoading || isVersionPreviewMode || editorInteractionsDisabled) && (
+        <ZoneLabelEditorSystem />
+      )}
     </ErrorBoundary>
   )
 })
@@ -949,6 +1004,8 @@ export default function Editor({
   onSaveStatusChange,
   previewScene,
   isVersionPreviewMode = false,
+  editorInteractionsDisabled = false,
+  shouldPauseAutoSave,
   isLoading = false,
   onThumbnailCapture,
   sidebarOverlay,
@@ -962,13 +1019,14 @@ export default function Editor({
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
 
-  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode })
+  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || editorInteractionsDisabled })
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
     onDirty,
     onSaveStatusChange,
     isVersionPreviewMode,
+    shouldPauseAutoSave,
   })
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
@@ -991,6 +1049,11 @@ export default function Editor({
       useViewer.getState().setProjectId(null)
     }
   }, [projectId])
+
+  useEffect(() => {
+    if (!editorInteractionsDisabled) return
+    resetEditorInteractionState()
+  }, [editorInteractionsDisabled])
 
   // Load scene on mount (or when onLoad identity changes, e.g. project switch)
   useEffect(() => {
@@ -1105,6 +1168,7 @@ export default function Editor({
 
   const viewerCanvas = (
     <ViewerCanvas
+      editorInteractionsDisabled={editorInteractionsDisabled}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1162,17 +1226,17 @@ export default function Editor({
               overlays={
                 <>
                   {!isCaptureMode && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
+                  {!(isVersionPreviewMode || isCaptureMode || editorInteractionsDisabled) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
                     </div>
                   )}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
+                  {!(isVersionPreviewMode || isCaptureMode || editorInteractionsDisabled) && (
                     <div className="pointer-events-auto">
                       <PanelManager />
                     </div>
                   )}
-                  {!isCaptureMode && (
+                  {!isCaptureMode && !editorInteractionsDisabled && (
                     <div className="pointer-events-auto">
                       <HelperManager />
                     </div>
@@ -1241,15 +1305,19 @@ export default function Editor({
 
             {/* Fixed UI overlays scoped to the viewer area */}
             <ViewerOverlays left={overlayLeft}>
-              <div className="pointer-events-auto">
-                <ActionMenu />
-              </div>
-              <div className="pointer-events-auto">
-                <PanelManager />
-              </div>
-              <div className="pointer-events-auto">
-                <HelperManager />
-              </div>
+              {!editorInteractionsDisabled && (
+                <>
+                  <div className="pointer-events-auto">
+                    <ActionMenu />
+                  </div>
+                  <div className="pointer-events-auto">
+                    <PanelManager />
+                  </div>
+                  <div className="pointer-events-auto">
+                    <HelperManager />
+                  </div>
+                </>
+              )}
             </ViewerOverlays>
             {/* First-person overlay — rendered on top of normal layout */}
             {isFirstPersonMode && (

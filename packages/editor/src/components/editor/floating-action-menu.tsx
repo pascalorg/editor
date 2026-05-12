@@ -28,12 +28,6 @@ import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
-import {
-  decorateItemDuplicate,
-  notifyItemDuplicateDraft,
-  requestExternalItemDelete,
-  requestExternalItemRepair,
-} from '../../robot-adapter'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -260,9 +254,6 @@ export function FloatingActionMenu() {
       let duplicateInfo = structuredClone(node) as any
       delete duplicateInfo.id
       duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
-      if (node.type === 'item') {
-        decorateItemDuplicate(node, duplicateInfo)
-      }
 
       let duplicate: AnyNode | null = null
       try {
@@ -272,7 +263,6 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
-          notifyItemDuplicateDraft(node, duplicate)
         } else if (node.type === 'column') {
           duplicate = ColumnNode.parse(duplicateInfo)
         } else if (node.type === 'wall') {
@@ -397,9 +387,6 @@ export function FloatingActionMenu() {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (node?.type === 'item' && requestExternalItemDelete(node)) {
-        return
-      }
       if (!selectedId) return
       if (node?.type === 'item') {
         sfxEmitter.emit('sfx:item-delete')
@@ -410,16 +397,6 @@ export function FloatingActionMenu() {
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
     [node, selectedId, setSelection],
-  )
-
-  const handleRepair = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (node?.type === 'item') {
-        requestExternalItemRepair(node)
-      }
-    },
-    [node],
   )
 
   if (

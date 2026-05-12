@@ -13,6 +13,10 @@ type NavigationItemMovePreview = {
   sourceItemId: ItemNode['id']
 }
 
+type NavigationItemRepairActivation = {
+  startedAtMs: number
+}
+
 type NavigationPostWarmupScope =
   | ((run: () => void | Promise<void>) => boolean | Promise<boolean>)
   | null
@@ -22,6 +26,7 @@ type NavigationRuntimeVisualState = {
   itemDeleteActivations: Partial<Record<BaseNode['id'], NavigationItemDeleteActivation>>
   itemMovePreview: NavigationItemMovePreview | null
   itemMoveVisualStates: Partial<Record<BaseNode['id'], ItemMoveVisualState>>
+  itemRepairActivations: Partial<Record<BaseNode['id'], NavigationItemRepairActivation>>
   navigationPostWarmupCompletedToken: number
   navigationPostWarmupRequestToken: number
   navigationPostWarmupScope: NavigationPostWarmupScope
@@ -52,9 +57,12 @@ export type ToolConeOverlayCamera = {
 
 type NavigationVisualState = NavigationRuntimeVisualState & {
   activateItemDelete: (id: BaseNode['id']) => void
+  activateItemRepair: (id: BaseNode['id']) => void
   beginItemDeleteFade: (id: BaseNode['id'], startedAtMs?: number) => void
   clearItemDelete: (id?: BaseNode['id'] | null) => void
+  clearItemRepair: (id?: BaseNode['id'] | null) => void
   registerTaskPreviewNode: (id: string) => void
+  resetRuntimeVisuals: (options?: { preserveToolConeOverlay?: boolean }) => void
   resetTaskQueueVisuals: () => void
   setItemMovePreview: (preview: NavigationItemMovePreview | null) => void
   setItemMoveVisualState: (id: BaseNode['id'], state: ItemMoveVisualState | null) => void
@@ -73,6 +81,16 @@ type NavigationVisualState = NavigationRuntimeVisualState & {
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
+function isTaskQueueMoveVisualState(visualState: ItemMoveVisualState) {
+  return (
+    visualState === 'carried' ||
+    visualState === 'copy-source-pending' ||
+    visualState === 'destination-ghost' ||
+    visualState === 'destination-preview' ||
+    visualState === 'source-pending'
+  )
+}
+
 const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
   activateItemDelete: (id) =>
     set((state) => ({
@@ -80,6 +98,15 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
         ...state.itemDeleteActivations,
         [id]: {
           fadeStartedAtMs: null,
+          startedAtMs: now(),
+        },
+      },
+    })),
+  activateItemRepair: (id) =>
+    set((state) => ({
+      itemRepairActivations: {
+        ...state.itemRepairActivations,
+        [id]: {
           startedAtMs: now(),
         },
       },
@@ -117,6 +144,22 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
       delete itemDeleteActivations[id]
       return { itemDeleteActivations }
     }),
+  clearItemRepair: (id) =>
+    set((state) => {
+      if (!id) {
+        return Object.keys(state.itemRepairActivations).length === 0
+          ? state
+          : { itemRepairActivations: {} }
+      }
+
+      if (!state.itemRepairActivations[id]) {
+        return state
+      }
+
+      const itemRepairActivations = { ...state.itemRepairActivations }
+      delete itemRepairActivations[id]
+      return { itemRepairActivations }
+    }),
   registerTaskPreviewNode: (id) =>
     set((state) =>
       state.taskPreviewNodeIds[id]
@@ -128,14 +171,30 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
             },
           },
     ),
+  resetRuntimeVisuals: (options) =>
+    set((state) => ({
+      itemDeleteActivations: {},
+      itemMovePreview: null,
+      itemMoveVisualStates: {},
+      itemRepairActivations: {},
+      nodeVisibilityOverrides: {},
+      taskPreviewNodeIds: {},
+      toolConeIsolatedOverlay: null,
+      toolConeOverlayCamera:
+        options?.preserveToolConeOverlay === true ? state.toolConeOverlayCamera : null,
+      toolConeOverlayEnabled:
+        options?.preserveToolConeOverlay === true ? state.toolConeOverlayEnabled : false,
+      toolConeOverlayWarmupReady:
+        options?.preserveToolConeOverlay === true ? state.toolConeOverlayWarmupReady : false,
+    })),
   resetTaskQueueVisuals: () =>
     set((state) => {
       const nextItemMoveVisualStates: Partial<Record<BaseNode['id'], ItemMoveVisualState>> = {}
-      let removedPendingMoveVisual = false
+      let removedMoveVisual = false
 
       for (const [itemId, visualState] of Object.entries(state.itemMoveVisualStates)) {
-        if (visualState === 'copy-source-pending' || visualState === 'source-pending') {
-          removedPendingMoveVisual = true
+        if (visualState && isTaskQueueMoveVisualState(visualState)) {
+          removedMoveVisual = true
           continue
         }
 
@@ -145,8 +204,9 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
       const hasTaskQueueVisuals =
         state.itemMovePreview !== null ||
         Object.keys(state.itemDeleteActivations).length > 0 ||
+        Object.keys(state.itemRepairActivations).length > 0 ||
         Object.keys(state.taskPreviewNodeIds).length > 0 ||
-        removedPendingMoveVisual
+        removedMoveVisual
 
       if (!hasTaskQueueVisuals) {
         return state
@@ -156,6 +216,7 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
         itemDeleteActivations: {},
         itemMovePreview: null,
         itemMoveVisualStates: nextItemMoveVisualStates,
+        itemRepairActivations: {},
         taskPreviewNodeIds: {},
       }
     }),
@@ -168,6 +229,7 @@ const navigationVisualsStore = createStore<NavigationVisualState>()((set) => ({
   itemDeleteActivations: {} as Partial<Record<BaseNode['id'], NavigationItemDeleteActivation>>,
   itemMovePreview: null,
   itemMoveVisualStates: {} as Partial<Record<BaseNode['id'], ItemMoveVisualState>>,
+  itemRepairActivations: {} as Partial<Record<BaseNode['id'], NavigationItemRepairActivation>>,
   navigationPostWarmupCompletedToken: 0,
   navigationPostWarmupRequestToken: 0,
   navigationPostWarmupScope: null as NavigationPostWarmupScope,

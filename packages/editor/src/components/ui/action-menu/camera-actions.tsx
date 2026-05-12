@@ -2,9 +2,16 @@
 
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
+import type { ReactNode } from 'react'
 import { ActionButton } from './action-button'
 
-export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
+export function CameraActions({
+  afterCameraMode,
+  hideOrbit = false,
+}: {
+  afterCameraMode?: ReactNode
+  hideOrbit?: boolean
+}) {
   const goToTopView = () => {
     emitter.emit('camera-controls:top-view')
   }
@@ -73,6 +80,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           width={28}
         />
       </ActionButton>
+      {afterCameraMode}
     </div>
   )
 }

@@ -105,7 +105,7 @@ function GPUDeviceWatcher() {
 
   useEffect(() => {
     const backend = (gl as any).backend
-    const device: GPUDevice | undefined = backend?.device
+    const device: WebGPUDeviceLike | undefined = backend?.device
 
     if (!device) {
       console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
@@ -120,7 +120,7 @@ function GPUDeviceWatcher() {
       features: Array.from(device.features ?? []),
     })
 
-    device.lost.then((info) => {
+    device.lost.then((info: WebGPUDeviceLossInfo) => {
       console.error(
         `[viewer] WebGPU device lost: reason="${info.reason}", message="${info.message}". ` +
           'The page must be reloaded to recover the GPU context.',
@@ -129,13 +129,14 @@ function GPUDeviceWatcher() {
 
     // Uncaptured errors are normally silent (only console-warned by Chrome at
     // best). Pipe them to console.error so silent mobile crashes show up.
-    const onUncapturedError = (event: GPUUncapturedErrorEvent) => {
-      console.error('[viewer] WebGPU uncaptured error:', event.error.message, event.error)
+    const onUncapturedError = (event: Event) => {
+      const error = (event as Event & { error?: { message?: string } }).error
+      console.error('[viewer] WebGPU uncaptured error:', error?.message, error)
     }
-    device.addEventListener('uncapturederror', onUncapturedError as EventListener)
+    device.addEventListener?.('uncapturederror', onUncapturedError)
 
     return () => {
-      device.removeEventListener('uncapturederror', onUncapturedError as EventListener)
+      device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
   }, [gl])
 

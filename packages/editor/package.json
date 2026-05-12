@@ -6,7 +6,7 @@
   "exports": {
     ".": "./src/index.tsx",
     "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
-    "./robot-adapter": "./src/robot-adapter.ts"
+    "./runtime": "./src/runtime.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"

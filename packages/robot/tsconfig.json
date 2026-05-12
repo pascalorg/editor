@@ -6,7 +6,7 @@
     "paths": {
       "@pascal-app/core": ["../core/src/index.ts"],
       "@pascal-app/core/*": ["../core/src/*"],
-      "@pascal-app/editor/robot-adapter": ["../editor/src/robot-adapter.ts"],
+      "@pascal-app/editor/runtime": ["../editor/src/runtime.ts"],
       "@pascal-app/viewer": ["../viewer/src/index.ts"]
     }
   },

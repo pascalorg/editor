@@ -14,6 +14,7 @@ import {
   type StairNode,
   type StairSegmentNode,
   type WallNode,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { measureNavigationPerf } from './navigation-performance'
 import {
@@ -45,6 +46,8 @@ const NAV_LINE_OF_SIGHT_SAMPLE_STEP = WALKABLE_CELL_SIZE * 0.45
 const NAV_LINE_OF_SIGHT_SEARCH_RADIUS_CELLS = 1
 const NAV_LINE_OF_SIGHT_HEIGHT_TOLERANCE = Math.max(0.22, WALKABLE_CELL_SIZE * 1.15)
 const NAV_PORTAL_RELIEF_EPSILON = WALKABLE_CELL_SIZE * 0.08
+const NAV_MIN_WALKABLE_SLAB_ELEVATION = -0.01
+const NAV_MAX_WALKABLE_SLAB_ELEVATION = 0.75
 
 // The walkable surface is already eroded by this radius, so valid nav points are
 // valid robot-center positions for this footprint.
@@ -56,6 +59,16 @@ const NAV_DOOR_GROUP_GAP_TOLERANCE = Math.max(
   NAVIGATION_AGENT_RADIUS * 0.9,
 )
 const NAV_DOOR_ENTRY_OFFSET = Math.max(WALKABLE_CELL_SIZE * 0.9, NAVIGATION_AGENT_RADIUS * 1.05)
+
+function isNavigationWalkableSlab(slab: SlabNode) {
+  const elevation = slab.elevation ?? 0.05
+  return elevation >= NAV_MIN_WALKABLE_SLAB_ELEVATION && elevation <= NAV_MAX_WALKABLE_SLAB_ELEVATION
+}
+
+function isNavigationBlockedZone(zone: ZoneNode) {
+  const name = (zone.name ?? '').toLowerCase()
+  return /\b(pool|pond|water|spa)\b/.test(name)
+}
 
 export type NavigationCell = {
   cellIndex: number
@@ -378,6 +391,9 @@ function getLevelNavigationResult(
   const slabs = level.children
     .map((childId) => nodes[childId])
     .filter((node): node is SlabNode => node?.type === 'slab')
+  const zones = level.children
+    .map((childId) => nodes[childId])
+    .filter((node): node is ZoneNode => node?.type === 'zone')
   const levelDescendantNodes = measureNavigationPerf('navigation.build.levelDescendantsMs', () =>
     collectLevelDescendants(level, nodes),
   )
@@ -405,6 +421,10 @@ function getLevelNavigationResult(
   const wallPolygons = wallSamples.map(({ polygon }) => polygon)
   const slabPolygons = measureNavigationPerf('navigation.build.slabPolygonsMs', () =>
     slabs.flatMap((slab) => {
+      if (!isNavigationWalkableSlab(slab)) {
+        return []
+      }
+
       const polygon = toWalkablePlanPolygon(slab.polygon)
       if (polygon.length < 3) {
         return []
@@ -420,6 +440,27 @@ function getLevelNavigationResult(
           holes,
           surfaceY: getSlabSurfaceY(slab),
         },
+      ]
+    }),
+  )
+  const slabObstacleSamples = measureNavigationPerf('navigation.build.slabObstacleSamplesMs', () =>
+    slabs.flatMap((slab) => {
+      if (isNavigationWalkableSlab(slab)) {
+        return []
+      }
+
+      const polygon = toWalkablePlanPolygon(slab.polygon)
+      if (polygon.length < 3) {
+        return []
+      }
+
+      return [
+        {
+          bounds: getPolygonBounds(polygon),
+          levelId: level.id,
+          polygon,
+          sourceId: slab.id,
+        } satisfies NavigationCollisionPolygonSample,
       ]
     }),
   )
@@ -551,10 +592,33 @@ function getLevelNavigationResult(
           },
         },
       ]
+      }),
+  )
+  const zoneObstacleSamples = measureNavigationPerf('navigation.build.zoneObstacleSamplesMs', () =>
+    zones.flatMap((zone) => {
+      if (zone.visible === false || !isNavigationBlockedZone(zone)) {
+        return []
+      }
+
+      const polygon = toWalkablePlanPolygon(zone.polygon)
+      if (polygon.length < 3) {
+        return []
+      }
+
+      return [
+        {
+          bounds: getPolygonBounds(polygon),
+          levelId: level.id,
+          polygon,
+          sourceId: zone.id,
+        } satisfies NavigationCollisionPolygonSample,
+      ]
     }),
   )
-  const obstacleSamples = measureNavigationPerf('navigation.build.obstacleSamplesMs', () =>
-    levelDescendantNodes.flatMap((node) => {
+  const obstacleSamples = measureNavigationPerf('navigation.build.obstacleSamplesMs', () => [
+    ...slabObstacleSamples,
+    ...zoneObstacleSamples,
+    ...levelDescendantNodes.flatMap((node) => {
       if (
         node.type !== 'item' ||
         node.visible === false ||
@@ -593,7 +657,7 @@ function getLevelNavigationResult(
           ]
         : []
     }),
-  )
+  ])
   const obstaclePolygons = obstacleSamples.map(({ polygon }) => polygon)
 
   const overlay = measureNavigationPerf('navigation.build.walkableOverlayMs', () =>
@@ -2493,69 +2557,6 @@ function getDoorOpeningPassagePoints(
   }
 }
 
-function isNavigationPathSegmentInsideDoorOpening(
-  opening: NavigationDoorOpening,
-  fromCell: NavigationCell,
-  toCell: NavigationCell,
-  cellSize: number,
-) {
-  if (fromCell.levelId !== opening.levelId || toCell.levelId !== opening.levelId) {
-    return false
-  }
-
-  const fromPoint = { x: fromCell.center[0], y: fromCell.center[2] }
-  const toPoint = { x: toCell.center[0], y: toCell.center[2] }
-  const portalOptions = {
-    depthEpsilon: Math.max(cellSize * 0.35, NAVIGATION_AGENT_RADIUS * 0.35),
-    widthEpsilon: Math.max(cellSize * 0.55, NAVIGATION_AGENT_RADIUS * 0.5),
-  }
-  const fromInsidePortal = isPointInsideDoorPortal(fromPoint, opening.polygon, portalOptions)
-  const toInsidePortal = isPointInsideDoorPortal(toPoint, opening.polygon, portalOptions)
-
-  const fromOffset = {
-    x: fromPoint.x - opening.center.x,
-    y: fromPoint.y - opening.center.y,
-  }
-  const toOffset = {
-    x: toPoint.x - opening.center.x,
-    y: toPoint.y - opening.center.y,
-  }
-  const fromDepth = dotPlan(fromOffset, opening.depthAxis)
-  const toDepth = dotPlan(toOffset, opening.depthAxis)
-  const depthDelta = toDepth - fromDepth
-  const depthEpsilon = portalOptions.depthEpsilon
-  const fromSide = Math.abs(fromDepth) <= depthEpsilon ? 0 : Math.sign(fromDepth)
-  const toSide = Math.abs(toDepth) <= depthEpsilon ? 0 : Math.sign(toDepth)
-  const hasOppositeSideCrossing =
-    fromSide !== 0 && toSide !== 0 && fromSide !== toSide && Math.abs(depthDelta) > depthEpsilon
-  const hasDoorwayEndpointCrossing =
-    Math.abs(depthDelta) > Number.EPSILON &&
-    ((fromInsidePortal && fromSide === 0 && toSide !== 0 && fromDepth * toDepth <= 0) ||
-      (toInsidePortal && toSide === 0 && fromSide !== 0 && fromDepth * toDepth <= 0) ||
-      (fromInsidePortal &&
-        toInsidePortal &&
-        fromSide === 0 &&
-        toSide === 0 &&
-        fromDepth * toDepth <= 0 &&
-        Math.abs(depthDelta) > cellSize * 0.05))
-  const crossesOpeningPlane = hasOppositeSideCrossing || hasDoorwayEndpointCrossing
-
-  if (!crossesOpeningPlane) {
-    return false
-  }
-
-  const fromWidth = dotPlan(fromOffset, opening.widthAxis)
-  const toWidth = dotPlan(toOffset, opening.widthAxis)
-  const crossingT = Math.min(Math.max(-fromDepth / depthDelta, 0), 1)
-  const crossingWidth = fromWidth + (toWidth - fromWidth) * crossingT
-  const crossingPoint = {
-    x: opening.center.x + opening.widthAxis.x * crossingWidth,
-    y: opening.center.y + opening.widthAxis.y * crossingWidth,
-  }
-
-  return isPointInsideDoorPortal(crossingPoint, opening.polygon, portalOptions)
-}
-
 export function getNavigationDoorTransitions(
   graph: NavigationGraph,
   pathIndices: number[],
@@ -2584,26 +2585,21 @@ export function getNavigationDoorTransitions(
 
   for (const segment of segments) {
     const pairKey = `${Math.min(segment.fromCellIndex, segment.toCellIndex)}:${Math.max(segment.fromCellIndex, segment.toCellIndex)}`
+    const openingId = openingIdByBridgeKey.get(pairKey)
+    if (!openingId) {
+      continue
+    }
+
+    const doorOpening = doorOpeningById.get(openingId)
     const fromCell = graph.cells[segment.fromCellIndex]
     const toCell = graph.cells[segment.toCellIndex]
-    if (!(fromCell && toCell)) {
+    if (!(doorOpening && fromCell && toCell)) {
       continue
     }
 
-    const bridgeOpeningId = openingIdByBridgeKey.get(pairKey)
-    const doorOpening =
-      (bridgeOpeningId ? doorOpeningById.get(bridgeOpeningId) : undefined) ??
-      graph.doorOpenings.find((opening) =>
-        isNavigationPathSegmentInsideDoorOpening(opening, fromCell, toCell, graph.cellSize),
-      )
-
-    if (!doorOpening || earliestTransitionByOpeningId.has(doorOpening.openingId)) {
-      continue
-    }
-
-    earliestTransitionByOpeningId.set(doorOpening.openingId, {
+    earliestTransitionByOpeningId.set(openingId, {
       doorIds: doorOpening.doorIds,
-      openingId: doorOpening.openingId,
+      openingId,
       ...getDoorOpeningPassagePoints(doorOpening, fromCell, toCell, graph.cellSize),
       fromCellIndex: segment.fromCellIndex,
       fromPathIndex: Math.floor(segment.pathPosition),

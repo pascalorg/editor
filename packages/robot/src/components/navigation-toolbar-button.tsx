@@ -2,7 +2,6 @@
 
 import { emitter } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEditor } from '@pascal-app/editor/robot-adapter'
 import { Bot, Check, Shield } from 'lucide-react'
 import { useCallback } from 'react'
 import { cn } from '../lib/utils'
@@ -48,13 +47,6 @@ export function NavigationToolbarButton() {
       viewerState.setSelection({ selectedIds: [], zoneId: null })
       viewerState.outliner.selectedObjects.length = 0
       viewerState.outliner.hoveredObjects.length = 0
-
-      const editorState = useEditor.getState()
-      editorState.setEditingHole(null)
-      editorState.setFloorplanSelectionTool('click')
-      editorState.setMode('select')
-      editorState.setSelectedReferenceId(null)
-      editorState.setTool(null)
 
       setRobotMode(mode)
       setFollowRobotEnabled(false)

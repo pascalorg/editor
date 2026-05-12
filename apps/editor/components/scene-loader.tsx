@@ -201,7 +201,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
+      <div className="pointer-events-none absolute top-16 right-4 z-40 flex items-center gap-2">
         <Link
           className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
           href="/scenes"

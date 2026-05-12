@@ -98,9 +98,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function shouldPreservePascalTruckPlacement(sourceTruckNode?: ItemNode | null) {
+export function hasPascalTruckManualPlacement(sourceTruckNode?: ItemNode | null) {
   const metadata = isRecord(sourceTruckNode?.metadata) ? sourceTruckNode.metadata : null
   return metadata?.manualPlacement === true
+}
+
+function shouldPreservePascalTruckPlacement(sourceTruckNode?: ItemNode | null) {
+  return hasPascalTruckManualPlacement(sourceTruckNode)
 }
 
 function getScaledItemDimensions(node: Record<string, unknown>): [number, number, number] | null {
@@ -398,7 +402,11 @@ function computePascalTruckSeedTransform(sceneGraph: SceneGraph, levelId: string
   if (!sitePolygon) {
     return fallbackTargetCenter
       ? {
-          position: [fallbackTargetCenter[0], 0, fallbackTargetCenter[1]] as [number, number, number],
+          position: [fallbackTargetCenter[0], 0, fallbackTargetCenter[1]] as [
+            number,
+            number,
+            number,
+          ],
           rotation: [0, Math.PI, 0] as [number, number, number],
           scale: PASCAL_TRUCK_SCENE_SCALE,
         }
@@ -544,9 +552,15 @@ export function stripPascalTruckFromSceneGraph(sceneGraph?: SceneGraph | null): 
 
   const truckIds = new Set(
     Object.entries(sceneGraph.nodes)
-      .filter(([, node]) => isPascalTruckNode(node))
+      .filter(([, node]) => isPascalTruckNode(node) && !hasPascalTruckManualPlacement(node))
       .map(([id]) => id),
   )
+  if (truckIds.size === 0) {
+    return {
+      sceneGraph,
+      truckNode: cloneValue(truckNode),
+    }
+  }
   const nextSceneGraph = cloneValue(sceneGraph)
 
   for (const truckId of truckIds) {

@@ -1,8 +1,16 @@
 'use client'
 
 import { Copy, Move, Trash2, Wrench } from 'lucide-react'
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { isNavigationItemMoveCopyOperation } from '../../lib/item-move-request'
 import { cn } from '../../lib/utils'
 import type { NavigationQueuedTask } from '../../store/use-navigation'
 import useNavigation from '../../store/use-navigation'
@@ -31,12 +39,32 @@ type TaskQueueRenderEntry =
       type: 'placeholder'
     }
 
+const TASK_QUEUE_LAYER_STYLE: CSSProperties = {
+  bottom: '5.25rem',
+  left: '50%',
+  pointerEvents: 'none',
+  position: 'absolute',
+  transform: 'translateX(-50%)',
+}
+
+const TASK_QUEUE_ROOT_STYLE: CSSProperties = {
+  inset: 0,
+  pointerEvents: 'none',
+  position: 'absolute',
+  zIndex: 1000,
+}
+
+const TASK_QUEUE_PANEL_STYLE: CSSProperties = {
+  backgroundColor: 'rgba(15, 23, 42, 0.92)',
+  color: '#f8fafc',
+}
+
 function isCopyTask(task: NavigationQueuedTask) {
   if (task.kind !== 'move') {
     return false
   }
 
-  return Boolean(task.request.visualItemId && task.request.visualItemId !== task.request.itemId)
+  return isNavigationItemMoveCopyOperation(task.request)
 }
 
 function getTaskMeta(task: NavigationQueuedTask) {
@@ -44,6 +72,11 @@ function getTaskMeta(task: NavigationQueuedTask) {
     return {
       buttonClassName:
         'border-red-200/55 bg-red-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] hover:border-red-100/80 hover:bg-red-400',
+      buttonStyle: {
+        backgroundColor: '#ef4444',
+        borderColor: 'rgba(254, 202, 202, 0.72)',
+        color: '#ffffff',
+      } satisfies CSSProperties,
       icon: Trash2,
       label: 'Delete',
     }
@@ -53,6 +86,11 @@ function getTaskMeta(task: NavigationQueuedTask) {
     return {
       buttonClassName:
         'border-amber-100/70 bg-amber-400 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] hover:border-amber-50 hover:bg-amber-300',
+      buttonStyle: {
+        backgroundColor: '#fbbf24',
+        borderColor: 'rgba(254, 243, 199, 0.82)',
+        color: '#451a03',
+      } satisfies CSSProperties,
       icon: Wrench,
       label: 'Repair',
     }
@@ -62,6 +100,11 @@ function getTaskMeta(task: NavigationQueuedTask) {
     return {
       buttonClassName:
         'border-green-100/70 bg-green-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] hover:border-green-50 hover:bg-green-400',
+      buttonStyle: {
+        backgroundColor: '#22c55e',
+        borderColor: 'rgba(220, 252, 231, 0.78)',
+        color: '#ffffff',
+      } satisfies CSSProperties,
       icon: Copy,
       label: 'Copy',
     }
@@ -70,6 +113,11 @@ function getTaskMeta(task: NavigationQueuedTask) {
   return {
     buttonClassName:
       'border-sky-100/70 bg-sky-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] hover:border-sky-50 hover:bg-sky-400',
+    buttonStyle: {
+      backgroundColor: '#0ea5e9',
+      borderColor: 'rgba(224, 242, 254, 0.78)',
+      color: '#ffffff',
+    } satisfies CSSProperties,
     icon: Move,
     label: 'Move',
   }
@@ -328,15 +376,16 @@ export function NavigationTaskQueuePanel() {
   }
 
   return (
-    <div data-testid="navigation-task-queue-layer" ref={rootRef}>
-      <div className="pointer-events-none fixed bottom-20 left-1/2 z-40 -translate-x-1/2 sm:bottom-24">
+    <div data-testid="navigation-task-queue-layer" ref={rootRef} style={TASK_QUEUE_ROOT_STYLE}>
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={TASK_QUEUE_LAYER_STYLE}>
         <div
-          className="pointer-events-auto inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 overflow-x-auto rounded-[1.75rem] border border-border/50 bg-sidebar/92 px-3 py-2 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.95)] backdrop-blur-xl"
+          className="pointer-events-auto inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 overflow-x-auto rounded-[1.75rem] border border-border/70 bg-sidebar/95 px-3 py-2 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.95)] backdrop-blur-xl"
           data-testid="navigation-task-queue"
           ref={panelRef}
+          style={TASK_QUEUE_PANEL_STYLE}
         >
           {taskQueue.length === 0 ? (
-            <div className="px-1 text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground/70">
+            <div className="px-1 text-[11px] font-medium uppercase tracking-[0.22em] text-foreground/80">
               Ghost Queue
             </div>
           ) : (
@@ -352,7 +401,7 @@ export function NavigationTaskQueuePanel() {
               }
 
               const task = entry.task
-              const { buttonClassName, icon: IconComponent, label } = getTaskMeta(task)
+              const { buttonClassName, buttonStyle, icon: IconComponent, label } = getTaskMeta(task)
               const active = task.taskId === activeTaskId
               const taskQueueIndex = taskQueue.findIndex((queuedTask) => queuedTask.taskId === task.taskId)
               return (
@@ -369,6 +418,7 @@ export function NavigationTaskQueuePanel() {
                     ref={(node) => {
                       buttonRefs.current[task.taskId] = node
                     }}
+                    style={buttonStyle}
                     title={label}
                     type="button"
                   >
@@ -383,7 +433,7 @@ export function NavigationTaskQueuePanel() {
 
       {dragState?.dragging && draggedTask && draggedTaskMeta && DraggedTaskIcon && (
         <div
-          className="pointer-events-none fixed z-50"
+          className="pointer-events-none absolute z-50"
           data-testid="navigation-task-drag-preview"
           style={{
             left: dragState.clientX - (dragLayerBounds?.left ?? 0),
@@ -398,6 +448,7 @@ export function NavigationTaskQueuePanel() {
                 draggedTaskMeta.buttonClassName,
                 !dragState.overPanel && 'scale-95 saturate-75',
               )}
+              style={draggedTaskMeta.buttonStyle}
               tabIndex={-1}
               type="button"
             >

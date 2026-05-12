@@ -48,3 +48,6 @@ og-test
 
 # Worktrees
 .worktrees
+
+# Local agent/runtime logs
+.codex/logs/

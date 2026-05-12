@@ -1,10 +1,13 @@
 'use client'
 
 import { type AnyNodeId, getScaledDimensions, type ItemNode, useScene } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor/robot-adapter'
 import { useViewer } from '@pascal-app/viewer'
 import mitt from 'mitt'
 import { create } from 'zustand'
+import {
+  isNavigationItemMoveCopyOperation,
+  normalizeNavigationItemMoveOperation,
+} from '../lib/item-move-request'
 import navigationVisualsStore from './use-navigation-visuals'
 
 type NavigationEvents = {
@@ -51,6 +54,7 @@ export type NavigationItemMoveRequest = {
   itemDimensions: [number, number, number]
   itemId: ItemNode['id']
   levelId: string | null
+  operation?: 'copy' | 'move'
   sourcePosition: [number, number, number]
   sourceRotation: [number, number, number]
   targetPreviewItemId?: ItemNode['id'] | null
@@ -120,25 +124,26 @@ function cloneNavigationItemDeleteRequest(
 function cloneNavigationItemMoveRequest(
   request: NavigationItemMoveRequest,
 ): NavigationItemMoveRequest {
+  const normalizedRequest = normalizeNavigationItemMoveOperation(request)
   return {
-    ...request,
+    ...normalizedRequest,
     finalUpdate: {
-      ...request.finalUpdate,
-      position: request.finalUpdate.position
-        ? ([...request.finalUpdate.position] as [number, number, number])
-        : request.finalUpdate.position,
-      rotation: request.finalUpdate.rotation
-        ? ([...request.finalUpdate.rotation] as [number, number, number])
-        : request.finalUpdate.rotation,
+      ...normalizedRequest.finalUpdate,
+      position: normalizedRequest.finalUpdate.position
+        ? ([...normalizedRequest.finalUpdate.position] as [number, number, number])
+        : normalizedRequest.finalUpdate.position,
+      rotation: normalizedRequest.finalUpdate.rotation
+        ? ([...normalizedRequest.finalUpdate.rotation] as [number, number, number])
+        : normalizedRequest.finalUpdate.rotation,
     },
-    itemDimensions: [...request.itemDimensions] as [number, number, number],
-    sourcePosition: [...request.sourcePosition] as [number, number, number],
-    sourceRotation: [...request.sourceRotation] as [number, number, number],
+    itemDimensions: [...normalizedRequest.itemDimensions] as [number, number, number],
+    sourcePosition: [...normalizedRequest.sourcePosition] as [number, number, number],
+    sourceRotation: [...normalizedRequest.sourceRotation] as [number, number, number],
   }
 }
 
 function isNavigationItemMoveCopyRequest(request: NavigationItemMoveRequest) {
-  return Boolean(request.visualItemId && request.visualItemId !== request.itemId)
+  return isNavigationItemMoveCopyOperation(request)
 }
 
 function getNavigationItemMoveQueueKey(request: NavigationItemMoveRequest) {
@@ -276,10 +281,12 @@ function deriveAdvancedActiveRequests(taskQueue: NavigationQueuedTask[], activeT
 type NavigationState = {
   activeTaskId: string | null
   activeTaskIndex: number
+  allowDurableSceneSave: (durationMs?: number) => void
   advanceTaskQueue: () => NavigationTaskAdvanceResult
   beginTaskLoopReset: () => number
   actorAvailable: boolean
   actorWorldPosition: [number, number, number] | null
+  durableSceneSaveAllowedUntil: number
   enabled: boolean
   followRobotEnabled: boolean
   itemDeleteRequest: NavigationItemDeleteRequest | null
@@ -329,6 +336,8 @@ type NavigationState = {
 const useNavigation = create<NavigationState>((set) => ({
   activeTaskId: null,
   activeTaskIndex: 0,
+  allowDurableSceneSave: (durationMs = 5000) =>
+    set({ durableSceneSaveAllowedUntil: performance.now() + durationMs }),
   advanceTaskQueue: () => {
     const result: NavigationTaskAdvanceResult = {
       hasQueuedTask: false,
@@ -363,6 +372,7 @@ const useNavigation = create<NavigationState>((set) => ({
   },
   actorAvailable: false,
   actorWorldPosition: null,
+  durableSceneSaveAllowedUntil: 0,
   enabled: false,
   followRobotEnabled: false,
   itemDeleteRequest: null,
@@ -455,6 +465,19 @@ const useNavigation = create<NavigationState>((set) => ({
     }),
   requestItemDelete: (itemDeleteRequest) =>
     set((state) => {
+      if (state.robotMode !== 'task') {
+        return {
+          activeTaskId: null,
+          activeTaskIndex: 0,
+          itemDeleteRequest: itemDeleteRequest
+            ? cloneNavigationItemDeleteRequest(itemDeleteRequest)
+            : null,
+          itemMoveRequest: null,
+          itemRepairRequest: null,
+          taskQueue: [],
+        }
+      }
+
       if (itemDeleteRequest === null) {
         return removeActiveTaskOfKind(state.taskQueue, state.activeTaskIndex, 'delete') ?? state
       }
@@ -500,6 +523,17 @@ const useNavigation = create<NavigationState>((set) => ({
     }),
   requestItemMove: (itemMoveRequest) =>
     set((state) => {
+      if (state.robotMode !== 'task') {
+        return {
+          activeTaskId: null,
+          activeTaskIndex: 0,
+          itemDeleteRequest: null,
+          itemMoveRequest: itemMoveRequest ? cloneNavigationItemMoveRequest(itemMoveRequest) : null,
+          itemRepairRequest: null,
+          taskQueue: [],
+        }
+      }
+
       if (itemMoveRequest === null) {
         return removeActiveTaskOfKind(state.taskQueue, state.activeTaskIndex, 'move') ?? state
       }
@@ -548,6 +582,19 @@ const useNavigation = create<NavigationState>((set) => ({
     }),
   requestItemRepair: (itemRepairRequest) =>
     set((state) => {
+      if (state.robotMode !== 'task') {
+        return {
+          activeTaskId: null,
+          activeTaskIndex: 0,
+          itemDeleteRequest: null,
+          itemMoveRequest: null,
+          itemRepairRequest: itemRepairRequest
+            ? cloneNavigationItemRepairRequest(itemRepairRequest)
+            : null,
+          taskQueue: [],
+        }
+      }
+
       if (itemRepairRequest === null) {
         return removeActiveTaskOfKind(state.taskQueue, state.activeTaskIndex, 'repair') ?? state
       }
@@ -619,12 +666,21 @@ const useNavigation = create<NavigationState>((set) => ({
         return state
       }
 
-      return {
+      const nextState: Partial<NavigationState> = {
         enabled: robotMode !== null,
         followRobotEnabled: robotMode !== null ? state.followRobotEnabled : false,
         moveItemsEnabled: robotMode !== null,
         robotMode,
       }
+      if (robotMode !== 'task') {
+        nextState.activeTaskId = null
+        nextState.activeTaskIndex = 0
+        nextState.itemDeleteRequest = null
+        nextState.itemMoveRequest = null
+        nextState.itemRepairRequest = null
+        nextState.taskQueue = []
+      }
+      return nextState
     }),
   setWallOverlayFilter: (key, value) =>
     set((state) => ({
@@ -647,7 +703,7 @@ const useNavigation = create<NavigationState>((set) => ({
   walkableOverlayVisible: false,
 }))
 
-function canUseRobotItemTask(node: ItemNode) {
+export function canUseRobotItemTask(node: ItemNode) {
   const { enabled, moveItemsEnabled } = useNavigation.getState()
   if (!enabled || !moveItemsEnabled || node.asset.attachTo) {
     return false
@@ -664,18 +720,14 @@ export function requestNavigationItemDelete(node: ItemNode) {
 
   const navigationState = useNavigation.getState()
   const viewerState = useViewer.getState()
-  const editorState = useEditor.getState()
   const taskAlreadyAssigned =
     Boolean(navigationVisualsStore.getState().itemDeleteActivations[node.id]) ||
+    Boolean(navigationVisualsStore.getState().itemRepairActivations[node.id]) ||
     navigationState.taskQueue.some((task) => task.request.itemId === node.id)
 
   if (taskAlreadyAssigned) {
     viewerState.setHoveredId(null)
     viewerState.setSelection({ selectedIds: [] })
-    return true
-  }
-
-  if (editorState.movingNode) {
     return true
   }
 
@@ -699,9 +751,9 @@ export function requestNavigationItemRepair(node: ItemNode) {
 
   const navigationState = useNavigation.getState()
   const viewerState = useViewer.getState()
-  const editorState = useEditor.getState()
   const taskAlreadyAssigned =
     Boolean(navigationVisualsStore.getState().itemDeleteActivations[node.id]) ||
+    Boolean(navigationVisualsStore.getState().itemRepairActivations[node.id]) ||
     navigationState.taskQueue.some((task) => task.request.itemId === node.id)
 
   if (taskAlreadyAssigned) {
@@ -710,10 +762,7 @@ export function requestNavigationItemRepair(node: ItemNode) {
     return true
   }
 
-  if (editorState.movingNode) {
-    return true
-  }
-
+  navigationVisualsStore.getState().activateItemRepair(node.id)
   viewerState.setHoveredId(null)
   viewerState.setSelection({ selectedIds: [] })
   navigationState.requestItemRepair({

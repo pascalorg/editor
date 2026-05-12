@@ -1,6 +1,13 @@
 'use client'
 
-import { sceneRegistry } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type DoorInteractiveState,
+  isOperationDoorType,
+  sceneRegistry,
+  useInteractive,
+  useScene,
+} from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { type MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import {
@@ -43,7 +50,12 @@ const DOOR_OVERHEAD_OPEN_LEAD_PADDING_SECONDS = 0.22
 const DOOR_CLOSE_PADDING_SECONDS = 0.18
 const DOOR_TRIGGER_REFERENCE_SPEED = 1.4
 const DOOR_TRIGGER_MAX_SPEED = 3.6
+const SCENE_DOOR_OPEN_RESPONSE = 8
+const SCENE_DOOR_CLOSE_RESPONSE = 6
+const SCENE_DOOR_OPEN_SETTLE_EPSILON = 0.01
+const SCENE_DOOR_SWING_OPEN_ANGLE = MathUtils.degToRad(90)
 const activeNavigationDoorIds = new Set<string>()
+const activeNavigationDoorOpenAmounts = new Map<string, number>()
 
 type DoorAnimationState = {
   alternateOpenPosition?: [number, number, number]
@@ -77,6 +89,10 @@ type NavigationDoorSystemProps = {
 
 export function getActiveNavigationDoorIds() {
   return activeNavigationDoorIds
+}
+
+export function getActiveNavigationDoorOpenAmounts() {
+  return activeNavigationDoorOpenAmounts
 }
 
 type DoorOpenTarget = {
@@ -521,6 +537,7 @@ export function NavigationDoorSystem({
   const doorOpenSelectionsRef = useRef(new Map<string, DoorOpenTargetSelection>())
   const overheadDoorOpenAmountsRef = useRef(new Map<string, number>())
   const previewDoorOpenAmountsRef = useRef(new Map<string, number>())
+  const sceneDoorOpenAmountsRef = useRef(new Map<string, number>())
   const doorTriggers = useMemo(
     () =>
       measureNavigationPerf('navigation.doorTriggerBuildMs', () =>
@@ -602,16 +619,72 @@ export function NavigationDoorSystem({
 
     const activeDoorIds = new Set<string>([...trackedDoorIdsRef.current, ...openDoorIds])
     activeNavigationDoorIds.clear()
+    activeNavigationDoorOpenAmounts.clear()
     for (const doorId of activeDoorIds) {
       activeNavigationDoorIds.add(doorId)
     }
     let openDoorCount = 0
 
     for (const doorId of activeDoorIds) {
+      const sceneDoorNode = useScene.getState().nodes[doorId as AnyNodeId]
+      if (sceneDoorNode?.type === 'door' && !sceneRegistry.byType.item.has(doorId)) {
+        const open = openDoorIds.has(doorId)
+        const isOperationDoor = isOperationDoorType(sceneDoorNode.doorType)
+        const interactive = useInteractive.getState()
+        const runtimeDoor = interactive.doors[doorId as AnyNodeId]
+        const persistedOpenValue = isOperationDoor
+          ? (sceneDoorNode.operationState ?? 0)
+          : (sceneDoorNode.swingAngle ?? 0) / SCENE_DOOR_SWING_OPEN_ANGLE
+        const runtimeOpenValue = isOperationDoor
+          ? runtimeDoor?.operationState
+          : runtimeDoor?.swingAngle !== undefined
+            ? runtimeDoor.swingAngle / SCENE_DOOR_SWING_OPEN_ANGLE
+            : undefined
+        const currentOpenAmount =
+          sceneDoorOpenAmountsRef.current.get(doorId) ??
+          MathUtils.clamp(runtimeOpenValue ?? persistedOpenValue, 0, 1)
+        const targetOpenAmount = open ? 1 : 0
+        const nextOpenAmount = MathUtils.damp(
+          currentOpenAmount,
+          targetOpenAmount,
+          targetOpenAmount > currentOpenAmount
+            ? SCENE_DOOR_OPEN_RESPONSE
+            : SCENE_DOOR_CLOSE_RESPONSE,
+          delta,
+        )
+        const settled =
+          Math.abs(nextOpenAmount - targetOpenAmount) <= SCENE_DOOR_OPEN_SETTLE_EPSILON
+        const appliedOpenAmount = settled ? targetOpenAmount : nextOpenAmount
+
+        if (targetOpenAmount > 0 || appliedOpenAmount > SCENE_DOOR_OPEN_SETTLE_EPSILON) {
+          const doorState: DoorInteractiveState = isOperationDoor
+            ? { operationState: appliedOpenAmount }
+            : { swingAngle: appliedOpenAmount * SCENE_DOOR_SWING_OPEN_ANGLE }
+          interactive.cancelDoorAnimation(doorId as AnyNodeId)
+          interactive.setDoorOpenState(doorId as AnyNodeId, doorState)
+          useScene.getState().markDirty(doorId as AnyNodeId)
+          sceneDoorOpenAmountsRef.current.set(doorId, appliedOpenAmount)
+          activeNavigationDoorOpenAmounts.set(doorId, appliedOpenAmount)
+          trackedDoorIdsRef.current.add(doorId)
+          if (appliedOpenAmount > 0.08) {
+            openDoorCount += 1
+          }
+        } else {
+          interactive.cancelDoorAnimation(doorId as AnyNodeId)
+          interactive.removeDoorOpenState(doorId as AnyNodeId)
+          useScene.getState().markDirty(doorId as AnyNodeId)
+          sceneDoorOpenAmountsRef.current.delete(doorId)
+          trackedDoorIdsRef.current.delete(doorId)
+          activeNavigationDoorOpenAmounts.set(doorId, 0)
+        }
+        continue
+      }
+
       const { animationState, leafPivot } = getDoorAnimationState(doorId)
       if (!leafPivot) {
         trackedDoorIdsRef.current.delete(doorId)
         overheadDoorOpenAmountsRef.current.delete(doorId)
+        sceneDoorOpenAmountsRef.current.delete(doorId)
         continue
       }
 
@@ -779,7 +852,14 @@ export function NavigationDoorSystem({
 
   useEffect(() => {
     return () => {
+      for (const doorId of sceneDoorOpenAmountsRef.current.keys()) {
+        useInteractive.getState().cancelDoorAnimation(doorId as AnyNodeId)
+        useInteractive.getState().removeDoorOpenState(doorId as AnyNodeId)
+        useScene.getState().markDirty(doorId as AnyNodeId)
+      }
+      sceneDoorOpenAmountsRef.current.clear()
       activeNavigationDoorIds.clear()
+      activeNavigationDoorOpenAmounts.clear()
     }
   }, [])
 

@@ -13,9 +13,19 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { triggerSFX } from '@pascal-app/editor/runtime'
 import { useViewer } from '@pascal-app/viewer'
 import { addAfterEffect, useFrame, useLoader, useThree } from '@react-three/fiber'
-import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   AdditiveBlending,
   Box3,
@@ -51,11 +61,11 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { color, float, mix, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial, RenderTarget } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
-import { triggerSFX, useEditor } from '@pascal-app/editor/robot-adapter'
 import {
   type ItemMoveVisualState,
   setItemMoveVisualState as setItemMoveVisualMetadata,
 } from '../lib/item-move-visuals'
+import { isNavigationItemMoveCopyOperation } from '../lib/item-move-request'
 import {
   buildNavigationGraph,
   findClosestNavigationCell,
@@ -79,8 +89,9 @@ import {
 } from '../lib/navigation-performance'
 import {
   buildPascalTruckNodeForScene,
-  getPascalTruckLocalAsset,
   getPascalTruckIntroReleaseDurationMs,
+  getPascalTruckLocalAsset,
+  isPascalTruckNode,
   PASCAL_TRUCK_ASSET,
   PASCAL_TRUCK_ASSET_ID,
   PASCAL_TRUCK_ENTRY_CLIP_DURATION_SECONDS,
@@ -93,7 +104,6 @@ import {
   PASCAL_TRUCK_ENTRY_TRAVEL_END_PROGRESS,
   PASCAL_TRUCK_ITEM_NODE_ID,
   PASCAL_TRUCK_REAR_LOCAL_X_SIGN,
-  isPascalTruckNode,
 } from '../lib/pascal-truck'
 import { stripTransientMetadata } from '../lib/transient'
 import useNavigation, {
@@ -108,11 +118,29 @@ import useNavigation, {
 } from '../store/use-navigation'
 import { getNavigationDraftRobotCopySourceIdFromNode } from '../store/use-navigation-drafts'
 import navigationVisualsStore, { useNavigationVisuals } from '../store/use-navigation-visuals'
-import { getActiveNavigationDoorIds, NavigationDoorSystem } from './navigation-door-system'
+import {
+  getActiveNavigationDoorIds,
+  getActiveNavigationDoorOpenAmounts,
+  NavigationDoorSystem,
+} from './navigation-door-system'
+import { restoreNavigationTaskLoopSceneSnapshot } from './navigation-scene-lifecycle'
 
 function appendTaskModeTrace(type: string, payload: Record<string, unknown> = {}) {
-  void type
-  void payload
+  if (!isNavigationDebugEnabled()) {
+    return
+  }
+
+  const debugWindow = window as typeof window & {
+    __pascalNavTrace?: Array<{ at: number; payload: Record<string, unknown>; type: string }>
+  }
+  const trace = debugWindow.__pascalNavTrace ?? []
+  trace.push({
+    at: performance.now(),
+    payload,
+    type,
+  })
+  debugWindow.__pascalNavTrace = trace.slice(-250)
+  console.info(`[navigation] ${type}`, payload)
 }
 
 function summarizeDebugSnapshotKey(key: string | null) {
@@ -247,6 +275,7 @@ const ITEM_MOVE_APPROACH_MARGIN = Math.max(
   NAVIGATION_AGENT_RADIUS + 0.06,
 )
 const ITEM_MOVE_APPROACH_MAX_SNAP_DISTANCE = 1.45
+const ITEM_MOVE_APPROACH_FALLBACK_MAX_SNAP_DISTANCE = 7.5
 const ITEM_MOVE_PICKUP_DURATION_MS = 760
 const ITEM_MOVE_DROP_DURATION_MS = 820
 const ITEM_INTERACTION_GESTURE_DURATION_SCALE = 0.5
@@ -301,6 +330,8 @@ type NavigationItemMoveApproach = {
   world: [number, number, number]
 }
 
+let lastItemMoveApproachDebug: Record<string, unknown> | null = null
+
 type NavigationItemFootprintBounds = {
   maxX: number
   maxZ: number
@@ -338,13 +369,14 @@ type TaskQueueSourceMarkerSpec = {
   dimensions: [number, number, number]
   isActive: boolean
   kind: 'copy' | 'delete' | 'move' | 'repair'
+  loopToken: number
   opacity: number
   position: [number, number, number]
   taskId: string
 }
 
 function isNavigationCopyItemMoveRequest(request: NavigationItemMoveRequest | null) {
-  return Boolean(request?.visualItemId && request.visualItemId !== request.itemId)
+  return isNavigationItemMoveCopyOperation(request)
 }
 
 function getNavigationQueuedTaskVisualKind(task: NavigationQueuedTask) {
@@ -360,6 +392,7 @@ function getTaskQueueSourceMarkerSpecs(
   activeTaskId: string | null,
   enabled: boolean,
   robotMode: NavigationRobotMode | null,
+  taskLoopToken: number,
 ): TaskQueueSourceMarkerSpec[] {
   if (!(enabled && robotMode === 'task')) {
     return []
@@ -395,6 +428,7 @@ function getTaskQueueSourceMarkerSpecs(
         dimensions: [...request.itemDimensions] as [number, number, number],
         isActive: task.taskId === activeTaskId,
         kind: taskVisualKind,
+        loopToken: taskLoopToken,
         opacity: task.taskId === activeTaskId ? 1 : TASK_QUEUE_INACTIVE_ACTION_SHIELD_OPACITY,
         position,
         taskId: task.taskId,
@@ -428,6 +462,7 @@ type NavigationItemMoveSequence = NavigationItemMovePlan & {
   dropSettledAt: number | null
   pickupStartedAt: number | null
   pickupTransferStartedAt: number | null
+  queueRestartToken: number
   sourceDisplayPosition: [number, number, number]
   stage: 'drop-settle' | 'drop-transfer' | 'pickup-transfer' | 'to-source' | 'to-target'
   taskId: string | null
@@ -438,6 +473,7 @@ type NavigationItemMoveSequence = NavigationItemMovePlan & {
 type NavigationItemDeleteSequence = {
   deleteStartedAt: number | null
   gesture: NavigationItemMoveGesture
+  queueRestartToken: number
   request: NavigationItemDeleteRequest
   sourceApproach: NavigationItemMoveApproach
   stage: 'delete-transfer' | 'to-source'
@@ -446,6 +482,7 @@ type NavigationItemDeleteSequence = {
 
 type NavigationItemRepairSequence = {
   gesture: NavigationItemMoveGesture
+  queueRestartToken: number
   repairStartedAt: number | null
   request: NavigationItemRepairRequest
   sourceApproach: NavigationItemMoveApproach
@@ -1459,7 +1496,130 @@ function getItemInteractionGestureDurationMs(gesture: NavigationItemMoveGesture)
   return gesture.durationSeconds * 1000 * ITEM_INTERACTION_GESTURE_DURATION_SCALE
 }
 
+function sameLiveTransform(
+  current: { position: [number, number, number]; rotation: number } | undefined,
+  expected: { position: [number, number, number]; rotation: number },
+) {
+  if (!current) {
+    return false
+  }
+
+  return (
+    Math.abs(current.position[0] - expected.position[0]) < 0.0001 &&
+    Math.abs(current.position[1] - expected.position[1]) < 0.0001 &&
+    Math.abs(current.position[2] - expected.position[2]) < 0.0001 &&
+    Math.abs(current.rotation - expected.rotation) < 0.0001
+  )
+}
+
+function sceneNodeMatchesLiveTransform(
+  itemId: string,
+  expected: { position: [number, number, number]; rotation: number },
+) {
+  const node = useScene.getState().nodes[itemId as AnyNodeId]
+  if (!node || !('position' in node) || !Array.isArray(node.position)) {
+    return false
+  }
+
+  const rotation = 'rotation' in node && Array.isArray(node.rotation) ? node.rotation : null
+  return (
+    Math.abs(node.position[0] - expected.position[0]) < 0.0001 &&
+    Math.abs(node.position[2] - expected.position[2]) < 0.0001 &&
+    Math.abs((rotation?.[1] ?? 0) - expected.rotation) < 0.0001
+  )
+}
+
+function clearLiveTransformAfterSceneCommit(
+  itemId: string,
+  expectedTransform?: { position: [number, number, number]; rotation: number },
+) {
+  if (typeof window === 'undefined') {
+    useLiveTransforms.getState().clear(itemId)
+    return
+  }
+
+  let frameCount = 0
+  const tick = () => {
+    frameCount += 1
+    const currentTransform = useLiveTransforms.getState().get(itemId)
+    if (!expectedTransform) {
+      if (frameCount >= 2) {
+        useLiveTransforms.getState().clear(itemId)
+        return
+      }
+    } else if (
+      sameLiveTransform(currentTransform, expectedTransform) &&
+      sceneNodeMatchesLiveTransform(itemId, expectedTransform)
+    ) {
+      useLiveTransforms.getState().clear(itemId)
+      return
+    }
+
+    if (frameCount < 90) {
+      window.requestAnimationFrame(tick)
+    }
+  }
+  window.requestAnimationFrame(tick)
+}
+
+function setNavigationItemLiveTransformNow(
+  itemId: string,
+  transform: { position: [number, number, number]; rotation: number },
+) {
+  useLiveTransforms.getState().set(itemId, transform)
+
+  const object = sceneRegistry.nodes.get(itemId)
+  if (!object) {
+    return
+  }
+
+  object.position.set(transform.position[0], transform.position[1], transform.position[2])
+  object.rotation.y = transform.rotation
+  object.updateMatrixWorld(true)
+}
+
+function clearDeletedItemVisualStateAfterUnmount(itemId: string) {
+  if (typeof window === 'undefined') {
+    navigationVisualsStore.getState().setNodeVisibilityOverride(itemId, false)
+    return
+  }
+
+  navigationVisualsStore.getState().setNodeVisibilityOverride(itemId, false)
+  let frameCount = 0
+  const tick = () => {
+    frameCount += 1
+    const sceneNodeExists = Boolean(useScene.getState().nodes[itemId as AnyNodeId])
+    const objectExists = sceneRegistry.nodes.has(itemId)
+
+    if (!sceneNodeExists && !objectExists) {
+      navigationVisualsStore.getState().clearItemDelete(itemId)
+      navigationVisualsStore.getState().setNodeVisibilityOverride(itemId, null)
+      return
+    }
+
+    if (objectExists) {
+      const object = sceneRegistry.nodes.get(itemId)
+      if (object) {
+        object.visible = false
+      }
+    }
+
+    if (frameCount < 120) {
+      window.requestAnimationFrame(tick)
+    }
+  }
+  window.requestAnimationFrame(tick)
+}
+
 function getNavigationItemMoveVisualItemId(request: NavigationItemMoveRequest) {
+  if (isNavigationCopyItemMoveRequest(request)) {
+    if (request.visualItemId && request.visualItemId !== request.targetPreviewItemId) {
+      return request.visualItemId
+    }
+
+    return `${request.targetPreviewItemId ?? request.itemId}__copy_carry`
+  }
+
   return request.visualItemId ?? request.itemId
 }
 
@@ -1471,8 +1631,90 @@ function getNavigationItemMoveCommitTargetId(request: NavigationItemMoveRequest)
   return request.itemId
 }
 
+function hasSeparateNavigationMoveDestinationGhost(request: NavigationItemMoveRequest) {
+  return Boolean(
+    request.targetPreviewItemId &&
+      request.targetPreviewItemId !== getNavigationItemMoveVisualItemId(request),
+  )
+}
+
 function shouldDelayPickupCarryUntilCheckoutComplete(request: NavigationItemMoveRequest) {
   return true
+}
+
+function ensureNavigationItemMoveCarryVisualNode(request: NavigationItemMoveRequest) {
+  const visualItemId = getNavigationItemMoveVisualItemId(request)
+  if (visualItemId === request.itemId) {
+    return visualItemId
+  }
+
+  const sceneState = useScene.getState()
+  const existingVisualNode = sceneState.nodes[visualItemId as AnyNodeId]
+  if (existingVisualNode?.type === 'item') {
+    return visualItemId
+  }
+
+  const sourceNode = sceneState.nodes[request.itemId as AnyNodeId]
+  if (sourceNode?.type !== 'item') {
+    appendTaskModeTrace('navigation.ensureCarryVisualSkipped', {
+      itemId: request.itemId,
+      reason: 'missing-source-node',
+      visualItemId,
+    })
+    return null
+  }
+
+  const parentId = request.levelId ?? sourceNode.parentId
+  if (!parentId) {
+    appendTaskModeTrace('navigation.ensureCarryVisualSkipped', {
+      itemId: request.itemId,
+      reason: 'missing-parent',
+      visualItemId,
+    })
+    return null
+  }
+
+  const carryNode = ItemNode.parse({
+    asset: sourceNode.asset,
+    id: visualItemId,
+    metadata: {
+      ...(stripTransientMetadata(sourceNode.metadata) as Record<string, unknown>),
+      isTransient: true,
+    },
+    name: sourceNode.name,
+    parentId,
+    position: [...request.sourcePosition] as [number, number, number],
+    rotation: [...request.sourceRotation] as [number, number, number],
+    scale: [...sourceNode.scale] as [number, number, number],
+    side: sourceNode.side,
+    visible: true,
+  })
+
+  sceneState.createNode(carryNode, parentId as AnyNodeId)
+  appendTaskModeTrace('navigation.ensureCarryVisualCreated', {
+    itemId: request.itemId,
+    visualItemId,
+  })
+  return visualItemId
+}
+
+function removeNavigationItemMoveCarryVisualNode(request: NavigationItemMoveRequest) {
+  const visualItemId = getNavigationItemMoveVisualItemId(request)
+  if (visualItemId === request.itemId || visualItemId === request.targetPreviewItemId) {
+    return
+  }
+
+  const sceneState = useScene.getState()
+  const visualNode = sceneState.nodes[visualItemId as AnyNodeId]
+  const metadata =
+    visualNode?.type === 'item' &&
+    typeof visualNode.metadata === 'object' &&
+    visualNode.metadata !== null
+      ? (visualNode.metadata as Record<string, unknown>)
+      : null
+  if (visualNode?.type === 'item' && metadata?.isTransient === true) {
+    sceneState.deleteNode(visualItemId as AnyNodeId)
+  }
 }
 
 function getNavigationItemMovePickupSourceVisualState(
@@ -1495,44 +1737,77 @@ function clearNavigationItemMovePickupSourcePending(request: NavigationItemMoveR
   }
 }
 
+function getNavigationItemMoveInteractionTargetItemId(sequence: NavigationItemMoveSequence) {
+  if (sequence.stage === 'pickup-transfer') {
+    return sequence.pickupCarryVisualStartedAt !== null
+      ? getNavigationItemMoveVisualItemId(sequence.request)
+      : sequence.request.itemId
+  }
+
+  if (
+    sequence.stage === 'to-target' ||
+    sequence.stage === 'drop-transfer' ||
+    sequence.stage === 'drop-settle'
+  ) {
+    return getNavigationItemMoveVisualItemId(sequence.request)
+  }
+
+  return null
+}
+
 function createNavigationItemMoveFallbackController(
   request: NavigationItemMoveRequest,
 ): NavigationItemMoveController {
   const visualItemId = getNavigationItemMoveVisualItemId(request)
+  const usesSeparateMoveCarryVisual =
+    !isNavigationCopyItemMoveRequest(request) && visualItemId !== request.itemId
 
   return {
     itemId: request.itemId,
     beginCarry: () => {
-      if (isNavigationCopyItemMoveRequest(request)) {
+      const ensuredVisualItemId = ensureNavigationItemMoveCarryVisualNode(request)
+      if (!ensuredVisualItemId) {
+        return
+      }
+
+      if (isNavigationCopyItemMoveRequest(request) || usesSeparateMoveCarryVisual) {
         const sourceRotationY = request.sourceRotation[1] ?? 0
-        useLiveTransforms.getState().set(visualItemId, {
+        useLiveTransforms.getState().set(ensuredVisualItemId, {
           position: [...request.sourcePosition] as [number, number, number],
           rotation: sourceRotationY,
         })
-        appendTaskModeTrace('navigation.copyCarrySeededFromSource', {
+        appendTaskModeTrace('navigation.carryVisualSeededFromSource', {
           itemId: request.itemId,
+          operation: isNavigationCopyItemMoveRequest(request) ? 'copy' : 'move',
           sourcePosition: request.sourcePosition,
           sourceRotationY,
-          visualItemId,
+          visualItemId: ensuredVisualItemId,
         })
       }
-      navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, 'carried')
+      if (usesSeparateMoveCarryVisual) {
+        navigationVisualsStore.getState().setNodeVisibilityOverride(request.itemId, false)
+      }
+      navigationVisualsStore.getState().setItemMoveVisualState(ensuredVisualItemId, 'carried')
     },
     cancel: () => {
       navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, null)
       navigationVisualsStore.getState().setNodeVisibilityOverride(visualItemId, null)
+      navigationVisualsStore.getState().setNodeVisibilityOverride(request.itemId, null)
       useLiveTransforms.getState().clear(visualItemId)
+      removeNavigationItemMoveCarryVisualNode(request)
     },
     commit: (finalUpdate, finalCarryTransform) => {
       const sceneState = useScene.getState()
-      const viewerState = useViewer.getState()
       const commitTargetId = getNavigationItemMoveCommitTargetId(request)
       const commitTargetNode = sceneState.nodes[commitTargetId as AnyNodeId]
 
       if (commitTargetNode?.type === 'item') {
         sceneState.updateNode(commitTargetId as AnyNodeId, {
           ...finalUpdate,
-          metadata: stripTransientMetadata(commitTargetNode.metadata) as ItemNode['metadata'],
+          metadata: setItemMoveVisualMetadata(
+            stripTransientMetadata(commitTargetNode.metadata),
+            null,
+          ) as ItemNode['metadata'],
           visible: true,
         })
       } else if (request.itemId !== commitTargetId) {
@@ -1545,7 +1820,10 @@ function createNavigationItemMoveFallbackController(
 
         sceneState.updateNode(request.itemId as AnyNodeId, {
           ...finalUpdate,
-          metadata: stripTransientMetadata(sourceNode.metadata) as ItemNode['metadata'],
+          metadata: setItemMoveVisualMetadata(
+            stripTransientMetadata(sourceNode.metadata),
+            null,
+          ) as ItemNode['metadata'],
           visible: true,
         })
       }
@@ -1555,8 +1833,17 @@ function createNavigationItemMoveFallbackController(
       }
       navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, null)
       navigationVisualsStore.getState().setNodeVisibilityOverride(visualItemId, null)
-      useLiveTransforms.getState().clear(visualItemId)
+      navigationVisualsStore.getState().setItemMoveVisualState(commitTargetId, null)
+      navigationVisualsStore.getState().setNodeVisibilityOverride(commitTargetId, null)
+      navigationVisualsStore.getState().setNodeVisibilityOverride(request.itemId, null)
       clearRuntimeItemMoveVisualState(visualItemId)
+      clearRuntimeItemMoveVisualState(commitTargetId)
+      removeNavigationItemMoveCarryVisualNode(request)
+      if (visualItemId === commitTargetId) {
+        clearLiveTransformAfterSceneCommit(visualItemId, finalCarryTransform)
+      } else {
+        useLiveTransforms.getState().clear(visualItemId)
+      }
     },
     updateCarryTransform: (position, rotationY) => {
       useLiveTransforms.getState().set(visualItemId, {
@@ -1629,11 +1916,115 @@ function removeTransientNavigationPreviewNode(itemId: string | null | undefined)
     return
   }
 
+  const metadata =
+    typeof node.metadata === 'object' && node.metadata !== null
+      ? (node.metadata as Record<string, unknown>)
+      : null
+  if (metadata?.isTransient !== true) {
+    unregisterNavigationTaskPreviewNode(itemId)
+    return
+  }
+
   appendTaskModeTrace('navigation.removeTransientPreviewNode', {
     itemId,
   })
   useScene.getState().deleteNode(itemId as AnyNode['id'])
   unregisterNavigationTaskPreviewNode(itemId)
+}
+
+function removeNavigationMoveDestinationGhost(request: NavigationItemMoveRequest) {
+  if (isNavigationCopyItemMoveRequest(request)) {
+    return
+  }
+
+  const previewId = request.targetPreviewItemId
+  if (!previewId || !hasSeparateNavigationMoveDestinationGhost(request)) {
+    return
+  }
+
+  const navigationVisuals = navigationVisualsStore.getState()
+  navigationVisuals.setItemMoveVisualState(previewId, null)
+  navigationVisuals.setNodeVisibilityOverride(previewId, null)
+  useLiveTransforms.getState().clear(previewId)
+  clearRuntimeItemMoveVisualState(previewId)
+  const object = sceneRegistry.nodes.get(previewId)
+  if (object) {
+    object.visible = false
+    object.updateMatrixWorld(true)
+  }
+  if (navigationVisuals.itemMovePreview?.id === previewId) {
+    navigationVisuals.setItemMovePreview(null)
+  }
+
+  const viewerState = useViewer.getState()
+  if (viewerState.previewSelectedIds.includes(previewId)) {
+    viewerState.setPreviewSelectedIds(
+      viewerState.previewSelectedIds.filter((candidateId) => candidateId !== previewId),
+    )
+  }
+
+  const node = useScene.getState().nodes[previewId as AnyNode['id']]
+  const metadata =
+    node?.type === 'item' && typeof node.metadata === 'object' && node.metadata !== null
+      ? (node.metadata as Record<string, unknown>)
+      : null
+  if (
+    node?.type === 'item' &&
+    (metadata?.isTransient === true || isNavigationTaskPreviewNodeId(previewId))
+  ) {
+    useScene.getState().deleteNode(previewId as AnyNode['id'])
+    unregisterNavigationTaskPreviewNode(previewId)
+  }
+}
+
+function clearNavigationCopyDestinationGhostForDrop(request: NavigationItemMoveRequest) {
+  if (!isNavigationCopyItemMoveRequest(request)) {
+    return
+  }
+
+  const previewId = request.targetPreviewItemId
+  if (!previewId) {
+    return
+  }
+
+  const navigationVisuals = navigationVisualsStore.getState()
+  navigationVisuals.setItemMoveVisualState(previewId, null)
+  navigationVisuals.setNodeVisibilityOverride(previewId, false)
+  useLiveTransforms.getState().clear(previewId)
+  clearRuntimeItemMoveVisualState(previewId)
+
+  const object = sceneRegistry.nodes.get(previewId)
+  if (object) {
+    object.visible = false
+    object.updateMatrixWorld(true)
+  }
+
+  const sceneState = useScene.getState()
+  const node = sceneState.nodes[previewId as AnyNodeId]
+  if (node?.type === 'item') {
+    sceneState.updateNode(previewId as AnyNodeId, {
+      metadata: setItemMoveVisualMetadata(node.metadata, null) as ItemNode['metadata'],
+      visible: false,
+    })
+  }
+
+  const viewerState = useViewer.getState()
+  if (viewerState.previewSelectedIds.includes(previewId)) {
+    viewerState.setPreviewSelectedIds(
+      viewerState.previewSelectedIds.filter((candidateId) => candidateId !== previewId),
+    )
+  }
+  if (viewerState.selection.selectedIds.includes(previewId as AnyNodeId)) {
+    viewerState.setSelection({
+      ...viewerState.selection,
+      selectedIds: viewerState.selection.selectedIds.filter(
+        (candidateId) => candidateId !== previewId,
+      ),
+    })
+  }
+  if (viewerState.outliner.selectedObjects.length > 0) {
+    viewerState.outliner.selectedObjects.length = 0
+  }
 }
 
 function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest) {
@@ -1673,7 +2064,10 @@ function ensureQueuedNavigationMoveGhostNode(request: NavigationItemMoveRequest)
     return null
   }
 
-  const previewMetadata = stripTransientMetadata(sourceNode.metadata) as ItemNode['metadata']
+  const previewMetadata = {
+    ...(stripTransientMetadata(sourceNode.metadata) as Record<string, unknown>),
+    isTransient: true,
+  } as ItemNode['metadata']
   registerNavigationTaskPreviewNode(previewId)
   const existingPreviewNode = sceneState.nodes[previewId as AnyNode['id']]
   if (existingPreviewNode?.type === 'item') {
@@ -1835,7 +2229,7 @@ function TaskQueueSourceMarker({ marker }: { marker: TaskQueueSourceMarkerSpec }
 
   useEffect(() => {
     fadeStartedAtMsRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
-  }, [marker.taskId])
+  }, [marker.loopToken, marker.taskId])
 
   useEffect(() => {
     return () => {
@@ -3439,12 +3833,14 @@ function findItemMoveApproach(
   const expandedMidX = (expandedMinX + expandedMaxX) * 0.5
   const expandedMidZ = (expandedMinZ + expandedMaxZ) * 0.5
   const candidateLevelId = toLevelNodeId(levelId)
+  const navigationY =
+    (candidateLevelId ? graph.levelBaseYById.get(candidateLevelId) : undefined) ?? y
   const candidatePoints: Array<{ penalty: number; world: [number, number, number] }> = []
   const pathCostByCellIndex = new Map<number, number>()
   const seenCandidateKeys = new Set<string>()
   const localToWorld = (localX: number, localZ: number): [number, number, number] => [
     x + rightX * localX + forwardX * localZ,
-    y,
+    navigationY,
     z + rightZ * localX + forwardZ * localZ,
   ]
   const worldToLocal = (world: [number, number, number]) => {
@@ -3549,6 +3945,25 @@ function findItemMoveApproach(
   sampleEdge([expandedMinX, expandedMinZ], [expandedMinX, expandedMaxZ], 0.02)
 
   let best: { approach: NavigationItemMoveApproach; score: number } | null = null
+  let fallbackBest: { approach: NavigationItemMoveApproach; score: number } | null = null
+  const collectDebug = isNavigationDebugEnabled()
+  const debug = collectDebug
+    ? {
+        acceptedCandidates: 0,
+        candidateCount: candidatePoints.length,
+        closestSnapDistance: Number.POSITIVE_INFINITY,
+        componentFilteredCandidates: 0,
+        fallbackAcceptedCandidates: 0,
+        componentId,
+        missingCellCandidates: 0,
+        missingPathCandidates: 0,
+        snapTooFarCandidates: 0,
+        startCellIndex,
+      }
+    : null
+  if (!debug) {
+    lastItemMoveApproachDebug = null
+  }
 
   for (const candidate of candidatePoints) {
     const cellIndex = findClosestNavigationCell(
@@ -3558,11 +3973,35 @@ function findItemMoveApproach(
       componentId,
     )
     if (cellIndex === null) {
+      if (debug) {
+        const unconstrainedCellIndex = findClosestNavigationCell(
+          graph,
+          candidate.world,
+          candidateLevelId ?? undefined,
+          null,
+        )
+        const unconstrainedComponentId =
+          unconstrainedCellIndex !== null
+            ? (graph.componentIdByCell[unconstrainedCellIndex] ?? null)
+            : null
+        if (
+          componentId !== null &&
+          unconstrainedCellIndex !== null &&
+          unconstrainedComponentId !== componentId
+        ) {
+          debug.componentFilteredCandidates += 1
+        } else {
+          debug.missingCellCandidates += 1
+        }
+      }
       continue
     }
 
     const cell = graph.cells[cellIndex]
     if (!cell) {
+      if (debug) {
+        debug.missingCellCandidates += 1
+      }
       continue
     }
 
@@ -3571,8 +4010,16 @@ function findItemMoveApproach(
       (cell.center[1] - candidate.world[1]) * 1.5,
       cell.center[2] - candidate.world[2],
     )
+    if (debug) {
+      debug.closestSnapDistance = Math.min(debug.closestSnapDistance, snapDistance)
+    }
     if (snapDistance > ITEM_MOVE_APPROACH_MAX_SNAP_DISTANCE) {
-      continue
+      if (debug) {
+        debug.snapTooFarCandidates += 1
+      }
+      if (snapDistance > ITEM_MOVE_APPROACH_FALLBACK_MAX_SNAP_DISTANCE) {
+        continue
+      }
     }
 
     let pathCost = pathCostByCellIndex.get(cellIndex)
@@ -3580,6 +4027,9 @@ function findItemMoveApproach(
       const pathResult =
         startCellIndex !== null ? findNavigationPath(graph, startCellIndex, cellIndex) : null
       if (!pathResult) {
+        if (debug) {
+          debug.missingPathCandidates += 1
+        }
         continue
       }
 
@@ -3594,6 +4044,27 @@ function findItemMoveApproach(
           candidate.world[2] - referenceWorld[2],
         )
       : 0
+    if (snapDistance > ITEM_MOVE_APPROACH_MAX_SNAP_DISTANCE) {
+      if (debug) {
+        debug.fallbackAcceptedCandidates += 1
+      }
+      const fallbackScore =
+        pathCost + snapDistance * 2.5 + referenceDistance * 0.05 + candidate.penalty + 100
+      if (!fallbackBest || fallbackScore < fallbackBest.score) {
+        fallbackBest = {
+          approach: {
+            cellIndex,
+            world: [...cell.center] as [number, number, number],
+          },
+          score: fallbackScore,
+        }
+      }
+      continue
+    }
+
+    if (debug) {
+      debug.acceptedCandidates += 1
+    }
     const score = pathCost + snapDistance * 0.8 + referenceDistance * 0.05 + candidate.penalty
     if (!best || score < best.score) {
       best = {
@@ -3606,7 +4077,18 @@ function findItemMoveApproach(
     }
   }
 
-  return best?.approach ?? null
+  if (debug) {
+    lastItemMoveApproachDebug = {
+      ...debug,
+      closestSnapDistance: Number.isFinite(debug.closestSnapDistance)
+        ? debug.closestSnapDistance
+        : null,
+      result: best?.approach ?? fallbackBest?.approach ?? null,
+      usedFallback: best === null && fallbackBest !== null,
+    }
+  }
+
+  return best?.approach ?? fallbackBest?.approach ?? null
 }
 
 function clamp01(value: number) {
@@ -4028,9 +4510,8 @@ export function NavigationSystem() {
     () => Object.keys(itemMoveControllers).length,
     [itemMoveControllers],
   )
-  const movingItemNode = useEditor((state) =>
-    state.movingNode?.type === 'item' ? (state.movingNode as ItemNode) : null,
-  )
+  const movingItemNodeRef = useRef<ItemNode | null>(null)
+  const movingItemNode = movingItemNodeRef.current
   const movingItemId = movingItemNode?.id ?? null
   const selection = useViewer((state) => state.selection)
   const itemMovePreview = useNavigationVisuals((state) => state.itemMovePreview)
@@ -4353,18 +4834,37 @@ export function NavigationSystem() {
         }
 
         if (isNavigationCopyItemMoveRequest(request)) {
-          const plannedCopyId = `__navigation-planned-copy__:${request.itemId}` as ItemNode['id']
-          snapshotNodes[plannedCopyId] = {
-            ...sourceNode,
-            id: plannedCopyId,
-            metadata: setItemMoveVisualMetadata(sourceNode.metadata, null) as ItemNode['metadata'],
-            parentId: targetParentId,
-            position: [...targetPosition] as [number, number, number],
-            rotation: [...targetRotation] as [number, number, number],
-          } as ItemNode as AnyNode
+          const commitTargetId = getNavigationItemMoveCommitTargetId(request)
+          const commitTargetNode = snapshotNodes[commitTargetId]
+          const copySnapshotNode =
+            commitTargetNode?.type === 'item'
+              ? ({
+                  ...commitTargetNode,
+                  metadata: setItemMoveVisualMetadata(
+                    stripTransientMetadata(commitTargetNode.metadata),
+                    null,
+                  ) as ItemNode['metadata'],
+                  parentId: targetParentId,
+                  position: [...targetPosition] as [number, number, number],
+                  rotation: [...targetRotation] as [number, number, number],
+                  visible: true,
+                } as ItemNode as AnyNode)
+              : ({
+                  ...sourceNode,
+                  id: commitTargetId,
+                  metadata: setItemMoveVisualMetadata(
+                    stripTransientMetadata(sourceNode.metadata),
+                    null,
+                  ) as ItemNode['metadata'],
+                  parentId: targetParentId,
+                  position: [...targetPosition] as [number, number, number],
+                  rotation: [...targetRotation] as [number, number, number],
+                  visible: true,
+                } as ItemNode as AnyNode)
 
+          snapshotNodes[commitTargetId] = copySnapshotNode
           updateParentChildren(targetParentId, (children) =>
-            children.includes(plannedCopyId) ? children : [...children, plannedCopyId],
+            children.includes(commitTargetId) ? children : [...children, commitTargetId],
           )
         } else {
           const sourceParentId = sourceNode.parentId
@@ -4422,8 +4922,29 @@ export function NavigationSystem() {
         targetGraphPerfMetricName?: string
       } = {},
     ): ResolvedNavigationItemMovePlan | null => {
-      if (!graph) {
+      const fail = (reason: string, meta: Record<string, unknown> = {}) => {
+        lastItemMovePlanDebugRef.current = {
+          actorComponentIdOverride,
+          actorNavigationPoint,
+          actorStartCellCenter: graph?.cells[actorStartCellIndex]?.center ?? null,
+          actorStartCellIndex,
+          graphCellCount: graph?.cells.length ?? null,
+          reason,
+          request: {
+            finalPosition: request.finalUpdate.position ?? null,
+            finalRotation: request.finalUpdate.rotation ?? request.sourceRotation ?? null,
+            itemId: request.itemId,
+            levelId: request.levelId,
+            sourcePosition: request.sourcePosition,
+            sourceRotation: request.sourceRotation,
+          },
+          ...meta,
+        }
         return null
+      }
+
+      if (!graph) {
+        return fail('missing-live-graph')
       }
 
       const nearestLiveActorCellIndexWithoutComponentFilter =
@@ -4439,7 +4960,7 @@ export function NavigationSystem() {
       const targetPosition = request.finalUpdate.position
       const targetRotation = request.finalUpdate.rotation ?? request.sourceRotation
       if (!targetPosition || !targetRotation) {
-        return null
+        return fail('missing-target-transform')
       }
 
       const sourceFootprintBounds = extractObjectLocalFootprintBounds(
@@ -4460,12 +4981,23 @@ export function NavigationSystem() {
         actorNavigationPoint,
       )
       if (!sourceApproach) {
-        return null
+        return fail('missing-source-approach', {
+          approachDebug: lastItemMoveApproachDebug,
+          actorStartCellCenter: graph.cells[actorStartCellIndex]?.center ?? null,
+          actorStartCellComponentId: graph.componentIdByCell[actorStartCellIndex] ?? null,
+        })
       }
 
       const sourcePath = findNavigationPath(graph, actorStartCellIndex, sourceApproach.cellIndex)
       if (!sourcePath) {
-        return null
+        return fail('missing-source-path', {
+          sourceApproach: {
+            cellCenter: graph.cells[sourceApproach.cellIndex]?.center ?? null,
+            cellIndex: sourceApproach.cellIndex,
+            componentId: graph.componentIdByCell[sourceApproach.cellIndex] ?? null,
+            world: sourceApproach.world,
+          },
+        })
       }
 
       const targetPlanningSnapshot = buildItemMoveTargetSceneSnapshot(request)
@@ -4474,7 +5006,9 @@ export function NavigationSystem() {
         targetGraphPerfMetricName,
       )
       if (!targetPlanningGraph) {
-        return null
+        return fail('missing-target-planning-graph', {
+          targetPlanningSnapshotKey: targetPlanningSnapshot.key,
+        })
       }
 
       const releasedSourceCellIndex = findClosestNavigationCell(
@@ -4484,7 +5018,15 @@ export function NavigationSystem() {
         null,
       )
       if (releasedSourceCellIndex === null) {
-        return null
+        return fail('missing-released-source-cell', {
+          sourceApproach: {
+            cellCenter: graph.cells[sourceApproach.cellIndex]?.center ?? null,
+            cellIndex: sourceApproach.cellIndex,
+            world: sourceApproach.world,
+          },
+          targetPlanningGraphCellCount: targetPlanningGraph.cells.length,
+          targetPlanningSnapshotKey: targetPlanningSnapshot.key,
+        })
       }
 
       const targetApproach = findItemMoveApproach(
@@ -4501,7 +5043,18 @@ export function NavigationSystem() {
         sourceApproach.world,
       )
       if (!targetApproach) {
-        return null
+        return fail('missing-target-approach', {
+          releasedSourceCellCenter:
+            targetPlanningGraph.cells[releasedSourceCellIndex]?.center ?? null,
+          releasedSourceCellIndex,
+          sourceApproach: {
+            cellCenter: graph.cells[sourceApproach.cellIndex]?.center ?? null,
+            cellIndex: sourceApproach.cellIndex,
+            world: sourceApproach.world,
+          },
+          targetPlanningGraphCellCount: targetPlanningGraph.cells.length,
+          targetPlanningSnapshotKey: targetPlanningSnapshot.key,
+        })
       }
 
       const targetPath = findNavigationPath(
@@ -4510,7 +5063,19 @@ export function NavigationSystem() {
         targetApproach.cellIndex,
       )
       if (!targetPath) {
-        return null
+        return fail('missing-target-path', {
+          releasedSourceCellCenter:
+            targetPlanningGraph.cells[releasedSourceCellIndex]?.center ?? null,
+          releasedSourceCellIndex,
+          targetApproach: {
+            cellCenter: targetPlanningGraph.cells[targetApproach.cellIndex]?.center ?? null,
+            cellIndex: targetApproach.cellIndex,
+            componentId: targetPlanningGraph.componentIdByCell[targetApproach.cellIndex] ?? null,
+            world: targetApproach.world,
+          },
+          targetPlanningGraphCellCount: targetPlanningGraph.cells.length,
+          targetPlanningSnapshotKey: targetPlanningSnapshot.key,
+        })
       }
 
       const usedDerivedTargetGraph = false
@@ -4703,7 +5268,6 @@ export function NavigationSystem() {
       if (pendingTaskGraphSyncKey !== null) {
         setPendingTaskGraphSyncKey(null)
       }
-      useNavigation.getState().setTaskLoopSettledToken(taskLoopToken)
       return
     }
 
@@ -4728,7 +5292,6 @@ export function NavigationSystem() {
     }
 
     pendingTaskLoopGraphSyncTokenRef.current = null
-    useNavigation.getState().setTaskLoopSettledToken(pendingTaskLoopGraphSyncToken)
   }, [pendingTaskGraphSyncKey])
 
   useEffect(() => {
@@ -5243,12 +5806,14 @@ export function NavigationSystem() {
   const trajectoryDebugDistanceRef = useRef<number | null>(null)
   const trajectoryDebugModeRef = useRef<'fade' | 'hidden' | 'live' | 'opaque'>('live')
   const trajectoryDebugPauseRef = useRef(false)
+  const trajectoryRetargetSuppressRef = useRef(false)
   const basePathShaderRef = useRef<TrajectoryShaderHandle | null>(null)
   const highlightPathShaderRef = useRef<TrajectoryShaderHandle | null>(null)
   const orbitPathShaderARef = useRef<TrajectoryShaderHandle | null>(null)
   const orbitPathShaderBRef = useRef<TrajectoryShaderHandle | null>(null)
   const lastItemMovePlanDebugRef = useRef<Record<string, unknown> | null>(null)
   const lastCommittedPathDebugRef = useRef<Record<string, unknown> | null>(null)
+  const lastNavigationClickDebugRef = useRef<Record<string, unknown> | null>(null)
   const lastPublishedActorPositionRef = useRef<[number, number, number] | null>(null)
   const lastPublishedActorPositionAtRef = useRef(0)
   const raycasterRef = useRef(new Raycaster())
@@ -5336,6 +5901,9 @@ export function NavigationSystem() {
     {},
   )
   const taskQueueSyncedDeleteIdsRef = useRef<Set<string>>(new Set())
+  const taskQueueSyncedRepairIdsRef = useRef<Set<string>>(new Set())
+  const taskQueueCompletedVisualSuppressionsRef = useRef<Record<string, number>>({})
+  const taskQueueVisualSyncLoopTokenRef = useRef(taskLoopToken)
   const debugPascalTruckIntroAttemptCountRef = useRef(0)
   const debugPascalTruckIntroStartCountRef = useRef(0)
   const normalRobotRuntimeActive =
@@ -5409,6 +5977,7 @@ export function NavigationSystem() {
 
       if (previewSelectedIds.length > 0) {
         viewerState.setPreviewSelectedIds([])
+        viewerState.outliner.selectedObjects.length = 0
       }
 
       if (carriedVisualItemIdRef.current) {
@@ -5431,11 +6000,16 @@ export function NavigationSystem() {
       if (request) {
         clearRuntimeItemMoveVisualState(request.itemId)
         clearRuntimeItemMoveVisualState(request.visualItemId)
+        const copyCommitTargetId = isNavigationCopyItemMoveRequest(request)
+          ? getNavigationItemMoveCommitTargetId(request)
+          : null
         if (
           request.targetPreviewItemId &&
           request.targetPreviewItemId !== preservedDestinationGhostId
         ) {
-          if (isNavigationTaskPreviewNodeId(request.targetPreviewItemId)) {
+          if (request.targetPreviewItemId === copyCommitTargetId) {
+            unregisterNavigationTaskPreviewNode(request.targetPreviewItemId)
+          } else if (isNavigationTaskPreviewNodeId(request.targetPreviewItemId)) {
             removedTransientPreviewIds.push(request.targetPreviewItemId)
             useScene.getState().deleteNode(request.targetPreviewItemId as AnyNodeId)
             unregisterNavigationTaskPreviewNode(request.targetPreviewItemId)
@@ -5506,6 +6080,8 @@ export function NavigationSystem() {
     navigationVisualsStore.getState().resetTaskQueueVisuals()
     taskQueueSyncedMoveVisualStatesRef.current = {}
     taskQueueSyncedDeleteIdsRef.current = new Set()
+    taskQueueSyncedRepairIdsRef.current = new Set()
+    taskQueueCompletedVisualSuppressionsRef.current = {}
     appendTaskModeTrace('navigation.resetTaskQueueVisualsComplete', {
       activeTaskId: navigationState.activeTaskId,
       queueLength: navigationState.taskQueue.length,
@@ -5588,6 +6164,7 @@ export function NavigationSystem() {
           navigationState.activeTaskId,
           navigationState.enabled,
           navigationState.robotMode,
+          navigationState.taskLoopToken,
         ),
         taskLoopSettledToken: navigationState.taskLoopSettledToken,
         taskLoopToken: navigationState.taskLoopToken,
@@ -5654,16 +6231,50 @@ export function NavigationSystem() {
   }, [pascalTruckIntroPlan])
 
   useEffect(() => {
+    if (taskQueueVisualSyncLoopTokenRef.current !== taskLoopToken) {
+      taskQueueVisualSyncLoopTokenRef.current = taskLoopToken
+      taskQueueSyncedMoveVisualStatesRef.current = {}
+      taskQueueSyncedDeleteIdsRef.current = new Set()
+      taskQueueSyncedRepairIdsRef.current = new Set()
+      taskQueueCompletedVisualSuppressionsRef.current = {}
+    }
+
+    if (enabled && robotMode === 'task' && !taskQueuePlanningReady) {
+      recordTaskModeTrace(
+        'navigation.taskQueueVisualSyncDeferred',
+        {
+          activeTaskId,
+          navigationSceneSnapshotKey: summarizeDebugSnapshotKey(
+            navigationSceneSnapshot?.key ?? null,
+          ),
+          pendingTaskGraphSyncKey: summarizeDebugSnapshotKey(pendingTaskGraphSyncKey),
+          queueLength: taskQueue.length,
+          taskLoopSettledToken,
+          taskLoopToken,
+        },
+        { includeSnapshot: true },
+      )
+      return
+    }
+
     const navigationVisuals = navigationVisualsStore.getState()
     const previousMoveVisualStates = taskQueueSyncedMoveVisualStatesRef.current
     const previousDeleteIds = taskQueueSyncedDeleteIdsRef.current
+    const previousRepairIds = taskQueueSyncedRepairIdsRef.current
     const nextMoveVisualStates: Partial<Record<string, ItemMoveVisualState>> = {}
     const nextDeleteIds = new Set<string>()
+    const nextRepairIds = new Set<string>()
     const moveTaskVisualRequests = new Map<string, NavigationItemMoveRequest>()
     const moveSourceIds = new Set<string>()
 
     if (enabled && robotMode === 'task') {
       for (const task of taskQueue) {
+        const completedInCurrentLoop =
+          taskQueueCompletedVisualSuppressionsRef.current[task.taskId] === taskLoopToken
+        if (completedInCurrentLoop) {
+          continue
+        }
+
         const taskVisualKind = getNavigationQueuedTaskVisualKind(task)
         if (task.kind === 'move') {
           moveTaskVisualRequests.set(task.taskId, task.request)
@@ -5673,13 +6284,21 @@ export function NavigationSystem() {
 
       if (activeTaskId) {
         const activeTask = taskQueue.find((task) => task.taskId === activeTaskId) ?? null
-        if (activeTask?.kind === 'move') {
+        const activeTaskCompletedInCurrentLoop =
+          activeTask !== null &&
+          taskQueueCompletedVisualSuppressionsRef.current[activeTask.taskId] === taskLoopToken
+        if (activeTaskCompletedInCurrentLoop) {
+          // Completed tasks stay queued for the next loop, but their one-shot visuals should not
+          // be re-applied on top of the result that was just committed in this loop.
+        } else if (activeTask?.kind === 'move') {
           moveTaskVisualRequests.set(activeTask.taskId, activeTask.request)
           moveSourceIds.add(activeTask.request.itemId)
         } else if (activeTask) {
           const activeTaskVisualKind = getNavigationQueuedTaskVisualKind(activeTask)
           if (activeTaskVisualKind === 'delete') {
             nextDeleteIds.add(activeTask.request.itemId)
+          } else if (activeTaskVisualKind === 'repair') {
+            nextRepairIds.add(activeTask.request.itemId)
           }
         }
       }
@@ -5760,8 +6379,21 @@ export function NavigationSystem() {
       }
     }
 
+    for (const itemId of previousRepairIds) {
+      if (!nextRepairIds.has(itemId)) {
+        navigationVisuals.clearItemRepair(itemId)
+      }
+    }
+
+    for (const itemId of nextRepairIds) {
+      if (!navigationVisuals.itemRepairActivations[itemId]) {
+        navigationVisuals.activateItemRepair(itemId)
+      }
+    }
+
     taskQueueSyncedMoveVisualStatesRef.current = nextMoveVisualStates
     taskQueueSyncedDeleteIdsRef.current = nextDeleteIds
+    taskQueueSyncedRepairIdsRef.current = nextRepairIds
     recordTaskModeTrace(
       'navigation.taskQueueVisualSync',
       {
@@ -5771,23 +6403,30 @@ export function NavigationSystem() {
           .filter(([, state]) => state === 'destination-ghost')
           .map(([id]) => id),
         moveVisualCount: Object.keys(nextMoveVisualStates).length,
+        navigationSceneSnapshotKey: summarizeDebugSnapshotKey(navigationSceneSnapshot?.key ?? null),
         queueLength: taskQueue.length,
+        repairCount: nextRepairIds.size,
+        taskLoopSettledToken,
+        taskLoopToken,
       },
       { includeSnapshot: true },
     )
   }, [
     activeTaskId,
     enabled,
+    navigationSceneSnapshot?.key,
+    pendingTaskGraphSyncKey,
     recordTaskModeTrace,
     robotMode,
     taskLoopSettledToken,
     taskLoopToken,
     taskQueue,
+    taskQueuePlanningReady,
   ])
 
   const taskQueueSourceMarkerSpecs = useMemo(
-    () => getTaskQueueSourceMarkerSpecs(taskQueue, activeTaskId, enabled, robotMode),
-    [activeTaskId, enabled, robotMode, taskQueue],
+    () => getTaskQueueSourceMarkerSpecs(taskQueue, activeTaskId, enabled, robotMode, taskLoopToken),
+    [activeTaskId, enabled, robotMode, taskLoopToken, taskQueue],
   )
 
   const actorSpawnPosition =
@@ -6106,10 +6745,13 @@ export function NavigationSystem() {
       itemDimensions: getScaledDimensions(requestSourceNode),
       itemId: requestSourceId,
       levelId: requestSourceNode.parentId,
+      operation: robotCopySourceId ? 'copy' : 'move',
       sourcePosition: [...requestSourceNode.position] as [number, number, number],
       sourceRotation: [...requestSourceNode.rotation] as [number, number, number],
       targetPreviewItemId: robotCopySourceId ? previewTargetNode.id : null,
-      visualItemId: robotCopySourceId ? previewTargetNode.id : requestSourceId,
+      visualItemId: robotCopySourceId
+        ? (`${previewTargetNode.id}__copy_carry` as ItemNode['id'])
+        : requestSourceId,
     }
     const previewPlanCacheKey = createNavigationItemMovePlanCacheKey(
       previewRequest,
@@ -6517,7 +7159,8 @@ export function NavigationSystem() {
       itemMoveControllerCount > 0
     const hasTaskQueueVisualsToClear =
       navigationVisualState.itemMovePreview !== null ||
-      Object.keys(navigationVisualState.itemDeleteActivations).length > 0
+      Object.keys(navigationVisualState.itemDeleteActivations).length > 0 ||
+      Object.keys(navigationVisualState.itemRepairActivations).length > 0
     const hasLocalStateToClear =
       pascalTruckIntroRef.current !== null ||
       pascalTruckExitRef.current !== null ||
@@ -6771,6 +7414,16 @@ export function NavigationSystem() {
   )
   debugPathCurveRef.current = pathCurve
   const pathLength = useMemo(() => pathCurve?.getLength() ?? 0, [pathCurve])
+  useEffect(() => {
+    if (!trajectoryRetargetSuppressRef.current) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      trajectoryRetargetSuppressRef.current = false
+    })
+    return () => window.cancelAnimationFrame(frameId)
+  }, [pathCurve])
   const conservativePathLength = useMemo(
     () => conservativePathCurve?.getLength() ?? 0,
     [conservativePathCurve],
@@ -7269,6 +7922,9 @@ export function NavigationSystem() {
         pathIndices: [...pathResult.indices],
         targetWorldPosition: targetWorldPosition ?? null,
       }
+      trajectoryRetargetSuppressRef.current = true
+      trajectoryRibbonMaterial.userData.uReveal.value = 0
+      trajectoryRibbonMaterial.userData.uFadeLength.value = 0
       setPathGraphOverride(planningGraph === graph ? null : planningGraph)
       setPathIndices(pathResult.indices)
       setPathAnchorWorldPosition(actorVisualWorldPosition)
@@ -7308,7 +7964,13 @@ export function NavigationSystem() {
 
       return true
     },
-    [getResolvedActorVisualWorldPosition, getResolvedActorWorldPosition, graph, setMotionState],
+    [
+      getResolvedActorVisualWorldPosition,
+      getResolvedActorWorldPosition,
+      graph,
+      setMotionState,
+      trajectoryRibbonMaterial,
+    ],
   )
 
   const requestNavigationToCell = useCallback(
@@ -7371,6 +8033,18 @@ export function NavigationSystem() {
         planningGraph,
         preferredLevelId ?? selection.levelId ?? null,
       )
+      const targetLevelId = preferredLevelId ?? selection.levelId ?? null
+      const targetBlockers = getNavigationPointBlockers(planningGraph, targetPoint, targetLevelId)
+      if (targetBlockers.obstacleIds.length > 0 || targetBlockers.wallIds.length > 0) {
+        lastNavigationClickDebugRef.current = {
+          ...lastNavigationClickDebugRef.current,
+          targetBlockers,
+          targetPoint,
+          reason: 'target-blocked',
+        }
+        return false
+      }
+
       const targetCellIndex = findClosestNavigationCell(
         planningGraph,
         targetPoint,
@@ -7417,6 +8091,15 @@ export function NavigationSystem() {
         exitState.endPosition[1] - ACTOR_HOVER_Y,
         exitState.endPosition[2],
       ]
+      const actorWorldPosition = getResolvedActorWorldPosition()
+      const actorToExitDistance =
+        actorWorldPosition === null
+          ? Number.POSITIVE_INFINITY
+          : Math.hypot(
+              actorWorldPosition[0] - exitState.endPosition[0],
+              actorWorldPosition[1] - exitState.endPosition[1],
+              actorWorldPosition[2] - exitState.endPosition[2],
+            )
       const exitTargetLevelId =
         exitState.finalCellIndex !== null
           ? (toLevelNodeId(graph.cells[exitState.finalCellIndex]?.levelId) ??
@@ -7424,27 +8107,86 @@ export function NavigationSystem() {
             null)
           : (selection.levelId ?? null)
 
-      return (
-        (precomputedExitPath
-          ? commitPlannedNavigationPath(
-              precomputedExitPath.planningGraph,
-              precomputedExitPath.pathResult,
-              precomputedExitPath.targetWorldPosition,
-              precomputedExitPath.destinationCellIndex,
-            )
-          : false) ||
-        requestNavigationToPoint(exitTargetPoint, exitTargetLevelId) ||
-        (exitState.finalCellIndex !== null
-          ? requestNavigationToCell(exitState.finalCellIndex)
-          : false)
+      const clearRejectedNoMotionPath = () => {
+        pendingMotionRef.current = null
+        setPathIndices([])
+        setPathAnchorWorldPosition(null)
+        setPathTargetWorldPosition(null)
+        setMotionState(
+          {
+            ...createActorMotionState(),
+            visibilityRevealProgress: 1,
+          },
+          'pascalTruckExit:rejectNoMotionPath',
+        )
+        setActorMoving(false)
+      }
+
+      const acceptStartedPath = (started: boolean) => {
+        if (!started) {
+          return false
+        }
+
+        if (actorToExitDistance <= 0.2 || pendingMotionRef.current?.moving === true) {
+          return true
+        }
+
+        clearRejectedNoMotionPath()
+        return false
+      }
+
+      if (
+        precomputedExitPath &&
+        acceptStartedPath(
+          commitPlannedNavigationPath(
+            precomputedExitPath.planningGraph,
+            precomputedExitPath.pathResult,
+            precomputedExitPath.targetWorldPosition,
+            precomputedExitPath.destinationCellIndex,
+          ),
+        )
+      ) {
+        return true
+      }
+
+      if (acceptStartedPath(requestNavigationToPoint(exitTargetPoint, exitTargetLevelId))) {
+        return true
+      }
+
+      if (exitState.finalCellIndex === null) {
+        return false
+      }
+      const finalCellIndex = exitState.finalCellIndex
+
+      const { actorStartCellIndex } = getActorNavigationPlanningState(graph, exitTargetLevelId)
+      if (actorStartCellIndex === null) {
+        return false
+      }
+
+      const pathResult = measureNavigationPerf('navigation.pascalTruckExitPathfindMs', () =>
+        findNavigationPath(graph, actorStartCellIndex, finalCellIndex),
+      )
+      if (!pathResult) {
+        return false
+      }
+
+      return acceptStartedPath(
+        commitPlannedNavigationPath(
+          graph,
+          pathResult,
+          exitTargetPoint,
+          finalCellIndex,
+        ),
       )
     },
     [
       commitPlannedNavigationPath,
+      getActorNavigationPlanningState,
+      getResolvedActorWorldPosition,
       graph,
-      requestNavigationToCell,
       requestNavigationToPoint,
       selection.levelId,
+      setMotionState,
     ],
   )
 
@@ -7506,28 +8248,21 @@ export function NavigationSystem() {
     }
     const started = tryStartPascalTruckExitPath(exitState, { consumePrecomputed: true })
     if (!started) {
-      pascalTruckExitRef.current = {
-        ...exitState,
-        stage: 'fade',
-      }
-      actorGroup.position.set(
-        exitState.endPosition[0],
-        exitState.endPosition[1],
-        exitState.endPosition[2],
-      )
-      actorGroup.rotation.y = exitState.rotationY
       pendingMotionRef.current = null
       setPathIndices([])
       setPathAnchorWorldPosition(null)
       setMotionState(
         {
           ...createActorMotionState(),
-          destinationCellIndex: exitState.finalCellIndex,
           visibilityRevealProgress: 1,
         },
         'pascalTruckExit:fallback',
       )
       setActorMoving(false)
+      recordTaskModeTrace('navigation.pascalTruckExitAwaitingPath', {
+        actorToTruckDistance,
+        finalCellIndex: exitState.finalCellIndex,
+      })
     }
   }, [
     enabled,
@@ -7683,6 +8418,7 @@ export function NavigationSystem() {
         precomputedPascalTruckExitRef.current = null
         schedulePascalTruckExit({
           allowQueuedTasks: true,
+          requiredTaskLoopToken: useNavigation.getState().taskLoopToken,
         })
       }
 
@@ -7780,11 +8516,44 @@ export function NavigationSystem() {
         requestItemDelete(null)
       }
       setItemMoveLocked(false)
-      navigationVisualsStore.getState().clearItemDelete(sequence.request.itemId)
-      useScene.getState().deleteNode(sequence.request.itemId)
+      if (robotMode === 'task') {
+        const sceneState = useScene.getState()
+        const itemNode = sceneState.nodes[sequence.request.itemId as AnyNodeId]
+        if (itemNode?.type === 'item') {
+          sceneState.updateNode(
+            sequence.request.itemId as AnyNodeId,
+            {
+              visible: false,
+            } as Partial<AnyNode>,
+          )
+          navigationVisualsStore
+            .getState()
+            .setNodeVisibilityOverride(sequence.request.itemId, false)
+          const itemObject = sceneRegistry.nodes.get(sequence.request.itemId)
+          if (itemObject) {
+            itemObject.visible = false
+            itemObject.updateMatrixWorld(true)
+          }
+        } else {
+          sceneState.deleteNode(sequence.request.itemId)
+          clearDeletedItemVisualStateAfterUnmount(sequence.request.itemId)
+        }
+
+        const updatedSceneState = useScene.getState()
+        const nextTaskGraphSyncKey = buildNavigationSceneSnapshot(
+          updatedSceneState.nodes as Record<string, AnyNode>,
+          updatedSceneState.rootNodeIds as string[],
+        ).key
+        setPendingTaskGraphSyncKey(nextTaskGraphSyncKey)
+      } else {
+        useScene.getState().deleteNode(sequence.request.itemId)
+        clearDeletedItemVisualStateAfterUnmount(sequence.request.itemId)
+      }
       triggerSFX('sfx:item-delete')
       if (robotMode === 'task') {
         if (sequence.taskId) {
+          taskQueueCompletedVisualSuppressionsRef.current[sequence.taskId] =
+            useNavigation.getState().taskLoopToken
           advanceTaskLoopAfterCompletion(sequence.taskId)
         } else {
           requestItemDelete(null)
@@ -7806,6 +8575,7 @@ export function NavigationSystem() {
       requestItemDelete,
       resetMotion,
       schedulePascalTruckExit,
+      setPendingTaskGraphSyncKey,
       setItemMoveLocked,
     ],
   )
@@ -7830,6 +8600,7 @@ export function NavigationSystem() {
       requestItemRepair(null)
     }
     setItemMoveLocked(false)
+    navigationVisualsStore.getState().clearItemRepair(activeSequence?.request.itemId)
     if (actorPositionInitializedRef.current && !hasPendingQueuedNavigationTask()) {
       schedulePascalTruckExit()
     }
@@ -7884,6 +8655,7 @@ export function NavigationSystem() {
     resetMotion()
     clearItemMoveGestureClipState()
     setItemMoveLocked(false)
+    navigationVisualsStore.getState().clearItemRepair(activeSequence.request.itemId)
     const navigationState = useNavigation.getState()
     if (
       actorPositionInitializedRef.current &&
@@ -7919,8 +8691,11 @@ export function NavigationSystem() {
         requestItemRepair(null)
       }
       setItemMoveLocked(false)
+      navigationVisualsStore.getState().clearItemRepair(sequence.request.itemId)
       if (robotMode === 'task') {
         if (sequence.taskId) {
+          taskQueueCompletedVisualSuppressionsRef.current[sequence.taskId] =
+            useNavigation.getState().taskLoopToken
           advanceTaskLoopAfterCompletion(sequence.taskId)
         } else {
           requestItemRepair(null)
@@ -7978,7 +8753,17 @@ export function NavigationSystem() {
       return
     }
 
-    const abortPendingItemMove = () => {
+    const abortPendingItemMove = (reason: string) => {
+      recordTaskModeTrace(
+        'navigation.itemMoveSequenceAbortBeforeStart',
+        {
+          activeTaskId,
+          itemId: itemMoveRequest.itemId,
+          reason,
+          taskQueueLength: useNavigation.getState().taskQueue.length,
+        },
+        { includeSnapshot: true },
+      )
       headItemMoveController.cancel()
       if (activeTaskId) {
         removeQueuedTask(activeTaskId)
@@ -7993,7 +8778,7 @@ export function NavigationSystem() {
     const targetRotationY = targetRotation?.[1] ?? itemMoveRequest.sourceRotation[1] ?? 0
 
     if (!targetPosition || !targetRotation) {
-      abortPendingItemMove()
+      abortPendingItemMove('missing-target-transform')
       return
     }
 
@@ -8003,7 +8788,7 @@ export function NavigationSystem() {
         selection.levelId ?? toLevelNodeId(itemMoveRequest.levelId) ?? null,
       )
     if (actorStartCellIndex === null) {
-      abortPendingItemMove()
+      abortPendingItemMove('missing-actor-start-cell')
       return
     }
 
@@ -8031,7 +8816,12 @@ export function NavigationSystem() {
       navigationItemMoveUsedPreviewPlan: Boolean(precomputedItemMovePlan),
     })
     if (!resolvedItemMovePlan) {
-      abortPendingItemMove()
+      abortPendingItemMove('unresolved-item-move-plan')
+      return
+    }
+
+    if (robotMode === 'task' && !resolvedItemMovePlan.exitPath) {
+      abortPendingItemMove('missing-truck-exit-path')
       return
     }
 
@@ -8051,7 +8841,7 @@ export function NavigationSystem() {
       sourceApproach.cellIndex,
     )
     if (!started) {
-      abortPendingItemMove()
+      abortPendingItemMove('commit-path-failed')
       return
     }
 
@@ -8066,6 +8856,7 @@ export function NavigationSystem() {
       pickupGesture: getRandomItemMoveGesture(),
       pickupStartedAt: null,
       pickupTransferStartedAt: null,
+      queueRestartToken,
       request: itemMoveRequest,
       sourceDisplayPosition: getRenderedFloorItemPosition(
         itemMoveRequest.levelId,
@@ -8110,6 +8901,7 @@ export function NavigationSystem() {
     navigationSceneSnapshot?.key,
     pascalTruckIntroCompleted,
     pascalTruckIntroTaskReady,
+    queueRestartToken,
     removeQueuedTask,
     requestItemMove,
     recordTaskModeTrace,
@@ -8154,6 +8946,11 @@ export function NavigationSystem() {
       )
 
     if (actorStartCellIndex === null) {
+      recordTaskModeTrace('navigation.itemDeleteSequenceStartFailed', {
+        activeTaskId,
+        itemId: itemDeleteRequest.itemId,
+        reason: 'missing-actor-start-cell',
+      })
       cancelItemDeleteSequence()
       return
     }
@@ -8175,17 +8972,41 @@ export function NavigationSystem() {
     )
 
     if (!sourceApproach) {
+      recordTaskModeTrace('navigation.itemDeleteSequenceStartFailed', {
+        activeTaskId,
+        actorStartCellIndex,
+        actorStartComponentId,
+        approachDebug: lastItemMoveApproachDebug,
+        itemId: itemDeleteRequest.itemId,
+        reason: 'missing-source-approach',
+      })
       cancelItemDeleteSequence()
       return
     }
 
     if (!findNavigationPath(graph, actorStartCellIndex, sourceApproach.cellIndex)) {
+      recordTaskModeTrace('navigation.itemDeleteSequenceStartFailed', {
+        activeTaskId,
+        actorStartCellIndex,
+        actorStartComponentId,
+        itemId: itemDeleteRequest.itemId,
+        reason: 'missing-source-path',
+        sourceCellIndex: sourceApproach.cellIndex,
+      })
       cancelItemDeleteSequence()
       return
     }
 
     const started = requestNavigationToPoint(sourceApproach.world)
     if (!started) {
+      recordTaskModeTrace('navigation.itemDeleteSequenceStartFailed', {
+        activeTaskId,
+        actorStartCellIndex,
+        actorStartComponentId,
+        itemId: itemDeleteRequest.itemId,
+        reason: 'commit-path-failed',
+        sourceCellIndex: sourceApproach.cellIndex,
+      })
       cancelItemDeleteSequence()
       return
     }
@@ -8193,6 +9014,7 @@ export function NavigationSystem() {
     itemDeleteSequenceRef.current = {
       deleteStartedAt: null,
       gesture: getRandomItemMoveGesture(),
+      queueRestartToken,
       request: itemDeleteRequest,
       sourceApproach,
       stage: 'to-source',
@@ -8216,6 +9038,7 @@ export function NavigationSystem() {
     itemMoveLocked,
     pascalTruckIntroCompleted,
     pascalTruckIntroTaskReady,
+    queueRestartToken,
     recordTaskModeTrace,
     requestNavigationToPoint,
     selection.levelId,
@@ -8293,6 +9116,7 @@ export function NavigationSystem() {
 
     itemRepairSequenceRef.current = {
       gesture: getRandomItemMoveGesture(),
+      queueRestartToken,
       repairStartedAt: null,
       request: itemRepairRequest,
       sourceApproach,
@@ -8317,6 +9141,7 @@ export function NavigationSystem() {
     itemRepairRequest,
     pascalTruckIntroCompleted,
     pascalTruckIntroTaskReady,
+    queueRestartToken,
     recordTaskModeTrace,
     requestItemRepair,
     requestNavigationToPoint,
@@ -8326,9 +9151,7 @@ export function NavigationSystem() {
 
   useEffect(() => {
     const manualNavigationReady =
-      robotMode === 'normal' &&
-      actorCellIndex !== null &&
-      Boolean(graph?.cells[actorCellIndex])
+      robotMode === 'normal' && actorCellIndex !== null && Boolean(graph?.cells[actorCellIndex])
     const taskNavigationReady =
       robotMode === 'task' && pascalTruckIntroCompleted && pascalTruckIntroTaskReady
 
@@ -8355,6 +9178,7 @@ export function NavigationSystem() {
       const hasQueuedMoveController = Object.keys(currentItemMoveControllers).length > 0
 
       if (
+        cameraDragging ||
         itemDeleteSequenceRef.current ||
         itemRepairSequenceRef.current ||
         pendingPascalTruckExitRef.current !== null ||
@@ -8362,14 +9186,30 @@ export function NavigationSystem() {
         useNavigation.getState().itemDeleteRequest ||
         currentItemRepairRequest ||
         useNavigation.getState().itemMoveLocked ||
-        useEditor.getState().movingNode ||
         performance.now() < navigationClickSuppressedUntil
       ) {
+        lastNavigationClickDebugRef.current = {
+          actorCellIndex,
+          hasQueuedMoveController,
+          itemDeleteRequest: Boolean(useNavigation.getState().itemDeleteRequest),
+          itemDeleteSequence: Boolean(itemDeleteSequenceRef.current),
+          itemMoveLocked: useNavigation.getState().itemMoveLocked,
+          itemRepairRequest: Boolean(currentItemRepairRequest),
+          itemRepairSequence: Boolean(itemRepairSequenceRef.current),
+          pascalTruckExit: pendingPascalTruckExitRef.current !== null,
+          reason: 'blocked',
+          suppressed: performance.now() < navigationClickSuppressedUntil,
+        }
         return false
       }
 
       const committedActorIndex = actorCellIndex
       if (committedActorIndex === null || !graph.cells[committedActorIndex]) {
+        lastNavigationClickDebugRef.current = {
+          actorCellIndex: committedActorIndex,
+          graphReady: Boolean(graph),
+          reason: 'missing-actor-cell',
+        }
         return false
       }
 
@@ -8405,51 +9245,89 @@ export function NavigationSystem() {
       const firstHit = hits[0] ?? null
       const firstOccludingHit =
         intersections.find((hit) => objectBelongsToRoots(hit.object, occluderRoots)) ?? null
-      const requestNavigationOnActorPlane = () => {
+      const requestNavigationOnActorPlane = (reason: string) => {
         const actorCell = graph.cells[committedActorIndex]
         const planeY = actorCell?.center[1] ?? 0
         const ray = raycasterRef.current.ray
         if (Math.abs(ray.direction.y) <= Number.EPSILON) {
+          lastNavigationClickDebugRef.current = {
+            ...lastNavigationClickDebugRef.current,
+            reason: `${reason}:parallel-ray`,
+          }
           return false
         }
 
         const distanceToPlane = (planeY - ray.origin.y) / ray.direction.y
         if (distanceToPlane <= 0) {
+          lastNavigationClickDebugRef.current = {
+            ...lastNavigationClickDebugRef.current,
+            reason: `${reason}:behind-camera`,
+          }
           return false
         }
 
         const point = ray.at(distanceToPlane, new Vector3())
-        return requestNavigationToPoint([point.x, planeY, point.z], preferredLevelId)
+        const accepted = requestNavigationToPoint([point.x, planeY, point.z], preferredLevelId)
+        lastNavigationClickDebugRef.current = {
+          ...lastNavigationClickDebugRef.current,
+          actorPlanePoint: [point.x, planeY, point.z],
+          reason: accepted ? `${reason}:actor-plane-accepted` : `${reason}:actor-plane-rejected`,
+        }
+        return accepted
       }
-
+      lastNavigationClickDebugRef.current = {
+        clientX,
+        clientY,
+        firstHitDistance: firstHit?.distance ?? null,
+        firstOccludingHitDistance: firstOccludingHit?.distance ?? null,
+        hitCount: hits.length,
+        intersectionCount: intersections.length,
+        pickableObjectCount: pickableObjects.length,
+        preferredLevelId,
+        reason: 'raycast',
+      }
       if (
         firstOccludingHit &&
         (!firstHit || firstOccludingHit.distance <= firstHit.distance + Number.EPSILON)
       ) {
-        return requestNavigationOnActorPlane()
+        lastNavigationClickDebugRef.current = {
+          ...lastNavigationClickDebugRef.current,
+          reason: 'occluded',
+        }
+        return requestNavigationOnActorPlane('occluded')
       }
 
       if (hits.length === 0) {
-        return requestNavigationOnActorPlane()
+        lastNavigationClickDebugRef.current = {
+          ...lastNavigationClickDebugRef.current,
+          reason: 'no-pickable-hit',
+        }
+        return requestNavigationOnActorPlane('no-pickable-hit')
       }
 
       // Some rooms sit below overlapping slabs from upper levels. Try the visible
       // hits in depth order and pick the first one that resolves on the active level.
       for (const hit of hits) {
         if (requestNavigationToPoint([hit.point.x, hit.point.y, hit.point.z], preferredLevelId)) {
+          lastNavigationClickDebugRef.current = {
+            ...lastNavigationClickDebugRef.current,
+            acceptedDistance: hit.distance,
+            acceptedPoint: [hit.point.x, hit.point.y, hit.point.z],
+            reason: 'accepted',
+          }
           return true
         }
       }
-      return requestNavigationOnActorPlane()
+      lastNavigationClickDebugRef.current = {
+        ...lastNavigationClickDebugRef.current,
+        reason: 'path-rejected',
+      }
+      return requestNavigationOnActorPlane('path-rejected')
     }
 
     const handleClick = (event: MouseEvent) => {
-      if (event.button !== 0) {
+      if (event.button !== 0 || robotMode === 'normal') {
         return
-      }
-
-      if (robotMode === 'normal') {
-        event.preventDefault()
       }
 
       requestNavigationAtClientPoint(event.clientX, event.clientY)
@@ -8460,52 +9338,25 @@ export function NavigationSystem() {
         return
       }
 
+      if (cameraDragging) {
+        return
+      }
+
       event.preventDefault()
+      lastNavigationClickDebugRef.current = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        reason: 'contextmenu-received',
+        target: event.target instanceof Element ? event.target.tagName : null,
+      }
       requestNavigationAtClientPoint(event.clientX, event.clientY)
-    }
-
-    const isSceneNavigationTarget = (target: EventTarget | null) => {
-      if (!(target instanceof Element)) {
-        return true
-      }
-
-      return !target.closest(
-        'a, button, input, textarea, select, [role="button"], [role="menu"], [role="menuitem"], [data-radix-popper-content-wrapper]',
-      )
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (robotMode !== 'normal' || (event.button !== 0 && event.button !== 2)) {
-        return
-      }
-
-      if (!isSceneNavigationTarget(event.target)) {
-        return
-      }
-
-      event.preventDefault()
-      event.stopPropagation()
-      requestNavigationAtClientPoint(event.clientX, event.clientY)
-    }
-
-    const handleWindowContextMenu = (event: MouseEvent) => {
-      if (robotMode !== 'normal' || !isSceneNavigationTarget(event.target)) {
-        return
-      }
-
-      event.preventDefault()
-      event.stopPropagation()
     }
 
     canvas.addEventListener('click', handleClick)
     canvas.addEventListener('contextmenu', handleContextMenu)
-    window.addEventListener('pointerdown', handlePointerDown, { capture: true })
-    window.addEventListener('contextmenu', handleWindowContextMenu, { capture: true })
     return () => {
       canvas.removeEventListener('click', handleClick)
       canvas.removeEventListener('contextmenu', handleContextMenu)
-      window.removeEventListener('pointerdown', handlePointerDown, { capture: true })
-      window.removeEventListener('contextmenu', handleWindowContextMenu, { capture: true })
     }
   }, [
     actorCellIndex,
@@ -8735,7 +9586,7 @@ export function NavigationSystem() {
     handlePascalTruckIntroRobotReady()
   }, [actorRobotWarmupReady, handlePascalTruckIntroRobotReady, pascalTruckIntroActive])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pendingTaskLoopIntroToken = pendingTaskLoopIntroAfterResetTokenRef.current
     if (pendingTaskLoopIntroToken === null) {
       return
@@ -8814,6 +9665,34 @@ export function NavigationSystem() {
     }
   }, [])
 
+  const restartTaskLoopFromBaseline = useCallback(
+    (reason: 'loop-wrap' | 'queue-restart') => {
+      const nextTaskLoopToken = beginTaskLoopReset()
+      toolInteractionPhaseRef.current = null
+      toolInteractionTargetItemIdRef.current = null
+      carriedVisualItemIdRef.current = null
+      setToolCarryItemId(null)
+      navigationVisualsStore.getState().setToolConeIsolatedOverlay(null)
+      const restored = restoreNavigationTaskLoopSceneSnapshot(nextTaskLoopToken)
+      pendingTaskLoopResetBeforeIntroRef.current = false
+      pendingTaskLoopIntroAfterResetTokenRef.current = nextTaskLoopToken
+      recordTaskModeTrace(
+        reason === 'queue-restart'
+          ? 'navigation.taskLoopResetAfterQueueReorder'
+          : 'navigation.taskLoopResetBeforeNextIntro',
+        {
+          restored,
+          taskLoopToken: nextTaskLoopToken,
+        },
+        { includeSnapshot: true },
+      )
+      setActorCellIndex(null)
+      resetMotion(true)
+      return nextTaskLoopToken
+    },
+    [beginTaskLoopReset, recordTaskModeTrace, resetMotion, setToolCarryItemId],
+  )
+
   useEffect(() => {
     return () => {
       cancelDeferredItemMoveCommit()
@@ -8839,6 +9718,25 @@ export function NavigationSystem() {
       return
     }
 
+    const activeMoveSequence = itemMoveSequenceRef.current
+    const activeDeleteSequence = itemDeleteSequenceRef.current
+    const activeRepairSequence = itemRepairSequenceRef.current
+    if (
+      activeMoveSequence?.queueRestartToken === queueRestartToken ||
+      activeDeleteSequence?.queueRestartToken === queueRestartToken ||
+      activeRepairSequence?.queueRestartToken === queueRestartToken
+    ) {
+      recordTaskModeTrace(
+        'navigation.queueRestartAlreadyOwnedByActiveSequence',
+        {
+          activeTaskId,
+          queueRestartToken,
+        },
+        { includeSnapshot: true },
+      )
+      return
+    }
+
     cancelDeferredItemMoveCommit()
 
     const timeoutId = pascalTruckIntroTaskReadyTimeoutRef.current
@@ -8847,7 +9745,6 @@ export function NavigationSystem() {
       pascalTruckIntroTaskReadyTimeoutRef.current = null
     }
 
-    const activeMoveSequence = itemMoveSequenceRef.current
     itemMoveSequenceRef.current = null
     if (activeMoveSequence) {
       itemMoveStageHistoryRef.current.push({ at: performance.now(), stage: null })
@@ -8864,15 +9761,18 @@ export function NavigationSystem() {
       useLiveTransforms
         .getState()
         .clear(getNavigationItemMoveVisualItemId(activeMoveSequence.request))
+      activeMoveSequence.controller.cancel()
     }
 
-    const activeDeleteSequence = itemDeleteSequenceRef.current
     itemDeleteSequenceRef.current = null
     if (activeDeleteSequence) {
       navigationVisualsStore.getState().clearItemDelete(activeDeleteSequence.request.itemId)
     }
 
     itemRepairSequenceRef.current = null
+    if (activeRepairSequence) {
+      navigationVisualsStore.getState().clearItemRepair(activeRepairSequence.request.itemId)
+    }
 
     pascalTruckIntroRef.current = null
     pascalTruckIntroPostWarmupTokenRef.current = null
@@ -8894,15 +9794,18 @@ export function NavigationSystem() {
     setPascalTruckIntroActive(false)
     setPascalTruckExitActive(false)
     setPascalTruckIntroCompleted(false)
-    setActorCellIndex(null)
-    resetMotion(true)
+    resetTaskQueueVisuals()
+    restartTaskLoopFromBaseline('queue-restart')
   }, [
+    activeTaskId,
     cancelDeferredItemMoveCommit,
     clearItemMoveGestureClipState,
     clearNavigationItemMoveVisualResidue,
     enabled,
     queueRestartToken,
     recordTaskModeTrace,
+    resetTaskQueueVisuals,
+    restartTaskLoopFromBaseline,
     resetMotion,
     robotMode,
     setPendingTaskGraphSyncKey,
@@ -8931,6 +9834,11 @@ export function NavigationSystem() {
         measureNavigationPerf('navigation.itemMoveCommitMs', () =>
           sequence.controller.commit(sequence.request.finalUpdate, finalCarryTransform),
         )
+        const navigationStateAfterCommit = useNavigation.getState()
+        if (navigationStateAfterCommit.itemMoveControllers[sequence.controller.itemId]) {
+          navigationStateAfterCommit.registerItemMoveController(sequence.controller.itemId, null)
+        }
+        clearNavigationItemMoveVisualResidue(sequence.request)
         setItemMoveLocked(false)
         if (robotMode === 'task') {
           if (sequence.taskId) {
@@ -8968,6 +9876,7 @@ export function NavigationSystem() {
       advanceTaskLoopAfterCompletion,
       buildItemMoveTargetSceneSnapshot,
       cancelDeferredItemMoveCommit,
+      clearNavigationItemMoveVisualResidue,
       hasPendingQueuedNavigationTask,
       removeQueuedTask,
       requestItemMove,
@@ -9051,8 +9960,17 @@ export function NavigationSystem() {
       // stale cell indices from the previous graph cannot render as a bogus post-drop path.
       setReleasedNavigationItemId(null)
       clearNavigationItemMoveVisualResidue(sequence.request, {
-        preserveDestinationGhost: robotMode === 'task' && sequence.taskId !== null,
+        preserveDestinationGhost:
+          !isNavigationCopyItemMoveRequest(sequence.request) &&
+          hasSeparateNavigationMoveDestinationGhost(sequence.request),
       })
+      if (
+        robotMode !== 'task' &&
+        !isNavigationCopyItemMoveRequest(sequence.request) &&
+        getNavigationItemMoveVisualItemId(sequence.request) !== sequence.request.itemId
+      ) {
+        navigationVisualsStore.getState().setNodeVisibilityOverride(sequence.request.itemId, false)
+      }
       if (carriedVisualItemIdRef.current) {
         navigationVisualsStore
           .getState()
@@ -9064,6 +9982,10 @@ export function NavigationSystem() {
       clearItemMoveGestureClipState()
       if (robotMode !== 'task') {
         requestItemMove(null)
+      }
+      if (robotMode === 'task' && sequence.taskId) {
+        taskQueueCompletedVisualSuppressionsRef.current[sequence.taskId] =
+          useNavigation.getState().taskLoopToken
       }
       scheduleDeferredItemMoveCommit(sequence, finalCarryTransform)
     },
@@ -9139,7 +10061,7 @@ export function NavigationSystem() {
         ? MathUtils.clamp(pathDistance / primaryPathLength, 0, 1)
         : 0
     const opaqueTrajectory = trajectoryDebugOpaqueRef.current || trajectoryMode === 'opaque'
-    const hiddenTrajectory = trajectoryMode === 'hidden'
+    const hiddenTrajectory = trajectoryMode === 'hidden' || trajectoryRetargetSuppressRef.current
     const visibleStart =
       !ribbonPathVisible || opaqueTrajectory || hiddenTrajectory
         ? 0
@@ -9196,7 +10118,9 @@ export function NavigationSystem() {
         )
         if (actorRobotWarmupReadyRef.current) {
           void tryStartPascalTruckIntroReveal('robot-ready', { ignorePendingWarmup: true })
-        } else if (pascalTruckIntro.warmupWaitElapsedMs >= PASCAL_TRUCK_ENTRY_ROBOT_READY_FALLBACK_MS) {
+        } else if (
+          pascalTruckIntro.warmupWaitElapsedMs >= PASCAL_TRUCK_ENTRY_ROBOT_READY_FALLBACK_MS
+        ) {
           void tryStartPascalTruckIntroReveal('robot-ready-timeout', { ignorePendingWarmup: true })
         }
       }
@@ -9402,16 +10326,7 @@ export function NavigationSystem() {
           robotMode === 'task' &&
           pendingTaskLoopResetBeforeIntroRef.current
         ) {
-          const nextTaskLoopToken = beginTaskLoopReset()
-          pendingTaskLoopResetBeforeIntroRef.current = false
-          pendingTaskLoopIntroAfterResetTokenRef.current = nextTaskLoopToken
-          recordTaskModeTrace(
-            'navigation.taskLoopResetBeforeNextIntro',
-            { taskLoopToken: nextTaskLoopToken },
-            { includeSnapshot: true },
-          )
-          setActorCellIndex(null)
-          resetMotion(true)
+          restartTaskLoopFromBaseline('loop-wrap')
         } else if (hasPendingTaskWork && beginPascalTruckIntro()) {
           setActorCellIndex(null)
         } else {
@@ -9496,14 +10411,7 @@ export function NavigationSystem() {
           ? 'repair'
           : null
     toolInteractionTargetItemIdRef.current = activeItemMoveSequence
-      ? activeItemMoveSequence.stage === 'pickup-transfer'
-        ? activeItemMoveSequence.pickupCarryVisualStartedAt !== null
-          ? getNavigationItemMoveVisualItemId(activeItemMoveSequence.request)
-          : activeItemMoveSequence.request.itemId
-        : activeItemMoveSequence.stage === 'drop-transfer' ||
-            activeItemMoveSequence.stage === 'drop-settle'
-          ? getNavigationItemMoveVisualItemId(activeItemMoveSequence.request)
-          : null
+      ? getNavigationItemMoveInteractionTargetItemId(activeItemMoveSequence)
       : activeItemDeleteSequence?.stage === 'delete-transfer'
         ? activeItemDeleteSequence.request.itemId
         : activeItemRepairSequence?.stage === 'repair-transfer'
@@ -9517,11 +10425,9 @@ export function NavigationSystem() {
     ) {
       clearItemMoveGestureClipState()
     }
-    const currentMovingNode = useEditor.getState().movingNode
     if (NAVIGATION_FRAME_TRACE_ENABLED) {
       const registeredMoveControllerId = Object.keys(itemMoveControllers)[0] ?? null
       const traceSourceId =
-        currentMovingNode?.id ??
         registeredMoveControllerId ??
         activeItemMoveSequence?.request.itemId ??
         null
@@ -9634,7 +10540,7 @@ export function NavigationSystem() {
         }
       }
     }
-    if (currentMovingNode && !activeItemMoveSequence) {
+    if (itemMovePreviewActive && !activeItemMoveSequence) {
       recordNavigationPerfSample('navigation.itemMovePreviewFrameDeltaMs', frameDeltaMs)
     }
     if (activeItemMoveSequence) {
@@ -9673,10 +10579,14 @@ export function NavigationSystem() {
         carryAnchor.position,
         sequence.request.sourceRotation[1] ?? 0,
       )
-      useLiveTransforms.getState().set(visualItemId, {
+      setNavigationItemLiveTransformNow(visualItemId, {
         position: carryAnchor.position,
         rotation: sequence.request.sourceRotation[1] ?? 0,
       })
+      const navigationVisuals = navigationVisualsStore.getState()
+      if (navigationVisuals.itemMoveVisualStates[visualItemId] !== 'carried') {
+        navigationVisuals.setItemMoveVisualState(visualItemId, 'carried')
+      }
     }
     const syncCarryVisualItem = (sequence: NavigationItemMoveSequence | null) => {
       const nextCarryVisualItemId =
@@ -9700,6 +10610,47 @@ export function NavigationSystem() {
         carriedVisualItemIdRef.current = nextCarryVisualItemId
       }
     }
+    const startPickupCarryVisual = (
+      sequence: NavigationItemMoveSequence,
+      pickupTransferProgress: number,
+    ) => {
+      const visualItemId = getNavigationItemMoveVisualItemId(sequence.request)
+      if (sequence.pickupCarryVisualStartedAt === null) {
+        sequence.pickupCarryVisualStartedAt = now
+        clearNavigationItemMovePickupSourcePending(sequence.request)
+        sequence.controller.beginCarry()
+      }
+      if (carriedVisualItemIdRef.current !== visualItemId) {
+        if (carriedVisualItemIdRef.current) {
+          navigationVisualsStore
+            .getState()
+            .setItemMoveVisualState(carriedVisualItemIdRef.current, null)
+        }
+        carriedVisualItemIdRef.current = visualItemId
+      }
+      toolInteractionTargetItemIdRef.current = visualItemId
+      if (sequence.pickupTransferStartedAt === null) {
+        sequence.pickupTransferStartedAt = now
+      }
+      const pickupTransform = getPickupTransferTransform(
+        [actorGroup.position.x, actorGroup.position.y, actorGroup.position.z],
+        actorGroup.rotation.y,
+        sequence.request.itemDimensions,
+        sequence.sourceDisplayPosition,
+        sequence.request.sourceRotation[1] ?? 0,
+        now,
+        pickupTransferProgress,
+      )
+      sequence.controller.updateCarryTransform(pickupTransform.position, pickupTransform.rotationY)
+      setNavigationItemLiveTransformNow(visualItemId, {
+        position: pickupTransform.position,
+        rotation: pickupTransform.rotationY,
+      })
+      const navigationVisuals = navigationVisualsStore.getState()
+      if (navigationVisuals.itemMoveVisualStates[visualItemId] !== 'carried') {
+        navigationVisuals.setItemMoveVisualState(visualItemId, 'carried')
+      }
+    }
     const beginPickup = (sequence: NavigationItemMoveSequence) => {
       if (sequence.pickupStartedAt !== null) {
         return
@@ -9717,13 +10668,7 @@ export function NavigationSystem() {
       syncItemMoveGestureClipState(sequence.pickupGesture, 0)
       markNavigationItemMovePickupSourcePending(sequence.request)
       if (!shouldDelayPickupCarryUntilCheckoutComplete(sequence.request)) {
-        sequence.pickupCarryVisualStartedAt = now
-        sequence.pickupTransferStartedAt = now
-        clearNavigationItemMovePickupSourcePending(sequence.request)
-        sequence.controller.beginCarry()
-        navigationVisualsStore
-          .getState()
-          .setItemMoveVisualState(getNavigationItemMoveVisualItemId(sequence.request), 'carried')
+        startPickupCarryVisual(sequence, 0)
       }
     }
     const beginDrop = (sequence: NavigationItemMoveSequence) => {
@@ -9853,6 +10798,17 @@ export function NavigationSystem() {
         })
       }
 
+      if (actorToTruckDistance > 0.2) {
+        recordTaskModeTrace('navigation.pascalTruckExitWaitingForPath', {
+          actorCellIndex,
+          actorToTruckDistance,
+          finalCellIndex: pascalTruckExit.finalCellIndex,
+          pathNodeCount: pathIndices.length,
+        })
+        recordNavigationPerfSample('navigation.frameMs', performance.now() - frameStart)
+        return
+      }
+
       actorGroup.position.set(
         pascalTruckExit.endPosition[0],
         pascalTruckExit.endPosition[1],
@@ -9902,22 +10858,13 @@ export function NavigationSystem() {
               activeItemMoveSequence.pickupCarryVisualStartedAt === null &&
               pickupGestureProgress >= 0.5
             ) {
-              activeItemMoveSequence.pickupCarryVisualStartedAt = now
-              clearNavigationItemMovePickupSourcePending(activeItemMoveSequence.request)
-              activeItemMoveSequence.controller.beginCarry()
-              navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, 'carried')
+              startPickupCarryVisual(activeItemMoveSequence, 0)
             }
             if (
               activeItemMoveSequence.pickupTransferStartedAt === null &&
               pickupGestureProgress >= 0.999
             ) {
-              if (activeItemMoveSequence.pickupCarryVisualStartedAt === null) {
-                activeItemMoveSequence.pickupCarryVisualStartedAt = now
-                clearNavigationItemMovePickupSourcePending(activeItemMoveSequence.request)
-                activeItemMoveSequence.controller.beginCarry()
-                navigationVisualsStore.getState().setItemMoveVisualState(visualItemId, 'carried')
-              }
-              activeItemMoveSequence.pickupTransferStartedAt = now
+              startPickupCarryVisual(activeItemMoveSequence, 0)
             }
             if (activeItemMoveSequence.pickupTransferStartedAt !== null) {
               const pickupTransferProgress = clamp01(
@@ -9937,7 +10884,7 @@ export function NavigationSystem() {
                 pickupTransform.position,
                 pickupTransform.rotationY,
               )
-              useLiveTransforms.getState().set(visualItemId, {
+              setNavigationItemLiveTransformNow(visualItemId, {
                 position: pickupTransform.position,
                 rotation: pickupTransform.rotationY,
               })
@@ -9978,6 +10925,7 @@ export function NavigationSystem() {
           ) {
             beginDrop(activeItemMoveSequence)
           } else if (activeItemMoveSequence.stage === 'drop-settle') {
+            clearNavigationCopyDestinationGhostForDrop(activeItemMoveSequence.request)
             const visualItemId = getNavigationItemMoveVisualItemId(activeItemMoveSequence.request)
             const dropGestureProgress = clamp01(
               (now - activeItemMoveSequence.dropStartedAt) /
@@ -9989,7 +10937,7 @@ export function NavigationSystem() {
               activeItemMoveSequence.targetDisplayPosition,
               activeItemMoveSequence.targetRotationY,
             )
-            useLiveTransforms.getState().set(visualItemId, {
+            setNavigationItemLiveTransformNow(visualItemId, {
               position: activeItemMoveSequence.targetDisplayPosition,
               rotation: activeItemMoveSequence.targetRotationY,
             })
@@ -10025,7 +10973,7 @@ export function NavigationSystem() {
               dropTransform.position,
               dropTransform.rotationY,
             )
-            useLiveTransforms.getState().set(visualItemId, {
+            setNavigationItemLiveTransformNow(visualItemId, {
               position: dropTransform.position,
               rotation: dropTransform.rotationY,
             })
@@ -10035,7 +10983,7 @@ export function NavigationSystem() {
                 activeItemMoveSequence.targetDisplayPosition,
                 activeItemMoveSequence.targetRotationY,
               )
-              useLiveTransforms.getState().set(visualItemId, {
+              setNavigationItemLiveTransformNow(visualItemId, {
                 position: activeItemMoveSequence.targetDisplayPosition,
                 rotation: activeItemMoveSequence.targetRotationY,
               })
@@ -10043,6 +10991,8 @@ export function NavigationSystem() {
               activeItemMoveSequence.dropSettledAt = now
               itemMoveStageHistoryRef.current.push({ at: now, stage: 'drop-settle' })
               recordNavigationPerfMark('navigation.itemMoveStage', { stage: 'drop-settle' })
+              removeNavigationMoveDestinationGhost(activeItemMoveSequence.request)
+              clearNavigationCopyDestinationGhostForDrop(activeItemMoveSequence.request)
             }
           }
         }
@@ -11056,6 +12006,8 @@ export function NavigationSystem() {
               : null,
           mesh: Boolean(mesh.isMesh),
           name: object.name || object.type,
+          position: [object.position.x, object.position.y, object.position.z],
+          rotationY: object.rotation.y,
           type: object.type,
           visible: object.visible,
         }
@@ -11084,13 +12036,11 @@ export function NavigationSystem() {
 
     const getItemMoveState = () => {
       const navigationState = useNavigation.getState()
-      const editorState = useEditor.getState()
       const itemMoveSequence = itemMoveSequenceRef.current
       const actorRobotDebugState = actorRobotDebugStateRef.current
       const previewSelectedIds = [...useViewer.getState().previewSelectedIds]
       const liveSceneNodes = useScene.getState().nodes as Record<string, any>
       const movingNodeId =
-        editorState.movingNode?.id ??
         Object.keys(navigationState.itemMoveControllers)[0] ??
         itemMoveSequence?.request.itemId ??
         null
@@ -11154,10 +12104,7 @@ export function NavigationSystem() {
         movingNodeLiveTransform: movingNodeId
           ? (useLiveTransforms.getState().get(movingNodeId) ?? null)
           : null,
-        movingNodePosition:
-          editorState.movingNode && 'position' in editorState.movingNode
-            ? editorState.movingNode.position
-            : null,
+        movingNodePosition: movingNode?.position ?? null,
         movingNodeVisualState: movingNodeId
           ? (navigationVisualsStore.getState().itemMoveVisualStates[movingNodeId] ?? null)
           : null,
@@ -11366,6 +12313,84 @@ export function NavigationSystem() {
         itemId,
         valid: placement.valid,
         world,
+      }
+    }
+
+    const canPlanMoveItemToWorld = (itemId: string, world: [number, number, number]) => {
+      const placement = canMoveItemToWorld(itemId, world)
+      if (!placement) {
+        return null
+      }
+
+      if (!placement.valid) {
+        return {
+          ...placement,
+          planResolved: false,
+        }
+      }
+
+      const candidate = sceneState.nodes[itemId]
+      if (!(candidate && candidate.type === 'item') || !graph) {
+        return {
+          ...placement,
+          planResolved: false,
+          reason: graph ? 'missing-item' : 'missing-graph',
+        }
+      }
+
+      const item = candidate as ItemNode
+      const { actorNavigationPoint, actorStartCellIndex, actorStartComponentId } =
+        getActorNavigationPlanningState(
+          graph,
+          selection.levelId ?? toLevelNodeId(item.parentId) ?? null,
+        )
+      if (actorStartCellIndex === null) {
+        return {
+          ...placement,
+          actorNavigationPoint,
+          actorStartCellIndex,
+          planResolved: false,
+          reason: 'missing-actor-start-cell',
+        }
+      }
+
+      const request: NavigationItemMoveRequest = {
+        finalUpdate: {
+          position: placement.finalPosition,
+          rotation: placement.finalRotation,
+        },
+        itemDimensions: getScaledDimensions(item),
+        itemId: item.id,
+        levelId: item.parentId,
+        sourcePosition: [...item.position] as [number, number, number],
+        sourceRotation: [...item.rotation] as [number, number, number],
+      }
+      const previousPlanDebug = lastItemMovePlanDebugRef.current
+      const resolvedPlan = resolveItemMovePlan(
+        request,
+        actorStartCellIndex,
+        actorNavigationPoint,
+        actorStartComponentId,
+        {
+          recordFallbackMeta: false,
+          targetGraphPerfMetricName: 'navigation.debugCanPlanMoveTargetGraphBuildMs',
+        },
+      )
+      const planDebug = lastItemMovePlanDebugRef.current
+      lastItemMovePlanDebugRef.current = previousPlanDebug
+      const exitPathResolved = Boolean(resolvedPlan?.exitPath)
+      const taskPlanResolved = Boolean(resolvedPlan && (robotMode !== 'task' || exitPathResolved))
+
+      return {
+        ...placement,
+        actorStartCellIndex,
+        exitPathResolved,
+        planDebug,
+        planResolved: taskPlanResolved,
+        reason:
+          resolvedPlan && robotMode === 'task' && !exitPathResolved
+            ? 'missing-truck-exit-path'
+            : placement.reason,
       }
     }
 
@@ -11740,6 +12765,7 @@ export function NavigationSystem() {
 
     const getViewportDiagnostics = () => {
       const rect = gl.domElement.getBoundingClientRect()
+      const cameraWorldPosition = camera.getWorldPosition(new Vector3())
       return {
         cameraAspect:
           camera instanceof PerspectiveCamera
@@ -11748,6 +12774,11 @@ export function NavigationSystem() {
               ? rect.width / rect.height
               : null,
         cameraLayers: camera.layers.mask,
+        cameraWorldPosition: [
+          cameraWorldPosition.x,
+          cameraWorldPosition.y,
+          cameraWorldPosition.z,
+        ] as [number, number, number],
         canvasClientHeight: gl.domElement.clientHeight,
         canvasClientWidth: gl.domElement.clientWidth,
         canvasHeight: gl.domElement.height,
@@ -11909,10 +12940,6 @@ export function NavigationSystem() {
 
       const levelId = resolveLevelId(item, sceneState.nodes)
       const selectionLevelId = toLevelNodeId(levelId) ?? useViewer.getState().selection.levelId
-      useEditor.getState().setPhase('furnish')
-      useEditor.getState().setMode('select')
-      useEditor.getState().setTool(null)
-      useEditor.getState().setMovingNode(item)
       recordNavigationPerfMark('navigation.debugStartMoveItem', { itemId: item.id })
       useViewer.getState().setSelection({
         levelId: selectionLevelId,
@@ -11961,10 +12988,6 @@ export function NavigationSystem() {
         return false
       }
 
-      if (!startMoveItem(itemId)) {
-        return false
-      }
-
       const request: NavigationItemMoveRequest = {
         finalUpdate: {
           position: finalPosition,
@@ -11973,6 +12996,7 @@ export function NavigationSystem() {
         itemDimensions,
         itemId: item.id,
         levelId: item.parentId,
+        operation: 'move',
         sourcePosition: [...item.position] as [number, number, number],
         sourceRotation: [...item.rotation] as [number, number, number],
       }
@@ -11983,29 +13007,10 @@ export function NavigationSystem() {
         targetZ: finalPosition[2],
       })
 
-      let remainingFrames = 120
-      const startWhenControllerReady = () => {
-        const editorState = useEditor.getState()
-        if (editorState.movingNode?.id !== item.id) {
-          return
-        }
-
-        const navigationState = useNavigation.getState()
-        if (navigationState.itemMoveControllers[item.id]) {
-          navigationState.requestItemMove(request)
-          navigationState.setItemMoveLocked(true)
-          return
-        }
-
-        if (remainingFrames <= 0) {
-          return
-        }
-
-        remainingFrames -= 1
-        requestAnimationFrame(startWhenControllerReady)
-      }
-
-      startWhenControllerReady()
+      navigationVisualsStore.getState().setItemMoveVisualState(item.id, 'source-pending')
+      const navigationState = useNavigation.getState()
+      navigationState.requestItemMove(request)
+      navigationState.setItemMoveLocked(false)
       return true
     }
 
@@ -12060,6 +13065,15 @@ export function NavigationSystem() {
         return false
       }
 
+      const plan = canPlanMoveItemToWorld(item.id, finalPosition)
+      if (!plan?.planResolved) {
+        recordNavigationPerfMark('navigation.debugQueueMoveItemRejected', {
+          itemId: item.id,
+          reason: plan?.reason ?? 'unresolved-plan',
+        })
+        return false
+      }
+
       const request: NavigationItemMoveRequest = {
         finalUpdate: {
           position: finalPosition,
@@ -12068,6 +13082,7 @@ export function NavigationSystem() {
         itemDimensions,
         itemId: item.id,
         levelId: item.parentId,
+        operation: 'move',
         sourcePosition: [...item.position] as [number, number, number],
         sourceRotation: [...item.rotation] as [number, number, number],
         targetPreviewItemId: previewId,
@@ -12101,7 +13116,7 @@ export function NavigationSystem() {
           }
           navigationVisualsStore.getState().setItemMoveVisualState(item.id, null)
           navigationVisualsStore.getState().setNodeVisibilityOverride(item.id, null)
-          useLiveTransforms.getState().clear(item.id)
+          clearLiveTransformAfterSceneCommit(item.id, finalCarryTransform)
           clearRuntimeItemMoveVisualState(item.id)
           navigationState.registerItemMoveController(item.id, null)
         },
@@ -12127,9 +13142,118 @@ export function NavigationSystem() {
       return true
     }
 
+    const queueCopyItemToWorld = (itemId: string, world: [number, number, number]) => {
+      const candidate = sceneState.nodes[itemId]
+      if (!(candidate && candidate.type === 'item')) {
+        return false
+      }
+
+      const item = candidate as ItemNode
+      if (
+        !isDebugMovableItem(
+          item,
+          sceneState.nodes as Record<string, ItemNode | LevelNode | { type?: string }>,
+        )
+      ) {
+        return false
+      }
+
+      const levelId = resolveLevelId(item, sceneState.nodes)
+      if (!levelId) {
+        return false
+      }
+
+      const navigationState = useNavigation.getState()
+      if (navigationState.itemMoveControllers[item.id]) {
+        return false
+      }
+
+      const itemDimensions = getScaledDimensions(item)
+      const finalPosition: [number, number, number] = [
+        snapDebugMoveAxis(world[0], itemDimensions[0]),
+        item.position[1],
+        snapDebugMoveAxis(world[2], itemDimensions[2]),
+      ]
+      const finalRotation = [...item.rotation] as [number, number, number]
+      const placement = spatialGridManager.canPlaceOnFloor(
+        levelId,
+        finalPosition,
+        itemDimensions,
+        finalRotation,
+        [item.id],
+      )
+      if (!placement.valid) {
+        return false
+      }
+
+      const plan = canPlanMoveItemToWorld(item.id, finalPosition)
+      if (!plan?.planResolved) {
+        recordNavigationPerfMark('navigation.debugQueueCopyItemRejected', {
+          itemId: item.id,
+          reason: plan?.reason ?? 'unresolved-plan',
+        })
+        return false
+      }
+
+      const previewId =
+        `item_debug_copy_preview_${item.id}_${Math.round(performance.now())}` as ItemNode['id']
+      const previewNode = ItemNode.parse({
+        asset: item.asset,
+        id: previewId,
+        metadata: {
+          ...(stripTransientMetadata(item.metadata) as Record<string, unknown>),
+          isTransient: true,
+          robotCopySourceId: item.id,
+        },
+        name: item.name,
+        parentId: item.parentId,
+        position: finalPosition,
+        rotation: finalRotation,
+        scale: [...item.scale] as [number, number, number],
+        side: item.side,
+        visible: true,
+      })
+
+      useScene.getState().createNode(previewNode, item.parentId as AnyNodeId)
+      registerNavigationTaskPreviewNode(previewId)
+
+      const request: NavigationItemMoveRequest = {
+        finalUpdate: {
+          position: finalPosition,
+          rotation: finalRotation,
+        },
+        itemDimensions,
+        itemId: item.id,
+        levelId: item.parentId,
+        operation: 'copy',
+        sourcePosition: [...item.position] as [number, number, number],
+        sourceRotation: [...item.rotation] as [number, number, number],
+        targetPreviewItemId: previewId,
+        visualItemId: `${previewId}__copy_carry` as ItemNode['id'],
+      }
+
+      navigationState.registerItemMoveController(
+        item.id,
+        createNavigationItemMoveFallbackController(request),
+      )
+      navigationVisualsStore.getState().setItemMoveVisualState(item.id, 'copy-source-pending')
+      navigationVisualsStore.getState().setItemMoveVisualState(previewId, 'destination-ghost')
+      recordNavigationPerfMark('navigation.debugQueueCopyItemToWorld', {
+        itemId: item.id,
+        previewId,
+        targetX: finalPosition[0],
+        targetY: finalPosition[1],
+        targetZ: finalPosition[2],
+      })
+      navigationState.requestItemMove(request)
+      navigationState.setItemMoveLocked(false)
+      return { previewId, target: finalPosition, visualItemId: request.visualItemId }
+    }
+
     const emitGridMove = (world: [number, number, number]) => {
       emitter.emit('grid:move', {
         nativeEvent: null as never,
+        object: scene,
         localPosition: world,
         position: world,
       })
@@ -12138,6 +13262,7 @@ export function NavigationSystem() {
     const emitGridClick = (world: [number, number, number]) => {
       emitter.emit('grid:click', {
         nativeEvent: null as never,
+        object: scene,
         localPosition: world,
         position: world,
       })
@@ -12196,8 +13321,43 @@ export function NavigationSystem() {
       return requestNavigationItemDelete(node)
     }
 
+    const selectItemById = (itemId: string) => {
+      const node = sceneState.nodes[itemId]
+      if (node?.type !== 'item') {
+        return false
+      }
+
+      const levelId = resolveLevelId(node, sceneState.nodes)
+      const selectionLevelId = toLevelNodeId(levelId) ?? useViewer.getState().selection.levelId
+      useViewer.getState().setHoveredId(null)
+      useViewer.getState().setPreviewSelectedIds([])
+      useViewer.getState().setSelection({
+        levelId: selectionLevelId,
+        selectedIds: [node.id],
+        zoneId: null,
+      })
+      return true
+    }
+
+    const clearEditorSelection = () => {
+      const viewerState = useViewer.getState()
+      viewerState.setHoveredId(null)
+      viewerState.setPreviewSelectedIds([])
+      viewerState.setSelection({
+        buildingId: viewerState.selection.buildingId,
+        levelId: viewerState.selection.levelId,
+        selectedIds: [],
+        zoneId: null,
+      })
+      viewerState.outliner.selectedObjects.length = 0
+      viewerState.outliner.hoveredObjects.length = 0
+      return true
+    }
+
     const navDebugApi = {
       canMoveItemToWorld,
+      canPlanMoveItemToWorld,
+      clearEditorSelection,
       getConnectivitySnapshot,
       getCurrentMovePlanDiagnostics,
       getDoorTangentDiagnostics,
@@ -12205,19 +13365,91 @@ export function NavigationSystem() {
       getPathDiagnostics,
       getRenderBreakdown,
       getState,
+      getTaskModeSnapshot,
       getTrajectorySamples,
       getItemMoveState,
+      getItemRuntimePose: (itemId: string) => {
+        const sceneNode = useScene.getState().nodes[itemId as AnyNodeId]
+        const object = sceneRegistry.nodes.get(itemId)
+        const navigationVisualState = navigationVisualsStore.getState()
+        const scenePosition =
+          sceneNode && 'position' in sceneNode && Array.isArray(sceneNode.position)
+            ? sceneNode.position
+            : null
+        const sceneRotation =
+          sceneNode && 'rotation' in sceneNode && Array.isArray(sceneNode.rotation)
+            ? sceneNode.rotation
+            : null
+
+        return {
+          deleteActivation:
+            navigationVisualState.itemDeleteActivations[itemId as AnyNodeId] ?? null,
+          liveTransform: useLiveTransforms.getState().get(itemId) ?? null,
+          moveVisualState: navigationVisualState.itemMoveVisualStates[itemId as AnyNodeId] ?? null,
+          renderPosition: object
+            ? ([object.position.x, object.position.y, object.position.z] as [
+                number,
+                number,
+                number,
+              ])
+            : null,
+          renderRotationY: object?.rotation.y ?? null,
+          renderVisible: object?.visible ?? null,
+          sceneExists: Boolean(sceneNode),
+          scenePosition,
+          sceneRotationY: sceneRotation?.[1] ?? null,
+          sceneVisible:
+            sceneNode && 'visible' in sceneNode ? ((sceneNode as ItemNode).visible ?? null) : null,
+          visibilityOverride:
+            navigationVisualState.nodeVisibilityOverrides[itemId as AnyNodeId] ?? null,
+        }
+      },
       getMovableItems,
       getRenderDiagnostics,
       getToolConeDiagnostics,
       getToolConeIsolatedOverlay: () => navigationVisualsStore.getState().toolConeIsolatedOverlay,
       getViewportDiagnostics,
+      getActorWorldPosition,
+      getActorComponentNavigationCells: () => {
+        if (!graph || actorCellIndex === null) {
+          return []
+        }
+
+        const componentId = graph.componentIdByCell[actorCellIndex]
+        if (componentId === undefined || componentId < 0) {
+          return []
+        }
+
+        const componentCells = graph.components[componentId] ?? []
+        const stride = Math.max(1, Math.floor(componentCells.length / 80))
+        return componentCells
+          .filter((_, index) => index % stride === 0)
+          .slice(0, 80)
+          .map((cellIndex) => {
+            const cell = graph.cells[cellIndex]
+            return cell
+              ? {
+                  cellIndex,
+                  center: cell.center,
+                  gridX: cell.gridX,
+                  gridY: cell.gridY,
+                  levelId: cell.levelId,
+                  surfaceType: cell.surfaceType,
+                }
+              : null
+          })
+          .filter(Boolean)
+      },
       getRuntimeSummary: () => {
         const navigationState = useNavigation.getState()
+        const navigationVisualState = navigationVisualsStore.getState()
+        const viewerState = useViewer.getState()
         const itemMoveSequence = itemMoveSequenceRef.current
         return {
           activeTaskId: navigationState.activeTaskId,
           activeTaskIndex: navigationState.activeTaskIndex,
+          activeNavigationDoorIds: [...getActiveNavigationDoorIds()],
+          activeNavigationDoorOpenAmounts: Object.fromEntries(getActiveNavigationDoorOpenAmounts()),
           actorCellIndex,
           actorMoving,
           actorRenderVisible,
@@ -12227,10 +13459,16 @@ export function NavigationSystem() {
           enabled,
           graphCellCount: graph?.cells.length ?? 0,
           hasGraph: Boolean(graph),
+          itemMoveControllerIds: Object.keys(navigationState.itemMoveControllers),
+          itemMovePreview: navigationVisualState.itemMovePreview,
+          itemDeleteActivations: navigationVisualState.itemDeleteActivations,
           itemDeleteRequestId: navigationState.itemDeleteRequest?.itemId ?? null,
           itemMoveRequestId: navigationState.itemMoveRequest?.itemId ?? null,
           itemMoveSequenceStage: itemMoveSequence?.stage ?? null,
+          itemMoveVisualStates: navigationVisualState.itemMoveVisualStates,
+          itemRepairActivations: navigationVisualState.itemRepairActivations,
           itemRepairRequestId: navigationState.itemRepairRequest?.itemId ?? null,
+          lastNavigationClick: lastNavigationClickDebugRef.current,
           motionWriteSource: motionWriteSourceRef.current,
           pathDistanceTravelled: trajectoryDebugDistanceRef.current ?? motionRef.current.distance,
           pathIndexCount: pathIndices.length,
@@ -12241,12 +13479,35 @@ export function NavigationSystem() {
           pascalTruckIntroPlanReady: pascalTruckIntroPlan !== null,
           pascalTruckIntroStartCount: debugPascalTruckIntroStartCountRef.current,
           pascalTruckIntroTaskReady,
+          pascalTruckExitActive,
           pendingTaskRequestActive:
             navigationState.itemMoveRequest !== null ||
             navigationState.itemDeleteRequest !== null ||
             navigationState.itemRepairRequest !== null,
+          pendingPascalTruckExitActive: pendingPascalTruckExitRef.current !== null,
+          previewSelectedIds: viewerState.previewSelectedIds,
+          queueRestartToken: navigationState.queueRestartToken,
           robotMode: navigationState.robotMode,
+          selectedOutlineObjectCount: viewerState.outliner.selectedObjects.length,
+          selectedOutlineObjectIds: viewerState.outliner.selectedObjects.map(
+            (object) => object.userData?.nodeId ?? object.name ?? object.uuid,
+          ),
+          selectedIds: viewerState.selection.selectedIds,
           taskQueueLength: navigationState.taskQueue.length,
+          taskQueueSourceMarkers: getTaskQueueSourceMarkerSpecs(
+            navigationState.taskQueue,
+            navigationState.activeTaskId,
+            navigationState.enabled,
+            navigationState.robotMode,
+            navigationState.taskLoopToken,
+          ),
+          taskLoopSettledToken: navigationState.taskLoopSettledToken,
+          taskLoopToken: navigationState.taskLoopToken,
+          taskPreviewNodeIds: navigationVisualState.taskPreviewNodeIds,
+          trajectoryFadeLength: trajectoryRibbonMaterial.userData.uFadeLength.value,
+          trajectoryRetargetSuppress: trajectoryRetargetSuppressRef.current,
+          trajectoryReveal: trajectoryRibbonMaterial.userData.uReveal.value,
+          trajectoryVisibleStart: trajectoryRibbonMaterial.userData.uVisibleStart.value,
         }
       },
       emitGridClick,
@@ -12289,8 +13550,18 @@ export function NavigationSystem() {
       },
       setRobotMode,
       requestDeleteItemById,
+      queueCopyItemToWorld,
       requestMoveItemToWorld,
       queueMoveItemToWorld,
+      moveQueuedTaskToIndex: (taskId: string, targetIndex: number) => {
+        useNavigation.getState().moveQueuedTask(taskId, targetIndex)
+        return useNavigation.getState().taskQueue.map((task) => ({
+          itemId: task.request.itemId,
+          kind: task.kind,
+          taskId: task.taskId,
+        }))
+      },
+      selectItemById,
       setToolConeIsolatedOverlay: (
         overlay: ReturnType<typeof navigationVisualsStore.getState>['toolConeIsolatedOverlay'],
       ) => {
@@ -12304,7 +13575,16 @@ export function NavigationSystem() {
       __pascalNavDebug?: typeof navDebugApi
     }
     debugWindow.__pascalNavDebug = navDebugApi
+    const publishDebugSummary = () => {
+      document.documentElement.dataset.pascalNavRuntimeSummary = JSON.stringify(
+        navDebugApi.getRuntimeSummary(),
+      )
+    }
+    publishDebugSummary()
+    const debugSummaryInterval = window.setInterval(publishDebugSummary, 250)
     return () => {
+      window.clearInterval(debugSummaryInterval)
+      delete document.documentElement.dataset.pascalNavRuntimeSummary
       if (debugWindow.__pascalNavDebug === navDebugApi) {
         delete debugWindow.__pascalNavDebug
       }
@@ -12344,6 +13624,7 @@ export function NavigationSystem() {
     getActorNavigationPlanningState,
     getTaskModeSnapshot,
     getResolvedActorWorldPosition,
+    resolveItemMovePlan,
   ])
 
   return (
@@ -12360,7 +13641,10 @@ export function NavigationSystem() {
       )}
 
       {taskQueueSourceMarkerSpecs.map((marker) => (
-        <TaskQueueSourceMarker key={`task-source-marker:${marker.taskId}`} marker={marker} />
+        <TaskQueueSourceMarker
+          key={`task-source-marker:${marker.loopToken}:${marker.taskId}`}
+          marker={marker}
+        />
       ))}
 
       {enabled && PATH_STATIC_PREVIEW_MODE && pathCurve && pathRenderSegments.length > 0 && (
@@ -12400,6 +13684,7 @@ export function NavigationSystem() {
               staticMeshVisibilityOverride={robotStaticMeshVisibleOverrideRef.current}
               showToolAttachments={actorToolAttachmentsVisible}
               toolConeColor={activeToolConeColor}
+              toolConeResetToken={taskLoopToken}
               toolCarryItemId={toolCarryItemId}
               toolCarryItemIdRef={carriedVisualItemIdRef}
               toolInteractionPhaseRef={toolInteractionPhaseRef}
