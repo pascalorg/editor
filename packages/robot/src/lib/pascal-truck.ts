@@ -623,7 +623,7 @@ export function buildPascalTruckNodeForScene(
           preserveManualPlacement && Array.isArray(sourceTruckNode.scale)
             ? sourceTruckNode.scale
             : seededTransform.scale,
-        visible: sourceTruckNode.visible ?? true,
+        visible: true,
       }
     : {
         asset: truckAsset,

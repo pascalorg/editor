@@ -391,7 +391,7 @@ function getCurrentSceneGraph(): SceneGraph {
   }
 }
 
-function removePascalTruckNodesFromCurrentScene() {
+function removeRuntimePascalTruckNodesFromCurrentScene() {
   const sceneState = useScene.getState()
   const truckIds = Object.entries(sceneState.nodes)
     .filter(([, node]) => isPascalTruckNode(node) && !hasPascalTruckManualPlacement(node))
@@ -402,11 +402,46 @@ function removePascalTruckNodesFromCurrentScene() {
   }
 }
 
+function hidePascalTruckNodesOutsideRobotMode() {
+  const sceneState = useScene.getState()
+  const truckIdsToDelete: AnyNodeId[] = []
+  const truckUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+
+  for (const [nodeId, node] of Object.entries(sceneState.nodes)) {
+    if (!isPascalTruckNode(node)) {
+      continue
+    }
+
+    const truckNodeId = nodeId as AnyNodeId
+    if (hasPascalTruckManualPlacement(node)) {
+      if (node.visible !== false) {
+        truckUpdates.push({ id: truckNodeId, data: { visible: false } })
+      }
+
+      const truckObject = sceneRegistry.nodes.get(nodeId)
+      if (truckObject?.visible) {
+        truckObject.visible = false
+        truckObject.updateMatrixWorld(true)
+      }
+      continue
+    }
+
+    truckIdsToDelete.push(truckNodeId)
+  }
+
+  if (truckUpdates.length > 0) {
+    sceneState.updateNodes(truckUpdates)
+  }
+  if (truckIdsToDelete.length > 0) {
+    sceneState.deleteNodes(truckIdsToDelete)
+  }
+}
+
 function ensurePascalTruckNodeInCurrentScene() {
   const sceneGraph = getCurrentSceneGraph()
   const stripped = stripPascalTruckFromSceneGraph(sceneGraph)
   const baseGraph = stripped.sceneGraph ?? sceneGraph
-  removePascalTruckNodesFromCurrentScene()
+  removeRuntimePascalTruckNodesFromCurrentScene()
 
   const { node, parentId } = buildPascalTruckNodeForScene(baseGraph, stripped.truckNode)
   useScene.getState().createNode(node as AnyNode, parentId ? (parentId as AnyNodeId) : undefined)
@@ -621,14 +656,14 @@ export function NavigationSceneLifecycle() {
     } else if (previousRobotMode === 'task' && robotMode !== 'task') {
       restoreTaskModeSceneSnapshot({ clearSnapshot: true, mode: 'full' })
       if (robotMode === null) {
-        removePascalTruckNodesFromCurrentScene()
+        hidePascalTruckNodesOutsideRobotMode()
       } else {
         ensurePascalTruckNodeInCurrentScene()
       }
     } else if (previousRobotMode !== null && robotMode === null) {
-      removePascalTruckNodesFromCurrentScene()
+      hidePascalTruckNodesOutsideRobotMode()
     } else if (robotMode === null) {
-      removePascalTruckNodesFromCurrentScene()
+      hidePascalTruckNodesOutsideRobotMode()
     }
 
     previousRobotModeRef.current = robotMode

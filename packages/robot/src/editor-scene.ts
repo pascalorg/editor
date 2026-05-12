@@ -34,17 +34,25 @@ export function prepareNavigationSceneGraph<T extends SceneGraphWithCollections>
   for (const [nodeId, node] of Object.entries(baseGraph.nodes)) {
     if (isPascalTruckNode(node)) {
       const localTruckAsset = getPascalTruckLocalAsset()
+      const shouldStripTruckMetadata =
+        hasTransientNavigationMetadata(node) || getItemMoveVisualState(node.metadata) !== null
       if (
         node.asset?.src !== localTruckAsset.src ||
-        node.asset?.thumbnail !== localTruckAsset.thumbnail
+        node.asset?.thumbnail !== localTruckAsset.thumbnail ||
+        node.visible !== false ||
+        shouldStripTruckMetadata
       ) {
         nextNodes ??= { ...baseGraph.nodes }
         nextNodes[nodeId] = {
           ...node,
           asset: localTruckAsset,
+          metadata: shouldStripTruckMetadata
+            ? setItemMoveVisualState(stripTransientMetadata(node.metadata), null)
+            : node.metadata,
+          visible: false,
         }
-        continue
       }
+      continue
     }
 
     if (hasTransientNavigationMetadata(node)) {
