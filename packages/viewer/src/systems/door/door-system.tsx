@@ -422,7 +422,7 @@ function addLeafSegmentContent({
   contentPadding: DoorNode['contentPadding']
   keepFrameWhenEmpty?: boolean
 }) {
-  const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
+  const hasLeafContent = (segments ?? []).some((seg) => seg.type !== 'empty')
   const shouldRenderFrame = hasLeafContent || keepFrameWhenEmpty
   const cpX = contentPadding[0]
   const cpY = contentPadding[1]
@@ -470,24 +470,26 @@ function addLeafSegmentContent({
 
   const contentW = leafWidth - 2 * cpX
   const contentH = leafHeight - 2 * cpY
-  const totalRatio = segments.reduce((sum, s) => sum + s.heightRatio, 0)
+  const totalRatio = (segments ?? []).reduce((sum, s) => sum + s.heightRatio, 0)
   const contentTop = leafCenterY + contentH / 2
 
   let segY = contentTop
-  for (const seg of segments) {
+  for (const seg of segments ?? []) {
     const segH = (seg.heightRatio / totalRatio) * contentH
     const segCenterY = segY - segH / 2
-    const numCols = seg.columnRatios.length
-    const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
-    const usableW = contentW - (numCols - 1) * seg.dividerThickness
-    const colWidths = seg.columnRatios.map((r) => (r / colSum) * usableW)
+    const columnRatios = seg.columnRatios ?? [1]
+    const dividerThickness = seg.dividerThickness ?? 0.03
+    const numCols = columnRatios.length
+    const colSum = columnRatios.reduce((a, b) => a + b, 0)
+    const usableW = contentW - (numCols - 1) * dividerThickness
+    const colWidths = columnRatios.map((r) => (r / colSum) * usableW)
 
     const colXCenters: number[] = []
     let cx = leafCenterX - contentW / 2
     for (let c = 0; c < numCols; c++) {
       colXCenters.push(cx + colWidths[c]! / 2)
       cx += colWidths[c]!
-      if (c < numCols - 1) cx += seg.dividerThickness
+      if (c < numCols - 1) cx += dividerThickness
     }
 
     if (seg.type !== 'empty') {
@@ -496,14 +498,14 @@ function addLeafSegmentContent({
         cx += colWidths[c]!
         addLeafBox(
           baseMaterial,
-          seg.dividerThickness,
+          dividerThickness,
           segH,
           leafDepth + 0.001,
-          cx + seg.dividerThickness / 2,
+          cx + dividerThickness / 2,
           segCenterY,
           0,
         )
-        cx += seg.dividerThickness
+        cx += dividerThickness
       }
     }
 
@@ -572,7 +574,7 @@ function addDoorLeaf(
     doorHeight: number
   },
 ) {
-  const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
+  const hasLeafContent = (segments ?? []).some((seg) => seg.type !== 'empty')
   const leafGroup = new THREE.Group()
   leafGroup.position.set(hingeX, 0, 0)
   leafGroup.rotation.y = swingRotation
