@@ -1,0 +1,46 @@
+{
+  "name": "@pascal-app/robot",
+  "version": "0.1.0",
+  "description": "Robot navigation feature package for Pascal editor",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./editor": "./src/editor.tsx",
+    "./store": "./src/store/use-navigation.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": "^0.8.0",
+    "@pascal-app/editor": "^0.8.0",
+    "@pascal-app/viewer": "^0.8.0",
+    "@react-three/drei": "^10",
+    "@react-three/fiber": "^9",
+    "next": ">=15",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "three": "^0.184"
+  },
+  "dependencies": {
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.562.0",
+    "mitt": "^3.0.1",
+    "tailwind-merge": "^3.5.0",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@pascal-app/core": "^0.8.0",
+    "@pascal-app/editor": "^0.8.0",
+    "@pascal-app/viewer": "^0.8.0",
+    "@pascal/typescript-config": "*",
+    "@types/node": "^22.19.12",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/three": "^0.184.0",
+    "typescript": "5.9.3"
+  }
+}

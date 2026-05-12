@@ -1,0 +1,14 @@
+{
+  "extends": "@pascal/typescript-config/react-library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pascal-app/core": ["../core/src/index.ts"],
+      "@pascal-app/core/*": ["../core/src/*"],
+      "@pascal-app/editor/runtime": ["../editor/src/runtime.ts"],
+      "@pascal-app/viewer": ["../viewer/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

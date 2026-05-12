@@ -56,6 +56,23 @@ function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) 
   return Array.isArray(material) ? material.some((entry) => entry.visible) : material.visible
 }
 
+function clonePositionOnlyGeometry(sourceGeometry: THREE.BufferGeometry) {
+  const position = sourceGeometry.getAttribute('position')
+  if (!position || position.count < 3 || position.itemSize < 3) return null
+
+  const positionArray = new Float32Array(position.count * 3)
+  for (let index = 0; index < position.count; index += 1) {
+    const targetIndex = index * 3
+    positionArray[targetIndex] = position.getX(index)
+    positionArray[targetIndex + 1] = position.getY(index)
+    positionArray[targetIndex + 2] = position.getZ(index)
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3))
+  return geometry
+}
+
 function cloneWorldGeometry(mesh: THREE.Mesh) {
   const sourceGeometry = mesh.geometry
   const position = sourceGeometry.getAttribute('position')
@@ -64,14 +81,10 @@ function cloneWorldGeometry(mesh: THREE.Mesh) {
   const workingGeometry = sourceGeometry.index
     ? sourceGeometry.toNonIndexed()
     : sourceGeometry.clone()
-  const cleanGeometry = new THREE.BufferGeometry()
-  cleanGeometry.setAttribute('position', workingGeometry.getAttribute('position').clone())
-
-  const normal = workingGeometry.getAttribute('normal')
-  if (normal) {
-    cleanGeometry.setAttribute('normal', normal.clone())
-  } else {
-    cleanGeometry.computeVertexNormals()
+  const cleanGeometry = clonePositionOnlyGeometry(workingGeometry)
+  if (!cleanGeometry) {
+    workingGeometry.dispose()
+    return null
   }
 
   cleanGeometry.applyMatrix4(mesh.matrixWorld)
@@ -124,15 +137,11 @@ function createDoorLeafColliderGeometry(root: THREE.Object3D, node: DoorNode) {
     const visibleHeight = leafH * (1 - openAmount)
     if (visibleHeight <= 0.12) return null
 
-    const sourceGeometry = new THREE.BoxGeometry(
-      leafW,
-      visibleHeight,
-      DOOR_LEAF_COLLIDER_DEPTH,
-    ).toNonIndexed()
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', sourceGeometry.getAttribute('position').clone())
-    geometry.setAttribute('normal', sourceGeometry.getAttribute('normal').clone())
+    const sourceGeometry = new THREE.BoxGeometry(leafW, visibleHeight, DOOR_LEAF_COLLIDER_DEPTH)
+      .toNonIndexed()
+    const geometry = clonePositionOnlyGeometry(sourceGeometry)
     sourceGeometry.dispose()
+    if (!geometry) return null
     const visibleCenterY = leafCenterY - leafH / 2 + visibleHeight / 2
     geometry.applyMatrix4(
       root.matrixWorld.clone().multiply(new THREE.Matrix4().makeTranslation(0, visibleCenterY, 0)),
@@ -158,10 +167,9 @@ function createDoorLeafColliderGeometry(root: THREE.Object3D, node: DoorNode) {
     leafH,
     DOOR_LEAF_COLLIDER_DEPTH,
   ).toNonIndexed()
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', sourceGeometry.getAttribute('position').clone())
-  geometry.setAttribute('normal', sourceGeometry.getAttribute('normal').clone())
+  const geometry = clonePositionOnlyGeometry(sourceGeometry)
   sourceGeometry.dispose()
+  if (!geometry) return null
   const matrix = root.matrixWorld
     .clone()
     .multiply(new THREE.Matrix4().makeTranslation(hingeX, 0, 0))

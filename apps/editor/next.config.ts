@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import path from 'node:path'
 
 const nextConfig: NextConfig = {
   logging: {
@@ -13,6 +14,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/core',
     '@pascal-app/editor',
     '@pascal-app/mcp',
+    '@pascal-app/robot',
   ],
   turbopack: {
     resolveAlias: {
@@ -21,6 +23,18 @@ const nextConfig: NextConfig = {
       '@react-three/fiber': './node_modules/@react-three/fiber',
       '@react-three/drei': './node_modules/@react-three/drei',
     },
+  },
+  webpack: (config) => {
+    config.resolve ??= {}
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      'three/tsl': path.resolve(__dirname, './node_modules/three/build/three.tsl.js'),
+      'three/webgpu': path.resolve(__dirname, './node_modules/three/build/three.webgpu.js'),
+      'three$': path.resolve(__dirname, './node_modules/three/build/three.module.js'),
+      '@react-three/fiber': path.resolve(__dirname, './node_modules/@react-three/fiber'),
+      '@react-three/drei': path.resolve(__dirname, './node_modules/@react-three/drei'),
+    }
+    return config
   },
   experimental: {
     serverActions: {

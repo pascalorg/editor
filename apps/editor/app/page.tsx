@@ -1,6 +1,12 @@
 'use client'
 
-import { Editor, ItemsPanel } from '@pascal-app/editor'
+import { Editor, ItemsPanel, type SceneGraph } from '@pascal-app/editor'
+import {
+  NavigationToolbarButton,
+  NavigationViewerFrame,
+  prepareNavigationSceneGraph,
+} from '@pascal-app/robot/editor'
+import { shouldPauseNavigationAutoSave, useNavigation } from '@pascal-app/robot'
 import { Layers, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -33,8 +39,21 @@ const SIDEBAR_TABS = [
 ]
 
 const PROJECT_ID = 'local-editor'
+const LOCAL_STORAGE_SCENE_KEY = 'pascal-editor-scene'
+
+async function loadNavigationSceneFromLocalStorage(): Promise<SceneGraph | null> {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_SCENE_KEY)
+    const scene = raw ? (JSON.parse(raw) as SceneGraph) : null
+    return prepareNavigationSceneGraph(scene) ?? scene
+  } catch {
+    return null
+  }
+}
 
 export default function Home() {
+  const robotMode = useNavigation((state) => state.robotMode)
+
   return (
     <div className="relative h-screen w-screen">
       {PROJECT_ID === 'local-editor' && (
@@ -54,11 +73,17 @@ export default function Home() {
         </div>
       )}
       <Editor
+        editorInteractionsDisabled={robotMode !== null}
         layoutVersion="v2"
+        onLoad={loadNavigationSceneFromLocalStorage}
         projectId={PROJECT_ID}
+        renderViewer={(children, props) => (
+          <NavigationViewerFrame {...props}>{children}</NavigationViewerFrame>
+        )}
+        shouldPauseAutoSave={shouldPauseNavigationAutoSave}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerToolbarRight={<CommunityViewerToolbarRight before={<NavigationToolbarButton />} />}
       />
     </div>
   )

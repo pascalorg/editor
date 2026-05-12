@@ -344,9 +344,11 @@ export function CommunityViewerToolbarLeft() {
   )
 }
 
-export function CommunityViewerToolbarRight() {
+export function CommunityViewerToolbarRight({ before }: { before?: ReactNode } = {}) {
   return (
     <div className={TOOLBAR_CONTAINER}>
+      {before}
+      {before ? <div className="my-1.5 w-px bg-border/50" /> : null}
       <LevelModeToggle />
       <WallModeToggle />
       <GridVisibilityToggle />

@@ -13,6 +13,7 @@ interface UseAutoSaveOptions {
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
   isVersionPreviewMode?: boolean
+  shouldPauseAutoSave?: () => boolean
 }
 
 /**
@@ -26,6 +27,7 @@ export function useAutoSave({
   onDirty,
   onSaveStatusChange,
   isVersionPreviewMode = false,
+  shouldPauseAutoSave,
 }: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
@@ -39,6 +41,7 @@ export function useAutoSave({
   const onDirtyRef = useRef(onDirty)
   const onSaveStatusChangeRef = useRef(onSaveStatusChange)
   const isVersionPreviewModeRef = useRef(isVersionPreviewMode)
+  const shouldPauseAutoSaveRef = useRef(shouldPauseAutoSave)
 
   useEffect(() => {
     onSaveRef.current = onSave
@@ -52,6 +55,9 @@ export function useAutoSave({
   useEffect(() => {
     isVersionPreviewModeRef.current = isVersionPreviewMode
   }, [isVersionPreviewMode])
+  useEffect(() => {
+    shouldPauseAutoSaveRef.current = shouldPauseAutoSave
+  }, [shouldPauseAutoSave])
 
   const setSaveStatus = useCallback((status: SaveStatus) => {
     onSaveStatusChangeRef.current?.(status)
@@ -63,7 +69,11 @@ export function useAutoSave({
     let lastNodeCount = Object.keys(useScene.getState().nodes).length
 
     async function executeSave() {
-      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
+      if (
+        isLoadingSceneRef.current ||
+        isVersionPreviewModeRef.current ||
+        shouldPauseAutoSaveRef.current?.()
+      ) {
         pendingSaveRef.current = true
         setSaveStatus('paused')
         return
@@ -121,7 +131,7 @@ export function useAutoSave({
         return
       }
 
-      if (isVersionPreviewModeRef.current) {
+      if (isVersionPreviewModeRef.current || shouldPauseAutoSaveRef.current?.()) {
         setSaveStatus('paused')
         lastNodesSnapshot = JSON.stringify(state.nodes)
         return
@@ -149,6 +159,7 @@ export function useAutoSave({
     })
 
     function flushOnExit() {
+      if (shouldPauseAutoSaveRef.current?.()) return
       if (!hasDirtyChangesRef.current) return
       const { nodes, rootNodeIds } = useScene.getState()
       const sceneGraph = { nodes, rootNodeIds } as SceneGraph
@@ -173,7 +184,7 @@ export function useAutoSave({
 
   // Handle version preview mode transitions
   useEffect(() => {
-    if (isVersionPreviewMode) {
+    if (isVersionPreviewMode || shouldPauseAutoSave?.()) {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
         saveTimeoutRef.current = undefined
@@ -199,7 +210,7 @@ export function useAutoSave({
     }
 
     setSaveStatus('saved')
-  }, [isVersionPreviewMode, setSaveStatus])
+  }, [isVersionPreviewMode, setSaveStatus, shouldPauseAutoSave])
 
   return { isLoadingSceneRef }
 }

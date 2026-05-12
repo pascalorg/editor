@@ -55,7 +55,7 @@ export function ItemPanel() {
   const handleDuplicate = useCallback(() => {
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
-    const proto = ItemNode.parse({
+    const duplicateInfo = {
       position: [...node.position] as [number, number, number],
       rotation: [...node.rotation] as [number, number, number],
       name: node.name,
@@ -63,17 +63,18 @@ export function ItemPanel() {
       parentId: node.parentId,
       side: node.side,
       metadata: { isNew: true },
-    })
+    }
+    const proto = ItemNode.parse(duplicateInfo)
     setMovingNode(proto)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
-    if (!selectedId) return
+    if (!(selectedId && node)) return
     sfxEmitter.emit('sfx:item-delete')
     deleteNode(selectedId as AnyNode['id'])
     setSelection({ selectedIds: [] })
-  }, [selectedId, deleteNode, setSelection])
+  }, [node, selectedId, deleteNode, setSelection])
 
   if (!(node && node.type === 'item' && selectedId)) return null
 

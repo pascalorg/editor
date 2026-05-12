@@ -396,7 +396,7 @@ export function FloatingActionMenu() {
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
-    [node?.type, selectedId, setSelection],
+    [node, selectedId, setSelection],
   )
 
   if (
@@ -439,6 +439,7 @@ export function FloatingActionMenu() {
                 ? handleMove
                 : undefined
             }
+            onRepair={node?.type === 'item' ? handleRepair : undefined}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
           />

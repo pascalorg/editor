@@ -162,7 +162,7 @@ function RightColumn({
     >
       {/* Viewer toolbar */}
       {(toolbarLeft || toolbarRight) && (
-        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
+        <div className="pointer-events-none absolute top-3 right-3 left-3 z-50 flex items-center justify-between gap-2">
           <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
           <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
         </div>
