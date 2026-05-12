@@ -294,11 +294,13 @@ function BoxPrimitive({
 }
 
 function MeshButtonLabel({
+  faceSign = 1,
   label,
   material,
   position,
   scale,
 }: {
+  faceSign?: -1 | 1
   label: string
   material: MeshStandardMaterial
   position: [number, number, number]
@@ -315,7 +317,7 @@ function MeshButtonLabel({
         const props = SEGMENT_PROPS[segment]
         return {
           position: [
-            startX + charIndex * spacing + props.position[0] * scale,
+            faceSign * (startX + charIndex * spacing + props.position[0] * scale),
             props.position[1] * scale,
             props.position[2],
           ] as Vector3Tuple,
@@ -323,7 +325,7 @@ function MeshButtonLabel({
         }
       }),
     )
-  }, [label, scale])
+  }, [faceSign, label, scale])
 
   const applyInstanceMatrices = useCallback(
     (mesh: InstancedMesh) => {
@@ -381,7 +383,7 @@ function ElevatorDirectionGlyph({
     )
   }
 
-  const ySign = direction === 'up' ? 1 : -1
+  const ySign = direction === 'up' ? -1 : 1
   return (
     <group position={position}>
       <BoxPrimitive
@@ -443,13 +445,14 @@ function ElevatorFloorIndicator({
           <ElevatorDirectionGlyph
             direction={direction}
             material={glyphMaterial}
-            position={[-0.115 * scale, 0, glyphZ]}
+            position={[-0.115 * faceSign * scale, 0, glyphZ]}
             scale={scale}
           />
           <MeshButtonLabel
+            faceSign={faceSign}
             label={displayLabel}
             material={glyphMaterial}
-            position={[0.075 * scale, 0, glyphZ]}
+            position={[0.075 * faceSign * scale, 0, glyphZ]}
             scale={0.055 * scale}
           />
         </>
@@ -594,6 +597,7 @@ function ElevatorMeshButton({
       />
       {label && (
         <MeshButtonLabel
+          faceSign={faceSign}
           label={label}
           material={labelMaterial}
           position={[0, 0, faceZ]}
