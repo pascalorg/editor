@@ -145,7 +145,7 @@ export function getSegmentAngleReferenceAtPoint(
   }
 
   const projected = getProjectedPointOnSegment(point, segment)
-  if (!projected || !pointsMatch(point, projected, SEGMENT_POINT_TOLERANCE)) {
+  if (!(projected && pointsMatch(point, projected, SEGMENT_POINT_TOLERANCE))) {
     return null
   }
 

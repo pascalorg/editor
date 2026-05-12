@@ -1,49 +1,51 @@
-# Pascal Agent Instructions
+# Agent Instructions — `pascalorg/editor`
 
-This repository uses shared architecture rules for AI assistants. Treat the rule files as the source of truth for architecture-sensitive work.
+Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the standalone editor app. Consumed both as npm packages and (in `pascalorg/private-editor`) as a git submodule.
 
-## Required Rule Sources
+## Repo Shape
 
-The canonical rules live in `.cursor/rules/*.mdc`.
+| Path | Purpose |
+|---|---|
+| `packages/core` | Scene graph, node schemas, stores, event bus, core systems — pure logic, no Three.js |
+| `packages/viewer` | Standalone 3D canvas: renderers, viewer systems, presentation state |
+| `packages/editor` | Editor UI components reused by the standalone app and embedders |
+| `packages/mcp` | MCP server and scene storage adapters |
+| `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools |
 
-Claude-compatible paths are exposed in `.claude/rules/*.md`.
-Codex-compatible paths are exposed in `.codex/rules/*.md`.
+## Where to look
 
-Both should point to the same Cursor rule sources so Claude and Codex review the exact same rules.
+- **Architecture rules** — `wiki/architecture/` (read on demand; index in `wiki/architecture/README.md`).
+- **Skills (ready workflows)** — `.agents/skills/<name>/SKILL.md`. Same content is reachable as `.claude/skills/`, `.cursor/skills/`, `.codex/skills/` (symlinks to `.agents/skills/`).
+- **Repo orientation for humans** — `README.md`, `SETUP.md`, `CONTRIBUTING.md`.
 
-## Architecture Rules
+`CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` are symlinks to this file. Codex reads this file directly.
 
-Read the relevant rules before making or reviewing changes in these areas:
+## Layer Boundaries (read once, internalise)
 
-- `.codex/rules/systems.md` — core systems vs viewer systems, what each may do
-- `.codex/rules/renderers.md` — renderer responsibilities and prohibitions
-- `.codex/rules/tools.md` — editor tools live only in `apps/editor/components/tools/`
-- `.codex/rules/viewer-isolation.md` — viewer must stay editor-agnostic
-- `.codex/rules/layers.md`
-- `.codex/rules/selection-managers.md`
-- `.codex/rules/scene-registry.md`
-- `.codex/rules/spatial-queries.md`
-- `.codex/rules/node-schemas.md`
-- `.codex/rules/events.md`
+- **`packages/core`** owns domain data and pure logic. It must not import Three.js, `packages/viewer`, `apps/editor`, rendering/UI concepts, tools, modes, phases, or view-specific concepts such as floorplan or paint preview.
+- **`packages/viewer`** owns the standalone 3D canvas, renderers, viewer systems, and genuine presentation state. It must not know about `useEditor`, editor tools, phases, modes, paint mode, floorplan state, or editor-only presentation vocabulary.
+- **`apps/editor`** owns the editing experience: tools, `useEditor`, panels, floorplan helpers, paint mode, keyboard shortcuts, command palette, action menus, cursor badges, and editor-only overlays. Editor features are injected into `<Viewer>` via props and children.
 
-For architecture reviews, the first four are always required. Read the remaining rules when the diff touches their subject area.
+Details, examples, and rationale live in `wiki/architecture/layers.md`, `wiki/architecture/viewer-isolation.md`, `wiki/architecture/systems.md`, `wiki/architecture/renderers.md`, `wiki/architecture/tools.md`.
 
-## Layer Boundaries
+## When making architecture-sensitive changes
 
-`packages/core` owns domain data and pure logic. It must not import Three.js, `packages/viewer`, `apps/editor`, rendering/UI concepts, tools, modes, phases, or view-specific concepts such as floorplan or paint preview.
+Read the relevant page in `wiki/architecture/` **before** writing code. The page list lives in `wiki/architecture/README.md`. As a minimum:
 
-`packages/viewer` owns the standalone 3D canvas, renderers, viewer systems, and genuine presentation state. It must not know about `useEditor`, editor tools, phases, modes, paint mode, floorplan state, or editor-only presentation vocabulary.
+- Adding a node type → `node-schemas.md`, `renderers.md`, `systems.md`
+- Adding a tool → `tools.md`, `spatial-queries.md`, `events.md`
+- Adding a system → `systems.md`, `scene-registry.md`
+- Anything in `packages/viewer` → `viewer-isolation.md`, `layers.md`
+- Anything touching selection → `selection-managers.md`, `scene-registry.md`, `events.md`
 
-`apps/editor` owns the editing experience: tools, `useEditor`, panels, floorplan helpers, paint mode, keyboard shortcuts, command palette, action menus, cursor badges, and editor-only overlays. Editor features are injected into `<Viewer>` via props and children.
+## When reviewing a PR
 
-## Review Expectations
+Invoke the `review-architecture` skill (`.agents/skills/review-architecture/SKILL.md`). It loads the required architecture pages, fetches the diff, classifies each new file by layer, and reports findings grouped by severity.
 
-When reviewing architecture changes:
+## Operating rules
 
-1. Classify every new file, type, store field, and exported helper as core, viewer, or editor before writing findings.
-2. Lead with layer-boundary blockers.
-3. Check hook hygiene for `useEditor`, `useScene`, and `useViewer`.
-4. Check selector performance for broad subscriptions and selectors that allocate fresh references.
-5. Skip formatting and import ordering unless they hide a real behavior or architecture issue.
-
-Use `.codex/skills/review-architecture/SKILL.md` when the user asks Codex to review a PR, audit a branch, or check architecture compliance.
+- Read the full file before editing. Plan all changes, then make one complete edit.
+- When the user corrects you, stop and re-read their message.
+- After two consecutive tool failures, stop and change approach.
+- Don't introduce backwards-compatibility shims, dead code, or speculative abstractions.
+- Don't write new comments unless they explain a non-obvious *why*.

@@ -154,7 +154,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
   } | null
 }): ActivePaintMaterial | null {
   const { nodes, selectedId, selectedMaterialTarget } = params
-  if (!selectedId || !selectedMaterialTarget || selectedMaterialTarget.nodeId !== selectedId)
+  if (!(selectedId && selectedMaterialTarget) || selectedMaterialTarget.nodeId !== selectedId)
     return null
 
   const selectedNode = nodes[selectedId]

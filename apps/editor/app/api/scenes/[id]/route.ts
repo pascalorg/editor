@@ -173,7 +173,7 @@ function parseIfMatch(raw: string | null): number | undefined {
   const inner = match ? match[1] : trimmed
   if (!inner) return undefined
   const n = Number(inner)
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return undefined
+  if (!(Number.isFinite(n) && Number.isInteger(n)) || n < 0) return undefined
   return n
 }
 

@@ -10,9 +10,7 @@ function positiveModulo(value: number, divisor: number): number {
 }
 
 /**
- * Snaps a position to 0.5 grid, with an offset to align item edges to grid lines.
- * For items with dimensions like 2.5, the center would be at 1.25 from the edge,
- * which doesn't align with 0.5 grid. This adds an offset so edges align instead.
+ * Snaps a position to the active grid step, aligning item edges to grid lines.
  */
 export function snapToGrid(position: number, dimension: number, step = getGridSnapStep()): number {
   const halfDim = dimension / 2
@@ -21,7 +19,7 @@ export function snapToGrid(position: number, dimension: number, step = getGridSn
 }
 
 /**
- * Snap a value to 0.5 increments (used for wall-local positions).
+ * Snap a value to the active grid step (used for wall-local positions).
  */
 export function snapToHalf(value: number, step = getGridSnapStep()): number {
   return Math.round(value / step) * step

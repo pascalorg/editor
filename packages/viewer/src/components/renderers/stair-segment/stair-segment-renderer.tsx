@@ -24,10 +24,27 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined)
     : undefined
-  const material = useMemo(
-    () => getStraightStairSegmentBodyMaterials(node, parentNode),
-    [node, parentNode],
-  )
+
+  const material = useMemo(() => {
+    return getStraightStairSegmentBodyMaterials(node, parentNode)
+  }, [
+    node.materialPreset,
+    node.material,
+    node.material?.preset,
+    node.material?.properties,
+    node.material?.texture,
+    parentNode?.materialPreset,
+    parentNode?.material,
+    parentNode?.material?.preset,
+    parentNode?.material?.properties,
+    parentNode?.material?.texture,
+    parentNode?.railingMaterialPreset,
+    parentNode?.railingMaterial,
+    parentNode?.sideMaterialPreset,
+    parentNode?.sideMaterial,
+    parentNode?.treadMaterialPreset,
+    parentNode?.treadMaterial,
+  ])
 
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()

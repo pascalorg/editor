@@ -1,9 +1,9 @@
 import {
+  getMaterialPresetByRef,
   type MaterialMapProperties,
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
-  getMaterialPresetByRef,
   resolveMaterial,
 } from '@pascal-app/core'
 import * as THREE from 'three'
@@ -90,8 +90,7 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
 
 function isStandardMaterial(material: THREE.Material): material is StandardMaterial {
   return (
-    material instanceof THREE.MeshStandardMaterial ||
-    material instanceof THREE.MeshPhysicalMaterial
+    material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial
   )
 }
 
@@ -112,11 +111,19 @@ function applyTextureProperties(
   return texture
 }
 
-function getPresetTextureCacheKey(path: string, props: MaterialMapProperties, slot?: TextureSlot): string {
+function getPresetTextureCacheKey(
+  path: string,
+  props: MaterialMapProperties,
+  slot?: TextureSlot,
+): string {
   return `${path}-${props.repeatX}-${props.repeatY}-${props.rotation}-${props.wrapS}-${props.wrapT}-${props.flipY}-${slot ?? 'map'}`
 }
 
-function getPresetTexture(path: string, props: MaterialMapProperties, slot?: TextureSlot): THREE.Texture {
+function getPresetTexture(
+  path: string,
+  props: MaterialMapProperties,
+  slot?: TextureSlot,
+): THREE.Texture {
   const cacheKey = getPresetTextureCacheKey(path, props, slot)
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
@@ -177,14 +184,17 @@ function queueTextureAssignment(
 
   material[slot] = null
 
-  void loadPresetTexture(path, props, slot).then((texture) => {
+  loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return
     material[slot] = texture
     material.needsUpdate = true
   })
 }
 
-function applyMaterialMapProperties(material: StandardMaterial, mapProperties: MaterialMapProperties) {
+function applyMaterialMapProperties(
+  material: StandardMaterial,
+  mapProperties: MaterialMapProperties,
+) {
   material.color.set(mapProperties.color)
   material.roughness = mapProperties.roughness
   material.metalness = mapProperties.metalness
@@ -206,10 +216,7 @@ function applyMaterialMapProperties(material: StandardMaterial, mapProperties: M
   material.needsUpdate = true
 }
 
-function applyMaterialPresetTextures(
-  material: StandardMaterial,
-  preset: MaterialPresetPayload,
-) {
+function applyMaterialPresetTextures(material: StandardMaterial, preset: MaterialPresetPayload) {
   const { maps, mapProperties } = preset
 
   queueTextureAssignment(material, 'map', maps.albedoMap, mapProperties)
@@ -243,7 +250,9 @@ export function applyMaterialPresetToMaterials(
   }
 }
 
-export function createMaterialFromPreset(preset: MaterialPresetPayload): THREE.MeshStandardMaterial {
+export function createMaterialFromPreset(
+  preset: MaterialPresetPayload,
+): THREE.MeshStandardMaterial {
   const cacheKey = JSON.stringify(preset)
 
   if (materialCache.has(cacheKey)) {
@@ -256,7 +265,9 @@ export function createMaterialFromPreset(preset: MaterialPresetPayload): THREE.M
   return material
 }
 
-export function createMaterialFromPresetRef(materialPreset?: string): THREE.MeshStandardMaterial | null {
+export function createMaterialFromPresetRef(
+  materialPreset?: string,
+): THREE.MeshStandardMaterial | null {
   const preset = getMaterialPresetByRef(materialPreset)
   if (!preset) return null
   return createMaterialFromPreset(preset)
@@ -271,16 +282,18 @@ export function createMaterial(material?: MaterialSchema): THREE.MeshStandardMat
   }
 
   const map = getTexture(material)
-
-  const threeMaterial = new THREE.MeshStandardMaterial({
+  const materialParams: THREE.MeshStandardMaterialParameters = {
     color: props.color,
     roughness: props.roughness,
     metalness: props.metalness,
     opacity: props.opacity,
     transparent: props.transparent,
     side: sideMap[props.side],
-    map,
-  })
+  }
+
+  if (map) materialParams.map = map
+
+  const threeMaterial = new THREE.MeshStandardMaterial(materialParams)
 
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial

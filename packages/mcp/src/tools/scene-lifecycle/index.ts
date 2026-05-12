@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../../operations'
+import { registerCreateProject } from './create-project'
 import { registerDeleteScene } from './delete-scene'
+import { registerGetProjectStatus } from './get-project-status'
 import { registerListScenes } from './list-scenes'
 import { registerLoadScene } from './load-scene'
 import { registerRenameScene } from './rename-scene'
@@ -13,6 +15,8 @@ import { registerSaveScene } from './save-scene'
  * entry points share the same storage boundary.
  */
 export function registerSceneLifecycleTools(server: McpServer, operations: SceneOperations): void {
+  registerCreateProject(server, operations)
+  registerGetProjectStatus(server, operations)
   registerSaveScene(server, operations)
   registerLoadScene(server, operations)
   registerListScenes(server, operations)
@@ -20,7 +24,13 @@ export function registerSceneLifecycleTools(server: McpServer, operations: Scene
   registerRenameScene(server, operations)
 }
 
+export { createProjectInput, createProjectOutput, registerCreateProject } from './create-project'
 export { deleteSceneInput, deleteSceneOutput, registerDeleteScene } from './delete-scene'
+export {
+  getProjectStatusInput,
+  getProjectStatusOutput,
+  registerGetProjectStatus,
+} from './get-project-status'
 export { listScenesInput, listScenesOutput, registerListScenes } from './list-scenes'
 export { loadSceneInput, loadSceneOutput, registerLoadScene } from './load-scene'
 export { registerRenameScene, renameSceneInput, renameSceneOutput } from './rename-scene'

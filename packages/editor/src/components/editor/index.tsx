@@ -20,6 +20,7 @@ import {
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
@@ -64,8 +65,10 @@ import { Grid } from './grid'
 import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
+import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
+import { WallMoveSideHandles } from './wall-move-side-handles'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
@@ -76,12 +79,12 @@ const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
 const EDITOR_HOVER_STYLES: HoverStyles = {
-  default: { visibleColor: 0x00_aaff, hiddenColor: 0xf3_ff47, strength: 5, pulse: true },
-  delete: { visibleColor: 0xef_4444, hiddenColor: 0x99_1b1b, strength: 6, pulse: false },
-  'paint-ready': { visibleColor: 0xf5_9e0b, hiddenColor: 0xfd_e068, strength: 5, pulse: true },
+  default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
+  delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
+  'paint-ready': { visibleColor: 0xf5_9e_0b, hiddenColor: 0xfd_e0_68, strength: 5, pulse: true },
   'paint-disabled': {
-    visibleColor: 0x94_a3b8,
-    hiddenColor: 0x47_5569,
+    visibleColor: 0x94_a3_b8,
+    hiddenColor: 0x47_55_69,
     strength: 4,
     pulse: false,
   },
@@ -462,7 +465,7 @@ function ViewerCanvasControlsHint({
     <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
       <section
         aria-label="Camera controls hint"
-        className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-[0_22px_40px_-28px_rgba(15,23,42,0.65),0_10px_24px_-20px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+        className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
         <div className="grid min-w-0 flex-1 grid-cols-3 items-start divide-x divide-border/18">
           {hints.map((hint) => (
@@ -585,6 +588,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
     <>
       {!isFirstPersonMode && <SelectionManager />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
@@ -753,7 +757,7 @@ function PaintCursorLayer({
       (activePaintMaterial.material !== undefined ||
         activePaintMaterial.materialPreset !== undefined),
   )
-  const label = !hasMaterial ? 'Choose material' : `Paint ${activePaintTarget}`
+  const label = hasMaterial ? `Paint ${activePaintTarget}` : 'Choose material'
   const icon = 'mdi:format-color-fill'
 
   useLayoutEffect(() => {
@@ -786,16 +790,16 @@ function PaintCursorLayer({
 const ViewerCanvas = memo(function ViewerCanvas({
   isVersionPreviewMode,
   isLoading,
+  isFirstPersonMode,
   hasLoadedInitialScene,
   showLoader,
-  isFirstPersonMode,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
+  isFirstPersonMode: boolean
   hasLoadedInitialScene: boolean
   showLoader: boolean
-  isFirstPersonMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
   const viewMode = useEditor((s) => s.viewMode)
@@ -837,7 +841,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [setFloorplanPaneRatio])
+  }, [])
 
   useEffect(() => {
     setIsCameraControlsHintVisible(!readCameraControlsHintDismissed())
@@ -940,7 +944,9 @@ export default function Editor({
   commandPaletteEmptyAction,
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode })
+
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
     onDirty,
@@ -951,8 +957,7 @@ export default function Editor({
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
-  const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
-  const wasFirstPersonModeRef = useRef(isFirstPersonMode)
+  const isCaptureMode = useEditor((s) => s.isCaptureMode)
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
@@ -969,39 +974,6 @@ export default function Editor({
       useViewer.getState().setProjectId(null)
     }
   }, [projectId])
-
-  useEffect(() => {
-    const wasFirstPersonMode = wasFirstPersonModeRef.current
-    wasFirstPersonModeRef.current = isFirstPersonMode
-
-    if (isFirstPersonMode && !wasFirstPersonMode) {
-      const viewer = useViewer.getState()
-      firstPersonPreviousLevelRef.current = viewer.selection.levelId
-      viewer.setCameraMode('perspective')
-      viewer.setWallMode('up')
-      viewer.setWalkthroughMode(true)
-      viewer.setSelection({ selectedIds: [], zoneId: null })
-      return
-    }
-
-    if (!(wasFirstPersonMode && !isFirstPersonMode)) return
-
-    const viewer = useViewer.getState()
-    const previousLevelId = firstPersonPreviousLevelRef.current
-    firstPersonPreviousLevelRef.current = null
-    viewer.setWalkthroughMode(false)
-
-    if (!previousLevelId) return
-
-    const previousLevelNode = useScene.getState().nodes[previousLevelId]
-    if (previousLevelNode?.type === 'level') {
-      viewer.setSelection({
-        levelId: previousLevelId,
-        zoneId: null,
-        selectedIds: [],
-      })
-    }
-  }, [isFirstPersonMode])
 
   // Load scene on mount (or when onLoad identity changes, e.g. project switch)
   useEffect(() => {
@@ -1063,6 +1035,42 @@ export default function Editor({
   }, [])
 
   const showLoader = isLoading || isSceneLoading
+
+  const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
+  const wasFirstPersonModeRef = useRef(isFirstPersonMode)
+
+  useEffect(() => {
+    const wasFirstPersonMode = wasFirstPersonModeRef.current
+    wasFirstPersonModeRef.current = isFirstPersonMode
+
+    if (isFirstPersonMode && !wasFirstPersonMode) {
+      const viewer = useViewer.getState()
+      firstPersonPreviousLevelRef.current = viewer.selection.levelId
+      viewer.setCameraMode('perspective')
+      viewer.setWallMode('up')
+      viewer.setWalkthroughMode(true)
+      viewer.setSelection({ selectedIds: [], zoneId: null })
+      return
+    }
+
+    if (!(wasFirstPersonMode && !isFirstPersonMode)) return
+
+    const viewer = useViewer.getState()
+    const previousLevelId = firstPersonPreviousLevelRef.current
+    firstPersonPreviousLevelRef.current = null
+    viewer.setWalkthroughMode(false)
+
+    if (!previousLevelId) return
+
+    const previousLevelNode = useScene.getState().nodes[previousLevelId]
+    if (previousLevelNode?.type === 'level') {
+      viewer.setSelection({
+        levelId: previousLevelId,
+        zoneId: null,
+        selectedIds: [],
+      })
+    }
+  }, [isFirstPersonMode])
 
   const previewViewerContent = (
     <Viewer hoverStyles={EDITOR_HOVER_STYLES} selectionManager="default">
@@ -1135,21 +1143,24 @@ export default function Editor({
               navbarSlot={navbarSlot}
               overlays={
                 <>
-                  <FloatingLevelSelector />
-                  {!isVersionPreviewMode && (
+                  {!isCaptureMode && <FloatingLevelSelector />}
+                  {!(isVersionPreviewMode || isCaptureMode) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
                     </div>
                   )}
-                  {!isVersionPreviewMode && (
+                  {!(isVersionPreviewMode || isCaptureMode) && (
                     <div className="pointer-events-auto">
                       <PanelManager />
                     </div>
                   )}
-                  <div className="pointer-events-auto">
-                    <HelperManager />
-                  </div>
+                  {!isCaptureMode && (
+                    <div className="pointer-events-auto">
+                      <HelperManager />
+                    </div>
+                  )}
                   {viewerBanner}
+                  {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
                 </>
               }
               renderTabContent={renderTabContent}
@@ -1159,14 +1170,14 @@ export default function Editor({
               viewerToolbarLeft={viewerToolbarLeft}
               viewerToolbarRight={viewerToolbarRight}
             />
+            <EditorCommands />
+            <CommandPalette emptyAction={commandPaletteEmptyAction} />
             {/* First-person overlay — rendered on top of normal layout */}
             {isFirstPersonMode && (
               <div className="pointer-events-none fixed inset-0 z-50">
                 <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
               </div>
             )}
-            <EditorCommands />
-            <CommandPalette emptyAction={commandPaletteEmptyAction} />
           </>
         )}
       </PresetsProvider>
@@ -1222,6 +1233,12 @@ export default function Editor({
                 <HelperManager />
               </div>
             </ViewerOverlays>
+            {/* First-person overlay — rendered on top of normal layout */}
+            {isFirstPersonMode && (
+              <div className="pointer-events-none fixed inset-0 z-50">
+                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+              </div>
+            )}
           </>
         )}
       </div>

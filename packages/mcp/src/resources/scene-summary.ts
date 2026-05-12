@@ -11,7 +11,7 @@ function polygonArea(poly: Poly2D): number {
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i]
     const b = poly[(i + 1) % poly.length]
-    if (!a || !b) continue
+    if (!(a && b)) continue
     sum += a[0] * b[1] - b[0] * a[1]
   }
   return Math.abs(sum) / 2
@@ -32,7 +32,7 @@ function emptyBBox(): BBox {
 }
 
 function expandBBox(bbox: BBox, x: number, y: number, z: number): void {
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return
+  if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) return
   bbox.empty = false
   if (x < bbox.min[0]) bbox.min[0] = x
   if (y < bbox.min[1]) bbox.min[1] = y

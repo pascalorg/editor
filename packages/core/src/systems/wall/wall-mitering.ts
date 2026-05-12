@@ -135,10 +135,7 @@ function findJunctions(walls: WallNode[]): Map<string, Junction> {
   return actualJunctions
 }
 
-function getWallDirectionFromJunction(
-  wall: WallNode,
-  endType: 'start' | 'end' | 'passthrough',
-) {
+function getWallDirectionFromJunction(wall: WallNode, endType: 'start' | 'end' | 'passthrough') {
   if (endType === 'passthrough') {
     return {
       x: wall.end[0] - wall.start[0],
@@ -148,9 +145,7 @@ function getWallDirectionFromJunction(
 
   if (isCurvedWall(wall)) {
     const frame = getWallCurveFrameAt(wall, endType === 'start' ? 0 : 1)
-    return endType === 'start'
-      ? frame.tangent
-      : { x: -frame.tangent.x, y: -frame.tangent.y }
+    return endType === 'start' ? frame.tangent : { x: -frame.tangent.x, y: -frame.tangent.y }
   }
 
   return endType === 'start'
@@ -158,18 +153,12 @@ function getWallDirectionFromJunction(
     : { x: wall.start[0] - wall.end[0], y: wall.start[1] - wall.end[1] }
 }
 
-function getWallBoundaryFrame(
-  wall: WallNode,
-  endType: 'start' | 'end',
-) {
+function getWallBoundaryFrame(wall: WallNode, endType: 'start' | 'end') {
   if (isCurvedWall(wall)) {
     const frame = getWallCurveFrameAt(wall, endType === 'start' ? 0 : 1)
     return {
       point: frame.point,
-      tangent:
-        endType === 'start'
-          ? frame.tangent
-          : { x: -frame.tangent.x, y: -frame.tangent.y },
+      tangent: endType === 'start' ? frame.tangent : { x: -frame.tangent.x, y: -frame.tangent.y },
       normal: frame.normal,
     }
   }

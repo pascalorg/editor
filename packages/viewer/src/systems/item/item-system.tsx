@@ -1,4 +1,3 @@
-import { useFrame } from '@react-three/fiber'
 import {
   type AnyNodeId,
   getScaledDimensions,
@@ -9,6 +8,7 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
+import { useFrame } from '@react-three/fiber'
 import type * as THREE from 'three'
 
 // ============================================================================

@@ -12,6 +12,7 @@ type SFXEvents = {
   'sfx:item-rotate': undefined
   'sfx:structure-build': undefined
   'sfx:structure-delete': undefined
+  'sfx:snapshot-capture': undefined
 }
 
 /**
@@ -37,6 +38,7 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:item-rotate', () => playSFX('itemRotate'))
   sfxEmitter.on('sfx:structure-build', () => playSFX('structureBuild'))
   sfxEmitter.on('sfx:structure-delete', () => playSFX('structureDelete'))
+  sfxEmitter.on('sfx:snapshot-capture', () => playSFX('snapshotCapture'))
 }
 
 /**

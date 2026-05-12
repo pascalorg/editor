@@ -291,8 +291,9 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       }
 
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
-      const hasChanged =
-        !samePoint(preview.start, originalStart) || !samePoint(preview.end, originalEnd)
+      const hasChanged = !(
+        samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
+      )
 
       if (hasChanged && isWallLongEnough(preview.start, preview.end)) {
         wasCommitted = true
@@ -392,7 +393,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       >
         <div className="translate-y-10">
           <div
-            className={`whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium shadow-lg backdrop-blur-md transition-colors ${
+            className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
               altPressed
                 ? 'border-amber-500/70 bg-amber-500/15 text-amber-100'
                 : 'border-border/70 bg-background/90 text-foreground/80'
@@ -416,7 +417,7 @@ function EndpointAngleLabel({
 }) {
   return (
     <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
-      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono text-[11px] font-semibold text-foreground shadow-lg backdrop-blur-md">
+      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono font-semibold text-[11px] text-foreground shadow-lg backdrop-blur-md">
         {label}
       </div>
     </Html>

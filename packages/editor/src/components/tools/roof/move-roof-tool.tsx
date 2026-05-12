@@ -158,7 +158,9 @@ export const MoveRoofTool: React.FC<{
 
     const localToWorldPoint = (localPoint: WallPlanPoint, y: number): [number, number, number] => {
       if (buildingObj) {
-        const worldPoint = buildingObj.localToWorld(new THREE.Vector3(localPoint[0], y, localPoint[1]))
+        const worldPoint = buildingObj.localToWorld(
+          new THREE.Vector3(localPoint[0], y, localPoint[1]),
+        )
         return [worldPoint.x, worldPoint.y, worldPoint.z]
       }
 
@@ -211,7 +213,10 @@ export const MoveRoofTool: React.FC<{
       })
       const [gridX, , gridZ] = localToWorldPoint(snappedLocal, y)
 
-      if (previousGridPosRef.current && (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])) {
+      if (
+        previousGridPosRef.current &&
+        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
+      ) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 

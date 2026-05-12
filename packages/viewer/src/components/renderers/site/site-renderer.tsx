@@ -90,6 +90,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
     if (slabPolygons.length > 0) {
       for (const ring of unionPolygons(slabPolygons.map((p) => p.map((pt) => [pt[0], -pt[1]])))) {
+        if (ring.length < 3) continue
         const hole = new Path()
         hole.moveTo(ring[0]![0], ring[0]![1])
         for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i]![0], ring[i]![1])

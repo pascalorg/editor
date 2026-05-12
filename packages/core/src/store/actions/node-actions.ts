@@ -9,6 +9,9 @@ import type { CollectionId } from '../../schema/collections'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
+type NodeCreateOp = { node: AnyNode; parentId?: AnyNodeId }
+type NodeUpdateOp = { id: AnyNodeId; data: Partial<AnyNode> }
+type NodeDeleteOp = AnyNodeId
 type WallAttachmentUpdate = { id: AnyNodeId; data: Partial<AnyNode> }
 type WallMergePlan = {
   primaryWallId: AnyNodeId
@@ -122,7 +125,7 @@ function buildMergedWallAttachmentUpdates(
   const wallChildren = [...(primary.children ?? []), ...(secondary.children ?? [])] as AnyNodeId[]
   for (const childId of wallChildren) {
     const child = nodes[childId]
-    if (!child || !('position' in child) || !Array.isArray(child.position)) {
+    if (!(child && 'position' in child && Array.isArray(child.position))) {
       continue
     }
 
@@ -190,10 +193,12 @@ function buildWallMergePlans(
       })
       const [primary, secondary] = sortedCandidates
       if (
-        !primary ||
-        !secondary ||
-        !areWallStylesCompatible(primary, secondary) ||
-        !areWallsCollinearAcrossPoint(primary, secondary, junction)
+        !(
+          primary &&
+          secondary &&
+          areWallStylesCompatible(primary, secondary) &&
+          areWallsCollinearAcrossPoint(primary, secondary, junction)
+        )
       ) {
         continue
       }
@@ -230,7 +235,7 @@ function buildWallMergePlans(
 export const createNodesAction = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
-  ops: { node: AnyNode; parentId?: AnyNodeId }[],
+  ops: NodeCreateOp[],
 ) => {
   if (get().readOnly) return
   set((state) => {
@@ -275,6 +280,144 @@ export const createNodesAction = (
   ops.forEach(({ node, parentId }) => {
     get().markDirty(node.id)
     if (parentId) get().markDirty(parentId)
+    else if (node.parentId) get().markDirty(node.parentId as AnyNodeId)
+  })
+}
+
+export const applyNodeChangesAction = (
+  set: (fn: (state: SceneState) => Partial<SceneState>) => void,
+  get: () => SceneState,
+  changes: { create?: NodeCreateOp[]; update?: NodeUpdateOp[]; delete?: NodeDeleteOp[] },
+) => {
+  if (get().readOnly) return
+
+  const createOps = changes.create ?? []
+  const updateOps = changes.update ?? []
+  const deleteOps = changes.delete ?? []
+  const nodesToMarkDirty = new Set<AnyNodeId>()
+  const parentsToMarkDirty = new Set<AnyNodeId>()
+
+  set((state) => {
+    const nextNodes = { ...state.nodes }
+    const nextCollections = { ...state.collections }
+    const nextRootIds = [...state.rootNodeIds]
+    let resolvedRootIds = nextRootIds
+
+    for (const { id, data } of updateOps) {
+      const currentNode = nextNodes[id]
+      if (!currentNode) continue
+
+      if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const oldParentId = currentNode.parentId as AnyNodeId | null
+        if (oldParentId && nextNodes[oldParentId]) {
+          const oldParent = nextNodes[oldParentId] as AnyContainerNode
+          nextNodes[oldParent.id] = {
+            ...oldParent,
+            children: oldParent.children.filter((childId) => childId !== id),
+          } as AnyNode
+          parentsToMarkDirty.add(oldParent.id)
+        }
+
+        const newParentId = data.parentId as AnyNodeId | null
+        if (newParentId && nextNodes[newParentId]) {
+          const newParent = nextNodes[newParentId] as AnyContainerNode
+          nextNodes[newParent.id] = {
+            ...newParent,
+            children: Array.from(new Set([...newParent.children, id])),
+          } as AnyNode
+          parentsToMarkDirty.add(newParent.id)
+        }
+      }
+
+      nextNodes[id] = { ...currentNode, ...data } as AnyNode
+      nodesToMarkDirty.add(id)
+    }
+
+    for (const { node, parentId } of createOps) {
+      const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
+      const newNode = {
+        ...node,
+        parentId: effectiveParentId,
+      } as AnyNode
+
+      nextNodes[newNode.id as AnyNodeId] = newNode
+      nodesToMarkDirty.add(newNode.id as AnyNodeId)
+
+      if (effectiveParentId && nextNodes[effectiveParentId]) {
+        const parent = nextNodes[effectiveParentId]
+        if ('children' in parent && Array.isArray(parent.children)) {
+          nextNodes[effectiveParentId] = {
+            ...parent,
+            children: Array.from(new Set([...parent.children, newNode.id])) as any,
+          }
+          parentsToMarkDirty.add(effectiveParentId)
+        }
+      } else if (!effectiveParentId && !nextRootIds.includes(newNode.id as AnyNodeId)) {
+        nextRootIds.push(newNode.id as AnyNodeId)
+      }
+    }
+
+    const allIdsToDelete = new Set<AnyNodeId>()
+    const collectDelete = (id: AnyNodeId) => {
+      if (allIdsToDelete.has(id)) return
+      allIdsToDelete.add(id)
+      const node = nextNodes[id]
+      if (node && 'children' in node && Array.isArray(node.children)) {
+        for (const childId of node.children) {
+          collectDelete(childId as AnyNodeId)
+        }
+      }
+    }
+
+    for (const id of deleteOps) {
+      collectDelete(id)
+    }
+
+    for (const id of allIdsToDelete) {
+      const node = nextNodes[id]
+      if (!node) continue
+
+      const parentId = node.parentId as AnyNodeId | null
+      if (parentId && nextNodes[parentId] && !allIdsToDelete.has(parentId)) {
+        const parent = nextNodes[parentId] as AnyContainerNode
+        if (parent.children) {
+          nextNodes[parent.id] = {
+            ...parent,
+            children: parent.children.filter((childId) => childId !== id),
+          } as AnyNode
+          parentsToMarkDirty.add(parent.id)
+        }
+      }
+
+      resolvedRootIds = resolvedRootIds.filter((rootId) => rootId !== id)
+
+      if ('collectionIds' in node && node.collectionIds) {
+        for (const collectionId of node.collectionIds as CollectionId[]) {
+          const collection = nextCollections[collectionId]
+          if (collection) {
+            nextCollections[collectionId] = {
+              ...collection,
+              nodeIds: collection.nodeIds.filter((nodeId) => nodeId !== id),
+            }
+          }
+        }
+      }
+
+      delete nextNodes[id]
+    }
+
+    return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
+  })
+
+  nodesToMarkDirty.forEach((id) => get().markDirty(id))
+  parentsToMarkDirty.forEach((id) => {
+    get().markDirty(id)
+    const parent = get().nodes[id]
+    if (parent && 'children' in parent && Array.isArray(parent.children)) {
+      for (const childId of parent.children) {
+        get().markDirty(childId as AnyNodeId)
+      }
+    }
   })
 }
 

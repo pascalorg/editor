@@ -144,7 +144,7 @@ export function NumberInput({
         }}
       />
       <div
-        className={`relative z-10 flex items-center overflow-hidden rounded-lg border shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] transition-all focus-within:border-primary focus-within:ring-1 focus-within:ring-primary ${isDragging ? 'border-neutral-300 bg-transparent ring-1 ring-neutral-200/60 dark:border-border dark:ring-border/50' : 'border-neutral-200/60 bg-white hover:border-neutral-300 dark:border-border/50 dark:bg-accent/30 dark:hover:border-border/80'}`}
+        className={`relative z-10 flex items-center overflow-hidden rounded-lg border shadow-elevation-0 transition-all focus-within:border-primary focus-within:ring-1 focus-within:ring-primary ${isDragging ? 'border-neutral-300 bg-transparent ring-1 ring-neutral-200/60 dark:border-border dark:ring-border/50' : 'border-neutral-200/60 bg-white hover:border-neutral-300 dark:border-border/50 dark:bg-accent/30 dark:hover:border-border/80'}`}
       >
         <div
           className={`z-10 select-none truncate py-1.5 pr-1 pl-2 font-barlow font-medium text-muted-foreground text-xs ${

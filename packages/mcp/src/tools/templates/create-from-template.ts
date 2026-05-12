@@ -7,6 +7,7 @@ import type { SceneOperations } from '../../operations'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
+import { currentLevelContext, sceneMetaPayload } from '../scene-lifecycle/metadata'
 
 export const createFromTemplateInput = {
   id: z
@@ -48,6 +49,13 @@ export const createFromTemplateOutput = {
       sizeBytes: z.number(),
       nodeCount: z.number(),
       url: z.string(),
+      editorUrl: z.string(),
+      published: z.boolean(),
+      isDraft: z.boolean(),
+      saveMode: z.enum(['draft', 'checkpoint']),
+      graphHash: z.string().optional(),
+      levelIds: z.array(z.string()),
+      defaultLevelId: z.string().nullable(),
     })
     .optional(),
 }
@@ -121,10 +129,18 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
       }
 
       try {
+        let saveProjectId = projectId
+        if (!saveProjectId && bridge.canCreateProject) {
+          const project = await bridge.createProject({ name: name ?? entry.name })
+          saveProjectId = project.projectId
+        }
         const meta = await bridge.saveScene({
+          ...(saveProjectId !== undefined ? { id: saveProjectId, projectId: saveProjectId } : {}),
           name: name ?? entry.name,
-          ...(projectId !== undefined ? { projectId } : {}),
           graph: { nodes, rootNodeIds },
+          saveMode: 'draft',
+          publish: false,
+          operation: 'create_from_template',
         })
         bridge.setActiveScene(meta)
         await appendLiveSceneEvent(bridge, meta.id, meta.version, 'create_from_template', {
@@ -132,17 +148,8 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
           rootNodeIds,
         })
         const scene = {
-          id: meta.id,
-          name: meta.name,
-          projectId: meta.projectId,
-          thumbnailUrl: meta.thumbnailUrl,
-          version: meta.version,
-          createdAt: meta.createdAt,
-          updatedAt: meta.updatedAt,
-          ownerId: meta.ownerId,
-          sizeBytes: meta.sizeBytes,
-          nodeCount: meta.nodeCount,
-          url: `/scene/${meta.id}`,
+          ...sceneMetaPayload(meta, { nodes, rootNodeIds }),
+          ...currentLevelContext(bridge),
         }
         const payload = { ...basePayload, scene }
         return {

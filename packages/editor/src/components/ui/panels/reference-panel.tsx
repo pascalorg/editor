@@ -4,11 +4,21 @@ import {
   type AnyNode,
   type GuideNode,
   loadAssetUrl,
-  saveAsset,
   type ScanNode,
+  saveAsset,
   useScene,
 } from '@pascal-app/core'
-import { Eye, EyeOff, LocateFixed, Lock, RotateCcw, Ruler, Trash2, Unlock, Upload } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  LocateFixed,
+  Lock,
+  RotateCcw,
+  Ruler,
+  Trash2,
+  Unlock,
+  Upload,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
 import { getGuideImageName } from '../../../lib/local-guide-image'
@@ -32,7 +42,9 @@ function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean) {
 export function ReferencePanel() {
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
-  const guideUi = useEditor((s) => (selectedReferenceId ? s.guideUi[selectedReferenceId] : undefined))
+  const guideUi = useEditor((s) =>
+    selectedReferenceId ? s.guideUi[selectedReferenceId] : undefined,
+  )
   const setGuideLocked = useEditor((s) => s.setGuideLocked)
   const setGuideScaleReferenceVisible = useEditor((s) => s.setGuideScaleReferenceVisible)
   const clearGuideUi = useEditor((s) => s.clearGuideUi)
@@ -77,11 +89,14 @@ export function ReferencePanel() {
 
       try {
         const assetUrl = await saveAsset(file)
-        updateNode(selectedReferenceId as AnyNode['id'], {
-          name: getGuideImageName(file.name),
-          url: assetUrl,
-          scaleReference: null,
-        } as Partial<GuideNode>)
+        updateNode(
+          selectedReferenceId as AnyNode['id'],
+          {
+            name: getGuideImageName(file.name),
+            url: assetUrl,
+            scaleReference: null,
+          } as Partial<GuideNode>,
+        )
         setGuideScaleReferenceVisible(selectedReferenceId, true)
       } catch {
         setReplaceError('Could not replace that image.')
@@ -138,7 +153,7 @@ export function ReferencePanel() {
   const isScan = node.type === 'scan'
   const guideLocked = !isScan && guideUi?.locked === true
   const scaleReferenceVisible = !isScan && guideUi?.scaleReferenceVisible !== false
-  const scaleStatus = !isScan ? getScaleStatus(node, scaleReferenceVisible) : null
+  const scaleStatus = isScan ? null : getScaleStatus(node, scaleReferenceVisible)
 
   return (
     <PanelWrapper
@@ -165,16 +180,16 @@ export function ReferencePanel() {
 
             <ActionGroup>
               <ActionButton
+                disabled={isReplacing}
                 icon={<Upload className="h-3.5 w-3.5" />}
                 label={isReplacing ? 'Replacing...' : 'Replace'}
                 onClick={() => replaceInputRef.current?.click()}
-                disabled={isReplacing}
               />
               <ActionButton
+                className="text-destructive hover:bg-destructive/10"
                 icon={<Trash2 className="h-3.5 w-3.5" />}
                 label="Delete"
                 onClick={handleDeleteGuide}
-                className="text-destructive hover:bg-destructive/10"
               />
             </ActionGroup>
 
@@ -232,16 +247,16 @@ export function ReferencePanel() {
 
             <ActionGroup>
               <ActionButton
-                label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
                 disabled={!node.scaleReference}
+                label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
                 onClick={() => {
                   if (!node.scaleReference) return
                   setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)
                 }}
               />
               <ActionButton
-                label="Clear Scale"
                 disabled={!node.scaleReference}
+                label="Clear Scale"
                 onClick={() => handleUpdate({ scaleReference: null } as Partial<GuideNode>)}
               />
             </ActionGroup>

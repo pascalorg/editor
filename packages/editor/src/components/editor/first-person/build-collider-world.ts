@@ -1,7 +1,7 @@
 import {
-  getGarageVisibleOpeningRatio,
   type AnyNodeId,
   type DoorNode,
+  getGarageVisibleOpeningRatio,
   isOperationDoorType,
   sceneRegistry,
   useInteractive,
@@ -97,11 +97,11 @@ function shouldSkipColliderNode(nodeId: string, type: (typeof COLLIDER_NODE_TYPE
   const node = useScene.getState().nodes[nodeId as AnyNodeId]
   if (!node || node.type !== 'door') return false
 
-  if (node.openingKind === 'opening') return true
-
   if (!node.segments.length) return true
 
-  return node.segments.every((segment) => segment.type === 'empty')
+  if (node.openingKind === 'opening') return true
+
+  return node.segments.every((segment: { type: string }) => segment.type === 'empty')
 }
 
 function createDoorLeafColliderGeometry(root: THREE.Object3D, node: DoorNode) {
@@ -273,9 +273,7 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
   }
 
   const mergedGeometry = mergeGeometries(geometries, false)
-  geometries.forEach((geometry) => {
-    geometry.dispose()
-  })
+  geometries.forEach((geometry) => geometry.dispose())
 
   if (!mergedGeometry || mergedGeometry.getAttribute('position') == null) {
     mergedGeometry?.dispose()

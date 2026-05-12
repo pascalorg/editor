@@ -10,7 +10,7 @@ export interface SceneMeta {
   name: string
   projectId: string | null
   thumbnailUrl: string | null
-  /** Monotonic, incremented on every save. */
+  /** Browser-visible model version. Draft saves may update the same version repeatedly. */
   version: number
   /** ISO 8601 timestamp. */
   createdAt: string
@@ -19,6 +19,18 @@ export interface SceneMeta {
   ownerId: string | null
   sizeBytes: number
   nodeCount: number
+  /** Browser route agents should return to users. Hosted apps should prefer /editor/<projectId>. */
+  editorUrl?: string
+  /** Backward-compatible alias for clients that still read url. */
+  url?: string
+  /** True when this save is browser-visible without a separate publish call. */
+  published?: boolean
+  /** True when the saved graph is still the mutable browser-visible draft. */
+  isDraft?: boolean
+  /** How the scene was saved. Draft saves should not create meaningful history versions. */
+  saveMode?: SceneSaveMode
+  /** Stable hash of the graph payload used for save/load/status matching. */
+  graphHash?: string
 }
 
 export interface SceneWithGraph extends SceneMeta {
@@ -43,7 +55,17 @@ export interface SceneSaveOptions {
   thumbnailUrl?: string | null
   /** When set, save fails with `SceneVersionConflictError` on mismatch. */
   expectedVersion?: number
+  /** `draft` updates the browser-visible working model; `checkpoint` records version history. */
+  saveMode?: SceneSaveMode
+  /** Whether a checkpoint should become the published/browser-visible head. */
+  publish?: boolean
+  /** Optional hosted MCP session id for project presence/debug metadata. */
+  agentSessionId?: string
+  /** Optional high-level operation name for presence/debug metadata. */
+  operation?: string
 }
+
+export type SceneSaveMode = 'draft' | 'checkpoint'
 
 export interface SceneListOptions {
   projectId?: string
@@ -67,8 +89,39 @@ export interface SceneEventListOptions {
   limit?: number
 }
 
+export interface ProjectCreateOptions {
+  id?: SceneId
+  name: string
+  ownerId?: string | null
+  isPrivate?: boolean
+}
+
+export interface ProjectStatus {
+  id: SceneId
+  projectId: string
+  name: string
+  editorUrl: string
+  url: string
+  ownerId: string | null
+  thumbnailUrl: string | null
+  publishedVersion: number | null
+  latestVersion: number | null
+  draftVersion: number | null
+  browserVisibleVersion: number | null
+  /** Alias for the browser-visible/latest meaningful version. */
+  version: number
+  isEmpty: boolean
+  sizeBytes: number
+  nodeCount: number
+  graphHash: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface SceneStore {
-  readonly backend: 'sqlite'
+  readonly backend: 'sqlite' | 'supabase'
+  createProject?(opts: ProjectCreateOptions): Promise<ProjectStatus>
+  getProjectStatus?(id: SceneId): Promise<ProjectStatus | null>
   save(opts: SceneSaveOptions): Promise<SceneMeta>
   load(id: SceneId): Promise<SceneWithGraph | null>
   list(opts?: SceneListOptions): Promise<SceneMeta[]>

@@ -297,7 +297,7 @@ export const FenceTool: React.FC = () => {
 
   return (
     <group>
-      <CursorSphere ref={cursorRef} height={FENCE_PREVIEW_HEIGHT} />
+      <CursorSphere height={FENCE_PREVIEW_HEIGHT} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={previewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial
@@ -338,7 +338,7 @@ function DraftMeasurementLabel({
 }) {
   return (
     <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
-      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono text-[11px] font-semibold text-foreground shadow-lg backdrop-blur-md">
+      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono font-semibold text-[11px] text-foreground shadow-lg backdrop-blur-md">
         {label}
       </div>
     </Html>

@@ -52,7 +52,7 @@ export async function connectHttp(
 ): Promise<HttpTransportHandle> {
   const host = options.host ?? DEFAULT_HOST
   const authToken = options.authToken ?? process.env.PASCAL_MCP_HTTP_TOKEN
-  if (!isLoopbackHost(host) && !authToken) {
+  if (!(isLoopbackHost(host) || authToken)) {
     throw new Error(
       'HTTP transport on a non-loopback host requires PASCAL_MCP_HTTP_TOKEN or authToken',
     )
@@ -149,7 +149,7 @@ function createHttpGuard(options: {
 
     if (options.authToken) {
       const supplied = bearerToken(req) ?? headerValue(req.headers['x-pascal-mcp-token'])
-      if (!supplied || !safeEqual(supplied, options.authToken)) {
+      if (!(supplied && safeEqual(supplied, options.authToken))) {
         sendJson(res, 401, { error: 'unauthorized' })
         return false
       }

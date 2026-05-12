@@ -1,4 +1,5 @@
 'use client'
+
 import {
   type CameraControlEvent,
   type CameraControlFitSceneEvent,
@@ -6,7 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer, ZONE_LAYER } from '@pascal-app/viewer'
+import { useViewer, WalkthroughControls, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'

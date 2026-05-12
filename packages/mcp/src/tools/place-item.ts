@@ -27,7 +27,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Place item',
       description:
-        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or the site for outdoor items.',
+        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, or a ceiling for ceiling-attached items. Do not target the site node directly.',
       inputSchema: placeItemInput,
       outputSchema: placeItemOutput,
     },
@@ -42,12 +42,11 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         targetType !== 'slab' &&
         targetType !== 'zone' &&
         targetType !== 'wall' &&
-        targetType !== 'ceiling' &&
-        targetType !== 'site'
+        targetType !== 'ceiling'
       ) {
         throwMcpError(
           ErrorCode.InvalidRequest,
-          `Cannot place item on ${targetType}; target must be a level, slab, zone, wall, ceiling, or site`,
+          `Cannot place item on ${targetType}; target must be a level, slab, zone, wall, or ceiling. Site-level placement is not supported yet because site.children is reserved for buildings.`,
         )
       }
 

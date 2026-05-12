@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { EDITOR_LAYER } from './../../../lib/constants'
+import { sfxEmitter } from './../../../lib/sfx-bus'
 import useEditor from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -67,6 +68,9 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
 
   // Select the newly created zone
   useViewer.getState().setSelection({ zoneId: zone.id })
+
+  // Play structure build sound
+  sfxEmitter.emit('sfx:structure-build')
 }
 
 type PreviewState = {
@@ -86,6 +90,7 @@ export const ZoneTool: React.FC = () => {
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
   const pointsRef = useRef<Array<[number, number]>>([])
+  const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const levelYRef = useRef(0) // Track current level Y position
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setTool = useEditor((state) => state.setTool)
@@ -181,12 +186,22 @@ export const ZoneTool: React.FC = () => {
 
       // If we have points, snap to axis from last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      if (lastPoint) {
-        const snapped = calculateSnapPoint(lastPoint, cursorPosition)
-        cursorRef.current.position.set(snapped[0], event.localPosition[1], snapped[1])
-      } else {
-        cursorRef.current.position.set(gridX, event.localPosition[1], gridZ)
+      const displayPoint = lastPoint
+        ? calculateSnapPoint(lastPoint, cursorPosition)
+        : cursorPosition
+
+      // Play snap sound when the snapped position changes during drawing
+      if (
+        pointsRef.current.length > 0 &&
+        previousSnappedPointRef.current &&
+        (displayPoint[0] !== previousSnappedPointRef.current[0] ||
+          displayPoint[1] !== previousSnappedPointRef.current[1])
+      ) {
+        sfxEmitter.emit('sfx:grid-snap')
       }
+      previousSnappedPointRef.current = displayPoint
+
+      cursorRef.current.position.set(displayPoint[0], event.localPosition[1], displayPoint[1])
 
       updatePreview()
     }

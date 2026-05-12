@@ -5,12 +5,11 @@ import {
   Editor,
   type SceneGraph,
   type SidebarTab,
-  ViewerToolbarLeft,
-  ViewerToolbarRight,
 } from '@pascal-app/editor'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
   id: string
@@ -200,8 +199,8 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
         sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<ViewerToolbarLeft />}
-        viewerToolbarRight={<ViewerToolbarRight />}
+        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
+        viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
     </div>
   )

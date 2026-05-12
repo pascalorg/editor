@@ -13,13 +13,53 @@ import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { CATALOG_ITEMS } from './catalog-items'
 
-export function ItemCatalog({ category }: { category: CatalogCategory }) {
+export function ItemCatalog({
+  category,
+  items: itemsOverride,
+  activePlacementTag = null,
+  activeFunctionalTag = null,
+  search = '',
+  overrideItems,
+  leadingTile,
+  emptyState,
+}: {
+  category: CatalogCategory
+  items?: AssetInput[]
+  activePlacementTag?: string | null
+  activeFunctionalTag?: string | null
+  search?: string
+  /** When set, bypasses all filtering and displays these items directly (used for server search results) */
+  overrideItems?: AssetInput[]
+  /** Rendered as the first grid cell, always visible when there are items. */
+  leadingTile?: React.ReactNode
+  /** Rendered when there are no items to show. Replaces the empty grid. */
+  emptyState?: React.ReactNode
+}) {
   const selectedItem = useEditor((state) => state.selectedItem)
   const setSelectedItem = useEditor((state) => state.setSelectedItem)
+  const setMode = useEditor((state) => state.setMode)
+  const setTool = useEditor((state) => state.setTool)
 
-  const categoryItems = CATALOG_ITEMS.filter((item) => item.category === category)
+  const sourceItems = itemsOverride ?? CATALOG_ITEMS
+  // Server-provided results bypass all local filtering; otherwise filter by category/search/tags
+  const filteredItems =
+    overrideItems ??
+    (() => {
+      const categoryItems = search
+        ? sourceItems
+        : sourceItems.filter((item) => item.category === category)
+      return categoryItems.filter((item) => {
+        const tags = item.tags ?? []
+        if (activePlacementTag && !tags.includes(activePlacementTag)) return false
+        if (activeFunctionalTag && !tags.includes(activeFunctionalTag)) return false
+        if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false
+        return true
+      })
+    })()
 
-  // Auto-select first item if current selection is not in this category
+  const categoryItems = filteredItems
+
+  // Auto-select first item if current selection is not in the filtered list
   useEffect(() => {
     const isCurrentItemInCategory = categoryItems.some((item) => item.src === selectedItem?.src)
     if (!isCurrentItemInCategory && categoryItems.length > 0) {
@@ -27,58 +67,60 @@ export function ItemCatalog({ category }: { category: CatalogCategory }) {
     }
   }, [categoryItems, selectedItem?.src, setSelectedItem])
 
-  // Get attachment icon based on attachTo type
   const getAttachmentIcon = (attachTo: AssetInput['attachTo']) => {
-    if (attachTo === 'wall' || attachTo === 'wall-side') {
-      return '/icons/wall.png'
-    }
-    if (attachTo === 'ceiling') {
-      return '/icons/ceiling.png'
-    }
+    if (attachTo === 'wall' || attachTo === 'wall-side') return '/icons/wall.png'
+    if (attachTo === 'ceiling') return '/icons/ceiling.png'
     return null
   }
 
+  if (filteredItems.length === 0 && emptyState) {
+    return <>{emptyState}</>
+  }
+
   return (
-    <div className="-mx-2 -my-2 flex max-w-xl gap-2 overflow-x-auto p-2">
-      {categoryItems.map((item, index) => {
+    <div
+      className="grid gap-2"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}
+    >
+      {leadingTile}
+      {filteredItems.map((item, index) => {
         const isSelected = selectedItem?.src === item?.src
         const attachmentIcon = getAttachmentIcon(item?.attachTo)
         return (
-          <Tooltip key={index}>
-            <TooltipTrigger asChild>
-              <button
-                className={cn(
-                  'relative aspect-square h-14 min-h-14 w-14 min-w-14 shrink-0 flex-col gap-px rounded-lg transition-all duration-200 ease-out hover:scale-105 hover:cursor-pointer',
-                  isSelected && 'ring-2 ring-primary-foreground',
-                )}
-                onClick={() => setSelectedItem(item)}
-                type="button"
-              >
-                <Image
-                  alt={item.name}
-                  className="rounded-lg object-cover"
-                  fill
-                  loading="eager"
-                  sizes="56px"
-                  src={resolveCdnUrl(item.thumbnail) || ''}
-                />
-                {attachmentIcon && (
-                  <div className="absolute right-0.5 bottom-0.5 flex h-4 w-4 items-center justify-center rounded bg-black/60">
-                    <Image
-                      alt={item.attachTo === 'ceiling' ? 'Ceiling attachment' : 'Wall attachment'}
-                      className="h-4 w-4"
-                      height={16}
-                      src={attachmentIcon}
-                      width={16}
-                    />
-                  </div>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent className="text-xs" side="top">
+          <button
+            className={cn(
+              'group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent',
+              isSelected && 'bg-sidebar-accent ring-2 ring-primary-foreground',
+            )}
+            key={index}
+            onClick={() => {
+              setSelectedItem(item)
+              setTool('item')
+              setMode('build')
+            }}
+            type="button"
+          >
+            <div className="relative aspect-square w-full overflow-hidden rounded-lg">
+              <img
+                alt={item.name}
+                className="h-full w-full object-cover"
+                loading="eager"
+                src={resolveCdnUrl(item.thumbnail) || ''}
+              />
+              {attachmentIcon && (
+                <div className="absolute right-1 bottom-1 flex h-4 w-4 items-center justify-center rounded bg-black/60">
+                  <img
+                    alt={item.attachTo === 'ceiling' ? 'Ceiling attachment' : 'Wall attachment'}
+                    className="h-4 w-4"
+                    src={attachmentIcon}
+                  />
+                </div>
+              )}
+            </div>
+            <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
               {item.name}
-            </TooltipContent>
-          </Tooltip>
+            </span>
+          </button>
         )
       })}
     </div>

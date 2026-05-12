@@ -2,6 +2,8 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
+  ProjectCreateOptions,
+  ProjectStatus,
   SceneEvent,
   SceneEventAppendOptions,
   SceneEventListOptions,
@@ -24,6 +26,8 @@ export interface SceneOperations {
   readonly hasSceneEvents: boolean
   readonly canAppendSceneEvents: boolean
   readonly canListSceneEvents: boolean
+  readonly canCreateProject: boolean
+  readonly canGetProjectStatus: boolean
   readonly storeBackend: SceneStore['backend'] | null
 
   setActiveScene(meta: ActiveSceneMeta): void
@@ -60,6 +64,8 @@ export interface SceneOperations {
   getHistory(): { pastCount: number; futureCount: number }
   clearHistory(): void
 
+  createProject(options: ProjectCreateOptions): Promise<ProjectStatus>
+  getProjectStatus(id: string): Promise<ProjectStatus | null>
   saveScene(options: SceneSaveOptions): Promise<SceneMeta>
   loadStoredScene(id: string): Promise<SceneWithGraph | null>
   listScenes(options?: SceneListOptions): Promise<SceneMeta[]>
@@ -100,6 +106,14 @@ class SceneOperationsFacade implements SceneOperations {
 
   get canListSceneEvents(): boolean {
     return typeof this.#store?.listSceneEvents === 'function'
+  }
+
+  get canCreateProject(): boolean {
+    return typeof this.#store?.createProject === 'function'
+  }
+
+  get canGetProjectStatus(): boolean {
+    return typeof this.#store?.getProjectStatus === 'function'
   }
 
   get storeBackend(): SceneStore['backend'] | null {
@@ -217,6 +231,44 @@ class SceneOperationsFacade implements SceneOperations {
 
   clearHistory(): void {
     this.requireBridge().clearHistory()
+  }
+
+  async createProject(options: ProjectCreateOptions): Promise<ProjectStatus> {
+    const store = this.requireStore()
+    if (!store.createProject) {
+      throw new Error('create_project_unavailable')
+    }
+    return store.createProject(options)
+  }
+
+  async getProjectStatus(id: string): Promise<ProjectStatus | null> {
+    const store = this.requireStore()
+    if (store.getProjectStatus) {
+      return store.getProjectStatus(id)
+    }
+    const scene = await store.load(id)
+    if (!scene) return null
+    const editorUrl = scene.editorUrl ?? `/editor/${scene.id}`
+    return {
+      id: scene.id,
+      projectId: scene.projectId ?? scene.id,
+      name: scene.name,
+      editorUrl,
+      url: editorUrl,
+      ownerId: scene.ownerId,
+      thumbnailUrl: scene.thumbnailUrl,
+      publishedVersion: scene.published === false ? null : scene.version,
+      latestVersion: scene.version,
+      draftVersion: null,
+      browserVisibleVersion: scene.version,
+      version: scene.version,
+      isEmpty: scene.nodeCount === 0,
+      sizeBytes: scene.sizeBytes,
+      nodeCount: scene.nodeCount,
+      graphHash: scene.graphHash ?? null,
+      createdAt: scene.createdAt,
+      updatedAt: scene.updatedAt,
+    }
   }
 
   async saveScene(options: SceneSaveOptions): Promise<SceneMeta> {

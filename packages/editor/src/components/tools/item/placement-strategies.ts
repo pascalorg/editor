@@ -506,21 +506,22 @@ export const itemSurfaceStrategy = {
 
     const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
 
+    // Counter-rotate so the draft's world Y rotation stays continuous when
+    // the user drags onto a rotated surface item. The cursor wireframe
+    // already shows the user's intended world rotation; we just need to
+    // store the right local value relative to the new parent.
+    const surfaceQuat = new Quaternion()
+    surfaceMesh.getWorldQuaternion(surfaceQuat)
+    const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
+    const localRotationY = ctx.currentCursorRotationY - surfaceWorldY
+    const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
+
     return {
       stateUpdate: { surface: 'item-surface', surfaceItemId: surfaceItem.id },
       nodeUpdate: {
         position: [x, y, z],
         parentId: surfaceItem.id,
-        rotation: [
-          (ctx.draftItem?.rotation ?? [0, 0, 0])[0],
-          (() => {
-            const surfaceQuat = new Quaternion()
-            surfaceMesh.getWorldQuaternion(surfaceQuat)
-            const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
-            return ctx.currentCursorRotationY - surfaceWorldY
-          })(),
-          (ctx.draftItem?.rotation ?? [0, 0, 0])[2],
-        ] as [number, number, number],
+        rotation: [draftRotation[0], localRotationY, draftRotation[2]],
       },
       cursorRotationY: ctx.currentCursorRotationY,
       gridPosition: [x, y, z],

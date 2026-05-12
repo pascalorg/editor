@@ -12,8 +12,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { BookMarked, Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { usePresetsAdapter } from '../../../contexts/presets-context'
-import { cn } from '../../../lib/utils'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { MetricControl } from '../controls/metric-control'
@@ -127,8 +127,11 @@ export function DoorPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<DoorNode>) => {
       if (!(selectedId && node)) return
+      const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
+      if (liveNode?.type !== 'door') return
+
       const hasChange = Object.entries(updates).some(([key, value]) => {
-        const currentValue = node[key as keyof DoorNode]
+        const currentValue = liveNode[key as keyof DoorNode]
         return !isSameDoorValue(currentValue, value)
       })
       if (!hasChange) return
@@ -137,7 +140,9 @@ export function DoorPanel() {
         useInteractive.getState().removeDoorOpenState(selectedId as AnyNodeId)
       }
       updateNode(selectedId as AnyNode['id'], updates)
-      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
+      const scene = useScene.getState()
+      scene.dirtyNodes.add(selectedId as AnyNodeId)
+      if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
     },
     [selectedId, node, updateNode],
   )
@@ -148,7 +153,13 @@ export function DoorPanel() {
       const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
       if (liveNode?.type !== 'door') return
 
-      if (!(previewRef.current && previewRef.current.id === selectedId && previewRef.current.key === key)) {
+      if (
+        !(
+          previewRef.current &&
+          previewRef.current.id === selectedId &&
+          previewRef.current.key === key
+        )
+      ) {
         previewRef.current = {
           id: selectedId as AnyNodeId,
           key,
@@ -333,7 +344,8 @@ export function DoorPanel() {
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)
   const isOpening = node.openingKind === 'opening'
   const openingShape = node.openingShape ?? 'rectangle'
-  const doorShape = openingShape === 'arch' || openingShape === 'rounded' ? openingShape : 'rectangle'
+  const doorShape =
+    openingShape === 'arch' || openingShape === 'rounded' ? openingShape : 'rectangle'
   const openingRadiusMode = node.openingRadiusMode ?? 'all'
   const openingTopRadii = node.openingTopRadii ?? [0.15, 0.15]
   const cornerRadius = node.cornerRadius ?? 0.15
@@ -348,7 +360,9 @@ export function DoorPanel() {
   const isRollupGarageDoor = doorType === 'garage-rollup'
   const isTiltupGarageDoor = doorType === 'garage-tiltup'
   const typeMode = isOpening ? 'opening' : isGarageDoor ? 'garage' : 'door'
-  const supportsHandleSide = isSwingDoor
+  const supportsHingeSide = doorType === 'hinged'
+  const supportsHandleSide = doorType === 'hinged'
+  const supportsTopShape = !isGarageDoor
   const maxDoorWidth = isGarageDoor ? 6 : 3
 
   const setOpeningTopRadius = (index: number, value: number, commit = false) => {
@@ -395,6 +409,7 @@ export function DoorPanel() {
         handleSide: 'right',
         trackStyle: 'visible',
         operationState: Math.max(node.operationState ?? 0, 0.65),
+        threshold: false,
         contentPadding: [0.03, 0.04],
         segments: foldingDoorSegments,
       }
@@ -411,6 +426,7 @@ export function DoorPanel() {
         trackStyle: 'pocket',
         slideDirection: node.slideDirection ?? 'left',
         operationState: node.operationState ?? 0,
+        threshold: false,
         contentPadding: [0.035, 0.045],
         segments: foldingDoorSegments,
       }
@@ -427,6 +443,7 @@ export function DoorPanel() {
         trackStyle: 'visible',
         slideDirection: node.slideDirection ?? 'left',
         operationState: node.operationState ?? 0,
+        threshold: false,
         contentPadding: [0.035, 0.045],
         segments: foldingDoorSegments,
       }
@@ -443,6 +460,7 @@ export function DoorPanel() {
         trackStyle: 'visible',
         slideDirection: node.slideDirection ?? 'left',
         operationState: node.operationState ?? 0,
+        threshold: false,
         contentPadding: [0.03, 0.04],
         segments: frenchDoorSegments,
       }
@@ -456,6 +474,7 @@ export function DoorPanel() {
         ...dimensionUpdates,
         handle: false,
         threshold: false,
+        openingShape: 'rectangle',
         trackStyle: 'overhead',
         operationState: 0,
         garagePanelCount: Math.max(3, Math.min(8, node.garagePanelCount ?? 4)),
@@ -472,6 +491,7 @@ export function DoorPanel() {
         ...dimensionUpdates,
         handle: false,
         threshold: false,
+        openingShape: 'rectangle',
         trackStyle: 'overhead',
         operationState: 0,
         garagePanelCount: 4,
@@ -488,6 +508,7 @@ export function DoorPanel() {
         ...dimensionUpdates,
         handle: false,
         threshold: false,
+        openingShape: 'rectangle',
         trackStyle: 'overhead',
         operationState: 0,
         garagePanelCount: 4,
@@ -578,7 +599,8 @@ export function DoorPanel() {
                     isSelected
                       ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
                       : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
-                    !option.available && 'cursor-not-allowed opacity-45 hover:bg-[#2C2C2E] hover:text-muted-foreground',
+                    !option.available &&
+                      'cursor-not-allowed opacity-45 hover:bg-[#2C2C2E] hover:text-muted-foreground',
                   )}
                   disabled={!option.available}
                   key={option.value}
@@ -738,7 +760,7 @@ export function DoorPanel() {
         />
       </PanelSection>
 
-      {!isOpening && (
+      {!isOpening && supportsTopShape && (
         <PanelSection title="Top Shape">
           <div className="flex flex-col gap-2 px-1 pb-1">
             <SegmentedControl
@@ -990,19 +1012,21 @@ export function DoorPanel() {
       {isSwingDoor && (
         <PanelSection title="Swing">
           <div className="flex flex-col gap-2 px-1 pb-1">
-            <div className="space-y-1">
-              <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                Hinges Side
-              </span>
-              <SegmentedControl
-                onChange={(v) => handleUpdate({ hingesSide: v })}
-                options={[
-                  { label: 'Left', value: 'left' },
-                  { label: 'Right', value: 'right' },
-                ]}
-                value={node.hingesSide}
-              />
-            </div>
+            {supportsHingeSide && (
+              <div className="space-y-1">
+                <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                  Hinges Side
+                </span>
+                <SegmentedControl
+                  onChange={(v) => handleUpdate({ hingesSide: v })}
+                  options={[
+                    { label: 'Left', value: 'left' },
+                    { label: 'Right', value: 'right' },
+                  ]}
+                  value={node.hingesSide}
+                />
+              </div>
+            )}
             <div className="space-y-1">
               <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
                 Direction
@@ -1029,245 +1053,244 @@ export function DoorPanel() {
           />
           {node.threshold && (
             <div className="mt-1 flex flex-col gap-1">
-              <SliderControl
-                label="Height"
-                max={0.1}
-                min={0.005}
-                onChange={(v) => handleUpdate({ thresholdHeight: v })}
-                precision={3}
-                step={0.005}
-                unit="m"
-                value={Math.round(node.thresholdHeight * 1000) / 1000}
-              />
-            </div>
-          )}
-        </PanelSection>
-      )}
-
-      {!isGarageDoor && (
-        <PanelSection title="Handle">
-          {isSwingDoor && (
-            <ToggleControl
-              checked={node.handle}
-              label="Enable Handle"
-              onChange={(checked) => handleUpdate({ handle: checked })}
-            />
-          )}
-          {(node.handle || !isSwingDoor) && (
-            <div className="mt-1 flex flex-col gap-1">
-              <SliderControl
-                label="Height"
-                max={node.height - 0.1}
-                min={0.5}
-                onChange={(v) => handleUpdate({ handleHeight: v })}
-                precision={2}
-                step={0.05}
-                unit="m"
-                value={Math.round(node.handleHeight * 100) / 100}
-              />
-              {supportsHandleSide && (
-                <div className="space-y-1">
-                  <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                    Handle Side
-                  </span>
-                  <SegmentedControl
-                    onChange={(v) => handleUpdate({ handleSide: v })}
-                    options={[
-                      { label: 'Left', value: 'left' },
-                      { label: 'Right', value: 'right' },
-                    ]}
-                    value={node.handleSide}
+                  <SliderControl
+                    label="Height"
+                    max={0.1}
+                    min={0.005}
+                    onChange={(v) => handleUpdate({ thresholdHeight: v })}
+                    precision={3}
+                    step={0.005}
+                    unit="m"
+                    value={Math.round(node.thresholdHeight * 1000) / 1000}
                   />
                 </div>
               )}
-            </div>
+            </PanelSection>
           )}
-        </PanelSection>
-      )}
 
-      {isSwingDoor && (
-        <PanelSection title="Hardware">
-          <ToggleControl
-            checked={node.doorCloser}
-            label="Door Closer"
-            onChange={(checked) => handleUpdate({ doorCloser: checked })}
-          />
-          <ToggleControl
-            checked={node.panicBar}
-            label="Panic Bar"
-            onChange={(checked) => handleUpdate({ panicBar: checked })}
-          />
-          {node.panicBar && (
-            <div className="mt-1 flex flex-col gap-1">
-              <SliderControl
-                label="Bar Height"
-                max={node.height - 0.1}
-                min={0.5}
-                onChange={(v) => handleUpdate({ panicBarHeight: v })}
-                precision={2}
-                step={0.05}
-                unit="m"
-                value={Math.round(node.panicBarHeight * 100) / 100}
-              />
-            </div>
-          )}
-        </PanelSection>
-      )}
-
-      {!isGarageDoor && (
-        <PanelSection title="Segments">
-          {node.segments.map((seg, i) => {
-            const numCols = seg.columnRatios.length
-            const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
-            const normCols = seg.columnRatios.map((r) => r / colSum)
-            return (
-              <div className="mb-2 flex flex-col gap-1" key={i}>
-                <div className="flex items-center justify-between pb-1">
-                  <span className="font-medium text-white/80 text-xs">Segment {i + 1}</span>
-                </div>
-
-                <SegmentedControl
-                  onChange={(t) => {
-                    const updated = node.segments.map((s, idx) =>
-                      idx === i ? { ...s, type: t } : s,
-                    )
-                    handleUpdate({ segments: updated })
-                  }}
-                  options={[
-                    { label: 'Panel', value: 'panel' },
-                    { label: 'Glass', value: 'glass' },
-                    { label: 'Empty', value: 'empty' },
-                  ]}
-                  value={seg.type}
+          {!isGarageDoor && (
+            <PanelSection title="Handle">
+              {isSwingDoor && (
+                <ToggleControl
+                  checked={node.handle}
+                  label="Enable Handle"
+                  onChange={(checked) => handleUpdate({ handle: checked })}
                 />
-
-                <SliderControl
-                  label="Height"
-                  max={95}
-                  min={5}
-                  onChange={(v) => setSegmentHeightRatio(i, v / 100)}
-                  precision={1}
-                  step={1}
-                  unit="%"
-                  value={Math.round(normHeights[i]! * 100 * 10) / 10}
-                />
-
-                <SliderControl
-                  label="Columns"
-                  max={8}
-                  min={1}
-                  onChange={(v) => {
-                    const n = Math.max(1, Math.min(8, Math.round(v)))
-                    const updated = node.segments.map((s, idx) =>
-                      idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
-                    )
-                    handleUpdate({ segments: updated })
-                  }}
-                  precision={0}
-                  step={1}
-                  value={numCols}
-                />
-
-                {numCols > 1 && (
-                  <div className="mt-1 border-border/50 border-t pt-1">
-                    {normCols.map((ratio, ci) => (
-                      <SliderControl
-                        key={`c-${ci}`}
-                        label={`C${ci + 1}`}
-                        max={95}
-                        min={5}
-                        onChange={(v) => setSegmentColumnRatio(i, ci, v / 100)}
-                        precision={1}
-                        step={1}
-                        unit="%"
-                        value={Math.round(ratio * 100 * 10) / 10}
+              )}
+              {(node.handle || !isSwingDoor) && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <SliderControl
+                    label="Height"
+                    max={node.height - 0.1}
+                    min={0.5}
+                    onChange={(v) => handleUpdate({ handleHeight: v })}
+                    precision={2}
+                    step={0.05}
+                    unit="m"
+                    value={Math.round(node.handleHeight * 100) / 100}
+                  />
+                  {supportsHandleSide && (
+                    <div className="space-y-1">
+                      <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                        Handle Side
+                      </span>
+                      <SegmentedControl
+                        onChange={(v) => handleUpdate({ handleSide: v })}
+                        options={[
+                          { label: 'Left', value: 'left' },
+                          { label: 'Right', value: 'right' },
+                        ]}
+                        value={node.handleSide}
                       />
-                    ))}
-                    <SliderControl
-                      label="Divider"
-                      max={0.1}
-                      min={0.005}
-                      onChange={(v) => {
-                        const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, dividerThickness: v } : s,
-                        )
-                        handleUpdate({ segments: updated })
-                      }}
-                      precision={3}
-                      step={0.005}
-                      unit="m"
-                      value={Math.round(seg.dividerThickness * 1000) / 1000}
-                    />
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </PanelSection>
+          )}
 
-                {seg.type === 'panel' && (
-                  <div className="mt-1 border-border/50 border-t pt-1">
-                    <SliderControl
-                      label="Inset"
-                      max={0.1}
-                      min={0}
-                      onChange={(v) => {
+          {isSwingDoor && (
+            <PanelSection title="Hardware">
+              <ToggleControl
+                checked={node.doorCloser}
+                label="Door Closer"
+                onChange={(checked) => handleUpdate({ doorCloser: checked })}
+              />
+              <ToggleControl
+                checked={node.panicBar}
+                label="Panic Bar"
+                onChange={(checked) => handleUpdate({ panicBar: checked })}
+              />
+              {node.panicBar && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <SliderControl
+                    label="Bar Height"
+                    max={node.height - 0.1}
+                    min={0.5}
+                    onChange={(v) => handleUpdate({ panicBarHeight: v })}
+                    precision={2}
+                    step={0.05}
+                    unit="m"
+                    value={Math.round(node.panicBarHeight * 100) / 100}
+                  />
+                </div>
+              )}
+            </PanelSection>
+          )}
+
+          {!isGarageDoor && (
+            <PanelSection title="Segments">
+              {node.segments.map((seg, i) => {
+                const numCols = seg.columnRatios.length
+                const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
+                const normCols = seg.columnRatios.map((r) => r / colSum)
+                return (
+                  <div className="mb-2 flex flex-col gap-1" key={i}>
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="font-medium text-white/80 text-xs">Segment {i + 1}</span>
+                    </div>
+
+                    <SegmentedControl
+                      onChange={(t) => {
                         const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, panelInset: v } : s,
+                          idx === i ? { ...s, type: t } : s,
                         )
                         handleUpdate({ segments: updated })
                       }}
-                      precision={3}
-                      step={0.005}
-                      unit="m"
-                      value={Math.round(seg.panelInset * 1000) / 1000}
+                      options={[
+                        { label: 'Panel', value: 'panel' },
+                        { label: 'Glass', value: 'glass' },
+                        { label: 'Empty', value: 'empty' },
+                      ]}
+                      value={seg.type}
                     />
+
                     <SliderControl
-                      label="Depth"
-                      max={0.1}
-                      min={0}
+                      label="Height"
+                      max={95}
+                      min={5}
+                      onChange={(v) => setSegmentHeightRatio(i, v / 100)}
+                      precision={1}
+                      step={1}
+                      unit="%"
+                      value={Math.round(normHeights[i]! * 100 * 10) / 10}
+                    />
+
+                    <SliderControl
+                      label="Columns"
+                      max={8}
+                      min={1}
                       onChange={(v) => {
+                        const n = Math.max(1, Math.min(8, Math.round(v)))
                         const updated = node.segments.map((s, idx) =>
-                          idx === i ? { ...s, panelDepth: v } : s,
+                          idx === i ? { ...s, columnRatios: Array(n).fill(1 / n) } : s,
                         )
                         handleUpdate({ segments: updated })
                       }}
-                      precision={3}
-                      step={0.005}
-                      unit="m"
-                      value={Math.round(seg.panelDepth * 1000) / 1000}
+                      precision={0}
+                      step={1}
+                      value={numCols}
                     />
+
+                    {numCols > 1 && (
+                      <div className="mt-1 border-border/50 border-t pt-1">
+                        {normCols.map((ratio, ci) => (
+                          <SliderControl
+                            key={`c-${ci}`}
+                            label={`C${ci + 1}`}
+                            max={95}
+                            min={5}
+                            onChange={(v) => setSegmentColumnRatio(i, ci, v / 100)}
+                            precision={1}
+                            step={1}
+                            unit="%"
+                            value={Math.round(ratio * 100 * 10) / 10}
+                          />
+                        ))}
+                        <SliderControl
+                          label="Divider"
+                          max={0.1}
+                          min={0.005}
+                          onChange={(v) => {
+                            const updated = node.segments.map((s, idx) =>
+                              idx === i ? { ...s, dividerThickness: v } : s,
+                            )
+                            handleUpdate({ segments: updated })
+                          }}
+                          precision={3}
+                          step={0.005}
+                          unit="m"
+                          value={Math.round(seg.dividerThickness * 1000) / 1000}
+                        />
+                      </div>
+                    )}
+
+                    {seg.type === 'panel' && (
+                      <div className="mt-1 border-border/50 border-t pt-1">
+                        <SliderControl
+                          label="Inset"
+                          max={0.1}
+                          min={0}
+                          onChange={(v) => {
+                            const updated = node.segments.map((s, idx) =>
+                              idx === i ? { ...s, panelInset: v } : s,
+                            )
+                            handleUpdate({ segments: updated })
+                          }}
+                          precision={3}
+                          step={0.005}
+                          unit="m"
+                          value={Math.round(seg.panelInset * 1000) / 1000}
+                        />
+                        <SliderControl
+                          label="Depth"
+                          max={0.1}
+                          min={0}
+                          onChange={(v) => {
+                            const updated = node.segments.map((s, idx) =>
+                              idx === i ? { ...s, panelDepth: v } : s,
+                            )
+                            handleUpdate({ segments: updated })
+                          }}
+                          precision={3}
+                          step={0.005}
+                          unit="m"
+                          value={Math.round(seg.panelDepth * 1000) / 1000}
+                        />
+                      </div>
+                    )}
                   </div>
+                )
+              })}
+
+              <div className="flex gap-1.5 px-1 pt-1">
+                <ActionButton
+                  label="+ Add Segment"
+                  onClick={() => {
+                    const updated = [
+                      ...node.segments,
+                      {
+                        type: 'panel' as const,
+                        heightRatio: 1,
+                        columnRatios: [1],
+                        dividerThickness: 0.03,
+                        panelDepth: 0.01,
+                        panelInset: 0.04,
+                      },
+                    ]
+                    handleUpdate({ segments: updated })
+                  }}
+                />
+                {node.segments.length > 1 && (
+                  <ActionButton
+                    className="text-white/60 hover:text-white"
+                    label="- Remove"
+                    onClick={() => handleUpdate({ segments: node.segments.slice(0, -1) })}
+                  />
                 )}
               </div>
-            )
-          })}
-
-          <div className="flex gap-1.5 px-1 pt-1">
-            <ActionButton
-              label="+ Add Segment"
-              onClick={() => {
-                const updated = [
-                  ...node.segments,
-                  {
-                    type: 'panel' as const,
-                    heightRatio: 1,
-                    columnRatios: [1],
-                    dividerThickness: 0.03,
-                    panelDepth: 0.01,
-                    panelInset: 0.04,
-                  },
-                ]
-                handleUpdate({ segments: updated })
-              }}
-            />
-            {node.segments.length > 1 && (
-              <ActionButton
-                className="text-white/60 hover:text-white"
-                label="- Remove"
-                onClick={() => handleUpdate({ segments: node.segments.slice(0, -1) })}
-              />
-            )}
-          </div>
-        </PanelSection>
-      )}
-
+            </PanelSection>
+          )}
         </>
       )}
 

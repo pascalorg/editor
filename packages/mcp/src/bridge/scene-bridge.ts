@@ -493,7 +493,7 @@ export class SceneBridge {
   private _findParentByChildrenScan(id: AnyNodeId): AnyNode | null {
     const nodes = useScene.getState().nodes
     for (const candidate of Object.values(nodes)) {
-      if (!('children' in candidate) || !Array.isArray(candidate.children)) continue
+      if (!('children' in candidate && Array.isArray(candidate.children))) continue
       for (const child of candidate.children as unknown[]) {
         let childId: string | null = null
         if (typeof child === 'string') childId = child

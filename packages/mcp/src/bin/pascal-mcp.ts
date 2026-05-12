@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { version } from '../index'
 import { createPascalMcpServer } from '../server'
+import { createSceneStore } from '../storage'
 import { connectHttp } from '../transports/http'
 import { connectStdio } from '../transports/stdio'
 
@@ -60,11 +61,12 @@ async function main(): Promise<void> {
     bridge.loadDefault()
   }
 
-  const server = createPascalMcpServer({ bridge })
+  const store = await createSceneStore()
+  const server = createPascalMcpServer({ bridge, store })
 
   if (values.http) {
     const portNum = Number.parseInt(values.port ?? '3917', 10)
-    if (!Number.isFinite(portNum) || portNum < 0 || portNum > 65535) {
+    if (!Number.isFinite(portNum) || portNum < 0 || portNum > 65_535) {
       throw new Error(`invalid --port value: ${values.port}`)
     }
     const handle = await connectHttp(server, portNum, {

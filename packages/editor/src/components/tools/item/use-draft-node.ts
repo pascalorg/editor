@@ -130,7 +130,6 @@ export function useDraftNode(): DraftNodeHandle {
       useScene.getState().updateNode(draft.id, {
         position: updateProps.position ?? draft.position,
         rotation: updateProps.rotation ?? draft.rotation,
-        scale: updateProps.scale ?? draft.scale,
         side: updateProps.side ?? draft.side,
         metadata: updateProps.metadata ?? stripTransient(draft.metadata),
         parentId: parentId as string,

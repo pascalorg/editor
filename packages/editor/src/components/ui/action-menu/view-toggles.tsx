@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon } from '@iconify/react'
 import {
   type AnyNodeId,
   type BuildingNode,
@@ -258,7 +259,7 @@ function GuidesControl() {
 
       <PopoverContent
         align="center"
-        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
+        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
         side="top"
         sideOffset={14}
       >
@@ -353,9 +354,9 @@ function GuidesControl() {
   )
 }
 
-// ── Grid snap ──────────────────────────────────────────────────────────────
+// ── Grid snap toggle ────────────────────────────────────────────────────────
 
-export function GridSnapControl() {
+function GridSnapControl() {
   const [isOpen, setIsOpen] = useState(false)
   const gridSnapStep = useEditor((state) => state.gridSnapStep)
   const setGridSnapStep = useEditor((state) => state.setGridSnapStep)
@@ -374,20 +375,7 @@ export function GridSnapControl() {
               )}
               type="button"
             >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zm-11 0h7v7H3v-7z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <Icon height={16} icon="lucide:grid-2x2" width={16} />
               <span className="mt-1 font-medium text-[9px] leading-none">
                 {formatGridSnapStep(gridSnapStep)}
               </span>
@@ -510,7 +498,7 @@ function ScansControl() {
 
       <PopoverContent
         align="center"
-        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.55),0_6px_16px_-10px_rgba(15,23,42,0.2)] backdrop-blur-xl"
+        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
         side="top"
         sideOffset={14}
       >
@@ -605,6 +593,8 @@ function ScansControl() {
   )
 }
 
+// ── Reference floor control ────────────────────────────────────────────────────────────────────
+
 function ReferenceFloorControl() {
   const showReferenceFloor = useEditor((state) => state.showReferenceFloor)
   const toggleReferenceFloor = useEditor((state) => state.toggleReferenceFloor)
@@ -694,7 +684,11 @@ function ReferenceFloorControl() {
               onClick={toggleReferenceFloor}
               type="button"
             >
-              {showReferenceFloor ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              {showReferenceFloor ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5" />
+              )}
             </button>
           </div>
 
@@ -728,9 +722,7 @@ function ReferenceFloorControl() {
                         )}
                       />
                       <span className="min-w-0 flex-1 truncate">{levelName}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {index + 1} below
-                      </span>
+                      <span className="text-[10px] text-muted-foreground">{index + 1} below</span>
                     </button>
                   )
                 })}
@@ -757,24 +749,20 @@ function ReferenceFloorControl() {
   )
 }
 
-// ── Main ViewToggles ────────────────────────────────────────────────────────
+// ── Exports ─────────────────────────────────────────────────────────────────
 
-export function ViewToggles() {
+export { GridSnapControl }
+
+export function SecondaryToggles() {
   return (
     <div className="flex items-center gap-1">
-      {/* Scans (toggle + dropdown) */}
       <ScansControl />
-
-      {/* Guides (toggle + dropdown) */}
       <GuidesControl />
-
-      <ReferenceFloorControl />
     </div>
   )
 }
 
-// Secondary toggles for mobile (grid snap + scans + guides)
-export function SecondaryToggles() {
+export function ViewToggles() {
   return (
     <div className="flex items-center gap-1">
       <GridSnapControl />

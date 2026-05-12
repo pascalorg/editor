@@ -1,8 +1,8 @@
 'use client'
 
+import type { AssetInput } from '@pascal-app/core'
 import {
   type AnyNodeId,
-  type AssetInput,
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
@@ -28,7 +28,6 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { getDefaultCatalogItem } from '../components/ui/item-catalog/catalog-items'
 import {
   type ActivePaintMaterial,
   type PaintableMaterialTarget,
@@ -37,7 +36,7 @@ import {
   type SingleSurfaceMaterialRole,
 } from '../lib/material-paint'
 
-const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'site'
+const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'ai'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
 const MIN_FLOORPLAN_PANE_RATIO = 0.15
 const MAX_FLOORPLAN_PANE_RATIO = 0.85
@@ -141,11 +140,11 @@ type EditorState = {
     | WindowNode
     | DoorNode
     | ElevatorNode
-    | FenceNode
     | CeilingNode
     | ColumnNode
     | SlabNode
     | WallNode
+    | FenceNode
     | RoofNode
     | RoofSegmentNode
     | SpawnNode
@@ -159,11 +158,11 @@ type EditorState = {
       | WindowNode
       | DoorNode
       | ElevatorNode
-      | FenceNode
       | CeilingNode
       | ColumnNode
       | SlabNode
       | WallNode
+      | FenceNode
       | RoofNode
       | RoofSegmentNode
       | SpawnNode
@@ -206,6 +205,9 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
+  // Capture mode (snapshot toolbar — hides panels for clean framing)
+  isCaptureMode: boolean
+  setCaptureMode: (active: boolean) => void
   // View mode (3D only, 2D only, or split 2D+3D)
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
@@ -228,21 +230,22 @@ type EditorState = {
   setReferenceFloorOffset: (offset: number) => void
   referenceFloorOpacity: number
   setReferenceFloorOpacity: (opacity: number) => void
+  // Development-only camera debug flag for inspecting underside geometry
+  allowUndergroundCamera: boolean
+  setAllowUndergroundCamera: (enabled: boolean) => void
   // First-person walkthrough mode (street view)
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
   setFirstPersonMode: (enabled: boolean) => void
-  // Development-only camera debug flag for inspecting underside geometry
-  allowUndergroundCamera: boolean
-  setAllowUndergroundCamera: (enabled: boolean) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
-  mobilePanelSheetHeight: number
-  setMobilePanelSheetHeight: (height: number) => void
-  isCaptureMode: boolean
   setIsCaptureMode: (enabled: boolean) => void
   floorplanPaneRatio: number
   setFloorplanPaneRatio: (ratio: number) => void
+  // Mobile-only: pixel height of the secondary panel sheet while open (0 when closed).
+  // Read by the mobile layout so the viewer container can shrink to preview edits.
+  mobilePanelSheetHeight: number
+  setMobilePanelSheetHeight: (px: number) => void
 }
 
 export type PersistedEditorUiState = Pick<
@@ -465,10 +468,6 @@ export function selectDefaultBuildingAndLevel() {
   }
 }
 
-function getDefaultSelectedItemForCategory(category: CatalogCategory | null): AssetInput | null {
-  return getDefaultCatalogItem(category)
-}
-
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -490,11 +489,7 @@ const useEditor = create<EditorState>()(
           } else if (phase === 'structure') {
             set({ tool: 'wall', catalogCategory: null })
           } else if (phase === 'furnish') {
-            set({
-              tool: 'item',
-              catalogCategory: 'furniture',
-              selectedItem: getDefaultSelectedItemForCategory('furniture'),
-            })
+            set({ tool: 'item', catalogCategory: 'furniture' })
           }
         } else {
           // Reset to select mode and clear tool/catalog when switching phases
@@ -534,15 +529,8 @@ const useEditor = create<EditorState>()(
             } else if (phase === 'structure' && structureLayer === 'elements') {
               set({ tool: 'wall' })
             } else if (phase === 'furnish') {
-              set({
-                tool: 'item',
-                catalogCategory: 'furniture',
-                selectedItem: getDefaultSelectedItemForCategory('furniture'),
-              })
+              set({ tool: 'item', catalogCategory: 'furniture' })
             }
-          } else if (phase === 'furnish' && tool === 'item' && !get().selectedItem) {
-            const category = get().catalogCategory ?? 'furniture'
-            set({ selectedItem: getDefaultSelectedItemForCategory(category) })
           }
         } else if (mode === 'material-paint') {
           get().primeMaterialPaintFromSelection()
@@ -572,17 +560,7 @@ const useEditor = create<EditorState>()(
         })
       },
       catalogCategory: DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory,
-      setCatalogCategory: (category) =>
-        set((state) => ({
-          catalogCategory: category,
-          selectedItem:
-            category !== null &&
-            state.phase === 'furnish' &&
-            state.mode === 'build' &&
-            state.tool === 'item'
-              ? getDefaultSelectedItemForCategory(category)
-              : state.selectedItem,
-        })),
+      setCatalogCategory: (category) => set({ catalogCategory: category }),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
       movingNode: null as
@@ -590,12 +568,14 @@ const useEditor = create<EditorState>()(
         | WindowNode
         | DoorNode
         | ElevatorNode
-        | FenceNode
         | CeilingNode
+        | ColumnNode
         | SlabNode
         | WallNode
+        | FenceNode
         | RoofNode
         | RoofSegmentNode
+        | SpawnNode
         | StairNode
         | StairSegmentNode
         | BuildingNode
@@ -698,6 +678,8 @@ const useEditor = create<EditorState>()(
           set({ isPreviewMode: false })
         }
       },
+      isCaptureMode: false,
+      setCaptureMode: (active) => set({ isCaptureMode: active }),
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
       splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
@@ -752,33 +734,20 @@ const useEditor = create<EditorState>()(
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
-      mobilePanelSheetHeight: 0,
-      setMobilePanelSheetHeight: (height) => set({ mobilePanelSheetHeight: height }),
-      isCaptureMode: false,
       setIsCaptureMode: (enabled) => set({ isCaptureMode: enabled }),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
       setFloorplanPaneRatio: (ratio) =>
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
+      mobilePanelSheetHeight: 0,
+      setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
     }),
     {
       name: 'pascal-editor-ui-preferences',
-      merge: (persistedState, currentState) => {
-        const mergedState = {
-          ...currentState,
-          ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
-          ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
-        }
-
-        return {
-          ...mergedState,
-          selectedItem:
-            mergedState.phase === 'furnish' &&
-            mergedState.mode === 'build' &&
-            mergedState.tool === 'item'
-              ? getDefaultSelectedItemForCategory(mergedState.catalogCategory ?? 'furniture')
-              : currentState.selectedItem,
-        }
-      },
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
+        ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
+      }),
       partialize: (state) => ({
         phase: state.phase,
         mode: state.mode,

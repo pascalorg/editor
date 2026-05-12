@@ -1,5 +1,3 @@
-// @ts-expect-error — bun:test is provided by the Bun runtime; core does not
-// depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '../../schema'
 import { BuildingNode, CeilingNode, ElevatorNode, LevelNode, SlabNode } from '../../schema'

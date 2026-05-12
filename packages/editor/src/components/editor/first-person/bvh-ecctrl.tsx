@@ -1,15 +1,8 @@
 import '../../../three-types'
 import { TransformControls, useKeyboardControls } from '@react-three/drei'
-import { useFrame, useThree, type ThreeElements } from '@react-three/fiber'
-import {
-  Suspense,
-  forwardRef,
-  useCallback,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-} from 'react'
+import { type ThreeElements, useFrame, useThree } from '@react-three/fiber'
 import type { ReactNode } from 'react'
+import { forwardRef, Suspense, useCallback, useImperativeHandle, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { clamp } from 'three/src/math/MathUtils.js'
 
@@ -156,16 +149,7 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
     const moveDirRef = useRef<THREE.ArrowHelper | null>(null)
     const elapsedRef = useRef(0)
 
-    function useIsInsideKeyboardControls() {
-      try {
-        return !!useKeyboardControls()
-      } catch {
-        return false
-      }
-    }
-
-    const isInsideKeyboardControls = useIsInsideKeyboardControls()
-    const [_, getKeys] = isInsideKeyboardControls ? useKeyboardControls() : [null, null]
+    const [, getKeys] = useKeyboardControls()
     const presetKeys = {
       forward: false,
       backward: false,
@@ -222,11 +206,11 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
     const scaledContactRadiusVec = useRef(new THREE.Vector3())
     const deltaDist = useRef(new THREE.Vector3())
     const currSlopeAngle = useRef(0)
-    const localMinDistance = useRef(Infinity)
+    const localMinDistance = useRef(Number.POSITIVE_INFINITY)
     const localClosestPoint = useRef(new THREE.Vector3())
     const localHitNormal = useRef(new THREE.Vector3())
     const triNormal = useRef(new THREE.Vector3())
-    const globalMinDistance = useRef(Infinity)
+    const globalMinDistance = useRef(Number.POSITIVE_INFINITY)
     const globalClosestPoint = useRef(new THREE.Vector3())
     const triHitPoint = useRef(new THREE.Vector3())
     const segHitPoint = useRef(new THREE.Vector3())
@@ -286,7 +270,13 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
         const moving = currentLinVel.current.lengthSq() > 1e-6
         const platformIsMoving = totalPlatformDeltaPos.current.lengthSq() > 1e-6
 
-        if (!moving && isOnGround.current && !jump && !isOnMovingPlatform.current && !platformIsMoving) {
+        if (
+          !moving &&
+          isOnGround.current &&
+          !jump &&
+          !isOnMovingPlatform.current &&
+          !platformIsMoving
+        ) {
           idleTime.current += delta
           if (idleTime.current > sleepTimeout) isSleeping.current = true
         } else {
@@ -340,7 +330,10 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
               upAxis.current,
             )
             characterModelTargetQuat.current.setFromRotationMatrix(characterModelLookMatrix.current)
-            characterModelRef.current.quaternion.slerp(characterModelTargetQuat.current, delta * turnSpeed)
+            characterModelRef.current.quaternion.slerp(
+              characterModelTargetQuat.current,
+              delta * turnSpeed,
+            )
           }
 
           const maxSpeed = run ? maxRunSpeed : maxWalkSpeed
@@ -358,18 +351,33 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
           )
           currentLinVel.current.add(deltaLinVel.current)
         } else if (isOnGround.current) {
-          deltaLinVel.current.copy(currentLinVelOnPlane.current).clampLength(0, deceleration * friction * delta)
+          deltaLinVel.current
+            .copy(currentLinVelOnPlane.current)
+            .clampLength(0, deceleration * friction * delta)
           currentLinVel.current.sub(deltaLinVel.current)
         }
       },
-      [acceleration, airDragFactor, counterAccFactor, deceleration, maxRunSpeed, maxWalkSpeed, turnSpeed, characterOrigin],
+      [
+        acceleration,
+        airDragFactor,
+        counterAccFactor,
+        deceleration,
+        maxRunSpeed,
+        maxWalkSpeed,
+        turnSpeed,
+        characterOrigin,
+      ],
     )
 
     const updateSegmentBBox = useCallback(() => {
       if (!characterGroupRef.current) return
 
-      characterSegment.current.start.set(0, capsuleLength / 2, 0).add(characterGroupRef.current.position)
-      characterSegment.current.end.set(0, -capsuleLength / 2, 0).add(characterGroupRef.current.position)
+      characterSegment.current.start
+        .set(0, capsuleLength / 2, 0)
+        .add(characterGroupRef.current.position)
+      characterSegment.current.end
+        .set(0, -capsuleLength / 2, 0)
+        .add(characterGroupRef.current.position)
 
       characterBbox.current
         .makeEmpty()
@@ -394,11 +402,18 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
 
     const collisionCheck = useCallback(
       (mesh: THREE.Mesh, originMatrix: THREE.Matrix4, delta: number) => {
-        if (!mesh.visible || !mesh.geometry.boundsTree || mesh.userData.excludeCollisionCheck) return
+        if (!(mesh.visible && mesh.geometry.boundsTree) || mesh.userData.excludeCollisionCheck)
+          return
 
-        originMatrix.decompose(contactTempPos.current, contactTempQuat.current, contactTempScale.current)
+        originMatrix.decompose(
+          contactTempPos.current,
+          contactTempQuat.current,
+          contactTempScale.current,
+        )
         collideInvertMatrix.current.copy(originMatrix).invert()
-        localCharacterSegment.current.copy(characterSegment.current).applyMatrix4(collideInvertMatrix.current)
+        localCharacterSegment.current
+          .copy(characterSegment.current)
+          .applyMatrix4(collideInvertMatrix.current)
 
         scaledContactRadiusVec.current.set(
           capsuleRadius / contactTempScale.current.x,
@@ -445,7 +460,10 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
               contactDepth.current =
                 capsuleRadius - capsuleContactPoint.current.distanceTo(triContactPoint.current)
 
-              accumulatedContactNormal.current.addScaledVector(contactNormal.current, contactDepth.current)
+              accumulatedContactNormal.current.addScaledVector(
+                contactNormal.current,
+                contactDepth.current,
+              )
               accumulatedContactPoint.current.add(triContactPoint.current)
               totalDepth.current += contactDepth.current
               triangleCount.current += 1
@@ -492,14 +510,16 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
 
     const floatingCheck = useCallback(
       (mesh: THREE.Mesh, originMatrix: THREE.Matrix4) => {
-        if (!mesh.visible || !mesh.geometry.boundsTree || mesh.userData.excludeFloatHit) return
+        if (!(mesh.visible && mesh.geometry.boundsTree) || mesh.userData.excludeFloatHit) return
 
         originMatrix.decompose(floatTempPos.current, floatTempQuat.current, floatTempScale.current)
         floatInvertMatrix.current.copy(originMatrix).invert()
         floatNormalInverseMatrix.current.getNormalMatrix(floatInvertMatrix.current)
         floatNormalMatrix.current.getNormalMatrix(originMatrix)
 
-        localFloatSensorSegment.current.copy(floatSensorSegment.current).applyMatrix4(floatInvertMatrix.current)
+        localFloatSensorSegment.current
+          .copy(floatSensorSegment.current)
+          .applyMatrix4(floatInvertMatrix.current)
         localFloatSensorBboxExpendPoint.current
           .copy(floatSensorBboxExpendPoint.current)
           .applyMatrix4(floatInvertMatrix.current)
@@ -517,20 +537,33 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
         localFloatSensorBbox.current.min.addScaledVector(scaledFloatRadiusVec.current, -1)
         localFloatSensorBbox.current.max.add(scaledFloatRadiusVec.current)
 
-        localMinDistance.current = Infinity
-        localClosestPoint.current.set(Infinity, Infinity, Infinity)
+        localMinDistance.current = Number.POSITIVE_INFINITY
+        localClosestPoint.current.set(
+          Number.POSITIVE_INFINITY,
+          Number.POSITIVE_INFINITY,
+          Number.POSITIVE_INFINITY,
+        )
 
         mesh.geometry.boundsTree.shapecast({
           intersectsBounds: (box) => box.intersectsBox(localFloatSensorBbox.current),
           intersectsTriangle: (tri) => {
-            tri.closestPointToSegment(localFloatSensorSegment.current, triHitPoint.current, segHitPoint.current)
-            localUpAxis.current.copy(upAxis.current).applyMatrix3(floatNormalInverseMatrix.current).normalize()
+            tri.closestPointToSegment(
+              localFloatSensorSegment.current,
+              triHitPoint.current,
+              segHitPoint.current,
+            )
+            localUpAxis.current
+              .copy(upAxis.current)
+              .applyMatrix3(floatNormalInverseMatrix.current)
+              .normalize()
             deltaHit.current.subVectors(triHitPoint.current, localFloatSensorSegment.current.start)
             deltaHit.current.divide(scaledFloatRadiusVec.current)
 
             const totalLengthSq = deltaHit.current.lengthSq()
             const dot = deltaHit.current.dot(localUpAxis.current)
-            const verticalLength = Math.abs(dot) / ((capsuleRadius + floatHeight + floatPullBackHeight) / floatSensorRadius)
+            const verticalLength =
+              Math.abs(dot) /
+              ((capsuleRadius + floatHeight + floatPullBackHeight) / floatSensorRadius)
             const horizontalLength = Math.sqrt(Math.max(0, totalLengthSq - dot * dot))
 
             if (horizontalLength < 1 && verticalLength < 1) {
@@ -560,9 +593,14 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
     const handleFloatingResponse = useCallback(
       (meshes: THREE.Mesh[], jump: boolean, delta: number) => {
         if (meshes.length === 0) return
+        let shouldJump = jump
 
-        globalMinDistance.current = Infinity
-        globalClosestPoint.current.set(Infinity, Infinity, Infinity)
+        globalMinDistance.current = Number.POSITIVE_INFINITY
+        globalClosestPoint.current.set(
+          Number.POSITIVE_INFINITY,
+          Number.POSITIVE_INFINITY,
+          Number.POSITIVE_INFINITY,
+        )
         floatHitNormal.current.set(0, 1, 0)
         isOnGround.current = false
         totalPlatformDeltaPos.current.set(0, 0, 0)
@@ -574,7 +612,11 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
           }
         }
 
-        if (floatCheckType !== 'SHAPECAST' && floatRaycastCandidates.length > 0 && globalMinDistance.current === Infinity) {
+        if (
+          floatCheckType !== 'SHAPECAST' &&
+          floatRaycastCandidates.length > 0 &&
+          globalMinDistance.current === Number.POSITIVE_INFINITY
+        ) {
           floatRaycaster.current.ray.origin.copy(floatSensorSegment.current.start)
           floatRaycaster.current.ray.direction.copy(gravityDir.current)
           const hits = floatRaycaster.current.intersectObjects(floatRaycastCandidates, false)
@@ -582,23 +624,28 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
           if (hit?.point) {
             globalClosestPoint.current.copy(hit.point)
             if (hit.face) {
-              floatHitNormal.current.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize()
+              floatHitNormal.current
+                .copy(hit.face.normal)
+                .transformDirection(hit.object.matrixWorld)
+                .normalize()
             }
           }
         }
 
-        if (globalClosestPoint.current.x === Infinity) return
+        if (globalClosestPoint.current.x === Number.POSITIVE_INFINITY) return
 
-        relativeHitPoint.current.copy(globalClosestPoint.current).sub(floatSensorSegment.current.start)
+        relativeHitPoint.current
+          .copy(globalClosestPoint.current)
+          .sub(floatSensorSegment.current.start)
         const currentDistance = relativeHitPoint.current.length()
         currSlopeAngle.current = floatHitNormal.current.angleTo(upAxis.current)
 
         if (currentDistance < floatHeight + capsuleRadius) {
           isOnGround.current = true
-          jump = false
+          shouldJump = false
         }
 
-        if (!jump) {
+        if (!shouldJump) {
           const displacement = floatHeight + capsuleRadius - currentDistance
           const velocityOnHitNormal = currentLinVel.current.dot(floatHitNormal.current)
           const springForce = displacement * floatSpringK
@@ -608,7 +655,17 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
           currentLinVel.current.addScaledVector(floatHitNormal.current, (totalForce / mass) * delta)
         }
       },
-      [capsuleRadius, floatCheckType, floatDampingC, floatHeight, floatRaycastCandidates, floatSpringK, floatingCheck, gravity, mass],
+      [
+        capsuleRadius,
+        floatCheckType,
+        floatDampingC,
+        floatHeight,
+        floatRaycastCandidates,
+        floatSpringK,
+        floatingCheck,
+        gravity,
+        mass,
+      ],
     )
 
     const updateCharacterWithPlatform = useCallback(() => {
@@ -646,8 +703,14 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
     )
 
     const resetLinVel = useCallback(() => currentLinVel.current.set(0, 0, 0), [])
-    const addLinVel = useCallback((velocity: THREE.Vector3) => currentLinVel.current.add(velocity), [])
-    const setLinVel = useCallback((velocity: THREE.Vector3) => currentLinVel.current.copy(velocity), [])
+    const addLinVel = useCallback(
+      (velocity: THREE.Vector3) => currentLinVel.current.add(velocity),
+      [],
+    )
+    const setLinVel = useCallback(
+      (velocity: THREE.Vector3) => currentLinVel.current.copy(velocity),
+      [],
+    )
     const setMovement = useCallback((movement: MovementInput) => {
       if (movement.forward !== undefined) forwardState.current = movement.forward
       if (movement.backward !== undefined) backwardState.current = movement.backward
@@ -682,7 +745,9 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
       debugRaySensorEnd.current?.position.copy(floatSensorSegment.current.end)
       standPointRef.current?.position.copy(globalClosestPoint.current)
       if (characterGroupRef.current) {
-        lookDirRef.current?.position.copy(characterGroupRef.current.position).addScaledVector(upAxis.current, 0.7)
+        lookDirRef.current?.position
+          .copy(characterGroupRef.current.position)
+          .addScaledVector(upAxis.current, 0.7)
       }
       lookDirRef.current?.lookAt(lookDirRef.current.position.clone().add(camProjDir.current))
       inputDirRef.current?.position.copy(characterSegment.current.end)
@@ -698,13 +763,13 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
       if (paused || elapsedRef.current < delay) return
 
       const deltaTime = Math.min(1 / 45, delta) * slowMotionFactor
-      const keys = isInsideKeyboardControls && getKeys ? getKeys() : presetKeys
-      const forward = forwardState.current || keys.forward
-      const backward = backwardState.current || keys.backward
-      const leftward = leftwardState.current || keys.leftward
-      const rightward = rightwardState.current || keys.rightward
-      const run = runState.current || keys.run
-      const jump = jumpState.current || keys.jump
+      const keys = getKeys() ?? presetKeys
+      const forward = forwardState.current || (keys.forward ?? false)
+      const backward = backwardState.current || (keys.backward ?? false)
+      const leftward = leftwardState.current || (keys.leftward ?? false)
+      const rightward = rightwardState.current || (keys.rightward ?? false)
+      const run = runState.current || (keys.run ?? false)
+      const jump = jumpState.current || (keys.jump ?? false)
 
       setInputDirection({
         forward,
@@ -740,7 +805,7 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
 
     return (
       <Suspense fallback={null}>
-        <group {...props} ref={characterGroupRef} dispose={null}>
+        <group {...props} dispose={null} ref={characterGroupRef}>
           {debug && (
             <mesh ref={characterColliderRef}>
               <capsuleGeometry args={colliderCapsuleArgs} />
@@ -777,8 +842,8 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
               <octahedronGeometry args={[0.1, 0]} />
               <meshNormalMaterial />
             </mesh>
-            <arrowHelper ref={inputDirRef} args={[undefined, undefined, undefined, '#00f']} />
-            <arrowHelper ref={moveDirRef} args={[undefined, undefined, undefined, '#f00']} />
+            <arrowHelper args={[undefined, undefined, undefined, '#00f']} ref={inputDirRef} />
+            <arrowHelper args={[undefined, undefined, undefined, '#f00']} ref={moveDirRef} />
             <mesh ref={standPointRef}>
               <octahedronGeometry args={[0.12, 0]} />
               <meshBasicMaterial color="red" opacity={0.2} transparent />

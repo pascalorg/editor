@@ -156,6 +156,8 @@ export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
+  // All positions are building-local: this tool is inside the ToolManager building group,
+  // so local coords are used for both data and visual positioning.
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
@@ -166,8 +168,6 @@ export const WallTool: React.FC = () => {
     let gridPosition: WallPlanPoint = [0, 0]
     let previousWallEnd: [number, number] | null = null
 
-    // All positions are building-local: this tool is inside the ToolManager building group,
-    // so local coords are used for both data and visual positioning.
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
@@ -324,7 +324,7 @@ function DraftMeasurementLabel({
 }) {
   return (
     <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
-      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono text-[11px] font-semibold text-foreground shadow-lg backdrop-blur-md">
+      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono font-semibold text-[11px] text-foreground shadow-lg backdrop-blur-md">
         {label}
       </div>
     </Html>

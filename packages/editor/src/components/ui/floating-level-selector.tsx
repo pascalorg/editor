@@ -171,7 +171,7 @@ function LevelRow({
             {...dragHandleProps}
             aria-label={`Reorder ${getLevelDisplayLabel(level)}`}
             className={cn(
-              'ml-0.5 flex h-6 w-4 shrink-0 touch-none cursor-grab items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
+              'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
             )}
             onClick={(e) => {

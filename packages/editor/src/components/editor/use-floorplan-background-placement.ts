@@ -144,11 +144,11 @@ export function useFloorplanBackgroundPlacement({
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
 
-        if (!roofDraftStart) {
+        if (roofDraftStart) {
+          clearRoofPlacementDraft()
+        } else {
           setRoofDraftStart(snappedPoint)
           setRoofDraftEnd(snappedPoint)
-        } else {
-          clearRoofPlacementDraft()
         }
         return true
       }

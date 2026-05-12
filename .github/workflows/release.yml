@@ -10,7 +10,9 @@ on:
         options:
           - core
           - viewer
-          - both
+          - editor
+          - mcp
+          - all
       bump:
         description: "Version bump"
         required: true
@@ -51,56 +53,115 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump & publish core
-        if: inputs.package == 'core' || inputs.package == 'both'
+      - name: Bump versions and sync inter-package references
+        run: |
+          BUMP=${{ inputs.bump }}
+          TARGET=${{ inputs.package }}
+
+          bump_version() {
+            local v=$1
+            IFS='.' read -r MAJ MIN PAT <<< "$v"
+            if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
+            if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
+            if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
+            echo "$MAJ.$MIN.$PAT"
+          }
+
+          # Track new versions in shell-local vars.
+          # NOTE: $GITHUB_ENV writes don't surface within the same step, so the
+          # peerDeps sync below must use shell vars, not env indirection.
+          declare -A NEW_VERSIONS
+
+          for pkg in core viewer editor mcp; do
+            if [ "$TARGET" = "$pkg" ] || [ "$TARGET" = "all" ]; then
+              CUR=$(jq -r '.version' packages/$pkg/package.json)
+              NEW=$(bump_version "$CUR")
+              jq --arg v "$NEW" '.version = $v' packages/$pkg/package.json > tmp.json && mv tmp.json packages/$pkg/package.json
+              NEW_VERSIONS[$pkg]=$NEW
+              UPPER=$(echo "$pkg" | tr '[:lower:]' '[:upper:]')
+              # Also export for the publish/commit/tag steps that follow.
+              echo "${UPPER}_VERSION=$NEW" >> $GITHUB_ENV
+              echo "Bumped @pascal-app/$pkg: $CUR → $NEW"
+            fi
+          done
+
+          # Sync inter-package references in peerDependencies and devDependencies.
+          # Anything that references a bumped @pascal-app/* package is updated to ^NEW.
+          for pkg in core viewer editor mcp; do
+            FILE=packages/$pkg/package.json
+            for dep in core viewer editor mcp; do
+              VAL="${NEW_VERSIONS[$dep]}"
+              [ -z "$VAL" ] && continue
+              jq --arg name "@pascal-app/$dep" --arg v "^$VAL" '
+                if .peerDependencies[$name] then .peerDependencies[$name] = $v else . end
+                | if .devDependencies[$name] then .devDependencies[$name] = $v else . end
+              ' "$FILE" > tmp.json && mv tmp.json "$FILE"
+            done
+          done
+
+          echo "=== @pascal-app/* refs after sync ==="
+          for pkg in core viewer editor mcp; do
+            echo "--- packages/$pkg/package.json ---"
+            jq '{ peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
+          done
+
+      - name: Build & publish core
+        if: inputs.package == 'core' || inputs.package == 'all'
         working-directory: packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          BUMP=${{ inputs.bump }}
-          VERSION=$(jq -r '.version' package.json)
-          IFS='.' read -r MAJ MIN PAT <<< "$VERSION"
-          if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
-          if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
-          if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
-          VERSION="$MAJ.$MIN.$PAT"
-          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
-          echo "CORE_VERSION=$VERSION" >> $GITHUB_ENV
-
           bun run build
-
           if [ "${{ inputs.dry-run }}" = "true" ]; then
-            echo "🏜️ Dry run — would publish @pascal-app/core@$VERSION"
+            echo "🏜️ Dry run — would publish @pascal-app/core@$CORE_VERSION"
             npm publish --dry-run --access public
           else
             npm publish --access public
-            echo "📦 Published @pascal-app/core@$VERSION"
+            echo "📦 Published @pascal-app/core@$CORE_VERSION"
           fi
 
-      - name: Bump & publish viewer
-        if: inputs.package == 'viewer' || inputs.package == 'both'
+      - name: Build & publish viewer
+        if: inputs.package == 'viewer' || inputs.package == 'all'
         working-directory: packages/viewer
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          BUMP=${{ inputs.bump }}
-          VERSION=$(jq -r '.version' package.json)
-          IFS='.' read -r MAJ MIN PAT <<< "$VERSION"
-          if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
-          if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
-          if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
-          VERSION="$MAJ.$MIN.$PAT"
-          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
-          echo "VIEWER_VERSION=$VERSION" >> $GITHUB_ENV
-
           bun run build
-
           if [ "${{ inputs.dry-run }}" = "true" ]; then
-            echo "🏜️ Dry run — would publish @pascal-app/viewer@$VERSION"
+            echo "🏜️ Dry run — would publish @pascal-app/viewer@$VIEWER_VERSION"
             npm publish --dry-run --access public
           else
             npm publish --access public
-            echo "📦 Published @pascal-app/viewer@$VERSION"
+            echo "📦 Published @pascal-app/viewer@$VIEWER_VERSION"
+          fi
+
+      - name: Publish editor
+        if: inputs.package == 'editor' || inputs.package == 'all'
+        working-directory: packages/editor
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/editor@$EDITOR_VERSION"
+            npm publish --dry-run --access public
+          else
+            npm publish --access public
+            echo "📦 Published @pascal-app/editor@$EDITOR_VERSION"
+          fi
+
+      - name: Build & publish mcp
+        if: inputs.package == 'mcp' || inputs.package == 'all'
+        working-directory: packages/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          bun run build
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/mcp@$MCP_VERSION"
+            npm publish --dry-run --access public
+          else
+            npm publish --access public
+            echo "📦 Published @pascal-app/mcp@$MCP_VERSION"
           fi
 
       - name: Commit version bumps & tag
@@ -117,6 +178,14 @@ jobs:
           if [ -n "$VIEWER_VERSION" ]; then
             PKGS="$PKGS @pascal-app/viewer@$VIEWER_VERSION"
             TAGS="$TAGS @pascal-app/viewer@$VIEWER_VERSION"
+          fi
+          if [ -n "$EDITOR_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/editor@$EDITOR_VERSION"
+            TAGS="$TAGS @pascal-app/editor@$EDITOR_VERSION"
+          fi
+          if [ -n "$MCP_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/mcp@$MCP_VERSION"
+            TAGS="$TAGS @pascal-app/mcp@$MCP_VERSION"
           fi
 
           git commit -m "release:${PKGS}"

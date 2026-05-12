@@ -35,8 +35,8 @@ import {
   Video,
 } from 'lucide-react'
 import { useEffect } from 'react'
-import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { runRedo, runUndo } from '../../../lib/history'
+import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
@@ -297,12 +297,14 @@ export function EditorCommands() {
       },
       {
         id: 'editor.viewer.camera-snapshot',
-        label: 'Camera Snapshot',
+        label: 'Take Snapshot',
         group: 'Viewer Controls',
         icon: <Camera className="h-4 w-4" />,
         keywords: ['camera', 'snapshot', 'capture', 'save', 'view', 'bookmark'],
-        navigate: true,
-        execute: () => navigateTo('camera-view'),
+        execute: () => {
+          setOpen(false)
+          useEditor.getState().setCaptureMode(true)
+        },
       },
 
       // ── View ─────────────────────────────────────────────────────────────

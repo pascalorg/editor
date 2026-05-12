@@ -106,11 +106,11 @@ export const MoveTool: React.FC<{
   if (movingNode.type === 'elevator')
     return <MoveElevatorTool node={movingNode as ElevatorNode} onCommitted={onNodeMoved} />
   if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
-  if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />
   if (movingNode.type === 'column') return <MoveColumnTool node={movingNode as ColumnNode} />
   if (movingNode.type === 'slab') return <MoveSlabTool node={movingNode as SlabNode} />
   if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
+  if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
   if (movingNode.type === 'spawn')

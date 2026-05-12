@@ -131,7 +131,6 @@ const PostProcessingPasses = ({
 
   // Reset retry state when project changes
   useEffect(() => {
-    // Intentionally touch projectId so the effect reruns on project switches.
     void projectId
     retryCountRef.current = 0
     if (rebuildTimeoutRef.current !== null) {
@@ -168,14 +167,22 @@ const PostProcessingPasses = ({
 
   // Build / rebuild the post-processing pipeline
   useEffect(() => {
-    // Intentionally touch these so React/biome treat project switches and retry bumps
-    // as explicit rebuild triggers instead of accidental extra dependencies.
-    void projectId
-    void pipelineVersion
-
     if (!(renderer && scene && camera)) {
+      console.warn('[viewer/post-processing] Skipping pipeline build — missing dependency.', {
+        hasRenderer: !!renderer,
+        hasScene: !!scene,
+        hasCamera: !!camera,
+      })
       return
     }
+
+    console.log('[viewer/post-processing] Building pipeline', {
+      version: pipelineVersion,
+      ssgi: SSGI_PARAMS.enabled,
+      hoverHighlightMode,
+      projectId,
+      rendererCtor: (renderer as any).constructor?.name,
+    })
 
     hasPipelineErrorRef.current = false
 
@@ -341,6 +348,7 @@ const PostProcessingPasses = ({
   }, [
     camera,
     hoverHiddenColor,
+    hoverHighlightMode,
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,

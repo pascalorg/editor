@@ -29,7 +29,7 @@ describe('save_scene', () => {
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('saves the current scene and returns SceneMeta with url', async () => {
+  test('saves the current scene and returns SceneMeta with editorUrl', async () => {
     const result = await client.callTool({
       name: 'save_scene',
       arguments: { name: 'My Scene' },
@@ -39,7 +39,10 @@ describe('save_scene', () => {
     expect(parsed.name).toBe('My Scene')
     expect(typeof parsed.id).toBe('string')
     expect(parsed.version).toBe(1)
-    expect(parsed.url).toBe(`/scene/${parsed.id}`)
+    expect(parsed.url).toBe(`/editor/${parsed.id}`)
+    expect(parsed.editorUrl).toBe(`/editor/${parsed.id}`)
+    expect(parsed.published).toBe(true)
+    expect(typeof parsed.graphHash).toBe('string')
     expect(parsed.nodeCount).toBeGreaterThan(0)
   })
 

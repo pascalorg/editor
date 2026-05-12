@@ -51,7 +51,7 @@ function updateCeilingGeometry(node: CeilingNode, mesh: THREE.Mesh) {
   const gridMesh = mesh.getObjectByName('ceiling-grid') as THREE.Mesh
   if (gridMesh) {
     gridMesh.geometry.dispose()
-    gridMesh.geometry = newGeo
+    gridMesh.geometry = newGeo.clone()
   }
 
   // Position at the ceiling height

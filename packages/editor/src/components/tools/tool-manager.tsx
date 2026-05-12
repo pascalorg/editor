@@ -64,9 +64,9 @@ export const ToolManager: React.FC = () => {
   const curvingFence = useEditor((state) => state.curvingFence)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
-  const selectedLevelId = useViewer((state) => state.selection.levelId)
-  const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const buildingId = useViewer((state) => state.selection.buildingId)
+  const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
 
@@ -140,8 +140,8 @@ export const ToolManager: React.FC = () => {
 
   return (
     <>
-      {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
+      {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {movingNode?.type === 'building' && (
         <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
       )}
@@ -175,21 +175,25 @@ export const ToolManager: React.FC = () => {
           />
         )}
         {!movingNode && showBuildTool && tool === 'spawn' && (
-          <SpawnTool currentLevelId={selectedLevelId} onPlaced={handlePlacedNodeSelected} />
+          <SpawnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
         )}
         {!movingNode && showBuildTool && tool === 'column' && (
-          <ColumnTool currentLevelId={selectedLevelId} onPlaced={handlePlacedNodeSelected} />
+          <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
         )}
         {!movingNode && showBuildTool && tool === 'elevator' && (
           <ElevatorTool
             buildingId={buildingId as BuildingNode['id'] | null}
-            levelId={selectedLevelId}
+            levelId={activeLevelId ?? null}
             onPlaced={handlePlacedElevatorSelected}
           />
         )}
-        {!movingNode && BuildToolComponent && tool !== 'column' && tool !== 'elevator' && (
+        {!movingNode &&
+        BuildToolComponent &&
+        tool !== 'spawn' &&
+        tool !== 'column' &&
+        tool !== 'elevator' ? (
           <BuildToolComponent />
-        )}
+        ) : null}
       </group>
     </>
   )

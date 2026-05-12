@@ -120,9 +120,8 @@ export function CeilingPanel() {
     const n = polygon.length
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
-      const current = polygon[i]
-      const next = polygon[j]
-      if (!(current && next)) continue
+      const current = polygon[i]!
+      const next = polygon[j]!
       area += current[0] * next[1]
       area -= next[0] * current[1]
     }

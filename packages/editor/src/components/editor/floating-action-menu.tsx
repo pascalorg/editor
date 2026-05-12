@@ -444,7 +444,11 @@ export function FloatingActionMenu() {
                 ? handleDuplicate
                 : undefined
             }
-            onMove={node && !DELETE_ONLY_TYPES.includes(node.type) ? handleMove : undefined}
+            onMove={
+              node && node.type !== 'wall' && !DELETE_ONLY_TYPES.includes(node.type)
+                ? handleMove
+                : undefined
+            }
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
           />

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && npx -y bun@1.3.13 run build --filter=editor",
+  "installCommand": "cd ../.. && npx -y bun@1.3.13 install --frozen-lockfile",
+  "outputDirectory": ".next",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "bunVersion": "1.x"
+}

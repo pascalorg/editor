@@ -111,7 +111,7 @@ function migrateWallSurfaceMaterials(node: Record<string, any>) {
     materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
   }
 
-  if (!hasInterior && !hasExterior) {
+  if (!(hasInterior || hasExterior)) {
     if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
       return node
     }
@@ -174,7 +174,7 @@ function migrateStairSurfaceMaterials(node: Record<string, any>) {
     return legacyFinish
   }
 
-  if (!hasRailing && !hasTread && !hasSide) {
+  if (!(hasRailing || hasTread || hasSide)) {
     if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
       return node
     }
@@ -236,7 +236,7 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
     materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
   }
 
-  if (!hasTop && !hasEdge && !hasWall) {
+  if (!(hasTop || hasEdge || hasWall)) {
     if (legacyFinish.material === undefined && legacyFinish.materialPreset === undefined) {
       return node
     }
@@ -350,7 +350,7 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
 }
 
 function getNodeChildIds(node: AnyNode): AnyNodeId[] {
-  if (!('children' in node) || !Array.isArray(node.children)) {
+  if (!('children' in node && Array.isArray(node.children))) {
     return []
   }
 
@@ -438,6 +438,11 @@ export type SceneState = {
 
   createNode: (node: AnyNode, parentId?: AnyNodeId) => void
   createNodes: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void
+  applyNodeChanges: (changes: {
+    create?: { node: AnyNode; parentId?: AnyNodeId }[]
+    update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
+    delete?: AnyNodeId[]
+  }) => void
 
   updateNode: (id: AnyNodeId, data: Partial<AnyNode>) => void
   updateNodes: (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => void
@@ -511,6 +516,13 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
+        set({
+          nodes: cleanedNodes,
+          rootNodeIds,
+          dirtyNodes: new Set<AnyNodeId>(),
+          collections: {},
+        })
+
         const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
         const reachableNodeIds = collectReachableNodeIds(cleanedNodes, normalizedRootNodeIds)
         if (normalizedRootNodeIds.length > 0) {
@@ -579,6 +591,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       createNodes: (ops) => nodeActions.createNodesAction(set, get, ops),
       createNode: (node, parentId) => nodeActions.createNodesAction(set, get, [{ node, parentId }]),
+      applyNodeChanges: (changes) => nodeActions.applyNodeChangesAction(set, get, changes),
 
       updateNodes: (updates) => nodeActions.updateNodesAction(set, get, updates),
       updateNode: (id, data) => nodeActions.updateNodesAction(set, get, [{ id, data }]),
@@ -701,8 +714,8 @@ let prevFutureLength = 0
 let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
 export function clearSceneHistory() {
-  useScene.temporal.getState().clear()
   resetSceneHistoryPauseDepth()
+  useScene.temporal.getState().clear()
   prevPastLength = 0
   prevFutureLength = 0
   prevNodesSnapshot = null

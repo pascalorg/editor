@@ -1,1 +1,0 @@
-../../../.claude/skills/review-architecture/SKILL.md

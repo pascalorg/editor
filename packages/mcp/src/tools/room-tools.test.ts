@@ -107,6 +107,10 @@ describe('room tools', () => {
     })
     const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(door.localX).toBeCloseTo(2.5, 3)
+    expect(door.t).toBe(0.5)
+    expect(door.position).toBe(0.5)
+    expect(door.wallLength).toBeCloseTo(5, 3)
+    expect(door.coordinateSystem).toBe('wall-local-meters')
     expect(
       (bridge.getNode(door.doorId) as { position: [number, number, number] }).position[0],
     ).toBeCloseTo(2.5, 3)
@@ -117,6 +121,10 @@ describe('room tools', () => {
     })
     const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(win.localX).toBeCloseTo(1.25, 3)
+    expect(win.t).toBe(0.25)
+    expect(win.position).toBe(0.25)
+    expect(win.wallLength).toBeCloseTo(5, 3)
+    expect(win.coordinateSystem).toBe('wall-local-meters')
     expect(
       (bridge.getNode(win.windowId) as { position: [number, number, number] }).position[1],
     ).toBe(1.5)
@@ -146,6 +154,7 @@ describe('room tools', () => {
     })
     const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(door.localX).toBeCloseTo(1.5, 3)
+    expect(door.t).toBe(0.25)
 
     const windowResult = await client.callTool({
       name: 'add_window',
@@ -153,6 +162,7 @@ describe('room tools', () => {
     })
     const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(win.localX).toBeCloseTo(4.5, 3)
+    expect(win.t).toBe(0.75)
     expect(bridge.validateScene().valid).toBe(true)
   })
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { ElevatorOpeningSystem } from '@pascal-app/core'
-import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
@@ -31,6 +30,7 @@ import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
+import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
 
@@ -84,7 +84,7 @@ extend(THREE as any)
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
 
 /**
- * Monitors the WebGPU device for loss events and logs them.
+ * Monitors the WebGPU device for loss / uncaptured errors and logs them.
  * WebGPU device loss can happen when:
  *  - Tab is backgrounded and OS reclaims GPU
  *  - Driver crash or GPU reset
@@ -97,6 +97,8 @@ type WebGPUDeviceLossInfo = {
 
 type WebGPUDeviceLike = {
   lost: Promise<WebGPUDeviceLossInfo>
+  label?: string
+  features?: Set<string>
   addEventListener?: (type: string, listener: EventListener) => void
   removeEventListener?: (type: string, listener: EventListener) => void
 }
@@ -109,8 +111,17 @@ function GPUDeviceWatcher() {
     const device = backend?.device as WebGPUDeviceLike | undefined
 
     if (!device) {
+      console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
+        backend: backend?.constructor?.name ?? 'unknown',
+        rendererType: (gl as any).constructor?.name ?? 'unknown',
+      })
       return
     }
+
+    console.log('[viewer] WebGPU device ready', {
+      label: device.label,
+      features: Array.from(device.features ?? []),
+    })
 
     device.lost.then((info: WebGPUDeviceLossInfo) => {
       console.error(
@@ -139,6 +150,7 @@ interface ViewerProps {
   hoverStyles?: HoverStyles
   selectionManager?: 'default' | 'custom'
   perf?: boolean
+  useBvh?: boolean
 }
 
 const Viewer: React.FC<ViewerProps> = ({
@@ -146,6 +158,7 @@ const Viewer: React.FC<ViewerProps> = ({
   hoverStyles = DEFAULT_HOVER_STYLES,
   selectionManager = 'default',
   perf = false,
+  useBvh = true,
 }) => {
   const theme = useViewer((state) => state.theme)
   return (
@@ -196,9 +209,13 @@ const Viewer: React.FC<ViewerProps> = ({
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
           /> */}
         <Lights />
-        <Bvh>
+        {useBvh ? (
+          <SceneBvh>
+            <SceneRenderer />
+          </SceneBvh>
+        ) : (
           <SceneRenderer />
-        </Bvh>
+        )}
 
         {/* Default Systems */}
         <LevelSystem />

@@ -65,6 +65,7 @@ export const GroundOccluder = () => {
 
     if (polygons.length > 0) {
       for (const ring of unionPolygons(polygons.map((pts) => pts.map((p) => [p[0], -p[1]])))) {
+        if (ring.length < 3) continue
         const hole = new THREE.Path()
 
         hole.moveTo(ring[0]![0], ring[0]![1])

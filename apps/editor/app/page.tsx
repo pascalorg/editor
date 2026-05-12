@@ -1,13 +1,34 @@
 'use client'
 
-import { Editor, type SidebarTab, ViewerToolbarLeft, ViewerToolbarRight } from '@pascal-app/editor'
+import { Editor, ItemsPanel } from '@pascal-app/editor'
+import { Layers, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
+import {
+  CommunityViewerToolbarLeft,
+  CommunityViewerToolbarRight,
+} from '@/components/viewer-toolbar'
 
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
+const SIDEBAR_TABS = [
   {
     id: 'site',
     label: 'Scene',
-    component: () => null, // Built-in SitePanel handles this
+    component: () => null,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Layers className="h-5 w-5" />,
+  },
+  {
+    id: 'items',
+    label: 'Items',
+    component: ItemsPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Package className="h-5 w-5" />,
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    component: () => null,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Settings className="h-5 w-5" />,
   },
 ]
 
@@ -36,8 +57,8 @@ export default function Home() {
         layoutVersion="v2"
         projectId={PROJECT_ID}
         sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<ViewerToolbarLeft />}
-        viewerToolbarRight={<ViewerToolbarRight />}
+        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
+        viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
     </div>
   )

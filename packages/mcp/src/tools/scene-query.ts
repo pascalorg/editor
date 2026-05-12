@@ -382,7 +382,7 @@ function holeBelongsToStair(
 }
 
 function parentListsChild(parent: AnyNode, childId: string): boolean {
-  if (!('children' in parent) || !Array.isArray(parent.children)) return false
+  if (!('children' in parent && Array.isArray(parent.children))) return false
   return parent.children.some((child) => {
     if (typeof child === 'string') return child === childId
     return (

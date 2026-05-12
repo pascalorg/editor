@@ -20,6 +20,7 @@ export {
   DEFAULT_WALL_MATERIAL,
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
+  glassMaterial,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'

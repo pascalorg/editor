@@ -3,9 +3,9 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
-  GuideNode,
+  type GuideNode,
   LevelNode,
-  ScanNode,
+  type ScanNode,
   type SiteNode,
   useScene,
   type ZoneNode,
@@ -32,14 +32,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from './../../../../../components/ui/primitives/popover'
-import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
-import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
-
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from './../../../../../lib/level-duplication'
-
+import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
+import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'

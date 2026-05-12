@@ -29,7 +29,7 @@ export async function publishLiveSceneSnapshot(
   syncDerivedStairOpenings(operations)
 
   const active = operations.getActiveScene()
-  if (!active || !operations.canAppendSceneEvents) return
+  if (!(active && operations.canAppendSceneEvents)) return
 
   const graph = operations.exportSceneGraph()
 
@@ -42,6 +42,9 @@ export async function publishLiveSceneSnapshot(
       thumbnailUrl: active.thumbnailUrl,
       graph,
       expectedVersion: active.version,
+      saveMode: 'draft',
+      publish: false,
+      operation: kind,
     })
     operations.setActiveScene(meta)
     await operations.appendSceneEvent({

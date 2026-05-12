@@ -1,1 +1,0 @@
-../../.cursor/rules/renderers.mdc

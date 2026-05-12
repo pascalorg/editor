@@ -1,25 +1,26 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { type MaterialSchema, MaterialSchema as MaterialSchemaSchema } from '../material'
+import type { MaterialSchema as MaterialSchemaType } from '../material'
+import { MaterialSchema } from '../material'
 import { RoofSegmentNode } from './roof-segment'
 
 export type RoofSurfaceMaterialRole = 'top' | 'edge' | 'wall'
 export type RoofSurfaceMaterialSpec = {
-  material?: MaterialSchema
+  material?: MaterialSchemaType
   materialPreset?: string
 }
 
 export const RoofNode = BaseNode.extend({
   id: objectId('roof'),
   type: nodeType('roof'),
-  material: MaterialSchemaSchema.optional(),
+  material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
-  topMaterial: MaterialSchemaSchema.optional(),
+  topMaterial: MaterialSchema.optional(),
   topMaterialPreset: z.string().optional(),
-  edgeMaterial: MaterialSchemaSchema.optional(),
+  edgeMaterial: MaterialSchema.optional(),
   edgeMaterialPreset: z.string().optional(),
-  wallMaterial: MaterialSchemaSchema.optional(),
+  wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
@@ -54,7 +55,8 @@ export function getEffectiveRoofSurfaceMaterial(
     if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
       return {
         material: node.topMaterial,
-        materialPreset: typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
+        materialPreset:
+          typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
       }
     }
   }

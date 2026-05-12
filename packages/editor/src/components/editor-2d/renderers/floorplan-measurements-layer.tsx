@@ -125,7 +125,12 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
   return (
     <>
       {measurements.map((measurement) => (
-        <g className={className} key={measurement.id} pointerEvents="none" style={{ userSelect: 'none' }}>
+        <g
+          className={className}
+          key={measurement.id}
+          pointerEvents="none"
+          style={{ userSelect: 'none' }}
+        >
           <FloorplanMeasurementLine
             dashed={measurement.dashedExtensions ?? true}
             isSelected={measurement.isSelected}

@@ -104,7 +104,9 @@ export function ControlModes() {
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-  const primeMaterialPaintFromSelection = useEditor((state) => state.primeMaterialPaintFromSelection)
+  const primeMaterialPaintFromSelection = useEditor(
+    (state) => state.primeMaterialPaintFromSelection,
+  )
   const levelId = useViewer((s) => s.selection.levelId)
 
   // Only subscribe to the primitive `level` number — when walls are added to
@@ -148,6 +150,8 @@ export function ControlModes() {
         // setPhase('site') calls viewer.resetSelection() which clears levelId,
         // breaking the 2D floorplan (it needs a level to render the SVG).
         useEditor.setState({ phase: 'site', mode: 'select', tool: null, catalogCategory: null })
+        // Clear object selection so the polygon editor handles receive pointer events
+        useViewer.getState().setSelection({ selectedIds: [] })
       }
       return
     }
@@ -188,6 +192,8 @@ export function ControlModes() {
       } else {
         setPhase('furnish')
         setMode('build')
+        // Auto-switch sidebar to the items panel so the user can pick furniture
+        useEditor.getState().setActiveSidebarPanel('items')
       }
     } else if (id === 'zone') {
       if (getIsActive('zone')) {

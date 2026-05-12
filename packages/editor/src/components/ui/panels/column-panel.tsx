@@ -11,6 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -71,10 +72,26 @@ const COLUMN_PROPORTION_PRESETS = {
 
 type ColumnProportionPresetId = keyof typeof COLUMN_PROPORTION_PRESETS
 
-const COLUMN_PROPORTION_OPTIONS = Object.entries(COLUMN_PROPORTION_PRESETS).map(([value, preset]) => ({
-  value: value as ColumnProportionPresetId,
-  label: preset.label,
-}))
+const COLUMN_PROPORTION_OPTIONS = Object.entries(COLUMN_PROPORTION_PRESETS).map(
+  ([value, preset]) => ({
+    value: value as ColumnProportionPresetId,
+    label: preset.label,
+  }),
+)
+
+const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportStyle'] }> = [
+  { label: 'Vertical', value: 'vertical' },
+  { label: 'A-Frame', value: 'a-frame' },
+  { label: 'Y Support', value: 'y-frame' },
+  { label: 'V Support', value: 'v-frame' },
+  { label: 'X Brace', value: 'x-brace' },
+  { label: 'K Brace', value: 'k-brace' },
+  { label: 'Single Strut', value: 'single-strut' },
+  { label: 'Tripod', value: 'tripod' },
+  { label: 'Trestle', value: 'trestle' },
+  { label: 'Portal Frame', value: 'portal-frame' },
+  { label: 'Box Frame', value: 'box-frame' },
+]
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -215,7 +232,12 @@ export function ColumnPanel() {
     supportStyle === 'box-frame'
 
   return (
-    <PanelWrapper icon="/icons/column.png" onClose={handleClose} title={node.name || 'Column'} width={300}>
+    <PanelWrapper
+      icon="/icons/column.png"
+      onClose={handleClose}
+      title={node.name || 'Column'}
+      width={300}
+    >
       <PanelSection title="Preset">
         <select
           className={SELECT_CLASS}
@@ -235,37 +257,39 @@ export function ColumnPanel() {
       </PanelSection>
 
       <PanelSection title="Shape">
-        <select
-          className={SELECT_CLASS}
-          onChange={(event) => {
-            const nextSupportStyle = event.target.value as ColumnNode['supportStyle']
-            handleUpdate({
-              supportStyle: nextSupportStyle,
-              ...(nextSupportStyle !== 'vertical'
-                ? {
-                    crossSection: 'rectangular',
-                    width: node.braceWidth ?? node.width,
-                    depth: node.braceDepth ?? node.depth,
-                    baseStyle: 'none',
-                    capitalStyle: 'none',
-                  }
-                : {}),
-            })
-          }}
-          value={supportStyle}
-        >
-          <option value="vertical">Vertical</option>
-          <option value="a-frame">A-Frame</option>
-          <option value="y-frame">Y Support</option>
-          <option value="v-frame">V Support</option>
-          <option value="x-brace">X Brace</option>
-          <option value="k-brace">K Brace</option>
-          <option value="single-strut">Single Strut</option>
-          <option value="tripod">Tripod Support</option>
-          <option value="trestle">Trestle Frame</option>
-          <option value="portal-frame">Portal Frame</option>
-          <option value="box-frame">Box Frame</option>
-        </select>
+        <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+          {SUPPORT_STYLE_OPTIONS.map((option) => {
+            const isSelected = supportStyle === option.value
+            return (
+              <button
+                className={cn(
+                  'flex min-h-12 items-center rounded-lg border px-2.5 text-left text-xs transition-colors',
+                  isSelected
+                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                )}
+                key={option.value}
+                onClick={() =>
+                  handleUpdate({
+                    supportStyle: option.value,
+                    ...(option.value !== 'vertical'
+                      ? {
+                          crossSection: 'rectangular',
+                          width: node.braceWidth ?? node.width,
+                          depth: node.braceDepth ?? node.depth,
+                          baseStyle: 'none',
+                          capitalStyle: 'none',
+                        }
+                      : {}),
+                  })
+                }
+                type="button"
+              >
+                <span className="truncate font-medium">{option.label}</span>
+              </button>
+            )
+          })}
+        </div>
         {isBraceSupport ? (
           <>
             <SliderControl
@@ -636,7 +660,7 @@ export function ColumnPanel() {
       )}
 
       {!isBraceSupport && (
-      <PanelSection title="Ends">
+        <PanelSection title="Ends">
         <select
           className={SELECT_CLASS}
           onChange={(event) => {
@@ -647,10 +671,22 @@ export function ColumnPanel() {
                 ? {}
                 : {
                     capitalHeight: Math.max(node.capitalHeight, 0.12),
-                    capitalTierCount: capitalStyle === 'stepped' ? Math.max(node.capitalTierCount ?? 3, 3) : node.capitalTierCount,
-                    capitalWidthScale: Math.max(node.capitalWidthScale ?? 1.3, capitalStyle === 'stepped' ? 1.42 : 1.28),
-                    capitalDepthScale: Math.max(node.capitalDepthScale ?? 1.3, capitalStyle === 'stepped' ? 1.42 : 1.28),
-                    capitalStepSpread: capitalStyle === 'stepped' ? Math.max(node.capitalStepSpread ?? 0.34, 0.34) : node.capitalStepSpread,
+                    capitalTierCount:
+                      capitalStyle === 'stepped'
+                        ? Math.max(node.capitalTierCount ?? 3, 3)
+                        : node.capitalTierCount,
+                    capitalWidthScale: Math.max(
+                      node.capitalWidthScale ?? 1.3,
+                      capitalStyle === 'stepped' ? 1.42 : 1.28,
+                    ),
+                    capitalDepthScale: Math.max(
+                      node.capitalDepthScale ?? 1.3,
+                      capitalStyle === 'stepped' ? 1.42 : 1.28,
+                    ),
+                    capitalStepSpread:
+                      capitalStyle === 'stepped'
+                        ? Math.max(node.capitalStepSpread ?? 0.34, 0.34)
+                        : node.capitalStepSpread,
                   }),
             })
           }}
@@ -732,13 +768,34 @@ export function ColumnPanel() {
                 ? {}
                 : {
                     baseHeight: Math.max(node.baseHeight, 0.12),
-                    baseTierCount: baseStyle === 'stepped-square' ? Math.max(node.baseTierCount ?? 3, 3) : node.baseTierCount,
-                    baseWidthScale: Math.max(node.baseWidthScale ?? 1.24, baseStyle === 'stepped-square' ? 1.42 : 1.24),
-                    baseDepthScale: Math.max(node.baseDepthScale ?? 1.24, baseStyle === 'stepped-square' ? 1.42 : 1.24),
-                    baseStepSpread: baseStyle === 'stepped-square' ? Math.max(node.baseStepSpread ?? 0.34, 0.34) : node.baseStepSpread,
-                    basePlinthHeightRatio: baseStyle === 'round-rings' ? (node.basePlinthHeightRatio ?? 0.44) : node.basePlinthHeightRatio,
-                    baseRoundBandScale: baseStyle === 'round-rings' ? (node.baseRoundBandScale ?? 0.92) : node.baseRoundBandScale,
-                    baseNeckScale: baseStyle === 'round-rings' ? (node.baseNeckScale ?? 0.72) : node.baseNeckScale,
+                    baseTierCount:
+                      baseStyle === 'stepped-square'
+                        ? Math.max(node.baseTierCount ?? 3, 3)
+                        : node.baseTierCount,
+                    baseWidthScale: Math.max(
+                      node.baseWidthScale ?? 1.24,
+                      baseStyle === 'stepped-square' ? 1.42 : 1.24,
+                    ),
+                    baseDepthScale: Math.max(
+                      node.baseDepthScale ?? 1.24,
+                      baseStyle === 'stepped-square' ? 1.42 : 1.24,
+                    ),
+                    baseStepSpread:
+                      baseStyle === 'stepped-square'
+                        ? Math.max(node.baseStepSpread ?? 0.34, 0.34)
+                        : node.baseStepSpread,
+                    basePlinthHeightRatio:
+                      baseStyle === 'round-rings'
+                        ? (node.basePlinthHeightRatio ?? 0.44)
+                        : node.basePlinthHeightRatio,
+                    baseRoundBandScale:
+                      baseStyle === 'round-rings'
+                        ? (node.baseRoundBandScale ?? 0.92)
+                        : node.baseRoundBandScale,
+                    baseNeckScale:
+                      baseStyle === 'round-rings'
+                        ? (node.baseNeckScale ?? 0.72)
+                        : node.baseNeckScale,
                   }),
             })
           }}
@@ -844,7 +901,7 @@ export function ColumnPanel() {
             value={node.baseStepSpread ?? 0.34}
           />
         )}
-      </PanelSection>
+        </PanelSection>
       )}
 
       <PanelSection title="Transform">

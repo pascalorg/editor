@@ -20,15 +20,12 @@ import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Box3,
   BufferGeometry,
   Euler,
   Float32BufferAttribute,
   type Group,
   type LineSegments,
-  Matrix4,
   type Mesh,
-  type Object3D,
   PlaneGeometry,
   Quaternion,
   Vector3,
@@ -114,79 +111,6 @@ function expandBoundsToGrid(
     max: [maxX, maxY, maxZ],
     dimensions: [expandedW, expandedH, expandedD],
     center: [cx, (minY + maxY) / 2, newCz],
-  }
-}
-
-function getPreviewBoundsFromObject(object: Object3D | null): PreviewBounds | null {
-  if (!object) return null
-
-  object.updateWorldMatrix(true, true)
-
-  const inverseRootMatrix = new Matrix4().copy(object.matrixWorld).invert()
-  const localMatrix = new Matrix4()
-  const localBounds = new Box3()
-  const scratchBounds = new Box3()
-  const hasBounds = { current: false }
-  const registeredNodeObjects = new Set(sceneRegistry.nodes.values())
-
-  const expandBounds = (child: Object3D) => {
-    if (child !== object && registeredNodeObjects.has(child)) {
-      return
-    }
-
-    const mesh = child as Object3D & {
-      isMesh?: boolean
-      name?: string
-      geometry?: {
-        boundingBox: Box3 | null
-        computeBoundingBox?: () => void
-      }
-    }
-
-    if (mesh.isMesh && mesh.name !== 'cutout' && mesh.geometry) {
-      if (!mesh.geometry.boundingBox && mesh.geometry.computeBoundingBox) {
-        mesh.geometry.computeBoundingBox()
-      }
-
-      if (mesh.geometry.boundingBox) {
-        localMatrix.copy(inverseRootMatrix).multiply(mesh.matrixWorld)
-        scratchBounds.copy(mesh.geometry.boundingBox).applyMatrix4(localMatrix)
-        if (Number.isFinite(scratchBounds.min.x) && Number.isFinite(scratchBounds.max.x)) {
-          if (!hasBounds.current) {
-            localBounds.copy(scratchBounds)
-            hasBounds.current = true
-          } else {
-            localBounds.union(scratchBounds)
-          }
-        }
-      }
-    }
-
-    for (const grandchild of child.children) {
-      expandBounds(grandchild)
-    }
-  }
-
-  for (const child of object.children) {
-    expandBounds(child)
-  }
-
-  if (!hasBounds.current) return null
-
-  const size = new Vector3()
-  const center = new Vector3()
-  localBounds.getSize(size)
-  localBounds.getCenter(center)
-
-  if (size.x <= 0 || size.y <= 0 || size.z <= 0) {
-    return null
-  }
-
-  return {
-    min: [localBounds.min.x, localBounds.min.y, localBounds.min.z],
-    max: [localBounds.max.x, localBounds.max.y, localBounds.max.z],
-    dimensions: [size.x, size.y, size.z],
-    center: [center.x, center.y, center.z],
   }
 }
 
@@ -366,7 +290,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   )
   const shiftFreeRef = useRef(false)
   const previewBoundsSignatureRef = useRef<string | null>(null)
-  const meshPreviewAppliedRef = useRef(false)
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
 
   // Store config callbacks in refs to avoid re-running effect when they change
@@ -503,7 +426,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   useEffect(() => {
     if (!asset) return
     useScene.temporal.getState().pause()
-    meshPreviewAppliedRef.current = false
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
@@ -1264,21 +1186,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     window.addEventListener('contextmenu', onContextMenu)
 
     // ---- Bounding box geometry ----
+    // Always derive the wireframe from `asset.dimensions × scale` rather than
+    // the rendered mesh bounds. Asset dimensions describe the item's footprint
+    // (e.g. only the trunk for a palm tree), while the mesh bbox would include
+    // foliage or other visual overhang the snap logic intentionally ignores.
 
     const draft = draftNode.current
-    const fallbackBounds = expandBoundsToGrid(
+    const previewBounds = expandBoundsToGrid(
       getFallbackPreviewBounds(draft, asset, asset.attachTo),
       asset.attachTo,
       gridSnapStep,
     )
-    const previewBounds = draft
-      ? expandBoundsToGrid(
-          getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null) ??
-            getFallbackPreviewBounds(draft, asset, asset.attachTo),
-          asset.attachTo,
-          gridSnapStep,
-        )
-      : fallbackBounds
     updatePreviewGeometry(previewBounds)
     updateDimensionGuides(previewBounds)
 
@@ -1324,7 +1242,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     return () => {
       tearingDown = true
-      meshPreviewAppliedRef.current = false
       unsubDraftWatch()
       // Clear live transform for any remaining draft
       if (draftNode.current) {
@@ -1358,17 +1275,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   useEffect(() => {
     if (!asset) return
     const draft = draftNode.current
-    const fallbackBounds = expandBoundsToGrid(
+    const previewBounds = expandBoundsToGrid(
       getFallbackPreviewBounds(draft, asset, asset.attachTo),
       asset.attachTo,
       gridSnapStep,
     )
-    const meshBounds = draft
-      ? getPreviewBoundsFromObject(sceneRegistry.nodes.get(draft.id) ?? null)
-      : null
-    const previewBounds = meshBounds
-      ? expandBoundsToGrid(meshBounds, asset.attachTo, gridSnapStep)
-      : fallbackBounds
     updatePreviewGeometry(previewBounds)
     updateDimensionGuides(previewBounds)
   }, [gridSnapStep, asset, draftNode])
@@ -1388,19 +1299,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (!draftNode.current) return
     const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
-    if (!meshPreviewAppliedRef.current) {
-      const previewBounds = getPreviewBoundsFromObject(mesh)
-      if (previewBounds) {
-        const expandedBounds = expandBoundsToGrid(
-          previewBounds,
-          asset.attachTo,
-          useEditor.getState().gridSnapStep,
-        )
-        updatePreviewGeometry(expandedBounds)
-        updateDimensionGuides(expandedBounds)
-        meshPreviewAppliedRef.current = true
-      }
-    }
 
     // Hide wall/ceiling-attached items when between surfaces (only cursor visible)
     if (asset.attachTo && placementState.current.surface === 'floor') {
@@ -1490,22 +1388,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const measurementContent = (
     <>
       <lineSegments
-        layers={EDITOR_LAYER}
         geometry={initialWidthGuideGeometry}
+        layers={EDITOR_LAYER}
         material={measurementMaterial}
         ref={measurementWidthRef}
         renderOrder={998}
       />
       <lineSegments
-        layers={EDITOR_LAYER}
         geometry={initialDepthGuideGeometry}
+        layers={EDITOR_LAYER}
         material={measurementMaterial}
         ref={measurementDepthRef}
         renderOrder={998}
       />
       <lineSegments
-        layers={EDITOR_LAYER}
         geometry={initialHeightGuideGeometry}
+        layers={EDITOR_LAYER}
         material={measurementMaterial}
         ref={measurementHeightRef}
         renderOrder={998}

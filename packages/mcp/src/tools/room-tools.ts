@@ -76,6 +76,11 @@ export const addDoorInput = {
 export const addDoorOutput = {
   doorId: z.string(),
   localX: z.number(),
+  t: z.number(),
+  position: z.number(),
+  wallLength: z.number(),
+  clamped: z.boolean(),
+  coordinateSystem: z.literal('wall-local-meters'),
 }
 
 export const addWindowInput = {
@@ -90,6 +95,11 @@ export const addWindowInput = {
 export const addWindowOutput = {
   windowId: z.string(),
   localX: z.number(),
+  t: z.number(),
+  position: z.number(),
+  wallLength: z.number(),
+  clamped: z.boolean(),
+  coordinateSystem: z.literal('wall-local-meters'),
   sillHeight: z.number(),
 }
 
@@ -471,7 +481,15 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
       })
       const id = bridge.createNode(door, wallId as AnyNodeId)
       await publishLiveSceneSnapshot(bridge, 'add_door')
-      return textResult({ doorId: id, localX })
+      return textResult({
+        doorId: id,
+        localX,
+        t: wallT,
+        position: wallT,
+        wallLength: length,
+        clamped: Math.abs(localX - wallT * length) > 1e-9,
+        coordinateSystem: 'wall-local-meters',
+      })
     },
   )
 }
@@ -506,7 +524,16 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
       })
       const id = bridge.createNode(windowNode, wallId as AnyNodeId)
       await publishLiveSceneSnapshot(bridge, 'add_window')
-      return textResult({ windowId: id, localX, sillHeight })
+      return textResult({
+        windowId: id,
+        localX,
+        t: wallT,
+        position: wallT,
+        wallLength: length,
+        clamped: Math.abs(localX - wallT * length) > 1e-9,
+        coordinateSystem: 'wall-local-meters',
+        sillHeight,
+      })
     },
   )
 }
@@ -539,8 +566,10 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
         const fp = itemFootprint(asset, placement.x, placement.z, placement.rotationDeg ?? 0)
         const padding = 0.05
         if (
-          !pointInBoundsWithPadding(fp.minX, fp.minZ, bounds, -padding) ||
-          !pointInBoundsWithPadding(fp.maxX, fp.maxZ, bounds, -padding)
+          !(
+            pointInBoundsWithPadding(fp.minX, fp.minZ, bounds, -padding) &&
+            pointInBoundsWithPadding(fp.maxX, fp.maxZ, bounds, -padding)
+          )
         ) {
           skipped.push(`${asset.id}: outside room bounds`)
           continue

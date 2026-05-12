@@ -41,7 +41,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       className={cn(
         'group/row mx-1 mb-0.5 flex h-8 cursor-pointer select-none items-center rounded-lg border px-2 text-sm transition-all duration-200',
         isSelected
-          ? 'border-neutral-200/60 bg-white text-foreground shadow-[0_1px_2px_0px_rgba(0,0,0,0.05)] ring-1 ring-white/50 ring-inset dark:border-border/50 dark:bg-accent/50 dark:ring-white/10'
+          ? 'border-neutral-200/60 bg-white text-foreground shadow-elevation-0 ring-1 ring-white/50 ring-inset dark:border-border/50 dark:bg-accent/50 dark:ring-white/10'
           : 'border-transparent text-muted-foreground hover:border-neutral-200/50 hover:bg-white/40 hover:text-foreground dark:hover:border-border/40 dark:hover:bg-accent/30',
       )}
       onClick={handleClick}

@@ -23,6 +23,10 @@ export const listScenesOutput = {
       ownerId: z.string().nullable(),
       sizeBytes: z.number(),
       nodeCount: z.number(),
+      editorUrl: z.string().optional(),
+      url: z.string().optional(),
+      published: z.boolean().optional(),
+      graphHash: z.string().optional(),
     }),
   ),
 }

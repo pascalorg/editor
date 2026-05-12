@@ -1,7 +1,3 @@
-// @ts-expect-error — bun:test is provided by the Bun runtime; core does not
-// depend on @types/bun so the import type is unresolved at compile time.
-// The tsconfig in packages/core still emits this file; the @ts-expect-error
-// keeps the build green while letting `bun test` pick it up normally.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ALLOWED_ORIGINS_ENV, AssetUrl } from './asset-url'
 

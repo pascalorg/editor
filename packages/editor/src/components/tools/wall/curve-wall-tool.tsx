@@ -81,15 +81,17 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         ? event.localPosition[2]
         : snapScalarToGrid(event.localPosition[2], snapStep)
 
-      const offsetFromMidpoint =
-        -(
-          (localX - chord.midpoint.x) * chord.normal.x +
-          (localZ - chord.midpoint.y) * chord.normal.y
-        )
+      const offsetFromMidpoint = -(
+        (localX - chord.midpoint.x) * chord.normal.x +
+        (localZ - chord.midpoint.y) * chord.normal.y
+      )
       const snappedOffset = shiftPressedRef.current
         ? offsetFromMidpoint
         : snapScalarToGrid(offsetFromMidpoint, snapStep)
-      const nextCurveOffset = normalizeWallCurveOffset(node, Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)))
+      const nextCurveOffset = normalizeWallCurveOffset(
+        node,
+        Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)),
+      )
 
       if (
         previousCurveOffsetRef.current !== null &&

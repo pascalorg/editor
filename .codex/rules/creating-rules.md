@@ -1,1 +1,0 @@
-../../.cursor/rules/creating-rules.mdc

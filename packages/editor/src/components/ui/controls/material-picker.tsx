@@ -5,8 +5,9 @@ import {
   getLibraryMaterialIdFromRef,
   getMaterialsForCategory,
   MATERIAL_CATEGORIES,
-  toLibraryMaterialRef,
   type MaterialSchema,
+  type MaterialTarget,
+  toLibraryMaterialRef,
 } from '@pascal-app/core'
 import { useEffect, useRef, useState } from 'react'
 import useEditor from '../../../store/use-editor'
@@ -17,6 +18,8 @@ type MaterialPickerProps = {
   onChange?: (material: MaterialSchema) => void
   onSelectMaterialPreset?: (materialPreset: string) => void
   disabled?: boolean
+  nodeType?: MaterialTarget
+  hideSideControl?: boolean
 }
 
 export function MaterialPicker({
@@ -48,8 +51,7 @@ export function MaterialPicker({
       return
     }
 
-    const catalogId =
-      getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? value?.id ?? undefined
+    const catalogId = getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? value?.id ?? undefined
     const selectedCatalogEntry = getCatalogMaterialById(catalogId)
     if (selectedCatalogEntry?.category) {
       setSelectedCategory(selectedCatalogEntry.category)
@@ -177,7 +179,7 @@ export function MaterialPicker({
                   title={item.label}
                   type="button"
                 >
-                  <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/12" />
+                  <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/12 ring-inset" />
                   {item.previewThumbnailUrl ? (
                     <img
                       alt={item.label}
@@ -193,7 +195,7 @@ export function MaterialPicker({
               ))}
               {selectedCategory === 'other' && onChange ? (
                 <button
-                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border text-[10px] font-medium transition-all ${
+                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border font-medium text-[10px] transition-all ${
                     showCustom
                       ? 'border-blue-500 ring-2 ring-blue-500/30'
                       : 'border-gray-300 hover:border-gray-400'

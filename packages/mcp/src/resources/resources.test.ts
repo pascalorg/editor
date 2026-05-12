@@ -201,21 +201,32 @@ describe('pascal://catalog/items', () => {
   })
 })
 
-describe('pascal://agent/guide', () => {
+describe('pascal://agent-guide', () => {
   beforeEach(() => resetScene())
 
-  test('returns MCP-first construction guidance', async () => {
+  test('returns MCP-first project guidance', async () => {
     const pair = await spinUp(registerAgentGuide)
     try {
-      const res = await pair.client.readResource({ uri: 'pascal://agent/guide' })
+      const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
       const content = res.contents[0] as { uri: string; mimeType?: string; text?: string }
       expect(content.mimeType).toBe('text/markdown')
       const text = content.text ?? ''
-      expect(text).toContain('create_story_shell')
-      expect(text).toContain('create_stair_between_levels')
-      expect(text).toContain('dedicated roof level')
-      expect(text).toContain('Do not make first-story walls taller')
-      expect(text).toContain('Run `validate_scene` and `verify_scene`')
+      expect(text).toContain('create_project')
+      expect(text).toContain('save_scene')
+      expect(text).toContain('get_project_status')
+      expect(text).toContain('editorUrl')
+      expect(text).toContain('0 to 1 along the wall')
+    } finally {
+      await pair.close()
+    }
+  })
+
+  test('keeps the legacy agent guide URI as an alias', async () => {
+    const pair = await spinUp(registerAgentGuide)
+    try {
+      const res = await pair.client.readResource({ uri: 'pascal://agent/guide' })
+      const text = (res.contents[0] as { text?: string }).text ?? ''
+      expect(text).toContain('Pascal MCP Agent Guide')
     } finally {
       await pair.close()
     }

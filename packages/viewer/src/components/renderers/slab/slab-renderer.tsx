@@ -1,5 +1,5 @@
 import { getMaterialPresetByRef, type SlabNode, useRegistry } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import * as THREE from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
@@ -10,6 +10,12 @@ import {
 } from '../../../lib/materials'
 
 const slabMaterialCache = new Map<string, THREE.MeshStandardMaterial>()
+
+function createEmptyGeometry() {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  return geometry
+}
 
 function getSlabMaterial(
   cacheKey: string,
@@ -47,10 +53,13 @@ function getSlabMaterial(
 
 export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const ref = useRef<Mesh>(null!)
+  const placeholderGeometry = useMemo(createEmptyGeometry, [])
 
   useRegistry(node.id, 'slab', ref)
 
   const handlers = useNodeEvents(node, 'slab')
+
+  useEffect(() => () => placeholderGeometry.dispose(), [placeholderGeometry])
 
   const material = useMemo(() => {
     const resolvedMaterial = node.material
@@ -75,13 +84,12 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   return (
     <mesh
       castShadow
+      geometry={placeholderGeometry}
       receiveShadow
       ref={ref}
       {...handlers}
       material={material}
       visible={node.visible}
-    >
-      <boxGeometry args={[0, 0, 0]} />
-    </mesh>
+    />
   )
 }

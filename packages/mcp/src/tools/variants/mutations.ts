@@ -11,21 +11,19 @@ export type MutationKind =
   | 'door-positions'
   | 'fence-style'
 
-/** Deterministic 32-bit RNG. */
+/** Deterministic seeded RNG. */
 export type Rng = () => number
 
 /**
- * Tiny PRNG. Returns a function that produces uniformly distributed floats in
- * [0, 1). Source: https://stackoverflow.com/a/47593316/17118
+ * Tiny Park-Miller PRNG. Returns a function that produces uniformly
+ * distributed floats in [0, 1) without bitwise operators.
  */
 export function mulberry32(seed: number): Rng {
-  let state = seed | 0
+  let state = Math.trunc(Math.abs(seed)) % 2_147_483_647
+  if (state === 0) state = 1
   return () => {
-    state = (state + 0x6d2b79f5) | 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    state = (state * 16_807) % 2_147_483_647
+    return (state - 1) / 2_147_483_646
   }
 }
 
@@ -74,10 +72,10 @@ function siteBounds(
     if (node.type !== 'site') continue
     const pts = (node as { polygon?: { points?: Array<[number, number]> } }).polygon?.points
     if (!pts || pts.length === 0) continue
-    let minX = Infinity
-    let maxX = -Infinity
-    let minZ = Infinity
-    let maxZ = -Infinity
+    let minX = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY
+    let maxZ = Number.NEGATIVE_INFINITY
     for (const [x, z] of pts) {
       if (x < minX) minX = x
       if (x > maxX) maxX = x
@@ -101,7 +99,7 @@ function isPerimeterWall(
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null,
   epsilon = 0.01,
 ): boolean {
-  if (!bounds || !wall.start || !wall.end) return false
+  if (!(bounds && wall.start && wall.end)) return false
   const onBound = (x: number, z: number): boolean =>
     Math.abs(x - bounds.minX) <= epsilon ||
     Math.abs(x - bounds.maxX) <= epsilon ||
@@ -154,7 +152,7 @@ function applyRoomProportions(graph: SceneGraph, rng: Rng): SceneGraph {
       start?: [number, number]
       end?: [number, number]
     }
-    if (!wall.start || !wall.end) continue
+    if (!(wall.start && wall.end)) continue
     if (isPerimeterWall(wall, bounds)) continue
     // Nudge each endpoint by ±10% of its current value.
     const nudge = (v: number): number => v * (1 + (rng() * 2 - 1) * 0.1)
@@ -193,7 +191,7 @@ function applyOpenPlan(graph: SceneGraph, rng: Rng): SceneGraph {
   out.rootNodeIds = out.rootNodeIds.filter((id) => !removal.has(id))
   // Drop references from any parent's `children` array.
   for (const parent of Object.values(out.nodes)) {
-    if (!('children' in parent) || !Array.isArray((parent as { children?: unknown[] }).children)) {
+    if (!('children' in parent && Array.isArray((parent as { children?: unknown[] }).children))) {
       continue
     }
     const children = (parent as { children: unknown[] }).children

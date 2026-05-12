@@ -10,6 +10,7 @@ import {
   type StoredTextContent,
 } from '../scene-lifecycle/test-utils'
 import { registerCreateFromTemplate } from './create-from-template'
+import { registerCreateHouseFromBrief } from './create-house-from-brief'
 import { registerListTemplates } from './list-templates'
 
 describe('list_templates', () => {
@@ -63,6 +64,7 @@ describe('create_from_template', () => {
     const operations = createSceneOperations({ bridge, store })
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerCreateFromTemplate(server, operations)
+    registerCreateHouseFromBrief(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -106,9 +108,16 @@ describe('create_from_template', () => {
     expect(result.isError).toBeFalsy()
     const parsed = parseToolText(result.content as StoredTextContent[])
     expect(parsed.scene).toBeDefined()
-    const scene = parsed.scene as { id: string; name: string; url: string; nodeCount: number }
+    const scene = parsed.scene as {
+      id: string
+      name: string
+      url: string
+      editorUrl: string
+      nodeCount: number
+    }
     expect(scene.name).toBe('My flat')
-    expect(scene.url).toBe(`/scene/${scene.id}`)
+    expect(scene.url).toBe(`/editor/${scene.id}`)
+    expect(scene.editorUrl).toBe(`/editor/${scene.id}`)
     expect(scene.nodeCount).toBeGreaterThan(0)
 
     // Confirm the store actually holds it.
@@ -130,6 +139,26 @@ describe('create_from_template', () => {
     for (const id of idsA) {
       expect(idsB).not.toContain(id)
     }
+  })
+
+  test('create_house_from_brief creates, saves, and returns an editor URL', async () => {
+    const result = await client.callTool({
+      name: 'create_house_from_brief',
+      arguments: {
+        brief: 'Create a compact modern two-bedroom home with a small patio.',
+        projectName: 'Brief house',
+        bedroomCount: 2,
+        landscaping: true,
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = parseToolText(result.content as StoredTextContent[])
+    expect(typeof parsed.projectId).toBe('string')
+    expect(parsed.editorUrl).toBe(`/editor/${parsed.projectId}`)
+    expect(parsed.version).toBe(1)
+    expect(parsed.published).toBe(true)
+    expect(parsed.nodeCount as number).toBeGreaterThan(0)
+    expect(parsed.nextStep as string).toContain('get_project_status')
   })
 })
 

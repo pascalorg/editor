@@ -4,11 +4,18 @@ import {
   resolveMaterial,
   useRegistry,
 } from '@pascal-app/core'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { BufferGeometry, Float32BufferAttribute } from 'three'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { NodeRenderer } from '../node-renderer'
+
+function createEmptyGeometry() {
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute([], 3))
+  return geometry
+}
 
 const gridScale = 5
 const gridX = positionWorld.x.mul(gridScale).fract()
@@ -51,9 +58,19 @@ function getCeilingMaterials(color = '#999999') {
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
+  const placeholderGeometry = useMemo(createEmptyGeometry, [])
+  const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
 
   useRegistry(node.id, 'ceiling', ref)
   const handlers = useNodeEvents(node, 'ceiling')
+
+  useEffect(
+    () => () => {
+      placeholderGeometry.dispose()
+      gridPlaceholderGeometry.dispose()
+    },
+    [gridPlaceholderGeometry, placeholderGeometry],
+  )
 
   const materials = useMemo(() => {
     const preset = getMaterialPresetByRef(node.materialPreset)
@@ -69,17 +86,15 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   ])
 
   return (
-    <mesh material={materials.bottomMaterial} ref={ref}>
-      <boxGeometry args={[0, 0, 0]} />
+    <mesh geometry={placeholderGeometry} material={materials.bottomMaterial} ref={ref}>
       <mesh
+        geometry={gridPlaceholderGeometry}
         material={materials.topMaterial}
         name="ceiling-grid"
         {...handlers}
         scale={0}
         visible={false}
-      >
-        <boxGeometry args={[0, 0, 0]} />
-      </mesh>
+      />
       {node.children.map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}

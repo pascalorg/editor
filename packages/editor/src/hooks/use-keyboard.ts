@@ -81,6 +81,7 @@ export const useKeyboard = ({
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('build')
+        useEditor.getState().setActiveSidebarPanel('items')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -277,6 +278,15 @@ export const useKeyboard = ({
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
 
         if (selectedNodeIds.length > 0) {
+          // Guard against accidental bulk deletion (e.g. box-select all + Delete)
+          const BULK_DELETE_THRESHOLD = 10
+          if (selectedNodeIds.length >= BULK_DELETE_THRESHOLD) {
+            const confirmed = window.confirm(
+              `Delete ${selectedNodeIds.length} selected elements? This cannot be undone if the undo history is exhausted.`,
+            )
+            if (!confirmed) return
+          }
+
           // Play appropriate SFX based on what's being deleted
           if (selectedNodeIds.length === 1) {
             const node = useScene.getState().nodes[selectedNodeIds[0]!]

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -6,6 +7,8 @@ import { z } from 'zod'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
+  type ProjectCreateOptions,
+  type ProjectStatus,
   type SceneEvent,
   type SceneEventAppendOptions,
   type SceneEventListOptions,
@@ -56,6 +59,15 @@ interface SceneEventRow {
   kind: string
   created_at: string
   graph_json: string
+}
+
+interface ProjectPlaceholder {
+  id: string
+  name: string
+  ownerId: string | null
+  thumbnailUrl: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 const GraphSchema = z.object({
@@ -116,6 +128,7 @@ function resolveMaxSceneBytes(
 }
 
 function rowToMeta(row: SceneRow): SceneMeta {
+  const editorUrl = editorUrlForScene(row.id)
   return {
     id: row.id,
     name: row.name,
@@ -127,6 +140,66 @@ function rowToMeta(row: SceneRow): SceneMeta {
     updatedAt: row.updated_at,
     sizeBytes: row.size_bytes,
     nodeCount: row.node_count,
+    editorUrl,
+    url: editorUrl,
+    published: true,
+    graphHash: hashGraphJson(row.graph_json),
+  }
+}
+
+function editorUrlForScene(id: string): string {
+  return `/editor/${id}`
+}
+
+function hashGraphJson(graphJson: string): string {
+  return createHash('sha256').update(graphJson).digest('hex')
+}
+
+function rowToProjectStatus(row: SceneRow): ProjectStatus {
+  const editorUrl = editorUrlForScene(row.id)
+  return {
+    id: row.id,
+    projectId: row.project_id ?? row.id,
+    name: row.name,
+    editorUrl,
+    url: editorUrl,
+    ownerId: row.owner_id,
+    thumbnailUrl: row.thumbnail_url,
+    publishedVersion: row.version,
+    latestVersion: row.version,
+    draftVersion: null,
+    browserVisibleVersion: row.version,
+    version: row.version,
+    isEmpty: row.node_count === 0,
+    sizeBytes: row.size_bytes,
+    nodeCount: row.node_count,
+    graphHash: hashGraphJson(row.graph_json),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function placeholderToProjectStatus(project: ProjectPlaceholder): ProjectStatus {
+  const editorUrl = editorUrlForScene(project.id)
+  return {
+    id: project.id,
+    projectId: project.id,
+    name: project.name,
+    editorUrl,
+    url: editorUrl,
+    ownerId: project.ownerId,
+    thumbnailUrl: project.thumbnailUrl,
+    publishedVersion: null,
+    latestVersion: null,
+    draftVersion: null,
+    browserVisibleVersion: null,
+    version: 0,
+    isEmpty: true,
+    sizeBytes: 0,
+    nodeCount: 0,
+    graphHash: null,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
   }
 }
 
@@ -205,6 +278,7 @@ export class SqliteSceneStore implements SceneStore {
   readonly databasePath: string
 
   private readonly maxSceneBytes: number
+  private readonly projectPlaceholders = new Map<string, ProjectPlaceholder>()
   private db: SqliteDatabase | null = null
   private dbPromise: Promise<SqliteDatabase> | null = null
 
@@ -212,6 +286,38 @@ export class SqliteSceneStore implements SceneStore {
     const env = opts.env ?? process.env
     this.databasePath = path.resolve(opts.databasePath ?? resolveDefaultDatabasePath(env))
     this.maxSceneBytes = resolveMaxSceneBytes(env, opts.maxSceneBytes)
+  }
+
+  async createProject(opts: ProjectCreateOptions): Promise<ProjectStatus> {
+    const db = await this.database()
+    assertValidName(opts.name)
+    const id = opts.id ? sanitizeSlug(opts.id) : this.generateUniqueId(db)
+    if (!isValidSlug(id)) {
+      throw new SceneInvalidError(`Invalid project id after sanitization: "${id}"`)
+    }
+    if (this.getRow(db, id)) {
+      throw new SceneInvalidError(`Project with id "${id}" already exists`)
+    }
+    const now = new Date().toISOString()
+    const project: ProjectPlaceholder = {
+      id,
+      name: opts.name,
+      ownerId: opts.ownerId ?? null,
+      thumbnailUrl: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+    this.projectPlaceholders.set(id, project)
+    return placeholderToProjectStatus(project)
+  }
+
+  async getProjectStatus(id: string): Promise<ProjectStatus | null> {
+    const db = await this.database()
+    const safeId = sanitizeSlug(id)
+    const row = this.getRow(db, safeId)
+    if (row) return rowToProjectStatus(row)
+    const placeholder = this.projectPlaceholders.get(safeId)
+    return placeholder ? placeholderToProjectStatus(placeholder) : null
   }
 
   async save(opts: SceneSaveOptions): Promise<SceneMeta> {
@@ -228,6 +334,7 @@ export class SqliteSceneStore implements SceneStore {
       }
 
       const existing = this.getRow(db, id)
+      const placeholder = this.projectPlaceholders.get(id)
 
       if (existing && providedId !== undefined && opts.expectedVersion === undefined) {
         throw new SceneInvalidError(
@@ -254,8 +361,12 @@ export class SqliteSceneStore implements SceneStore {
 
       const now = new Date().toISOString()
       const version = (existing?.version ?? 0) + 1
-      const createdAt = existing?.created_at ?? now
+      const createdAt = existing?.created_at ?? placeholder?.createdAt ?? now
       const nodeCount = Object.keys(opts.graph.nodes ?? {}).length
+      const projectId = opts.projectId ?? existing?.project_id ?? (placeholder ? id : null)
+      const ownerId = opts.ownerId ?? existing?.owner_id ?? placeholder?.ownerId ?? null
+      const thumbnailUrl =
+        opts.thumbnailUrl ?? existing?.thumbnail_url ?? placeholder?.thumbnailUrl ?? null
 
       if (existing) {
         db.query(
@@ -272,9 +383,9 @@ export class SqliteSceneStore implements SceneStore {
            WHERE id = ?`,
         ).run(
           opts.name,
-          opts.projectId ?? null,
-          opts.ownerId ?? null,
-          opts.thumbnailUrl ?? null,
+          projectId,
+          ownerId,
+          thumbnailUrl,
           version,
           now,
           sizeBytes,
@@ -291,9 +402,9 @@ export class SqliteSceneStore implements SceneStore {
         ).run(
           id,
           opts.name,
-          opts.projectId ?? null,
-          opts.ownerId ?? null,
-          opts.thumbnailUrl ?? null,
+          projectId,
+          ownerId,
+          thumbnailUrl,
           version,
           createdAt,
           now,
@@ -307,19 +418,25 @@ export class SqliteSceneStore implements SceneStore {
         `INSERT INTO scene_revisions (
            scene_id, version, graph_json, author_kind, author_id, created_at
          ) VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(id, version, graphJson, 'mcp', opts.ownerId ?? null, now)
+      ).run(id, version, graphJson, 'mcp', ownerId, now)
+
+      this.projectPlaceholders.delete(id)
 
       return {
         id,
         name: opts.name,
-        projectId: opts.projectId ?? null,
-        ownerId: opts.ownerId ?? null,
-        thumbnailUrl: opts.thumbnailUrl ?? null,
+        projectId,
+        ownerId,
+        thumbnailUrl,
         version,
         createdAt,
         updatedAt: now,
         sizeBytes,
         nodeCount,
+        editorUrl: editorUrlForScene(id),
+        url: editorUrlForScene(id),
+        published: true,
+        graphHash: hashGraphJson(graphJson),
       }
     })
   }

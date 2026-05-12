@@ -1,4 +1,3 @@
-import { useFrame } from '@react-three/fiber'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -8,10 +7,20 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+
+function csgGeometry(brush: Brush): THREE.BufferGeometry {
+  return brush.geometry as unknown as THREE.BufferGeometry
+}
+
+function csgMaterials(brush: Brush): THREE.Material[] {
+  const mat = (brush as any).material
+  return Array.isArray(mat) ? mat : [mat]
+}
 
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
@@ -183,7 +192,7 @@ function updateMergedRoofGeometry(
     )
 
     const applyTransform = (brush: Brush) => {
-      brush.geometry.applyMatrix4(_matrix)
+      csgGeometry(brush).applyMatrix4(_matrix)
       brush.updateMatrixWorld()
     }
 
@@ -242,11 +251,9 @@ function updateMergedRoofGeometry(
       const shinDeck = csgEvaluator.evaluate(finalShinTrimmed, finalDeckTrimmed, ADDITION)
       const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
 
-      const resultGeo = combined.geometry
+      const resultGeo = csgGeometry(combined)
 
-      const resultMaterials: THREE.Material[] = Array.isArray(combined.material)
-        ? combined.material
-        : [combined.material]
+      const resultMaterials = csgMaterials(combined)
 
       const matToIndex = new Map<THREE.Material, number>([
         [dummyMats[0], 0],
@@ -259,8 +266,8 @@ function updateMergedRoofGeometry(
         g.materialIndex = mapRoofGroupMaterialIndex(g.materialIndex, resultMaterials, matToIndex)
       }
 
-      ensureUv2Attribute(resultGeo)
       resultGeo.computeVertexNormals()
+      ensureUv2Attribute(resultGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = resultGeo
 
@@ -614,11 +621,9 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
     const shinDeck = csgEvaluator.evaluate(shinSlab, deckSlab, ADDITION)
     const combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
 
-    resultGeo = combined.geometry
+    resultGeo = csgGeometry(combined)
 
-    const resultMaterials: THREE.Material[] = Array.isArray(combined.material)
-      ? combined.material
-      : [combined.material]
+    const resultMaterials = csgMaterials(combined)
 
     const matToIndex = new Map<THREE.Material, number>([
       [dummyMats[0], 0],
@@ -641,7 +646,7 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
     shinDeck.geometry.dispose()
   } catch (e) {
     console.error('Roof CSG failed:', e)
-    resultGeo = wallBrush.geometry.clone()
+    resultGeo = csgGeometry(wallBrush).clone()
   }
 
   deckSlab.geometry.dispose()
@@ -649,8 +654,8 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
   wallBrush.geometry.dispose()
   innerBrush.geometry.dispose()
 
-  ensureUv2Attribute(resultGeo)
   resultGeo.computeVertexNormals()
+  ensureUv2Attribute(resultGeo)
   return resultGeo
 }
 
@@ -1014,8 +1019,8 @@ function createGeometryFromFaces(
   // Merge identical vertices to optimize geometry for CSG and create clean topology
   const mergedGeo = mergeVertices(geometry, 1e-4)
   geometry.dispose()
-  ensureUv2Attribute(mergedGeo)
 
+  ensureUv2Attribute(mergedGeo)
   return mergedGeo
 }
 

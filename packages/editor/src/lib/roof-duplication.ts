@@ -134,7 +134,7 @@ export function duplicateRoofSubtree(
     createdParent && 'children' in createdParent && Array.isArray(createdParent.children)
       ? (createdParent.children as AnyNodeId[])
       : null
-  if (!createdParent || !parentChildIds?.includes(createdRoof.id as AnyNodeId)) {
+  if (!(createdParent && parentChildIds?.includes(createdRoof.id as AnyNodeId))) {
     throw new Error(`Duplicated roof "${createdRoof.id}" was not linked to parent "${parentId}"`)
   }
 

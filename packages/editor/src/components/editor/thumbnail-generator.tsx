@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, sceneRegistry, useScene } from '@pascal-app/core'
+import { emitter, sceneRegistry } from '@pascal-app/core'
 import { SSGI_PARAMS, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import type { CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -28,7 +28,6 @@ import { EDITOR_LAYER } from '../../lib/constants'
 
 const THUMBNAIL_WIDTH = 1920
 const THUMBNAIL_HEIGHT = 1080
-const AUTO_SAVE_DELAY = 10_000
 
 export interface SnapshotCameraData {
   position: [number, number, number]
@@ -49,8 +48,6 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const mainCamera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as CameraControls | null
   const isGenerating = useRef(false)
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingAutoRef = useRef(false)
   const onThumbnailCaptureRef = useRef(onThumbnailCapture)
 
   const thumbnailCameraRef = useRef<THREE.PerspectiveCamera | null>(null)
@@ -61,7 +58,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     onThumbnailCaptureRef.current = onThumbnailCapture
   }, [onThumbnailCapture])
 
-  // Build the thumbnail camera, SSGI pipeline, and render target once, reused on every capture.
+  // Build the thumbnail camera, SSGI pipeline, and render target once — reused on every capture.
   useEffect(() => {
     const cam = new THREE.PerspectiveCamera(60, THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT, 0.1, 1000)
     cam.layers.disable(EDITOR_LAYER)
@@ -75,7 +72,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         if (!mounted) return
 
         // pass() handles MRT internally for all material types, including custom
-        // shaders, unlike renderer.setMRT() which crashes on non-NodeMaterials.
+        // shaders — unlike renderer.setMRT() which crashes on non-NodeMaterials.
         // pass() also respects camera.layers, so EDITOR_LAYER objects are filtered.
         const scenePass = pass(scene, cam)
         scenePass.setMRT(
@@ -117,15 +114,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const ao = (denoisePass as any).r
         const finalOutput = vec4(scenePassColor.rgb.mul(ao), scenePassColor.a)
 
-        // FXAA requires a texture node as input, convertToTexture renders finalOutput
-        // into an intermediate RT so FXAA can sample it with neighbor UV offsets.
+        // FXAA requires a texture node as input; convertToTexture renders finalOutput
+        // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
         const aaOutput = fxaa(convertToTexture(finalOutput))
 
         const pipeline = new RenderPipeline(gl as unknown as WebGPURenderer)
         pipeline.outputNode = aaOutput
         pipelineRef.current = pipeline
 
-        // Dedicated render target, pipeline outputs here instead of the canvas,
+        // Dedicated render target — pipeline outputs here instead of the canvas,
         // so R3F's main render loop can never overwrite our capture.
         const { width, height } = gl.domElement
         renderTargetRef.current = new RenderTarget(width, height, { depthBuffer: true })
@@ -176,7 +173,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         thumbnailCamera.aspect = width / height
         thumbnailCamera.updateProjectionMatrix()
 
-        // Capture camera data for snapshot storage.
+        // Capture camera data for snapshot storage
         const pos = mainCamera.position
         let tgt: [number, number, number] | null = null
         if (controls && 'getTarget' in controls) {
@@ -192,7 +189,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           ...(isOrtho && { zoom: (mainCamera as THREE.OrthographicCamera).zoom }),
         }
 
-        // For auto-save, snap levels to stacked positions and reset levelMode.
+        // For auto-save: snap levels to stacked positions and reset levelMode
         let restoreLevelMode: (() => void) | null = null
         let restoreLevels: () => void = () => {}
         if (snapLevels) {
@@ -205,7 +202,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         }
 
         // Hide scan and guide nodes directly so they are excluded from the
-        // thumbnail regardless of whether ScanSystem or GuideSystem listeners are
+        // thumbnail regardless of whether ScanSystem/GuideSystem listeners are
         // registered. Returns a function that restores the original visibility.
         const restoreNodeVisibility = (() => {
           const saved = new Map<THREE.Object3D, boolean>()
@@ -231,7 +228,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         if (pipelineRef.current && renderTargetRef.current) {
           const rt = renderTargetRef.current
 
-          // Resize RT if the canvas dimensions changed.
+          // Resize RT if the canvas dimensions changed
           if (rt.width !== width || rt.height !== height) {
             rt.setSize(width, height)
           }
@@ -248,7 +245,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           emitter.emit('thumbnail:after-capture', undefined)
 
           // Restore level positions, levelMode, and node visibility immediately after the
-          // render, before the async GPU readback.
+          // render — before the async GPU readback.
           restoreLevels()
           restoreLevelMode?.()
           restoreNodeVisibility()
@@ -339,6 +336,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, outW, outH, 0, 0, outW, outH)
             blob = await offscreen.convertToBlob({ type: 'image/png' })
           } else {
+            // Standard: center-crop to 1920×1080 aspect ratio
             const srcAspect = width / height
             const dstAspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT
             let sx = 0,
@@ -364,7 +362,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           if (captureMode !== undefined) cameraData.captureMode = captureMode
           cameraData.resolution = { w: outW, h: outH }
         } else {
-          // Fallback: plain render directly to the canvas.
+          // Fallback: plain render directly to the canvas
           emitter.emit('thumbnail:before-capture', undefined)
           gl.render(scene, thumbnailCamera)
           emitter.emit('thumbnail:after-capture', undefined)
@@ -450,10 +448,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   )
 
   // Thumbnail request via emitter. Two call shapes:
-  //  - user-driven capture: `{ projectId, captureMode, cropRegion }`, captures
+  //  - user-driven capture: `{ projectId, captureMode, cropRegion }` — captures
   //    the current pose with the supplied crop.
-  //  - auto-save capture: `{ projectId, snapLevels: true }`, snaps levels to
-  //    their true positions first for a consistent auto-thumbnail angle.
+  //  - host-driven auto-save: `{ projectId, snapLevels: true }` — snaps levels
+  //    to their true positions first for a consistent auto-thumbnail angle.
+  // The caller owns policy (when to fire, whether the tab is visible).
   useEffect(() => {
     if (!onThumbnailCapture) return
 
@@ -469,49 +468,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     return () => emitter.off('camera-controls:generate-thumbnail', handleGenerateThumbnail)
   }, [generate, onThumbnailCapture])
 
-  // OSS adaptation: keep local debounced auto-capture behavior because the
-  // community host-side autosave hook is not part of this repo.
-  useEffect(() => {
-    if (!onThumbnailCapture) return
-
-    const triggerNow = () => {
-      void generate(true)
-    }
-
-    const scheduleOrDefer = () => {
-      if (document.visibilityState === 'visible') {
-        triggerNow()
-      } else {
-        pendingAutoRef.current = true
-      }
-    }
-
-    const onSceneChange = () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-      debounceTimerRef.current = setTimeout(scheduleOrDefer, AUTO_SAVE_DELAY)
-    }
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && pendingAutoRef.current) {
-        pendingAutoRef.current = false
-        triggerNow()
-      }
-    }
-
-    const unsubscribe = useScene.subscribe((state, prevState) => {
-      if (state.nodes !== prevState.nodes) onSceneChange()
-    })
-
-    document.addEventListener('visibilitychange', onVisibilityChange)
-
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-      unsubscribe()
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [generate, onThumbnailCapture])
-
-  // Go-to-camera: animate camera to a saved snapshot position or target.
+  // Go-to-camera: animate camera to a saved snapshot position/target
   useEffect(() => {
     const handler = ({
       position,

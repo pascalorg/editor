@@ -3,25 +3,31 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveStairSurfaceMaterial,
   type LevelNode,
+  type MaterialSchema,
   type StairNode,
+  StairNode as StairNodeSchema,
   type StairRailingMode,
-  type StairSlabOpeningMode,
-  type StairTopLandingMode,
-  type StairType,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
+  type StairSlabOpeningMode,
+  type StairSurfaceMaterialRole,
+  type StairTopLandingMode,
+  type StairType,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-import { duplicateStairSubtree } from '../../../lib/stair-duplication'
 import { useShallow } from 'zustand/react/shallow'
+import { buildStairSurfaceMaterialPatch } from '../../../lib/material-paint'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { duplicateStairSubtree } from '../../../lib/stair-duplication'
 import useEditor from '../../../store/use-editor'
 import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '../../tools/stair/stair-defaults'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MaterialPicker } from '../controls/material-picker'
 import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -59,6 +65,7 @@ export function StairPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -87,6 +94,35 @@ export function StairPanel() {
       updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId, updateNode],
+  )
+
+  const materialTargetRole =
+    selectedMaterialTarget &&
+    selectedMaterialTarget.nodeId === node?.id &&
+    (selectedMaterialTarget.role === 'railing' ||
+      selectedMaterialTarget.role === 'tread' ||
+      selectedMaterialTarget.role === 'side')
+      ? selectedMaterialTarget.role
+      : null
+  const materialPickerValue =
+    node && materialTargetRole ? getEffectiveStairSurfaceMaterial(node, materialTargetRole) : {}
+
+  const handleTargetedMaterialChange = useCallback(
+    (material: MaterialSchema) => {
+      if (!(node && materialTargetRole)) return
+      handleUpdate(buildStairSurfaceMaterialPatch(node, materialTargetRole, material, undefined))
+    },
+    [handleUpdate, materialTargetRole, node],
+  )
+
+  const handleTargetedMaterialPresetChange = useCallback(
+    (materialPreset: string) => {
+      if (!(node && materialTargetRole)) return
+      handleUpdate(
+        buildStairSurfaceMaterialPatch(node, materialTargetRole, undefined, materialPreset),
+      )
+    },
+    [handleUpdate, materialTargetRole, node],
   )
 
   const handleClose = useCallback(() => {
@@ -222,11 +258,11 @@ export function StairPanel() {
           />
 
           <div className="space-y-1.5">
-            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
               From Level
             </div>
             <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
               onChange={(event) => handleUpdate({ fromLevelId: event.target.value })}
               value={resolvedFromLevelId ?? ''}
             >
@@ -239,11 +275,11 @@ export function StairPanel() {
           </div>
 
           <div className="space-y-1.5">
-            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
               To Level
             </div>
             <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
               onChange={(event) => handleUpdate({ toLevelId: event.target.value })}
               value={resolvedToLevelId ?? ''}
             >
@@ -262,7 +298,7 @@ export function StairPanel() {
           />
 
           {(node.slabOpeningMode ?? 'none') === 'destination' ? (
-            <SliderControl
+            <MetricControl
               label="Opening Offset"
               max={0.5}
               min={0}
@@ -308,7 +344,7 @@ export function StairPanel() {
 
       {(node.stairType === 'curved' || node.stairType === 'spiral') && (
         <PanelSection title="Geometry">
-          <SliderControl
+          <MetricControl
             label="Width"
             max={10}
             min={0.4}
@@ -318,7 +354,7 @@ export function StairPanel() {
             unit="m"
             value={Math.round((node.width ?? 1) * 100) / 100}
           />
-          <SliderControl
+          <MetricControl
             label="Rise"
             max={10}
             min={0.2}
@@ -328,7 +364,7 @@ export function StairPanel() {
             unit="m"
             value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
           />
-          <SliderControl
+          <MetricControl
             label="Steps"
             max={32}
             min={2}
@@ -346,7 +382,7 @@ export function StairPanel() {
             />
           )}
           {(node.stairType === 'spiral' || !(node.fillToFloor ?? true)) && (
-            <SliderControl
+            <MetricControl
               label="Thickness"
               max={1}
               min={0.02}
@@ -357,7 +393,7 @@ export function StairPanel() {
               value={Math.round((node.thickness ?? 0.25) * 100) / 100}
             />
           )}
-          <SliderControl
+          <MetricControl
             label="Inner Radius"
             max={10}
             min={node.stairType === 'spiral' ? 0.05 : 0.2}
@@ -385,7 +421,7 @@ export function StairPanel() {
                 value={node.topLandingMode ?? 'none'}
               />
               {(node.topLandingMode ?? 'none') === 'integrated' && (
-                <SliderControl
+                <MetricControl
                   label="Top Landing"
                   max={5}
                   min={0.3}
@@ -519,6 +555,22 @@ export function StairPanel() {
             onClick={handleDelete}
           />
         </ActionGroup>
+      </PanelSection>
+      <PanelSection title="Material">
+        {materialTargetRole ? null : (
+          <div className="mb-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-[11px] text-muted-foreground">
+            Click the stair surface you want to edit. Materials apply to one target at a time.
+          </div>
+        )}
+        <MaterialPicker
+          disabled={!materialTargetRole}
+          hideSideControl
+          nodeType="stair"
+          onChange={handleTargetedMaterialChange}
+          onSelectMaterialPreset={handleTargetedMaterialPresetChange}
+          selectedMaterialPreset={materialPickerValue.materialPreset}
+          value={materialPickerValue.material}
+        />
       </PanelSection>
     </PanelWrapper>
   )

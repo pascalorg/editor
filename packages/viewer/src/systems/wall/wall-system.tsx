@@ -37,6 +37,10 @@ function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
 }
 
+function csgGeometry(brush: Brush): THREE.BufferGeometry {
+  return brush.geometry as unknown as THREE.BufferGeometry
+}
+
 type WallBoundaryEdgeTag = 'front' | 'back' | 'base'
 
 type TaggedWallBoundaryEdge = {
@@ -57,7 +61,7 @@ function insetCurvedWallBoundaryPointsFor3D(
   boundaryPoints: ReturnType<typeof getWallMiterBoundaryPoints>,
   miterData: WallMiterData,
 ) {
-  if (!boundaryPoints || !isCurvedWall(wall)) {
+  if (!(boundaryPoints && isCurvedWall(wall))) {
     return boundaryPoints
   }
 
@@ -431,7 +435,7 @@ export function generateExtrudedWall(
   childrenNodes: AnyNode[],
   miterData: WallMiterData,
   slabElevation = 0,
-) {
+): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   // Positive slab: shift the whole wall up (full height preserved)
@@ -519,18 +523,18 @@ export function generateExtrudedWall(
     cutoutBrush.updateMatrixWorld()
     const newResult = csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION)
     if (resultBrush !== wallBrush) {
-      resultBrush.geometry.dispose()
+      csgGeometry(resultBrush).dispose()
     }
     resultBrush = newResult
   }
 
   // Clean up
-  wallBrush.geometry.dispose()
+  csgGeometry(wallBrush).dispose()
   for (const brush of cutoutBrushes) {
-    brush.geometry.dispose()
+    csgGeometry(brush).dispose()
   }
 
-  const resultGeometry = resultBrush.geometry
+  const resultGeometry = csgGeometry(resultBrush)
   resultGeometry.computeVertexNormals()
   assignWallMaterialGroups(resultGeometry, wallNode, boundaryEdges)
   ensureUv2Attribute(resultGeometry)

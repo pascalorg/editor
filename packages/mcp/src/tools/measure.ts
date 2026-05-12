@@ -129,7 +129,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
 
       const fromCentre = getCentre(from as AnyNode)
       const toCentre = getCentre(to as AnyNode)
-      if (!fromCentre || !toCentre) {
+      if (!(fromCentre && toCentre)) {
         throwMcpError(
           ErrorCode.InvalidRequest,
           `Cannot derive centre for measurement between ${from.type} and ${to.type}`,

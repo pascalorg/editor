@@ -2,7 +2,7 @@ import { Howl } from 'howler'
 import useAudio from '../store/use-audio'
 
 // Per-sound variation config. Playback rate also shifts pitch (one semitone ≈ 1.0595×),
-// so a rate range of ~0.88–1.12 reads as a subtle ±2 semitones, enough to kill the
+// so a rate range of ~0.88–1.12 reads as a subtle ±2 semitones — enough to kill the
 // machine-gun feeling when the same SFX fires in rapid succession.
 type SFXConfig = {
   src: string
@@ -13,8 +13,8 @@ type SFXConfig = {
   // Minimum gap between two plays of this SFX. Triggers within this window
   // are silently dropped so bursty sequences don't phase-stack into noise.
   minIntervalMs?: number
-  // Random stereo pan per play, max absolute offset (0 = center, 1 = hard
-  // right). A small value like 0.15 keeps things centered but adds just enough
+  // Random stereo pan per play — max absolute offset (0 = center, 1 = hard
+  // right). A small value like 0.15 keeps things centred but adds just enough
   // spread to stop repeats from stacking on the same point in the field.
   panJitter?: number
 }
@@ -66,7 +66,7 @@ export const SFX: Record<string, SFXConfig> = {
     panJitter: 0.15,
   },
   snapshotCapture: {
-    // Shutter should sound consistent, no variation.
+    // Shutter should sound consistent — no variation.
     src: '/audios/sfx/snapshot_capture.mp3',
   },
 } as const
@@ -102,7 +102,7 @@ export function playSFX(name: SFXName) {
   }
   const config = SFX[name]!
 
-  // Drop rapid repeats, two plays of the same SFX within minIntervalMs just
+  // Drop rapid repeats — two plays of the same SFX within minIntervalMs just
   // smear into noise, they don't add useful information.
   const now = performance.now()
   const minInterval = config.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS

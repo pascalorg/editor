@@ -1,6 +1,6 @@
 import {
-  clampDoorOperationState,
   type AnyNodeId,
+  clampDoorOperationState,
   type DoorNode,
   getDoorRenderOpenAmount,
   sceneRegistry,

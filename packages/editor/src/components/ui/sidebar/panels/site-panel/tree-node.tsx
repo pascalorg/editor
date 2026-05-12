@@ -83,7 +83,9 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
 
   switch (nodeType) {
     case 'building':
-      return <BuildingTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `building_${string}`} />
+      return (
+        <BuildingTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `building_${string}`} />
+      )
     case 'ceiling':
       return <CeilingTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'column':

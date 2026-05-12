@@ -396,8 +396,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 <>
                   <polyline
                     fill="none"
-                    points={formatSvgPolygonPoints(arrow.polyline)}
                     pointerEvents="none"
+                    points={formatSvgPolygonPoints(arrow.polyline)}
                     stroke={straightAccent}
                     strokeWidth="1.15"
                     vectorEffect="non-scaling-stroke"
@@ -411,8 +411,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                   />
                   <polygon
                     fill={straightAccent}
-                    points={formatSvgPolygonPoints(arrow.head)}
                     pointerEvents="none"
+                    points={formatSvgPolygonPoints(arrow.head)}
                   />
                 </>
               ) : null}
@@ -438,8 +438,6 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                   }
                 : undefined
             }
-            onPointerEnter={canSelectStairs ? () => onStairHoverEnter(stair.id) : undefined}
-            onPointerLeave={canSelectStairs ? () => onStairHoverChange(null) : undefined}
             onPointerDown={
               canFocusStairs && stairSelected
                 ? (event) => {
@@ -449,6 +447,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                   }
                 : undefined
             }
+            onPointerEnter={canSelectStairs ? () => onStairHoverEnter(stair.id) : undefined}
+            onPointerLeave={canSelectStairs ? () => onStairHoverChange(null) : undefined}
             pointerEvents={canSelectStairs ? undefined : 'none'}
             style={canSelectStairs ? { cursor } : undefined}
           >
@@ -456,8 +456,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
               <polygon
                 fill="transparent"
                 key={`${stair.id}:hit:${polygonIndex}`}
-                points={formatSvgPolygonPoints(polygon)}
                 pointerEvents={canSelectStairs ? 'all' : 'none'}
+                points={formatSvgPolygonPoints(polygon)}
                 stroke="transparent"
                 strokeLinejoin="round"
                 strokeWidth={hitStrokeWidth}

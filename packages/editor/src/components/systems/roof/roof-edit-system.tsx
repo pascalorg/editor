@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react'
  * Imperatively toggles the Three.js visibility of roof objects based on the
  * editor selection — without causing React re-renders in RoofRenderer.
  *
- * When a roof-segment is selected:
+ * When a roof (or one of its segments) is selected:
  *   - merged-roof mesh is hidden
  *   - segments-wrapper group is shown (individual segments visible for editing)
  *   - all children are marked dirty so RoofSystem rebuilds their geometry

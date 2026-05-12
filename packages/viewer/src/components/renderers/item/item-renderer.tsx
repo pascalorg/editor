@@ -156,9 +156,12 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const lightEffects =
     interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
 
+  // useGLTF caches scenes, and Clone shares child geometry/material references.
+  // Undo can unmount one item while another clone of the same asset still needs them.
   return (
     <>
       <Clone
+        dispose={null}
         object={scene}
         position={node.asset.offset}
         ref={ref}

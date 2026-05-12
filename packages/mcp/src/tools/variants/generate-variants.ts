@@ -119,7 +119,7 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
 
       // 2. Seed the RNG. Default seed is a time-ish number so runs vary, but
       //    tests always pass a fixed seed for determinism.
-      const initialSeed = seed ?? Math.floor(Math.random() * 0xffffffff)
+      const initialSeed = seed ?? Math.floor(Math.random() * 0xff_ff_ff_ff)
 
       const mutations = vary as MutationKind[]
       const variants: Array<{

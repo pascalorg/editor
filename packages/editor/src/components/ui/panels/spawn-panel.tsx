@@ -87,7 +87,7 @@ export function SpawnPanel() {
 
   if (!(node && node.type === 'spawn' && selectedId)) return null
 
-  const rotationDegrees = Math.round((((draftRotation ?? node.rotation) * 180) / Math.PI))
+  const rotationDegrees = Math.round(((draftRotation ?? node.rotation) * 180) / Math.PI)
   const storedRotationDegrees = Math.round((node.rotation * 180) / Math.PI)
 
   return (
@@ -97,7 +97,9 @@ export function SpawnPanel() {
           label="X"
           max={node.position[0] + 2}
           min={node.position[0] - 2}
-          onChange={(value) => handleUpdate({ position: [value, node.position[1], node.position[2]] })}
+          onChange={(value) =>
+            handleUpdate({ position: [value, node.position[1], node.position[2]] })
+          }
           precision={2}
           step={0.01}
           unit="m"
@@ -107,7 +109,9 @@ export function SpawnPanel() {
           label="Y"
           max={node.position[1] + 2}
           min={node.position[1] - 2}
-          onChange={(value) => handleUpdate({ position: [node.position[0], value, node.position[2]] })}
+          onChange={(value) =>
+            handleUpdate({ position: [node.position[0], value, node.position[2]] })
+          }
           precision={2}
           step={0.01}
           unit="m"
@@ -117,7 +121,9 @@ export function SpawnPanel() {
           label="Z"
           max={node.position[2] + 2}
           min={node.position[2] - 2}
-          onChange={(value) => handleUpdate({ position: [node.position[0], node.position[1], value] })}
+          onChange={(value) =>
+            handleUpdate({ position: [node.position[0], node.position[1], value] })
+          }
           precision={2}
           step={0.01}
           unit="m"

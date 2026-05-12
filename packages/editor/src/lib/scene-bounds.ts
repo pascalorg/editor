@@ -33,7 +33,7 @@ function extendPoint(
   z: unknown,
 ): void {
   if (typeof x !== 'number' || typeof z !== 'number') return
-  if (!Number.isFinite(x) || !Number.isFinite(z)) return
+  if (!(Number.isFinite(x) && Number.isFinite(z))) return
   if (x < acc.minX) acc.minX = x
   if (x > acc.maxX) acc.maxX = x
   if (z < acc.minZ) acc.minZ = z

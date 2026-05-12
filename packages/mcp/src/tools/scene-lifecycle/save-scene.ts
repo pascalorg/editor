@@ -6,12 +6,23 @@ import type { SceneOperations } from '../../operations'
 import { SceneVersionConflictError } from '../../storage/types'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
+import { currentLevelContext, sceneMetaPayload } from './metadata'
 
 export const saveSceneInput = {
   id: z.string().min(1).max(64).optional(),
   name: z.string().min(1).max(200),
   projectId: z.string().optional(),
   expectedVersion: z.number().int().positive().optional(),
+  saveMode: z
+    .enum(['draft', 'checkpoint'])
+    .default('draft')
+    .describe(
+      '`draft` updates the browser-visible working model without polluting version history. `checkpoint` creates a meaningful saved version.',
+    ),
+  publish: z
+    .boolean()
+    .optional()
+    .describe('For checkpoint saves, publish the checkpoint as the browser-visible version.'),
   thumbnail: z.string().url().optional(),
   includeCurrentScene: z
     .boolean()
@@ -37,6 +48,13 @@ export const saveSceneOutput = {
   sizeBytes: z.number(),
   nodeCount: z.number(),
   url: z.string(),
+  editorUrl: z.string(),
+  published: z.boolean(),
+  isDraft: z.boolean(),
+  saveMode: z.enum(['draft', 'checkpoint']),
+  graphHash: z.string().optional(),
+  levelIds: z.array(z.string()),
+  defaultLevelId: z.string().nullable(),
 }
 
 export function registerSaveScene(server: McpServer, bridge: SceneOperations): void {
@@ -45,11 +63,21 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Save scene',
       description:
-        'Persist the current scene (or a provided graph) to the SceneStore. Returns the SceneMeta along with a `url` pointing to `/scene/<id>`.',
+        'Save the current scene (or a provided graph) to the SceneStore. Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
       inputSchema: saveSceneInput,
       outputSchema: saveSceneOutput,
     },
-    async ({ id, name, projectId, expectedVersion, thumbnail, includeCurrentScene, graph }) => {
+    async ({
+      id,
+      name,
+      projectId,
+      expectedVersion,
+      saveMode,
+      publish,
+      thumbnail,
+      includeCurrentScene,
+      graph,
+    }) => {
       let sceneGraph: SceneGraph
       if (includeCurrentScene) {
         const validation = bridge.validateScene()
@@ -98,23 +126,17 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
           graph: sceneGraph,
           ...(thumbnail !== undefined ? { thumbnailUrl: thumbnail } : {}),
           ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+          saveMode,
+          ...(publish !== undefined ? { publish } : {}),
+          operation: 'save_scene',
         })
         await appendLiveSceneEvent(bridge, meta.id, meta.version, 'save_scene', sceneGraph)
         if (includeCurrentScene) {
           bridge.setActiveScene(meta)
         }
         const payload = {
-          id: meta.id,
-          name: meta.name,
-          projectId: meta.projectId,
-          thumbnailUrl: meta.thumbnailUrl,
-          version: meta.version,
-          createdAt: meta.createdAt,
-          updatedAt: meta.updatedAt,
-          ownerId: meta.ownerId,
-          sizeBytes: meta.sizeBytes,
-          nodeCount: meta.nodeCount,
-          url: `/scene/${meta.id}`,
+          ...sceneMetaPayload(meta, sceneGraph),
+          ...currentLevelContext(bridge),
         }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

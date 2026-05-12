@@ -112,9 +112,9 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
           receiveShadow
         />
       ) : null}
-      {!isSegmentBasedStair ? (
+      {isSegmentBasedStair ? null : (
         <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} />
-      ) : null}
+      )}
       <StairRailings material={railingMaterial} stair={node} />
       {isSegmentBasedStair ? (
         <group name="segments-wrapper" visible={false}>
@@ -292,7 +292,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
       ))}
       {railPaths.slice(1).map((segmentPath, index) => {
         const previousPath = railPaths[index]
-        if (!previousPath || !segmentPath.connectFromPrevious) return null
+        if (!(previousPath && segmentPath.connectFromPrevious)) return null
         if (previousPath.layout.segment.segmentType === 'landing') return null
         if (segmentPath.layout.segment.segmentType === 'landing') return null
 
@@ -451,10 +451,10 @@ function CurvedStairBody({
       {isSpiral && (stair.showCenterColumn ?? true) ? (
         <mesh
           castShadow
-          receiveShadow
           material={sideMaterial}
           name="stair-side"
           position={[0, spiralColumnHeight / 2, 0]}
+          receiveShadow
         >
           <cylinderGeometry
             args={[spiralColumnRadius, spiralColumnRadius, spiralColumnHeight, 10]}

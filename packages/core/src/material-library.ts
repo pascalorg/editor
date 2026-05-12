@@ -1,5 +1,7 @@
 import {
   type MaterialPresetPayload,
+  type MaterialTarget,
+  MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
 
 export type MaterialCatalogItem = {
@@ -11,6 +13,32 @@ export type MaterialCatalogItem = {
   previewColor?: string
   preset: MaterialPresetPayload
 }
+
+const WALL_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.wall]
+
+const SLAB_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.slab]
+
+const WALL_AND_SLAB_TARGETS: MaterialTarget[] = [
+  MaterialTargetSchema.enum.wall,
+  MaterialTargetSchema.enum.slab,
+]
+
+const STAIR_TARGETS: MaterialTarget[] = [
+  MaterialTargetSchema.enum.stair,
+  MaterialTargetSchema.enum['stair-segment'],
+]
+
+const STAIR_AND_FENCE_TARGETS: MaterialTarget[] = [
+  ...STAIR_TARGETS,
+  MaterialTargetSchema.enum.fence,
+]
+
+const ROOF_TARGETS: MaterialTarget[] = [
+  MaterialTargetSchema.enum.roof,
+  MaterialTargetSchema.enum['roof-segment'],
+]
+
+const CEILING_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.ceiling]
 
 export const MATERIAL_CATEGORIES = [
   'wood',

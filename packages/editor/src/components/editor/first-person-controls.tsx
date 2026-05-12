@@ -1311,14 +1311,15 @@ export const FirstPersonControls = () => {
       {controllerStart && (
         <KeyboardControls map={keyboardMap}>
           <BVHEcctrl
-            ref={controllerRef}
-            key="first-person-controller"
+            acceleration={26}
+            airDragFactor={0.3}
             colliderCapsuleArgs={[0.25, 0.8, 4, 8]}
             colliderMeshes={firstPersonColliderMeshes}
             collisionCheckIteration={3}
             collisionPushBackDamping={0.1}
             collisionPushBackThreshold={0.001}
             debug={false}
+            deceleration={30}
             delay={0}
             fallGravityFactor={4}
             floatCheckType="BOTH"
@@ -1329,14 +1330,13 @@ export const FirstPersonControls = () => {
             floatSpringK={1200}
             gravity={9.81}
             jumpVel={6}
+            key="first-person-controller"
             maxRunSpeed={5.5}
             maxSlope={1.2}
             maxWalkSpeed={4}
             paused={isElevatorRideLocked}
             position={controllerStart.position}
-            acceleration={26}
-            airDragFactor={0.3}
-            deceleration={30}
+            ref={controllerRef}
           />
         </KeyboardControls>
       )}
@@ -1408,12 +1408,12 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
       {isLocked && (
         <div className="pointer-events-none fixed top-1/2 right-6 z-40 -translate-y-1/2">
           <div className="flex min-w-[148px] flex-col gap-3 rounded-2xl border border-border/35 bg-background/80 px-4 py-4 shadow-lg backdrop-blur-xl">
-            <ControlHint label="Move" keys={['W', 'A', 'S', 'D']} />
+            <ControlHint keys={['W', 'A', 'S', 'D']} label="Move" />
             <div className="h-px w-full bg-border/30" />
-            <InlineControlHint label="Jump" keyLabel="Space" />
-            <InlineControlHint label="Sprint" keyLabel="Shift" />
-            <InlineControlHint label="Interact" keyLabel="E / R" />
-            <InlineControlHint label="Close" keyLabel="T" />
+            <InlineControlHint keyLabel="Space" label="Jump" />
+            <InlineControlHint keyLabel="Shift" label="Sprint" />
+            <InlineControlHint keyLabel="E / R" label="Interact" />
+            <InlineControlHint keyLabel="T" label="Close" />
             <div className="h-px w-full bg-border/30" />
             <span className="text-center text-muted-foreground/60 text-xs">
               Click to look around
@@ -1448,7 +1448,7 @@ function ControlHint({ label, keys }: { label: string; keys: string[] }) {
 function InlineControlHint({ label, keyLabel }: { label: string; keyLabel: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em] uppercase">
+      <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-[0.03em]">
         {label}
       </span>
       <kbd className="flex h-5 min-w-5 items-center justify-center rounded border border-border/50 bg-accent/40 px-1.5 font-mono text-[10px] text-foreground/80 leading-none">

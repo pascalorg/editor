@@ -2,8 +2,8 @@
 
 import type { LevelNode } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
-import { cn } from '../../lib/utils'
 import type { LevelDuplicatePreset } from '../../lib/level-duplication'
+import { cn } from '../../lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -69,9 +69,7 @@ export function LevelDuplicateDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Duplicate Level</DialogTitle>
-          <DialogDescription>
-            Choose what to copy from {getLevelLabel(level)}.
-          </DialogDescription>
+          <DialogDescription>Choose what to copy from {getLevelLabel(level)}.</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-2">
@@ -95,7 +93,7 @@ export function LevelDuplicateDialog({
 
         <DialogFooter>
           <button
-            className="cursor-pointer rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent"
+            className="cursor-pointer rounded-md px-4 py-2 text-muted-foreground text-sm transition-colors hover:bg-accent"
             onClick={() => onOpenChange(false)}
             type="button"
           >

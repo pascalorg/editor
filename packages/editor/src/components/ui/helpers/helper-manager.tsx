@@ -1,5 +1,6 @@
 'use client'
 
+import { useIsMobile } from '../../../hooks/use-mobile'
 import useEditor from '../../../store/use-editor'
 import { BuildingHelper } from './building-helper'
 import { CeilingHelper } from './ceiling-helper'
@@ -12,6 +13,10 @@ export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const movingNode = useEditor((state) => state.movingNode)
+  const isMobile = useIsMobile()
+
+  // Helpers are keyboard-driven hints (Esc, R, etc.) — irrelevant on touch.
+  if (isMobile) return null
 
   if (movingNode) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />

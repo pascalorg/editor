@@ -50,13 +50,7 @@ export const SpawnTreeNode = memo(function SpawnTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <Image
-          alt=""
-          className="object-contain"
-          height={14}
-          src="/icons/site.png"
-          width={14}
-        />
+        <Image alt="" className="object-contain" height={14} src="/icons/site.png" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}

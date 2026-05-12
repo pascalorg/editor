@@ -205,6 +205,7 @@ export function EditorLayoutV2({
   viewerContent,
   overlays,
 }: EditorLayoutV2Props) {
+  const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const isMobile = useIsMobile()
 
   if (isMobile) {
@@ -229,7 +230,7 @@ export function EditorLayoutV2({
 
       {/* Main content: left column + right column */}
       <div className="flex min-h-0 flex-1">
-        {sidebarTabs.length > 0 && (
+        {!isCaptureMode && sidebarTabs.length > 0 && (
           <LeftColumn
             renderTabContent={renderTabContent}
             sidebarOverlay={sidebarOverlay}
@@ -238,8 +239,8 @@ export function EditorLayoutV2({
         )}
         <RightColumn
           overlays={overlays}
-          toolbarLeft={viewerToolbarLeft}
-          toolbarRight={viewerToolbarRight}
+          toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
+          toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
         >
           {viewerContent}
         </RightColumn>

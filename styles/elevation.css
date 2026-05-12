@@ -1,0 +1,162 @@
+/*
+ * Shared Elevation System & Corner Smoothing
+ *
+ * Natural shadow stacking with light/dark mode adaptation.
+ * Import from any app: @import "../../../styles/elevation.css";
+ *
+ * Shadows:
+ *   shadow-elevation-0  Flat — ambient ring only
+ *   shadow-elevation-1  Subtle lift — inner cards, inset panels
+ *   shadow-elevation-2  Card / surface
+ *   shadow-elevation-3  Popover / dropdown
+ *   shadow-elevation-4  Sticky / floating bar
+ *   shadow-elevation-5  Modal / dialog
+ *   shadow-elevation-6  Full overlay — maximum depth
+ *
+ * Corner smoothing:
+ *   corner-smooth        Composable — pair with any rounded-* class
+ */
+
+/* ── Register tokens so Tailwind generates shadow-elevation-* utilities ── */
+@theme inline {
+  --shadow-elevation-0: var(--shadow-elevation-0);
+  --shadow-elevation-1: var(--shadow-elevation-1);
+  --shadow-elevation-2: var(--shadow-elevation-2);
+  --shadow-elevation-3: var(--shadow-elevation-3);
+  --shadow-elevation-4: var(--shadow-elevation-4);
+  --shadow-elevation-5: var(--shadow-elevation-5);
+  --shadow-elevation-6: var(--shadow-elevation-6);
+}
+
+/* ════════════════════════════════════════
+   Light mode — Stacked Elevation
+   Base ambient ring + diffusion layers using the
+   1 → 3 → 6 → 12 → 24 → 48 doubling sequence.
+   Spread = -(blur / 2) keeps each layer tight.
+   ════════════════════════════════════════ */
+:root {
+  --shadow-color: rgb(0 0 0 / 0.06);
+
+  --shadow-elevation-0: 0 0 0 1px var(--shadow-color);
+
+  --shadow-elevation-1:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color);
+
+  --shadow-elevation-2:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color);
+
+  --shadow-elevation-3:
+    0 0 0 1px var(--shadow-color),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color);
+
+  --shadow-elevation-4:
+    0 0 0 1px var(--shadow-color),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color);
+
+  --shadow-elevation-5:
+    0 0 0 1px var(--shadow-color),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color),
+    0 24px 24px -12px var(--shadow-color);
+
+  --shadow-elevation-6:
+    0 0 0 1px var(--shadow-color),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color),
+    0 24px 24px -12px var(--shadow-color),
+    0 48px 48px -24px var(--shadow-color);
+}
+
+/* ════════════════════════════════════════
+   Dark mode — Inset Light Illusion
+   Simulates elevation by painting light on raised surfaces.
+   Top-edge highlight + perimeter ring (both inset) increase
+   in intensity as the card "lifts" toward the light source.
+   Drop shadow stack grounds the elevation.
+   ════════════════════════════════════════ */
+.dark {
+  --shadow-color: rgba(0, 0, 0, 0.18);
+
+  /* Highlight intensity (inset top edge) */
+  --dm-hi-base: rgba(255, 255, 255, 0.02);
+  --dm-hi-mid: rgba(255, 255, 255, 0.05);
+  --dm-hi-high: rgba(255, 255, 255, 0.08);
+  --dm-hi-peak: rgba(255, 255, 255, 0.11);
+
+  /* Ring intensity (inset perimeter) */
+  --dm-ring-base: rgba(255, 255, 255, 0.02);
+  --dm-ring-mid: rgba(255, 255, 255, 0.04);
+  --dm-ring-high: rgba(255, 255, 255, 0.06);
+
+  --shadow-elevation-0: inset 0 0 0 1px var(--dm-ring-base);
+
+  --shadow-elevation-1:
+    inset 0 1px 0 0 var(--dm-hi-base), inset 0 0 0 1px var(--dm-ring-base),
+    0 1px 1px -0.5px var(--shadow-color);
+
+  --shadow-elevation-2:
+    inset 0 1px 0 0 var(--dm-hi-mid),
+    inset 0 0 0 1px var(--dm-ring-base),
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color);
+
+  --shadow-elevation-3:
+    inset 0 1px 0 0 var(--dm-hi-mid),
+    inset 0 0 0 1px var(--dm-ring-mid),
+    0 0 0 1px rgba(0, 0, 0, 0.14),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color);
+
+  --shadow-elevation-4:
+    inset 0 1px 0 0 var(--dm-hi-high),
+    inset 0 0 0 1px var(--dm-ring-mid),
+    0 0 0 1px rgba(0, 0, 0, 0.16),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color);
+
+  --shadow-elevation-5:
+    inset 0 1px 0 0 var(--dm-hi-high),
+    inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgba(0, 0, 0, 0.18),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color),
+    0 24px 24px -12px var(--shadow-color);
+
+  --shadow-elevation-6:
+    inset 0 1px 0 0 var(--dm-hi-peak),
+    inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color),
+    0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color),
+    0 24px 24px -12px var(--shadow-color),
+    0 48px 48px -24px var(--shadow-color);
+}
+
+/* ════════════════════════════════════════
+   Corner Smoothing — Progressive Enhancement
+   Composable: pair with any rounded-* class.
+   Usage: class="rounded-2xl corner-smooth"
+   ════════════════════════════════════════ */
+@layer utilities {
+  .corner-smooth {
+    corner-shape: squircle;
+  }
+}

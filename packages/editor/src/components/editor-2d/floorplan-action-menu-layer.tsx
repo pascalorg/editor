@@ -16,6 +16,7 @@ export type FloorplanActionMenuEntry = {
   onDelete: FloorplanActionMenuHandler
   onMove: FloorplanActionMenuHandler
   onAddHole?: FloorplanActionMenuHandler
+  onCurve?: FloorplanActionMenuHandler
   onDuplicate?: FloorplanActionMenuHandler
 }
 
@@ -84,6 +85,7 @@ export const FloorplanActionMenuLayer = memo(function FloorplanActionMenuLayer({
           >
             <NodeActionMenu
               onAddHole={entry.onAddHole}
+              onCurve={entry.onCurve}
               onDelete={entry.onDelete}
               onDuplicate={entry.onDuplicate}
               onMove={entry.onMove}
