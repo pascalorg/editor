@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Copy, Move, Trash2, Wrench } from 'lucide-react'
 import { type MouseEvent, type PointerEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Box3, type Camera, type Object3D, Vector3 } from 'three'
@@ -41,18 +42,66 @@ type PendingPlacement = {
   sourceItemId: ItemNode['id']
 }
 
-function clearRobotViewerItemState() {
+function getRobotSelectableObject(itemId: ItemNode['id'] | null) {
+  if (!itemId) {
+    return null
+  }
+
+  const node = useScene.getState().nodes[itemId as AnyNodeId]
+  if (node?.type !== 'item' || !canUseRobotItemTask(node)) {
+    return null
+  }
+
+  const object = sceneRegistry.nodes.get(itemId)
+  return object?.parent ? object : null
+}
+
+function syncRobotViewerObjectList(target: Object3D[], itemId: ItemNode['id'] | null) {
+  const object = getRobotSelectableObject(itemId)
+  if (target.length === (object ? 1 : 0) && target[0] === object) {
+    return
+  }
+
+  target.length = 0
+  if (object) {
+    target.push(object)
+  }
+}
+
+function syncRobotViewerItemState(
+  selectedItemId: ItemNode['id'] | null,
+  hoveredItemId: ItemNode['id'] | null,
+) {
   const viewerState = useViewer.getState()
-  viewerState.setHoveredId(null)
-  viewerState.setPreviewSelectedIds([])
-  viewerState.setSelection({
-    buildingId: viewerState.selection.buildingId,
-    levelId: viewerState.selection.levelId,
-    selectedIds: [],
-    zoneId: null,
-  })
-  viewerState.outliner.selectedObjects.length = 0
-  viewerState.outliner.hoveredObjects.length = 0
+  const selectedObject = getRobotSelectableObject(selectedItemId)
+  const hoveredObject = getRobotSelectableObject(hoveredItemId)
+  const resolvedSelectedItemId = selectedObject ? selectedItemId : null
+  const resolvedHoveredItemId = hoveredObject ? hoveredItemId : null
+
+  if (viewerState.hoveredId !== resolvedHoveredItemId) {
+    viewerState.setHoveredId(resolvedHoveredItemId)
+  }
+  if (viewerState.previewSelectedIds.length > 0) {
+    viewerState.setPreviewSelectedIds([])
+  }
+  if (
+    viewerState.selection.zoneId !== null ||
+    viewerState.selection.selectedIds.length !== (resolvedSelectedItemId ? 1 : 0) ||
+    viewerState.selection.selectedIds[0] !== resolvedSelectedItemId
+  ) {
+    viewerState.setSelection({
+      buildingId: viewerState.selection.buildingId,
+      levelId: viewerState.selection.levelId,
+      selectedIds: resolvedSelectedItemId ? [resolvedSelectedItemId] : [],
+      zoneId: null,
+    })
+  }
+  syncRobotViewerObjectList(viewerState.outliner.selectedObjects, resolvedSelectedItemId)
+  syncRobotViewerObjectList(viewerState.outliner.hoveredObjects, resolvedHoveredItemId)
+}
+
+function clearRobotViewerItemState() {
+  syncRobotViewerItemState(null, null)
 }
 
 function getPreviewVisualStateForOperation(operation: PendingPlacement['operation']) {
@@ -214,19 +263,59 @@ function calculateActionMenuScreenPosition(
 export function NavigationItemActionMenu() {
   const robotMode = useNavigation((state) => state.robotMode)
   const suppressNavigationClick = useNavigation((state) => state.suppressNavigationClick)
+  const invalidate = useThree((state) => state.invalidate)
   const [activeItemId, setActiveItemId] = useState<ItemNode['id'] | null>(null)
   const [menuPosition, setMenuPosition] = useState<[number, number, number] | null>(null)
   const [pendingPlacement, setPendingPlacement] = useState<PendingPlacement | null>(null)
+  const hoveredRobotItemIdRef = useRef<ItemNode['id'] | null>(null)
   const ignoreGridClearUntilRef = useRef(0)
   const pendingPlacementRef = useRef<PendingPlacement | null>(null)
   const pointerActionHandledRef = useRef(false)
+  const selectedRobotItemIdRef = useRef<ItemNode['id'] | null>(null)
   const activeItem = useScene((state) =>
     activeItemId ? (state.nodes[activeItemId as AnyNodeId] as ItemNode | undefined) : undefined,
+  )
+
+  const clearRobotSelection = useCallback(() => {
+    selectedRobotItemIdRef.current = null
+    hoveredRobotItemIdRef.current = null
+    clearRobotViewerItemState()
+    invalidate()
+  }, [invalidate])
+
+  const selectRobotItem = useCallback(
+    (item: ItemNode) => {
+      selectedRobotItemIdRef.current = item.id
+      hoveredRobotItemIdRef.current = null
+      syncRobotViewerItemState(item.id, null)
+      invalidate()
+    },
+    [invalidate],
+  )
+
+  const setRobotHoverItem = useCallback(
+    (itemId: ItemNode['id'] | null) => {
+      hoveredRobotItemIdRef.current = itemId
+      syncRobotViewerItemState(selectedRobotItemIdRef.current, itemId)
+      invalidate()
+    },
+    [invalidate],
   )
 
   useEffect(() => {
     pendingPlacementRef.current = pendingPlacement
   }, [pendingPlacement])
+
+  useFrame(() => {
+    if (robotMode === null) {
+      return
+    }
+    if (!selectedRobotItemIdRef.current && !hoveredRobotItemIdRef.current) {
+      return
+    }
+
+    syncRobotViewerItemState(selectedRobotItemIdRef.current, hoveredRobotItemIdRef.current)
+  })
 
   useEffect(() => {
     if (robotMode === null) {
@@ -235,10 +324,11 @@ export function NavigationItemActionMenu() {
       setPendingPlacement(null)
       setActiveItemId(null)
       setMenuPosition(null)
+      clearRobotSelection()
       return
     }
-    clearRobotViewerItemState()
-  }, [robotMode])
+    clearRobotSelection()
+  }, [clearRobotSelection, robotMode])
 
   useEffect(() => {
     if (robotMode === null) {
@@ -246,6 +336,9 @@ export function NavigationItemActionMenu() {
     }
 
     const handleItemPointerDown = (event: ItemEvent) => {
+      if (pendingPlacementRef.current) {
+        return
+      }
       if (!isPrimaryPointerEvent(event)) {
         return
       }
@@ -255,7 +348,33 @@ export function NavigationItemActionMenu() {
       suppressNavigationClick(500)
     }
 
+    const handleItemEnter = (event: ItemEvent) => {
+      if (pendingPlacementRef.current) {
+        return
+      }
+      const item = event.node as ItemNode
+      if (!canUseRobotItemTask(item)) {
+        return
+      }
+
+      setRobotHoverItem(item.id)
+    }
+
+    const handleItemLeave = (event: ItemEvent) => {
+      const item = event.node as ItemNode
+      if (!canUseRobotItemTask(item)) {
+        return
+      }
+
+      if (hoveredRobotItemIdRef.current === item.id) {
+        setRobotHoverItem(null)
+      }
+    }
+
     const handleItemClick = (event: ItemEvent) => {
+      if (pendingPlacementRef.current) {
+        return
+      }
       if (!isPrimaryPointerEvent(event)) {
         return
       }
@@ -266,7 +385,7 @@ export function NavigationItemActionMenu() {
 
       event.stopPropagation()
       suppressNavigationClick(500)
-      clearRobotViewerItemState()
+      selectRobotItem(item)
       if (
         typeof window !== 'undefined' &&
         window.localStorage.getItem('pascal-navigation-debug') === '1'
@@ -296,24 +415,29 @@ export function NavigationItemActionMenu() {
       }
       setActiveItemId(null)
       setMenuPosition(null)
+      clearRobotSelection()
     }
 
+    emitter.on('item:enter', handleItemEnter as never)
+    emitter.on('item:leave', handleItemLeave as never)
     emitter.on('item:pointerdown', handleItemPointerDown as never)
     emitter.on('item:click', handleItemClick as never)
     emitter.on('grid:click', clearMenu as never)
 
     return () => {
+      emitter.off('item:enter', handleItemEnter as never)
+      emitter.off('item:leave', handleItemLeave as never)
       emitter.off('item:pointerdown', handleItemPointerDown as never)
       emitter.off('item:click', handleItemClick as never)
       emitter.off('grid:click', clearMenu as never)
     }
-  }, [robotMode, suppressNavigationClick])
+  }, [clearRobotSelection, robotMode, selectRobotItem, setRobotHoverItem, suppressNavigationClick])
 
   const closeMenu = useCallback(() => {
     setActiveItemId(null)
     setMenuPosition(null)
-    clearRobotViewerItemState()
-  }, [])
+    clearRobotSelection()
+  }, [clearRobotSelection])
 
   useEffect(() => {
     if (!pendingPlacement) {
@@ -434,9 +558,9 @@ export function NavigationItemActionMenu() {
       setPendingPlacement(pending)
       setActiveItemId(null)
       setMenuPosition(null)
-      clearRobotViewerItemState()
+      selectRobotItem(activeItem)
     },
-    [activeItem],
+    [activeItem, selectRobotItem],
   )
 
   const handleMove = useCallback(() => {

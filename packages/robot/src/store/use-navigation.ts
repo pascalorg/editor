@@ -708,6 +708,13 @@ export function canUseRobotItemTask(node: ItemNode) {
   if (!enabled || !moveItemsEnabled || node.asset.attachTo) {
     return false
   }
+  const metadata = node.metadata as Record<string, unknown> | null | undefined
+  if (
+    metadata?.isTransient === true ||
+    navigationVisualsStore.getState().taskPreviewNodeIds[node.id]
+  ) {
+    return false
+  }
 
   const parentNode = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : null
   return parentNode?.type !== 'item'

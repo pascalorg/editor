@@ -121,6 +121,30 @@ function hasTaskModeSceneContent(
   )
 }
 
+function canCaptureTaskModeBaselineSnapshot() {
+  const navigationState = useNavigation.getState()
+  return (
+    navigationState.enabled &&
+    navigationState.robotMode === 'task' &&
+    navigationState.taskQueue.length === 0 &&
+    navigationState.itemDeleteRequest === null &&
+    navigationState.itemMoveRequest === null &&
+    navigationState.itemRepairRequest === null &&
+    Object.keys(navigationState.itemMoveControllers).length === 0
+  )
+}
+
+function hasActiveTaskModeRuntimeState() {
+  const navigationState = useNavigation.getState()
+  return (
+    navigationState.taskQueue.length > 0 ||
+    navigationState.itemDeleteRequest !== null ||
+    navigationState.itemMoveRequest !== null ||
+    navigationState.itemRepairRequest !== null ||
+    Object.keys(navigationState.itemMoveControllers).length > 0
+  )
+}
+
 function cloneSceneNode<T>(node: T): T {
   if (typeof structuredClone === 'function') {
     return structuredClone(node)
@@ -181,16 +205,16 @@ function resetViewerAndEditorState(mode: TaskModeRestoreMode) {
 
   viewerState.outliner.selectedObjects.length = 0
   viewerState.outliner.hoveredObjects.length = 0
-  if (mode !== 'task-loop') {
-    sceneRegistry.clear()
-  }
   useLiveTransforms.getState().clearAll()
   const navigationVisuals = navigationVisualsStore.getState()
-  navigationVisuals.resetRuntimeVisuals({ preserveToolConeOverlay: mode === 'task-loop' })
+  const preserveToolConeOverlay =
+    mode === 'task-loop' || useNavigation.getState().robotMode !== null
+  navigationVisuals.resetRuntimeVisuals({ preserveToolConeOverlay })
+  if (preserveToolConeOverlay) {
+    navigationVisuals.setToolConeOverlayEnabled(true)
+  }
   if (mode === 'task-loop') {
     navigationVisuals.setToolConeOverlayCamera(null)
-    navigationVisuals.setToolConeOverlayWarmupReady(false)
-    navigationVisuals.setToolConeOverlayEnabled(true)
   }
 
   useNavigation.setState((state) =>
@@ -436,6 +460,34 @@ export function NavigationSceneLifecycle() {
     return sceneGraph ?? { nodes: {}, rootNodeIds: [] }
   }, [])
 
+  const captureMissingTaskModeBaselineSnapshot = useCallback(() => {
+    if (
+      robotMode !== 'task' ||
+      hasTaskModeSceneContent(taskModeSceneSnapshotRef.current) ||
+      !canCaptureTaskModeBaselineSnapshot()
+    ) {
+      return
+    }
+
+    const currentScene = captureCurrentSceneGraph()
+    if (!hasTaskModeSceneContent(currentScene)) {
+      return
+    }
+
+    taskModeSceneSnapshotRef.current = currentScene
+    ensurePascalTruckNodeInCurrentScene()
+    useNavigation.getState().setTaskLoopSettledToken(useNavigation.getState().taskLoopToken)
+  }, [captureCurrentSceneGraph, robotMode])
+
+  useLayoutEffect(() => {
+    if (robotMode !== 'task') {
+      return
+    }
+
+    captureMissingTaskModeBaselineSnapshot()
+    return useScene.subscribe(captureMissingTaskModeBaselineSnapshot)
+  }, [captureMissingTaskModeBaselineSnapshot, robotMode])
+
   const restoreTaskModeSceneSnapshot = useCallback(
     (options?: { clearSnapshot?: boolean; mode?: TaskModeRestoreMode; settledToken?: number }) => {
       if (restoreFinalizeFrameRef.current !== null) {
@@ -476,6 +528,7 @@ export function NavigationSceneLifecycle() {
 
         restoreFinalizeFrameRef.current = requestAnimationFrame(finalizeWhenTaskRuntimeReady)
       }
+      const mode = options?.mode ?? 'task-loop'
 
       const currentManualTruckNode = getManualPascalTruckNodeFromCurrentScene()
       if (currentManualTruckNode && hasTaskModeSceneContent(taskModeSceneSnapshotRef.current)) {
@@ -487,6 +540,11 @@ export function NavigationSceneLifecycle() {
 
       const snapshot = taskModeSceneSnapshotRef.current
       if (!hasTaskModeSceneContent(snapshot)) {
+        if (mode === 'task-loop' && hasActiveTaskModeRuntimeState()) {
+          finalizeRestore()
+          return false
+        }
+
         const currentScene = captureCurrentSceneGraph()
         taskModeSceneSnapshotRef.current = hasTaskModeSceneContent(currentScene)
           ? currentScene
@@ -495,7 +553,6 @@ export function NavigationSceneLifecycle() {
         return false
       }
 
-      const mode = options?.mode ?? 'task-loop'
       restorePendingRef.current = true
       setNavigationSceneRestorePending(true)
       if (

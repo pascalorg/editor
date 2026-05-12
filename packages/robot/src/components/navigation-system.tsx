@@ -62,6 +62,7 @@ import { color, float, mix, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial, RenderTarget } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
 import {
+  getItemMoveVisualState,
   type ItemMoveVisualState,
   setItemMoveVisualState as setItemMoveVisualMetadata,
 } from '../lib/item-move-visuals'
@@ -2002,10 +2003,15 @@ function clearNavigationCopyDestinationGhostForDrop(request: NavigationItemMoveR
   const sceneState = useScene.getState()
   const node = sceneState.nodes[previewId as AnyNodeId]
   if (node?.type === 'item') {
-    sceneState.updateNode(previewId as AnyNodeId, {
-      metadata: setItemMoveVisualMetadata(node.metadata, null) as ItemNode['metadata'],
-      visible: false,
-    })
+    const hasMoveVisualMetadata = getItemMoveVisualState(node.metadata) !== null
+    if ((node.visible ?? true) !== false || hasMoveVisualMetadata) {
+      sceneState.updateNode(previewId as AnyNodeId, {
+        metadata: hasMoveVisualMetadata
+          ? (setItemMoveVisualMetadata(node.metadata, null) as ItemNode['metadata'])
+          : node.metadata,
+        visible: false,
+      })
+    }
   }
 
   const viewerState = useViewer.getState()
@@ -4506,6 +4512,10 @@ export function NavigationSystem() {
           ? NAVIGATION_TOOL_CONE_COPY_COLOR
           : NAVIGATION_TOOL_CONE_MOVE_COLOR
         : NAVIGATION_TOOL_CONE_MOVE_COLOR
+  const toolConeRuntimeResetToken = useMemo(
+    () => `${robotMode ?? 'off'}:${taskLoopToken}`,
+    [robotMode, taskLoopToken],
+  )
   const itemMoveControllerCount = useMemo(
     () => Object.keys(itemMoveControllers).length,
     [itemMoveControllers],
@@ -7184,9 +7194,13 @@ export function NavigationSystem() {
     precomputedPascalTruckExitRef.current = null
     itemDeleteSequenceRef.current = null
     itemRepairSequenceRef.current = null
+    toolInteractionPhaseRef.current = null
+    toolInteractionTargetItemIdRef.current = null
+    carriedVisualItemIdRef.current = null
     setReleasedNavigationItemId(null)
     clearItemMoveGestureClipState()
     resetTaskQueueVisuals()
+    navigationVisualsStore.getState().setToolConeIsolatedOverlay(null)
     setPascalTruckIntroActive(false)
     setPascalTruckExitActive(false)
     setPascalTruckIntroCompleted(false)
@@ -13684,7 +13698,7 @@ export function NavigationSystem() {
               staticMeshVisibilityOverride={robotStaticMeshVisibleOverrideRef.current}
               showToolAttachments={actorToolAttachmentsVisible}
               toolConeColor={activeToolConeColor}
-              toolConeResetToken={taskLoopToken}
+              toolConeResetToken={toolConeRuntimeResetToken}
               toolCarryItemId={toolCarryItemId}
               toolCarryItemIdRef={carriedVisualItemIdRef}
               toolInteractionPhaseRef={toolInteractionPhaseRef}

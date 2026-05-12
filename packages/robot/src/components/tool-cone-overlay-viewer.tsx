@@ -308,7 +308,9 @@ function ToolConeOverlayCameraBridge() {
       ] as [number, number, number, number],
     }
     const previousSnapshot = previousSnapshotRef.current
+    const overlayCamera = navigationVisualsStore.getState().toolConeOverlayCamera
     if (
+      overlayCamera &&
       previousSnapshot &&
       arraysEqual(previousSnapshot.position, nextSnapshot.position) &&
       arraysEqual(previousSnapshot.quaternion, nextSnapshot.quaternion) &&
@@ -884,13 +886,21 @@ export function ToolConeOverlayViewer({
 }: ComponentProps<typeof Viewer> & { enabled?: boolean }) {
   useEffect(() => {
     const state = navigationVisualsStore.getState()
-    state.setToolConeOverlayEnabled(enabled)
-    if (!enabled) {
-      state.setToolConeOverlayCamera(null)
-      state.setToolConeIsolatedOverlay(null)
-      state.setToolConeOverlayWarmupReady(false)
+    if (state.toolConeOverlayEnabled !== enabled) {
+      state.setToolConeOverlayEnabled(enabled)
     }
-  }, [enabled])
+    if (!enabled) {
+      if (state.toolConeOverlayCamera !== null) {
+        state.setToolConeOverlayCamera(null)
+      }
+      if (state.toolConeIsolatedOverlay !== null) {
+        state.setToolConeIsolatedOverlay(null)
+      }
+      if (state.toolConeOverlayWarmupReady) {
+        state.setToolConeOverlayWarmupReady(false)
+      }
+    }
+  })
 
   return (
     <div className="relative h-full w-full">
