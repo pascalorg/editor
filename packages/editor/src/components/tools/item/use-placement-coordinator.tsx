@@ -116,10 +116,10 @@ function expandBoundsToGrid(
 
 function getFallbackPreviewBounds(
   item: import('@pascal-app/core').ItemNode | null,
-  asset: AssetInput,
-  attachTo: AssetInput['attachTo'],
+  asset: AssetInput | null | undefined,
+  attachTo: AssetInput['attachTo'] | null | undefined,
 ): PreviewBounds {
-  const dims = item ? getScaledDimensions(item) : (asset.dimensions ?? DEFAULT_DIMENSIONS)
+  const dims = item ? getScaledDimensions(item) : (asset?.dimensions ?? DEFAULT_DIMENSIONS)
   return {
     min: [-dims[0] / 2, 0, attachTo === 'wall-side' ? -dims[2] : -dims[2] / 2],
     max: [dims[0] / 2, dims[1], attachTo === 'wall-side' ? 0 : dims[2] / 2],
@@ -1341,7 +1341,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const dims = getGridAlignedDimensions(rawDims, initialAttachTo, gridSnapStep)
   const wallSideZOffset = initialAttachTo === 'wall-side' ? -dims[2] / 2 : 0
   const initialDimensionBounds = expandBoundsToGrid(
-    getFallbackPreviewBounds(initialDraft, config.asset!, initialAttachTo),
+    getFallbackPreviewBounds(initialDraft, config.asset, initialAttachTo),
     initialAttachTo,
     gridSnapStep,
   )
