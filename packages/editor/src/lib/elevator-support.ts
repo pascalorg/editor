@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type BuildingNode,
   type ElevatorNode,
   type LevelNode,
   spatialGridManager,
@@ -21,6 +22,30 @@ function getBuildingLevels(
     .sort((left, right) => left.level - right.level)
 }
 
+export function resolveCurrentBuildingId({
+  buildingId,
+  levelId,
+  nodes,
+}: {
+  buildingId: BuildingNode['id'] | null
+  levelId: LevelNode['id'] | null
+  nodes: Record<string, AnyNode>
+}): BuildingNode['id'] | null {
+  if (buildingId) return buildingId
+  if (!levelId) return null
+
+  const level = nodes[levelId as AnyNodeId]
+  if (
+    level?.type === 'level' &&
+    level.parentId &&
+    nodes[level.parentId as AnyNodeId]?.type === 'building'
+  ) {
+    return level.parentId as BuildingNode['id']
+  }
+
+  return null
+}
+
 export function resolveElevatorSupportLevelId({
   buildingId,
   preferredLevelId,
@@ -29,13 +54,16 @@ export function resolveElevatorSupportLevelId({
   preferredLevelId?: string | null
 }): LevelNode['id'] | null {
   const nodes = useScene.getState().nodes
+  const preferred = preferredLevelId ? nodes[preferredLevelId as AnyNodeId] : undefined
   const levels = getBuildingLevels(buildingId, nodes)
-  if (levels.length === 0) return null
-
-  const preferred = preferredLevelId
+  const preferredInBuilding = preferredLevelId
     ? levels.find((level) => level.id === preferredLevelId)
     : undefined
-  return preferred?.id ?? levels[0]?.id ?? null
+
+  if (preferredInBuilding) return preferredInBuilding.id
+  if (levels.length === 0) return preferred?.type === 'level' ? preferred.id : null
+
+  return levels[0]?.id ?? null
 }
 
 export function resolveElevatorSupportY({

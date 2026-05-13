@@ -6,16 +6,11 @@ import type {
   SlabNode,
   StairNode,
   StairSegmentNode,
+  SurfaceHoleMetadata,
 } from '../../schema'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
 type Point2D = [number, number]
-
-type SurfaceHoleMetadata = {
-  source: 'manual' | 'stair' | 'elevator'
-  elevatorId?: string
-  stairId?: string
-}
 
 type SegmentTransform = {
   position: [number, number, number]

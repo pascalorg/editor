@@ -9,7 +9,7 @@ import {
 } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { resolveElevatorSupportY } from '../../../lib/elevator-support'
+import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
@@ -29,21 +29,6 @@ type ElevatorToolProps = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
   onPlaced?: (elevatorId: AnyNodeId, buildingId: BuildingNode['id']) => void
-}
-
-function resolveCurrentBuildingId(
-  buildingId: BuildingNode['id'] | null,
-  levelId: LevelNode['id'] | null,
-): BuildingNode['id'] | null {
-  if (buildingId) return buildingId as BuildingNode['id']
-  if (!levelId) return null
-
-  const level = useScene.getState().nodes[levelId as AnyNodeId]
-  if (level?.type === 'level' && level.parentId) {
-    return level.parentId as BuildingNode['id']
-  }
-
-  return null
 }
 
 function resolveDefaultServiceRange(
@@ -130,7 +115,11 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
   const previewGeometry = useMemo(() => createElevatorPreviewGeometry(), [])
 
   useEffect(() => {
-    const currentBuildingId = resolveCurrentBuildingId(buildingId, levelId)
+    const currentBuildingId = resolveCurrentBuildingId({
+      buildingId,
+      levelId,
+      nodes: useScene.getState().nodes,
+    })
     if (!currentBuildingId) return
 
     rotationRef.current = 0
@@ -160,7 +149,11 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
     }
 
     const onGridClick = (event: GridEvent) => {
-      const latestBuildingId = resolveCurrentBuildingId(buildingId, levelId)
+      const latestBuildingId = resolveCurrentBuildingId({
+        buildingId,
+        levelId,
+        nodes: useScene.getState().nodes,
+      })
       if (!latestBuildingId) return
 
       const gridX = Math.round(event.localPosition[0] * 2) / 2

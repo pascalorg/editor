@@ -1,14 +1,15 @@
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
-import type { AnyNode, AnyNodeId, CeilingNode, ElevatorNode, SlabNode } from '../../schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CeilingNode,
+  ElevatorNode,
+  SlabNode,
+  SurfaceHoleMetadata,
+} from '../../schema'
 import { resolveElevatorServiceLevels } from './elevator-service'
 
 type Point2D = [number, number]
-
-type SurfaceHoleMetadata = {
-  source: 'manual' | 'stair' | 'elevator'
-  elevatorId?: string
-  stairId?: string
-}
 
 const ELEVATOR_OPENING_PADDING = 0.08
 const DEFAULT_ELEVATOR_SHAFT_WALL_THICKNESS = 0.09

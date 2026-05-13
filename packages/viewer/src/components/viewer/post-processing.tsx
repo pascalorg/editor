@@ -116,6 +116,7 @@ const PostProcessingPasses = ({
 
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
+  const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
   const [pipelineVersion, setPipelineVersion] = useState(0)
@@ -131,7 +132,8 @@ const PostProcessingPasses = ({
 
   // Reset retry state when project changes
   useEffect(() => {
-    void projectId
+    if (lastProjectIdRef.current === projectId) return
+    lastProjectIdRef.current = projectId
     retryCountRef.current = 0
     if (rebuildTimeoutRef.current !== null) {
       clearTimeout(rebuildTimeoutRef.current)

@@ -6,6 +6,8 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
+  pauseSceneHistory,
+  resumeSceneHistory,
   sceneRegistry,
   useLiveTransforms,
   useScene,
@@ -36,6 +38,7 @@ export function MoveElevatorTool({
   onCommitted?: (nodeId: AnyNodeId) => void
 }) {
   const onCommittedRef = useRef(onCommitted)
+  const historyPausedRef = useRef(false)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const previewPositionRef = useRef<ElevatorNode['position']>([
     movingNode.position[0],
@@ -57,7 +60,19 @@ export function MoveElevatorTool({
   }, [onCommitted])
 
   useEffect(() => {
-    useScene.temporal.getState().pause()
+    const pauseHistory = () => {
+      const temporal = useScene.temporal.getState()
+      if (historyPausedRef.current || !temporal.isTracking) return
+      pauseSceneHistory(useScene)
+      historyPausedRef.current = true
+    }
+    const resumeHistory = () => {
+      if (!historyPausedRef.current) return
+      resumeSceneHistory(useScene)
+      historyPausedRef.current = false
+    }
+
+    pauseHistory()
     const movingNodeId = (movingNode as { id?: ElevatorNode['id'] }).id
 
     const meta =
@@ -148,7 +163,7 @@ export function MoveElevatorTool({
 
       wasCommitted = true
       clearPreview()
-      useScene.temporal.getState().resume()
+      resumeHistory()
       if (movingNodeId && useScene.getState().nodes[movingNodeId as AnyNodeId]) {
         useScene.getState().updateNode(movingNodeId as AnyNodeId, {
           position: nextPosition,
@@ -188,7 +203,7 @@ export function MoveElevatorTool({
         }
       }
       resetObject(original.position, original.rotation)
-      useScene.temporal.getState().resume()
+      resumeHistory()
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -226,7 +241,7 @@ export function MoveElevatorTool({
         })
         resetObject(original.position, original.rotation)
       }
-      useScene.temporal.getState().resume()
+      resumeHistory()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)

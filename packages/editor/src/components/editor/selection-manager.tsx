@@ -56,6 +56,7 @@ import useEditor, {
 import { boxSelectHandled } from '../tools/select/box-select-tool'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
+  // Elevators are building-scoped, so they stay selectable across level filters.
   if (node.type === 'elevator') return true
   const currentLevelId = useViewer.getState().selection.levelId
   if (!currentLevelId) return true // No level selected, allow all
