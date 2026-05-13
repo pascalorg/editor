@@ -22,10 +22,8 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
 
   return (
     <mesh
-      castShadow
       material={material}
       position={node.position}
-      receiveShadow
       ref={ref}
       rotation={node.rotation}
       visible={node.visible}
