@@ -4,6 +4,17 @@ import type { AmbientLight, DirectionalLight, OrthographicCamera } from 'three/w
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
 
+// Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
+// (which doubles draw calls for every shadow-casting mesh) so you can
+// isolate how much of the baseline GPU cost is shadows vs. raw geometry.
+const SHADOWS_DISABLED =
+  typeof window !== 'undefined' &&
+  new Set(
+    (new URLSearchParams(window.location.search).get('disable') ?? '')
+      .split(',')
+      .map((s) => s.trim()),
+  ).has('shadows')
+
 export function Lights() {
   const theme = useViewer((state) => state.theme)
   const isDark = theme === 'dark'
@@ -109,24 +120,26 @@ export function Lights() {
   return (
     <>
       <directionalLight
-        castShadow
+        castShadow={!SHADOWS_DISABLED}
         position={[10, 10, 10]}
         ref={light1Ref}
         shadow-bias={-0.002}
         shadow-mapSize={[1024, 1024]}
         shadow-normalBias={0.3}
-        shadow-radius={3}
+        shadow-radius={2}
       >
-        <orthographicCamera
-          attach="shadow-camera"
-          bottom={-shadowCameraSize}
-          far={100}
-          left={-shadowCameraSize}
-          near={1}
-          ref={shadowCamera}
-          right={shadowCameraSize}
-          top={shadowCameraSize}
-        />
+        {SHADOWS_DISABLED ? null : (
+          <orthographicCamera
+            attach="shadow-camera"
+            bottom={-shadowCameraSize}
+            far={100}
+            left={-shadowCameraSize}
+            near={1}
+            ref={shadowCamera}
+            right={shadowCameraSize}
+            top={shadowCameraSize}
+          />
+        )}
       </directionalLight>
 
       <directionalLight position={[-10, 10, -10]} ref={light2Ref} />

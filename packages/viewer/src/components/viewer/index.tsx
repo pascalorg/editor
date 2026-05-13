@@ -4,6 +4,7 @@ import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
+import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import useViewer from '../../store/use-viewer'
 import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
 import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
@@ -11,8 +12,8 @@ import { DoorSystem } from '../../systems/door/door-system'
 import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
-import { ItemSystem } from '../../systems/item/item-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
+import { ItemSystem } from '../../systems/item/item-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { RoofSystem } from '../../systems/roof/roof-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
@@ -160,11 +161,16 @@ const Viewer: React.FC<ViewerProps> = ({
   useBvh = true,
 }) => {
   const theme = useViewer((state) => state.theme)
+  // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
+  // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
+  // Desktops (fine pointer) keep the original 1.5 cap.
+  const maxDpr =
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
       className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
-      dpr={[1, 1.5]}
+      dpr={[1, maxDpr]}
       frameloop="never"
       gl={
         ((props: { canvas?: HTMLCanvasElement }) => {
@@ -242,7 +248,7 @@ const Viewer: React.FC<ViewerProps> = ({
 
         <ItemLightSystem />
         {selectionManager === 'default' && <SelectionManager />}
-        {perf && <PerfMonitor />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}
       </ErrorBoundary>
     </Canvas>
@@ -251,7 +257,16 @@ const Viewer: React.FC<ViewerProps> = ({
 
 const DebugRenderer = () => {
   useFrame(({ gl, scene, camera }) => {
+    const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
     gl.render(scene, camera)
+    if (PERF_OVERLAY_ENABLED) {
+      const queue = (gl as any).backend?.device?.queue as
+        | { onSubmittedWorkDone?: () => Promise<void> }
+        | undefined
+      queue?.onSubmittedWorkDone?.().then(() => {
+        pushGpuSample(performance.now() - submittedAt)
+      })
+    }
   })
   return null
 }
