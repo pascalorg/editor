@@ -607,7 +607,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <PresetThumbnailGenerator />
       {!isFirstPersonMode && <SiteEdgeLabels />}
-      {isFirstPersonMode && <InteractiveSystem />}
+      <InteractiveSystem />
     </>
   )
 })

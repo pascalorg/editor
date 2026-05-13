@@ -1,6 +1,7 @@
 import { type AnyNodeId, type CeilingNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
   const uv = geometry.getAttribute('uv')
@@ -82,7 +83,7 @@ export function generateCeilingGeometry(ceilingNode: CeilingNode): THREE.BufferG
   shape.closePath()
 
   // Add holes to the shape
-  const holes = ceilingNode.holes || []
+  const holes = mergeSurfaceHolePolygons(ceilingNode.holes || [])
   for (const holePolygon of holes) {
     if (holePolygon.length < 3) continue
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { Canvas, extend, useFrame, useThree, type ThreeToJSXElements } from '@react-three/fiber'
+import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
+import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
@@ -8,6 +9,7 @@ import useViewer from '../../store/use-viewer'
 import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
 import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
 import { DoorSystem } from '../../systems/door/door-system'
+import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
@@ -106,7 +108,7 @@ function GPUDeviceWatcher() {
 
   useEffect(() => {
     const backend = (gl as any).backend
-    const device: GPUDevice | undefined = backend?.device
+    const device = backend?.device as WebGPUDeviceLike | undefined
 
     if (!device) {
       console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
@@ -121,22 +123,22 @@ function GPUDeviceWatcher() {
       features: Array.from(device.features ?? []),
     })
 
-    device.lost.then((info) => {
+    device.lost.then((info: WebGPUDeviceLossInfo) => {
       console.error(
-        `[viewer] WebGPU device lost: reason="${info.reason}", message="${info.message}". ` +
+        `[viewer] WebGPU device lost: reason="${info.reason ?? 'unknown'}", message="${info.message ?? ''}". ` +
           'The page must be reloaded to recover the GPU context.',
       )
     })
 
     // Uncaptured errors are normally silent (only console-warned by Chrome at
     // best). Pipe them to console.error so silent mobile crashes show up.
-    const onUncapturedError = (event: GPUUncapturedErrorEvent) => {
-      console.error('[viewer] WebGPU uncaptured error:', event.error.message, event.error)
+    const onUncapturedError = (event: any) => {
+      console.error('[viewer] WebGPU uncaptured error:', event?.error?.message, event?.error)
     }
-    device.addEventListener('uncapturederror', onUncapturedError as EventListener)
+    device.addEventListener?.('uncapturederror', onUncapturedError)
 
     return () => {
-      device.removeEventListener('uncapturederror', onUncapturedError as EventListener)
+      device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
   }, [gl])
 
@@ -175,24 +177,12 @@ const Viewer: React.FC<ViewerProps> = ({
           const canvas = props.canvas
           const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
           if (cached) return cached
-          // Surface the env we're about to ask WebGPU for — catches "no
-          // navigator.gpu" / "adapter request failed" silently failing in
-          // mobile WebViews where WebGPU is gated behind flags.
-          const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator
-          console.log('[viewer] Creating WebGPURenderer', {
-            hasNavigatorGPU: hasGpu,
-            ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
-          })
           const promise = (async () => {
             try {
               const renderer = new THREE.WebGPURenderer(props as any)
               renderer.toneMapping = THREE.ACESFilmicToneMapping
               renderer.toneMappingExposure = 0.9
               await renderer.init()
-              console.log('[viewer] WebGPURenderer ready', {
-                backend: (renderer as any).backend?.constructor?.name,
-                isWebGPU: (renderer as any).isWebGPURenderer === true,
-              })
               return renderer
             } catch (err) {
               // Drop the failed promise from the cache so a future Canvas
@@ -240,6 +230,9 @@ const Viewer: React.FC<ViewerProps> = ({
         {/* Core systems */}
         <CeilingSystem />
         <DoorAnimationSystem />
+        <ElevatorRuntimeSystem />
+        <ElevatorInteractionSystem />
+        <ElevatorOpeningSystem />
         <WindowAnimationSystem />
         <DoorSystem />
         <FenceSystem />

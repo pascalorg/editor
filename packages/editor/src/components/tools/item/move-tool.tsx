@@ -1,8 +1,10 @@
 import type {
+  AnyNodeId,
   BuildingNode,
   CeilingNode,
   ColumnNode,
   DoorNode,
+  ElevatorNode,
   FenceNode,
   ItemNode,
   RoofNode,
@@ -21,6 +23,7 @@ import { MoveBuildingContent } from '../building/move-building-tool'
 import { MoveCeilingTool } from '../ceiling/move-ceiling-tool'
 import { MoveColumnTool } from '../column/move-column-tool'
 import { MoveDoorTool } from '../door/move-door-tool'
+import { MoveElevatorTool } from '../elevator/move-elevator-tool'
 import { MoveFenceTool } from '../fence/move-fence-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
 import { MoveSlabTool } from '../slab/move-slab-tool'
@@ -90,13 +93,18 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
   return <>{cursor}</>
 }
 
-export const MoveTool: React.FC = () => {
+export const MoveTool: React.FC<{
+  onNodeMoved?: (nodeId: AnyNodeId) => void
+  onSpawnMoved?: (nodeId: SpawnNode['id']) => void
+}> = ({ onNodeMoved, onSpawnMoved }) => {
   const movingNode = useEditor((state) => state.movingNode)
 
   if (!movingNode) return null
   if (movingNode.type === 'building')
     return <MoveBuildingContent node={movingNode as BuildingNode} />
   if (movingNode.type === 'door') return <MoveDoorTool node={movingNode as DoorNode} />
+  if (movingNode.type === 'elevator')
+    return <MoveElevatorTool node={movingNode as ElevatorNode} onCommitted={onNodeMoved} />
   if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
   if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />
   if (movingNode.type === 'column') return <MoveColumnTool node={movingNode as ColumnNode} />
@@ -105,7 +113,8 @@ export const MoveTool: React.FC = () => {
   if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
-  if (movingNode.type === 'spawn') return <MoveSpawnTool node={movingNode as SpawnNode} />
+  if (movingNode.type === 'spawn')
+    return <MoveSpawnTool node={movingNode as SpawnNode} onCommitted={onSpawnMoved} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
     return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
   return <MoveItemContent movingNode={movingNode as ItemNode} />

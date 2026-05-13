@@ -764,12 +764,12 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
 
       const deltaTime = Math.min(1 / 45, delta) * slowMotionFactor
       const keys = getKeys() ?? presetKeys
-      const forward = forwardState.current || keys.forward
-      const backward = backwardState.current || keys.backward
-      const leftward = leftwardState.current || keys.leftward
-      const rightward = rightwardState.current || keys.rightward
-      const run = runState.current || keys.run
-      const jump = jumpState.current || keys.jump
+      const forward = forwardState.current || (keys.forward ?? false)
+      const backward = backwardState.current || (keys.backward ?? false)
+      const leftward = leftwardState.current || (keys.leftward ?? false)
+      const rightward = rightwardState.current || (keys.rightward ?? false)
+      const run = runState.current || (keys.run ?? false)
+      const jump = jumpState.current || (keys.jump ?? false)
 
       setInputDirection({
         forward,

@@ -6,6 +6,7 @@ import {
   type CeilingNode,
   ColumnNode,
   DoorNode,
+  ElevatorNode,
   FenceNode,
   generateId,
   ItemNode,
@@ -35,6 +36,7 @@ const ALLOWED_TYPES = [
   'item',
   'door',
   'window',
+  'elevator',
   'roof',
   'roof-segment',
   'stair',
@@ -183,6 +185,7 @@ export function FloatingActionMenu() {
         node.type === 'item' ||
         node.type === 'window' ||
         node.type === 'door' ||
+        node.type === 'elevator' ||
         node.type === 'wall' ||
         node.type === 'fence' ||
         node.type === 'column' ||
@@ -263,6 +266,8 @@ export function FloatingActionMenu() {
           duplicate = WindowNode.parse(duplicateInfo)
         } else if (node.type === 'item') {
           duplicate = ItemNode.parse(duplicateInfo)
+        } else if (node.type === 'elevator') {
+          duplicate = ElevatorNode.parse(duplicateInfo)
         } else if (node.type === 'column') {
           duplicate = ColumnNode.parse(duplicateInfo)
         } else if (node.type === 'wall') {
@@ -296,7 +301,11 @@ export function FloatingActionMenu() {
       }
 
       if (duplicate) {
-        if (duplicate.type === 'door' || duplicate.type === 'window') {
+        if (
+          duplicate.type === 'door' ||
+          duplicate.type === 'window' ||
+          duplicate.type === 'elevator'
+        ) {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (duplicate.type === 'wall') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
@@ -325,6 +334,7 @@ export function FloatingActionMenu() {
         }
         if (
           duplicate.type === 'item' ||
+          duplicate.type === 'elevator' ||
           duplicate.type === 'column' ||
           duplicate.type === 'wall' ||
           duplicate.type === 'fence' ||

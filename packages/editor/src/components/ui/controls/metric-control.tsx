@@ -9,24 +9,28 @@ interface MetricControlProps {
   label: React.ReactNode
   value: number
   onChange: (value: number) => void
+  onCommit?: (value: number) => void
   min?: number
   max?: number
   precision?: number
   step?: number
   className?: string
   unit?: string
+  restoreOnCommit?: boolean
 }
 
 export function MetricControl({
   label,
   value,
   onChange,
+  onCommit,
   min = Number.NEGATIVE_INFINITY,
   max = Number.POSITIVE_INFINITY,
   precision = 2,
   step = 1,
   className,
   unit = '',
+  restoreOnCommit = true,
 }: MetricControlProps) {
   const viewerUnit = useViewer((state) => state.unit)
   const isImperial = viewerUnit === 'imperial' && unit === 'm'
@@ -53,6 +57,17 @@ export function MetricControl({
     [min, max],
   )
 
+  const applyCommittedValue = useCallback(
+    (nextValue: number) => {
+      if (onCommit) {
+        onCommit(nextValue)
+      } else {
+        onChange(nextValue)
+      }
+    },
+    [onChange, onCommit],
+  )
+
   useEffect(() => {
     if (!isEditing) {
       setInputValue(displayValue.toFixed(precision))
@@ -77,13 +92,13 @@ export function MetricControl({
       const finalValue = Number.parseFloat((newValue * multiplier).toFixed(precision)) / multiplier
 
       if (Math.abs(finalValue - valueRef.current) > 1e-6) {
-        onChange(finalValue)
+        applyCommittedValue(finalValue)
       }
     }
 
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, clamp, onChange, precision, multiplier])
+  }, [isEditing, step, clamp, applyCommittedValue, precision, multiplier])
 
   useEffect(() => {
     if (!isHovered || isEditing) return
@@ -104,14 +119,14 @@ export function MetricControl({
           Number.parseFloat((newValue * multiplier).toFixed(precision)) / multiplier
 
         if (Math.abs(finalValue - valueRef.current) > 1e-6) {
-          onChange(finalValue)
+          applyCommittedValue(finalValue)
         }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, clamp, onChange, precision, multiplier])
+  }, [isHovered, isEditing, step, clamp, applyCommittedValue, precision, multiplier])
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -148,7 +163,14 @@ export function MetricControl({
         document.removeEventListener('pointermove', handlePointerMove)
         document.removeEventListener('pointerup', handlePointerUp)
 
-        if (Math.abs(finalValue - startValueRef.current) > 1e-6) {
+        const changed = Math.abs(finalValue - startValueRef.current) > 1e-6
+        if (onCommit) {
+          if (changed && restoreOnCommit) {
+            onChange(startValueRef.current)
+          }
+          useScene.temporal.getState().resume()
+          onCommit(finalValue)
+        } else if (changed) {
           onChange(startValueRef.current)
           useScene.temporal.getState().resume()
           onChange(finalValue)
@@ -160,7 +182,7 @@ export function MetricControl({
       document.addEventListener('pointermove', handlePointerMove)
       document.addEventListener('pointerup', handlePointerUp)
     },
-    [isEditing, value, onChange, clamp, precision, step, multiplier],
+    [isEditing, value, onChange, onCommit, restoreOnCommit, clamp, precision, step, multiplier],
   )
 
   const handleValueClick = useCallback(() => {
@@ -177,10 +199,10 @@ export function MetricControl({
     if (Number.isNaN(numValue)) {
       setInputValue((value * multiplier).toFixed(precision))
     } else {
-      onChange(clamp(numValue / multiplier))
+      applyCommittedValue(clamp(numValue / multiplier))
     }
     setIsEditing(false)
-  }, [inputValue, onChange, clamp, multiplier, value, precision])
+  }, [inputValue, applyCommittedValue, clamp, multiplier, value, precision])
 
   const handleInputBlur = useCallback(() => {
     submitValue()
@@ -196,16 +218,16 @@ export function MetricControl({
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         const newV = clamp(value + step / multiplier)
-        onChange(newV)
+        applyCommittedValue(newV)
         setInputValue((newV * multiplier).toFixed(precision))
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         const newV = clamp(value - step / multiplier)
-        onChange(newV)
+        applyCommittedValue(newV)
         setInputValue((newV * multiplier).toFixed(precision))
       }
     },
-    [submitValue, value, multiplier, precision, step, clamp, onChange],
+    [submitValue, value, multiplier, precision, step, clamp, applyCommittedValue],
   )
 
   return (

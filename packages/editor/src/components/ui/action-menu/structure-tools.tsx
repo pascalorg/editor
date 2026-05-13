@@ -25,6 +25,7 @@ export const tools: ToolConfig[] = [
   { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
   { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
+  { id: 'elevator', iconSrc: '/icons/elevator.svg', label: 'Elevator' },
   { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stairs' },
   { id: 'door', iconSrc: '/icons/door.png', label: 'Door' },

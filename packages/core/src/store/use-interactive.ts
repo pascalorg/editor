@@ -39,12 +39,25 @@ export type WindowAnimationState = {
   persist: boolean
 }
 
+export type ElevatorPhase = 'idle' | 'closing' | 'moving' | 'opening' | 'open'
+
+export type ElevatorInteractiveState = {
+  currentLevelId: AnyNodeId | null
+  targetLevelId: AnyNodeId | null
+  carY: number
+  doorOpen: number
+  phase: ElevatorPhase
+  phaseStartedAt: number | null
+  queue: AnyNodeId[]
+}
+
 type InteractiveStore = {
   items: Record<AnyNodeId, ItemInteractiveState>
   doors: Record<AnyNodeId, DoorInteractiveState>
   doorAnimations: Record<AnyNodeId, DoorAnimationState>
   windows: Record<AnyNodeId, WindowInteractiveState>
   windowAnimations: Record<AnyNodeId, WindowAnimationState>
+  elevators: Record<AnyNodeId, ElevatorInteractiveState>
 
   /** Initialize a node's interactive state from its asset definition (idempotent) */
   initItem: (itemId: AnyNodeId, interactive: Interactive) => void
@@ -78,6 +91,15 @@ type InteractiveStore = {
 
   /** Cancel a queued window animation */
   cancelWindowAnimation: (windowId: AnyNodeId) => void
+
+  /** Initialize an elevator's runtime state from its default served level. */
+  initElevator: (elevatorId: AnyNodeId, levelId: AnyNodeId, carY: number) => void
+
+  /** Merge runtime elevator state. */
+  setElevatorState: (elevatorId: AnyNodeId, value: Partial<ElevatorInteractiveState>) => void
+
+  /** Remove elevator runtime state when its renderer unmounts. */
+  removeElevator: (elevatorId: AnyNodeId) => void
 }
 
 const defaultControlValue = (interactive: Interactive, index: number): ControlValue => {
@@ -99,6 +121,7 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   doorAnimations: {},
   windows: {},
   windowAnimations: {},
+  elevators: {},
 
   initItem: (itemId, interactive) => {
     const { controls } = interactive
@@ -201,6 +224,49 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
     set((state) => {
       const { [windowId]: _, ...rest } = state.windowAnimations
       return { windowAnimations: rest }
+    })
+  },
+
+  initElevator: (elevatorId, levelId, carY) => {
+    if (get().elevators[elevatorId]) return
+
+    set((state) => ({
+      elevators: {
+        ...state.elevators,
+        [elevatorId]: {
+          currentLevelId: levelId,
+          targetLevelId: null,
+          carY,
+          doorOpen: 0,
+          phase: 'idle',
+          phaseStartedAt: null,
+          queue: [],
+        },
+      },
+    }))
+  },
+
+  setElevatorState: (elevatorId, value) => {
+    set((state) => {
+      const current = state.elevators[elevatorId]
+      if (!current) return state
+
+      return {
+        elevators: {
+          ...state.elevators,
+          [elevatorId]: {
+            ...current,
+            ...value,
+          },
+        },
+      }
+    })
+  },
+
+  removeElevator: (elevatorId) => {
+    set((state) => {
+      const { [elevatorId]: _, ...rest } = state.elevators
+      return { elevators: rest }
     })
   },
 }))

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Elevator">
+  <rect x="12" y="6" width="40" height="52" rx="5" fill="#d9e2ec"/>
+  <rect x="16" y="10" width="32" height="44" rx="2" fill="#64748b"/>
+  <path d="M32 10v44" stroke="#d9e2ec" stroke-width="2.5"/>
+  <rect x="20" y="15" width="10" height="15" rx="1.5" fill="#9bd7ff" opacity=".9"/>
+  <rect x="34" y="15" width="10" height="15" rx="1.5" fill="#9bd7ff" opacity=".9"/>
+  <circle cx="23" cy="41" r="2.2" fill="#fbbf24"/>
+  <circle cx="41" cy="41" r="2.2" fill="#fbbf24"/>
+  <path d="M26 48h12" stroke="#d9e2ec" stroke-linecap="round" stroke-width="3"/>
+</svg>

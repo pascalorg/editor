@@ -91,7 +91,7 @@ export function SlabPanel() {
     (index: number) => {
       if (!selectedId) return
       const currentHoles = node?.holes || []
-      if (node?.holeMetadata?.[index]?.source === 'stair') return
+      if ((node?.holeMetadata?.[index]?.source ?? 'manual') !== 'manual') return
       const newHoles = currentHoles.filter((_, i) => i !== index)
       const currentMetadata = currentHoles.map(
         (_, metadataIndex) => node?.holeMetadata?.[metadataIndex] ?? { source: 'manual' as const },
@@ -173,7 +173,8 @@ export function SlabPanel() {
               const isEditing =
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
               const source = node.holeMetadata?.[index]?.source ?? 'manual'
-              const isAutoHole = source === 'stair'
+              const isAutoHole = source !== 'manual'
+              const autoLabel = source === 'elevator' ? 'Auto elevator cutout' : 'Auto stair cutout'
               return (
                 <div
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
@@ -191,7 +192,7 @@ export function SlabPanel() {
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       {holeArea.toFixed(2)} m² · {hole.length} pts ·{' '}
-                      {isAutoHole ? 'Auto stair cutout' : 'Manual'}
+                      {isAutoHole ? autoLabel : 'Manual'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">

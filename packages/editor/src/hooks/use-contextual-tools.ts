@@ -28,6 +28,7 @@ export function useContextualTools() {
       'slab',
       'ceiling',
       'roof',
+      'elevator',
       'door',
       'window',
     ]

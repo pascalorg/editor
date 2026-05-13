@@ -58,6 +58,7 @@ import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
 import { DoorTreeNode } from './door-tree-node'
+import { ElevatorTreeNode } from './elevator-tree-node'
 import { FenceTreeNode } from './fence-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
@@ -89,6 +90,8 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
       return <CeilingTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'column':
       return <ColumnTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
+    case 'elevator':
+      return <ElevatorTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'level':
       return <LevelTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `level_${string}`} />
     case 'slab':

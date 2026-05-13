@@ -4,7 +4,6 @@ import {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialsForCategory,
-  getMaterialsForTarget,
   MATERIAL_CATEGORIES,
   type MaterialSchema,
   type MaterialTarget,

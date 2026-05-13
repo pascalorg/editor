@@ -56,6 +56,8 @@ import useEditor, {
 import { boxSelectHandled } from '../tools/select/box-select-tool'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
+  // Elevators are building-scoped, so they stay selectable across level filters.
+  if (node.type === 'elevator') return true
   const currentLevelId = useViewer.getState().selection.levelId
   if (!currentLevelId) return true // No level selected, allow all
   const nodeLevelId = resolveLevelId(node, useScene.getState().nodes)
@@ -68,6 +70,7 @@ type SelectableNodeType =
   | 'item'
   | 'column'
   | 'building'
+  | 'elevator'
   | 'zone'
   | 'slab'
   | 'ceiling'
@@ -565,6 +568,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'fence',
       'item',
       'column',
+      'elevator',
       'zone',
       'slab',
       'ceiling',
@@ -579,11 +583,18 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
     handleSelect: (node, nativeEvent, modifierKeys) => {
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
-      const nodeLevelId = resolveLevelId(node, nodes)
-      const buildingId = resolveBuildingId(nodeLevelId, nodes)
+      const nodeLevelId = node.type === 'elevator' ? null : resolveLevelId(node, nodes)
+      const buildingId =
+        node.type === 'elevator' &&
+        node.parentId &&
+        nodes[node.parentId as AnyNodeId]?.type === 'building'
+          ? node.parentId
+          : nodeLevelId
+            ? resolveBuildingId(nodeLevelId, nodes)
+            : null
 
       const updates: any = {}
-      if (nodeLevelId !== 'default' && nodeLevelId !== selection.levelId) {
+      if (nodeLevelId && nodeLevelId !== 'default' && nodeLevelId !== selection.levelId) {
         updates.levelId = nodeLevelId
       }
       if (buildingId && buildingId !== selection.buildingId) {
@@ -619,6 +630,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
         node.type === 'wall' ||
         node.type === 'fence' ||
         node.type === 'column' ||
+        node.type === 'elevator' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
         node.type === 'roof' ||
@@ -683,6 +695,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'wall' ||
     node.type === 'fence' ||
     node.type === 'column' ||
+    node.type === 'elevator' ||
     node.type === 'slab' ||
     node.type === 'ceiling' ||
     node.type === 'roof' ||
@@ -1162,6 +1175,7 @@ export const SelectionManager = () => {
       'item',
       'column',
       'building',
+      'elevator',
       'zone',
       'slab',
       'ceiling',
@@ -1258,6 +1272,7 @@ export const SelectionManager = () => {
         node.type === 'wall' ||
         node.type === 'fence' ||
         node.type === 'column' ||
+        node.type === 'elevator' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
         node.type === 'roof' ||
@@ -1312,6 +1327,7 @@ export const SelectionManager = () => {
       'item',
       'column',
       'building',
+      'elevator',
       'slab',
       'ceiling',
       'roof',
@@ -1385,6 +1401,7 @@ export const SelectionManager = () => {
       'fence',
       'item',
       'column',
+      'elevator',
       'slab',
       'ceiling',
       'roof',

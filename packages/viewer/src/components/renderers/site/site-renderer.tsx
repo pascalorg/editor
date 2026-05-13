@@ -2,6 +2,7 @@ import { useRegistry, useScene, type SiteNode, type SlabNode } from '@pascal-app
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, Path, Shape, type Group } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
+import { unionPolygons } from '../../../lib/polygon-union'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
 
@@ -87,16 +88,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i]![0], -pts[i]![1])
     shape.closePath()
 
-    for (const polygon of slabPolygons) {
-      if (polygon.length < 3) continue
-
-      const hole = new Path()
-      hole.moveTo(polygon[0]![0], -polygon[0]![1])
-      for (let i = 1; i < polygon.length; i++) {
-        hole.lineTo(polygon[i]![0], -polygon[i]![1])
+    if (slabPolygons.length > 0) {
+      for (const ring of unionPolygons(slabPolygons.map((p) => p.map((pt) => [pt[0], -pt[1]])))) {
+        if (ring.length < 3) continue
+        const hole = new Path()
+        hole.moveTo(ring[0]![0], ring[0]![1])
+        for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i]![0], ring[i]![1])
+        hole.closePath()
+        shape.holes.push(hole)
       }
-      hole.closePath()
-      shape.holes.push(hole)
     }
 
     return shape

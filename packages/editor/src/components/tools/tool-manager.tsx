@@ -12,6 +12,7 @@ import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
 import { CeilingTool } from './ceiling/ceiling-tool'
 import { ColumnTool } from './column/column-tool'
 import { DoorTool } from './door/door-tool'
+import { ElevatorTool } from './elevator/elevator-tool'
 import { CurveFenceTool } from './fence/curve-fence-tool'
 import { FenceTool } from './fence/fence-tool'
 import { MoveFenceEndpointTool } from './fence/move-fence-endpoint-tool'
@@ -45,7 +46,6 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     door: DoorTool,
     item: ItemTool,
     zone: ZoneTool,
-    spawn: SpawnTool,
     window: WindowTool,
   },
   furnish: {
@@ -67,6 +67,7 @@ export const ToolManager: React.FC = () => {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
+  const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
 
   // Building transform for the local group — all building-relative tools live inside this group
@@ -128,14 +129,22 @@ export const ToolManager: React.FC = () => {
 
   const BuildToolComponent = showBuildTool ? tools[phase]?.[tool] : null
   const handlePlacedNodeSelected = (nodeId: AnyNodeId) => {
-    useViewer.getState().setSelection({ selectedIds: [nodeId] })
+    setSelection({ selectedIds: [nodeId] })
+  }
+  const handlePlacedElevatorSelected = (
+    nodeId: AnyNodeId,
+    elevatorBuildingId: BuildingNode['id'],
+  ) => {
+    setSelection({ buildingId: elevatorBuildingId, selectedIds: [nodeId] })
   }
 
   return (
     <>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
-      {movingNode?.type === 'building' && <MoveTool onSpawnMoved={handlePlacedNodeSelected} />}
+      {movingNode?.type === 'building' && (
+        <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
+      )}
 
       {/* Building-local group: all other tools are relative to the selected building.
           Cursor visuals set positions in building-local space; this group applies the
@@ -160,13 +169,29 @@ export const ToolManager: React.FC = () => {
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {curvingFence && <CurveFenceTool node={curvingFence} />}
         {movingNode && movingNode.type !== 'building' && (
-          <MoveTool onSpawnMoved={handlePlacedNodeSelected} />
+          <MoveTool
+            onNodeMoved={handlePlacedNodeSelected}
+            onSpawnMoved={handlePlacedNodeSelected}
+          />
         )}
-        {!movingNode && BuildToolComponent && tool === 'spawn' ? (
+        {!movingNode && showBuildTool && tool === 'spawn' && (
           <SpawnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
-        ) : !movingNode && showBuildTool && tool === 'column' ? (
+        )}
+        {!movingNode && showBuildTool && tool === 'column' && (
           <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
-        ) : !movingNode && BuildToolComponent && tool !== 'column' ? (
+        )}
+        {!movingNode && showBuildTool && tool === 'elevator' && (
+          <ElevatorTool
+            buildingId={buildingId as BuildingNode['id'] | null}
+            levelId={activeLevelId ?? null}
+            onPlaced={handlePlacedElevatorSelected}
+          />
+        )}
+        {!movingNode &&
+        BuildToolComponent &&
+        tool !== 'spawn' &&
+        tool !== 'column' &&
+        tool !== 'elevator' ? (
           <BuildToolComponent />
         ) : null}
       </group>

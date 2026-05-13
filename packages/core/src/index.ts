@@ -5,6 +5,7 @@ export type {
   CeilingEvent,
   ColumnEvent,
   DoorEvent,
+  ElevatorEvent,
   EventSuffix,
   FenceEvent,
   GridEvent,
@@ -73,13 +74,56 @@ export {
   type ControlValue,
   type DoorAnimationState,
   type DoorInteractiveState,
+  type ElevatorInteractiveState,
+  type ElevatorPhase,
   type ItemInteractiveState,
   useInteractive,
   type WindowAnimationState,
   type WindowInteractiveState,
 } from './store/use-interactive'
+export {
+  default as useLiveNodeOverrides,
+  type LiveNodeOverrides,
+} from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
+export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
+export {
+  getElevatorCabCenterZ,
+  getElevatorCabDepth,
+  getElevatorCabWidth,
+  getElevatorDoorLeafSides,
+  getElevatorDoorLeafWidth,
+  getElevatorDoorLeafX,
+  getElevatorShaftDepth,
+  getElevatorShaftWallThickness,
+  getElevatorShaftWidth,
+  getResolvedElevatorDoorPanelStyle,
+  getResolvedElevatorDoorStyle,
+  getResolvedElevatorShaftStyle,
+  type ElevatorDoorSide,
+} from './systems/elevator/elevator-geometry'
+export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
+export { ElevatorOpeningSystem } from './systems/elevator/elevator-opening-system'
+export {
+  createElevatorInteractiveState,
+  openElevatorDoor,
+  openElevatorDoorState,
+  queueElevatorRequest,
+  requestElevatorLevel,
+  stepElevatorRuntimeState,
+  stepElevatorRuntimes,
+} from './systems/elevator/elevator-runtime'
+export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
+export {
+  DEFAULT_ELEVATOR_LEVEL_HEIGHT,
+  type ElevatorLevelEntry,
+  getElevatorLevelHeight,
+  resolveElevatorBuildingLevels,
+  resolveElevatorLevels,
+  resolveElevatorServiceLevelIds,
+  resolveElevatorServiceLevels,
+} from './systems/elevator/elevator-service'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export {
   getClampedWallCurveOffset,

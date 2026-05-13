@@ -6,15 +6,11 @@ import type {
   SlabNode,
   StairNode,
   StairSegmentNode,
+  SurfaceHoleMetadata,
 } from '../../schema'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 
 type Point2D = [number, number]
-
-type SurfaceHoleMetadata = {
-  source: 'manual' | 'stair'
-  stairId?: string
-}
 
 type SegmentTransform = {
   position: [number, number, number]
@@ -66,6 +62,7 @@ function metadataEqual(left: SurfaceHoleMetadata[], right: SurfaceHoleMetadata[]
   return left.every(
     (entry, index) =>
       entry.source === right[index]?.source &&
+      (entry.elevatorId ?? null) === (right[index]?.elevatorId ?? null) &&
       (entry.stairId ?? null) === (right[index]?.stairId ?? null),
   )
 }
@@ -311,6 +308,10 @@ function pointInPolygon(point: Point2D, polygon: Point2D[]) {
 
 function polygonContainsPolygon(outer: Point2D[], inner: Point2D[]) {
   return inner.every((point) => pointInPolygon(point, outer))
+}
+
+function isCoveredByExistingHole(existingHoles: Point2D[][], autoHole: Point2D[]) {
+  return existingHoles.some((existingHole) => polygonContainsPolygon(existingHole, autoHole))
 }
 
 function getAxisAlignedRectFromPolygon(polygon: Point2D[]): AxisAlignedRect | null {
@@ -689,12 +690,10 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const slabLevelId = resolveLevelId(slab, nodes)
     const existingHoles = slab.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, slab.holeMetadata)
-    const manualHoles = existingHoles.filter(
-      (_hole, index) => existingMetadata[index]?.source !== 'stair',
-    )
-    const manualMetadata = existingMetadata
-      .filter((entry) => entry.source !== 'stair')
-      .map((entry) => ({ ...entry }))
+    const preservedHoles = existingHoles
+      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .filter((entry) => entry.metadata.source !== 'stair')
+    const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
 
     const stairHoles = stairs
       .filter((stair) => shouldApplyStairToSlab(stair, slabLevelId, nodes))
@@ -718,9 +717,16 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
         })),
       )
       .filter((hole) => polygonContainsPolygon(slab.polygon, hole.polygon))
+      .filter((hole) => !isCoveredByExistingHole(preservedHolePolygons, hole.polygon))
 
-    const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
-    const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]
+    const nextHoles = [
+      ...preservedHoles.map((hole) => hole.polygon),
+      ...stairHoles.map((hole) => hole.polygon),
+    ]
+    const nextMetadata = [
+      ...preservedHoles.map((hole) => ({ ...hole.metadata })),
+      ...stairHoles.map((hole) => hole.metadata),
+    ]
 
     if (
       !(polygonsEqual(existingHoles, nextHoles) && metadataEqual(existingMetadata, nextMetadata))
@@ -739,12 +745,10 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const ceilingLevelId = resolveLevelId(ceiling, nodes)
     const existingHoles = ceiling.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, ceiling.holeMetadata)
-    const manualHoles = existingHoles.filter(
-      (_hole, index) => existingMetadata[index]?.source !== 'stair',
-    )
-    const manualMetadata = existingMetadata
-      .filter((entry) => entry.source !== 'stair')
-      .map((entry) => ({ ...entry }))
+    const preservedHoles = existingHoles
+      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .filter((entry) => entry.metadata.source !== 'stair')
+    const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
 
     const stairHoles = stairs
       .filter((stair) => shouldApplyStairToCeiling(stair, ceilingLevelId, nodes))
@@ -768,9 +772,16 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
         })),
       )
       .filter((hole) => polygonContainsPolygon(ceiling.polygon, hole.polygon))
+      .filter((hole) => !isCoveredByExistingHole(preservedHolePolygons, hole.polygon))
 
-    const nextHoles = [...manualHoles, ...stairHoles.map((hole) => hole.polygon)]
-    const nextMetadata = [...manualMetadata, ...stairHoles.map((hole) => hole.metadata)]
+    const nextHoles = [
+      ...preservedHoles.map((hole) => hole.polygon),
+      ...stairHoles.map((hole) => hole.polygon),
+    ]
+    const nextMetadata = [
+      ...preservedHoles.map((hole) => ({ ...hole.metadata })),
+      ...stairHoles.map((hole) => hole.metadata),
+    ]
 
     if (
       !(polygonsEqual(existingHoles, nextHoles) && metadataEqual(existingMetadata, nextMetadata))
