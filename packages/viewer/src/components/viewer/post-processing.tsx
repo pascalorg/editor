@@ -21,6 +21,7 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
+import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import useViewer from '../../store/use-viewer'
@@ -40,6 +41,43 @@ export const SSGI_PARAMS = {
   useScreenSpaceSampling: true,
   useTemporalFiltering: false,
 }
+
+// Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
+// to the URL (any subset) and reload to skip those passes. Each flag prevents
+// allocation + per-frame work for that stage, so device temperature deltas
+// across combos isolate which pass is the actual culprit. Picked up once at
+// pipeline build; reload after changing the URL.
+//   - ao:      skip SSGI entirely (and denoise, since denoise has nothing to denoise)
+//   - denoise: keep SSGI but feed its raw noisy AO straight to the composite
+//   - outline: skip the merged-outline node and its 14 internal RTs
+//   - postFx:  bypass the whole RenderPipeline and use renderer.render(scene, camera)
+//              directly — isolates raw scene-render cost from any post-FX overhead
+function readPerfDisableFlags() {
+  if (typeof window === 'undefined') {
+    return { ao: false, denoise: false, outline: false, postFx: false }
+  }
+  const raw = new URLSearchParams(window.location.search).get('disable') ?? ''
+  const set = new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  )
+  return {
+    ao: set.has('ao'),
+    denoise: set.has('denoise'),
+    outline: set.has('outline'),
+    postFx: set.has('postFx'),
+  }
+}
+
+const PERF_POST_FX_DISABLED =
+  typeof window !== 'undefined' &&
+  new Set(
+    (new URLSearchParams(window.location.search).get('disable') ?? '')
+      .split(',')
+      .map((s) => s.trim()),
+  ).has('postFx')
 
 const MAX_PIPELINE_RETRIES = 3
 const RETRY_DELAY_MS = 500
@@ -178,9 +216,17 @@ const PostProcessingPasses = ({
       return
     }
 
+    const perfDisable = readPerfDisableFlags()
+    const ssgiEnabled = SSGI_PARAMS.enabled && !perfDisable.ao
+    const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
+    const outlineEnabled = !perfDisable.outline
+
     console.log('[viewer/post-processing] Building pipeline', {
       version: pipelineVersion,
-      ssgi: SSGI_PARAMS.enabled,
+      ssgi: ssgiEnabled,
+      denoise: denoiseEnabled,
+      outline: outlineEnabled,
+      perfDisable,
       hoverHighlightMode,
       projectId,
       rendererCtor: (renderer as any).constructor?.name,
@@ -227,7 +273,7 @@ const PostProcessingPasses = ({
 
       let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
 
-      if (SSGI_PARAMS.enabled) {
+      if (ssgiEnabled) {
         // MRT only needed for SSGI (diffuse for GI, normal for SSGI sampling)
         scenePass.setMRT(
           mrt({
@@ -265,15 +311,21 @@ const PostProcessingPasses = ({
 
         const giTexture = (giPass as any).getTextureNode()
 
-        // DenoiseNode only denoises RGB — alpha is passed through unchanged.
-        // SSGI packs AO into alpha, so we remap it into RGB before denoising.
-        const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
-        const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
-        denoisePass.index.value = 0
-        denoisePass.radius.value = 4
-
         const gi = giPass.rgb
-        const ao = (denoisePass as any).r
+        let ao: any
+        if (denoiseEnabled) {
+          // DenoiseNode only denoises RGB — alpha is passed through unchanged.
+          // SSGI packs AO into alpha, so we remap it into RGB before denoising.
+          const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
+          const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
+          denoisePass.index.value = 0
+          denoisePass.radius.value = 4
+          ao = (denoisePass as any).r
+        } else {
+          // Diagnostic path: feed raw noisy SSGI AO straight through. Will
+          // look grainy — that's the point, it isolates denoise cost.
+          ao = giTexture.a
+        }
 
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(
@@ -284,36 +336,39 @@ const PostProcessingPasses = ({
 
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
       const outliner = useViewer.getState().outliner
-      const outlineNode = mergedOutline(scene, camera, {
-        primaryObjects: outliner.selectedObjects,
-        secondaryObjects: outliner.hoveredObjects,
-        primaryEdgeThickness: uniform(1),
-        secondaryEdgeThickness: uniform(1.5),
-      })
+      let compositeWithOutlines = sceneColor
+      if (outlineEnabled) {
+        const outlineNode = mergedOutline(scene, camera, {
+          primaryObjects: outliner.selectedObjects,
+          secondaryObjects: outliner.hoveredObjects,
+          primaryEdgeThickness: uniform(1),
+          secondaryEdgeThickness: uniform(1.5),
+        })
 
-      // Selected: white visible, yellow hidden
-      const selectedVisibleColor = uniform(new Color(0xff_ff_ff))
-      const selectedHiddenColor = uniform(new Color(0xf3_ff_47))
-      const selectedStrength = uniform(3)
-      const selectedOutline = outlineNode.primaryVisibleEdge
-        .mul(selectedVisibleColor)
-        .add(outlineNode.primaryHiddenEdge.mul(selectedHiddenColor))
-        .mul(selectedStrength)
+        // Selected: white visible, yellow hidden
+        const selectedVisibleColor = uniform(new Color(0xff_ff_ff))
+        const selectedHiddenColor = uniform(new Color(0xf3_ff_47))
+        const selectedStrength = uniform(3)
+        const selectedOutline = outlineNode.primaryVisibleEdge
+          .mul(selectedVisibleColor)
+          .add(outlineNode.primaryHiddenEdge.mul(selectedHiddenColor))
+          .mul(selectedStrength)
 
-      // Hovered: blue visible, yellow hidden, pulsing
-      const pulsePeriod = uniform(3)
-      const oscillating = oscSine(time.div(pulsePeriod).mul(2)).mul(0.5).add(0.5)
-      const osc = mix(oscillating, float(1), hoverPulseMix)
-      const hoverOutline = outlineNode.secondaryVisibleEdge
-        .mul(hoverVisibleColor)
-        .add(outlineNode.secondaryHiddenEdge.mul(hoverHiddenColor))
-        .mul(hoverStrength)
-        .mul(osc)
+        // Hovered: blue visible, yellow hidden, pulsing
+        const pulsePeriod = uniform(3)
+        const oscillating = oscSine(time.div(pulsePeriod).mul(2)).mul(0.5).add(0.5)
+        const osc = mix(oscillating, float(1), hoverPulseMix)
+        const hoverOutline = outlineNode.secondaryVisibleEdge
+          .mul(hoverVisibleColor)
+          .add(outlineNode.secondaryHiddenEdge.mul(hoverHiddenColor))
+          .mul(hoverStrength)
+          .mul(osc)
 
-      const compositeWithOutlines = vec4(
-        add(sceneColor.rgb, selectedOutline.add(hoverOutline)),
-        sceneColor.a,
-      )
+        compositeWithOutlines = vec4(
+          add(sceneColor.rgb, selectedOutline.add(hoverOutline)),
+          sceneColor.a,
+        )
+      }
 
       const finalOutput = vec4(
         mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha),
@@ -371,12 +426,21 @@ const PostProcessingPasses = ({
     sanitizeOutlineObjects(outliner.selectedObjects)
     sanitizeOutlineObjects(outliner.hoveredObjects)
 
-    if (hasPipelineErrorRef.current || !renderPipelineRef.current) {
+    if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
       try {
         if ((renderer as any).setClearAlpha) {
           ;(renderer as any).setClearAlpha(1)
         }
+        const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)
+        if (PERF_OVERLAY_ENABLED) {
+          const queue = (renderer as any).backend?.device?.queue as
+            | { onSubmittedWorkDone?: () => Promise<void> }
+            | undefined
+          queue?.onSubmittedWorkDone?.().then(() => {
+            pushGpuSample(performance.now() - submittedAt)
+          })
+        }
       } catch (fallbackError) {
         console.error('[viewer/post-processing] Fallback render failed.', fallbackError)
       }
@@ -387,7 +451,21 @@ const PostProcessingPasses = ({
       // Clear alpha=0 so background pixels in the output MRT attachment (index 0) get a=0,
       // making scenePassColor.a a reliable geometry mask (geometry pixels write a=1 via output node).
       ;(renderer as any).setClearAlpha(0)
+      const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
       renderPipelineRef.current.render()
+      if (PERF_OVERLAY_ENABLED) {
+        // device.queue.onSubmittedWorkDone() resolves once the GPU has
+        // finished the work we just submitted — the delta from our submit
+        // timestamp is a clean per-frame GPU duration. Doesn't block CPU
+        // (no await) and works for the custom RenderPipeline path that
+        // bypasses three.js's timestamp-query infrastructure.
+        const queue = (renderer as any).backend?.device?.queue as
+          | { onSubmittedWorkDone?: () => Promise<void> }
+          | undefined
+        queue?.onSubmittedWorkDone?.().then(() => {
+          pushGpuSample(performance.now() - submittedAt)
+        })
+      }
     } catch (error) {
       hasPipelineErrorRef.current = true
       console.error('[viewer/post-processing] Render pass failed.', {

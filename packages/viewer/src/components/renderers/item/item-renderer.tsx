@@ -1,12 +1,12 @@
 import {
+  useInteractive,
+  useRegistry,
+  useScene,
   type AnimationEffect,
   type AnyNodeId,
   type Interactive,
   type ItemNode,
   type LightEffect,
-  useInteractive,
-  useRegistry,
-  useScene,
 } from '@pascal-app/core'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
@@ -24,7 +24,7 @@ import { useItemLightPool } from '../../../store/use-item-light-pool'
 import { ErrorBoundary } from '../../error-boundary'
 import { NodeRenderer } from '../node-renderer'
 
-const getMaterialForOriginal = (original: Material): MeshStandardNodeMaterial => {
+const getMaterialForOriginal = (original: Material): Material => {
   if (original.name.toLowerCase() === 'glass') {
     return glassMaterial
   }
