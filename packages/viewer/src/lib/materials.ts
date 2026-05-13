@@ -1,13 +1,13 @@
 import {
   getMaterialPresetByRef,
+  resolveMaterial,
   type MaterialMapProperties,
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
-  resolveMaterial,
 } from '@pascal-app/core'
 import * as THREE from 'three'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 export const baseMaterial = new MeshStandardNodeMaterial({
   color: '#f2f0ed',
@@ -15,10 +15,8 @@ export const baseMaterial = new MeshStandardNodeMaterial({
   metalness: 0.0,
 })
 
-export const glassMaterial = new MeshStandardNodeMaterial({
+export const glassMaterial = new MeshLambertNodeMaterial({
   color: '#e0f2fe',
-  roughness: 0.05,
-  metalness: 0.0,
   transparent: true,
   opacity: 0.35,
   side: THREE.DoubleSide,

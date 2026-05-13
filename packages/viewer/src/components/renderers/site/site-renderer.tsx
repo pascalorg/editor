@@ -1,6 +1,6 @@
-import { type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
+import { useRegistry, useScene, type SiteNode, type SlabNode } from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
+import { BufferGeometry, Float32BufferAttribute, Path, Shape, type Group } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import useViewer from '../../../store/use-viewer'
 import { NodeRenderer } from '../node-renderer'
@@ -126,15 +126,23 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
       {groundShape && (
-        <mesh position={[0, -0.05, 0]} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <shapeGeometry args={[groundShape]} />
-          <meshStandardMaterial
+          {/* PERF TEST: basic material — no PBR / shadows / lighting calc.
+              Ground color = canvas background, so lighting is invisible work. */}
+          <meshBasicMaterial
+            color={bgColor}
+            polygonOffset={true}
+            polygonOffsetFactor={1}
+            polygonOffsetUnits={1}
+          />
+          {/* <meshStandardMaterial
             color={bgColor}
             depthWrite={true}
             polygonOffset={true}
             polygonOffsetFactor={1}
             polygonOffsetUnits={1}
-          />
+          /> */}
         </mesh>
       )}
 
