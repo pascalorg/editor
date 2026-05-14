@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type AnyNodeDefinition,
   nodeRegistry,
   type ParamField,
   useScene,
@@ -35,25 +34,23 @@ import { PanelWrapper } from './panel-wrapper'
  * can't be auto-generated (topology editors etc.).
  */
 export function ParametricInspector() {
-  const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
-  const deleteNode = useScene((s) => s.deleteNode)
-  const setMovingNode = useEditor((s) => s.setMovingNode)
+  // Subscribe only to the *type* — a string primitive that doesn't change
+  // when slider values change. Without this, every updateNode tick during
+  // a drag re-renders the entire panel + every field + every SliderControl.
+  // Per-field subscriptions live on FieldRenderer below.
+  const nodeType = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
 
-  const node = useScene((s) =>
-    selectedId ? s.nodes[selectedId as AnyNodeId] : undefined,
-  )
-
-  const def = node ? nodeRegistry.get(node.type) : undefined
+  const def = nodeType ? nodeRegistry.get(nodeType) : undefined
   const parametrics = def?.parametrics
 
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNodeId, patch)
+      useScene.getState().updateNode(selectedId, patch)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleClose = useCallback(() => {
@@ -61,23 +58,25 @@ export function ParametricInspector() {
   }, [setSelection])
 
   const handleMove = useCallback(() => {
+    if (!selectedId) return
+    const node = useScene.getState().nodes[selectedId]
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
-    setMovingNode(node as any)
+    useEditor.getState().setMovingNode(node as any)
     setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+  }, [selectedId, setSelection])
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return
     sfxEmitter.emit('sfx:structure-delete')
-    deleteNode(selectedId as AnyNodeId)
+    useScene.getState().deleteNode(selectedId)
     setSelection({ selectedIds: [] })
-  }, [deleteNode, selectedId, setSelection])
+  }, [selectedId, setSelection])
 
-  if (!node || !def || !parametrics) return null
+  if (!selectedId || !def || !parametrics) return null
 
   const presentation = def.presentation
-  const title = presentation?.label ?? node.type
+  const title = presentation?.label ?? nodeType ?? ''
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
 
@@ -85,19 +84,14 @@ export function ParametricInspector() {
     <PanelWrapper onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
-          {group.fields.map((field, fi) => {
-            // Skip fields whose visibleIf predicate excludes the current node.
-            const visibleIf = (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf
-            if (visibleIf && !visibleIf(node)) return null
-            return (
-              <FieldRenderer
-                key={`field-${gi}-${fi}-${String(field.key)}`}
-                field={field as ParamField<AnyNode>}
-                node={node}
-                onUpdate={handleUpdate}
-              />
-            )
-          })}
+          {group.fields.map((field, fi) => (
+            <FieldRenderer
+              key={`field-${gi}-${fi}-${String(field.key)}`}
+              field={field as ParamField<AnyNode>}
+              nodeId={selectedId}
+              onUpdate={handleUpdate}
+            />
+          ))}
         </PanelSection>
       ))}
       {(canMove || canDelete) && (
@@ -125,13 +119,30 @@ export function ParametricInspector() {
 
 interface FieldRendererProps {
   field: ParamField<AnyNode>
-  node: AnyNode
+  nodeId: AnyNodeId
   onUpdate: (patch: Partial<AnyNode>) => void
 }
 
-function FieldRenderer({ field, node, onUpdate }: FieldRendererProps) {
+function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   const key = String(field.key)
-  const value = (node as Record<string, unknown>)[key]
+  // Subscribe only to this field's value. Zustand compares with ===, so when
+  // another field on the same node changes (which produces a new node object
+  // reference), this primitive value stays equal and the field doesn't
+  // re-render. Vec3 arrays get a new reference only when the array itself
+  // changes — same outcome.
+  const value = useScene((s) => {
+    const n = s.nodes[nodeId]
+    return n ? (n as Record<string, unknown>)[key] : undefined
+  })
+  // visibleIf may consult other fields on the node — subscribe to its boolean
+  // result so we re-evaluate when relevant.
+  const visible = useScene((s) => {
+    const visibleIf = (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf
+    if (!visibleIf) return true
+    const n = s.nodes[nodeId]
+    return n ? visibleIf(n as AnyNode) : false
+  })
+  if (!visible) return null
 
   switch (field.kind) {
     case 'number': {
