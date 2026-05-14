@@ -53,8 +53,10 @@ export {
 } from './components/tools/shared/polygon-editor'
 export {
   formatAngleRadians,
+  getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  type SegmentAngleReference,
 } from './components/tools/shared/segment-angle'
 // Stair placement defaults — used by the kind-owned stair / stair-segment
 // panels. Re-exported from `components/tools/stair/stair-defaults.ts`.
