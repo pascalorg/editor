@@ -10,15 +10,15 @@ import { spawnDefinition } from './spawn'
  * Removed in the PR that signs off parity (legacy spawn files deleted in the
  * same commit). All other built-in node migrations follow the same pattern.
  */
-function readEnvFlag(name: string): boolean {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env
-  const flag = env?.[name]
-  return flag === '1' || flag === 'true'
-}
-
 function isSpawnRegistryEnabled(): boolean {
-  return readEnvFlag('NEXT_PUBLIC_USE_REGISTRY_FOR_SPAWN')
+  // Next.js / Turbopack inlines `process.env.NEXT_PUBLIC_*` references at
+  // build time, but ONLY when the access is a literal property — dynamic
+  // bracket access (`env[name]`) is not substituted and resolves to
+  // undefined in the browser. Keep this as a literal so the value is baked
+  // into the client bundle.
+  if (typeof process === 'undefined') return false
+  const flag = process.env.NEXT_PUBLIC_USE_REGISTRY_FOR_SPAWN
+  return flag === '1' || flag === 'true'
 }
 
 function getBuiltinNodes(): AnyNodeDefinition[] {

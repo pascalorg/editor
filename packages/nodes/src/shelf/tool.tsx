@@ -3,8 +3,8 @@
 import {
   emitter,
   type GridEvent,
-  sceneRegistry,
   ShelfNode,
+  sceneRegistry,
   snapPointToGrid,
   useScene,
 } from '@pascal-app/core'
@@ -13,8 +13,17 @@ import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
 
 const worldVector = new Vector3()
-const GRID_STEP = 0.5 // match the editor's default placement grid
+const GRID_STEP = 0.5
 
+/**
+ * Convert a click event into the shelf's commit position (level-local). The
+ * shelf node's `position` field is stored relative to its level parent, so
+ * we project the click point into the level's local frame before storing.
+ *
+ * Different from the cursor preview path: the cursor lives inside the
+ * ToolManager's building-local group and snaps to `event.localPosition`
+ * directly. This conversion only applies to the *committed* data.
+ */
 function getLevelLocalPosition(levelId: string, event: GridEvent): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
   if (!levelObject) {
@@ -36,11 +45,12 @@ const ShelfTool = () => {
     if (!activeLevelId) return
 
     const onGridMove = (event: GridEvent) => {
-      // Imperative position update — no React state, so the component
-      // doesn't re-render. R3F-applied props would otherwise clobber the
-      // imperative `position.set` on the next render.
-      const next = getLevelLocalPosition(activeLevelId, event)
-      cursorRef.current?.position.set(next[0], next[1], next[2])
+      // Cursor lives in the ToolManager's building-local group. Use
+      // `event.localPosition` (already building-local) so the visual cursor
+      // sits where the mouse hits the floor. Legacy spawn-tool does the
+      // same — don't apply worldToLocal here.
+      const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
+      cursorRef.current?.position.set(sx, event.localPosition[1], sz)
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -52,6 +62,8 @@ const ShelfTool = () => {
       })
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
+      // biome-ignore lint/suspicious/noConsole: dev-only verification log
+      console.info('[shelf] placed', shelf.id, 'level-local', position, 'parent', activeLevelId)
     }
 
     emitter.on('grid:move', onGridMove)
@@ -65,9 +77,6 @@ const ShelfTool = () => {
 
   if (!activeLevelId) return null
 
-  // Cursor preview — a translucent shelf-shaped slab. No `position` prop on
-  // the group; we move it imperatively via the ref so React re-renders don't
-  // reset it to the origin.
   return (
     <group ref={cursorRef}>
       <mesh position={[0, 0.9, 0]}>

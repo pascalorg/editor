@@ -2,24 +2,23 @@
 
 import { useLiveTransforms, useRegistry } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
-import type { Group } from 'three'
-import { buildShelfGeometry } from './geometry'
+import { Color, type Group } from 'three'
 import type { ShelfNode } from './schema'
 
-// Note: `useNodeEvents` from @pascal-app/viewer has a hardcoded kind list and
-// doesn't yet know about 'shelf'. Phase 4 generalizes it to consume the
-// registry — until then, shelf selection works via R3F's default raycast
-// (clicks bubble through the scene; the editor's selection manager handles
-// them by hit-testing the registered Object3D).
+// Note: useNodeEvents from @pascal-app/viewer has a hardcoded kind list and
+// doesn't yet know about 'shelf'. Phase 4 generalizes it via the registry —
+// until then, shelf selection works via R3F's default raycast (clicks bubble
+// through; the editor's selection manager hit-tests the registered Object3D).
 
 /**
- * Registry-driven shelf renderer.
+ * Registry-driven shelf renderer. Renders top board + brackets as inline R3F
+ * primitives so React owns the scene graph end-to-end — no imperative
+ * children swap.
  *
- * The pure `buildShelfGeometry` function returns a Group of meshes. We mount
- * an empty group, attach event handlers, register with `sceneRegistry`, and
- * imperatively swap in the built geometry whenever the schema-relevant fields
- * change. This pattern keeps the JSX trivial and centralizes parametric work
- * in the pure function — better for AI authoring and easier to swap out.
+ * The pure `buildShelfGeometry` function in `./geometry.ts` produces the same
+ * shape outside of React (used by tests + reachable by AI-authored consumers
+ * that want a Three.js Group). Keeping both costs nothing because the shape
+ * primitives are tiny.
  */
 const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
   const ref = useRef<Group>(null!)
@@ -27,27 +26,23 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
 
   useRegistry(node.id, 'shelf', ref)
 
-  // Build a fresh Group each time the parametric fields change.
-  const built = useMemo(
-    () => buildShelfGeometry(node),
-    [node.width, node.depth, node.thickness, node.height, node.bracketStyle, node.color],
-  )
+  const color = useMemo(() => new Color(node.color), [node.color])
+  const topY = node.height + node.thickness / 2
 
-  // Mount the built children under our group ref. Re-runs when `built`
-  // changes (parametric edit) or when the parent ref mounts.
+  // Bracket dimensions mirror buildShelfGeometry — keep these in sync if the
+  // geometry function evolves. Phase 4 may consolidate.
+  const inset = Math.min(0.12, node.width / 6)
+  const bracketHeight = Math.max(0.01, node.height)
+  const bracketWidth =
+    node.bracketStyle === 'industrial'
+      ? Math.max(0.04, node.depth * 0.2)
+      : Math.max(0.02, node.depth * 0.12)
+  const bracketDepth = node.bracketStyle === 'industrial' ? node.depth * 0.95 : node.depth * 0.7
+
   useEffect(() => {
-    const root = ref.current
-    if (!root) return
-    // Clear previous children. We don't dispose the buffer geometries here
-    // because they're owned by the previous `built` and were already
-    // discarded by React's reconciler when useMemo recomputed.
-    while (root.children.length > 0) {
-      root.remove(root.children[0]!)
-    }
-    for (const child of [...built.children]) {
-      root.add(child)
-    }
-  }, [built])
+    // biome-ignore lint/suspicious/noConsole: dev-only verification log
+    console.info('[shelf] rendered', node.id, 'at', node.position)
+  }, [node.id, node.position])
 
   return (
     <group
@@ -55,7 +50,33 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
       ref={ref}
       rotation={liveTransform?.rotation ? [0, liveTransform.rotation, 0] : node.rotation}
       visible={node.visible}
-    />
+    >
+      {/* Top board */}
+      <mesh position={[0, topY, 0]} name="shelf-top">
+        <boxGeometry args={[node.width, node.thickness, node.depth]} />
+        <meshStandardMaterial color={color} roughness={0.65} metalness={0.05} />
+      </mesh>
+
+      {/* Brackets (skipped for 'hidden' style) */}
+      {node.bracketStyle !== 'hidden' && (
+        <>
+          <mesh
+            position={[-(node.width / 2 - inset), bracketHeight / 2, 0]}
+            name="shelf-bracket-left"
+          >
+            <boxGeometry args={[bracketWidth, bracketHeight, bracketDepth]} />
+            <meshStandardMaterial color={color} roughness={0.65} metalness={0.05} />
+          </mesh>
+          <mesh
+            position={[node.width / 2 - inset, bracketHeight / 2, 0]}
+            name="shelf-bracket-right"
+          >
+            <boxGeometry args={[bracketWidth, bracketHeight, bracketDepth]} />
+            <meshStandardMaterial color={color} roughness={0.65} metalness={0.05} />
+          </mesh>
+        </>
+      )}
+    </group>
   )
 }
 
