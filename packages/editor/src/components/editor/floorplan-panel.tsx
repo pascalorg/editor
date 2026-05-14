@@ -15597,21 +15597,6 @@ export function FloorplanPanel() {
     },
     [deleteNode, selectedItemEntry, setSelection],
   )
-  const handleSelectedWallMove = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation()
-
-      const wall = selectedWallEntry?.wall
-      if (!wall) {
-        return
-      }
-
-      sfxEmitter.emit('sfx:item-pick')
-      setMovingNode(wall)
-      setSelection({ selectedIds: [] })
-    },
-    [selectedWallEntry, setMovingNode, setSelection],
-  )
   const handleWallMoveHandlePointerDown = useCallback(
     (wall: WallNode, event: ReactPointerEvent<SVGCircleElement>) => {
       if (event.button !== 0) {
@@ -17905,7 +17890,6 @@ export function FloorplanPanel() {
             onCurve: canCurveSelectedWall ? handleSelectedWallCurve : undefined,
             onDelete: handleSelectedWallDelete,
             onDuplicate: handleSelectedWallDuplicate,
-            onMove: handleSelectedWallMove,
           }}
         />
 
