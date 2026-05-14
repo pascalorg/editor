@@ -10,6 +10,14 @@ export {
   type Vec3,
 } from './hosting'
 export {
+  type AxisLock,
+  applyAxisLock,
+  isMovable,
+  movePlanToward,
+  moveToward,
+  resolveMovable,
+} from './movement'
+export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
   type SnapServices,
