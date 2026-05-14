@@ -35,6 +35,7 @@ type SelectableNodeType =
   | 'door'
   | 'column'
   | 'item'
+  | 'shelf'
   | 'slab'
   | 'ceiling'
   | 'roof'
@@ -338,6 +339,7 @@ export const SelectionManager = () => {
       'fence',
       'item',
       'column',
+      'shelf',
       'slab',
       'ceiling',
       'roof',
