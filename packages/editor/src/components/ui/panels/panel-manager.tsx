@@ -34,6 +34,7 @@ import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
 import { getNodeDisplay } from './node-display'
 import { PaintPanel } from './paint-panel'
+import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { RoofSegmentPanel } from './roof-segment-panel'
@@ -113,7 +114,12 @@ function panelForType(type: string | null) {
     case 'window':
       return <WindowPanel />
     default:
-      return null
+      // Registry fallback: any kind registered via @pascal-app/nodes with a
+      // `parametrics` descriptor on its NodeDefinition gets an auto-derived
+      // panel. Phase 4 will replace the hardcoded switch above with the
+      // registry-first path; until then this fallback lets new kinds (shelf,
+      // etc.) have a working inspector without per-kind panel files.
+      return <ParametricInspector />
   }
 }
 
