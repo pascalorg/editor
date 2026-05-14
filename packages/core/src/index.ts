@@ -65,6 +65,7 @@ export {
 } from './material-library'
 export * from './registry'
 export * from './schema'
+export * from './services'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
