@@ -14,6 +14,7 @@ export type {
   NodeEvent,
   RoofEvent,
   RoofSegmentEvent,
+  ShelfEvent,
   SiteEvent,
   SlabEvent,
   SpawnEvent,

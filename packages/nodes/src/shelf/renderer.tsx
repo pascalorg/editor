@@ -1,14 +1,10 @@
 'use client'
 
 import { useLiveTransforms, useRegistry } from '@pascal-app/core'
+import { useNodeEvents } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { Color, type Group } from 'three'
 import type { ShelfNode } from './schema'
-
-// Note: useNodeEvents from @pascal-app/viewer has a hardcoded kind list and
-// doesn't yet know about 'shelf'. Phase 4 generalizes it via the registry —
-// until then, shelf selection works via R3F's default raycast (clicks bubble
-// through; the editor's selection manager hit-tests the registered Object3D).
 
 /**
  * Registry-driven shelf renderer. Renders top board + brackets as inline R3F
@@ -19,9 +15,14 @@ import type { ShelfNode } from './schema'
  * shape outside of React (used by tests + reachable by AI-authored consumers
  * that want a Three.js Group). Keeping both costs nothing because the shape
  * primitives are tiny.
+ *
+ * `useNodeEvents(node, 'shelf')` wires pointer events on each mesh into the
+ * editor's emitter — the selection manager subscribes to `shelf:click` etc.
+ * and updates `useViewer.selection`. Required for selection from the canvas.
  */
 const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
   const ref = useRef<Group>(null!)
+  const handlers = useNodeEvents(node, 'shelf')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
 
   useRegistry(node.id, 'shelf', ref)
@@ -29,7 +30,7 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
   const color = useMemo(() => new Color(node.color), [node.color])
   const topY = node.height + node.thickness / 2
 
-  // Bracket dimensions mirror buildShelfGeometry — keep these in sync if the
+  // Bracket dimensions mirror buildShelfGeometry — keep in sync if the
   // geometry function evolves. Phase 4 may consolidate.
   const inset = Math.min(0.12, node.width / 6)
   const bracketHeight = Math.max(0.01, node.height)
@@ -52,7 +53,7 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
       visible={node.visible}
     >
       {/* Top board */}
-      <mesh position={[0, topY, 0]} name="shelf-top">
+      <mesh position={[0, topY, 0]} name="shelf-top" {...handlers}>
         <boxGeometry args={[node.width, node.thickness, node.depth]} />
         <meshStandardMaterial color={color} roughness={0.65} metalness={0.05} />
       </mesh>
@@ -63,6 +64,7 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
           <mesh
             position={[-(node.width / 2 - inset), bracketHeight / 2, 0]}
             name="shelf-bracket-left"
+            {...handlers}
           >
             <boxGeometry args={[bracketWidth, bracketHeight, bracketDepth]} />
             <meshStandardMaterial color={color} roughness={0.65} metalness={0.05} />
@@ -70,6 +72,7 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
           <mesh
             position={[node.width / 2 - inset, bracketHeight / 2, 0]}
             name="shelf-bracket-right"
+            {...handlers}
           >
             <boxGeometry args={[bracketWidth, bracketHeight, bracketDepth]} />
             <meshStandardMaterial color={color} roughness={0.65} metalness={0.05} />

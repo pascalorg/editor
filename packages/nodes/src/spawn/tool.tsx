@@ -1,25 +1,10 @@
 'use client'
 
 import { emitter, type GridEvent, SpawnNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { CursorSphere, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
-
-/**
- * Registry-driven spawn placement tool. No props — reads `activeLevelId` from
- * `useViewer` directly and broadcasts placement events through the store.
- *
- * Behavior parity with the legacy tool in
- * `@pascal-app/editor/components/tools/spawn/spawn-tool.tsx`:
- * - Grid-snap to half-meter increments on X/Z
- * - Project click position into the active level's local frame
- * - Singleton: if a spawn already exists for this level, reuse it and clean
- *   up any duplicates
- * - On commit: select the placed spawn and exit build mode
- *
- * Mounted by `ToolManager`'s registry-first dispatch (Phase 0 shim) when
- * `nodeRegistry.has('spawn')` and the active tool is 'spawn'.
- */
 
 const roundToHalf = (value: number) => Math.round(value * 2) / 2
 const worldVector = new Vector3()
@@ -47,22 +32,26 @@ function getLevelLocalPosition(levelId: string, event: GridEvent): [number, numb
   return [roundToHalf(worldVector.x), worldVector.y, roundToHalf(worldVector.z)]
 }
 
+/**
+ * Registry-driven spawn placement tool. Reads `activeLevelId` from useViewer
+ * directly (no props), broadcasts placement via store updates + SFX, and
+ * uses the shared CursorSphere from @pascal-app/editor for visual parity
+ * with legacy placement tools.
+ */
 const SpawnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
-  const [, setCursor] = useState<[number, number, number] | null>(null)
   const cursorRef = useRef<Group>(null)
 
   useEffect(() => {
     if (!activeLevelId) return
 
     const onGridMove = (event: GridEvent) => {
-      const next: [number, number, number] = [
-        roundToHalf(event.localPosition[0]),
-        event.localPosition[1],
-        roundToHalf(event.localPosition[2]),
-      ]
-      setCursor(next)
-      cursorRef.current?.position.set(next[0], next[1], next[2])
+      // Cursor lives in the ToolManager's building-local group. Use
+      // event.localPosition directly (already building-local) with the
+      // same half-meter snap the legacy tool uses.
+      const nextX = roundToHalf(event.localPosition[0])
+      const nextZ = roundToHalf(event.localPosition[2])
+      cursorRef.current?.position.set(nextX, event.localPosition[1], nextZ)
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -91,11 +80,9 @@ const SpawnTool = () => {
       }
 
       useViewer.getState().setSelection({ selectedIds: [placedId] })
-      // Note: legacy tool also emits sfx:structure-build and resets the editor
-      // tool/mode. We rely on the legacy ToolManager to do the latter via the
-      // build-tool exit path; this commit doesn't replicate the SFX since the
-      // registry doesn't yet bridge to the editor's sfx-emitter. Phase 4's
-      // command surface adds a clean path.
+      triggerSFX('sfx:structure-build')
+      useEditor.getState().setTool(null)
+      useEditor.getState().setMode('select')
     }
 
     emitter.on('grid:move', onGridMove)
@@ -109,20 +96,7 @@ const SpawnTool = () => {
 
   if (!activeLevelId) return null
 
-  // Visible marker for the cursor — using a simple group + box. The legacy
-  // tool used a CursorSphere component from @pascal-app/editor; here we keep
-  // the dependency arrow flowing nodes→editor (which is allowed by the layer
-  // rules) but use a minimal inline mesh to avoid the dependency entirely for
-  // the spike. Phase 4 ports CursorSphere to the editor framework so node
-  // tools can reuse it.
-  return (
-    <group ref={cursorRef}>
-      <mesh position={[0, 1.1, 0]}>
-        <sphereGeometry args={[0.18, 16, 12]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.6} />
-      </mesh>
-    </group>
-  )
+  return <CursorSphere color="#60a5fa" height={2.2} ref={cursorRef} />
 }
 
 export default SpawnTool

@@ -8,6 +8,7 @@ import {
   snapPointToGrid,
   useScene,
 } from '@pascal-app/core'
+import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
@@ -16,13 +17,11 @@ const worldVector = new Vector3()
 const GRID_STEP = 0.5
 
 /**
- * Convert a click event into the shelf's commit position (level-local). The
- * shelf node's `position` field is stored relative to its level parent, so
- * we project the click point into the level's local frame before storing.
+ * Convert a click into the shelf's commit position (level-local). The shelf
+ * node's `position` field is stored relative to its level parent, so we
+ * project the click point into the level's local frame before storing.
  *
- * Different from the cursor preview path: the cursor lives inside the
- * ToolManager's building-local group and snaps to `event.localPosition`
- * directly. This conversion only applies to the *committed* data.
+ * Cursor display uses event.localPosition (building-local) — see onGridMove.
  */
 function getLevelLocalPosition(levelId: string, event: GridEvent): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
@@ -37,6 +36,17 @@ function getLevelLocalPosition(levelId: string, event: GridEvent): [number, numb
   return [sx, worldVector.y, sz]
 }
 
+// Cursor preview dimensions — match the shelf's default schema dimensions.
+// Once the shelf has user-tunable defaults in the inspector, this can pull
+// from the active draft.
+const PREVIEW_WIDTH = 1.2
+const PREVIEW_DEPTH = 0.3
+const PREVIEW_THICKNESS = 0.04
+const PREVIEW_HEIGHT = 0.9
+const PREVIEW_INSET = Math.min(0.12, PREVIEW_WIDTH / 6)
+const PREVIEW_BRACKET_WIDTH = Math.max(0.02, PREVIEW_DEPTH * 0.12)
+const PREVIEW_BRACKET_DEPTH = PREVIEW_DEPTH * 0.7
+
 const ShelfTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
@@ -45,10 +55,6 @@ const ShelfTool = () => {
     if (!activeLevelId) return
 
     const onGridMove = (event: GridEvent) => {
-      // Cursor lives in the ToolManager's building-local group. Use
-      // `event.localPosition` (already building-local) so the visual cursor
-      // sits where the mouse hits the floor. Legacy spawn-tool does the
-      // same — don't apply worldToLocal here.
       const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
       cursorRef.current?.position.set(sx, event.localPosition[1], sz)
     }
@@ -62,6 +68,7 @@ const ShelfTool = () => {
       })
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
+      triggerSFX('sfx:structure-build')
       // biome-ignore lint/suspicious/noConsole: dev-only verification log
       console.info('[shelf] placed', shelf.id, 'level-local', position, 'parent', activeLevelId)
     }
@@ -77,10 +84,24 @@ const ShelfTool = () => {
 
   if (!activeLevelId) return null
 
+  // Cursor preview: ghostly version of the full shelf (top board + brackets)
+  // so the user sees the same shape they're placing. Position is updated
+  // imperatively via the ref; no React state, no re-render cycles.
   return (
     <group ref={cursorRef}>
-      <mesh position={[0, 0.9, 0]}>
-        <boxGeometry args={[1.2, 0.04, 0.3]} />
+      {/* Top board */}
+      <mesh position={[0, PREVIEW_HEIGHT + PREVIEW_THICKNESS / 2, 0]}>
+        <boxGeometry args={[PREVIEW_WIDTH, PREVIEW_THICKNESS, PREVIEW_DEPTH]} />
+        <meshStandardMaterial color="#a07050" transparent opacity={0.5} />
+      </mesh>
+      {/* Left bracket */}
+      <mesh position={[-(PREVIEW_WIDTH / 2 - PREVIEW_INSET), PREVIEW_HEIGHT / 2, 0]}>
+        <boxGeometry args={[PREVIEW_BRACKET_WIDTH, PREVIEW_HEIGHT, PREVIEW_BRACKET_DEPTH]} />
+        <meshStandardMaterial color="#a07050" transparent opacity={0.5} />
+      </mesh>
+      {/* Right bracket */}
+      <mesh position={[PREVIEW_WIDTH / 2 - PREVIEW_INSET, PREVIEW_HEIGHT / 2, 0]}>
+        <boxGeometry args={[PREVIEW_BRACKET_WIDTH, PREVIEW_HEIGHT, PREVIEW_BRACKET_DEPTH]} />
         <meshStandardMaterial color="#a07050" transparent opacity={0.5} />
       </mesh>
     </group>

@@ -13,6 +13,7 @@ import type {
   LevelNode,
   RoofNode,
   RoofSegmentNode,
+  ShelfNode,
   SiteNode,
   SlabNode,
   SpawnNode,
@@ -57,6 +58,7 @@ export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type LevelEvent = NodeEvent<LevelNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
+export type ShelfEvent = NodeEvent<ShelfNode>
 export type SlabEvent = NodeEvent<SlabNode>
 export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
@@ -189,6 +191,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'level', LevelEvent> &
   NodeEvents<'zone', ZoneEvent> &
   NodeEvents<'slab', SlabEvent> &
+  NodeEvents<'shelf', ShelfEvent> &
   NodeEvents<'spawn', SpawnEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &

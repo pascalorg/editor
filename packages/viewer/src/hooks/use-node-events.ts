@@ -21,6 +21,8 @@ import {
   type RoofNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
+  type ShelfEvent,
+  type ShelfNode,
   type SiteEvent,
   type SiteNode,
   type SlabEvent,
@@ -49,6 +51,7 @@ type NodeConfig = {
   building: { node: BuildingNode; event: BuildingEvent }
   level: { node: LevelNode; event: LevelEvent }
   zone: { node: ZoneNode; event: ZoneEvent }
+  shelf: { node: ShelfNode; event: ShelfEvent }
   slab: { node: SlabNode; event: SlabEvent }
   spawn: { node: SpawnNode; event: SpawnEvent }
   ceiling: { node: CeilingNode; event: CeilingEvent }

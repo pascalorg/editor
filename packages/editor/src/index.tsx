@@ -4,6 +4,7 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
 export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'

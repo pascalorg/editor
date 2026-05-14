@@ -63,6 +63,7 @@ import { FenceTreeNode } from './fence-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
+import { ShelfTreeNode } from './shelf-tree-node'
 import { SlabTreeNode } from './slab-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
@@ -94,6 +95,8 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
       return <ElevatorTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'level':
       return <LevelTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `level_${string}`} />
+    case 'shelf':
+      return <ShelfTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `shelf_${string}`} />
     case 'slab':
       return <SlabTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
     case 'spawn':
