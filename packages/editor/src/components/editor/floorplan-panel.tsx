@@ -43,8 +43,8 @@ import {
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
-  WallNode as WallNodeSchema,
   type WallNode,
+  WallNode as WallNodeSchema,
   WindowNode,
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
@@ -92,9 +92,20 @@ import {
 } from '../editor-2d/renderers/floorplan-measurements-layer'
 import { FloorplanRoofLayer } from '../editor-2d/renderers/floorplan-roof-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
-import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import {
+  buildSvgArcPath,
+  buildSvgPolylinePath,
+  formatPolygonPath,
+  getArcPlanPoint,
+} from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
+import {
+  formatAngleRadians,
+  getAngleArcToSegmentReference,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../tools/shared/segment-angle'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
@@ -196,6 +207,10 @@ const FLOORPLAN_WALL_OUTER_MEASUREMENT_EXTENSION = 'rgba(96, 165, 250, 0.9)'
 const FLOORPLAN_WALL_INNER_MEASUREMENT_STROKE = 'rgba(96, 165, 250, 0.95)'
 const FLOORPLAN_WALL_INNER_MEASUREMENT_TEXT = 'rgba(59, 130, 246, 0.98)'
 const FLOORPLAN_WALL_INNER_MEASUREMENT_EXTENSION = 'rgba(147, 197, 253, 0.9)'
+const FLOORPLAN_DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
+const FLOORPLAN_DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
+const FLOORPLAN_DRAFT_ANGLE_LABEL_OFFSET = 0.16
+const FLOORPLAN_DRAFT_ANGLE_STROKE = 'rgba(249, 115, 22, 0.98)'
 const FLOORPLAN_OPENING_MEASUREMENT_STROKE = 'rgba(249, 115, 22, 0.98)'
 const FLOORPLAN_OPENING_MEASUREMENT_TEXT = 'rgba(234, 88, 12, 0.98)'
 const FLOORPLAN_OPENING_MEASUREMENT_EXTENSION = 'rgba(251, 146, 60, 0.9)'
@@ -2237,6 +2252,68 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     frontSide: 'unknown',
     backSide: 'unknown',
   }
+}
+
+type DraftWallAngleOverlay = {
+  id: string
+  path: string
+  label: string
+  labelX: number
+  labelY: number
+}
+
+function getDraftWallAngleOverlays(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  walls: WallNode[],
+): DraftWallAngleOverlay[] {
+  const draftFromStart: WallPlanPoint = [end[0] - start[0], end[1] - start[1]]
+  const draftFromEnd: WallPlanPoint = [start[0] - end[0], start[1] - end[1]]
+  const endpoints = [
+    { id: 'start', point: start, draftVector: draftFromStart },
+    { id: 'end', point: end, draftVector: draftFromEnd },
+  ]
+  const overlays: DraftWallAngleOverlay[] = []
+
+  for (const endpoint of endpoints) {
+    const connectedWall = walls.find((wall) =>
+      Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, wall)),
+    )
+    if (!connectedWall) continue
+
+    const connectedReference = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
+    if (!connectedReference) continue
+
+    const angle = getAngleToSegmentReference(endpoint.draftVector, connectedReference)
+    const arc = getAngleArcToSegmentReference(endpoint.draftVector, connectedReference)
+    if (angle === null || !arc || arc.angle < 0.01) continue
+
+    const draftLength = Math.hypot(endpoint.draftVector[0], endpoint.draftVector[1])
+    const referenceLength = Math.hypot(connectedReference.vector[0], connectedReference.vector[1])
+    const radius = clamp(
+      Math.min(draftLength, referenceLength) * 0.28,
+      FLOORPLAN_DRAFT_ANGLE_ARC_MIN_RADIUS,
+      FLOORPLAN_DRAFT_ANGLE_ARC_MAX_RADIUS,
+    )
+    overlays.push({
+      id: endpoint.id,
+      path: buildSvgArcPath(
+        { x: endpoint.point[0], y: endpoint.point[1] },
+        radius,
+        arc.startAngle,
+        arc.endAngle,
+      ),
+      label: formatAngleRadians(angle),
+      labelX: toSvgX(
+        endpoint.point[0] + Math.cos(arc.midAngle) * (radius + FLOORPLAN_DRAFT_ANGLE_LABEL_OFFSET),
+      ),
+      labelY: toSvgY(
+        endpoint.point[1] + Math.sin(arc.midAngle) * (radius + FLOORPLAN_DRAFT_ANGLE_LABEL_OFFSET),
+      ),
+    })
+  }
+
+  return overlays
 }
 
 function pointsEqual(a: WallPlanPoint, b: WallPlanPoint): boolean {
@@ -5801,6 +5878,48 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
         measurements={wallMeasurements}
         palette={palette}
       />
+    </>
+  )
+})
+
+const FloorplanDraftAngleLayer = memo(function FloorplanDraftAngleLayer({
+  overlays,
+}: {
+  overlays: DraftWallAngleOverlay[]
+}) {
+  if (overlays.length === 0) {
+    return null
+  }
+
+  return (
+    <>
+      {overlays.map((overlay) => (
+        <g key={overlay.id} pointerEvents="none" style={{ userSelect: 'none' }}>
+          <path
+            d={overlay.path}
+            fill="none"
+            shapeRendering="geometricPrecision"
+            stroke={FLOORPLAN_DRAFT_ANGLE_STROKE}
+            strokeLinecap="round"
+            strokeOpacity={0.95}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+          <text
+            dominantBaseline="central"
+            fill={FLOORPLAN_DRAFT_ANGLE_STROKE}
+            fillOpacity={0.98}
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+            fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
+            fontWeight="600"
+            textAnchor="middle"
+            x={overlay.labelX}
+            y={overlay.labelY}
+          >
+            {overlay.label}
+          </text>
+        </g>
+      ))}
     </>
   )
 })
@@ -10389,6 +10508,49 @@ export function FloorplanPanel() {
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
   }, [draftEnd, draftStart, levelId])
+  const draftWallLengthMeasurements = useMemo(() => {
+    if (!(isWallBuildActive && draftStart && draftEnd && isWallLongEnough(draftStart, draftEnd))) {
+      return []
+    }
+
+    const dx = draftEnd[0] - draftStart[0]
+    const dy = draftEnd[1] - draftStart[1]
+    const length = Math.hypot(dx, dy)
+    if (length < 1e-6) return []
+
+    const normal = { x: -dy / length, y: dx / length }
+    const measurement = getLinearMeasurementOverlay(
+      'wall-draft:length',
+      { x: draftStart[0], y: draftStart[1] },
+      { x: draftEnd[0], y: draftEnd[1] },
+      formatMeasurement(length, unit, calibratedMetersPerUnit),
+      {
+        extensionOvershoot: FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT,
+        offsetDistance: FLOORPLAN_MEASUREMENT_OFFSET,
+        offsetVector: normal,
+      },
+    )
+
+    return measurement
+      ? [
+          {
+            ...measurement,
+            dashedExtensions: true,
+            isSelected: true,
+            stroke: FLOORPLAN_DRAFT_ANGLE_STROKE,
+            labelFill: FLOORPLAN_DRAFT_ANGLE_STROKE,
+            extensionStroke: FLOORPLAN_DRAFT_ANGLE_STROKE,
+          },
+        ]
+      : []
+  }, [calibratedMetersPerUnit, draftEnd, draftStart, isWallBuildActive, unit])
+  const draftWallAngleOverlays = useMemo(() => {
+    if (!(isWallBuildActive && draftStart && draftEnd && isWallLongEnough(draftStart, draftEnd))) {
+      return []
+    }
+
+    return getDraftWallAngleOverlays(draftStart, draftEnd, walls)
+  }, [draftEnd, draftStart, isWallBuildActive, walls])
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
       const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
@@ -17620,6 +17782,14 @@ export function FloorplanPanel() {
                 measurements={selectedItemClearanceMeasurements}
                 palette={palette}
               />
+
+              <FloorplanMeasurementsLayer
+                className="wall-draft-dimension"
+                measurements={draftWallLengthMeasurements}
+                palette={palette}
+              />
+
+              <FloorplanDraftAngleLayer overlays={draftWallAngleOverlays} />
 
               {/* Zone labels: always visible so users can click to select zones from any mode */}
               <FloorplanZoneLabelLayer
