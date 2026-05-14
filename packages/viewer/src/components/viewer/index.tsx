@@ -12,8 +12,8 @@ import { DoorSystem } from '../../systems/door/door-system'
 import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
-import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { ItemSystem } from '../../systems/item/item-system'
+import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { RoofSystem } from '../../systems/roof/roof-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
@@ -27,9 +27,11 @@ import { ZoneSystem } from '../../systems/zone/zone-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
+import { LegacySystem } from './legacy-system'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
+import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
@@ -223,30 +225,76 @@ const Viewer: React.FC<ViewerProps> = ({
         )}
 
         {/* Default Systems */}
-        <LevelSystem />
-        <GuideSystem />
-        <ScanSystem />
-        <WallCutout />
+        <LegacySystem kind="level">
+          <LevelSystem />
+        </LegacySystem>
+        <LegacySystem kind="guide">
+          <GuideSystem />
+        </LegacySystem>
+        <LegacySystem kind="scan">
+          <ScanSystem />
+        </LegacySystem>
+        <LegacySystem kind="wall">
+          <WallCutout />
+        </LegacySystem>
         {/* Core systems */}
-        <CeilingSystem />
-        <DoorAnimationSystem />
-        <ElevatorRuntimeSystem />
-        <ElevatorInteractionSystem />
-        <ElevatorOpeningSystem />
-        <WindowAnimationSystem />
-        <DoorSystem />
-        <FenceSystem />
-        <ItemSystem />
-        <RoofSystem />
-        <SlabSystem />
-        <StairSystem />
-        <WallSystem />
-        <WindowSystem />
-        <ZoneSystem />
+        <LegacySystem kind="ceiling">
+          <CeilingSystem />
+        </LegacySystem>
+        <LegacySystem kind="door">
+          <DoorAnimationSystem />
+        </LegacySystem>
+        <LegacySystem kind="elevator">
+          <ElevatorRuntimeSystem />
+        </LegacySystem>
+        <LegacySystem kind="elevator">
+          <ElevatorInteractionSystem />
+        </LegacySystem>
+        <LegacySystem kind="elevator">
+          <ElevatorOpeningSystem />
+        </LegacySystem>
+        <LegacySystem kind="window">
+          <WindowAnimationSystem />
+        </LegacySystem>
+        <LegacySystem kind="door">
+          <DoorSystem />
+        </LegacySystem>
+        <LegacySystem kind="fence">
+          <FenceSystem />
+        </LegacySystem>
+        <LegacySystem kind="item">
+          <ItemSystem />
+        </LegacySystem>
+        <LegacySystem kind="roof">
+          <RoofSystem />
+        </LegacySystem>
+        <LegacySystem kind="slab">
+          <SlabSystem />
+        </LegacySystem>
+        <LegacySystem kind="stair">
+          <StairSystem />
+        </LegacySystem>
+        <LegacySystem kind="wall">
+          <WallSystem />
+        </LegacySystem>
+        <LegacySystem kind="window">
+          <WindowSystem />
+        </LegacySystem>
+        <LegacySystem kind="zone">
+          <ZoneSystem />
+        </LegacySystem>
+        {/* Mounts systems contributed by registry-backed kinds. Today the
+            registry is empty so this renders nothing. Once kinds register
+            (Phase 2+), each kind's registered system runs here and its
+            legacy counterpart above short-circuits via the LegacySystem
+            wrapper (which checks nodeRegistry.has). */}
+        <RegisteredSystems />
         <PostProcessing hoverStyles={hoverStyles} />
         {/* <DebugRenderer /> */}
 
-        <ItemLightSystem />
+        <LegacySystem kind="item">
+          <ItemLightSystem />
+        </LegacySystem>
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}
