@@ -1,5 +1,6 @@
 'use client'
 
+import '../lib/bootstrap'
 import {
   applySceneGraphToEditor,
   Editor,
