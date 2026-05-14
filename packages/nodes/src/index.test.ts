@@ -13,8 +13,12 @@ describe('builtinPlugin', () => {
     expect(Array.isArray(builtinPlugin.nodes)).toBe(true)
   })
 
-  test('loads with zero kinds today (Phase 0 — registry empty)', async () => {
+  test('loads the registered kinds without error', async () => {
     await loadPlugin(builtinPlugin)
-    expect(nodeRegistry.size).toBe(0)
+    // Phase 2 registers shelf unconditionally; spawn is flag-gated. So the
+    // registry should always contain shelf, and may contain spawn depending
+    // on the NEXT_PUBLIC_USE_REGISTRY_FOR_SPAWN env value at module load.
+    expect(nodeRegistry.has('shelf')).toBe(true)
+    expect(nodeRegistry.size).toBeGreaterThanOrEqual(1)
   })
 })

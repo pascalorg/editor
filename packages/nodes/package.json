@@ -24,6 +24,7 @@
   },
   "peerDependencies": {
     "@pascal-app/core": "^0.8.0",
+    "@pascal-app/viewer": "^0.8.0",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
@@ -31,8 +32,10 @@
   },
   "devDependencies": {
     "@pascal-app/core": "^0.8.0",
+    "@pascal-app/viewer": "^0.8.0",
     "@pascal/typescript-config": "*",
     "@types/bun": "^1.3.0",
+    "@types/node": "^22.19.12",
     "@types/react": "^19.2.2",
     "@types/three": "^0.184.0",
     "typescript": "6.0.2"

@@ -33,6 +33,10 @@ export const tools: ToolConfig[] = [
   { id: 'fence', iconSrc: '/icons/fence.png', label: 'Fence' },
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
+  // Registry-driven shelf node — placed via the registry-first ToolManager
+  // shim from Phase 0. No icon file shipped; using a placeholder icon until
+  // Phase 4 derives palette entries from `definition.presentation.icon`.
+  { id: 'shelf', iconSrc: '/icons/column.png', label: 'Shelf' },
 ]
 
 export function StructureTools() {
