@@ -74,34 +74,7 @@ function normalizeExistingMetadata(
   return holes.map((_, index) => metadata?.[index] ?? { source: 'manual' })
 }
 
-function expandPolygonFromCentroid(polygon: Point2D[], offset: number) {
-  if (Math.abs(offset) < 1e-6) {
-    return polygon.map(([x, z]) => [x, z] as Point2D)
-  }
-
-  const centroid = polygon.reduce(
-    (acc, [x, z]) => {
-      acc.x += x
-      acc.z += z
-      return acc
-    },
-    { x: 0, z: 0 },
-  )
-  centroid.x /= Math.max(polygon.length, 1)
-  centroid.z /= Math.max(polygon.length, 1)
-
-  return polygon.map(([x, z]) => {
-    const dx = x - centroid.x
-    const dz = z - centroid.z
-    const length = Math.hypot(dx, dz)
-    if (length < 1e-6) {
-      return [x, z] as Point2D
-    }
-
-    const scale = Math.max(0.1, (length + offset) / length)
-    return [centroid.x + dx * scale, centroid.z + dz * scale] as Point2D
-  })
-}
+// (Removing expandPolygonRadially in favor of geometric expansion inside the polygon generators)
 
 function rotateXZ(x: number, z: number, angle: number): [number, number] {
   const cos = Math.cos(angle)
@@ -424,17 +397,20 @@ function buildUnionPolygonsFromRects(rects: AxisAlignedRect[]): Point2D[][] {
   return polygons
 }
 
-function getCurvedOpeningPolygon(stair: StairNode): Point2D[] {
+function getCurvedOpeningPolygon(stair: StairNode, offset: number = 0): Point2D[] {
   const width = Math.max(stair.width ?? 1, 0.4)
-  const innerRadius = Math.max(0.2, stair.innerRadius ?? 0.9)
-  const outerRadius = innerRadius + width
+  const innerRadius = Math.max(0.01, (stair.innerRadius ?? 0.9) - offset)
+  const outerRadius = (stair.innerRadius ?? 0.9) + width + offset
   const totalSweep = stair.sweepAngle ?? Math.PI / 2
-  const openingSweep =
-    Math.sign(totalSweep || 1) *
+  const baseOpeningSweep =
+    Math.abs(totalSweep) *
     Math.max(
-      Math.abs(totalSweep) * CURVED_STAIR_SLAB_OPENING_RATIO,
-      Math.abs(totalSweep) / Math.max(stair.stepCount ?? 1, 1),
+      CURVED_STAIR_SLAB_OPENING_RATIO,
+      1 / Math.max(stair.stepCount ?? 1, 1),
     )
+  const angleOffset = offset / Math.max(innerRadius, 0.1)
+  const openingSweep = Math.sign(totalSweep || 1) * Math.min(Math.abs(totalSweep), baseOpeningSweep + angleOffset * 2)
+
   const startAngle = totalSweep / 2 - openingSweep
   const endAngle = totalSweep / 2
   const segmentCount = Math.max(
@@ -466,14 +442,30 @@ function getCurvedOpeningPolygon(stair: StairNode): Point2D[] {
   return [...outerPoints, ...innerPoints]
 }
 
-function getSpiralOpeningPolygon(stair: StairNode): Point2D[] {
-  const radius = Math.max(0.05, stair.innerRadius ?? 0.9) + Math.max(stair.width ?? 1, 0.4)
+function getSpiralOpeningPolygon(stair: StairNode, offset: number = 0): Point2D[] {
+  const radius = Math.max(0.05, stair.innerRadius ?? 0.9) + Math.max(stair.width ?? 1, 0.4) + offset
   const segmentCount = 48
 
   return Array.from({ length: segmentCount }).map((_, index) => {
     const angle = (index / segmentCount) * Math.PI * 2
     return toWorldPlanPoint(stair, Math.cos(angle) * radius, Math.sin(angle) * radius)
   })
+}
+
+function getSpiralLandingPolygon(stair: StairNode, offset: number = 0): Point2D[] {
+  const width = Math.max(stair.width ?? 1, 0.4)
+  const outerRadius = Math.max(0.05, (stair.innerRadius ?? 0.9) + width)
+  const depth = Math.max(stair.topLandingDepth ?? 0.9, 0.1)
+  const halfWidth = width / 2
+
+  const localPoints: Point2D[] = [
+    [outerRadius - offset, -halfWidth - offset],
+    [outerRadius + depth + offset, -halfWidth - offset],
+    [outerRadius + depth + offset, halfWidth + offset],
+    [outerRadius - offset, halfWidth + offset],
+  ]
+
+  return localPoints.map(([x, z]) => toWorldPlanPoint(stair, x, z))
 }
 
 function getStraightOpeningPolygonsForSurface(
@@ -570,11 +562,16 @@ function getStairOpeningPolygons(
   }
 
   if (stair.stairType === 'curved') {
-    return [getCurvedOpeningPolygon(stair)]
+    return [getCurvedOpeningPolygon(stair, Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0.15))]
   }
 
   if (stair.stairType === 'spiral') {
-    return [getSpiralOpeningPolygon(stair)]
+    const offset = Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0.15)
+    const polygons = [getSpiralOpeningPolygon(stair, offset)]
+    if (stair.topLandingMode === 'integrated') {
+      polygons.push(getSpiralLandingPolygon(stair, offset))
+    }
+    return polygons
   }
 
   if (typeof targetElevation === 'number') {
@@ -703,13 +700,7 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           nodes,
           getTargetSlabElevationForStair(stair, slab, slabLevelId, nodes),
         ).map((polygon) => ({
-          polygon:
-            stair.stairType === 'straight'
-              ? polygon
-              : expandPolygonFromCentroid(
-                  polygon,
-                  Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0),
-                ),
+          polygon,
           metadata: {
             source: 'stair' as const,
             stairId: stair.id,
@@ -758,13 +749,7 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           nodes,
           getTargetCeilingElevationForStair(stair, ceiling, ceilingLevelId, nodes),
         ).map((polygon) => ({
-          polygon:
-            stair.stairType === 'straight'
-              ? polygon
-              : expandPolygonFromCentroid(
-                  polygon,
-                  Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0),
-                ),
+          polygon,
           metadata: {
             source: 'stair' as const,
             stairId: stair.id,
