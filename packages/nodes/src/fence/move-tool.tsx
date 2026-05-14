@@ -2,13 +2,14 @@
 
 import {
   type AnyNodeId,
+  constrainWallMoveDeltaToAxis,
   emitter,
   type FenceNode,
+  getPerpendicularWallMoveAxis,
   type GridEvent,
   type LevelNode,
-  sceneRegistry,
-  useLiveTransforms,
   useScene,
+  type WallMoveAxis,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -20,22 +21,17 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type * as THREE from 'three'
 
 /**
  * Phase 5 Stage D — fence whole-move tool.
  *
- * Live-drag pattern: translate the fence MESH (and any linked fences
- * sharing an endpoint) via `sceneRegistry.nodes.get(id).position` +
- * `useLiveTransforms`. No `scene.update` during the drag — fence
- * geometry isn't rebuilt per tick. On commit we write the translated
- * start/end (plus the linked-fence cascade) to the scene once.
- * `GeometrySystem` resets `mesh.position` on rebuild, so the visual
- * transitions smoothly with no teleport.
+ * Live-drag pattern: translate the fence via direct scene updates while
+ * temporal history is paused. On commit we restore the original, resume
+ * history, apply the final position (single undo step), then re-pause.
+ * `constrainWallMoveDeltaToAxis` keeps moves axis-aligned.
  *
- * History stays UNPAUSED during the drag (we're only mutating Three.js
- * mesh transforms). The single `scene.update` on commit is the single
- * undo step.
+ * Wired via `def.affordanceTools.move`. The editor's `MoveTool`
+ * dispatcher picks this up before its legacy chain.
  */
 function samePoint(a: [number, number], b: [number, number]) {
   return a[0] === b[0] && a[1] === b[1]
@@ -99,38 +95,32 @@ function getLinkedFenceUpdates(
   }))
 }
 
-function setMeshOffset(fenceId: FenceNode['id'], deltaX: number, deltaZ: number): void {
-  const mesh = sceneRegistry.nodes.get(fenceId) as THREE.Object3D | undefined
-  if (mesh) mesh.position.set(deltaX, 0, deltaZ)
-}
-
-function setFenceLiveTransform(fenceId: FenceNode['id'], deltaX: number, deltaZ: number): void {
-  // useLiveTransforms holds the SAME delta the direct mesh.position
-  // mutation uses — ParametricNodeRenderer reads it and reconciles
-  // `<group position={liveTransform.position}>` via React. Mismatched
-  // values here cause the two systems to fight per frame (jitter
-  // during drag).
-  useLiveTransforms.getState().set(fenceId, {
-    position: [deltaX, 0, deltaZ],
-    rotation: 0,
-  })
-}
-
 export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
+  const meta =
+    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : {}
+  const isNew = !!meta.isNew
+
   const linkedOriginalsRef = useRef(
-    getLinkedFenceSnapshots({
-      fenceId: node.id,
-      fenceParentId: node.parentId ?? null,
-      originalStart: node.start,
-      originalEnd: node.end,
-    }),
+    isNew
+      ? []
+      : getLinkedFenceSnapshots({
+          fenceId: node.id,
+          fenceParentId: node.parentId ?? null,
+          originalStart: node.start,
+          originalEnd: node.end,
+        }),
   )
   const dragAnchorRef = useRef<[number, number] | null>(null)
-  const deltaRef = useRef<[number, number]>([0, 0])
+  const previewRef = useRef<{ start: [number, number]; end: [number, number] } | null>(null)
+  const moveAxisRef = useRef<WallMoveAxis | null>(
+    getPerpendicularWallMoveAxis(node.start, node.end),
+  )
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
     const centerX = (node.start[0] + node.end[0]) / 2
@@ -146,7 +136,6 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     const fenceId = node.id
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
-    const linkedOriginals = linkedOriginalsRef.current
 
     const levelNode =
       node.parentId && useScene.getState().nodes[node.parentId as AnyNodeId]?.type === 'level'
@@ -160,29 +149,47 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
       .filter((child): child is FenceNode => child?.type === 'fence')
 
+    useScene.temporal.getState().pause()
     let wasCommitted = false
 
-    const applyPreview = (deltaX: number, deltaZ: number) => {
-      deltaRef.current = [deltaX, deltaZ]
-      setMeshOffset(fenceId, deltaX, deltaZ)
-      setFenceLiveTransform(fenceId, deltaX, deltaZ)
-      for (const linked of linkedOriginals) {
-        setMeshOffset(linked.id, deltaX, deltaZ)
-        setFenceLiveTransform(linked.id, deltaX, deltaZ)
+    const applyNodePreview = (
+      updates: Array<{ id: FenceNode['id']; start: [number, number]; end: [number, number] }>,
+    ) => {
+      useScene.getState().updateNodes(
+        updates.map((entry) => ({
+          id: entry.id as AnyNodeId,
+          data: { start: entry.start, end: entry.end },
+        })),
+      )
+      for (const entry of updates) {
+        useScene.getState().markDirty(entry.id as AnyNodeId)
       }
-      // Cursor at translated polygon center.
-      const centerX = (originalStart[0] + originalEnd[0]) / 2
-      const centerZ = (originalStart[1] + originalEnd[1]) / 2
-      setCursorLocalPos([centerX + deltaX, 0, centerZ + deltaZ])
     }
 
-    const clearPreview = () => {
-      setMeshOffset(fenceId, 0, 0)
-      useLiveTransforms.getState().clear(fenceId)
-      for (const linked of linkedOriginals) {
-        setMeshOffset(linked.id, 0, 0)
-        useLiveTransforms.getState().clear(linked.id)
-      }
+    const restoreOriginal = () => {
+      applyNodePreview([
+        { id: fenceId, start: originalStart, end: originalEnd },
+        ...linkedOriginalsRef.current,
+      ])
+    }
+
+    const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
+      previewRef.current = { start: nextStart, end: nextEnd }
+      const centerX = (nextStart[0] + nextEnd[0]) / 2
+      const centerZ = (nextStart[1] + nextEnd[1]) / 2
+      setCursorLocalPos([centerX, 0, centerZ])
+      const previewUpdates = [
+        { id: fenceId, start: nextStart, end: nextEnd },
+        ...getLinkedFenceUpdates(
+          linkedOriginalsRef.current,
+          originalStart,
+          originalEnd,
+          nextStart,
+          nextEnd,
+        ),
+      ]
+
+      applyNodePreview(previewUpdates)
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -204,7 +211,16 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      applyPreview(localX - anchor[0], localZ - anchor[1])
+      const [deltaX, deltaZ] = constrainWallMoveDeltaToAxis(
+        localX - anchor[0],
+        localZ - anchor[1],
+        moveAxisRef.current,
+      )
+
+      const nextStart: [number, number] = [originalStart[0] + deltaX, originalStart[1] + deltaZ]
+      const nextEnd: [number, number] = [originalEnd[0] + deltaX, originalEnd[1] + deltaZ]
+
+      applyPreview(nextStart, nextEnd)
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -213,37 +229,31 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         return
       }
 
-      const [deltaX, deltaZ] = deltaRef.current
       wasCommitted = true
 
-      if (deltaX !== 0 || deltaZ !== 0) {
-        const nextStart: [number, number] = [originalStart[0] + deltaX, originalStart[1] + deltaZ]
-        const nextEnd: [number, number] = [originalEnd[0] + deltaX, originalEnd[1] + deltaZ]
-        const linkedUpdates = getLinkedFenceUpdates(
-          linkedOriginals,
+      const preview = previewRef.current
+      if (!preview) {
+        exitMoveMode()
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+
+      // Restore original baseline while paused so the next resume+update
+      // registers as a single tracked change (undo reverts to original).
+      restoreOriginal()
+
+      useScene.temporal.getState().resume()
+      applyNodePreview([
+        { id: fenceId, start: preview.start, end: preview.end },
+        ...getLinkedFenceUpdates(
+          linkedOriginalsRef.current,
           originalStart,
           originalEnd,
-          nextStart,
-          nextEnd,
-        )
-        useScene.getState().updateNodes([
-          { id: fenceId as AnyNodeId, data: { start: nextStart, end: nextEnd } },
-          ...linkedUpdates.map((u) => ({
-            id: u.id as AnyNodeId,
-            data: { start: u.start, end: u.end },
-          })),
-        ])
-        useScene.getState().markDirty(fenceId as AnyNodeId)
-        for (const linked of linkedOriginals) {
-          useScene.getState().markDirty(linked.id as AnyNodeId)
-        }
-      }
-      // Clear useLiveTransforms but leave mesh.position — GeometrySystem
-      // resets it on the rebuild next frame.
-      useLiveTransforms.getState().clear(fenceId)
-      for (const linked of linkedOriginals) {
-        useLiveTransforms.getState().clear(linked.id)
-      }
+          preview.start,
+          preview.end,
+        ),
+      ])
+      useScene.temporal.getState().pause()
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [fenceId] })
@@ -252,8 +262,9 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
-      clearPreview()
+      restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [fenceId] })
+      useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -264,13 +275,9 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
 
     return () => {
       if (!wasCommitted) {
-        clearPreview()
-      } else {
-        useLiveTransforms.getState().clear(fenceId)
-        for (const linked of linkedOriginals) {
-          useLiveTransforms.getState().clear(linked.id)
-        }
+        restoreOriginal()
       }
+      useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
