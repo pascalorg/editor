@@ -7,7 +7,6 @@ import {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
-  type MaterialSchema,
   normalizeWallCurveOffset,
   useScene,
 } from '@pascal-app/core'
@@ -19,7 +18,6 @@ import { useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
-import { MaterialPicker } from '../controls/material-picker'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'

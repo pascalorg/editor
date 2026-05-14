@@ -126,15 +126,19 @@ export const RoofSystem = () => {
         pendingRoofUpdates.delete(id)
         continue
       }
+
       const group = sceneRegistry.nodes.get(id) as THREE.Group
-      if (group) {
-        const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
-        if (mergedMesh?.visible !== false) {
-          // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
-          updateMergedRoofGeometry(node as RoofNode, group, nodes)
-          roofsProcessed++
-        }
+      if (!group) continue
+
+      const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
+      if (!mergedMesh) continue
+
+      if (mergedMesh.visible !== false) {
+        // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
+        updateMergedRoofGeometry(node as RoofNode, group, nodes)
+        roofsProcessed++
       }
+
       pendingRoofUpdates.delete(id)
     }
   }, 5) // Priority 5: run after all other systems have settled
