@@ -21,7 +21,6 @@ import {
   getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
-  getPerpendicularWallMoveAxis,
   type ItemNode,
   ItemNode as ItemNodeSchema,
   isCurvedWall,
@@ -1727,9 +1726,7 @@ function formatPolygonPoints(points: Point2D[]): string {
     .join(' ')
 }
 
-function getFloorplanWallMoveHandles(
-  wall: WallNode,
-): FloorplanWallMoveHandle[] {
+function getFloorplanWallMoveHandles(wall: WallNode): FloorplanWallMoveHandle[] {
   const dx = wall.end[0] - wall.start[0]
   const dy = wall.end[1] - wall.start[1]
   const length = Math.hypot(dx, dy)
@@ -1773,9 +1770,7 @@ function getFloorplanWallMoveHandles(
   ]
 }
 
-function getFloorplanFenceMoveHandles(
-  fence: FenceNode,
-): FloorplanFenceMoveHandle[] {
+function getFloorplanFenceMoveHandles(fence: FenceNode): FloorplanFenceMoveHandle[] {
   const dx = fence.end[0] - fence.start[0]
   const dy = fence.end[1] - fence.start[1]
   const length = Math.hypot(dx, dy)
@@ -2154,6 +2149,14 @@ function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
   return baseSweepAngle
 }
 
+function clampFloorplanCircularSweepAngle(sweepAngle: number) {
+  if (Math.abs(sweepAngle) >= Math.PI * 2) {
+    return Math.sign(sweepAngle || 1) * (Math.PI * 2 - 0.001)
+  }
+
+  return sweepAngle
+}
+
 function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
   if (
     (stair.stairType ?? 'straight') !== 'spiral' ||
@@ -2175,8 +2178,11 @@ function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
 function getFloorplanCurvedStairHitPolygon(stair: StairNode): Point2D[] {
   const stairType = stair.stairType ?? 'straight'
   const sweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
+  const visualSweepAngle = clampFloorplanCircularSweepAngle(
+    sweepAngle + getFloorplanSpiralLandingSweep(stair, sweepAngle),
+  )
   const startAngle = -stair.rotation - sweepAngle / 2
-  const endAngle = startAngle + sweepAngle + getFloorplanSpiralLandingSweep(stair, sweepAngle)
+  const endAngle = startAngle + visualSweepAngle
   const center = {
     x: stair.position[0],
     y: stair.position[2],
@@ -10716,13 +10722,7 @@ export function FloorplanPanel() {
       floorplanSelectionTool === 'click' &&
       selectedFenceEntry !== null
     )
-  }, [
-    floorplanSelectionTool,
-    isOpeningPlacementActive,
-    mode,
-    movingNode,
-    selectedFenceEntry,
-  ])
+  }, [floorplanSelectionTool, isOpeningPlacementActive, mode, movingNode, selectedFenceEntry])
   const slabVertexHandles = useMemo(() => {
     if (!shouldShowSlabBoundaryHandles) {
       return []
@@ -15841,7 +15841,7 @@ export function FloorplanPanel() {
 
     const cloned = structuredClone(wall) as Record<string, unknown>
     delete cloned.id
-    
+
     cloned.children = []
     cloned.metadata = {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
@@ -15871,7 +15871,7 @@ export function FloorplanPanel() {
 
     const cloned = structuredClone(fence) as Record<string, unknown>
     delete cloned.id
-    
+
     cloned.metadata = {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
       isNew: true,
