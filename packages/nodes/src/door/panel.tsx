@@ -80,6 +80,25 @@ const foldingDoorSegments: DoorNode['segments'] = [
   },
 ]
 
+const hingedDoorSegments: DoorNode['segments'] = [
+  {
+    type: 'panel',
+    heightRatio: 0.4,
+    columnRatios: [1],
+    dividerThickness: 0.03,
+    panelDepth: 0.01,
+    panelInset: 0.04,
+  },
+  {
+    type: 'panel',
+    heightRatio: 0.6,
+    columnRatios: [1],
+    dividerThickness: 0.03,
+    panelDepth: 0.01,
+    panelInset: 0.04,
+  },
+]
+
 const defaultDoorDimensions: Record<DoorNode['doorType'], { width: number; height: number }> = {
   hinged: { width: 0.9, height: 2.1 },
   double: { width: 1.5, height: 2.1 },
@@ -91,6 +110,19 @@ const defaultDoorDimensions: Record<DoorNode['doorType'], { width: number; heigh
   'garage-sectional': { width: 2.7, height: 2.4 },
   'garage-rollup': { width: 2.7, height: 2.4 },
   'garage-tiltup': { width: 2.7, height: 2.4 },
+}
+
+const defaultDoorSegmentsByType: Record<DoorNode['doorType'], DoorNode['segments']> = {
+  hinged: hingedDoorSegments,
+  double: hingedDoorSegments,
+  french: frenchDoorSegments,
+  folding: foldingDoorSegments,
+  pocket: foldingDoorSegments,
+  barn: foldingDoorSegments,
+  sliding: frenchDoorSegments,
+  'garage-sectional': foldingDoorSegments,
+  'garage-rollup': foldingDoorSegments,
+  'garage-tiltup': foldingDoorSegments,
 }
 
 function isSameDoorValue(current: unknown, next: unknown): boolean {
@@ -367,7 +399,12 @@ export default function DoorPanel() {
   const typeMode = isOpening ? 'opening' : isGarageDoor ? 'garage' : 'door'
   const supportsHingeSide = doorType === 'hinged'
   const supportsHandleSide = doorType === 'hinged'
-  const supportsTopShape = !isGarageDoor
+  const supportsTopShape =
+    !isGarageDoor &&
+    doorType !== 'folding' &&
+    doorType !== 'pocket' &&
+    doorType !== 'barn' &&
+    doorType !== 'sliding'
   const maxDoorWidth = isGarageDoor ? 6 : 3
 
   const setOpeningTopRadius = (index: number, value: number, commit = false) => {
@@ -382,6 +419,7 @@ export default function DoorPanel() {
 
   const getDoorTypeUpdates = (nextDoorType: DoorNode['doorType']): Partial<DoorNode> => {
     const dimensions = defaultDoorDimensions[nextDoorType]
+    const segments = structuredClone(defaultDoorSegmentsByType[nextDoorType])
     const dimensionUpdates = {
       width: dimensions.width,
       height: dimensions.height,
@@ -395,10 +433,10 @@ export default function DoorPanel() {
         leafCount: 2,
         ...dimensionUpdates,
         handleSide: 'right',
+        segments,
         ...(nextDoorType === 'french'
           ? {
               contentPadding: [0.045, 0.055],
-              segments: frenchDoorSegments,
             }
           : {}),
       }
@@ -410,13 +448,14 @@ export default function DoorPanel() {
         doorType: nextDoorType,
         leafCount: 4,
         ...dimensionUpdates,
+        openingShape: 'rectangle',
         handle: true,
         handleSide: 'right',
         trackStyle: 'visible',
         operationState: Math.max(node.operationState ?? 0, 0.65),
         threshold: false,
         contentPadding: [0.03, 0.04],
-        segments: foldingDoorSegments,
+        segments,
       }
     }
 
@@ -426,6 +465,7 @@ export default function DoorPanel() {
         doorType: nextDoorType,
         leafCount: 1,
         ...dimensionUpdates,
+        openingShape: 'rectangle',
         handle: true,
         handleSide: 'right',
         trackStyle: 'pocket',
@@ -433,7 +473,7 @@ export default function DoorPanel() {
         operationState: node.operationState ?? 0,
         threshold: false,
         contentPadding: [0.035, 0.045],
-        segments: foldingDoorSegments,
+        segments,
       }
     }
 
@@ -443,6 +483,7 @@ export default function DoorPanel() {
         doorType: nextDoorType,
         leafCount: 1,
         ...dimensionUpdates,
+        openingShape: 'rectangle',
         handle: true,
         handleSide: 'right',
         trackStyle: 'visible',
@@ -450,7 +491,7 @@ export default function DoorPanel() {
         operationState: node.operationState ?? 0,
         threshold: false,
         contentPadding: [0.035, 0.045],
-        segments: foldingDoorSegments,
+        segments,
       }
     }
 
@@ -460,6 +501,7 @@ export default function DoorPanel() {
         doorType: nextDoorType,
         leafCount: 2,
         ...dimensionUpdates,
+        openingShape: 'rectangle',
         handle: true,
         handleSide: 'right',
         trackStyle: 'visible',
@@ -467,7 +509,7 @@ export default function DoorPanel() {
         operationState: node.operationState ?? 0,
         threshold: false,
         contentPadding: [0.03, 0.04],
-        segments: frenchDoorSegments,
+        segments,
       }
     }
 
@@ -484,7 +526,7 @@ export default function DoorPanel() {
         operationState: 0,
         garagePanelCount: Math.max(3, Math.min(8, node.garagePanelCount ?? 4)),
         contentPadding: [0.04, 0.04],
-        segments: foldingDoorSegments,
+        segments,
       }
     }
 
@@ -501,7 +543,7 @@ export default function DoorPanel() {
         operationState: 0,
         garagePanelCount: 4,
         contentPadding: [0.04, 0.04],
-        segments: foldingDoorSegments,
+        segments,
       }
     }
 
@@ -518,7 +560,7 @@ export default function DoorPanel() {
         operationState: 0,
         garagePanelCount: 4,
         contentPadding: [0.04, 0.04],
-        segments: foldingDoorSegments,
+        segments,
       }
     }
 
@@ -527,6 +569,7 @@ export default function DoorPanel() {
       doorType: nextDoorType,
       leafCount: 1,
       ...dimensionUpdates,
+      segments,
       threshold: true,
     }
   }

@@ -128,12 +128,26 @@ type FloorplanMeasurementsLayerProps = {
   className: string
   measurements: LinearMeasurementOverlay[]
   palette: FloorplanMeasurementPalette
+  sceneRotationDeg?: number
+}
+
+function normalizeReadableScreenAngle(angleDeg: number) {
+  let normalized = ((((angleDeg + 180) % 360) + 360) % 360) - 180
+
+  if (normalized > 90) {
+    normalized -= 180
+  } else if (normalized <= -90) {
+    normalized += 180
+  }
+
+  return normalized
 }
 
 export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLayer({
   className,
   measurements,
   palette,
+  sceneRotationDeg = 0,
 }: FloorplanMeasurementsLayerProps) {
   if (measurements.length === 0) {
     return null
@@ -141,81 +155,90 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
 
   return (
     <>
-      {measurements.map((measurement) => (
-        <g
-          className={className}
-          key={measurement.id}
-          pointerEvents="none"
-          style={{ userSelect: 'none' }}
-        >
-          <FloorplanMeasurementLine
-            dashed={measurement.dashedExtensions ?? true}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            segment={measurement.extensionStart}
-            stroke={measurement.extensionStroke}
-          />
-          <FloorplanMeasurementLine
-            isSelected={measurement.isSelected}
-            palette={palette}
-            path={measurement.dimensionPathStart}
-            segment={measurement.dimensionLineStart}
-            stroke={measurement.stroke}
-          />
-          <FloorplanMeasurementLine
-            isSelected={measurement.isSelected}
-            palette={palette}
-            path={measurement.dimensionPathEnd}
-            segment={measurement.dimensionLineEnd}
-            stroke={measurement.stroke}
-          />
-          <FloorplanMeasurementLine
-            dashed={measurement.dashedExtensions ?? true}
-            isSelected={measurement.isSelected}
-            palette={palette}
-            segment={measurement.extensionEnd}
-            stroke={measurement.extensionStroke}
-          />
-          {measurement.showTicks !== false ? (
-            <>
-              <FloorplanMeasurementTick
-                angleDeg={measurement.labelAngleDeg}
+      {measurements.map((measurement) =>
+        (() => {
+          const screenLabelAngleDeg = normalizeReadableScreenAngle(
+            measurement.labelAngleDeg + sceneRotationDeg,
+          )
+          const localLabelAngleDeg = screenLabelAngleDeg - sceneRotationDeg
+
+          return (
+            <g
+              className={className}
+              key={measurement.id}
+              pointerEvents="none"
+              style={{ userSelect: 'none' }}
+            >
+              <FloorplanMeasurementLine
+                dashed={measurement.dashedExtensions ?? true}
                 isSelected={measurement.isSelected}
                 palette={palette}
-                stroke={measurement.stroke}
-                x={measurement.dimensionLineStart.x1}
-                y={measurement.dimensionLineStart.y1}
+                segment={measurement.extensionStart}
+                stroke={measurement.extensionStroke}
               />
-              <FloorplanMeasurementTick
-                angleDeg={measurement.labelAngleDeg}
+              <FloorplanMeasurementLine
                 isSelected={measurement.isSelected}
                 palette={palette}
+                path={measurement.dimensionPathStart}
+                segment={measurement.dimensionLineStart}
                 stroke={measurement.stroke}
-                x={measurement.dimensionLineEnd.x2}
-                y={measurement.dimensionLineEnd.y2}
               />
-            </>
-          ) : null}
-          <text
-            dominantBaseline="central"
-            fill={measurement.labelFill ?? palette.measurementStroke}
-            fillOpacity={
-              measurement.isSelected
-                ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY
-                : FLOORPLAN_MEASUREMENT_LABEL_OPACITY * 0.4
-            }
-            fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-            fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
-            fontWeight="600"
-            textAnchor="middle"
-            transform={`rotate(${measurement.labelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
-            x={measurement.labelX}
-            y={measurement.labelY}
-          >
-            {measurement.label}
-          </text>
-        </g>
-      ))}
+              <FloorplanMeasurementLine
+                isSelected={measurement.isSelected}
+                palette={palette}
+                path={measurement.dimensionPathEnd}
+                segment={measurement.dimensionLineEnd}
+                stroke={measurement.stroke}
+              />
+              <FloorplanMeasurementLine
+                dashed={measurement.dashedExtensions ?? true}
+                isSelected={measurement.isSelected}
+                palette={palette}
+                segment={measurement.extensionEnd}
+                stroke={measurement.extensionStroke}
+              />
+              {measurement.showTicks !== false ? (
+                <>
+                  <FloorplanMeasurementTick
+                    angleDeg={localLabelAngleDeg}
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    stroke={measurement.stroke}
+                    x={measurement.dimensionLineStart.x1}
+                    y={measurement.dimensionLineStart.y1}
+                  />
+                  <FloorplanMeasurementTick
+                    angleDeg={localLabelAngleDeg}
+                    isSelected={measurement.isSelected}
+                    palette={palette}
+                    stroke={measurement.stroke}
+                    x={measurement.dimensionLineEnd.x2}
+                    y={measurement.dimensionLineEnd.y2}
+                  />
+                </>
+              ) : null}
+              <text
+                dominantBaseline="central"
+                fill={measurement.labelFill ?? palette.measurementStroke}
+                fillOpacity={
+                  measurement.isSelected
+                    ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY
+                    : FLOORPLAN_MEASUREMENT_LABEL_OPACITY * 0.4
+                }
+                fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
+                fontWeight="600"
+                textAnchor="middle"
+                transform={`rotate(${localLabelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
+                x={measurement.labelX}
+                y={measurement.labelY}
+              >
+                {measurement.label}
+              </text>
+            </g>
+          )
+        })(),
+      )}
     </>
   )
 })
