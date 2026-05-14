@@ -1,4 +1,10 @@
 export {
+  createDragSession,
+  type DragSession,
+  type DragSessionInput,
+  type DragSessionOptions,
+} from './drag-session'
+export {
   type AttachError,
   type AttachResult,
   canAttach,
