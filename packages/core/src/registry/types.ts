@@ -32,10 +32,46 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   tool?: LazyComponent
   affordances?: Affordance<z.infer<S>>[]
 
+  presentation?: Presentation
   mcp?: McpOverrides
 }
 
 export type NodeCategory = 'site' | 'structure' | 'furnish' | 'analysis' | 'utility'
+
+// ─── Presentation (tool palette + UI surface) ────────────────────────
+
+/**
+ * UI metadata for surfacing a node kind in the tool palette and elsewhere.
+ * Phase 4 ships the consumer (auto-derived palette buttons); definitions can
+ * declare this from Phase 2 onward so the spike's `column` and `shelf` show up
+ * correctly the moment the palette consumes the registry.
+ */
+export type Presentation = {
+  /** Sentence-case label shown in palette buttons, breadcrumbs, etc. */
+  label: string
+  /** Optional longer tooltip / help text. */
+  description?: string
+  /** Icon for palette buttons and tree views. */
+  icon: IconRef
+  /** Tool palette section. Defaults to `category` when omitted. */
+  paletteSection?: 'site' | 'structure' | 'furnish'
+  /** Sort key within a palette section; lower numbers come first. */
+  paletteOrder?: number
+  /** Set true for kinds that exist but should NOT appear in the palette
+   * (containers like `site`/`building`/`level`, internal nodes). */
+  hidden?: boolean
+}
+
+export type IconRef =
+  /** Iconify identifier, e.g. `lucide:square`. Matches the @iconify-react
+   * setup the editor app already uses for tool icons. */
+  | { kind: 'iconify'; name: string }
+  /** Inline SVG path data. Use for asset packs or plugins that want a custom
+   * mark without contributing a React component. */
+  | { kind: 'svg'; viewBox: string; path: string }
+  /** Custom React component, lazy-loaded. Use sparingly — adds a Suspense
+   * boundary per icon. */
+  | { kind: 'component'; module: () => Promise<{ default: ComponentType }> }
 
 export type LazyComponent = () => Promise<{ default: ComponentType }>
 
