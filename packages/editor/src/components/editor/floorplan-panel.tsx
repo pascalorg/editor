@@ -12,6 +12,7 @@ import {
   type ElevatorNode,
   emitter,
   type FenceNode,
+  FenceNode as FenceNodeSchema,
   type GridEvent,
   type GuideNode,
   getRenderableSlabPolygon,
@@ -20,6 +21,7 @@ import {
   getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
+  getPerpendicularWallMoveAxis,
   type ItemNode,
   ItemNode as ItemNodeSchema,
   isCurvedWall,
@@ -568,6 +570,13 @@ type FloorplanWallMoveHandle = {
   point: Point2D
   rotationDeg: number
   wall: WallNode
+}
+
+type FloorplanFenceMoveHandle = {
+  id: string
+  point: Point2D
+  rotationDeg: number
+  fence: FenceNode
 }
 
 type FloorplanFenceEntry = {
@@ -1760,6 +1769,52 @@ function getFloorplanWallMoveHandles(
       },
       rotationDeg: (Math.atan2(-normal.y, -normal.x) * 180) / Math.PI,
       wall,
+    },
+  ]
+}
+
+function getFloorplanFenceMoveHandles(
+  fence: FenceNode,
+): FloorplanFenceMoveHandle[] {
+  const dx = fence.end[0] - fence.start[0]
+  const dy = fence.end[1] - fence.start[1]
+  const length = Math.hypot(dx, dy)
+
+  if (length < 1e-6) {
+    return []
+  }
+
+  const frame = isCurvedWall(fence) ? getWallCurveFrameAt(fence as unknown as WallNode, 0.5) : null
+  const midpoint = frame
+    ? frame.point
+    : {
+        x: (fence.start[0] + fence.end[0]) / 2,
+        y: (fence.start[1] + fence.end[1]) / 2,
+      }
+  const normal = frame ? frame.normal : { x: -dy / length, y: dx / length }
+  const offset = Math.max(
+    (fence.thickness ?? 0.1) / 2 + FLOORPLAN_WALL_MOVE_ARROW_OFFSET,
+    FLOORPLAN_WALL_MOVE_ARROW_MIN_OFFSET,
+  )
+
+  return [
+    {
+      id: `${fence.id}:move:front`,
+      point: {
+        x: midpoint.x + normal.x * offset,
+        y: midpoint.y + normal.y * offset,
+      },
+      rotationDeg: (Math.atan2(normal.y, normal.x) * 180) / Math.PI,
+      fence,
+    },
+    {
+      id: `${fence.id}:move:back`,
+      point: {
+        x: midpoint.x - normal.x * offset,
+        y: midpoint.y - normal.y * offset,
+      },
+      rotationDeg: (Math.atan2(-normal.y, -normal.x) * 180) / Math.PI,
+      fence,
     },
   ]
 }
@@ -8202,6 +8257,110 @@ const FloorplanWallMoveHandleLayer = memo(function FloorplanWallMoveHandleLayer(
   )
 })
 
+const FloorplanFenceMoveHandleLayer = memo(function FloorplanFenceMoveHandleLayer({
+  handles,
+  hoveredHandleId,
+  onHandleHoverChange,
+  onFenceMovePointerDown,
+}: {
+  handles: FloorplanFenceMoveHandle[]
+  hoveredHandleId: string | null
+  onHandleHoverChange: (handleId: string | null) => void
+  onFenceMovePointerDown: (fence: FenceNode, event: ReactPointerEvent<SVGCircleElement>) => void
+}) {
+  const bodyLength = FLOORPLAN_WALL_MOVE_ARROW_BODY_LENGTH
+  const bodyStrokeWidth = FLOORPLAN_WALL_MOVE_ARROW_BODY_WIDTH
+  const headLength = FLOORPLAN_WALL_MOVE_ARROW_HEAD_LENGTH
+  const hitRadius = FLOORPLAN_WALL_MOVE_ARROW_HIT_RADIUS
+  const tailLength = bodyStrokeWidth * 0.9
+
+  return (
+    <>
+      {handles.map((handle) => {
+        const isHovered = hoveredHandleId === handle.id
+        const fill = isHovered
+          ? FLOORPLAN_WALL_MOVE_ARROW_HOVER_COLOR
+          : FLOORPLAN_WALL_MOVE_ARROW_COLOR
+        const headPoints = buildSvgArrowHeadPoints({ x: headLength / 2, y: 0 }, 0, headLength)
+        const shaftX = -bodyLength + tailLength
+        const shaftWidth = bodyLength - tailLength
+
+        return (
+          <g
+            key={handle.id}
+            onPointerEnter={() => onHandleHoverChange(handle.id)}
+            onPointerLeave={() => onHandleHoverChange(null)}
+            transform={`translate(${toSvgX(handle.point.x)} ${toSvgY(handle.point.y)}) rotate(${handle.rotationDeg})`}
+          >
+            <rect
+              fill={fill}
+              fillOpacity={1}
+              height={bodyStrokeWidth}
+              pointerEvents="none"
+              width={shaftWidth}
+              x={shaftX}
+              y={-bodyStrokeWidth / 2}
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <rect
+              fill={fill}
+              fillOpacity={1}
+              height={bodyStrokeWidth}
+              pointerEvents="none"
+              rx={bodyStrokeWidth * 0.12}
+              ry={bodyStrokeWidth * 0.12}
+              width={tailLength}
+              x={-bodyLength}
+              y={-bodyStrokeWidth / 2}
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <rect
+              fill={fill}
+              fillOpacity={1}
+              height={bodyStrokeWidth}
+              pointerEvents="none"
+              width={tailLength * 0.08}
+              x={-bodyLength + tailLength - bodyStrokeWidth * 0.04}
+              y={-bodyStrokeWidth / 2}
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <polygon
+              fill={fill}
+              fillOpacity={1}
+              points={headPoints}
+              pointerEvents="none"
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <circle
+              cx={0}
+              cy={0}
+              fill="transparent"
+              onPointerDown={(event) => onFenceMovePointerDown(handle.fence, event)}
+              pointerEvents="all"
+              r={hitRadius}
+              stroke="transparent"
+              style={{ cursor: EDITOR_CURSOR }}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        )
+      })}
+    </>
+  )
+})
+
 const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   edgeHandles = [],
   hoveredHandleId,
@@ -8571,6 +8730,7 @@ export function FloorplanPanel() {
   const mode = useEditor((state) => state.mode)
   const setPhase = useEditor((state) => state.setPhase)
   const setMovingFenceEndpoint = useEditor((state) => state.setMovingFenceEndpoint)
+  const setCurvingFence = useEditor((state) => state.setCurvingFence)
   const setMovingNode = useEditor((state) => state.setMovingNode)
   const setCurvingWall = useEditor((state) => state.setCurvingWall)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
@@ -8676,6 +8836,7 @@ export function FloorplanPanel() {
   const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
   const [hoveredEndpointId, setHoveredEndpointId] = useState<string | null>(null)
   const [hoveredWallMoveHandleId, setHoveredWallMoveHandleId] = useState<string | null>(null)
+  const [hoveredFenceMoveHandleId, setHoveredFenceMoveHandleId] = useState<string | null>(null)
   const [hoveredWallCurveHandleId, setHoveredWallCurveHandleId] = useState<string | null>(null)
   const [hoveredSiteHandleId, setHoveredSiteHandleId] = useState<string | null>(null)
   const [hoveredSlabHandleId, setHoveredSlabHandleId] = useState<string | null>(null)
@@ -10547,6 +10708,21 @@ export function FloorplanPanel() {
     wallCurveDraft,
   ])
   const canCurveSelectedWall = wallCurveHandles.length > 0
+  const canCurveSelectedFence = useMemo(() => {
+    return (
+      !isOpeningPlacementActive &&
+      !movingNode &&
+      mode === 'select' &&
+      floorplanSelectionTool === 'click' &&
+      selectedFenceEntry !== null
+    )
+  }, [
+    floorplanSelectionTool,
+    isOpeningPlacementActive,
+    mode,
+    movingNode,
+    selectedFenceEntry,
+  ])
   const slabVertexHandles = useMemo(() => {
     if (!shouldShowSlabBoundaryHandles) {
       return []
@@ -11755,6 +11931,28 @@ export function FloorplanPanel() {
     mode,
     movingNode,
     selectedWallEntry,
+  ])
+
+  const fenceMoveHandles = useMemo(() => {
+    if (
+      floorplanSelectionTool !== 'click' ||
+      !selectedFenceEntry ||
+      curvingFence ||
+      movingFenceEndpoint ||
+      isOpeningPlacementActive ||
+      movingNode
+    ) {
+      return []
+    }
+
+    return getFloorplanFenceMoveHandles(selectedFenceEntry.fence)
+  }, [
+    curvingFence,
+    floorplanSelectionTool,
+    isOpeningPlacementActive,
+    movingFenceEndpoint,
+    movingNode,
+    selectedFenceEntry,
   ])
 
   useEffect(() => {
@@ -15615,6 +15813,24 @@ export function FloorplanPanel() {
     },
     [setCurvingWall, setMovingFenceEndpoint, setMovingNode, setSelection],
   )
+  const handleFenceMoveHandlePointerDown = useCallback(
+    (fence: FenceNode, event: ReactPointerEvent<SVGCircleElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      sfxEmitter.emit('sfx:item-pick')
+      setHoveredFenceMoveHandleId(null)
+      setMovingFenceEndpoint(null)
+      setCurvingFence(null)
+      setMovingNode(fence)
+      setSelection({ selectedIds: [] })
+    },
+    [setCurvingFence, setMovingFenceEndpoint, setMovingNode, setSelection],
+  )
   const duplicateSelectedWall = useCallback(() => {
     const wall = selectedWallEntry?.wall
     if (!wall?.parentId) {
@@ -15625,6 +15841,7 @@ export function FloorplanPanel() {
 
     const cloned = structuredClone(wall) as Record<string, unknown>
     delete cloned.id
+    
     cloned.children = []
     cloned.metadata = {
       ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
@@ -15644,12 +15861,48 @@ export function FloorplanPanel() {
       temporal.resume()
     }
   }, [selectedWallEntry, setMovingNode, setSelection])
+  const duplicateSelectedFence = useCallback(() => {
+    const fence = selectedFenceEntry?.fence
+    if (!fence?.parentId) {
+      return
+    }
+
+    sfxEmitter.emit('sfx:item-pick')
+
+    const cloned = structuredClone(fence) as Record<string, unknown>
+    delete cloned.id
+    
+    cloned.metadata = {
+      ...(typeof cloned.metadata === 'object' && cloned.metadata !== null ? cloned.metadata : {}),
+      isNew: true,
+    }
+
+    const temporal = useScene.temporal.getState()
+    temporal.pause()
+    try {
+      const duplicate = FenceNodeSchema.parse(cloned)
+      useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+      setMovingNode(duplicate)
+      setSelection({ selectedIds: [] })
+    } catch (error) {
+      console.error('Failed to duplicate fence', error)
+    } finally {
+      temporal.resume()
+    }
+  }, [selectedFenceEntry, setMovingNode, setSelection])
   const handleSelectedWallDuplicate = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       duplicateSelectedWall()
     },
     [duplicateSelectedWall],
+  )
+  const handleSelectedFenceDuplicate = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      duplicateSelectedFence()
+    },
+    [duplicateSelectedFence],
   )
   const handleSelectedWallCurve = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -15665,6 +15918,21 @@ export function FloorplanPanel() {
       setSelection({ selectedIds: [] })
     },
     [canCurveSelectedWall, selectedWallEntry, setCurvingWall, setSelection],
+  )
+  const handleSelectedFenceCurve = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+
+      const fence = selectedFenceEntry?.fence
+      if (!(fence && canCurveSelectedFence)) {
+        return
+      }
+
+      sfxEmitter.emit('sfx:item-pick')
+      setCurvingFence(fence)
+      setSelection({ selectedIds: [] })
+    },
+    [canCurveSelectedFence, selectedFenceEntry, setCurvingFence, setSelection],
   )
   const handleSelectedWallDelete = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -15956,21 +16224,6 @@ export function FloorplanPanel() {
       setSelection({ selectedIds: [] })
     },
     [deleteNode, selectedCeilingEntry, setSelection],
-  )
-  const handleSelectedFenceMove = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation()
-
-      const fence = selectedFenceEntry?.fence
-      if (!fence) {
-        return
-      }
-
-      sfxEmitter.emit('sfx:item-pick')
-      setMovingNode(fence)
-      setSelection({ selectedIds: [] })
-    },
-    [selectedFenceEntry, setMovingNode, setSelection],
   )
   const handleSelectedFenceDelete = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -17845,7 +18098,8 @@ export function FloorplanPanel() {
           fence={{
             position: selectedFenceActionMenuPosition,
             onDelete: handleSelectedFenceDelete,
-            onMove: handleSelectedFenceMove,
+            onDuplicate: duplicateSelectedFence,
+            onCurve: canCurveSelectedFence ? handleSelectedFenceCurve : undefined,
           }}
           item={{
             position: selectedItemActionMenuPosition,
@@ -18378,6 +18632,13 @@ export function FloorplanPanel() {
                 hoveredHandleId={hoveredWallMoveHandleId}
                 onHandleHoverChange={setHoveredWallMoveHandleId}
                 onWallMovePointerDown={handleWallMoveHandlePointerDown}
+              />
+
+              <FloorplanFenceMoveHandleLayer
+                handles={fenceMoveHandles}
+                hoveredHandleId={hoveredFenceMoveHandleId}
+                onFenceMovePointerDown={handleFenceMoveHandlePointerDown}
+                onHandleHoverChange={setHoveredFenceMoveHandleId}
               />
 
               <FloorplanPolygonHandleLayer
