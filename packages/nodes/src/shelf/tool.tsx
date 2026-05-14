@@ -3,42 +3,43 @@
 import {
   emitter,
   type GridEvent,
-  ShelfNode,
   sceneRegistry,
+  ShelfNode,
   snapPointToGrid,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
 
 const worldVector = new Vector3()
+const GRID_STEP = 0.5 // match the editor's default placement grid
 
 function getLevelLocalPosition(levelId: string, event: GridEvent): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
   if (!levelObject) {
-    const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], 0.1)
+    const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
     return [sx, event.localPosition[1], sz]
   }
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
-  const [sx, sz] = snapPointToGrid([worldVector.x, worldVector.z], 0.1)
+  const [sx, sz] = snapPointToGrid([worldVector.x, worldVector.z], GRID_STEP)
   return [sx, worldVector.y, sz]
 }
 
 const ShelfTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
-  const [, setCursor] = useState<[number, number, number] | null>(null)
   const cursorRef = useRef<Group>(null)
 
   useEffect(() => {
     if (!activeLevelId) return
 
     const onGridMove = (event: GridEvent) => {
-      const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], 0.1)
-      const next: [number, number, number] = [sx, event.localPosition[1], sz]
-      setCursor(next)
+      // Imperative position update — no React state, so the component
+      // doesn't re-render. R3F-applied props would otherwise clobber the
+      // imperative `position.set` on the next render.
+      const next = getLevelLocalPosition(activeLevelId, event)
       cursorRef.current?.position.set(next[0], next[1], next[2])
     }
 
@@ -64,6 +65,9 @@ const ShelfTool = () => {
 
   if (!activeLevelId) return null
 
+  // Cursor preview — a translucent shelf-shaped slab. No `position` prop on
+  // the group; we move it imperatively via the ref so React re-renders don't
+  // reset it to the origin.
   return (
     <group ref={cursorRef}>
       <mesh position={[0, 0.9, 0]}>

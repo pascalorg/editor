@@ -5,7 +5,13 @@ import { useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { Color, type Group, Shape } from 'three'
 
-const SPAWN_COLOR = new Color('#22c55e')
+// TEMPORARY (Phase 2 verification): the registry-driven renderer paints
+// spawns RED so you can visually tell which dispatch path is live. The
+// legacy renderer in @pascal-app/viewer is still green. Revert this to
+// '#22c55e' once the registry path is signed off for parity. Tracked by
+// the NEXT_PUBLIC_USE_REGISTRY_FOR_SPAWN flag — if a spawn renders red
+// you're on the new path; green = legacy.
+const SPAWN_COLOR = new Color('#ef4444')
 
 /**
  * Registry-driven spawn renderer. Behaviorally identical to the legacy
