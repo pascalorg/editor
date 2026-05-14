@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   DEFAULT_WALL_HEIGHT,
+  type FenceNode,
   getWallCurveFrameAt,
   getWallThickness,
   isCurvedWall,
@@ -11,9 +12,8 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent } from '@react-three/fiber'
+import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
-import { useThree } from '@react-three/fiber'
 import {
   BufferGeometry,
   ConeGeometry,
@@ -34,7 +34,6 @@ const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
 
 type WallMoveHandle = {
-  direction: [number, number]
   key: string
   position: [number, number, number]
   rotationY: number
@@ -91,13 +90,13 @@ export function WallMoveSideHandles() {
   const curvingFence = useEditor((state) => state.curvingFence)
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
-  const wall = useScene((state) => {
+  const selectedNode = useScene((state) => {
     const node = selectedId ? state.nodes[selectedId as AnyNodeId] : null
-    return node?.type === 'wall' ? node : null
+    return node?.type === 'wall' || node?.type === 'fence' ? node : null
   })
 
   const shouldRender =
-    Boolean(wall) &&
+    Boolean(selectedNode) &&
     !isFloorplanHovered &&
     mode !== 'delete' &&
     !movingNode &&
@@ -106,9 +105,13 @@ export function WallMoveSideHandles() {
     !curvingWall &&
     !curvingFence
 
-  if (!shouldRender || !wall) return null
+  if (!shouldRender || !selectedNode) return null
 
-  return <WallMoveSideHandlesForWall wall={wall} />
+  return selectedNode.type === 'wall' ? (
+    <WallMoveSideHandlesForWall wall={selectedNode} />
+  ) : (
+    <WallMoveSideHandlesForFence fence={selectedNode} />
+  )
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
@@ -163,10 +166,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
   const { camera } = useThree()
 
-  const zoom =
-    camera instanceof OrthographicCamera
-      ? 1 / camera.zoom
-      : 1
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
   const scale = (isHovered ? 1.12 : 1) * zoom
 
@@ -195,14 +195,75 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   }
 
   return (
-    <group
-      position={handle.position}
-      rotation={[0, handle.rotationY, 0]}
-      scale={scale}
-    >
+    <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
         frustumCulled={false}
         onPointerDown={activateWallMove}
+        onPointerEnter={(event) => {
+          event.stopPropagation()
+          setIsHovered(true)
+          document.body.style.cursor = 'grab'
+        }}
+        onPointerLeave={(event) => {
+          event.stopPropagation()
+          setIsHovered(false)
+          if (document.body.style.cursor === 'grab') {
+            document.body.style.cursor = ''
+          }
+        }}
+        renderOrder={1002}
+      >
+        <primitive attach="geometry" object={arrowGeometry} />
+        <meshBasicMaterial
+          color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
+          depthTest
+          depthWrite
+          opacity={1}
+          side={DoubleSide}
+          transparent={false}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: WallMoveHandle }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const { camera } = useThree()
+
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.12 : 1) * zoom
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
+        document.body.style.cursor = ''
+      }
+    }
+  }, [])
+
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+
+  const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    event.nativeEvent.preventDefault()
+    document.body.style.cursor = 'grabbing'
+
+    sfxEmitter.emit('sfx:item-pick')
+    useEditor.getState().setMovingNode(fence)
+    useEditor.getState().setMovingWallEndpoint(null)
+    useEditor.getState().setMovingFenceEndpoint(null)
+    useEditor.getState().setCurvingWall(null)
+    useEditor.getState().setCurvingFence(null)
+    useViewer.getState().setSelection({ selectedIds: [] })
+  }
+
+  return (
+    <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
+      <mesh
+        frustumCulled={false}
+        onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
           setIsHovered(true)
@@ -257,6 +318,77 @@ function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
   ]
 }
 
+function WallMoveSideHandlesForFence({ fence }: { fence: FenceNode }) {
+  const [levelObject, setLevelObject] = useState<Object3D | null>(() =>
+    fence.parentId ? (sceneRegistry.nodes.get(fence.parentId) ?? null) : null,
+  )
+
+  useEffect(() => {
+    let frameId = 0
+
+    const resolveLevelObject = () => {
+      const nextLevelObject = fence.parentId
+        ? (sceneRegistry.nodes.get(fence.parentId) ?? null)
+        : null
+      setLevelObject((currentLevelObject) => {
+        if (currentLevelObject === nextLevelObject) {
+          return currentLevelObject
+        }
+        return nextLevelObject
+      })
+
+      if (!nextLevelObject) {
+        frameId = window.requestAnimationFrame(resolveLevelObject)
+      }
+    }
+
+    resolveLevelObject()
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [fence.parentId])
+
+  const handles = useMemo(() => getFenceMoveHandles(fence), [fence])
+
+  if (!levelObject || handles.length === 0) return null
+
+  return createPortal(
+    <group>
+      {handles.map((handle) => (
+        <FenceMoveArrowHandle fence={fence} handle={handle} key={handle.key} />
+      ))}
+    </group>,
+    levelObject,
+  )
+}
+
+function getFenceMoveHandles(fence: FenceNode): WallMoveHandle[] {
+  const dx = fence.end[0] - fence.start[0]
+  const dz = fence.end[1] - fence.start[1]
+  const length = Math.hypot(dx, dz)
+
+  if (length < 1e-6) {
+    return []
+  }
+
+  const midpoint: [number, number] = [
+    (fence.start[0] + fence.end[0]) / 2,
+    (fence.start[1] + fence.end[1]) / 2,
+  ]
+  const normal: [number, number] = [-dz / length, dx / length]
+  const fenceHeight = fence.height ?? 1.8
+  const handleHeight = Math.max(fenceHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
+  const offset = Math.max((fence.thickness ?? 0.1) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
+
+  return [
+    buildWallMoveHandle('front', midpoint, normal, offset, handleHeight),
+    buildWallMoveHandle('back', midpoint, [-normal[0], -normal[1]], offset, handleHeight),
+  ]
+}
+
 function buildWallMoveHandle(
   key: string,
   midpoint: [number, number],
@@ -265,7 +397,6 @@ function buildWallMoveHandle(
   height: number,
 ): WallMoveHandle {
   return {
-    direction,
     key,
     position: [midpoint[0] + direction[0] * offset, height, midpoint[1] + direction[1] * offset],
     rotationY: Math.atan2(-direction[1], direction[0]),

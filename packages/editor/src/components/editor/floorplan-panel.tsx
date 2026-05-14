@@ -4525,6 +4525,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   unit,
   metersPerUnit,
   isGuideTraceVisible,
+  floorplanSceneRotationDeg,
 }: {
   canFocusGeometry: boolean
   canSelectSlabs: boolean
@@ -4560,6 +4561,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
   unit: 'metric' | 'imperial'
   metersPerUnit: number | null
   isGuideTraceVisible: boolean
+  floorplanSceneRotationDeg: number
 }) {
   const selectedWallEntries = wallPolygons.filter(({ wall }) => selectedIdSet.has(wall.id))
   const wallMeasurements =
@@ -6244,6 +6246,7 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
         className="wall-dimension"
         measurements={wallMeasurements}
         palette={palette}
+        sceneRotationDeg={floorplanSceneRotationDeg}
       />
     </>
   )
@@ -18365,6 +18368,7 @@ export function FloorplanPanel() {
                 isDeleteMode={isDeleteMode}
                 isGuideTraceVisible={isGuideTraceVisible}
                 metersPerUnit={calibratedMetersPerUnit}
+                floorplanSceneRotationDeg={floorplanSceneRotationDeg}
                 onCeilingDoubleClick={handleCeilingDoubleClick}
                 onCeilingHoverChange={handleCeilingHoverChange}
                 onCeilingSelect={handleCeilingSelect}
@@ -18490,18 +18494,21 @@ export function FloorplanPanel() {
                 className="opening-placement-dimension"
                 measurements={movingOpeningPlacementMeasurements}
                 palette={palette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
               />
 
               <FloorplanMeasurementsLayer
                 className="item-clearance-dimension"
                 measurements={selectedItemClearanceMeasurements}
                 palette={palette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
               />
 
               <FloorplanMeasurementsLayer
                 className="wall-draft-dimension"
                 measurements={draftWallLengthMeasurements}
                 palette={palette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
               />
 
               <FloorplanDraftAngleLayer overlays={draftWallAngleOverlays} />

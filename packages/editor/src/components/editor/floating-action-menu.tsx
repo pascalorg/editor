@@ -445,7 +445,10 @@ export function FloatingActionMenu() {
                 : undefined
             }
             onMove={
-              node && node.type !== 'wall' && !DELETE_ONLY_TYPES.includes(node.type)
+              node &&
+              node.type !== 'wall' &&
+              node.type !== 'fence' &&
+              !DELETE_ONLY_TYPES.includes(node.type)
                 ? handleMove
                 : undefined
             }
