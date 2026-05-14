@@ -12,6 +12,8 @@ const FLOORPLAN_MEASUREMENT_END_TICK = 0.18
 export type LinearMeasurementOverlay = {
   dashedExtensions?: boolean
   id: string
+  dimensionPathEnd?: string | null
+  dimensionPathStart?: string | null
   dimensionLineEnd: { x1: number; y1: number; x2: number; y2: number }
   dimensionLineStart: { x1: number; y1: number; x2: number; y2: number }
   extensionStart: { x1: number; y1: number; x2: number; y2: number }
@@ -34,6 +36,7 @@ type FloorplanMeasurementPalette = {
 type FloorplanMeasurementLineProps = {
   palette: FloorplanMeasurementPalette
   segment: { x1: number; y1: number; x2: number; y2: number }
+  path?: string | null
   isSelected?: boolean
   dashed?: boolean
   stroke?: string
@@ -42,6 +45,7 @@ type FloorplanMeasurementLineProps = {
 function FloorplanMeasurementLine({
   palette,
   segment,
+  path,
   isSelected,
   dashed = false,
   stroke,
@@ -50,7 +54,20 @@ function FloorplanMeasurementLine({
     ? FLOORPLAN_MEASUREMENT_LINE_OPACITY
     : FLOORPLAN_MEASUREMENT_LINE_OPACITY * 0.4
 
-  return (
+  return path ? (
+    <path
+      d={path}
+      fill="none"
+      shapeRendering="geometricPrecision"
+      stroke={stroke ?? palette.measurementStroke}
+      strokeDasharray={dashed ? FLOORPLAN_MEASUREMENT_EXTENSION_DASH : undefined}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeOpacity={lineOpacity}
+      strokeWidth={FLOORPLAN_MEASUREMENT_LINE_WIDTH}
+      vectorEffect="non-scaling-stroke"
+    />
+  ) : (
     <line
       shapeRendering="geometricPrecision"
       stroke={stroke ?? palette.measurementStroke}
@@ -141,12 +158,14 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
           <FloorplanMeasurementLine
             isSelected={measurement.isSelected}
             palette={palette}
+            path={measurement.dimensionPathStart}
             segment={measurement.dimensionLineStart}
             stroke={measurement.stroke}
           />
           <FloorplanMeasurementLine
             isSelected={measurement.isSelected}
             palette={palette}
+            path={measurement.dimensionPathEnd}
             segment={measurement.dimensionLineEnd}
             stroke={measurement.stroke}
           />

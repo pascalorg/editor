@@ -2764,6 +2764,180 @@ function getLinearMeasurementOverlay(
   }
 }
 
+function getPolylineLength(points: Point2D[]) {
+  let length = 0
+
+  for (let index = 1; index < points.length; index += 1) {
+    length += getPlanPointDistance(points[index - 1]!, points[index]!)
+  }
+
+  return length
+}
+
+function getPolylinePointAtDistance(points: Point2D[], distance: number) {
+  if (points.length === 0) return null
+  if (points.length === 1) {
+    return {
+      point: points[0]!,
+      tangent: { x: 1, y: 0 },
+    }
+  }
+
+  let travelled = 0
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1]!
+    const end = points[index]!
+    const segmentLength = getPlanPointDistance(start, end)
+    if (segmentLength <= 1e-9) continue
+
+    if (travelled + segmentLength >= distance) {
+      const t = clamp((distance - travelled) / segmentLength, 0, 1)
+      return {
+        point: interpolatePlanPoint(start, end, t),
+        tangent: {
+          x: (end.x - start.x) / segmentLength,
+          y: (end.y - start.y) / segmentLength,
+        },
+      }
+    }
+
+    travelled += segmentLength
+  }
+
+  const previous = points[points.length - 2]!
+  const last = points[points.length - 1]!
+  const finalLength = getPlanPointDistance(previous, last)
+
+  return {
+    point: last,
+    tangent:
+      finalLength > 1e-9
+        ? {
+            x: (last.x - previous.x) / finalLength,
+            y: (last.y - previous.y) / finalLength,
+          }
+        : { x: 1, y: 0 },
+  }
+}
+
+function slicePolylineByDistance(points: Point2D[], startDistance: number, endDistance: number) {
+  if (points.length < 2 || endDistance <= startDistance) return []
+
+  const startSample = getPolylinePointAtDistance(points, startDistance)
+  const endSample = getPolylinePointAtDistance(points, endDistance)
+  if (!(startSample && endSample)) return []
+
+  const slicedPoints: Point2D[] = [startSample.point]
+  let travelled = 0
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]!
+    const current = points[index]!
+    travelled += getPlanPointDistance(previous, current)
+
+    if (travelled > startDistance && travelled < endDistance) {
+      slicedPoints.push(current)
+    }
+  }
+
+  slicedPoints.push(endSample.point)
+
+  return slicedPoints
+}
+
+function getWallCurveOffsetPath(
+  wall: WallNode,
+  sideSign: 1 | -1,
+  offsetDistance: number,
+  segments = 32,
+) {
+  return Array.from({ length: segments + 1 }, (_, index) => {
+    const frame = getWallCurveFrameAt(wall, index / segments)
+
+    return {
+      x: frame.point.x + frame.normal.x * sideSign * offsetDistance,
+      y: frame.point.y + frame.normal.y * sideSign * offsetDistance,
+    }
+  })
+}
+
+function getCurvedWallMeasurementOverlay(
+  id: string,
+  wall: WallNode,
+  sideSign: 1 | -1,
+  measurementOffset: number,
+  label: string,
+  stroke: string,
+  labelFill: string,
+  extensionStroke: string,
+): LinearMeasurementOverlay | null {
+  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const facePath = getWallCurveOffsetPath(wall, sideSign, halfThickness)
+  const guidePath = getWallCurveOffsetPath(wall, sideSign, halfThickness + measurementOffset)
+  const guideLength = getPolylineLength(guidePath)
+
+  if (guideLength < 0.1) return null
+
+  const labelSample = getPolylinePointAtDistance(guidePath, guideLength / 2)
+  if (!labelSample) return null
+
+  let labelAngleDeg = (Math.atan2(labelSample.tangent.y, labelSample.tangent.x) * 180) / Math.PI
+  if (labelAngleDeg > 90) {
+    labelAngleDeg -= 180
+  } else if (labelAngleDeg <= -90) {
+    labelAngleDeg += 180
+  }
+
+  const labelGapHalf = Math.min(
+    FLOORPLAN_MEASUREMENT_LABEL_GAP / 2,
+    Math.max(0, guideLength / 2 - FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING),
+  )
+  const startPath = slicePolylineByDistance(guidePath, 0, guideLength / 2 - labelGapHalf)
+  const endPath = slicePolylineByDistance(guidePath, guideLength / 2 + labelGapHalf, guideLength)
+  const guideStart = guidePath[0]!
+  const guideEnd = guidePath[guidePath.length - 1]!
+  const faceStart = facePath[0]!
+  const faceEnd = facePath[facePath.length - 1]!
+
+  return {
+    id,
+    dimensionLineStart: {
+      x1: guideStart.x,
+      y1: guideStart.y,
+      x2: startPath[startPath.length - 1]?.x ?? guideStart.x,
+      y2: startPath[startPath.length - 1]?.y ?? guideStart.y,
+    },
+    dimensionLineEnd: {
+      x1: endPath[0]?.x ?? guideEnd.x,
+      y1: endPath[0]?.y ?? guideEnd.y,
+      x2: guideEnd.x,
+      y2: guideEnd.y,
+    },
+    dimensionPathStart: buildSvgPolylinePath(startPath),
+    dimensionPathEnd: buildSvgPolylinePath(endPath),
+    extensionStart: {
+      x1: faceStart.x,
+      y1: faceStart.y,
+      x2: guideStart.x,
+      y2: guideStart.y,
+    },
+    extensionEnd: {
+      x1: faceEnd.x,
+      y1: faceEnd.y,
+      x2: guideEnd.x,
+      y2: guideEnd.y,
+    },
+    extensionStroke,
+    isSelected: true,
+    label,
+    labelAngleDeg,
+    labelFill,
+    labelX: labelSample.point.x,
+    labelY: labelSample.point.y,
+    stroke,
+  }
+}
+
 type WallFaceLine = {
   start: Point2D
   end: Point2D
@@ -2942,8 +3116,57 @@ function getSelectedWallMeasurementOverlays(
 
     const centerX = minX === Number.POSITIVE_INFINITY ? 0 : (minX + maxX) / 2
     const centerY = minY === Number.POSITIVE_INFINITY ? 0 : (minY + maxY) / 2
-    const overlay = getWallMeasurementOverlay(wall, centerX, centerY, unit, metersPerUnit)
-    return overlay ? [overlay] : []
+    const chord = getWallChordFrame(wall)
+    const midpoint = getWallCurveFrameAt(wall, 0.5).point
+    const fromCenter = {
+      x: midpoint.x - centerX,
+      y: midpoint.y - centerY,
+    }
+    const outwardSign: 1 | -1 = dotPlanVectors(fromCenter, chord.normal) >= 0 ? 1 : -1
+    const inwardSign: 1 | -1 = outwardSign === 1 ? -1 : 1
+    const outerFaceLength = getPolylineLength(
+      getWallCurveOffsetPath(wall, outwardSign, (wall.thickness ?? 0.1) / 2),
+    )
+    const innerFaceLength = getPolylineLength(
+      getWallCurveOffsetPath(wall, inwardSign, (wall.thickness ?? 0.1) / 2),
+    )
+    const overlays: LinearMeasurementOverlay[] = []
+
+    if (outerFaceLength >= 0.1) {
+      const overlay = getCurvedWallMeasurementOverlay(
+        `${wall.id}:outer-face`,
+        wall,
+        outwardSign,
+        FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
+        formatMeasurement(outerFaceLength, unit, metersPerUnit),
+        FLOORPLAN_WALL_OUTER_MEASUREMENT_STROKE,
+        FLOORPLAN_WALL_OUTER_MEASUREMENT_TEXT,
+        FLOORPLAN_WALL_OUTER_MEASUREMENT_EXTENSION,
+      )
+
+      if (overlay) {
+        overlays.push(overlay)
+      }
+    }
+
+    if (innerFaceLength >= 0.1) {
+      const overlay = getCurvedWallMeasurementOverlay(
+        `${wall.id}:inner-face`,
+        wall,
+        inwardSign,
+        FLOORPLAN_WALL_INNER_MEASUREMENT_OFFSET,
+        formatMeasurement(innerFaceLength, unit, metersPerUnit),
+        FLOORPLAN_WALL_INNER_MEASUREMENT_STROKE,
+        FLOORPLAN_WALL_INNER_MEASUREMENT_TEXT,
+        FLOORPLAN_WALL_INNER_MEASUREMENT_EXTENSION,
+      )
+
+      if (overlay) {
+        overlays.push(overlay)
+      }
+    }
+
+    return overlays
   }
 
   const faceContext = getWallMeasurementFaceContext(selectedWallEntry, wallPolygons)

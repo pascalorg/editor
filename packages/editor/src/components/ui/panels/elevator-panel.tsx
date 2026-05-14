@@ -466,7 +466,7 @@ export function ElevatorPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/elevator.svg"
+      icon="/icons/elevator.png"
       onClose={handleClose}
       title={node.name || 'Elevator'}
       width={300}
