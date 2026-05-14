@@ -12,15 +12,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import {
-  type ComponentType,
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -28,35 +20,23 @@ import { CursorSphere } from '../shared/cursor-sphere'
 
 const roundToHalf = (value: number) => Math.round(value * 2) / 2
 
-// Cache lazy preview components keyed by their module loader so React.lazy
-// isn't re-invoked across renders.
-const previewCache = new WeakMap<() => Promise<unknown>, ComponentType<{ node: AnyNode }>>()
-
-function loadPreview(node: AnyNode): ComponentType<{ node: AnyNode }> | null {
-  const def = nodeRegistry.get(node.type)
-  if (!def?.preview) return null
-  const cached = previewCache.get(def.preview)
-  if (cached) return cached
-  const Comp = lazy(def.preview as () => Promise<{ default: ComponentType<{ node: AnyNode }> }>)
-  previewCache.set(def.preview, Comp)
-  return Comp
-}
-
 /**
  * Generic move tool for any registry-backed kind.
  *
- * Behavior mirrors MoveColumnTool's shape:
- * - Pauses scene history on activation, resumes on commit / cancel / unmount.
- * - On each `grid:move`, applies a live transform to the original node so it
- *   visibly follows the cursor (no second copy of the node).
- * - On `grid:click`, commits the position to the scene store.
- * - If the kind exposes a `preview` component on its NodeDefinition, render
- *   it as a translucent ghost at the cursor too — the user sees the shape
- *   they're moving (better UX than just CursorSphere's line).
+ * The node's actual mesh — registered with `sceneRegistry` via the kind's
+ * renderer — follows the cursor via:
+ * - `useLiveTransforms.set(node.id, { position, rotation })` triggers a
+ *   re-render of the renderer, which applies the new position via R3F.
+ * - `sceneRegistry.nodes.get(node.id).position.set(...)` is a defensive
+ *   imperative update so the move feels snappy even if the React render
+ *   tick is delayed.
  *
- * Phase 4 may merge the preview slot with the renderer behind an `opacity`
- * prop. Until then, defining `preview` on a NodeDefinition gives nice move
- * + placement UX for free.
+ * No separate translucent ghost — the actual rendered mesh IS the preview.
+ * The cursor sphere is just a visual aim point (ring + line on the floor).
+ *
+ * Re-creation path: if the node was somehow orphaned (no entry in
+ * `useScene.nodes`), the registry's schema parses a fresh node at the
+ * committed position. Mirrors MoveColumnTool's behavior.
  */
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   const initialPosition: [number, number, number] = useMemo(
@@ -67,6 +47,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     [node],
   )
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(initialPosition)
+  const previousSnapRef = useRef<[number, number] | null>(null)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -74,6 +55,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   useEffect(() => {
     useScene.temporal.getState().pause()
+    previousSnapRef.current = null
     let committed = false
 
     const applyPreview = (position: [number, number, number]) => {
@@ -86,7 +68,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      applyPreview([roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])])
+      const x = roundToHalf(event.localPosition[0])
+      const z = roundToHalf(event.localPosition[2])
+      applyPreview([x, 0, z])
+
+      // Click sound on grid-cell cross, matching the placement tools.
+      const prev = previousSnapRef.current
+      if (!prev || prev[0] !== x || prev[1] !== z) {
+        sfxEmitter.emit('sfx:grid-snap')
+        previousSnapRef.current = [x, z]
+      }
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -151,18 +142,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
   }, [exitMoveMode, initialPosition, node])
 
-  const Preview = loadPreview(node)
-
-  return (
-    <>
-      <CursorSphere color="#a78bfa" height={2.5} position={previewPosition} />
-      {Preview && (
-        <Suspense fallback={null}>
-          <group position={previewPosition}>
-            <Preview node={node} />
-          </group>
-        </Suspense>
-      )}
-    </>
-  )
+  // Cursor sphere is just the aim point — the actual node's rendered mesh
+  // is what follows via live transforms. Visible alongside.
+  return <CursorSphere color="#a78bfa" height={2.5} position={previewPosition} />
 }
