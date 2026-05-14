@@ -12,7 +12,15 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  type ComponentType,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -20,21 +28,44 @@ import { CursorSphere } from '../shared/cursor-sphere'
 
 const roundToHalf = (value: number) => Math.round(value * 2) / 2
 
+// Cache lazy preview components keyed by their module loader so React.lazy
+// isn't re-invoked across renders.
+const previewCache = new WeakMap<() => Promise<unknown>, ComponentType<{ node: AnyNode }>>()
+
+function loadPreview(node: AnyNode): ComponentType<{ node: AnyNode }> | null {
+  const def = nodeRegistry.get(node.type)
+  if (!def?.preview) return null
+  const cached = previewCache.get(def.preview)
+  if (cached) return cached
+  const Comp = lazy(def.preview as () => Promise<{ default: ComponentType<{ node: AnyNode }> }>)
+  previewCache.set(def.preview, Comp)
+  return Comp
+}
+
 /**
- * Generic move tool for any registry-backed kind. Mirrors MoveColumnTool's
- * shape but parses re-creation through `nodeRegistry.get(kind).schema`
- * instead of a hardcoded schema reference. Used as the fallback in
- * `<MoveTool>` for kinds without a bespoke mover.
+ * Generic move tool for any registry-backed kind.
  *
- * Phase 4 may consolidate this with the per-kind movers if they all
- * collapse to the same position+rotation shape — until then they live
- * side by side.
+ * Behavior mirrors MoveColumnTool's shape:
+ * - Pauses scene history on activation, resumes on commit / cancel / unmount.
+ * - On each `grid:move`, applies a live transform to the original node so it
+ *   visibly follows the cursor (no second copy of the node).
+ * - On `grid:click`, commits the position to the scene store.
+ * - If the kind exposes a `preview` component on its NodeDefinition, render
+ *   it as a translucent ghost at the cursor too — the user sees the shape
+ *   they're moving (better UX than just CursorSphere's line).
+ *
+ * Phase 4 may merge the preview slot with the renderer behind an `opacity`
+ * prop. Until then, defining `preview` on a NodeDefinition gives nice move
+ * + placement UX for free.
  */
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
-  const initialPosition: [number, number, number] =
-    'position' in node && Array.isArray((node as { position?: unknown }).position)
-      ? ((node as { position: [number, number, number] }).position ?? [0, 0, 0])
-      : [0, 0, 0]
+  const initialPosition: [number, number, number] = useMemo(
+    () =>
+      'position' in node && Array.isArray((node as { position?: unknown }).position)
+        ? ((node as { position: [number, number, number] }).position ?? [0, 0, 0])
+        : [0, 0, 0],
+    [node],
+  )
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(initialPosition)
 
   const exitMoveMode = useCallback(() => {
@@ -67,15 +98,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const nodeId = node.id
 
       if (nodeId && useScene.getState().nodes[nodeId]) {
-        // Existing node — just update its position.
         committed = true
         useLiveTransforms.getState().clear(nodeId)
         useScene.temporal.getState().resume()
         useScene.getState().updateNode(nodeId, { position } as Partial<AnyNode>)
       } else if (node.parentId) {
-        // Orphan re-create path — re-parse the node fresh via the kind's
-        // schema in the registry. Mirrors MoveColumnTool's behavior for
-        // registry-supplied kinds.
         const def = nodeRegistry.get(node.type)
         if (def) {
           const reparsed = def.schema.parse({
@@ -124,9 +151,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
   }, [exitMoveMode, initialPosition, node])
 
-  // Cursor color from the def's presentation if available, else a neutral fallback.
-  const def = nodeRegistry.get(node.type)
-  const cursorColor = def?.presentation?.icon.kind === 'iconify' ? '#a78bfa' : '#a78bfa'
+  const Preview = loadPreview(node)
 
-  return <CursorSphere color={cursorColor} height={2.5} position={previewPosition} />
+  return (
+    <>
+      <CursorSphere color="#a78bfa" height={2.5} position={previewPosition} />
+      {Preview && (
+        <Suspense fallback={null}>
+          <group position={previewPosition}>
+            <Preview node={node} />
+          </group>
+        </Suspense>
+      )}
+    </>
+  )
 }

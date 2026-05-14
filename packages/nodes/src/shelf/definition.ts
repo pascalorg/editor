@@ -46,6 +46,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
   tool: () => import('./tool'),
 
   presentation: {

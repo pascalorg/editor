@@ -10,8 +10,9 @@ import {
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
+import ShelfPreview from './preview'
 
 const worldVector = new Vector3()
 const GRID_STEP = 0.5
@@ -36,21 +37,18 @@ function getLevelLocalPosition(levelId: string, event: GridEvent): [number, numb
   return [sx, worldVector.y, sz]
 }
 
-// Cursor preview dimensions — match the shelf's default schema dimensions.
-// Once the shelf has user-tunable defaults in the inspector, this can pull
-// from the active draft.
-const PREVIEW_WIDTH = 1.2
-const PREVIEW_DEPTH = 0.3
-const PREVIEW_THICKNESS = 0.04
-const PREVIEW_HEIGHT = 0.9
-const PREVIEW_INSET = Math.min(0.12, PREVIEW_WIDTH / 6)
-const PREVIEW_BRACKET_WIDTH = Math.max(0.02, PREVIEW_DEPTH * 0.12)
-const PREVIEW_BRACKET_DEPTH = PREVIEW_DEPTH * 0.7
-
 const ShelfTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
   const previousSnapRef = useRef<[number, number] | null>(null)
+
+  // Default-shaped shelf for the placement preview. Same shape the move tool
+  // uses (both reach for `shelfDefinition.preview`) so placement and move
+  // look identical.
+  const previewNode = useMemo(
+    () => ShelfNode.parse({ name: 'Shelf', position: [0, 0, 0], rotation: [0, 0, 0] }),
+    [],
+  )
 
   useEffect(() => {
     if (!activeLevelId) return
@@ -60,8 +58,6 @@ const ShelfTool = () => {
       const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
       cursorRef.current?.position.set(sx, event.localPosition[1], sz)
 
-      // Fire grid-snap SFX only when the snapped position crosses a cell,
-      // matching the wall / slab / curve tools.
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== sx || prev[1] !== sz) {
         triggerSFX('sfx:grid-snap')
@@ -94,26 +90,12 @@ const ShelfTool = () => {
 
   if (!activeLevelId) return null
 
-  // Cursor preview: ghostly version of the full shelf (top board + brackets)
-  // so the user sees the same shape they're placing. Position is updated
-  // imperatively via the ref; no React state, no re-render cycles.
+  // Cursor preview: defers to the shared ShelfPreview component used by the
+  // move tool too. Position is updated imperatively via the ref; no React
+  // state, no re-render cycles.
   return (
     <group ref={cursorRef}>
-      {/* Top board */}
-      <mesh position={[0, PREVIEW_HEIGHT + PREVIEW_THICKNESS / 2, 0]}>
-        <boxGeometry args={[PREVIEW_WIDTH, PREVIEW_THICKNESS, PREVIEW_DEPTH]} />
-        <meshStandardMaterial color="#a07050" transparent opacity={0.5} />
-      </mesh>
-      {/* Left bracket */}
-      <mesh position={[-(PREVIEW_WIDTH / 2 - PREVIEW_INSET), PREVIEW_HEIGHT / 2, 0]}>
-        <boxGeometry args={[PREVIEW_BRACKET_WIDTH, PREVIEW_HEIGHT, PREVIEW_BRACKET_DEPTH]} />
-        <meshStandardMaterial color="#a07050" transparent opacity={0.5} />
-      </mesh>
-      {/* Right bracket */}
-      <mesh position={[PREVIEW_WIDTH / 2 - PREVIEW_INSET, PREVIEW_HEIGHT / 2, 0]}>
-        <boxGeometry args={[PREVIEW_BRACKET_WIDTH, PREVIEW_HEIGHT, PREVIEW_BRACKET_DEPTH]} />
-        <meshStandardMaterial color="#a07050" transparent opacity={0.5} />
-      </mesh>
+      <ShelfPreview node={previewNode} />
     </group>
   )
 }

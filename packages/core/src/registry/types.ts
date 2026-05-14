@@ -32,6 +32,15 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   tool?: LazyComponent
   affordances?: Affordance<z.infer<S>>[]
 
+  /**
+   * Optional translucent preview of the node — used by the move tool to
+   * show where the node will land, and by the placement tool's cursor.
+   * Receives the partially-resolved node (or a default-shaped stub during
+   * placement before any commit has happened). Phase 4 may merge this with
+   * the renderer behind an `opacity` prop.
+   */
+  preview?: () => Promise<{ default: ComponentType<{ node: z.infer<S> }> }>
+
   presentation?: Presentation
   mcp?: McpOverrides
 }
