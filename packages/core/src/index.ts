@@ -44,10 +44,10 @@ export {
 } from './lib/door-operation'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
+  type AutoSlabSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   planAutoSlabsForLevel,
-  type AutoSlabSyncPlan,
   type Space,
   wallTouchesOthers,
 } from './lib/space-detection'
@@ -63,6 +63,7 @@ export {
   type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
+export * from './registry'
 export * from './schema'
 export {
   getSceneHistoryPauseDepth,
@@ -89,6 +90,7 @@ export { default as useLiveTransforms, type LiveTransform } from './store/use-li
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
+  type ElevatorDoorSide,
   getElevatorCabCenterZ,
   getElevatorCabDepth,
   getElevatorCabWidth,
@@ -101,7 +103,6 @@ export {
   getResolvedElevatorDoorPanelStyle,
   getResolvedElevatorDoorStyle,
   getResolvedElevatorShaftStyle,
-  type ElevatorDoorSide,
 } from './systems/elevator/elevator-geometry'
 export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
 export { ElevatorOpeningSystem } from './systems/elevator/elevator-opening-system'
@@ -157,8 +158,8 @@ export {
   constrainWallMoveDeltaToAxis,
   getPerpendicularWallMoveAxis,
   planWallMoveJunctions,
-  type WallMoveBridgePlan,
   type WallMoveAxis,
+  type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
