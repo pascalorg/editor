@@ -41,9 +41,11 @@ function getLevelLocalPosition(levelId: string, event: GridEvent): [number, numb
 const SpawnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
+  const previousSnapRef = useRef<[number, number] | null>(null)
 
   useEffect(() => {
     if (!activeLevelId) return
+    previousSnapRef.current = null
 
     const onGridMove = (event: GridEvent) => {
       // Cursor lives in the ToolManager's building-local group. Use
@@ -52,6 +54,15 @@ const SpawnTool = () => {
       const nextX = roundToHalf(event.localPosition[0])
       const nextZ = roundToHalf(event.localPosition[2])
       cursorRef.current?.position.set(nextX, event.localPosition[1], nextZ)
+
+      // Fire grid-snap SFX only when the snapped position crosses a cell,
+      // not every frame the mouse moves within the same cell. Matches the
+      // wall / slab / curve tools.
+      const prev = previousSnapRef.current
+      if (!prev || prev[0] !== nextX || prev[1] !== nextZ) {
+        triggerSFX('sfx:grid-snap')
+        previousSnapRef.current = [nextX, nextZ]
+      }
     }
 
     const onGridClick = (event: GridEvent) => {

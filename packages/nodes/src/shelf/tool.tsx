@@ -50,13 +50,23 @@ const PREVIEW_BRACKET_DEPTH = PREVIEW_DEPTH * 0.7
 const ShelfTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
+  const previousSnapRef = useRef<[number, number] | null>(null)
 
   useEffect(() => {
     if (!activeLevelId) return
+    previousSnapRef.current = null
 
     const onGridMove = (event: GridEvent) => {
       const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
       cursorRef.current?.position.set(sx, event.localPosition[1], sz)
+
+      // Fire grid-snap SFX only when the snapped position crosses a cell,
+      // matching the wall / slab / curve tools.
+      const prev = previousSnapRef.current
+      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+        triggerSFX('sfx:grid-snap')
+        previousSnapRef.current = [sx, sz]
+      }
     }
 
     const onGridClick = (event: GridEvent) => {
