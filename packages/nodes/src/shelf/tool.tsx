@@ -75,8 +75,6 @@ const ShelfTool = () => {
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
       triggerSFX('sfx:structure-build')
-      // biome-ignore lint/suspicious/noConsole: dev-only verification log
-      console.info('[shelf] placed', shelf.id, 'level-local', position, 'parent', activeLevelId)
     }
 
     emitter.on('grid:move', onGridMove)

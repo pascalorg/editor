@@ -22,23 +22,27 @@ const roundToHalf = (value: number) => Math.round(value * 2) / 2
 /**
  * Generic move tool for any registry-backed kind.
  *
- * Pattern: matches the item move tool (which works). The
- * `useLiveTransforms` + `sceneRegistry.position.set` approach used by
- * MoveColumnTool is broken — the renderer doesn't visibly follow.
+ * Imperative-only motion during drag:
+ * - On every `grid:move` we mutate `sceneRegistry.nodes.get(id).position`
+ *   directly. The node's store data is unchanged → the renderer doesn't
+ *   re-render → R3F doesn't reapply `position={node.position}` → the
+ *   imperative mutation sticks. Movement is smooth, framerate-locked,
+ *   and React-free.
  *
- * Instead, on every `grid:move` we directly `useScene.updateNode(id, { position })`
- * while history is paused. The kind's renderer already reads
- * `node.position` from the store, so the mesh visibly follows the cursor.
+ * Store update happens only on commit (single undoable action).
  *
- * Commit: pause-revert-resume-update sequence so undo replays one
- * coherent action (revert → final position) instead of the per-tick
- * spam that the move generated.
+ * Cancel imperatively snaps the mesh back to its original position and
+ * resumes history without ever having touched the store mid-drag.
  *
- * Cancel: restore the original position before unmounting.
+ * This is faster than the items pattern (which updates the store per tick
+ * and re-renders the renderer on every mouse move). Trade-off: if the
+ * renderer happens to re-render for some other reason mid-drag, R3F will
+ * reapply node.position and snap the mesh back. Mitigation: history is
+ * paused, no upstream state subscribed by the renderer changes during the
+ * drag, so re-renders are rare in practice. If a kind needs guaranteed
+ * stability, it can opt into a "live position" hook in Phase 4.
  */
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
-  // Snapshot the original position once at mount — used for cancel revert
-  // and for the pause-revert-resume sequence at commit.
   const originalPosition: [number, number, number] = useMemo(
     () =>
       'position' in node && Array.isArray((node as { position?: unknown }).position)
@@ -54,25 +58,25 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   }, [])
 
   useEffect(() => {
-    // Pause history so per-tick updateNode calls don't fill the undo stack.
+    // Pause history so the eventual commit lands as a single undoable step,
+    // not the per-tick spam that would happen if we updated the store on
+    // each move.
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
     let committed = false
 
-    const applyPreview = (position: [number, number, number]) => {
-      setCursorPosition(position)
-      // Update the actual scene node — the renderer reads node.position and
-      // re-renders. The mesh visibly follows. Same pattern as the item move
-      // tool (useDraftNode.adopt).
-      useScene.getState().updateNode(node.id, { position } as Partial<AnyNode>)
-    }
-
     const onGridMove = (event: GridEvent) => {
       const x = roundToHalf(event.localPosition[0])
       const z = roundToHalf(event.localPosition[2])
-      applyPreview([x, 0, z])
+      setCursorPosition([x, 0, z])
 
-      // Click sound on grid-cell cross, matching the placement tools.
+      // Pure imperative: move the mesh via its registered Object3D ref.
+      // No React re-render. No store update. The shelf (or any registry
+      // kind) follows the cursor smoothly because nothing competes with
+      // this position write until commit.
+      sceneRegistry.nodes.get(node.id)?.position.set(x, 0, z)
+
+      // SFX on cell-cross, matching placement.
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== x || prev[1] !== z) {
         sfxEmitter.emit('sfx:grid-snap')
@@ -88,12 +92,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       ]
 
       if (useScene.getState().nodes[node.id]) {
-        // Restore original position while still paused, then resume and
-        // do a single tracked update. Undo replays the (original → final)
-        // single step, not every grid-move tick.
-        useScene.getState().updateNode(node.id, {
-          position: originalPosition,
-        } as Partial<AnyNode>)
+        // Store still has the original position (we didn't touch it during
+        // drag). Resume history and do one tracked update. Undo replays the
+        // (original → final) single step.
         useScene.temporal.getState().resume()
         useScene.getState().updateNode(node.id, { position } as Partial<AnyNode>)
         useScene.temporal.getState().pause()
@@ -121,11 +122,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onCancel = () => {
-      // Restore original position while paused — this won't enter undo.
-      useScene.getState().updateNode(node.id, {
-        position: originalPosition,
-      } as Partial<AnyNode>)
-      // Defensive Three.js reset in case React render lags.
+      // Snap mesh back to original visually. Store was never touched.
       sceneRegistry.nodes
         .get(node.id)
         ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
@@ -142,13 +139,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
-      // If we unmount without committing (e.g., user picks a different
-      // tool), restore original position so the scene doesn't show the
-      // stale preview state, and resume history.
+      // If we unmount without committing (e.g., the user switches tools or
+      // navigates away), restore the mesh imperatively and resume history.
+      // Store was never touched so no data revert is needed.
       if (!committed) {
-        useScene.getState().updateNode(node.id, {
-          position: originalPosition,
-        } as Partial<AnyNode>)
+        sceneRegistry.nodes
+          .get(node.id)
+          ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
         useScene.temporal.getState().resume()
       }
     }

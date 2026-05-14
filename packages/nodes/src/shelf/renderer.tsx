@@ -2,7 +2,7 @@
 
 import { useLiveTransforms, useRegistry } from '@pascal-app/core'
 import { useNodeEvents } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { Color, type Group } from 'three'
 import type { ShelfNode } from './schema'
 
@@ -39,11 +39,6 @@ const ShelfRenderer = ({ node }: { node: ShelfNode }) => {
       ? Math.max(0.04, node.depth * 0.2)
       : Math.max(0.02, node.depth * 0.12)
   const bracketDepth = node.bracketStyle === 'industrial' ? node.depth * 0.95 : node.depth * 0.7
-
-  useEffect(() => {
-    // biome-ignore lint/suspicious/noConsole: dev-only verification log
-    console.info('[shelf] rendered', node.id, 'at', node.position)
-  }, [node.id, node.position])
 
   return (
     <group
