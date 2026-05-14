@@ -102,6 +102,17 @@ export const MoveTool: React.FC<{
   const movingNode = useEditor((state) => state.movingNode)
 
   if (!movingNode) return null
+
+  // Registry-first dispatch. Any kind registered via @pascal-app/nodes
+  // gets the imperative MoveRegistryNodeTool (smooth, framerate-locked
+  // motion via sceneRegistry — see plan: "Validated patterns from the
+  // spike"). The legacy per-kind movers below are short-circuited for
+  // any kind in the registry — that's how Phase 5 will progressively
+  // delete them as kinds migrate.
+  if (nodeRegistry.has(movingNode.type)) {
+    return <MoveRegistryNodeTool node={movingNode} />
+  }
+
   if (movingNode.type === 'building')
     return <MoveBuildingContent node={movingNode as BuildingNode} />
   if (movingNode.type === 'door') return <MoveDoorTool node={movingNode as DoorNode} />
@@ -119,13 +130,5 @@ export const MoveTool: React.FC<{
     return <MoveSpawnTool node={movingNode as SpawnNode} onCommitted={onSpawnMoved} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
     return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
-  // Registry-driven kinds (any NodeDefinition with `capabilities.movable`)
-  // get a generic position+rotation mover. Phase 4 may consolidate this
-  // with the per-kind movers above when they all collapse to the same
-  // shape. Must come BEFORE the MoveItemContent fallback because that
-  // assumes the node is an ItemNode.
-  if (nodeRegistry.has(movingNode.type)) {
-    return <MoveRegistryNodeTool node={movingNode} />
-  }
   return <MoveItemContent movingNode={movingNode as ItemNode} />
 }
