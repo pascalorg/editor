@@ -60,6 +60,7 @@
     "build": "tsc --build",
     "dev": "tsc --build --watch",
     "test": "bun test",
+    "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
