@@ -2,10 +2,12 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  nodeRegistry,
   type SlabNode,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
 import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
@@ -31,6 +33,21 @@ import { WallTool } from './wall/wall-tool'
 import { WindowTool } from './window/window-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
+
+// Cache lazy tool components keyed by their loader so React.lazy isn't
+// re-invoked across renders.
+const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+
+function getRegistryTool(tool: Tool | null): ComponentType | null {
+  if (!tool) return null
+  const def = nodeRegistry.get(tool)
+  if (!def?.tool) return null
+  const cached = lazyToolCache.get(def.tool)
+  if (cached) return cached
+  const Comp = lazy(def.tool as () => Promise<{ default: ComponentType }>)
+  lazyToolCache.set(def.tool, Comp)
+  return Comp
+}
 
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
   site: {
@@ -127,7 +144,14 @@ export const ToolManager: React.FC = () => {
   // Show build tools when in build mode
   const showBuildTool = mode === 'build' && tool !== null
 
-  const BuildToolComponent = showBuildTool ? tools[phase]?.[tool] : null
+  // Registry-first: if the active tool's kind has a NodeDefinition with a
+  // tool contribution, the registry-driven tool takes over. Otherwise fall
+  // through to the legacy `tools` map below. Today the registry is empty so
+  // RegistryToolComponent is always null — zero behavior change.
+  const RegistryToolComponent = showBuildTool ? getRegistryTool(tool) : null
+  const useRegistryTool = RegistryToolComponent != null
+
+  const BuildToolComponent = showBuildTool && !useRegistryTool ? tools[phase]?.[tool] : null
   const handlePlacedNodeSelected = (nodeId: AnyNodeId) => {
     setSelection({ selectedIds: [nodeId] })
   }
@@ -174,13 +198,21 @@ export const ToolManager: React.FC = () => {
             onSpawnMoved={handlePlacedNodeSelected}
           />
         )}
-        {!movingNode && showBuildTool && tool === 'spawn' && (
+        {/* Registry-first: when the active tool's kind has a registered
+            NodeDefinition with a tool contribution, mount it here. Today
+            the registry is empty so this branch never fires. */}
+        {!movingNode && useRegistryTool && RegistryToolComponent && (
+          <Suspense fallback={null}>
+            <RegistryToolComponent />
+          </Suspense>
+        )}
+        {!movingNode && !useRegistryTool && showBuildTool && tool === 'spawn' && (
           <SpawnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
         )}
-        {!movingNode && showBuildTool && tool === 'column' && (
+        {!movingNode && !useRegistryTool && showBuildTool && tool === 'column' && (
           <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
         )}
-        {!movingNode && showBuildTool && tool === 'elevator' && (
+        {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (
           <ElevatorTool
             buildingId={buildingId as BuildingNode['id'] | null}
             levelId={activeLevelId ?? null}
