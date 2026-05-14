@@ -266,7 +266,7 @@ function getStraightFlightOpeningDepth(stair: StairNode, segment: StairSegmentNo
     0.2,
     segment.length / Math.max(segment.stepCount || stair.stepCount || 10, 1),
   )
-  return Math.min(segment.length, Math.max(treadDepth * 6, segment.length * 0.62, 1.8))
+  return Math.min(segment.length, Math.max(treadDepth * 10, segment.length * 0.8, 3.0))
 }
 
 function polygonArea(points: Point2D[]) {
@@ -486,7 +486,7 @@ function getStraightOpeningPolygonsForSurface(
 
   const riserHeight = (stair.totalRise ?? 2.5) / Math.max(stair.stepCount ?? 10, 1)
   const targetThreshold = Math.max(riserHeight * 2, STRAIGHT_STAIR_TARGET_THRESHOLD_MIN)
-  const openingOffset = Math.max(stair.openingOffset ?? 0, 0)
+  const openingOffset = Math.max(stair.openingOffset ?? 0, 0.15)
   const openingRects: AxisAlignedRect[] = []
 
   for (let index = 0; index < layouts.length; index += 1) {
