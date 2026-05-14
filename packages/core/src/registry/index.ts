@@ -1,4 +1,11 @@
 export { loadPlugin, nodeRegistry, registerNode } from './registry'
+export {
+  type CascadeContext,
+  type ChildQuery,
+  cascadeDirty,
+  collectDescendants,
+  type SpatialQuery,
+} from './relations-resolver'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
 export type {
   Affordance,
