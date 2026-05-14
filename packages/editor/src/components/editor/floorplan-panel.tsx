@@ -94,6 +94,7 @@ import { FloorplanRoofLayer } from '../editor-2d/renderers/floorplan-roof-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import {
   buildSvgArcPath,
+  buildSvgArrowHeadPoints,
   buildSvgPolylinePath,
   formatPolygonPath,
   getArcPlanPoint,
@@ -162,6 +163,14 @@ const FLOORPLAN_ENDPOINT_HANDLE_ACTIVE_RADIUS_PX = 9
 const FLOORPLAN_ENDPOINT_HANDLE_DOT_RADIUS_PX = 3
 const FLOORPLAN_ENDPOINT_HANDLE_ACTIVE_DOT_RADIUS_PX = 4
 const FLOORPLAN_CURVE_HANDLE_DOT_RADIUS_PX = 3
+const FLOORPLAN_WALL_MOVE_ARROW_OFFSET = 0.28
+const FLOORPLAN_WALL_MOVE_ARROW_MIN_OFFSET = 0.5
+const FLOORPLAN_WALL_MOVE_ARROW_BODY_LENGTH = 0.14
+const FLOORPLAN_WALL_MOVE_ARROW_BODY_WIDTH = 0.06
+const FLOORPLAN_WALL_MOVE_ARROW_HEAD_LENGTH = 0.14
+const FLOORPLAN_WALL_MOVE_ARROW_HIT_RADIUS = 0.18
+const FLOORPLAN_WALL_MOVE_ARROW_COLOR = '#8381ed'
+const FLOORPLAN_WALL_MOVE_ARROW_HOVER_COLOR = '#a5b4fc'
 const FLOORPLAN_POLYGON_VERTEX_RADIUS_PX = 6.5
 const FLOORPLAN_POLYGON_VERTEX_ACTIVE_RADIUS_PX = 7.5
 const FLOORPLAN_POLYGON_VERTEX_DOT_RADIUS_PX = 2.5
@@ -199,8 +208,8 @@ const FLOORPLAN_SLAB_LABEL_FONT_SIZE = 0.2
 const FLOORPLAN_MEASUREMENT_LABEL_STROKE_WIDTH = 0
 const FLOORPLAN_MEASUREMENT_LABEL_GAP = 0.56
 const FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING = 0.14
-const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.34
-const FLOORPLAN_WALL_INNER_MEASUREMENT_OFFSET = 0.24
+const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.18
+const FLOORPLAN_WALL_INNER_MEASUREMENT_OFFSET = 0.18
 const FLOORPLAN_WALL_OUTER_MEASUREMENT_STROKE = 'rgba(59, 130, 246, 0.95)'
 const FLOORPLAN_WALL_OUTER_MEASUREMENT_TEXT = 'rgba(37, 99, 235, 0.98)'
 const FLOORPLAN_WALL_OUTER_MEASUREMENT_EXTENSION = 'rgba(96, 165, 250, 0.9)'
@@ -552,6 +561,13 @@ type WallPolygonEntry = {
   wall: WallNode
   polygon: Point2D[]
   points: string
+}
+
+type FloorplanWallMoveHandle = {
+  id: string
+  point: Point2D
+  rotationDeg: number
+  wall: WallNode
 }
 
 type FloorplanFenceEntry = {
@@ -1700,6 +1716,52 @@ function formatPolygonPoints(points: Point2D[]): string {
       return `${svgPoint.x},${svgPoint.y}`
     })
     .join(' ')
+}
+
+function getFloorplanWallMoveHandles(
+  wall: WallNode,
+): FloorplanWallMoveHandle[] {
+  const dx = wall.end[0] - wall.start[0]
+  const dy = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dy)
+
+  if (length < 1e-6) {
+    return []
+  }
+
+  const frame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const midpoint = frame
+    ? frame.point
+    : {
+        x: (wall.start[0] + wall.end[0]) / 2,
+        y: (wall.start[1] + wall.end[1]) / 2,
+      }
+  const normal = frame ? frame.normal : { x: -dy / length, y: dx / length }
+  const offset = Math.max(
+    (wall.thickness ?? 0.1) / 2 + FLOORPLAN_WALL_MOVE_ARROW_OFFSET,
+    FLOORPLAN_WALL_MOVE_ARROW_MIN_OFFSET,
+  )
+
+  return [
+    {
+      id: `${wall.id}:move:front`,
+      point: {
+        x: midpoint.x + normal.x * offset,
+        y: midpoint.y + normal.y * offset,
+      },
+      rotationDeg: (Math.atan2(normal.y, normal.x) * 180) / Math.PI,
+      wall,
+    },
+    {
+      id: `${wall.id}:move:back`,
+      point: {
+        x: midpoint.x - normal.x * offset,
+        y: midpoint.y - normal.y * offset,
+      },
+      rotationDeg: (Math.atan2(-normal.y, -normal.x) * 180) / Math.PI,
+      wall,
+    },
+  ]
 }
 
 function toFloorplanPolygon(points: Array<[number, number]>): Point2D[] {
@@ -5349,7 +5411,10 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           const pocketTrackStart =
             pocketSign > 0
               ? svgP1
-              : { x: svgP1.x - nx * foldingSpan, y: svgP1.y - ny * foldingSpan }
+              : {
+                  x: svgP1.x - nx * foldingSpan,
+                  y: svgP1.y - ny * foldingSpan,
+                }
           const pocketTrackEnd =
             pocketSign > 0
               ? { x: svgP2.x + nx * foldingSpan, y: svgP2.y + ny * foldingSpan }
@@ -5442,10 +5507,22 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 py * swingSign * faceOffset,
             }
             return [
-              { x: start.x - px * leafHalfThickness, y: start.y - py * leafHalfThickness },
-              { x: end.x - px * leafHalfThickness, y: end.y - py * leafHalfThickness },
-              { x: end.x + px * leafHalfThickness, y: end.y + py * leafHalfThickness },
-              { x: start.x + px * leafHalfThickness, y: start.y + py * leafHalfThickness },
+              {
+                x: start.x - px * leafHalfThickness,
+                y: start.y - py * leafHalfThickness,
+              },
+              {
+                x: end.x - px * leafHalfThickness,
+                y: end.y - py * leafHalfThickness,
+              },
+              {
+                x: end.x + px * leafHalfThickness,
+                y: end.y + py * leafHalfThickness,
+              },
+              {
+                x: start.x + px * leafHalfThickness,
+                y: start.y + py * leafHalfThickness,
+              },
             ]
               .map((point) => `${point.x},${point.y}`)
               .join(' ')
@@ -5475,12 +5552,18 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
                 [
                   {
                     key: 'left',
-                    hingePoint: { x: cx - nx * (width / 2), y: cy - ny * (width / 2) },
+                    hingePoint: {
+                      x: cx - nx * (width / 2),
+                      y: cy - ny * (width / 2),
+                    },
                     strikePoint: { x: cx, y: cy },
                   },
                   {
                     key: 'right',
-                    hingePoint: { x: cx + nx * (width / 2), y: cy + ny * (width / 2) },
+                    hingePoint: {
+                      x: cx + nx * (width / 2),
+                      y: cy + ny * (width / 2),
+                    },
                     strikePoint: { x: cx, y: cy },
                   },
                 ] as const
@@ -8015,6 +8098,110 @@ const FloorplanWallCurveHandleLayer = memo(function FloorplanWallCurveHandleLaye
   )
 })
 
+const FloorplanWallMoveHandleLayer = memo(function FloorplanWallMoveHandleLayer({
+  handles,
+  hoveredHandleId,
+  onHandleHoverChange,
+  onWallMovePointerDown,
+}: {
+  handles: FloorplanWallMoveHandle[]
+  hoveredHandleId: string | null
+  onHandleHoverChange: (handleId: string | null) => void
+  onWallMovePointerDown: (wall: WallNode, event: ReactPointerEvent<SVGCircleElement>) => void
+}) {
+  const bodyLength = FLOORPLAN_WALL_MOVE_ARROW_BODY_LENGTH
+  const bodyStrokeWidth = FLOORPLAN_WALL_MOVE_ARROW_BODY_WIDTH
+  const headLength = FLOORPLAN_WALL_MOVE_ARROW_HEAD_LENGTH
+  const hitRadius = FLOORPLAN_WALL_MOVE_ARROW_HIT_RADIUS
+  const tailLength = bodyStrokeWidth * 0.9
+
+  return (
+    <>
+      {handles.map((handle) => {
+        const isHovered = hoveredHandleId === handle.id
+        const fill = isHovered
+          ? FLOORPLAN_WALL_MOVE_ARROW_HOVER_COLOR
+          : FLOORPLAN_WALL_MOVE_ARROW_COLOR
+        const headPoints = buildSvgArrowHeadPoints({ x: headLength / 2, y: 0 }, 0, headLength)
+        const shaftX = -bodyLength + tailLength
+        const shaftWidth = bodyLength - tailLength
+
+        return (
+          <g
+            key={handle.id}
+            onPointerEnter={() => onHandleHoverChange(handle.id)}
+            onPointerLeave={() => onHandleHoverChange(null)}
+            transform={`translate(${toSvgX(handle.point.x)} ${toSvgY(handle.point.y)}) rotate(${handle.rotationDeg})`}
+          >
+            <rect
+              fill={fill}
+              fillOpacity={1}
+              height={bodyStrokeWidth}
+              pointerEvents="none"
+              width={shaftWidth}
+              x={shaftX}
+              y={-bodyStrokeWidth / 2}
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <rect
+              fill={fill}
+              fillOpacity={1}
+              height={bodyStrokeWidth}
+              pointerEvents="none"
+              rx={bodyStrokeWidth * 0.12}
+              ry={bodyStrokeWidth * 0.12}
+              width={tailLength}
+              x={-bodyLength}
+              y={-bodyStrokeWidth / 2}
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <rect
+              fill={fill}
+              fillOpacity={1}
+              height={bodyStrokeWidth}
+              pointerEvents="none"
+              width={tailLength * 0.08}
+              x={-bodyLength + tailLength - bodyStrokeWidth * 0.04}
+              y={-bodyStrokeWidth / 2}
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <polygon
+              fill={fill}
+              fillOpacity={1}
+              points={headPoints}
+              pointerEvents="none"
+              style={{
+                opacity: isHovered ? 1 : 0.98,
+                transition: FLOORPLAN_HOVER_TRANSITION,
+              }}
+            />
+            <circle
+              cx={0}
+              cy={0}
+              fill="transparent"
+              onPointerDown={(event) => onWallMovePointerDown(handle.wall, event)}
+              pointerEvents="all"
+              r={hitRadius}
+              stroke="transparent"
+              style={{ cursor: EDITOR_CURSOR }}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        )
+      })}
+    </>
+  )
+})
+
 const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   edgeHandles = [],
   hoveredHandleId,
@@ -8488,6 +8675,7 @@ export function FloorplanPanel() {
     useState<ElevatorResizeDragState | null>(null)
   const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
   const [hoveredEndpointId, setHoveredEndpointId] = useState<string | null>(null)
+  const [hoveredWallMoveHandleId, setHoveredWallMoveHandleId] = useState<string | null>(null)
   const [hoveredWallCurveHandleId, setHoveredWallCurveHandleId] = useState<string | null>(null)
   const [hoveredSiteHandleId, setHoveredSiteHandleId] = useState<string | null>(null)
   const [hoveredSlabHandleId, setHoveredSlabHandleId] = useState<string | null>(null)
@@ -8742,7 +8930,10 @@ export function FloorplanPanel() {
     if (wallCurveDraft) {
       const wall = nextWallById.get(wallCurveDraft.wallId)
       if (wall) {
-        nextWallById.set(wall.id, { ...wall, curveOffset: wallCurveDraft.curveOffset })
+        nextWallById.set(wall.id, {
+          ...wall,
+          curveOffset: wallCurveDraft.curveOffset,
+        })
       }
     }
 
@@ -11124,10 +11315,22 @@ export function FloorplanPanel() {
 
     return getFloorplanActionMenuPosition(
       [
-        { x: position.x - FLOORPLAN_SPAWN_HIT_RADIUS, y: position.y - FLOORPLAN_SPAWN_HIT_RADIUS },
-        { x: position.x + FLOORPLAN_SPAWN_HIT_RADIUS, y: position.y - FLOORPLAN_SPAWN_HIT_RADIUS },
-        { x: position.x + FLOORPLAN_SPAWN_HIT_RADIUS, y: position.y + FLOORPLAN_SPAWN_HIT_RADIUS },
-        { x: position.x - FLOORPLAN_SPAWN_HIT_RADIUS, y: position.y + FLOORPLAN_SPAWN_HIT_RADIUS },
+        {
+          x: position.x - FLOORPLAN_SPAWN_HIT_RADIUS,
+          y: position.y - FLOORPLAN_SPAWN_HIT_RADIUS,
+        },
+        {
+          x: position.x + FLOORPLAN_SPAWN_HIT_RADIUS,
+          y: position.y - FLOORPLAN_SPAWN_HIT_RADIUS,
+        },
+        {
+          x: position.x + FLOORPLAN_SPAWN_HIT_RADIUS,
+          y: position.y + FLOORPLAN_SPAWN_HIT_RADIUS,
+        },
+        {
+          x: position.x - FLOORPLAN_SPAWN_HIT_RADIUS,
+          y: position.y + FLOORPLAN_SPAWN_HIT_RADIUS,
+        },
       ],
       viewBox,
       surfaceSize,
@@ -11532,6 +11735,27 @@ export function FloorplanPanel() {
     [gridBounds, gridSteps.majorStep],
   )
   const floorplanUnitsPerPixel = viewBox.width / Math.max(surfaceSize.width, 1)
+  const wallMoveHandles = useMemo(() => {
+    if (
+      isOpeningPlacementActive ||
+      movingNode ||
+      curvingWall ||
+      mode !== 'select' ||
+      floorplanSelectionTool !== 'click' ||
+      !selectedWallEntry
+    ) {
+      return []
+    }
+
+    return getFloorplanWallMoveHandles(selectedWallEntry.wall)
+  }, [
+    curvingWall,
+    floorplanSelectionTool,
+    isOpeningPlacementActive,
+    mode,
+    movingNode,
+    selectedWallEntry,
+  ])
 
   useEffect(() => {
     setReferenceScaleUnit(unit === 'imperial' ? 'feet' : 'meters')
@@ -11733,22 +11957,30 @@ export function FloorplanPanel() {
           Math.max(0.8, nextOuterSize - dragState.shaftWallThickness * 2),
         )
         const nextCabWidth = nextShaftWidth
-        useLiveNodeOverrides
-          .getState()
-          .set(dragState.elevatorId, { shaftWidth: nextShaftWidth, width: nextCabWidth })
+        useLiveNodeOverrides.getState().set(dragState.elevatorId, {
+          shaftWidth: nextShaftWidth,
+          width: nextCabWidth,
+        })
         setCursorPoint(planPoint)
-        return { shaftWidth: nextShaftWidth, width: nextCabWidth } satisfies Partial<ElevatorNode>
+        return {
+          shaftWidth: nextShaftWidth,
+          width: nextCabWidth,
+        } satisfies Partial<ElevatorNode>
       }
 
       const nextShaftDepth = roundPlanMeters(
         Math.max(0.8, nextOuterSize - dragState.shaftWallThickness * 2),
       )
       const nextCabDepth = nextShaftDepth
-      useLiveNodeOverrides
-        .getState()
-        .set(dragState.elevatorId, { depth: nextCabDepth, shaftDepth: nextShaftDepth })
+      useLiveNodeOverrides.getState().set(dragState.elevatorId, {
+        depth: nextCabDepth,
+        shaftDepth: nextShaftDepth,
+      })
       setCursorPoint(planPoint)
-      return { depth: nextCabDepth, shaftDepth: nextShaftDepth } satisfies Partial<ElevatorNode>
+      return {
+        depth: nextCabDepth,
+        shaftDepth: nextShaftDepth,
+      } satisfies Partial<ElevatorNode>
     },
     [],
   )
@@ -15380,6 +15612,24 @@ export function FloorplanPanel() {
     },
     [selectedWallEntry, setMovingNode, setSelection],
   )
+  const handleWallMoveHandlePointerDown = useCallback(
+    (wall: WallNode, event: ReactPointerEvent<SVGCircleElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      sfxEmitter.emit('sfx:item-pick')
+      setHoveredWallMoveHandleId(null)
+      setMovingFenceEndpoint(null)
+      setCurvingWall(null)
+      setMovingNode(wall)
+      setSelection({ selectedIds: [] })
+    },
+    [setCurvingWall, setMovingFenceEndpoint, setMovingNode, setSelection],
+  )
   const duplicateSelectedWall = useCallback(() => {
     const wall = selectedWallEntry?.wall
     if (!wall?.parentId) {
@@ -17023,6 +17273,7 @@ export function FloorplanPanel() {
     handleElevatorHoverChange(null)
     handleZoneHoverChange(null)
     setHoveredEndpointId(null)
+    setHoveredWallMoveHandleId(null)
     setHoveredSiteHandleId(null)
     setHoveredSlabHandleId(null)
     setHoveredCeilingHandleId(null)
@@ -17151,6 +17402,7 @@ export function FloorplanPanel() {
       handleElevatorHoverChange(null)
       handleZoneHoverChange(null)
       setHoveredEndpointId(null)
+      setHoveredWallMoveHandleId(null)
       floorplanMarqueeSnapPointRef.current = snappedPoint
       syncPreviewSelectedIds([])
       setFloorplanMarqueeState({
@@ -17783,7 +18035,9 @@ export function FloorplanPanel() {
             onPointerMove={handleSvgPointerMove}
             onPointerUp={endPanning}
             ref={svgRef}
-            style={{ cursor: referenceScaleDraft ? 'crosshair' : EDITOR_CURSOR }}
+            style={{
+              cursor: referenceScaleDraft ? 'crosshair' : EDITOR_CURSOR,
+            }}
             viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
           >
             <defs>
@@ -18133,6 +18387,13 @@ export function FloorplanPanel() {
                 onWallCurvePointerDown={handleWallCurvePointerDown}
                 palette={palette}
                 unitsPerPixel={floorplanUnitsPerPixel}
+              />
+
+              <FloorplanWallMoveHandleLayer
+                handles={wallMoveHandles}
+                hoveredHandleId={hoveredWallMoveHandleId}
+                onHandleHoverChange={setHoveredWallMoveHandleId}
+                onWallMovePointerDown={handleWallMoveHandlePointerDown}
               />
 
               <FloorplanPolygonHandleLayer
