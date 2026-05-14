@@ -9,3 +9,14 @@ export {
   pickHost,
   type Vec3,
 } from './hosting'
+export {
+  DEFAULT_ANGLE_STEP,
+  DEFAULT_GRID_STEP,
+  type SnapServices,
+  snapAngleToList,
+  snapPointToAngle,
+  snapPointToGrid,
+  snapScalar,
+  snapServices,
+  snapVec3ToGrid,
+} from './snap'
