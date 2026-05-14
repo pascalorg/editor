@@ -3,7 +3,9 @@
 import {
   type AnyNodeId,
   DEFAULT_WALL_HEIGHT,
+  getWallCurveFrameAt,
   getWallThickness,
+  isCurvedWall,
   sceneRegistry,
   useScene,
   type WallNode,
@@ -11,6 +13,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
+import { useThree } from '@react-three/fiber'
 import {
   BufferGeometry,
   ConeGeometry,
@@ -18,6 +21,7 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   type Object3D,
+  OrthographicCamera,
 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -157,6 +161,14 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
 function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const { camera } = useThree()
+
+  const zoom =
+    camera instanceof OrthographicCamera
+      ? 1 / camera.zoom
+      : 1
+
+  const scale = (isHovered ? 1.12 : 1) * zoom
 
   useEffect(() => {
     return () => {
@@ -186,7 +198,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
     <group
       position={handle.position}
       rotation={[0, handle.rotationY, 0]}
-      scale={isHovered ? 1.12 : 1}
+      scale={scale}
     >
       <mesh
         frustumCulled={false}
@@ -228,11 +240,13 @@ function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
     return []
   }
 
-  const normal: [number, number] = [-dz / length, dx / length]
-  const midpoint: [number, number] = [
-    (wall.start[0] + wall.end[0]) / 2,
-    (wall.start[1] + wall.end[1]) / 2,
-  ]
+  const frame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const normal: [number, number] = frame
+    ? [frame.normal.x, frame.normal.y]
+    : [-dz / length, dx / length]
+  const midpoint: [number, number] = frame
+    ? [frame.point.x, frame.point.y]
+    : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
   const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
   const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
   const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
