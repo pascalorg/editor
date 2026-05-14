@@ -4912,6 +4912,377 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
           const markerX = (p1!.x + p2!.x + p3!.x + p4!.x) / 4
           const markerY = (p1!.y + p2!.y + p3!.y + p4!.y) / 4
           const windowOpeningShape = opening.openingShape ?? 'rectangle'
+          const windowType = opening.windowType ?? 'fixed'
+          const windowOpenAmount = Math.max(0, Math.min(1, opening.operationState ?? 0))
+          const innerPoints = [insetInnerStart, insetInnerEnd, insetOuterEnd, insetOuterStart]
+          const innerPolygonPoints = formatPolygonPoints(innerPoints)
+          const innerCenterX = (centerStart.x + centerEnd.x) / 2
+          const innerCenterY = (centerStart.y + centerEnd.y) / 2
+          const innerSpan = Math.hypot(centerEnd.x - centerStart.x, centerEnd.y - centerStart.y)
+          const panelNormalHalf = normalLength * 0.18
+          const panelNormalOffset = normalLength * 0.11
+          const detailColor = isDeleteHovered ? palette.deleteStroke : symbolStroke
+          const windowTypeDetails = (() => {
+            if (windowType === 'sliding') {
+              const panelSpan = innerSpan * 0.56
+              const panelCenterOffset = innerSpan * 0.12
+              const slideTravel = innerSpan * 0.18 * windowOpenAmount
+              const makePanelPoints = (alongOffset: number, normalOffset: number, travel = 0) => {
+                const start = {
+                  x:
+                    innerCenterX -
+                    tangentX * (panelSpan / 2 - alongOffset - travel) +
+                    normalX * normalOffset,
+                  y:
+                    innerCenterY -
+                    tangentY * (panelSpan / 2 - alongOffset - travel) +
+                    normalY * normalOffset,
+                }
+                const end = {
+                  x:
+                    innerCenterX +
+                    tangentX * (panelSpan / 2 + alongOffset - travel) +
+                    normalX * normalOffset,
+                  y:
+                    innerCenterY +
+                    tangentY * (panelSpan / 2 + alongOffset - travel) +
+                    normalY * normalOffset,
+                }
+                return formatPolygonPoints([
+                  {
+                    x: start.x - normalX * panelNormalHalf,
+                    y: start.y - normalY * panelNormalHalf,
+                  },
+                  {
+                    x: end.x - normalX * panelNormalHalf,
+                    y: end.y - normalY * panelNormalHalf,
+                  },
+                  {
+                    x: end.x + normalX * panelNormalHalf,
+                    y: end.y + normalY * panelNormalHalf,
+                  },
+                  {
+                    x: start.x + normalX * panelNormalHalf,
+                    y: start.y + normalY * panelNormalHalf,
+                  },
+                ])
+              }
+
+              return (
+                <>
+                  <polygon
+                    fill="none"
+                    points={makePanelPoints(-panelCenterOffset, -panelNormalOffset, slideTravel)}
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <polygon
+                    fill="none"
+                    points={makePanelPoints(panelCenterOffset, panelNormalOffset)}
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </>
+              )
+            }
+
+            if (windowType === 'casement') {
+              const isFrench = (opening.casementStyle ?? 'single') === 'french'
+              if (isFrench) {
+                const leftHinge = {
+                  x: centerStart.x,
+                  y: centerStart.y,
+                }
+                const rightHinge = {
+                  x: centerEnd.x,
+                  y: centerEnd.y,
+                }
+                const meet = { x: innerCenterX, y: innerCenterY }
+                const swingOffset = panelNormalHalf * (0.2 + windowOpenAmount * 1.1)
+                return (
+                  <>
+                    <line
+                      stroke={detailColor}
+                      strokeWidth={detailStrokeWidth}
+                      vectorEffect="non-scaling-stroke"
+                      x1={toSvgX(leftHinge.x)}
+                      x2={toSvgX(meet.x)}
+                      y1={toSvgY(leftHinge.y)}
+                      y2={toSvgY(meet.y - normalY * swingOffset)}
+                    />
+                    <line
+                      stroke={detailColor}
+                      strokeWidth={detailStrokeWidth}
+                      vectorEffect="non-scaling-stroke"
+                      x1={toSvgX(rightHinge.x)}
+                      x2={toSvgX(meet.x)}
+                      y1={toSvgY(rightHinge.y)}
+                      y2={toSvgY(meet.y + normalY * swingOffset)}
+                    />
+                  </>
+                )
+              }
+
+              const hingeOnLeft = (opening.hingesSide ?? 'left') === 'left'
+              const hinge = hingeOnLeft ? centerStart : centerEnd
+              const strike = hingeOnLeft ? centerEnd : centerStart
+              const swingOffset = panelNormalHalf * (0.2 + windowOpenAmount * 1.3)
+              return (
+                <line
+                  stroke={detailColor}
+                  strokeWidth={detailStrokeWidth}
+                  vectorEffect="non-scaling-stroke"
+                  x1={toSvgX(hinge.x)}
+                  x2={toSvgX(strike.x + normalX * swingOffset)}
+                  y1={toSvgY(hinge.y)}
+                  y2={toSvgY(strike.y + normalY * swingOffset)}
+                />
+              )
+            }
+
+            if (windowType === 'awning' || windowType === 'hopper') {
+              const swingDown =
+                windowType === 'hopper' || (opening.awningDirection ?? 'up') === 'down'
+              const hingeMid = swingDown
+                ? {
+                    x: (insetOuterStart.x + insetOuterEnd.x) / 2,
+                    y: (insetOuterStart.y + insetOuterEnd.y) / 2,
+                  }
+                : {
+                    x: (insetInnerStart.x + insetInnerEnd.x) / 2,
+                    y: (insetInnerStart.y + insetInnerEnd.y) / 2,
+                  }
+              const openEdgeMid = swingDown
+                ? {
+                    x: (insetInnerStart.x + insetInnerEnd.x) / 2,
+                    y:
+                      (insetInnerStart.y + insetInnerEnd.y) / 2 -
+                      normalY * panelNormalHalf * windowOpenAmount,
+                  }
+                : {
+                    x: (insetOuterStart.x + insetOuterEnd.x) / 2,
+                    y:
+                      (insetOuterStart.y + insetOuterEnd.y) / 2 +
+                      normalY * panelNormalHalf * windowOpenAmount,
+                  }
+              const openEdgeMidAdjusted = {
+                x:
+                  openEdgeMid.x +
+                  normalX * panelNormalHalf * windowOpenAmount * (swingDown ? -1 : 1),
+                y: openEdgeMid.y,
+              }
+              return (
+                <>
+                  <line
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(hingeMid.x - tangentX * innerSpan * 0.22)}
+                    x2={toSvgX(hingeMid.x + tangentX * innerSpan * 0.22)}
+                    y1={toSvgY(hingeMid.y - tangentY * innerSpan * 0.22)}
+                    y2={toSvgY(hingeMid.y + tangentY * innerSpan * 0.22)}
+                  />
+                  <line
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(hingeMid.x)}
+                    x2={toSvgX(openEdgeMidAdjusted.x)}
+                    y1={toSvgY(hingeMid.y)}
+                    y2={toSvgY(openEdgeMidAdjusted.y)}
+                  />
+                </>
+              )
+            }
+
+            if (windowType === 'single-hung' || windowType === 'double-hung') {
+              const travelOffset = normalLength * 0.18 * windowOpenAmount
+              const splitOffset = normalLength * 0.02
+              const topRailStart = {
+                x:
+                  innerCenterX -
+                  tangentX * innerSpan * 0.34 -
+                  normalX * (splitOffset + (windowType === 'double-hung' ? -travelOffset : 0)),
+                y:
+                  innerCenterY -
+                  tangentY * innerSpan * 0.34 -
+                  normalY * (splitOffset + (windowType === 'double-hung' ? -travelOffset : 0)),
+              }
+              const topRailEnd = {
+                x:
+                  innerCenterX +
+                  tangentX * innerSpan * 0.34 -
+                  normalX * (splitOffset + (windowType === 'double-hung' ? -travelOffset : 0)),
+                y:
+                  innerCenterY +
+                  tangentY * innerSpan * 0.34 -
+                  normalY * (splitOffset + (windowType === 'double-hung' ? -travelOffset : 0)),
+              }
+              const bottomRailStart = {
+                x:
+                  innerCenterX -
+                  tangentX * innerSpan * 0.34 +
+                  normalX * (splitOffset + travelOffset),
+                y:
+                  innerCenterY -
+                  tangentY * innerSpan * 0.34 +
+                  normalY * (splitOffset + travelOffset),
+              }
+              const bottomRailEnd = {
+                x:
+                  innerCenterX +
+                  tangentX * innerSpan * 0.34 +
+                  normalX * (splitOffset + travelOffset),
+                y:
+                  innerCenterY +
+                  tangentY * innerSpan * 0.34 +
+                  normalY * (splitOffset + travelOffset),
+              }
+              return (
+                <>
+                  <line
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(topRailStart.x)}
+                    x2={toSvgX(topRailEnd.x)}
+                    y1={toSvgY(topRailStart.y)}
+                    y2={toSvgY(topRailEnd.y)}
+                  />
+                  <line
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(bottomRailStart.x)}
+                    x2={toSvgX(bottomRailEnd.x)}
+                    y1={toSvgY(bottomRailStart.y)}
+                    y2={toSvgY(bottomRailEnd.y)}
+                  />
+                  {windowType === 'single-hung' ? (
+                    <line
+                      stroke={detailColor}
+                      strokeWidth={detailStrokeWidth}
+                      vectorEffect="non-scaling-stroke"
+                      x1={toSvgX(bottomRailStart.x + normalX * panelNormalHalf)}
+                      x2={toSvgX(bottomRailEnd.x + normalX * panelNormalHalf)}
+                      y1={toSvgY(bottomRailStart.y + normalY * panelNormalHalf)}
+                      y2={toSvgY(bottomRailEnd.y + normalY * panelNormalHalf)}
+                    />
+                  ) : null}
+                </>
+              )
+            }
+
+            if (windowType === 'louvered') {
+              return (
+                <>
+                  {[0.2, 0.4, 0.6, 0.8].map((ratio) => {
+                    const anchor = {
+                      x: centerStart.x + (centerEnd.x - centerStart.x) * ratio,
+                      y: centerStart.y + (centerEnd.y - centerStart.y) * ratio,
+                    }
+                    return (
+                      <line
+                        key={`${opening.id}-louver-${ratio}`}
+                        stroke={detailColor}
+                        strokeWidth={detailStrokeWidth}
+                        vectorEffect="non-scaling-stroke"
+                        x1={toSvgX(
+                          anchor.x -
+                            tangentX * innerSpan * 0.18 -
+                            normalX * panelNormalHalf * (1 - windowOpenAmount * 0.6),
+                        )}
+                        x2={toSvgX(
+                          anchor.x +
+                            tangentX * innerSpan * 0.18 +
+                            normalX * panelNormalHalf * (1 + windowOpenAmount * 0.8),
+                        )}
+                        y1={toSvgY(
+                          anchor.y -
+                            tangentY * innerSpan * 0.18 -
+                            normalY * panelNormalHalf * (1 - windowOpenAmount * 0.6),
+                        )}
+                        y2={toSvgY(
+                          anchor.y +
+                            tangentY * innerSpan * 0.18 +
+                            normalY * panelNormalHalf * (1 + windowOpenAmount * 0.8),
+                        )}
+                      />
+                    )
+                  })}
+                </>
+              )
+            }
+
+            if (windowType === 'bay' || windowType === 'bow') {
+              return (
+                <>
+                  <line
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(centerStart.x)}
+                    x2={toSvgX(innerCenterX)}
+                    y1={toSvgY(centerStart.y)}
+                    y2={toSvgY(innerCenterY + normalY * panelNormalHalf)}
+                  />
+                  <line
+                    stroke={detailColor}
+                    strokeWidth={detailStrokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    x1={toSvgX(centerEnd.x)}
+                    x2={toSvgX(innerCenterX)}
+                    y1={toSvgY(centerEnd.y)}
+                    y2={toSvgY(innerCenterY - normalY * panelNormalHalf)}
+                  />
+                </>
+              )
+            }
+
+            return (
+              <>
+                <line
+                  stroke={detailColor}
+                  strokeWidth={detailStrokeWidth}
+                  vectorEffect="non-scaling-stroke"
+                  x1={toSvgX(centerStart.x)}
+                  x2={toSvgX(centerEnd.x)}
+                  y1={toSvgY(centerStart.y)}
+                  y2={toSvgY(centerEnd.y)}
+                />
+                {[0.25, 0.5, 0.75].map((ratio) => {
+                  const topPoint = {
+                    x: insetInnerStart.x + (insetInnerEnd.x - insetInnerStart.x) * ratio,
+                    y: insetInnerStart.y + (insetInnerEnd.y - insetInnerStart.y) * ratio,
+                  }
+                  const bottomPoint = {
+                    x: insetOuterStart.x + (insetOuterEnd.x - insetOuterStart.x) * ratio,
+                    y: insetOuterStart.y + (insetOuterEnd.y - insetOuterStart.y) * ratio,
+                  }
+                  const midPoint = {
+                    x: (topPoint.x + bottomPoint.x) / 2,
+                    y: (topPoint.y + bottomPoint.y) / 2,
+                  }
+                  const mullionHalf = normalLength * 0.18
+
+                  return (
+                    <line
+                      key={`${opening.id}-mullion-${ratio}`}
+                      stroke={detailColor}
+                      strokeWidth={detailStrokeWidth}
+                      vectorEffect="non-scaling-stroke"
+                      x1={toSvgX(midPoint.x - normalX * mullionHalf)}
+                      x2={toSvgX(midPoint.x + normalX * mullionHalf)}
+                      y1={toSvgY(midPoint.y - normalY * mullionHalf)}
+                      y2={toSvgY(midPoint.y + normalY * mullionHalf)}
+                    />
+                  )
+                })}
+              </>
+            )
+          })()
 
           if (opening.openingKind === 'opening') {
             const detailInset = Math.min(tangentLength * 0.14, 0.18)
@@ -5102,53 +5473,12 @@ const FloorplanGeometryLayer = memo(function FloorplanGeometryLayer({
               />
               <polygon
                 fill="none"
-                points={formatPolygonPoints([
-                  insetInnerStart,
-                  insetInnerEnd,
-                  insetOuterEnd,
-                  insetOuterStart,
-                ])}
+                points={innerPolygonPoints}
                 stroke={isDeleteHovered ? palette.deleteStroke : symbolStroke}
                 strokeWidth={innerStrokeWidth}
                 vectorEffect="non-scaling-stroke"
               />
-              <line
-                stroke={isDeleteHovered ? palette.deleteStroke : symbolStroke}
-                strokeWidth={detailStrokeWidth}
-                vectorEffect="non-scaling-stroke"
-                x1={toSvgX(centerStart.x)}
-                x2={toSvgX(centerEnd.x)}
-                y1={toSvgY(centerStart.y)}
-                y2={toSvgY(centerEnd.y)}
-              />
-              {[0.25, 0.5, 0.75].map((ratio) => {
-                const topPoint = {
-                  x: insetInnerStart.x + (insetInnerEnd.x - insetInnerStart.x) * ratio,
-                  y: insetInnerStart.y + (insetInnerEnd.y - insetInnerStart.y) * ratio,
-                }
-                const bottomPoint = {
-                  x: insetOuterStart.x + (insetOuterEnd.x - insetOuterStart.x) * ratio,
-                  y: insetOuterStart.y + (insetOuterEnd.y - insetOuterStart.y) * ratio,
-                }
-                const midPoint = {
-                  x: (topPoint.x + bottomPoint.x) / 2,
-                  y: (topPoint.y + bottomPoint.y) / 2,
-                }
-                const mullionHalf = normalLength * 0.18
-
-                return (
-                  <line
-                    key={`${opening.id}-mullion-${ratio}`}
-                    stroke={isDeleteHovered ? palette.deleteStroke : symbolStroke}
-                    strokeWidth={detailStrokeWidth}
-                    vectorEffect="non-scaling-stroke"
-                    x1={toSvgX(midPoint.x - normalX * mullionHalf)}
-                    x2={toSvgX(midPoint.x + normalX * mullionHalf)}
-                    y1={toSvgY(midPoint.y - normalY * mullionHalf)}
-                    y2={toSvgY(midPoint.y + normalY * mullionHalf)}
-                  />
-                )
-              })}
+              {windowTypeDetails}
               {isSelected ? (
                 <>
                   <circle
