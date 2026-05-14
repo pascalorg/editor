@@ -17,7 +17,7 @@ bun install
 bun dev
 ```
 
-The editor will be running at **http://localhost:3000**. That's it!
+The editor will be running at **http://localhost:3002**. That's it!
 
 ### Optional
 
