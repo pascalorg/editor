@@ -10,6 +10,7 @@ import {
   FenceNode,
   generateId,
   ItemNode,
+  isRegistrySelectable,
   RoofSegmentNode,
   type SlabNode,
   SpawnNode,
@@ -78,7 +79,12 @@ export function FloatingActionMenu() {
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
-  const isValidType = node ? ALLOWED_TYPES.includes(node.type) : false
+  // ALLOWED_TYPES is the hardcoded set; registry-driven kinds (any
+  // NodeDefinition with `capabilities.selectable`) get the floating menu
+  // by default too. Phase 4 collapses these into a single registry check.
+  const isValidType = node
+    ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
+    : false
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {

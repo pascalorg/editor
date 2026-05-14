@@ -7,7 +7,9 @@ import {
   emitter,
   type FenceNode,
   getMaterialPresetByRef,
+  getSelectableKinds,
   type ItemNode,
+  isRegistrySelectable,
   type NodeEvent,
   type RoofEvent,
   type RoofNode,
@@ -576,7 +578,6 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'roof-segment',
       'stair',
       'stair-segment',
-      'shelf',
       'spawn',
       'window',
       'door',
@@ -649,6 +650,11 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       }
       if (node.type === 'window' || node.type === 'door') return true
 
+      // Registry-driven: any kind whose NodeDefinition declares the
+      // `selectable` capability is also selectable in structure phase. Phase 4
+      // makes this the only path and deletes the hardcoded chain above.
+      if (isRegistrySelectable(node.type)) return true
+
       return false
     },
   },
@@ -705,7 +711,10 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'stair-segment' ||
     node.type === 'spawn' ||
     node.type === 'window' ||
-    node.type === 'door'
+    node.type === 'door' ||
+    // Registry-driven kinds default to structure/elements (Phase 4 reads
+    // `definition.presentation.paletteSection` to route correctly).
+    isRegistrySelectable(node.type)
   ) {
     return {
       phase: 'structure',
@@ -1013,20 +1022,26 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
-      'shelf',
       'window',
       'door',
       'zone',
     ] as const
 
-    for (const type of allTypes) {
+    // Registry-driven kinds get the same subscriptions as the hardcoded list,
+    // so future built-in nodes don't need to edit allTypes per migration.
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    for (const type of subscribedKinds) {
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:click` as any, onClick as any)
     }
 
     return () => {
-      for (const type of allTypes) {
+      for (const type of subscribedKinds) {
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:click` as any, onClick as any)
@@ -1185,12 +1200,18 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
-      'shelf',
       'spawn',
       'window',
       'door',
     ]
-    allTypes.forEach((type) => {
+    // Registry-driven kinds get the same subscriptions as the hardcoded list,
+    // so future built-in nodes don't need to edit allTypes per migration.
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    subscribedKinds.forEach((type) => {
       emitter.on(`${type}:click` as any, onClick as any)
     })
 
@@ -1211,7 +1232,7 @@ export const SelectionManager = () => {
     emitter.on('grid:click', onGridClick)
 
     return () => {
-      allTypes.forEach((type) => {
+      subscribedKinds.forEach((type) => {
         emitter.off(`${type}:click` as any, onClick as any)
       })
       emitter.off('grid:click', onGridClick)
@@ -1337,21 +1358,25 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
-      'shelf',
       'spawn',
       'window',
       'door',
       'zone',
       'site',
     ]
-    allTypes.forEach((type) => {
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    subscribedKinds.forEach((type) => {
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:double-click` as any, onDoubleClick as any)
     })
 
     return () => {
-      allTypes.forEach((type) => {
+      subscribedKinds.forEach((type) => {
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
@@ -1412,21 +1437,25 @@ export const SelectionManager = () => {
       'roof-segment',
       'stair',
       'stair-segment',
-      'shelf',
       'spawn',
       'window',
       'door',
       'zone',
     ] as const
 
-    for (const type of allTypes) {
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    for (const type of subscribedKinds) {
       emitter.on(`${type}:click` as any, onClick as any)
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
     }
 
     return () => {
-      for (const type of allTypes) {
+      for (const type of subscribedKinds) {
         emitter.off(`${type}:click` as any, onClick as any)
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)

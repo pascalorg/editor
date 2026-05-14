@@ -57,6 +57,34 @@ export function registerNode(def: AnyNodeDefinition): void {
   nodeRegistry._register(def)
 }
 
+/**
+ * Returns the set of registered kinds whose definition declares the
+ * `selectable` capability. Callers that maintain hardcoded "selectable kinds"
+ * lists (SelectionManager, FloatingActionMenu) should concat this with their
+ * legacy entries instead of editing the hardcoded list per migration.
+ *
+ * Phase 6 deletes the hardcoded lists entirely and uses this function as the
+ * single source of truth. For now it's additive over the legacy lists so the
+ * existing kinds keep working unchanged.
+ */
+export function getSelectableKinds(): string[] {
+  const result: string[] = []
+  for (const [kind, def] of nodeRegistry.entries()) {
+    if (def.capabilities.selectable !== undefined) {
+      result.push(kind)
+    }
+  }
+  return result
+}
+
+/**
+ * Returns true when the kind is declared selectable in the registry. Use
+ * in expression chains like `if (node.type === 'wall' || isRegistrySelectable(node.type))`.
+ */
+export function isRegistrySelectable(kind: string): boolean {
+  return nodeRegistry.get(kind)?.capabilities.selectable !== undefined
+}
+
 export async function loadPlugin(plugin: Plugin): Promise<void> {
   if (plugin.apiVersion !== HOST_API_VERSION) {
     throw new Error(
