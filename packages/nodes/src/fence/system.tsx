@@ -1,7 +1,6 @@
 'use client'
 
 import { FenceSystem } from '@pascal-app/viewer'
-import { useEffect } from 'react'
 
 /**
  * Registry-driven fence system bundle.
@@ -10,8 +9,7 @@ import { useEffect } from 'react'
  * via `RegisteredSystems` when fence is registry-driven. The legacy
  * `<LegacySystem kind="fence">` wrapper around `<FenceSystem />` in
  * `viewer/components/viewer/index.tsx` short-circuits whenever
- * `nodeRegistry.has('fence')` is true — same pattern wall used in
- * milestone B.
+ * `nodeRegistry.has('fence')` is true — same pattern wall uses.
  *
  * Phase 6 deletes the legacy mount point; until then this bundle is the
  * single mount surface for fence's per-frame work when registry-driven.
@@ -22,13 +20,6 @@ import { useEffect } from 'react'
  * the rebuild loop and this bundle can be deleted.
  */
 const FenceSystems = () => {
-  useEffect(() => {
-    console.info('[fence:registry] system bundle mounted — registry path active')
-    return () => {
-      console.info('[fence:registry] system bundle unmounted')
-    }
-  }, [])
-
   return <FenceSystem />
 }
 

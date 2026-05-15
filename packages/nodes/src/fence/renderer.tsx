@@ -2,7 +2,7 @@
 
 import { type FenceNode, useRegistry, useScene } from '@pascal-app/core'
 import { DEFAULT_STAIR_MATERIAL, useNodeEvents } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 
 /**
@@ -17,8 +17,6 @@ import type { Mesh } from 'three'
  * Material is `DEFAULT_STAIR_MATERIAL` (legacy reuse; fence and stairs
  * share the wood-tone preset).
  */
-let didLogFirstRegistryFenceMount = false
-
 const FenceRenderer = ({ node }: { node: FenceNode }) => {
   const ref = useRef<Mesh>(null!)
   const handlers = useNodeEvents(node, 'fence')
@@ -28,14 +26,6 @@ const FenceRenderer = ({ node }: { node: FenceNode }) => {
   useLayoutEffect(() => {
     useScene.getState().markDirty(node.id)
   }, [node.id])
-
-  useEffect(() => {
-    if (didLogFirstRegistryFenceMount) return
-    didLogFirstRegistryFenceMount = true
-    console.info(
-      '[fence:registry] first registry-driven FenceRenderer mounted — legacy FenceRenderer is NOT in use',
-    )
-  }, [])
 
   return (
     <mesh

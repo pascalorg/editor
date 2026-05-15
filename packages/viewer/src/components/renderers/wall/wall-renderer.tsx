@@ -5,12 +5,6 @@ import { useNodeEvents } from '../../../hooks/use-node-events'
 import { getVisibleWallMaterials } from '../../../systems/wall/wall-materials'
 import { NodeRenderer } from '../node-renderer'
 
-// Phase 3 verification — see the matching `[wall:registry]` log in
-// nodes/src/wall/renderer.tsx. When this fires, wall is on the legacy
-// path; the registry-driven WallRenderer is not in use. Drop alongside
-// the legacy file at Phase 6.
-let didLogFirstLegacyWallMount = false
-
 function createEmptyWallGeometry() {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute([], 3))
@@ -34,14 +28,6 @@ export const WallRenderer = ({ node }: { node: WallNode }) => {
   useLayoutEffect(() => {
     useScene.getState().markDirty(node.id)
   }, [node.id])
-
-  useEffect(() => {
-    if (didLogFirstLegacyWallMount) return
-    didLogFirstLegacyWallMount = true
-    console.info(
-      '[wall:legacy] first legacy WallRenderer mounted — registry-driven WallRenderer is NOT in use',
-    )
-  }, [])
 
   useEffect(() => {
     return () => {
