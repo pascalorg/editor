@@ -4,7 +4,18 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+// Phase 5 Stage D transitional exports — pure drafting / angle helpers
+// consumed by kind-owned drag actions in @pascal-app/nodes. Stage F
+// cleanup moves these into @pascal-app/nodes (fence/drafting.ts +
+// shared/segment-angle.ts) once every Stage D port is in.
+export { type FencePlanPoint, snapFenceDraftPoint } from './components/tools/fence/fence-drafting'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
+export {
+  formatAngleRadians,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from './components/tools/shared/segment-angle'
+export { isWallLongEnough } from './components/tools/wall/wall-drafting'
 export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
 export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'
@@ -36,7 +47,12 @@ export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
-export type { FloorplanSelectionTool, SplitOrientation, ViewMode } from './store/use-editor'
+export type {
+  FloorplanSelectionTool,
+  MovingFenceEndpoint,
+  SplitOrientation,
+  ViewMode,
+} from './store/use-editor'
 export { default as useEditor } from './store/use-editor'
 export {
   type PaletteView,

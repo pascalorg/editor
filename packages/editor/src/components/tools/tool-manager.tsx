@@ -58,18 +58,15 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
  * Returns null when the kind doesn't declare the affordance — caller
  * renders the legacy fallback in that case.
  */
-function getRegistryAffordanceTool(
-  kind: string,
-  affordance: string,
-): ComponentType<{ node: any }> | null {
+function getRegistryAffordanceTool(kind: string, affordance: string): ComponentType<any> | null {
   const def = nodeRegistry.get(kind)
   const loader = def?.affordanceTools?.[affordance]
   if (!loader) return null
   const cached = lazyToolCache.get(loader)
-  if (cached) return cached as ComponentType<{ node: any }>
-  const Comp = lazy(loader as () => Promise<{ default: ComponentType<{ node: any }> }>)
+  if (cached) return cached
+  const Comp = lazy(loader as () => Promise<{ default: ComponentType<any> }>)
   lazyToolCache.set(loader, Comp as unknown as ComponentType)
-  return Comp
+  return Comp as unknown as ComponentType<any>
 }
 
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
@@ -212,7 +209,20 @@ export const ToolManager: React.FC = () => {
           <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
         )}
         {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
-        {movingFenceEndpoint && <MoveFenceEndpointTool target={movingFenceEndpoint} />}
+        {movingFenceEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingFenceEndpoint.fence.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingFenceEndpoint} />
+              </Suspense>
+            ) : (
+              <MoveFenceEndpointTool target={movingFenceEndpoint} />
+            )
+          })()}
         {curvingWall && <CurveWallTool node={curvingWall} />}
         {curvingFence &&
           (() => {

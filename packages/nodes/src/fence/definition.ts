@@ -76,6 +76,10 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     // actions/curve.ts; this component is the React wrapper using
     // useDragAction + the cursor visuals.
     curve: () => import('./curve-tool'),
+    // Triggered by useEditor.movingFenceEndpoint. Pure logic in
+    // actions/move-endpoint.ts (linked-fence cascade, alt-detach,
+    // single-undo dance). Wrapper owns the angle label + detach badge.
+    'move-endpoint': () => import('./move-endpoint-tool'),
   },
 
   toolHints: [
