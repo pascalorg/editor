@@ -58,6 +58,13 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   parametrics: fenceParametrics,
 
+  // Stage D: kind-owned placement tool. Two-click flow (start → end)
+  // with live preview, length / angle HUD, snap to walls / fences /
+  // grid. Mounted by ToolManager when `useEditor.tool === 'fence'`
+  // via the registry's getRegistryTool() — falls back to the legacy
+  // tools[phase][tool] map when missing.
+  tool: () => import('./tool'),
+
   // Stage B: pure geometry function. Generic <GeometrySystem> rebuilds
   // on dirtyNodes; <ParametricNodeRenderer> mounts the empty group.
   // `renderer` + `system` fields dropped along with their files.

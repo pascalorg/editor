@@ -8,7 +8,11 @@ export {
 // consumed by kind-owned drag actions in @pascal-app/nodes. Stage F
 // cleanup moves these into @pascal-app/nodes (fence/drafting.ts +
 // shared/segment-angle.ts) once every Stage D port is in.
-export { type FencePlanPoint, snapFenceDraftPoint } from './components/tools/fence/fence-drafting'
+export {
+  createFenceOnCurrentLevel,
+  type FencePlanPoint,
+  snapFenceDraftPoint,
+} from './components/tools/fence/fence-drafting'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export {
   formatAngleRadians,
@@ -42,6 +46,9 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
+// Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
+export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { EDITOR_LAYER } from './lib/constants'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
