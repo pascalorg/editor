@@ -9,7 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
 /**
@@ -18,14 +18,22 @@ import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
  * For every node in the active level whose definition exposes
  * `def.floorplan`, builds a `GeometryContext`, calls the builder, and
  * emits the resulting SVG via `<FloorplanGeometryRenderer>`. Each entry
- * is wrapped in an interactive `<g>` that handles:
+ * is wrapped in an interactive `<g>` that handles **click → select**.
  *
- *  - **Click → select**. Sets `useViewer.selection.selectedIds = [id]`.
- *  - **Drag → move**. Pure imperative translation via the wrapping `<g>`'s
- *    transform attribute during drag; one `updateNode(id, { position })`
- *    call on pointerup. Same pattern as `MoveRegistryNodeTool` (the
- *    validated "smooth move" from Phase 2/3): no per-tick store update,
- *    no re-render storm, no zundo bloat. Only the dragged node mutates.
+ * Move and delete happen via the same flow as 3D: select sets
+ * `useViewer.selection`, the `<ParametricInspector>` opens with Move /
+ * Delete buttons, and the user enters move mode from there. Floor-plan
+ * cursor-driven placement for registry kinds (the "while in moving
+ * state, click in floor plan to place") is a follow-up — see the
+ * plan's Phase 4 follow-on section.
+ *
+ * Drag-to-move was prototyped here briefly but removed: the grab cursor
+ * + drag interaction model is inconsistent with the rest of the editor
+ * (3D doesn't drag, it uses select → Move button → cursor-driven
+ * placement) and the SVG coord conversion needs to route through the
+ * floor-plan scene `<g>` (legacy `floorplanSceneRef`) to account for
+ * pan/zoom transforms. Both warrant a proper port via the action menu
+ * + movingNode flow, not an inline drag in this layer.
  *
  * Coexists with the legacy `floorplan-panel.tsx` inline rendering —
  * unmigrated kinds keep their hand-written branches. As each kind ports
@@ -41,100 +49,14 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
 
-  // Drag state — tracks the active pointer drag across global pointermove
-  // / pointerup so the pointer can leave the dragged element without
-  // breaking the gesture. Imperative DOM updates avoid React re-renders;
-  // store update happens once on commit.
-  const dragRef = useRef<{
-    id: AnyNodeId
-    pointerId: number
-    startSvgX: number
-    startSvgY: number
-    originalPosition: [number, number, number]
-    element: SVGGElement
-    moved: boolean
-  } | null>(null)
-
-  const handlePointerDown = useCallback(
+  const handleSelect = useCallback(
     (id: AnyNodeId, event: React.PointerEvent<SVGGElement>) => {
       if (event.button !== 0) return
       event.stopPropagation()
-
-      const node = useScene.getState().nodes[id]
-      if (!node || typeof (node as { position?: unknown }).position === 'undefined') return
-      const position = (node as unknown as { position: [number, number, number] }).position
-      if (!Array.isArray(position) || position.length < 3) return
-
-      const svg = event.currentTarget.ownerSVGElement
-      if (!svg) return
-      const pt = svgPoint(svg, event.clientX, event.clientY)
-
       setSelection({ selectedIds: [id] })
-
-      dragRef.current = {
-        id,
-        pointerId: event.pointerId,
-        startSvgX: pt.x,
-        startSvgY: pt.y,
-        originalPosition: [position[0], position[1], position[2]],
-        element: event.currentTarget,
-        moved: false,
-      }
-      // Pause undo while we drag so the commit on pointerup lands as a
-      // single history step. Resume in the pointerup handler.
-      useScene.temporal.getState().pause()
     },
     [setSelection],
   )
-
-  // Global pointermove / pointerup so the drag survives the cursor
-  // leaving the entry's bounding box.
-  useEffect(() => {
-    const onMove = (event: PointerEvent) => {
-      const drag = dragRef.current
-      if (!drag || event.pointerId !== drag.pointerId) return
-      const svg = drag.element.ownerSVGElement
-      if (!svg) return
-      const pt = svgPoint(svg, event.clientX, event.clientY)
-      const dx = pt.x - drag.startSvgX
-      const dy = pt.y - drag.startSvgY
-      if (!drag.moved && (dx !== 0 || dy !== 0)) drag.moved = true
-      drag.element.setAttribute('transform', `translate(${dx} ${dy})`)
-    }
-
-    const onUp = (event: PointerEvent) => {
-      const drag = dragRef.current
-      if (!drag || event.pointerId !== drag.pointerId) return
-
-      // Clear the imperative override before committing; the store update
-      // will re-render the entry with the new position baked in via the
-      // builder, so the temporary transform is no longer needed.
-      drag.element.removeAttribute('transform')
-
-      if (drag.moved) {
-        const svg = drag.element.ownerSVGElement
-        if (svg) {
-          const pt = svgPoint(svg, event.clientX, event.clientY)
-          const dx = pt.x - drag.startSvgX
-          const dy = pt.y - drag.startSvgY
-          const [ox, oy, oz] = drag.originalPosition
-          useScene
-            .getState()
-            .updateNode(drag.id, { position: [ox + dx, oy, oz + dy] } as Partial<AnyNode>)
-        }
-      }
-
-      useScene.temporal.getState().resume()
-      dragRef.current = null
-    }
-
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [])
 
   const entries = useMemo(() => {
     if (!levelId) return []
@@ -180,8 +102,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             }
             data-node-id={id}
             key={id}
-            onPointerDown={(e) => handlePointerDown(id, e)}
-            style={{ cursor: 'grab' }}
+            onPointerDown={(e) => handleSelect(id, e)}
+            style={{ cursor: 'pointer' }}
           >
             <FloorplanGeometryRenderer geometry={geometry} />
             {isSelected && <SelectionOutline geometry={geometry} />}
@@ -206,16 +128,6 @@ function withSelectionStyle(g: FloorplanGeometry): FloorplanGeometry {
     return { ...g, children: g.children.map(withSelectionStyle) }
   }
   return { ...g, ...accent }
-}
-
-function svgPoint(svg: SVGSVGElement, clientX: number, clientY: number): { x: number; y: number } {
-  const pt = svg.createSVGPoint()
-  pt.x = clientX
-  pt.y = clientY
-  const ctm = svg.getScreenCTM()
-  if (!ctm) return { x: 0, y: 0 }
-  const transformed = pt.matrixTransform(ctm.inverse())
-  return { x: transformed.x, y: transformed.y }
 }
 
 function buildContext(node: AnyNode, nodes: Record<string, AnyNode>): GeometryContext {
