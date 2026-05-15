@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildDoorFloorplan } from './floorplan'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
 
@@ -12,16 +13,14 @@ import { DoorNode } from './schema'
  *    keeps legacy `MoveDoorTool`.
  *  - `selectable`, `duplicable`, `deletable` standard.
  *
- * Relations:
- *  - `parentId` references a wall — re-anchors on wall move (handled by
- *    `DoorSystem`'s cascade to parent wall).
- *  - `cascadeDelete: 'children'` — door has no children in v1.
- *
- * Renderer + system: wrap-export legacy `DoorRenderer` + bundle
- * `DoorSystem` + `DoorAnimationSystem`.
- *
- * Tool field absent: door placement / move tools wired through editor
- * state, not registry dispatch. Legacy DoorTool / MoveDoorTool continue.
+ * Stages:
+ *  - A: registered.
+ *  - B: deferred — door geometry (frame / leaf / glass / hardware /
+ *    segments) is ~800 lines in DoorSystem; extraction is a focused
+ *    session. `def.renderer` (wrap-export of legacy DoorRenderer) +
+ *    `def.system` (DoorSystem + DoorAnimationSystem bundle) hold parity.
+ *  - C: `def.floorplan` polygon sits in parent wall's cutout. Legacy
+ *    `openingPolygons` short-circuits door entries when registered.
  */
 export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
@@ -56,6 +55,9 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     // before wall mitering at 4).
     priority: 3,
   },
+  // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
+  // direction + perpendicular for the cutout footprint.
+  floorplan: buildDoorFloorplan,
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },

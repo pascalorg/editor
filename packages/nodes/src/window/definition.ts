@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildWindowFloorplan } from './floorplan'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
 
@@ -6,8 +7,12 @@ import { WindowNode } from './schema'
  * Window — Phase 5 batch kind. Mirrors door's shape: hosted on walls,
  * cuts holes in them, animated open/close state for opening windows.
  *
- * Capabilities: no `movable` (wall-bound drag is bespoke). Tool field
- * absent (legacy WindowTool / MoveWindowTool continue).
+ * Stages:
+ *  - A: registered.
+ *  - B: deferred — window geometry ~800 lines; extraction is a focused
+ *    session. `def.renderer` + `def.system` wrap-export legacy.
+ *  - C: `def.floorplan` polygon sits in parent wall's cutout. Legacy
+ *    `openingPolygons` short-circuits window entries when registered.
  */
 export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
@@ -39,6 +44,9 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     module: () => import('./system'),
     priority: 3,
   },
+  // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
+  // + thickness — same shape as door.
+  floorplan: buildWindowFloorplan,
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },

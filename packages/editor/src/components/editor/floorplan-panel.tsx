@@ -8486,19 +8486,21 @@ export function FloorplanPanel() {
       return [{ fence: displayFence, centerline, markerFrames, path }]
     })
   }, [fences, movingFloorplanNodeRevision])
-  const wallPolygons = useMemo(
-    () =>
-      walls.map((wall) => {
-        const floorplanWall = floorplanWallById.get(wall.id) ?? getFloorplanWall(wall)
-        const polygon = getWallPlanFootprint(floorplanWall, wallMiterData)
-        return {
-          points: formatPolygonPoints(polygon),
-          wall,
-          polygon,
-        }
-      }),
-    [floorplanWallById, wallMiterData, walls],
-  )
+  const wallPolygons = useMemo(() => {
+    // Wall migrated to def.floorplan (Phase 5 Stage C). When registered,
+    // FloorplanRegistryLayer renders the mitered wall polygon; this
+    // legacy path short-circuits. Removed entirely in Phase 6 cleanup.
+    if (nodeRegistry.has('wall')) return []
+    return walls.map((wall) => {
+      const floorplanWall = floorplanWallById.get(wall.id) ?? getFloorplanWall(wall)
+      const polygon = getWallPlanFootprint(floorplanWall, wallMiterData)
+      return {
+        points: formatPolygonPoints(polygon),
+        wall,
+        polygon,
+      }
+    })
+  }, [floorplanWallById, wallMiterData, walls])
   const displayWallPolygons = useMemo(() => {
     if (!(wallEndpointDraft || wallCurveDraft)) {
       return wallPolygons
@@ -8547,41 +8549,49 @@ export function FloorplanPanel() {
     )
   }, [displayWallById, wallCurveDraft, wallEndpointDraft, wallPolygons])
 
-  const openingsPolygons = useMemo(
-    () =>
-      openings.flatMap((opening) => {
-        const wall = displayFloorplanWallById.get(opening.parentId as WallNode['id'])
-        if (!wall) return []
-        const live = useLiveTransforms.getState().get(opening.id)
-        const displayOpening =
-          live &&
-          (movingNode?.type === 'door' || movingNode?.type === 'window') &&
-          movingNode.id === opening.id
-            ? {
-                ...opening,
-                position: [
-                  live.position[0],
-                  opening.position[1],
-                  live.position[2],
-                ] as typeof opening.position,
-                rotation: [
-                  opening.rotation[0],
-                  live.rotation,
-                  opening.rotation[2],
-                ] as typeof opening.rotation,
-              }
-            : opening
-        const polygon = getOpeningFootprint(wall, displayOpening)
-        return [
-          {
-            opening: displayOpening,
-            points: formatPolygonPoints(polygon),
-            polygon,
-          },
-        ]
-      }),
-    [displayFloorplanWallById, movingFloorplanNodeRevision, movingNode, openings],
-  )
+  const openingsPolygons = useMemo(() => {
+    // Doors + windows migrated to def.floorplan (Phase 5 Stage C). When
+    // both registered, FloorplanRegistryLayer renders each opening's
+    // polygon via its kind's builder; this legacy path short-circuits
+    // to avoid double-render. Filter per kind so a partial migration
+    // would still work.
+    const doorRegistered = nodeRegistry.has('door')
+    const windowRegistered = nodeRegistry.has('window')
+    if (doorRegistered && windowRegistered) return []
+    return openings.flatMap((opening) => {
+      if (doorRegistered && opening.type === 'door') return []
+      if (windowRegistered && opening.type === 'window') return []
+      const wall = displayFloorplanWallById.get(opening.parentId as WallNode['id'])
+      if (!wall) return []
+      const live = useLiveTransforms.getState().get(opening.id)
+      const displayOpening =
+        live &&
+        (movingNode?.type === 'door' || movingNode?.type === 'window') &&
+        movingNode.id === opening.id
+          ? {
+              ...opening,
+              position: [
+                live.position[0],
+                opening.position[1],
+                live.position[2],
+              ] as typeof opening.position,
+              rotation: [
+                opening.rotation[0],
+                live.rotation,
+                opening.rotation[2],
+              ] as typeof opening.rotation,
+            }
+          : opening
+      const polygon = getOpeningFootprint(wall, displayOpening)
+      return [
+        {
+          opening: displayOpening,
+          points: formatPolygonPoints(polygon),
+          polygon,
+        },
+      ]
+    })
+  }, [displayFloorplanWallById, movingFloorplanNodeRevision, movingNode, openings])
   const slabPolygons = useMemo(() => {
     // Slab migrated to def.floorplan (Phase 5 Stage C). When registered,
     // FloorplanRegistryLayer renders the slab polygon; this legacy
