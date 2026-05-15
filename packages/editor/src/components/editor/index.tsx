@@ -1158,6 +1158,11 @@ export default function Editor({
                       <HelperManager />
                     </div>
                   )}
+                  {isFirstPersonMode && (
+                    <FirstPersonOverlay
+                      onExit={() => useEditor.getState().setFirstPersonMode(false)}
+                    />
+                  )}
                   {viewerBanner}
                   {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
                 </>
@@ -1171,12 +1176,6 @@ export default function Editor({
             />
             <EditorCommands />
             <CommandPalette emptyAction={commandPaletteEmptyAction} />
-            {/* First-person overlay — rendered on top of normal layout */}
-            {isFirstPersonMode && (
-              <div className="pointer-events-none fixed inset-0 z-50">
-                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-              </div>
-            )}
           </>
         )}
       </PresetsProvider>
@@ -1231,13 +1230,10 @@ export default function Editor({
               <div className="pointer-events-auto">
                 <HelperManager />
               </div>
-            </ViewerOverlays>
-            {/* First-person overlay — rendered on top of normal layout */}
-            {isFirstPersonMode && (
-              <div className="pointer-events-none fixed inset-0 z-50">
+              {isFirstPersonMode && (
                 <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-              </div>
-            )}
+              )}
+            </ViewerOverlays>
           </>
         )}
       </div>
