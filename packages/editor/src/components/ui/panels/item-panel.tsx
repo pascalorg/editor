@@ -3,7 +3,7 @@
 import { type AnyNode, getScaledDimensions, ItemNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -16,7 +16,6 @@ import { PanelWrapper } from './panel-wrapper'
 export function ItemPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
@@ -26,18 +25,26 @@ export function ItemPanel() {
 
   const [uniformScale, setUniformScale] = useState(true)
 
+  // Panel slider-drag fix recipe (plans/editor-node-registry.md). Item
+  // panel has scale + position + rotation sliders — same Maximum update
+  // depth cascade risk as fence / wall / etc. without the nodeRef.
+  const nodeRef = useRef(node)
+  nodeRef.current = node
+
   const handleUpdate = useCallback(
     (updates: Partial<ItemNode>) => {
-      if (!(selectedId && node)) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      if (!selectedId) return
+      const n = nodeRef.current
+      if (!n) return
+      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
 
-      if (node.asset.attachTo === 'wall' && node.parentId) {
+      if (n.asset.attachTo === 'wall' && n.parentId) {
         requestAnimationFrame(() => {
-          useScene.getState().dirtyNodes.add(node.parentId as AnyNode['id'])
+          useScene.getState().dirtyNodes.add(n.parentId as AnyNode['id'])
         })
       }
     },
-    [selectedId, node, updateNode],
+    [selectedId],
   )
 
   const handleClose = useCallback(() => {

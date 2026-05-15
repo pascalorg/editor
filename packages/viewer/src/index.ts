@@ -12,6 +12,7 @@ export { CeilingRenderer } from './components/renderers/ceiling/ceiling-renderer
 // Each kind has a geometry system + animation system to mount via
 // RegisteredSystems when the kind is registry-driven.
 export { DoorRenderer } from './components/renderers/door/door-renderer'
+export { ItemRenderer } from './components/renderers/item/item-renderer'
 export { NodeRenderer } from './components/renderers/node-renderer'
 export { WindowRenderer } from './components/renderers/window/window-renderer'
 export { default as Viewer } from './components/viewer'
@@ -50,6 +51,11 @@ export { DoorSystem } from './systems/door/door-system'
 // alongside the legacy fence mount point.
 export { FenceSystem } from './systems/fence/fence-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
+// Item systems for the registry-driven item definition. ItemSystem
+// applies attachTo-driven transforms each frame; ItemLightSystem
+// manages item-mounted light sources.
+export { ItemSystem } from './systems/item/item-system'
+export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 // Slab system follows the wall + fence re-export pattern — composed into

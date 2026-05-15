@@ -2,6 +2,7 @@ import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { ceilingDefinition } from './ceiling'
 import { doorDefinition } from './door'
 import { fenceDefinition } from './fence'
+import { itemDefinition } from './item'
 import { shelfDefinition } from './shelf'
 import { slabDefinition } from './slab'
 import { spawnDefinition } from './spawn'
@@ -19,12 +20,12 @@ import { windowDefinition } from './window'
  * `loadPlugin` call path. This is intentional: the API is stress-tested
  * by built-ins before any third-party plugin lands.
  *
- * All four current kinds are registered unconditionally. Parity is
- * verified by comparing against deployed production rather than an
- * in-app env-var flag toggle. Legacy paths still exist in `viewer/` and
- * `editor/` for kinds undergoing migration; they short-circuit via the
- * Phase 0 `<LegacySystem>` wrapper + `NodeRenderer`'s registry-first
- * dispatch. Phase 6 deletes the legacy paths.
+ * All kinds are registered unconditionally. Parity is verified by
+ * comparing against deployed production rather than an in-app env-var
+ * flag toggle. Legacy paths still exist in `viewer/` and `editor/` for
+ * kinds undergoing migration; they short-circuit via the Phase 0
+ * `<LegacySystem>` wrapper + `NodeRenderer`'s registry-first dispatch.
+ * Phase 6 deletes the legacy paths.
  */
 export const builtinPlugin: Plugin = {
   id: 'pascal:core',
@@ -38,12 +39,14 @@ export const builtinPlugin: Plugin = {
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
     windowDefinition as unknown as AnyNodeDefinition,
+    itemDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
 export { ceilingDefinition } from './ceiling'
 export { doorDefinition } from './door'
 export { fenceDefinition } from './fence'
+export { itemDefinition } from './item'
 export { shelfDefinition } from './shelf'
 export { slabDefinition } from './slab'
 export { spawnDefinition } from './spawn'
