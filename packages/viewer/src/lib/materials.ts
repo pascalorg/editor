@@ -52,6 +52,18 @@ type TextureSlot =
   | 'emissiveMap'
 
 const SRGB_TEXTURE_SLOTS: TextureSlot[] = ['map', 'emissiveMap']
+const TEXTURE_SLOTS: TextureSlot[] = [
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'displacementMap',
+  'aoMap',
+  'bumpMap',
+  'alphaMap',
+  'lightMap',
+  'emissiveMap',
+]
 
 function getTextureChannel(slot?: TextureSlot): number {
   if (slot === 'aoMap' || slot === 'lightMap') {
@@ -88,6 +100,7 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   const repeatX = textureConfig.repeat?.[0] ?? textureConfig.scale ?? 1
   const repeatY = textureConfig.repeat?.[1] ?? textureConfig.scale ?? 1
   texture.repeat.set(repeatX, repeatY)
+  texture.updateMatrix()
   texture.colorSpace = THREE.SRGBColorSpace
 
   textureCache.set(cacheKey, texture)
@@ -110,6 +123,7 @@ function applyTextureProperties(
   texture.repeat.set(props.repeatX, props.repeatY)
   texture.rotation = props.rotation
   texture.flipY = props.flipY
+  texture.updateMatrix()
   texture.channel = getTextureChannel(slot)
   texture.colorSpace = SRGB_TEXTURE_SLOTS.includes(slot ?? 'map')
     ? THREE.SRGBColorSpace
@@ -139,6 +153,26 @@ function getPresetTexture(
   applyTextureProperties(texture, props, slot)
   textureCache.set(cacheKey, texture)
   return texture
+}
+
+function createAssignedTexture(
+  source: THREE.Texture,
+  props: MaterialMapProperties,
+  slot?: TextureSlot,
+): THREE.Texture {
+  const texture = source.clone()
+  return applyTextureProperties(texture, props, slot)
+}
+
+function applyTexturePropertiesToMaterial(
+  material: StandardMaterial,
+  props: MaterialMapProperties,
+) {
+  for (const slot of TEXTURE_SLOTS) {
+    const texture = material[slot]
+    if (!texture) continue
+    applyTextureProperties(texture, props, slot)
+  }
 }
 
 async function loadPresetTexture(
@@ -185,7 +219,8 @@ function queueTextureAssignment(
   const cacheKey = getPresetTextureCacheKey(path, props, slot)
   const cached = textureCache.get(cacheKey)
   if (cached) {
-    material[slot] = cached
+    material[slot] = createAssignedTexture(cached, props, slot)
+    material.needsUpdate = true
     return
   }
 
@@ -193,7 +228,7 @@ function queueTextureAssignment(
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return
-    material[slot] = texture
+    material[slot] = createAssignedTexture(texture, props, slot)
     material.needsUpdate = true
   })
 }
@@ -220,6 +255,7 @@ function applyMaterialMapProperties(
         ? THREE.BackSide
         : THREE.DoubleSide
   material.normalScale.set(mapProperties.normalScaleX, mapProperties.normalScaleY)
+  applyTexturePropertiesToMaterial(material, mapProperties)
   material.needsUpdate = true
 }
 
