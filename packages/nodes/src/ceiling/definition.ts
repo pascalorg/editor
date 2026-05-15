@@ -1,20 +1,23 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildCeilingFloorplan } from './floorplan'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
 
 /**
- * Ceiling — Phase 5 batch kind, polygon-based. Structurally identical
- * to slab but mounted at `height` rather than `elevation`.
+ * Ceiling — Phase 5 batch kind, polygon-based. Structurally similar to
+ * slab but with React-rendered hosted children + TSL shader materials +
+ * named meshes that other systems poke (`getObjectByName('ceiling-grid')`).
  *
- * Capabilities:
- *  - **No `movable`**: ceiling move is bespoke via legacy `MoveCeilingTool`
- *    + the floor-plan boundary / hole editors. Capability-driven dispatch
- *    keeps the legacy mover (preserves polygon-aware behavior).
- *  - **`surfaces.top`**: items host on the ceiling at `height`.
- *  - `selectable`, `duplicable`, `deletable` standard.
+ * **Stage B intentionally skipped**: pure `def.geometry` extraction
+ * would lose the React children rendering (hosted items) and the
+ * named-mesh structure. Ceiling keeps `def.renderer` as the custom
+ * escape hatch (per plans/editor-node-registry.md "custom-behavior
+ * escape hatch"). Renderer wraps the legacy CeilingRenderer; system
+ * wraps the legacy CeilingSystem.
  *
- * Relations: `hosts: ['item']` for ceiling-mounted items (lights, fans).
- * `cascadeDelete: 'descendants'` removes hosted items on ceiling delete.
+ * **Stage C completed**: `def.floorplan` builder draws the ceiling
+ * polygon as a dashed outline in floor plan; legacy `ceilingPolygons`
+ * short-circuits to [] when ceiling is registered.
  */
 export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   kind: 'ceiling',
@@ -59,6 +62,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     module: () => import('./system'),
     priority: 4,
   },
+  floorplan: buildCeilingFloorplan,
 
   toolHints: [
     { key: 'Left click', label: 'Trace ceiling outline' },

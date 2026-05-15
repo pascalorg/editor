@@ -1,34 +1,21 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildFenceFloorplan } from './floorplan'
+import { buildFenceGeometry } from './geometry'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
 
 /**
- * Fence — the first Phase 5 batch-migration kind.
+ * Fence — Phase 5 batch kind. Stage B complete: `def.geometry` drives
+ * the rebuild via the generic `<GeometrySystem>`; `<ParametricNodeRenderer>`
+ * mounts the empty group. No per-kind renderer or system file.
  *
- * What this definition encodes:
- *  - **Capabilities**: snappable (other walls/fences/items snap to it),
- *    surfaces (front + back faces host items), selectable, duplicable,
- *    deletable. No `movable` capability — fence move is bespoke
- *    endpoint-drag, same shape as wall (handled by legacy MoveFenceTool
- *    until the affordance port).
- *  - **Relations**: `linkedBy: 'endpoint-match'` for fence-corner cascade.
- *    No `hosts` field — doors/windows don't mount on fences. `affectsSpatial`
- *    omitted: moving a fence doesn't dirty slabs/zones in the legacy
- *    behavior, so the registry stays parity-equivalent until we
- *    explicitly add the cascade (separate decision).
- *  - **Parametrics**: dimensions, posts, style — see `./parametrics.ts`.
- *  - **toolHints**: placement panel hints for the fence-build tool.
- *  - **Renderer + system**: thin placeholder mesh + re-export of the
- *    legacy `FenceSystem`. Same shape as wall milestone B; future Phase 5+
- *    extracts the pure geometry function and migrates to `def.geometry`.
+ * Capabilities:
+ *  - **No `movable`**: fence move is bespoke endpoint-drag. Capability-
+ *    driven dispatch keeps the legacy MoveFenceTool until the
+ *    affordance port (Stage D).
+ *  - `surfaces.sides`, `selectable`, `duplicable`, `deletable` standard.
  *
- * Tool field stays absent: fence has 4 separate tools (build, curve,
- * move, move-endpoint) wired through editor state, not the registry
- * tool dispatch. They keep running unchanged until the affordance port.
- *
- * Migration is gated by `feature-flag.ts`
- * (env: `NEXT_PUBLIC_USE_REGISTRY_FOR_FENCE`). See
- * `plans/editor-node-registry.md#phase-5` for the batch order.
+ * Relations: `linkedBy: 'endpoint-match'` for corner cascade.
  */
 export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   kind: 'fence',
@@ -71,16 +58,15 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   parametrics: fenceParametrics,
 
-  renderer: {
-    kind: 'parametric',
-    module: () => import('./renderer'),
-  },
-  system: {
-    module: () => import('./system'),
-    // Same frame priority as the legacy FenceSystem (4 — runs after door/
-    // window animations at 2-3, before zone/level systems at 6+).
-    priority: 4,
-  },
+  // Stage B: pure geometry function. Generic <GeometrySystem> rebuilds
+  // on dirtyNodes; <ParametricNodeRenderer> mounts the empty group.
+  // `renderer` + `system` fields dropped along with their files.
+  geometry: buildFenceGeometry,
+  // Stage C: floor-plan rendering. FloorplanRegistryLayer iterates kinds
+  // with `floorplan` set and renders via FloorplanGeometryRenderer.
+  // Legacy `floorplanFenceEntries` short-circuits to [] when fence is
+  // registered (see floorplan-panel.tsx).
+  floorplan: buildFenceFloorplan,
 
   toolHints: [
     { key: 'Left click', label: 'Set fence start / end' },

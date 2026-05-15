@@ -1,29 +1,24 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildSlabFloorplan } from './floorplan'
+import { buildSlabGeometry } from './geometry'
 import { slabParametrics } from './parametrics'
 import { SlabNode } from './schema'
 
 /**
- * Slab — Phase 5 batch kind, polygon-based.
+ * Slab — Phase 5 batch kind, polygon-based. Stage B: `def.geometry`
+ * drives the rebuild via generic <GeometrySystem>; <ParametricNodeRenderer>
+ * mounts the empty group. No per-kind renderer or system file.
  *
  * Capabilities:
  *  - **No `movable`**: slab's "move" today is whole-slab translation via
  *    legacy `MoveSlabTool`, which integrates with the floor-plan boundary /
- *    hole editors. Per the capability-driven dispatch rule, omitting
- *    `movable` keeps the legacy mover (preserves polygon-aware behavior).
- *    Migration to the generic mover is possible in a later milestone if
- *    the legacy mover proves equivalent.
+ *    hole editors. Capability-driven dispatch keeps the legacy mover.
  *  - **`surfaces.top`**: items host on the slab top at `elevation`.
  *  - `selectable`, `duplicable`, `deletable` standard.
  *
  * Relations:
  *  - `hosts: ['item']` — items mount on the slab top.
  *  - `cascadeDelete: 'descendants'` — deleting a slab removes hosted items.
- *
- * Renderer + system: thin renderer + re-export of the legacy `SlabSystem`.
- * Same shape as wall / fence runtime port.
- *
- * Tool field absent: slab has 3 tools (slab-tool, boundary-editor, hole-
- * editor) wired through editor state, not registry dispatch.
  */
 export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   kind: 'slab',
@@ -59,14 +54,11 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   parametrics: slabParametrics,
 
-  renderer: {
-    kind: 'parametric',
-    module: () => import('./renderer'),
-  },
-  system: {
-    module: () => import('./system'),
-    priority: 4,
-  },
+  // Stage B: pure geometry function.
+  geometry: buildSlabGeometry,
+  // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
+  // to [] when slab is registered (see floorplan-panel.tsx).
+  floorplan: buildSlabFloorplan,
 
   toolHints: [
     { key: 'Left click', label: 'Trace slab outline' },

@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildSpawnFloorplan } from './floorplan'
 import { spawnParametrics } from './parametrics'
 import { SpawnNode } from './schema'
 
@@ -34,12 +35,14 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
-  // `floorplan: buildSpawnFloorplan` deferred — spawn already renders in
-  // the legacy floorplan-panel.tsx via `floorplanSpawnEntries`. Adding it
-  // here would double-render. The pure builder lives in
-  // ./floorplan.ts ready to wire when the legacy inline branch is
-  // removed (Phase 5 spawn-floorplan migration PR — same shape as the
-  // wall feature flag, but per kind in the legacy panel itself).
+  // Stage C migration: floor-plan rendering via def.floorplan.
+  // floorplan-panel.tsx's `floorplanSpawnEntries` short-circuits to []
+  // when `nodeRegistry.has('spawn')`, so this builder is the single
+  // path. FloorplanRegistryLayer renders + handles click-to-select;
+  // FloorplanRegistryActionMenu handles move / duplicate (disabled) /
+  // delete. Legacy spawn click handlers in FloorplanNodeLayer become
+  // dead code once Phase 6 cleanup removes the [] entries path.
+  floorplan: buildSpawnFloorplan,
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place spawn point' },

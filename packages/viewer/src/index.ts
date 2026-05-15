@@ -49,7 +49,7 @@ export { DoorSystem } from './systems/door/door-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.
-export { FenceSystem } from './systems/fence/fence-system'
+export { FenceSystem, generateFenceGeometry } from './systems/fence/fence-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 // Item systems for the registry-driven item definition. ItemSystem
 // applies attachTo-driven transforms each frame; ItemLightSystem
@@ -61,7 +61,7 @@ export { getRoofMaterialArray } from './systems/roof/roof-materials'
 // Slab system follows the wall + fence re-export pattern — composed into
 // the registry-driven slab definition's `def.system`. Removed in Phase 6
 // alongside the legacy slab mount point.
-export { SlabSystem } from './systems/slab/slab-system'
+export { generateSlabGeometry, SlabSystem } from './systems/slab/slab-system'
 export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'
 export { WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'

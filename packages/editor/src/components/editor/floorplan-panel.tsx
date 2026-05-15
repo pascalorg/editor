@@ -8440,49 +8440,52 @@ export function FloorplanPanel() {
 
     return hasPreviewWalls ? nextFloorplanWallById : floorplanWallById
   }, [displayWallById, floorplanWallById, wallCurveDraft, wallEndpointDraft])
-  const floorplanFenceEntries = useMemo(
-    () =>
-      fences.flatMap((fence) => {
-        const live = useLiveTransforms.getState().get(fence.id)
-        const fenceCenterX = (fence.start[0] + fence.end[0]) / 2
-        const fenceCenterZ = (fence.start[1] + fence.end[1]) / 2
-        const displayFence = live
-          ? {
-              ...fence,
-              start: [
-                fence.start[0] + (live.position[0] - fenceCenterX),
-                fence.start[1] + (live.position[2] - fenceCenterZ),
-              ] as typeof fence.start,
-              end: [
-                fence.end[0] + (live.position[0] - fenceCenterX),
-                fence.end[1] + (live.position[2] - fenceCenterZ),
-              ] as typeof fence.end,
-            }
-          : fence
-        const centerline = isCurvedWall(displayFence)
-          ? sampleWallCenterline(displayFence, 24)
-          : [
-              { x: displayFence.start[0], y: displayFence.start[1] },
-              { x: displayFence.end[0], y: displayFence.end[1] },
-            ]
-        const path = buildSvgPolylinePath(centerline)
-        if (!path) {
-          return []
-        }
-
-        const markerFrames = getFloorplanFenceMarkerTs(displayFence).map((t) => {
-          const frame = getWallCurveFrameAt(displayFence, t)
-
-          return {
-            angleDeg: (Math.atan2(frame.tangent.y, frame.tangent.x) * 180) / Math.PI,
-            point: frame.point,
+  const floorplanFenceEntries = useMemo(() => {
+    // Fence migrated to def.floorplan (Phase 5 Stage C). When registered,
+    // FloorplanRegistryLayer renders the fence polyline; this legacy
+    // path short-circuits to avoid double-render. Removed entirely in
+    // Phase 6 cleanup.
+    if (nodeRegistry.has('fence')) return []
+    return fences.flatMap((fence) => {
+      const live = useLiveTransforms.getState().get(fence.id)
+      const fenceCenterX = (fence.start[0] + fence.end[0]) / 2
+      const fenceCenterZ = (fence.start[1] + fence.end[1]) / 2
+      const displayFence = live
+        ? {
+            ...fence,
+            start: [
+              fence.start[0] + (live.position[0] - fenceCenterX),
+              fence.start[1] + (live.position[2] - fenceCenterZ),
+            ] as typeof fence.start,
+            end: [
+              fence.end[0] + (live.position[0] - fenceCenterX),
+              fence.end[1] + (live.position[2] - fenceCenterZ),
+            ] as typeof fence.end,
           }
-        })
+        : fence
+      const centerline = isCurvedWall(displayFence)
+        ? sampleWallCenterline(displayFence, 24)
+        : [
+            { x: displayFence.start[0], y: displayFence.start[1] },
+            { x: displayFence.end[0], y: displayFence.end[1] },
+          ]
+      const path = buildSvgPolylinePath(centerline)
+      if (!path) {
+        return []
+      }
 
-        return [{ fence: displayFence, centerline, markerFrames, path }]
-      }),
-    [fences, movingFloorplanNodeRevision],
-  )
+      const markerFrames = getFloorplanFenceMarkerTs(displayFence).map((t) => {
+        const frame = getWallCurveFrameAt(displayFence, t)
+
+        return {
+          angleDeg: (Math.atan2(frame.tangent.y, frame.tangent.x) * 180) / Math.PI,
+          point: frame.point,
+        }
+      })
+
+      return [{ fence: displayFence, centerline, markerFrames, path }]
+    })
+  }, [fences, movingFloorplanNodeRevision])
   const wallPolygons = useMemo(
     () =>
       walls.map((wall) => {
@@ -8579,33 +8582,36 @@ export function FloorplanPanel() {
       }),
     [displayFloorplanWallById, movingFloorplanNodeRevision, movingNode, openings],
   )
-  const slabPolygons = useMemo(
-    () =>
-      slabs.flatMap((slab) => {
-        const polygon = toFloorplanPolygon(slab.polygon)
-        if (polygon.length < 3) {
-          return []
-        }
+  const slabPolygons = useMemo(() => {
+    // Slab migrated to def.floorplan (Phase 5 Stage C). When registered,
+    // FloorplanRegistryLayer renders the slab polygon; this legacy
+    // path short-circuits to avoid double-render. Removed entirely in
+    // Phase 6 cleanup.
+    if (nodeRegistry.has('slab')) return []
+    return slabs.flatMap((slab) => {
+      const polygon = toFloorplanPolygon(slab.polygon)
+      if (polygon.length < 3) {
+        return []
+      }
 
-        const holes = (slab.holes ?? [])
-          .map((hole) => toFloorplanPolygon(hole))
-          .filter((hole) => hole.length >= 3)
-        const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
-        const visualHoles = holes
+      const holes = (slab.holes ?? [])
+        .map((hole) => toFloorplanPolygon(hole))
+        .filter((hole) => hole.length >= 3)
+      const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
+      const visualHoles = holes
 
-        return [
-          {
-            slab,
-            polygon,
-            holes,
-            visualPolygon,
-            visualHoles,
-            path: formatPolygonPath(visualPolygon, visualHoles),
-          },
-        ]
-      }),
-    [slabs],
-  )
+      return [
+        {
+          slab,
+          polygon,
+          holes,
+          visualPolygon,
+          visualHoles,
+          path: formatPolygonPath(visualPolygon, visualHoles),
+        },
+      ]
+    })
+  }, [slabs])
   const displaySlabPolygons = useMemo(() => {
     if (!(slabBoundaryDraft || slabHoleBoundaryDraft || slabHoleMoveDraft)) {
       return slabPolygons
@@ -8662,29 +8668,31 @@ export function FloorplanPanel() {
       return nextEntry
     })
   }, [slabBoundaryDraft, slabHoleBoundaryDraft, slabHoleMoveDraft, slabPolygons])
-  const ceilingPolygons = useMemo(
-    () =>
-      ceilings.flatMap((ceiling) => {
-        const polygon = toFloorplanPolygon(ceiling.polygon)
-        if (polygon.length < 3) {
-          return []
-        }
+  const ceilingPolygons = useMemo(() => {
+    // Ceiling migrated to def.floorplan (Phase 5 Stage C). When registered,
+    // FloorplanRegistryLayer renders the ceiling polygon; this legacy
+    // path short-circuits. Removed entirely in Phase 6 cleanup.
+    if (nodeRegistry.has('ceiling')) return []
+    return ceilings.flatMap((ceiling) => {
+      const polygon = toFloorplanPolygon(ceiling.polygon)
+      if (polygon.length < 3) {
+        return []
+      }
 
-        const holes = (ceiling.holes ?? [])
-          .map((hole) => toFloorplanPolygon(hole))
-          .filter((hole) => hole.length >= 3)
+      const holes = (ceiling.holes ?? [])
+        .map((hole) => toFloorplanPolygon(hole))
+        .filter((hole) => hole.length >= 3)
 
-        return [
-          {
-            ceiling,
-            polygon,
-            holes,
-            path: formatPolygonPath(polygon, holes),
-          },
-        ]
-      }),
-    [ceilings],
-  )
+      return [
+        {
+          ceiling,
+          polygon,
+          holes,
+          path: formatPolygonPath(polygon, holes),
+        },
+      ]
+    })
+  }, [ceilings])
   const displayCeilingPolygons = useMemo(() => {
     if (!(ceilingBoundaryDraft || ceilingHoleBoundaryDraft || ceilingHoleMoveDraft)) {
       return ceilingPolygons
@@ -8802,24 +8810,28 @@ export function FloorplanPanel() {
       ),
     [levelDescendantNodes],
   )
-  const floorplanSpawnEntries = useMemo<FloorplanSpawnEntry[]>(
-    () =>
-      spawns
-        .filter((spawn) => spawn.visible !== false)
-        .map((spawn) => {
-          const live = useLiveTransforms.getState().get(spawn.id)
-
-          return {
-            spawn,
-            position: {
-              x: live?.position[0] ?? spawn.position[0],
-              y: live?.position[2] ?? spawn.position[2],
-            },
-            rotation: live?.rotation ?? spawn.rotation,
-          }
-        }),
-    [movingFloorplanNodeRevision, spawns],
-  )
+  const floorplanSpawnEntries = useMemo<FloorplanSpawnEntry[]>(() => {
+    // Spawn migrated to the registry-driven floor-plan layer (Phase 5
+    // Stage C). When registered, FloorplanRegistryLayer renders the
+    // spawn marker via def.floorplan; FloorplanRegistryActionMenu
+    // handles select / move / delete. Returning [] here skips the
+    // legacy rendering + action menu paths to avoid double-render.
+    // Removed entirely in Phase 6 cleanup.
+    if (nodeRegistry.has('spawn')) return []
+    return spawns
+      .filter((spawn) => spawn.visible !== false)
+      .map((spawn) => {
+        const live = useLiveTransforms.getState().get(spawn.id)
+        return {
+          spawn,
+          position: {
+            x: live?.position[0] ?? spawn.position[0],
+            y: live?.position[2] ?? spawn.position[2],
+          },
+          rotation: live?.rotation ?? spawn.rotation,
+        }
+      })
+  }, [movingFloorplanNodeRevision, spawns])
   const floorplanItemEntries = useMemo(() => {
     const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
 
