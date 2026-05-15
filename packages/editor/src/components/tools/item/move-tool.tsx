@@ -103,13 +103,22 @@ export const MoveTool: React.FC<{
 
   if (!movingNode) return null
 
-  // Registry-first dispatch. Any kind registered via @pascal-app/nodes
-  // gets the imperative MoveRegistryNodeTool (smooth, framerate-locked
-  // motion via sceneRegistry — see plan: "Validated patterns from the
-  // spike"). The legacy per-kind movers below are short-circuited for
-  // any kind in the registry — that's how Phase 5 will progressively
-  // delete them as kinds migrate.
-  if (nodeRegistry.has(movingNode.type)) {
+  // Capability-driven dispatch. A registered kind opts INTO the generic
+  // mover by declaring `capabilities.movable` — that's the "I'm a simple
+  // translate-on-the-X/Z-plane node" signal (shelf, spawn, future
+  // single-position items). Kinds with bespoke move semantics (wall
+  // endpoint drag + linked-wall corner cascade + ALT-detach, fence
+  // endpoint drag + curve sagitta, slab polygon vertex edit, stair
+  // endpoint drag, etc.) deliberately OMIT `capabilities.movable` so
+  // this branch falls through to their legacy per-kind movers below.
+  //
+  // Without this guard, every registered kind would be force-routed
+  // through MoveRegistryNodeTool's "translate position" pattern,
+  // breaking wall / fence / slab / stair endpoint UX (the smart
+  // sims-style arrows that move the dragged endpoint while cascading
+  // to linked walls / re-anchoring hosted children / etc.).
+  const def = nodeRegistry.get(movingNode.type)
+  if (def?.capabilities?.movable) {
     return <MoveRegistryNodeTool node={movingNode} />
   }
 
