@@ -53,6 +53,14 @@ type TextureSlot =
 
 const SRGB_TEXTURE_SLOTS: TextureSlot[] = ['map', 'emissiveMap']
 
+function getTextureChannel(slot?: TextureSlot): number {
+  if (slot === 'aoMap' || slot === 'lightMap') {
+    return 2
+  }
+
+  return 0
+}
+
 function getCacheKey(props: MaterialProperties): string {
   return `${props.color}-${props.roughness}-${props.metalness}-${props.opacity}-${props.transparent}-${props.side}`
 }
@@ -102,6 +110,7 @@ function applyTextureProperties(
   texture.repeat.set(props.repeatX, props.repeatY)
   texture.rotation = props.rotation
   texture.flipY = props.flipY
+  texture.channel = getTextureChannel(slot)
   texture.colorSpace = SRGB_TEXTURE_SLOTS.includes(slot ?? 'map')
     ? THREE.SRGBColorSpace
     : THREE.NoColorSpace
