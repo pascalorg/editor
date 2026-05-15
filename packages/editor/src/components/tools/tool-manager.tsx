@@ -179,10 +179,31 @@ export const ToolManager: React.FC = () => {
         rotation={buildingRotation as [number, number, number]}
       >
         {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
-        {showSlabBoundaryEditor && selectedSlabId && <SlabBoundaryEditor slabId={selectedSlabId} />}
-        {showSlabHoleEditor && selectedSlabId && editingHole && (
-          <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
-        )}
+        {showSlabBoundaryEditor &&
+          selectedSlabId &&
+          (() => {
+            const Registry = getRegistryAffordanceTool('slab', 'boundary-edit')
+            return Registry ? (
+              <Suspense fallback={null}>
+                <Registry slabId={selectedSlabId} />
+              </Suspense>
+            ) : (
+              <SlabBoundaryEditor slabId={selectedSlabId} />
+            )
+          })()}
+        {showSlabHoleEditor &&
+          selectedSlabId &&
+          editingHole &&
+          (() => {
+            const Registry = getRegistryAffordanceTool('slab', 'hole-edit')
+            return Registry ? (
+              <Suspense fallback={null}>
+                <Registry holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
+              </Suspense>
+            ) : (
+              <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
+            )
+          })()}
         {showCeilingBoundaryEditor && selectedCeilingId && (
           <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
         )}

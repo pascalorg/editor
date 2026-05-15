@@ -14,6 +14,11 @@ export {
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
+// Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
+export {
+  PolygonEditor,
+  type PolygonEditorProps,
+} from './components/tools/shared/polygon-editor'
 export {
   formatAngleRadians,
   getAngleToSegmentReference,

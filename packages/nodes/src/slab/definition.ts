@@ -54,6 +54,19 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   parametrics: slabParametrics,
 
+  // Stage D: kind-owned placement tool. Multi-click polygon drawing
+  // with axis/45° snap (Shift to defeat).
+  tool: () => import('./tool'),
+
+  // Stage D: drag/edit affordances. Boundary editor + hole editor
+  // delegate to the shared `<PolygonEditor>`; move uses the single-
+  // undo dance for the polygon-translate commit.
+  affordanceTools: {
+    'boundary-edit': () => import('./boundary-editor'),
+    'hole-edit': () => import('./hole-editor'),
+    move: () => import('./move-tool'),
+  },
+
   // Stage B: pure geometry function.
   geometry: buildSlabGeometry,
   // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
