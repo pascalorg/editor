@@ -90,9 +90,28 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   parametrics: wallParametrics,
 
-  // No `geometry` / `renderer` / `system` / `tool` fields yet — see file
-  // header. Adding them registers wall via `builtinPlugin.nodes` and flips
-  // the dispatch shims; do that in milestone B once the runtime port lands.
+  // Wall's renderer is the thin placeholder-mesh mount point from milestone
+  // B; the system bundle composes the legacy `WallSystem` + `WallCutout`
+  // re-exported from viewer (so we don't duplicate ~970 lines of CSG /
+  // mitering / cutaway logic just to swap the dispatch). The legacy
+  // mount in `<LegacySystem kind="wall">` short-circuits the moment
+  // `nodeRegistry.has('wall')` is true.
+  //
+  // No `tool` yet — wall placement / endpoint drag / curve drag remain
+  // bespoke until the affordance port lands. Phase 0 shims keep the legacy
+  // wall tool running while wall is registered (it's not wired through the
+  // registry tool dispatch).
+  renderer: {
+    kind: 'parametric',
+    module: () => import('./renderer'),
+  },
+  system: {
+    module: () => import('./system'),
+    // Priority 4 mirrors the legacy WallSystem's useFrame priority — keeps
+    // miter cascade running after door/window animation systems (priority 2)
+    // but before zone/level systems that read wall positions.
+    priority: 4,
+  },
 
   presentation: {
     label: 'Wall',

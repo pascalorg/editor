@@ -1,3 +1,8 @@
+// `NodeRenderer` is the recursive dispatch component used by parent
+// renderers (wall renders doors/windows, slab renders hosted items).
+// Public so registry-driven kinds can compose children without reaching
+// into viewer's internal paths.
+export { NodeRenderer } from './components/renderers/node-renderer'
 export { default as Viewer } from './components/viewer'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
@@ -29,4 +34,10 @@ export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'
+export { WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
+// Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
+// definition can compose them into `def.system` without duplicating the
+// 800+ lines of CSG / mitering logic during Phase 3. These exports are
+// removed in Phase 6 when the legacy mount points are deleted.
+export { WallSystem } from './systems/wall/wall-system'
