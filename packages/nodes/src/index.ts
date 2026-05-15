@@ -1,6 +1,7 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { fenceDefinition } from './fence'
 import { shelfDefinition } from './shelf'
+import { slabDefinition } from './slab'
 import { spawnDefinition } from './spawn'
 import { wallDefinition } from './wall'
 
@@ -30,10 +31,12 @@ export const builtinPlugin: Plugin = {
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
+    slabDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
 export { fenceDefinition } from './fence'
 export { shelfDefinition } from './shelf'
+export { slabDefinition } from './slab'
 export { spawnDefinition } from './spawn'
 export { wallDefinition } from './wall'

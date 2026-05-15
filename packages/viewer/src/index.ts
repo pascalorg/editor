@@ -38,6 +38,10 @@ export { FenceSystem } from './systems/fence/fence-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
+// Slab system follows the wall + fence re-export pattern — composed into
+// the registry-driven slab definition's `def.system`. Removed in Phase 6
+// alongside the legacy slab mount point.
+export { SlabSystem } from './systems/slab/slab-system'
 export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'
 export { WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
