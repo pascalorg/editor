@@ -125,6 +125,7 @@ export {
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
+export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,

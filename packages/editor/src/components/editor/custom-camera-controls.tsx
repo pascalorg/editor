@@ -7,7 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer, ZONE_LAYER } from '@pascal-app/viewer'
+import { useViewer, WalkthroughControls, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -440,9 +440,9 @@ export const CustomCameraControls = () => {
   return (
     <CameraControls
       makeDefault
-      maxDistance={250}
+      maxDistance={100}
       maxPolarAngle={maxPolarAngle}
-      minDistance={2}
+      minDistance={10}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
       onRest={onRest}

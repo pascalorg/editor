@@ -1,6 +1,6 @@
 'use client'
 
-import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
+import { ElevatorOpeningSystem, ElevatorRuntimeSystem, StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
@@ -233,6 +233,7 @@ const Viewer: React.FC<ViewerProps> = ({
         <ElevatorRuntimeSystem />
         <ElevatorInteractionSystem />
         <ElevatorOpeningSystem />
+        <StairOpeningSystem />
         <WindowAnimationSystem />
         <DoorSystem />
         <FenceSystem />
