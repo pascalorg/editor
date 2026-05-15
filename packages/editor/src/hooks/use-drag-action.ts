@@ -42,6 +42,14 @@ export type UseDragActionArgs<Ctx, Draft> = {
   onCommit?: () => void
   /** Fires once after `action.cancel` (Esc, unmount, or commit-returns-false). */
   onCancel?: () => void
+  /**
+   * Milliseconds after activation during which `grid:click` is swallowed.
+   * Stops the very click that mounted this tool (a DOM button or 3D
+   * handle elsewhere) from cascading into the grid and immediately
+   * committing the drag. Defaults to 150ms — matches the legacy guard
+   * used by every kind-owned tool entered via a click.
+   */
+  activationGraceMs?: number
 }
 
 /**
@@ -72,12 +80,21 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
 
     session.start(argsRef.current.initial)
 
+    const activatedAt = Date.now()
+    const graceMs = argsRef.current.activationGraceMs ?? 150
+
     const onMove = (event: GridEvent) => {
       const point: readonly [number, number] = [event.localPosition[0], event.localPosition[2]]
       session.move(point, modifiersFromGridEvent(event))
     }
 
-    const onClick = (_event: GridEvent) => {
+    const onClick = (event: GridEvent) => {
+      // Swallow the click that mounted this tool — otherwise the very
+      // first grid:click cascades into commit() before any move().
+      if (Date.now() - activatedAt < graceMs) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
       session.commit()
     }
 

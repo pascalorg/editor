@@ -1,7 +1,7 @@
 'use client'
 
 import { type FenceNode, getWallMidpointHandlePoint, useScene } from '@pascal-app/core'
-import { CursorSphere, useDragAction, useEditor } from '@pascal-app/editor'
+import { CursorSphere, triggerSFX, useDragAction, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { curveFenceDragAction } from './actions/curve'
@@ -31,7 +31,8 @@ export const FenceCurveTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     initialHandle.y,
   ])
 
-  const exitCurveMode = () => {
+  const exitCurveMode = (committed: boolean) => {
+    if (committed) triggerSFX('sfx:item-place')
     useViewer.getState().setSelection({ selectedIds: [node.id] })
     useEditor.getState().setCurvingFence(null)
   }
@@ -46,8 +47,8 @@ export const FenceCurveTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       // placeholder until the first grid:move fires.
       point: [initialHandle.x, initialHandle.y],
     },
-    onCommit: exitCurveMode,
-    onCancel: exitCurveMode,
+    onCommit: () => exitCurveMode(true),
+    onCancel: () => exitCurveMode(false),
   })
 
   // Mirror the active curveOffset back into the cursor position. The
