@@ -242,10 +242,7 @@ function getLevelSlabs(levelId: string, nodes: ReturnType<typeof useScene.getSta
   )
 }
 
-function getLevelAutoSlabs(
-  levelId: string,
-  nodes: ReturnType<typeof useScene.getState>['nodes'],
-) {
+function getLevelAutoSlabs(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
   return getLevelSlabs(levelId, nodes).filter((slab) => slab.autoFromWalls)
 }
 

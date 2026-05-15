@@ -1,12 +1,12 @@
 import {
-  useInteractive,
-  useRegistry,
-  useScene,
   type AnimationEffect,
   type AnyNodeId,
   type Interactive,
   type ItemNode,
   type LightEffect,
+  useInteractive,
+  useRegistry,
+  useScene,
 } from '@pascal-app/core'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'

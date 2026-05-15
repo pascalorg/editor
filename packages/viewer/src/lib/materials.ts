@@ -1,10 +1,10 @@
 import {
   getMaterialPresetByRef,
-  resolveMaterial,
   type MaterialMapProperties,
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  resolveMaterial,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'

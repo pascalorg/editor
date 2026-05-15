@@ -8,7 +8,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
