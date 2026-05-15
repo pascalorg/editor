@@ -1,4 +1,5 @@
 import type { ItemNode as ItemNodeType, NodeDefinition } from '@pascal-app/core'
+import { buildItemFloorplan } from './floorplan'
 import { itemParametrics } from './parametrics'
 import { ItemNode } from './schema'
 
@@ -18,25 +19,17 @@ import { ItemNode } from './schema'
  *    placement. The smooth generic mover can't express that. Legacy
  *    mover keeps running via capability-driven dispatch.
  *  - `selectable`, `duplicable`, `deletable` standard.
- *  - Items have a catalog-defined `surface.height` (some items act as
- *    tables — they expose a surface other items stack on). For Stage A
- *    we don't surface this via `capabilities.surfaces.top` yet —
- *    legacy ItemSystem computes the stack y via spatial-grid lookups.
- *    Phase 5+ may surface it.
+ *
+ * Stages:
+ *  - A: registered.
+ *  - B: N/A — def.renderer escape hatch (GLB / useGLTF).
+ *  - C: `def.floorplan` resolves parent chain via `ctx.resolve`,
+ *    returns a rotated rectangle (width × depth). Mirrors the legacy
+ *    `getItemFloorplanTransform` math. Legacy `floorplanItemEntries`
+ *    short-circuits when item is registered.
  *
  * `toolHints`: matches the legacy ItemHelper UI (mouse / R / T / Shift /
- * Esc) — same panel the user sees during placement. Once item registers,
- * `HelperManager` consults `def.toolHints` and renders the
- * `RegisteredToolHelper` for placement (the legacy ItemHelper still
- * renders for movingNode state — that's a generic "you're moving
- * something" panel, not item-specific; Phase 5+ may deprecate it).
- *
- * Renderer + system: wrap-export of legacy ItemRenderer + bundle of
- * ItemSystem + ItemLightSystem.
- *
- * Tool field absent: catalog UI + item-tool placement flow stays on
- * editor state. Phase 5+ may port to `DragAction` once the registry's
- * catalog-aware affordances exist.
+ * Esc) — registry-driven placement panel.
  */
 export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   kind: 'item',
@@ -86,6 +79,9 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     // Same priority as the legacy ItemSystem.
     priority: 2,
   },
+  // Stage C: floor-plan polygon. ctx.resolve walks the parent chain
+  // (wall / nested item / level) to compute the world-space transform.
+  floorplan: buildItemFloorplan,
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },

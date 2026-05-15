@@ -8843,6 +8843,11 @@ export function FloorplanPanel() {
       })
   }, [movingFloorplanNodeRevision, spawns])
   const floorplanItemEntries = useMemo(() => {
+    // Item migrated to def.floorplan (Phase 5 Stage C). When registered,
+    // FloorplanRegistryLayer renders the item rectangle via the
+    // parent-chain transform walker; this legacy path short-circuits.
+    // Removed entirely in Phase 6 cleanup.
+    if (nodeRegistry.has('item')) return []
     const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
 
     return floorplanItems.flatMap((item) => {
