@@ -8,7 +8,12 @@
 // to duplicate at Stage A. Wrap-exported here, ported into the nodes
 // folder in a later stage.
 export { CeilingRenderer } from './components/renderers/ceiling/ceiling-renderer'
+// Door + window internals for registry-driven door / window definitions.
+// Each kind has a geometry system + animation system to mount via
+// RegisteredSystems when the kind is registry-driven.
+export { DoorRenderer } from './components/renderers/door/door-renderer'
 export { NodeRenderer } from './components/renderers/node-renderer'
+export { WindowRenderer } from './components/renderers/window/window-renderer'
 export { default as Viewer } from './components/viewer'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
@@ -38,6 +43,8 @@ export {
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
+export { DoorAnimationSystem } from './systems/door/door-animation-system'
+export { DoorSystem } from './systems/door/door-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.
@@ -57,3 +64,5 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
 export { WallSystem } from './systems/wall/wall-system'
+export { WindowAnimationSystem } from './systems/window/window-animation-system'
+export { WindowSystem } from './systems/window/window-system'

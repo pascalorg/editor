@@ -1,10 +1,12 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { ceilingDefinition } from './ceiling'
+import { doorDefinition } from './door'
 import { fenceDefinition } from './fence'
 import { shelfDefinition } from './shelf'
 import { slabDefinition } from './slab'
 import { spawnDefinition } from './spawn'
 import { wallDefinition } from './wall'
+import { windowDefinition } from './window'
 
 /**
  * Built-in plugin bundling every node kind shipped with the Pascal editor.
@@ -34,12 +36,16 @@ export const builtinPlugin: Plugin = {
     fenceDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
+    doorDefinition as unknown as AnyNodeDefinition,
+    windowDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
 export { ceilingDefinition } from './ceiling'
+export { doorDefinition } from './door'
 export { fenceDefinition } from './fence'
 export { shelfDefinition } from './shelf'
 export { slabDefinition } from './slab'
 export { spawnDefinition } from './spawn'
 export { wallDefinition } from './wall'
+export { windowDefinition } from './window'

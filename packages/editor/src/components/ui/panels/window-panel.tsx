@@ -93,7 +93,6 @@ const silllessWindowTypes = new Set<WindowNode['windowType']>(['bay', 'bow'])
 export function WindowPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const previewRef = useRef<{
@@ -108,9 +107,11 @@ export function WindowPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WindowNode | undefined) : undefined,
   )
 
+  // Panel slider-drag fix recipe (plans/editor-node-registry.md). Without
+  // it, the 15+ SliderControls in this panel would loop on drag.
   const handleUpdate = useCallback(
     (updates: Partial<WindowNode>) => {
-      if (!(selectedId && node)) return
+      if (!selectedId) return
       const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
       if (liveNode?.type !== 'window') return
 
@@ -120,12 +121,12 @@ export function WindowPanel() {
       })
       if (!hasChange) return
 
-      updateNode(selectedId as AnyNode['id'], updates)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
       const scene = useScene.getState()
       scene.dirtyNodes.add(selectedId as AnyNodeId)
       if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
     },
-    [selectedId, node, updateNode],
+    [selectedId],
   )
 
   const previewWindowUpdate = useCallback(
@@ -169,10 +170,12 @@ export function WindowPanel() {
       }
       previewRef.current = null
 
-      updateNode(selectedId as AnyNode['id'], { [key]: value } as Partial<WindowNode>)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], {
+        [key]: value,
+      } as Partial<WindowNode>)
       scene.dirtyNodes.add(selectedId as AnyNodeId)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleClose = useCallback(() => {

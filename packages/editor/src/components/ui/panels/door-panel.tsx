@@ -109,7 +109,6 @@ function isSameDoorValue(current: unknown, next: unknown): boolean {
 export function DoorPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const previewRef = useRef<{
@@ -124,9 +123,11 @@ export function DoorPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined,
   )
 
+  // Panel slider-drag fix recipe (plans/editor-node-registry.md). Without
+  // it, the 29+ SliderControls in this panel would loop on drag.
   const handleUpdate = useCallback(
     (updates: Partial<DoorNode>) => {
-      if (!(selectedId && node)) return
+      if (!selectedId) return
       const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
       if (liveNode?.type !== 'door') return
 
@@ -139,12 +140,12 @@ export function DoorPanel() {
       if ('operationState' in updates || 'swingAngle' in updates || 'doorType' in updates) {
         useInteractive.getState().removeDoorOpenState(selectedId as AnyNodeId)
       }
-      updateNode(selectedId as AnyNode['id'], updates)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
       const scene = useScene.getState()
       scene.dirtyNodes.add(selectedId as AnyNodeId)
       if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
     },
-    [selectedId, node, updateNode],
+    [selectedId],
   )
 
   const previewDoorUpdate = useCallback(
@@ -188,10 +189,10 @@ export function DoorPanel() {
       }
       previewRef.current = null
 
-      updateNode(selectedId as AnyNode['id'], { [key]: value } as Partial<DoorNode>)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], { [key]: value } as Partial<DoorNode>)
       scene.dirtyNodes.add(selectedId as AnyNodeId)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleClose = useCallback(() => {
