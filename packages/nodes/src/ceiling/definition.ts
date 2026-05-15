@@ -54,6 +54,19 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
 
   parametrics: ceilingParametrics,
 
+  // Stage D: kind-owned placement tool. Multi-click polygon drawing
+  // with a vertical TSL-gradient connector + ground-shadow lines.
+  tool: () => import('./tool'),
+
+  // Stage D: drag/edit affordances. Boundary editor + hole editor
+  // delegate to the shared `<PolygonEditor>`; move uses the single-
+  // undo dance.
+  affordanceTools: {
+    'boundary-edit': () => import('./boundary-editor'),
+    'hole-edit': () => import('./hole-editor'),
+    move: () => import('./move-tool'),
+  },
+
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

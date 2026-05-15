@@ -204,12 +204,31 @@ export const ToolManager: React.FC = () => {
               <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
             )
           })()}
-        {showCeilingBoundaryEditor && selectedCeilingId && (
-          <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
-        )}
-        {showCeilingHoleEditor && selectedCeilingId && editingHole && (
-          <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
-        )}
+        {showCeilingBoundaryEditor &&
+          selectedCeilingId &&
+          (() => {
+            const Registry = getRegistryAffordanceTool('ceiling', 'boundary-edit')
+            return Registry ? (
+              <Suspense fallback={null}>
+                <Registry ceilingId={selectedCeilingId} />
+              </Suspense>
+            ) : (
+              <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
+            )
+          })()}
+        {showCeilingHoleEditor &&
+          selectedCeilingId &&
+          editingHole &&
+          (() => {
+            const Registry = getRegistryAffordanceTool('ceiling', 'hole-edit')
+            return Registry ? (
+              <Suspense fallback={null}>
+                <Registry ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
+              </Suspense>
+            ) : (
+              <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
+            )
+          })()}
         {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
         {movingFenceEndpoint &&
           (() => {
