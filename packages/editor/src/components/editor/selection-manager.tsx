@@ -684,9 +684,19 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
     },
     isValid: (node) => {
       if (!isNodeInCurrentLevel(node)) return false
-      if (node.type !== 'item') return false
-      const item = node as ItemNode
-      return item.asset.category !== 'door' && item.asset.category !== 'window'
+      // Item: door/window-category items belong to structure phase, not furnish.
+      if (node.type === 'item') {
+        const item = node as ItemNode
+        return item.asset.category !== 'door' && item.asset.category !== 'window'
+      }
+      // Registry-driven kinds with `category: 'furnish'` (shelf today,
+      // future furniture kinds): selectable in furnish phase if their
+      // definition declares the `selectable` capability. Without this
+      // branch, shelf clicks routed to furnish phase via getSelectionTarget
+      // would be rejected here — single-click selection broken.
+      const def = nodeRegistry.get(node.type)
+      if (def && def.category === 'furnish' && def.capabilities.selectable) return true
+      return false
     },
   },
 }
