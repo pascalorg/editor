@@ -34,6 +34,7 @@ import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-sel
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
+import { MetricControl } from '../../../controls/metric-control'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
@@ -766,6 +767,17 @@ function LevelItem({
             initial={{ height: 0, opacity: 0 }}
             transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
           >
+            <div className="relative border-border/50 border-b py-2 pr-3 pl-[60px]">
+              <div className="pointer-events-none absolute top-0 bottom-0 left-[45px] z-10 w-px bg-border/50" />
+              <MetricControl
+                label="Base elevation"
+                onChange={(value) => updateNode(level.id, { baseElevation: value })}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={Math.round((level.baseElevation ?? 0) * 100) / 100}
+              />
+            </div>
             <LevelReferences
               isLastLevel={isLast}
               levelId={level.id}

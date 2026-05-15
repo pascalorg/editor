@@ -8,6 +8,28 @@ import {
 
 export const DEFAULT_LEVEL_HEIGHT = 2.5
 
+type LevelWithBaseElevation = Pick<LevelNode, 'baseElevation'>
+
+export function getLevelBaseElevation(level: LevelWithBaseElevation | null | undefined): number {
+  return level?.baseElevation ?? 0
+}
+
+export function getLevelTargetY(
+  cumulativeY: number,
+  level: LevelWithBaseElevation | null | undefined,
+  explodedExtra = 0,
+): number {
+  return cumulativeY + getLevelBaseElevation(level) + explodedExtra
+}
+
+export function getNextLevelCumulativeY(
+  cumulativeY: number,
+  levelHeight: number,
+  level: LevelWithBaseElevation | null | undefined,
+): number {
+  return cumulativeY + levelHeight + getLevelBaseElevation(level)
+}
+
 // Cache: levelId → computed height. Invalidated when the nodes reference changes.
 // Zustand produces a new `nodes` object on every mutation, so reference equality
 // is a zero-cost way to detect stale data without any subscription overhead.
@@ -88,9 +110,10 @@ export function snapLevelsToTruePositions(): () => void {
   // Snap to true stacked positions and make all levels visible
   let cumulativeY = 0
   for (const { levelId, obj } of entries) {
-    obj.position.y = cumulativeY
+    const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
+    obj.position.y = getLevelTargetY(cumulativeY, level)
     obj.visible = true
-    cumulativeY += getLevelHeight(levelId, nodes)
+    cumulativeY = getNextLevelCumulativeY(cumulativeY, getLevelHeight(levelId, nodes), level)
   }
 
   return () => {

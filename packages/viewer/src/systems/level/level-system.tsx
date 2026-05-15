@@ -2,7 +2,7 @@ import { type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { lerp } from 'three/src/math/MathUtils.js'
 import useViewer from '../../store/use-viewer'
-import { getLevelHeight } from './level-utils'
+import { getLevelHeight, getLevelTargetY, getNextLevelCumulativeY } from './level-utils'
 
 const EXPLODED_GAP = 5
 
@@ -32,15 +32,14 @@ export const LevelSystem = () => {
     // Walk sorted levels, accumulating base Y offsets
     let cumulativeY = 0
     for (const { levelId, index, obj } of entries) {
-      const level = nodes[levelId as LevelNode['id']]
-      const baseY = cumulativeY
+      const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
       const explodedExtra = levelMode === 'exploded' ? index * EXPLODED_GAP : 0
-      const targetY = baseY + explodedExtra
+      const targetY = getLevelTargetY(cumulativeY, level, explodedExtra)
 
       obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
       obj.visible = levelMode !== 'solo' || level?.id === selectedLevel || !selectedLevel
 
-      cumulativeY += getLevelHeight(levelId, nodes)
+      cumulativeY = getNextLevelCumulativeY(cumulativeY, getLevelHeight(levelId, nodes), level)
     }
   }, 5) // Using a lower priority so it runs after transforms from other systems have settled
   return null
