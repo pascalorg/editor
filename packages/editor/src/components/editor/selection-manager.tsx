@@ -11,6 +11,7 @@ import {
   type ItemNode,
   isRegistrySelectable,
   type NodeEvent,
+  nodeRegistry,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
@@ -691,6 +692,25 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 }
 
 const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
+  // Item is checked FIRST so its asset.category-driven routing (door/
+  // window items land in structure phase, everything else in furnish)
+  // beats the generic registry fallback below. Without this, registering
+  // `item` (Phase 5) made isRegistrySelectable('item') match the
+  // structure branch first, breaking single-click selection: first click
+  // switched the editor to structure phase, second click selected.
+  if (node.type === 'item') {
+    const item = node as ItemNode
+    if (item.asset.category === 'door' || item.asset.category === 'window') {
+      return {
+        phase: 'structure',
+        structureLayer: 'elements',
+      }
+    }
+    return {
+      phase: 'furnish',
+    }
+  }
+
   if (node.type === 'zone') {
     return {
       phase: 'structure',
@@ -711,10 +731,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'stair-segment' ||
     node.type === 'spawn' ||
     node.type === 'window' ||
-    node.type === 'door' ||
-    // Registry-driven kinds default to structure/elements (Phase 4 reads
-    // `definition.presentation.paletteSection` to route correctly).
-    isRegistrySelectable(node.type)
+    node.type === 'door'
   ) {
     return {
       phase: 'structure',
@@ -722,18 +739,16 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     }
   }
 
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    if (item.asset.category === 'door' || item.asset.category === 'window') {
-      return {
-        phase: 'structure',
-        structureLayer: 'elements',
-      }
+  // Registry-driven kinds (Phase 5+): route by `def.category`. Built-ins
+  // above match before this fallback. Furnish-category kinds (shelf,
+  // item — already handled above) land on the furnish phase; structure-
+  // category kinds (everything else) on structure/elements.
+  const def = nodeRegistry.get(node.type)
+  if (def) {
+    if (def.category === 'furnish') {
+      return { phase: 'furnish' }
     }
-
-    return {
-      phase: 'furnish',
-    }
+    return { phase: 'structure', structureLayer: 'elements' }
   }
 
   return null
