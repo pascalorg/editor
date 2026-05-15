@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { formatMeasurement, parseMeasurement } from '../../../lib/measurements'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { cn } from '../../../lib/utils'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
   formatAngleRadians,
@@ -30,17 +32,7 @@ type DraftMeasurementState = {
   angleLabels: DraftAngleLabel[]
 } | null
 
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
 
-  return `${Number.parseFloat(value.toFixed(2))}m`
-}
 
 function getDraftAngleLabels(
   start: WallPlanPoint,
@@ -162,6 +154,8 @@ export const WallTool: React.FC = () => {
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
+  const draftInputRef = useRef<string | null>(null)
+  const [draftInput, setDraftInput] = useState<string | null>(null)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
 
   useEffect(() => {
@@ -246,6 +240,42 @@ export const WallTool: React.FC = () => {
       if (e.key === 'Shift') {
         shiftPressed.current = true
       }
+
+      if (buildingState.current === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (/^[\d.'"-]$/.test(e.key)) {
+          const next = (draftInputRef.current || '') + e.key
+          draftInputRef.current = next
+          setDraftInput(next)
+        } else if (e.key === 'Backspace') {
+          if (draftInputRef.current) {
+            const next = draftInputRef.current.slice(0, -1)
+            draftInputRef.current = next || null
+            setDraftInput(draftInputRef.current)
+          }
+        } else if (e.key === 'Enter' && draftInputRef.current) {
+          const parsed = parseMeasurement(draftInputRef.current, unit === 'imperial' ? 'imperial' : 'metric')
+          if (parsed !== null && parsed > 0.01) {
+            const start = startingPoint.current
+            const end = endingPoint.current
+            const dx = end.x - start.x
+            const dz = end.z - start.z
+            const currentLength = Math.hypot(dx, dz)
+            
+            if (currentLength > 0.001) {
+              const newEnd: WallPlanPoint = [
+                start.x + (dx / currentLength) * parsed,
+                start.z + (dz / currentLength) * parsed
+              ]
+              createWallOnCurrentLevel([start.x, start.z], newEnd)
+              buildingState.current = 0
+              wallPreviewRef.current.visible = false
+              draftInputRef.current = null
+              setDraftInput(null)
+              setDraftMeasurement(null)
+            }
+          }
+        }
+      }
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -255,7 +285,11 @@ export const WallTool: React.FC = () => {
     }
 
     const onCancel = () => {
-      if (buildingState.current === 1) {
+      if (draftInputRef.current !== null) {
+        markToolCancelConsumed()
+        draftInputRef.current = null
+        setDraftInput(null)
+      } else if (buildingState.current === 1) {
         markToolCancelConsumed()
         buildingState.current = 0
         wallPreviewRef.current.visible = false
@@ -299,8 +333,9 @@ export const WallTool: React.FC = () => {
       {draftMeasurement && (
         <>
           <DraftMeasurementLabel
-            label={draftMeasurement.lengthLabel}
+            label={draftInput !== null ? draftInput : draftMeasurement.lengthLabel}
             position={draftMeasurement.lengthPosition}
+            isTyping={draftInput !== null}
           />
           {draftMeasurement.angleLabels.map((angleLabel) => (
             <DraftMeasurementLabel
@@ -318,14 +353,24 @@ export const WallTool: React.FC = () => {
 function DraftMeasurementLabel({
   label,
   position,
+  isTyping,
 }: {
   label: string
   position: [number, number, number]
+  isTyping?: boolean
 }) {
   return (
     <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
-      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono font-semibold text-[11px] text-foreground shadow-lg backdrop-blur-md">
+      <div
+        className={cn(
+          "whitespace-nowrap rounded-full border border-border px-2 py-1 font-mono font-semibold text-[11px] shadow-lg backdrop-blur-md",
+          isTyping
+            ? "bg-primary text-primary-foreground border-transparent ring-2 ring-primary/30 ring-offset-1 ring-offset-background"
+            : "bg-background/95 text-foreground"
+        )}
+      >
         {label}
+        {isTyping && <span className="animate-pulse">_</span>}
       </div>
     </Html>
   )
