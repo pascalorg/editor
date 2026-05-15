@@ -32,8 +32,6 @@ type DraftMeasurementState = {
   angleLabels: DraftAngleLabel[]
 } | null
 
-
-
 function getDraftAngleLabels(
   start: WallPlanPoint,
   end: WallPlanPoint,
@@ -253,18 +251,21 @@ export const WallTool: React.FC = () => {
             setDraftInput(draftInputRef.current)
           }
         } else if (e.key === 'Enter' && draftInputRef.current) {
-          const parsed = parseMeasurement(draftInputRef.current, unit === 'imperial' ? 'imperial' : 'metric')
+          const parsed = parseMeasurement(
+            draftInputRef.current,
+            unit === 'imperial' ? 'imperial' : 'metric',
+          )
           if (parsed !== null && parsed > 0.01) {
             const start = startingPoint.current
             const end = endingPoint.current
             const dx = end.x - start.x
             const dz = end.z - start.z
             const currentLength = Math.hypot(dx, dz)
-            
+
             if (currentLength > 0.001) {
               const newEnd: WallPlanPoint = [
                 start.x + (dx / currentLength) * parsed,
-                start.z + (dz / currentLength) * parsed
+                start.z + (dz / currentLength) * parsed,
               ]
               createWallOnCurrentLevel([start.x, start.z], newEnd)
               buildingState.current = 0
@@ -363,10 +364,10 @@ function DraftMeasurementLabel({
     <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
       <div
         className={cn(
-          "whitespace-nowrap rounded-full border border-border px-2 py-1 font-mono font-semibold text-[11px] shadow-lg backdrop-blur-md",
+          'whitespace-nowrap rounded-full border border-border px-2 py-1 font-mono font-semibold text-[11px] shadow-lg backdrop-blur-md',
           isTyping
-            ? "bg-primary text-primary-foreground border-transparent ring-2 ring-primary/30 ring-offset-1 ring-offset-background"
-            : "bg-background/95 text-foreground"
+            ? 'bg-primary text-primary-foreground border-transparent ring-2 ring-primary/30 ring-offset-1 ring-offset-background'
+            : 'bg-background/95 text-foreground',
         )}
       >
         {label}

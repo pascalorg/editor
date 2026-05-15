@@ -26,7 +26,11 @@ export function parseMeasurement(input: string, unit: 'metric' | 'imperial'): nu
   return null
 }
 
-export function formatMeasurement(valueInMeters: number, unit: 'metric' | 'imperial', precision = 2): string {
+export function formatMeasurement(
+  valueInMeters: number,
+  unit: 'metric' | 'imperial',
+  precision = 2,
+): string {
   if (unit === 'metric') {
     return Number.parseFloat(valueInMeters.toFixed(precision)).toFixed(precision)
   }
