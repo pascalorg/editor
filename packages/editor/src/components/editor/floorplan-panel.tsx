@@ -25,6 +25,7 @@ import {
   isCurvedWall,
   type LevelNode,
   loadAssetUrl,
+  nodeRegistry,
   normalizeWallCurveOffset,
   type Point2D,
   type RoofNode,
@@ -9678,6 +9679,12 @@ export function FloorplanPanel() {
     (mode === 'build' && tool === 'item') || movingNode?.type === 'item'
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
   const isFloorItemMoveActive = movingNode?.type === 'item' && !movingNode.asset.attachTo
+  // Any registry-driven kind whose tool is currently active. Lets the floor
+  // plan emit `grid:click` / `grid:move` events to that kind's placement tool
+  // (shelf today; future Phase 5 kinds the moment they register a `tool`).
+  // Independent of whether the kind has a `def.floorplan` builder — placement
+  // works as long as the kind's tool subscribes to the emitter.
+  const isRegistryToolBuildActive = mode === 'build' && tool != null && nodeRegistry.has(tool)
   const isFloorplanGridInteractionActive =
     isFenceBuildActive ||
     isRoofBuildActive ||
@@ -9695,7 +9702,8 @@ export function FloorplanPanel() {
     isFenceCurveActive ||
     isFenceEndpointMoveActive ||
     isFloorItemBuildActive ||
-    isFloorItemMoveActive
+    isFloorItemMoveActive ||
+    isRegistryToolBuildActive
   const floorplanPreviewStairSegment = useMemo(
     () =>
       StairSegmentNodeSchema.parse({
