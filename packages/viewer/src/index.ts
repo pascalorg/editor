@@ -23,6 +23,7 @@ export {
   DEFAULT_DOOR_MATERIAL,
   DEFAULT_ROOF_MATERIAL,
   DEFAULT_SLAB_MATERIAL,
+  DEFAULT_STAIR_MATERIAL,
   DEFAULT_WALL_MATERIAL,
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
@@ -30,6 +31,10 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'
+// Fence system follows the wall re-export pattern — composed into the
+// registry-driven fence definition's `def.system`. Removed in Phase 6
+// alongside the legacy fence mount point.
+export { FenceSystem } from './systems/fence/fence-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'

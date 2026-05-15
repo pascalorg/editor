@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { fenceDefinition, isFenceRegistryEnabled } from './fence'
 import { shelfDefinition } from './shelf'
 import { spawnDefinition } from './spawn'
 import { isWallRegistryEnabled, wallDefinition } from './wall'
@@ -14,23 +15,25 @@ import { isWallRegistryEnabled, wallDefinition } from './wall'
  * `loadPlugin` call path. This is intentional: the API is stress-tested
  * by built-ins before any third-party plugin lands.
  *
- * Phase 2 status: shelf is a brand-new kind. Spawn is migrated to the
- * registry path — the legacy SpawnRenderer / SpawnTool files are still
- * present in viewer/editor packages but short-circuited by the Phase 0
- * dispatch shims (`nodeRegistry.has('spawn')` is true → legacy path
- * yields). Legacy spawn files are deleted in a follow-up PR.
- *
- * Phase 3 status: wall is registry-driven *behind a feature flag*. With
- * `NEXT_PUBLIC_USE_REGISTRY_FOR_WALL=true`, `wallDefinition` is included
- * here and the Phase 0 shims switch wall to the registry path; the
- * `<LegacySystem kind="wall">` wrappers around `WallSystem` and
- * `WallCutout` short-circuit and the bundled `system.tsx` re-mounts them
- * via `RegisteredSystems`. Off (default): wall stays on the legacy path.
- * The flag drops the moment parity is signed off across the Phase 3
- * fixture scenes — until then it gates the migration safely.
+ * Status by kind:
+ *  - **shelf**: brand-new kind, registry-driven, no legacy. Registered
+ *    unconditionally.
+ *  - **spawn**: migrated to the registry path during Phase 2. Legacy
+ *    SpawnRenderer / SpawnTool files still present in viewer/editor but
+ *    short-circuited by the Phase 0 shims. Registered unconditionally.
+ *  - **wall**: registry-driven behind `NEXT_PUBLIC_USE_REGISTRY_FOR_WALL`.
+ *    Phase 3 stress test; flag drops when fixture parity signs off.
+ *  - **fence**: registry-driven behind `NEXT_PUBLIC_USE_REGISTRY_FOR_FENCE`.
+ *    First Phase 5 batch-migration kind. Same shape as wall (thin
+ *    renderer + system re-export); pure geometry / floor-plan / tool
+ *    affordance ports as later milestones.
  */
 const wallEntries: AnyNodeDefinition[] = isWallRegistryEnabled()
   ? [wallDefinition as unknown as AnyNodeDefinition]
+  : []
+
+const fenceEntries: AnyNodeDefinition[] = isFenceRegistryEnabled()
+  ? [fenceDefinition as unknown as AnyNodeDefinition]
   : []
 
 export const builtinPlugin: Plugin = {
@@ -40,9 +43,11 @@ export const builtinPlugin: Plugin = {
     shelfDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     ...wallEntries,
+    ...fenceEntries,
   ],
 }
 
+export { fenceDefinition } from './fence'
 export { shelfDefinition } from './shelf'
 export { spawnDefinition } from './spawn'
 export { wallDefinition } from './wall'
