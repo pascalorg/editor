@@ -46,6 +46,10 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  system: {
+    module: () => import('./system'),
+    priority: 5,
+  },
   preview: () => import('./preview'),
   tool: () => import('./tool'),
 
