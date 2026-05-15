@@ -47,6 +47,20 @@ export type FloorplanStyle = {
   opacity?: number
 }
 
+// ─── ToolHint ────────────────────────────────────────────────────────
+//
+// A single key + label entry in the contextual shortcut hint panel.
+// `HelperManager` consults `def.toolHints` when the active tool matches
+// a registered kind; matches the existing per-tool helper components
+// today (e.g. WallHelper renders three of these entries).
+
+export type ToolHint = {
+  /** Key combo or input label, e.g. 'Left click', 'Shift', 'Esc'. */
+  key: string
+  /** Description of what the input does. Sentence case. */
+  label: string
+}
+
 export type FloorplanGeometry =
   | ({ kind: 'path'; d: string } & FloorplanStyle)
   | ({ kind: 'polygon'; points: readonly FloorplanPoint[] } & FloorplanStyle)
@@ -146,6 +160,17 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   system?: SystemContribution
   tool?: LazyComponent
   affordances?: Affordance<z.infer<S>>[]
+  /**
+   * Contextual shortcut hints shown by `HelperManager` when this kind's
+   * tool is active. Pure data — `HelperManager` renders these via a
+   * generic <RegisteredToolHelper>. Drops the need for a hand-written
+   * `<XxxHelper>` component per kind.
+   *
+   * Static array for now (covers ~all current uses). If a kind needs
+   * state-dependent hints (e.g. different keys during a drag), it keeps
+   * its bespoke helper component instead.
+   */
+  toolHints?: ToolHint[]
 
   /**
    * Optional translucent preview of the node — used by the move tool to

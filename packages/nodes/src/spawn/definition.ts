@@ -34,7 +34,17 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  // `floorplan: buildSpawnFloorplan` deferred — spawn already renders in
+  // the legacy floorplan-panel.tsx via `floorplanSpawnEntries`. Adding it
+  // here would double-render. The pure builder lives in
+  // ./floorplan.ts ready to wire when the legacy inline branch is
+  // removed (Phase 5 spawn-floorplan migration PR — same shape as the
+  // wall feature flag, but per kind in the legacy panel itself).
   tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Place spawn point' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
 
   presentation: {
     label: 'Spawn Point',

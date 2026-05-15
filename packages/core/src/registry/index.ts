@@ -54,5 +54,6 @@ export type {
   SurfaceQuery,
   SurfacesConfig,
   SystemContribution,
+  ToolHint,
   Vec2,
 } from './types'

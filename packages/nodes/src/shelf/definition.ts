@@ -56,6 +56,10 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Place shelf' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
 
   presentation: {
     label: 'Shelf',

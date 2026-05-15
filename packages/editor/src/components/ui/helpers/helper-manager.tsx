@@ -1,10 +1,12 @@
 'use client'
 
+import { nodeRegistry } from '@pascal-app/core'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import useEditor from '../../../store/use-editor'
 import { BuildingHelper } from './building-helper'
 import { CeilingHelper } from './ceiling-helper'
 import { ItemHelper } from './item-helper'
+import { RegisteredToolHelper } from './registered-tool-helper'
 import { RoofHelper } from './roof-helper'
 import { SlabHelper } from './slab-helper'
 import { WallHelper } from './wall-helper'
@@ -25,6 +27,17 @@ export function HelperManager() {
 
   if (mode === 'material-paint') {
     return null
+  }
+
+  // Registry-first: if the active tool matches a registered kind whose
+  // definition supplies `toolHints`, render via the generic helper.
+  // Otherwise fall through to the hand-written per-tool helpers below.
+  // Legacy helpers get deleted as their kind migrates `toolHints` in.
+  if (tool) {
+    const def = nodeRegistry.get(tool)
+    if (def?.toolHints && def.toolHints.length > 0) {
+      return <RegisteredToolHelper hints={def.toolHints} />
+    }
   }
 
   // Show appropriate helper based on current tool
