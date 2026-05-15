@@ -1,7 +1,9 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { formatMeasurement, parseMeasurement } from '../../../lib/measurements'
 import { cn } from '../../../lib/utils'
 
 interface SliderControlProps {
@@ -59,10 +61,25 @@ export function SliderControl({
   unit = '',
   restoreOnCommit = true,
 }: SliderControlProps) {
+  const viewerUnit = useViewer((state) => state.unit)
+  const isLengthMeasurement = unit === 'm'
+  const activeUnit = isLengthMeasurement ? viewerUnit : 'metric'
+  const multiplier = isLengthMeasurement && activeUnit === 'imperial' ? 3.28084 : 1
+  const displayUnit = isLengthMeasurement && activeUnit === 'imperial' ? '' : unit
+
+  const getDisplayStr = useCallback(
+    (v: number) => {
+      return isLengthMeasurement && activeUnit === 'imperial'
+        ? formatMeasurement(v, 'imperial', precision)
+        : v.toFixed(precision)
+    },
+    [isLengthMeasurement, activeUnit, precision],
+  )
+
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [inputValue, setInputValue] = useState(value.toFixed(precision))
+  const [inputValue, setInputValue] = useState(getDisplayStr(value))
 
   const dragRef = useRef<{
     // Original value at drag start — preserved across modifier re-anchors so
@@ -83,9 +100,9 @@ export function SliderControl({
 
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(value.toFixed(precision))
+      setInputValue(getDisplayStr(value))
     }
-  }, [value, precision, isEditing])
+  }, [value, getDisplayStr, isEditing])
 
   // Wheel support on the label
   useEffect(() => {
@@ -95,7 +112,7 @@ export function SliderControl({
       if (isEditing) return
       e.preventDefault()
       const direction = e.deltaY < 0 ? 1 : -1
-      const s = getAdjustedStep(step, e)
+      const s = getAdjustedStep(step / multiplier, e)
       const newValue = clamp(valueRef.current + direction * s)
       const final = Number.parseFloat(newValue.toFixed(stepPrecision(s)))
       if (final !== valueRef.current) onChange(final)
@@ -114,7 +131,7 @@ export function SliderControl({
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') direction = -1
       if (direction !== 0) {
         e.preventDefault()
-        const s = getAdjustedStep(step, e)
+        const s = getAdjustedStep(step / multiplier, e)
         const newValue = clamp(valueRef.current + direction * s)
         const final = Number.parseFloat(newValue.toFixed(stepPrecision(s)))
         if (final !== valueRef.current) onChange(final)
@@ -145,20 +162,20 @@ export function SliderControl({
   const handleLabelPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragRef.current) return
-      const multiplier = getStepMultiplier(e)
+      const multiplier_val = getStepMultiplier(e)
       // If modifier keys changed mid-drag, re-anchor from the current pointer
       // position and value — otherwise the accumulated dx would be applied
       // with a new step size and jump the value (e.g. pressing Cmd while
       // already far from the starting point would snap back toward it).
-      if (multiplier !== dragRef.current.stepMultiplier) {
+      if (multiplier_val !== dragRef.current.stepMultiplier) {
         dragRef.current.anchorX = e.clientX
         dragRef.current.anchorValue = valueRef.current
-        dragRef.current.stepMultiplier = multiplier
+        dragRef.current.stepMultiplier = multiplier_val
         return
       }
       const { anchorX, anchorValue } = dragRef.current
       const dx = e.clientX - anchorX
-      const s = step * multiplier
+      const s = (step / multiplier) * multiplier_val
       // 4 px per step at default sensitivity
       const newValue = clamp(
         Number.parseFloat((anchorValue + (dx / 4) * s).toFixed(stepPrecision(s))),
@@ -195,47 +212,54 @@ export function SliderControl({
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
-    setInputValue(value.toFixed(precision))
-  }, [value, precision])
+    setInputValue(getDisplayStr(value))
+  }, [value, getDisplayStr])
 
   const submitValue = useCallback(() => {
-    const numValue = Number.parseFloat(inputValue)
-    if (Number.isNaN(numValue)) {
-      setInputValue(value.toFixed(precision))
+    let nextValue: number | null = null
+    if (isLengthMeasurement && activeUnit === 'imperial') {
+      nextValue = parseMeasurement(inputValue, 'imperial')
     } else {
-      const nextValue = clamp(Number.parseFloat(numValue.toFixed(precision)))
-      onChange(nextValue)
-      onCommit?.(nextValue)
+      const numValue = Number.parseFloat(inputValue)
+      nextValue = Number.isNaN(numValue) ? null : numValue
+    }
+
+    if (nextValue === null) {
+      setInputValue(getDisplayStr(value))
+    } else {
+      const clamped = clamp(Number.parseFloat(nextValue.toFixed(precision + 2)))
+      onChange(clamped)
+      onCommit?.(clamped)
     }
     setIsEditing(false)
-  }, [inputValue, onChange, onCommit, clamp, precision, value])
+  }, [inputValue, onChange, onCommit, clamp, precision, value, isLengthMeasurement, activeUnit, getDisplayStr])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         submitValue()
       } else if (e.key === 'Escape') {
-        setInputValue(value.toFixed(precision))
+        setInputValue(getDisplayStr(value))
         setIsEditing(false)
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const adjustedStep = getAdjustedStep(step, e)
+        const adjustedStep = getAdjustedStep(step / multiplier, e)
         const newV = clamp(
           Number.parseFloat((value + adjustedStep).toFixed(stepPrecision(adjustedStep))),
         )
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue(getDisplayStr(newV))
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const adjustedStep = getAdjustedStep(step, e)
+        const adjustedStep = getAdjustedStep(step / multiplier, e)
         const newV = clamp(
           Number.parseFloat((value - adjustedStep).toFixed(stepPrecision(adjustedStep))),
         )
         onChange(newV)
-        setInputValue(newV.toFixed(precision))
+        setInputValue(getDisplayStr(newV))
       }
     },
-    [submitValue, value, precision, step, clamp, onChange],
+    [submitValue, value, getDisplayStr, step, multiplier, clamp, onChange],
   )
 
   return (
@@ -288,7 +312,7 @@ export function SliderControl({
               type="text"
               value={inputValue}
             />
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </>
         ) : (
           <div
@@ -296,9 +320,11 @@ export function SliderControl({
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight" suppressHydrationWarning>
-              {Number(value.toFixed(precision)).toFixed(precision)}
+              {isLengthMeasurement && activeUnit === 'imperial'
+                ? formatMeasurement(value, 'imperial', precision)
+                : Number(value.toFixed(precision)).toFixed(precision)}
             </span>
-            {unit && <span className="ml-[1px] text-muted-foreground">{unit}</span>}
+            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </div>
         )}
       </div>
