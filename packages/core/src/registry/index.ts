@@ -22,6 +22,7 @@ export type {
   CuttableConfig,
   DragAction,
   EditorCtx,
+  GeometryContext,
   HostableConfig,
   IconRef,
   Issue,

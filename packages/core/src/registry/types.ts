@@ -1,6 +1,30 @@
 import type { ComponentType } from 'react'
+import type { Object3D } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+
+// ─── GeometryContext ─────────────────────────────────────────────────
+//
+// Read-only scene access passed to `def.geometry(node, ctx)`. Most kinds'
+// builders ignore `ctx` and read only `node` (shelf, item, spawn). Kinds
+// whose meshes reference other nodes by ID — wall miters with siblings,
+// door cutouts read parent wall — use `ctx` to resolve those references
+// without importing `useScene`. Builders stay pure and unit-testable.
+//
+// Future extension: `levelData?: { miters?: ... }` for level-scoped batch
+// data (wall mitering across an entire level). Decided alongside the wall
+// migration off its dedicated system (Phase 3+).
+
+export type GeometryContext = {
+  /** Look up any node by ID. Returns undefined if the node doesn't exist. */
+  resolve: <N = AnyNode>(id: AnyNodeId) => N | undefined
+  /** Resolved children of this node (filters out unresolvable IDs). */
+  children: AnyNode[]
+  /** Same kind, same parent — drives wall mitering / endpoint-match. */
+  siblings: AnyNode[]
+  /** Resolved parent (null for root-level nodes). */
+  parent: AnyNode | null
+}
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
@@ -39,6 +63,19 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * already null-guard on `def.renderer` so omitting it is safe.
    */
   renderer?: RendererSource<z.infer<S>>
+  /**
+   * Pure geometry builder. When set, the framework's generic
+   * `<GeometrySystem>` calls this on every dirty mark — `nodes` keyed by
+   * `def.geometry`'s presence are picked up; the returned `Object3D`'s
+   * children replace the registered group's children. Together with
+   * `<ParametricNodeRenderer>` this lets a kind ship without per-kind
+   * `renderer.tsx` or `system.tsx` files (see
+   * `wiki/architecture/node-definitions.md`). Combine with `renderer` if
+   * you want JSX-side composition (drei, `<Html>`, GLB) AND parametric
+   * rebuilds; combine with `system` if you also need per-frame imperative
+   * work (animations, named-mesh material poking).
+   */
+  geometry?: (node: z.infer<S>, ctx: GeometryContext) => Object3D
   system?: SystemContribution
   tool?: LazyComponent
   affordances?: Affordance<z.infer<S>>[]

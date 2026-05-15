@@ -11,6 +11,7 @@ import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
 import { DoorSystem } from '../../systems/door/door-system'
 import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
+import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
 import { ItemSystem } from '../../systems/item/item-system'
 import { ItemLightSystem } from '../../systems/item-light/item-light-system'
@@ -283,6 +284,13 @@ const Viewer: React.FC<ViewerProps> = ({
         <LegacySystem kind="zone">
           <ZoneSystem />
         </LegacySystem>
+        {/* Generic geometry rebuild loop for any registered kind that
+            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
+            builder, swaps the registered group's children. Runs alongside
+            per-kind systems — they coexist, this system only acts on
+            kinds whose definition exposes a `geometry` function. See
+            wiki/architecture/node-definitions.md. */}
+        <GeometrySystem />
         {/* Mounts systems contributed by registry-backed kinds. Today the
             registry is empty so this renders nothing. Once kinds register
             (Phase 2+), each kind's registered system runs here and its

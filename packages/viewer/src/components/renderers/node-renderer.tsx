@@ -11,6 +11,7 @@ import { FenceRenderer } from './fence/fence-renderer'
 import { GuideRenderer } from './guide/guide-renderer'
 import { ItemRenderer } from './item/item-renderer'
 import { LevelRenderer } from './level/level-renderer'
+import { ParametricNodeRenderer } from './parametric-node-renderer'
 import { RoofRenderer } from './roof/roof-renderer'
 import { RoofSegmentRenderer } from './roof-segment/roof-segment-renderer'
 import { ScanRenderer } from './scan/scan-renderer'
@@ -43,18 +44,28 @@ function getRegistryRenderer(
 function RegistryRenderer({ node }: { node: AnyNode }) {
   const def = nodeRegistry.get(node.type)
   if (!def) return null
-  // A registered kind may omit `renderer` — in that flow the framework's
-  // generic empty-group renderer covers it (Phase 4 work). Until that ships,
-  // returning null here lets <NodeRenderer> fall through to the legacy switch,
-  // which is how wall's milestone-A skeleton stays inert.
-  if (!def.renderer) return null
-  const Renderer = getRegistryRenderer(def.renderer as RendererSource<AnyNode>)
-  if (!Renderer) return null
-  return (
-    <Suspense fallback={null}>
-      <Renderer node={node} />
-    </Suspense>
-  )
+  // Three-checkbox dispatch (see wiki/architecture/node-definitions.md):
+  //  1. Custom renderer overrides everything — JSX-side composition for
+  //     kinds that need GLB, drei, <Html>, instancing, shader materials.
+  //  2. Else, if the kind ships `def.geometry`, use the generic empty-group
+  //     <ParametricNodeRenderer>. `<GeometrySystem>` fills it from the pure
+  //     builder. No per-kind renderer.tsx needed.
+  //  3. Else, the kind has neither — registered but unrenderable. Fall
+  //     through to null; <NodeRenderer> falls back to the legacy switch
+  //     (used by wall during milestone A before its runtime wired up).
+  if (def.renderer) {
+    const Renderer = getRegistryRenderer(def.renderer as RendererSource<AnyNode>)
+    if (!Renderer) return null
+    return (
+      <Suspense fallback={null}>
+        <Renderer node={node} />
+      </Suspense>
+    )
+  }
+  if (def.geometry) {
+    return <ParametricNodeRenderer node={node} />
+  }
+  return null
 }
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {

@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildShelfGeometry } from './geometry'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
 
@@ -42,14 +43,15 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
 
   parametrics: shelfParametrics,
 
-  renderer: {
-    kind: 'parametric',
-    module: () => import('./renderer'),
-  },
-  system: {
-    module: () => import('./system'),
-    priority: 5,
-  },
+  // Three-checkbox composition: shelf needs only a pure geometry function.
+  // The framework's <ParametricNodeRenderer> mounts an empty group + wires
+  // events / registry / dirty-on-mount; the global <GeometrySystem> calls
+  // `buildShelfGeometry(node)` on every dirty mark and swaps the group's
+  // children. No `renderer.tsx`, no `system.tsx` — see
+  // `wiki/architecture/node-definitions.md`. Shelf is the reference port
+  // proving Phase 4's boilerplate collapse end-to-end.
+  geometry: buildShelfGeometry,
+
   preview: () => import('./preview'),
   tool: () => import('./tool'),
 
