@@ -441,6 +441,12 @@ export const FenceTool: React.FC = () => {
   useEffect(() => {
     let previousFenceEnd: [number, number] | null = null
 
+    const stopDrafting = () => {
+      buildingState.current = 0
+      previewRef.current.visible = false
+      setDraftMeasurement(null)
+    }
+
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && previewRef.current)) return
 
@@ -485,6 +491,11 @@ export const FenceTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+        stopDrafting()
+        return
+      }
+
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
 
@@ -506,9 +517,18 @@ export const FenceTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
-        createFenceOnCurrentLevel([startingPoint.current.x, startingPoint.current.z], snappedEnd)
+        const createdFence = createFenceOnCurrentLevel(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedEnd,
+        )
+        if (!createdFence) return
+
+        const nextStart = createdFence.end
+        startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
+        endingPoint.current.copy(startingPoint.current)
+        cursorRef.current.position.copy(startingPoint.current)
         previewRef.current.visible = false
-        buildingState.current = 0
+        buildingState.current = 1
         setDraftMeasurement(null)
       }
     }
@@ -524,9 +544,7 @@ export const FenceTool: React.FC = () => {
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
-        buildingState.current = 0
-        previewRef.current.visible = false
-        setDraftMeasurement(null)
+        stopDrafting()
       }
     }
 
