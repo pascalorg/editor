@@ -23,6 +23,7 @@ export function createElevatorInteractiveState(
     phase: 'idle',
     phaseStartedAt: null,
     queue: [],
+    requestedStops: [],
   }
 }
 
@@ -64,6 +65,9 @@ export function queueElevatorRequest(
   return {
     ...state,
     queue: [...state.queue, levelId],
+    requestedStops: state.requestedStops.includes(levelId)
+      ? state.requestedStops
+      : [...state.requestedStops, levelId],
   }
 }
 
@@ -124,6 +128,7 @@ export function stepElevatorRuntimeState({
       phase: 'idle',
       phaseStartedAt: null,
       queue: [],
+      requestedStops: [],
       doorOpen: 0,
     }
   }
@@ -147,7 +152,11 @@ export function stepElevatorRuntimeState({
             doorOpen: Math.max(0, state.doorOpen - doorStep),
           }
         }
-        return state
+        if (state.requestedStops.length === 0) return state
+        return {
+          ...state,
+          requestedStops: [],
+        }
       }
 
       return {
@@ -180,6 +189,7 @@ export function stepElevatorRuntimeState({
           targetLevelId: null,
           phase: 'idle',
           queue: [],
+          requestedStops: [],
         }
       }
 

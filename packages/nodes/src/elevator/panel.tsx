@@ -170,6 +170,7 @@ export default function ElevatorPanel() {
       if (!state) return null
       return {
         currentLevelId: state.currentLevelId,
+        requestedStops: state.requestedStops,
         queue: state.queue,
         targetLevelId: state.targetLevelId,
       }
@@ -463,14 +464,9 @@ export default function ElevatorPanel() {
       : fromLevelId || levels[0]?.id) ??
     null
   const destinationOrderByLevelId = new Map<string, number>()
-  const orderedDestinationIds: string[] = []
-  if (runtime?.targetLevelId) orderedDestinationIds.push(runtime.targetLevelId)
-  for (const levelId of runtime?.queue ?? []) {
-    if (!orderedDestinationIds.includes(levelId)) orderedDestinationIds.push(levelId)
-  }
-  orderedDestinationIds.forEach((levelId, index) => {
+  for (const [index, levelId] of (runtime?.requestedStops ?? []).entries()) {
     destinationOrderByLevelId.set(levelId, index + 1)
-  })
+  }
 
   return (
     <PanelWrapper
@@ -589,6 +585,63 @@ export default function ElevatorPanel() {
               commitTransform(displayPosition, displayRotation + Math.PI / 4)
             }}
           />
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Service">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              From
+            </div>
+            <select
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
+              onChange={(event) =>
+                handleServiceBoundaryChange('fromLevelId', event.target.value)
+              }
+              value={fromLevelId}
+            >
+              {levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name || `Level ${level.level}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              To
+            </div>
+            <select
+              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
+              onChange={(event) => handleServiceBoundaryChange('toLevelId', event.target.value)}
+              value={toLevelId}
+            >
+              {levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name || `Level ${level.level}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            Default Floor
+          </div>
+          <select
+            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
+            onChange={(event) => handleUpdate({ defaultLevelId: event.target.value || null })}
+            value={selectedDefaultLevelId}
+          >
+            {defaultLevelOptions.map((level) => (
+              <option key={level.id} value={level.id}>
+                {level.name || `Level ${level.level}`}
+              </option>
+            ))}
+          </select>
         </div>
       </PanelSection>
 
@@ -751,61 +804,6 @@ export default function ElevatorPanel() {
           unit="m"
           value={displayNode.doorHeight}
         />
-      </PanelSection>
-
-      <PanelSection title="Service">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              From
-            </div>
-            <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
-              onChange={(event) => handleServiceBoundaryChange('fromLevelId', event.target.value)}
-              value={fromLevelId}
-            >
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level}`}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              To
-            </div>
-            <select
-              className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
-              onChange={(event) => handleServiceBoundaryChange('toLevelId', event.target.value)}
-              value={toLevelId}
-            >
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level}`}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Default Floor
-          </div>
-          <select
-            className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground"
-            onChange={(event) => handleUpdate({ defaultLevelId: event.target.value || null })}
-            value={selectedDefaultLevelId}
-          >
-            {defaultLevelOptions.map((level) => (
-              <option key={level.id} value={level.id}>
-                {level.name || `Level ${level.level}`}
-              </option>
-            ))}
-          </select>
-        </div>
       </PanelSection>
 
       <PanelSection title="Access">
