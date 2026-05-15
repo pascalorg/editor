@@ -80,6 +80,13 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     // actions/move-endpoint.ts (linked-fence cascade, alt-detach,
     // single-undo dance). Wrapper owns the angle label + detach badge.
     'move-endpoint': () => import('./move-endpoint-tool'),
+    // Triggered by useEditor.movingNode when the moving node is a
+    // fence. Whole-fence rigid translation with linked-fence cascade.
+    // Pure logic in actions/move.ts uses the live-drag exception
+    // (mesh.position + useLiveTransforms) to avoid rebuilding fence
+    // geometry every pointer tick; commits the final start/end with
+    // the single-undo dance.
+    move: () => import('./move-tool'),
   },
 
   toolHints: [

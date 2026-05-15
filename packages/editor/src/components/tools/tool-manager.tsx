@@ -21,6 +21,7 @@ import { MoveFenceEndpointTool } from './fence/move-fence-endpoint-tool'
 import { ItemTool } from './item/item-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
+import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
 import { SlabHoleEditor } from './slab/slab-hole-editor'
@@ -47,26 +48,6 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   const Comp = lazy(def.tool as () => Promise<{ default: ComponentType }>)
   lazyToolCache.set(def.tool, Comp)
   return Comp
-}
-
-/**
- * Lazy-loads the kind's drag-affordance component from
- * `def.affordanceTools[name]`. Lets editor consume kind-owned tools
- * from `@pascal-app/nodes` without a static import (which would create
- * a circular dep: nodes already depends on editor).
- *
- * Returns null when the kind doesn't declare the affordance — caller
- * renders the legacy fallback in that case.
- */
-function getRegistryAffordanceTool(kind: string, affordance: string): ComponentType<any> | null {
-  const def = nodeRegistry.get(kind)
-  const loader = def?.affordanceTools?.[affordance]
-  if (!loader) return null
-  const cached = lazyToolCache.get(loader)
-  if (cached) return cached
-  const Comp = lazy(loader as () => Promise<{ default: ComponentType<any> }>)
-  lazyToolCache.set(loader, Comp as unknown as ComponentType)
-  return Comp as unknown as ComponentType<any>
 }
 
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {

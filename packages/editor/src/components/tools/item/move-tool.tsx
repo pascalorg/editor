@@ -17,6 +17,7 @@ import type {
   WindowNode,
 } from '@pascal-app/core'
 import { nodeRegistry } from '@pascal-app/core'
+import { Suspense } from 'react'
 import { Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -28,6 +29,7 @@ import { MoveElevatorTool } from '../elevator/move-elevator-tool'
 import { MoveFenceTool } from '../fence/move-fence-tool'
 import { MoveRegistryNodeTool } from '../registry/move-registry-node-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
+import { getRegistryAffordanceTool } from '../shared/affordance-dispatch'
 import { MoveSlabTool } from '../slab/move-slab-tool'
 import { MoveSpawnTool } from '../spawn/move-spawn-tool'
 import { MoveWallTool } from '../wall/move-wall-tool'
@@ -120,6 +122,18 @@ export const MoveTool: React.FC<{
   const def = nodeRegistry.get(movingNode.type)
   if (def?.capabilities?.movable) {
     return <MoveRegistryNodeTool node={movingNode} />
+  }
+
+  // Phase 5 Stage D: registry-driven move affordance (kind-owned
+  // `DragAction` with bespoke semantics). Falls through to the legacy
+  // per-kind chain below when the kind hasn't ported its move tool.
+  const RegistryMove = getRegistryAffordanceTool(movingNode.type, 'move')
+  if (RegistryMove) {
+    return (
+      <Suspense fallback={null}>
+        <RegistryMove node={movingNode} />
+      </Suspense>
+    )
   }
 
   if (movingNode.type === 'building')
