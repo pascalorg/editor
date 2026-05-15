@@ -3,7 +3,8 @@ import type { WallNode } from '../../schema'
 const AXIS_EPSILON = 1e-6
 
 export type WallPlanPoint = [number, number]
-export type WallMoveAxis = 'x' | 'z'
+// Unit direction vector (x,z) to constrain move deltas along.
+export type WallMoveAxis = [number, number]
 export type WallMoveEndpoint = 'start' | 'end'
 
 export type WallMoveBridgePlan<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>> = {
@@ -29,12 +30,15 @@ export function getPerpendicularWallMoveAxis(
   start: WallPlanPoint,
   end: WallPlanPoint,
 ): WallMoveAxis | null {
-  const wallDeltaX = Math.abs(end[0] - start[0])
-  const wallDeltaZ = Math.abs(end[1] - start[1])
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const length = Math.hypot(dx, dz)
 
-  if (wallDeltaX < AXIS_EPSILON && wallDeltaZ < AXIS_EPSILON) return null
+  if (length < AXIS_EPSILON) return null
 
-  return wallDeltaX >= wallDeltaZ ? 'z' : 'x'
+  // Perpendicular (normal) direction for moving the wall "sideways".
+  // This matches the arrow handles shown in the editor.
+  return [-dz / length, dx / length]
 }
 
 export function constrainWallMoveDeltaToAxis(
@@ -42,8 +46,10 @@ export function constrainWallMoveDeltaToAxis(
   deltaZ: number,
   axis: WallMoveAxis | null,
 ): WallPlanPoint {
-  if (axis === 'x') return [deltaX, 0]
-  if (axis === 'z') return [0, deltaZ]
+  if (axis) {
+    const projected = deltaX * axis[0] + deltaZ * axis[1]
+    return [axis[0] * projected, axis[1] * projected]
+  }
   return [deltaX, deltaZ]
 }
 
