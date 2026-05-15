@@ -6,11 +6,10 @@ import {
   type StairSegmentNode,
   sceneRegistry,
   spatialGridManager,
-  syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -30,26 +29,6 @@ export const StairSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
-  const syncingAutoOpeningsRef = useRef(false)
-
-  useEffect(() => {
-    const applyUpdates = (updates: ReturnType<typeof syncAutoStairOpenings>) => {
-      if (updates.length === 0) return
-      syncingAutoOpeningsRef.current = true
-      useScene.getState().updateNodes(updates)
-      queueMicrotask(() => {
-        syncingAutoOpeningsRef.current = false
-      })
-    }
-
-    applyUpdates(syncAutoStairOpenings(useScene.getState().nodes))
-
-    return useScene.subscribe((state, prevState) => {
-      if (syncingAutoOpeningsRef.current) return
-      if (state.nodes === prevState.nodes) return
-      applyUpdates(syncAutoStairOpenings(state.nodes))
-    })
-  }, [])
 
   useFrame(() => {
     if (rootNodeIds.length === 0) {
