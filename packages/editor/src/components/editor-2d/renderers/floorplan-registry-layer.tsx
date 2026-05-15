@@ -58,6 +58,14 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     [setSelection],
   )
 
+  // Outer SVG has `onClick={handleBackgroundClick}` which can deselect on
+  // empty-area clicks. stopPropagation on onPointerDown doesn't block the
+  // synthesized click that follows pointer-up. Stopping the click too
+  // keeps the selection set by `handleSelect`.
+  const handleClickStop = useCallback((event: React.MouseEvent<SVGGElement>) => {
+    event.stopPropagation()
+  }, [])
+
   const entries = useMemo(() => {
     if (!levelId) return []
     const out: {
@@ -102,6 +110,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             }
             data-node-id={id}
             key={id}
+            onClick={handleClickStop}
             onPointerDown={(e) => handleSelect(id, e)}
             style={{ cursor: 'pointer' }}
           >

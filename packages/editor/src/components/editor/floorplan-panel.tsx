@@ -84,6 +84,8 @@ import {
   FloorplanDuplicateHotkey,
   FloorplanSiteKeyHandler,
 } from '../editor-2d/floorplan-hotkey-handlers'
+import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
+import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import {
@@ -17272,6 +17274,10 @@ export function FloorplanPanel() {
             onMove: handleSelectedWallMove,
           }}
         />
+        {/* Floating Move / Duplicate / Delete buttons for registered
+            kinds (shelf today; others as Phase 5 ports add def.floorplan).
+            Renders nothing for legacy kinds — they keep the layer above. */}
+        <FloorplanRegistryActionMenu />
 
         {referenceScaleDraft && (
           <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">
@@ -17445,6 +17451,7 @@ export function FloorplanPanel() {
             />
 
             <g
+              data-floorplan-scene=""
               ref={floorplanSceneRef}
               transform={
                 floorplanSceneRotationDeg !== 0 ? `rotate(${floorplanSceneRotationDeg})` : undefined
@@ -17680,6 +17687,11 @@ export function FloorplanPanel() {
                   today) overlay on top until their inline equivalent is
                   removed in their Phase 5 migration PR. */}
               <FloorplanRegistryLayer />
+              {/* Cursor-driven placement ghost for movingNode when the
+                  active kind is registry-driven. Renders via a portal
+                  into the floor-plan scene <g> (the data-floorplan-scene
+                  attribute below); see floorplan-registry-move-overlay.tsx. */}
+              <FloorplanRegistryMoveOverlay />
 
               <FloorplanMarqueeLayer
                 bounds={visibleSvgMarqueeBounds}
