@@ -195,6 +195,19 @@ describe('createDragSession', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  test('dispose does NOT fire onCancel (silent cleanup)', () => {
+    const onCommit = mock(() => {})
+    const onCancel = mock(() => {})
+    const scene = makeSpyScene()
+    const session = createDragSession(makeAction(), scene, { onCommit, onCancel })
+    session.start({ point: [0, 0] })
+    session.dispose()
+    expect(onCommit).toHaveBeenCalledTimes(0)
+    expect(onCancel).toHaveBeenCalledTimes(0)
+    expect(scene._calls.resumeHistory).toBe(1)
+    expect(scene._calls.restoreAll).toBe(1)
+  })
+
   test('dirty cascade fires once per id even across multiple move ticks', () => {
     // Register a kind with no relations — cascade returns just {startId}.
     registerNode(makeDef('thing'))

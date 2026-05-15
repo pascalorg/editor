@@ -40,7 +40,11 @@ export type DragSession<Ctx, Draft> = {
   /** Returns the latest draft `apply` produced (or null before first move). */
   getDraft: () => Draft | null
   isActive: () => boolean
-  /** Idempotent cleanup. If active, equivalent to `cancel()`. */
+  /** Idempotent cleanup. If active, restores scene state and resumes
+   * history, but does **not** fire `onCancel`. Use for React-effect
+   * teardown — onCancel would re-trigger the parent's state machine and
+   * break StrictMode's double-mount cycle. Esc / external aborts must
+   * still call `cancel()` directly. */
   dispose: () => void
 }
 
@@ -136,7 +140,14 @@ export function createDragSession<Ctx, Draft>(
       if (active && ctx != null) {
         action.cancel(ctx, scene)
         scene.restoreAll()
-        terminate(false)
+        // Silent terminate: no onCancel. The caller (e.g. useDragAction's
+        // effect cleanup) is reacting to the parent unmounting and would
+        // loop the state machine if onCancel re-set the parent's state.
+        active = false
+        ctx = null
+        draft = null
+        dirtyMarked = new Set()
+        scene.resumeHistory()
       }
     },
   }
