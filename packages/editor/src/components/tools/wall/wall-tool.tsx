@@ -392,6 +392,12 @@ export const WallTool: React.FC = () => {
     let gridPosition: WallPlanPoint = [0, 0]
     let previousWallEnd: [number, number] | null = null
 
+    const stopDrafting = () => {
+      buildingState.current = 0
+      wallPreviewRef.current.visible = false
+      setDraftMeasurement(null)
+    }
+
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
@@ -438,6 +444,11 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+        stopDrafting()
+        return
+      }
+
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
@@ -460,9 +471,18 @@ export const WallTool: React.FC = () => {
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
         // Both start and end are building-local ✓
-        createWallOnCurrentLevel([startingPoint.current.x, startingPoint.current.z], snappedEnd)
+        const createdWall = createWallOnCurrentLevel(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedEnd,
+        )
+        if (!createdWall) return
+
+        const nextStart = createdWall.end
+        startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
+        endingPoint.current.copy(startingPoint.current)
+        cursorRef.current.position.copy(startingPoint.current)
         wallPreviewRef.current.visible = false
-        buildingState.current = 0
+        buildingState.current = 1
         setDraftMeasurement(null)
       }
     }
@@ -482,9 +502,7 @@ export const WallTool: React.FC = () => {
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
-        buildingState.current = 0
-        wallPreviewRef.current.visible = false
-        setDraftMeasurement(null)
+        stopDrafting()
       }
     }
 

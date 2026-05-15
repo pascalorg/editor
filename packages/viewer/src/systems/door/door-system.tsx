@@ -438,8 +438,6 @@ function createRoundedClippedLeafFrameShape(
     getRoundedBoundaryYAtX(x, fullLeft, fullRight, top, {
       topLeft: outerRadii.topLeft,
       topRight: outerRadii.topRight,
-      bottomLeft: 0,
-      bottomRight: 0,
     }),
   )
 
@@ -466,8 +464,6 @@ function createRoundedClippedLeafFrameShape(
     getRoundedBoundaryYAtX(x, innerFullLeft, innerFullRight, innerTop, {
       topLeft: innerRadii.topLeft,
       topRight: innerRadii.topRight,
-      bottomLeft: 0,
-      bottomRight: 0,
     }),
   )
 
@@ -730,8 +726,6 @@ function addLeafSegmentContent({
       return getRoundedBoundaryYAtX(x, leafLeft, leafRight, leafTop, {
         topLeft: openingTopRadii.topLeft,
         topRight: openingTopRadii.topRight,
-        bottomLeft: 0,
-        bottomRight: 0,
       })
     }
 
@@ -742,7 +736,7 @@ function addLeafSegmentContent({
           leafLeft,
           leafRight,
           leafTop,
-          archHeight,
+          clampedLeafArchHeight,
           archOuterSide,
         )
       }
