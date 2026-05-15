@@ -43,6 +43,11 @@ function getRegistryRenderer(
 function RegistryRenderer({ node }: { node: AnyNode }) {
   const def = nodeRegistry.get(node.type)
   if (!def) return null
+  // A registered kind may omit `renderer` — in that flow the framework's
+  // generic empty-group renderer covers it (Phase 4 work). Until that ships,
+  // returning null here lets <NodeRenderer> fall through to the legacy switch,
+  // which is how wall's milestone-A skeleton stays inert.
+  if (!def.renderer) return null
   const Renderer = getRegistryRenderer(def.renderer as RendererSource<AnyNode>)
   if (!Renderer) return null
   return (

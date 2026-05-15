@@ -27,7 +27,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   relations?: Relations
   parametrics?: ParametricDescriptor<z.infer<S>>
 
-  renderer: RendererSource<z.infer<S>>
+  /**
+   * Renderer for this kind. Optional under the three-checkbox composition
+   * model (see `wiki/architecture/node-definitions.md`): when omitted, the
+   * framework mounts a generic empty-group renderer that the per-kind
+   * geometry/system fills. Required today only because the generic
+   * renderer is not yet implemented — Phase 4 lands it, then this field
+   * becomes truly optional at runtime too. Making the type optional now so
+   * milestone-A skeletons (like wall) can compile before their runtime
+   * port; downstream consumers (`<NodeRenderer>`, `RegisteredSystems`)
+   * already null-guard on `def.renderer` so omitting it is safe.
+   */
+  renderer?: RendererSource<z.infer<S>>
   system?: SystemContribution
   tool?: LazyComponent
   affordances?: Affordance<z.infer<S>>[]
