@@ -26,6 +26,58 @@ export type GeometryContext = {
   parent: AnyNode | null
 }
 
+// ─── FloorplanGeometry ───────────────────────────────────────────────
+//
+// Output shape for `def.floorplan(node, ctx)`. The floor-plan panel
+// converts these primitives to React-SVG elements via a generic renderer
+// — kinds never touch SVG nodes directly. Coordinates are level-local
+// meters; the panel handles world→SVG transform via its viewBox.
+//
+// Visual styling lives in the geometry so an AI-authored kind can pick
+// its own colors without needing to know about CSS / theme tokens. The
+// renderer maps these directly to SVG attributes.
+
+export type FloorplanPoint = readonly [x: number, y: number]
+
+export type FloorplanStyle = {
+  stroke?: string
+  fill?: string
+  strokeWidth?: number
+  strokeDasharray?: string
+  opacity?: number
+}
+
+export type FloorplanGeometry =
+  | ({ kind: 'path'; d: string } & FloorplanStyle)
+  | ({ kind: 'polygon'; points: readonly FloorplanPoint[] } & FloorplanStyle)
+  | ({
+      kind: 'polyline'
+      points: readonly FloorplanPoint[]
+    } & FloorplanStyle)
+  | ({
+      kind: 'rect'
+      x: number
+      y: number
+      width: number
+      height: number
+      rx?: number
+      ry?: number
+    } & FloorplanStyle)
+  | ({ kind: 'circle'; cx: number; cy: number; r: number } & FloorplanStyle)
+  | ({
+      kind: 'line'
+      x1: number
+      y1: number
+      x2: number
+      y2: number
+    } & FloorplanStyle)
+  | {
+      kind: 'group'
+      children: FloorplanGeometry[]
+      /** Optional transform applied to all children. Rotation in radians. */
+      transform?: { translate?: FloorplanPoint; rotate?: number }
+    }
+
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
 export type Plugin = {
@@ -76,6 +128,21 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * work (animations, named-mesh material poking).
    */
   geometry?: (node: z.infer<S>, ctx: GeometryContext) => Object3D
+  /**
+   * Pure 2D builder for floor-plan rendering. Mirrors `geometry` but emits
+   * plain `FloorplanGeometry` data (SVG-renderable) rather than three.js
+   * Object3D. Coordinates are level-local meters — the floor-plan panel
+   * applies the world→SVG transform.
+   *
+   * Returns `null` when the kind shouldn't appear in floor plan (e.g. an
+   * invisible utility node, or a kind that's 3D-only). Kinds that need
+   * floor-plan rendering but no 3D mesh set `floorplan` without `geometry`.
+   *
+   * See `wiki/architecture/node-definitions.md` ("floor-plan rendering"
+   * section) and Phase 5 of the registry plan for the migration plan off
+   * the legacy `floorplan-panel.tsx` monolith.
+   */
+  floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
   system?: SystemContribution
   tool?: LazyComponent
   affordances?: Affordance<z.infer<S>>[]

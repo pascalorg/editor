@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { buildShelfFloorplan } from './floorplan'
 import { buildShelfGeometry } from './geometry'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
@@ -43,14 +44,15 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
 
   parametrics: shelfParametrics,
 
-  // Three-checkbox composition: shelf needs only a pure geometry function.
-  // The framework's <ParametricNodeRenderer> mounts an empty group + wires
-  // events / registry / dirty-on-mount; the global <GeometrySystem> calls
-  // `buildShelfGeometry(node)` on every dirty mark and swaps the group's
-  // children. No `renderer.tsx`, no `system.tsx` — see
+  // Three-checkbox composition: shelf needs only pure builder functions.
+  // The framework's <ParametricNodeRenderer> + <GeometrySystem> handle 3D
+  // mount and rebuild on dirty; the <FloorplanRegistryLayer> calls
+  // buildShelfFloorplan for the 2D top-down view. No renderer.tsx, no
+  // system.tsx, no inline floor-plan SVG — see
   // `wiki/architecture/node-definitions.md`. Shelf is the reference port
-  // proving Phase 4's boilerplate collapse end-to-end.
+  // proving Phase 4's boilerplate collapse for both 3D and 2D.
   geometry: buildShelfGeometry,
+  floorplan: buildShelfFloorplan,
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),

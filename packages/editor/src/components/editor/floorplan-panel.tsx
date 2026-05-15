@@ -43,8 +43,8 @@ import {
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
-  WallNode as WallNodeSchema,
   type WallNode,
+  WallNode as WallNodeSchema,
   WindowNode,
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
@@ -90,6 +90,7 @@ import {
   FloorplanMeasurementsLayer,
   type LinearMeasurementOverlay,
 } from '../editor-2d/renderers/floorplan-measurements-layer'
+import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanRoofLayer } from '../editor-2d/renderers/floorplan-roof-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
@@ -17671,6 +17672,14 @@ export function FloorplanPanel() {
                   y={viewBox.minY}
                 />
               )}
+
+              {/* Registry-driven floor-plan layer. Iterates kinds whose
+                  NodeDefinition supplies a `floorplan` builder and renders
+                  their SVG via <FloorplanGeometryRenderer>. Sits above the
+                  legacy inline content so newly-registered kinds (shelf
+                  today) overlay on top until their inline equivalent is
+                  removed in their Phase 5 migration PR. */}
+              <FloorplanRegistryLayer />
 
               <FloorplanMarqueeLayer
                 bounds={visibleSvgMarqueeBounds}
