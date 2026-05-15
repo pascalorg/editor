@@ -1,7 +1,7 @@
 import type { AnyNode, AnyNodeId, ElevatorNode } from '../../schema'
 import { type ElevatorInteractiveState, useInteractive } from '../../store/use-interactive'
 import useScene from '../../store/use-scene'
-import { resolveElevatorLevels, type ElevatorLevelEntry } from './elevator-service'
+import { type ElevatorLevelEntry, resolveElevatorLevels } from './elevator-service'
 
 const EPSILON = 0.001
 
@@ -23,6 +23,7 @@ export function createElevatorInteractiveState(
     phase: 'idle',
     phaseStartedAt: null,
     queue: [],
+    requestedStops: [],
   }
 }
 
@@ -64,12 +65,13 @@ export function queueElevatorRequest(
   return {
     ...state,
     queue: [...state.queue, levelId],
+    requestedStops: state.requestedStops.includes(levelId)
+      ? state.requestedStops
+      : [...state.requestedStops, levelId],
   }
 }
 
-export function openElevatorDoorState(
-  state: ElevatorInteractiveState,
-): ElevatorInteractiveState {
+export function openElevatorDoorState(state: ElevatorInteractiveState): ElevatorInteractiveState {
   if (!state.currentLevelId || state.phase === 'moving') return state
 
   return {
@@ -126,6 +128,7 @@ export function stepElevatorRuntimeState({
       phase: 'idle',
       phaseStartedAt: null,
       queue: [],
+      requestedStops: [],
       doorOpen: 0,
     }
   }
@@ -149,7 +152,11 @@ export function stepElevatorRuntimeState({
             doorOpen: Math.max(0, state.doorOpen - doorStep),
           }
         }
-        return state
+        if (state.requestedStops.length === 0) return state
+        return {
+          ...state,
+          requestedStops: [],
+        }
       }
 
       return {
@@ -182,6 +189,7 @@ export function stepElevatorRuntimeState({
           targetLevelId: null,
           phase: 'idle',
           queue: [],
+          requestedStops: [],
         }
       }
 
@@ -246,7 +254,9 @@ export function stepElevatorRuntimes(now: number, delta: number) {
 
     const state = useInteractive.getState().elevators[elevatorId]
     if (!state) {
-      useInteractive.getState().initElevator(elevatorId, defaultEntry.id as AnyNodeId, defaultEntry.baseY)
+      useInteractive
+        .getState()
+        .initElevator(elevatorId, defaultEntry.id as AnyNodeId, defaultEntry.baseY)
       continue
     }
 
