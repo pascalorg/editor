@@ -14,7 +14,7 @@ import {
 
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Spline } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -44,7 +44,6 @@ export function FencePanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
 
@@ -52,34 +51,43 @@ export function FencePanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as FenceNode | undefined) : undefined,
   )
 
+  // Mirror the latest node into a ref so the slider handlers below have
+  // stable identities across re-renders. Without this, every store tick
+  // (one per pointermove during a slider drag) rebuilt the handler
+  // refs, which destabilised SliderControl's pointer-capture listeners
+  // and combined with float drift in `getWallCurveLength` produced a
+  // "Maximum update depth exceeded" cascade.
+  const nodeRef = useRef(node)
+  nodeRef.current = node
+
   const handleUpdate = useCallback(
     (updates: Partial<FenceNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
-      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleUpdateLength = useCallback(
     (newLength: number) => {
-      if (!node || newLength <= 0) return
+      const n = nodeRef.current
+      if (!n || newLength <= 0) return
 
-      const dx = node.end[0] - node.start[0]
-      const dz = node.end[1] - node.start[1]
+      const dx = n.end[0] - n.start[0]
+      const dz = n.end[1] - n.start[1]
       const currentLength = Math.sqrt(dx * dx + dz * dz)
       if (currentLength === 0) return
 
       const dirX = dx / currentLength
       const dirZ = dz / currentLength
       const newEnd: [number, number] = [
-        node.start[0] + dirX * newLength,
-        node.start[1] + dirZ * newLength,
+        n.start[0] + dirX * newLength,
+        n.start[1] + dirZ * newLength,
       ]
 
       handleUpdate({ end: newEnd })
     },
-    [node, handleUpdate],
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {

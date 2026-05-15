@@ -12,7 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Spline } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -23,7 +23,6 @@ import { PanelWrapper } from './panel-wrapper'
 export function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
 
@@ -47,21 +46,30 @@ export function WallPanel() {
     })
   })
 
+  // Mirror the latest node into a ref so the slider handlers below have
+  // stable identities across re-renders. Without this, every store tick
+  // (one per pointermove during a slider drag) rebuilt the handler
+  // refs, destabilising SliderControl's pointer-capture listeners and
+  // combining with float drift in `getWallCurveLength` produced a
+  // "Maximum update depth exceeded" cascade. Same fix in fence-panel.tsx.
+  const nodeRef = useRef(node)
+  nodeRef.current = node
+
   const handleUpdate = useCallback(
     (updates: Partial<WallNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
-      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleUpdateLength = useCallback(
     (newLength: number) => {
-      if (!node || newLength <= 0) return
+      const n = nodeRef.current
+      if (!n || newLength <= 0) return
 
-      const dx = node.end[0] - node.start[0]
-      const dz = node.end[1] - node.start[1]
+      const dx = n.end[0] - n.start[0]
+      const dz = n.end[1] - n.start[1]
       const currentLength = Math.sqrt(dx * dx + dz * dz)
 
       if (currentLength === 0) return
@@ -70,13 +78,13 @@ export function WallPanel() {
       const dirZ = dz / currentLength
 
       const newEnd: [number, number] = [
-        node.start[0] + dirX * newLength,
-        node.start[1] + dirZ * newLength,
+        n.start[0] + dirX * newLength,
+        n.start[1] + dirZ * newLength,
       ]
 
       handleUpdate({ end: newEnd })
     },
-    [node, handleUpdate],
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
