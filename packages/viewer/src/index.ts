@@ -2,6 +2,12 @@
 // renderers (wall renders doors/windows, slab renders hosted items).
 // Public so registry-driven kinds can compose children without reaching
 // into viewer's internal paths.
+
+// Ceiling internals re-exported for the registry-driven ceiling definition.
+// The ceiling renderer uses TSL shaders for a grid pattern — too much code
+// to duplicate at Stage A. Wrap-exported here, ported into the nodes
+// folder in a later stage.
+export { CeilingRenderer } from './components/renderers/ceiling/ceiling-renderer'
 export { NodeRenderer } from './components/renderers/node-renderer'
 export { default as Viewer } from './components/viewer'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
@@ -31,6 +37,7 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { default as useViewer } from './store/use-viewer'
+export { CeilingSystem } from './systems/ceiling/ceiling-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.

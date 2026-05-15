@@ -3,7 +3,7 @@
 import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -14,7 +14,6 @@ import { PanelWrapper } from './panel-wrapper'
 export function CeilingPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const editingHole = useEditor((s) => s.editingHole)
   const setEditingHole = useEditor((s) => s.setEditingHole)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -23,12 +22,17 @@ export function CeilingPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined) : undefined,
   )
 
+  // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
+  // handler refs so slider drags don't trigger Maximum update depth.
+  const nodeRef = useRef(node)
+  nodeRef.current = node
+
   const handleUpdate = useCallback(
     (updates: Partial<CeilingNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleClose = useCallback(() => {
