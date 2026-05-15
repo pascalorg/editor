@@ -5,18 +5,15 @@ import {
   constrainWallMoveDeltaToAxis,
   emitter,
   type FenceNode,
-  getPerpendicularWallMoveAxis,
   type GridEvent,
+  getPerpendicularWallMoveAxis,
   type LevelNode,
-  sceneRegistry,
-  useLiveTransforms,
   useScene,
   type WallMoveAxis,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type * as THREE from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'

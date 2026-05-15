@@ -1,6 +1,6 @@
-import { useRegistry, useScene, type SiteNode, type SlabNode } from '@pascal-app/core'
+import { type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
 import { useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, Path, Shape, type Group } from 'three'
+import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 import { unionPolygons } from '../../../lib/polygon-union'
 import useViewer from '../../../store/use-viewer'
