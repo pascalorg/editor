@@ -1,6 +1,7 @@
 'use client'
 
 import { WallCutout, WallSystem } from '@pascal-app/viewer'
+import { useEffect } from 'react'
 
 /**
  * Registry-driven wall system bundle.
@@ -27,6 +28,17 @@ import { WallCutout, WallSystem } from '@pascal-app/viewer'
  * then this file is the single mount surface for wall's per-frame work.
  */
 const WallSystems = () => {
+  // Phase 3 verification log — confirms the registry took over the wall
+  // dispatch. Fires once when RegisteredSystems lazy-loads this bundle (so
+  // exactly once per viewer mount when NEXT_PUBLIC_USE_REGISTRY_FOR_WALL=true).
+  // Drop alongside the feature flag at Phase 3 sign-off.
+  useEffect(() => {
+    console.info('[wall:registry] system bundle mounted — registry path active')
+    return () => {
+      console.info('[wall:registry] system bundle unmounted')
+    }
+  }, [])
+
   return (
     <>
       <WallSystem />

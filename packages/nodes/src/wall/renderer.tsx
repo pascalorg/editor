@@ -25,6 +25,12 @@ import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
  * That decision lands in a later milestone; for now the system retains
  * ownership of the rebuild loop.
  */
+// Phase 3 verification — set once when the first registry-driven wall
+// renderer mounts. Stops the log firing per wall (a scene with 200 walls
+// would spam the console). Drop alongside the feature flag at Phase 3
+// sign-off.
+let didLogFirstRegistryWallMount = false
+
 function createEmptyWallGeometry(): BufferGeometry {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute([], 3))
@@ -48,6 +54,14 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   useLayoutEffect(() => {
     useScene.getState().markDirty(node.id)
   }, [node.id])
+
+  useEffect(() => {
+    if (didLogFirstRegistryWallMount) return
+    didLogFirstRegistryWallMount = true
+    console.info(
+      '[wall:registry] first registry-driven WallRenderer mounted — legacy WallRenderer is NOT in use',
+    )
+  }, [])
 
   useEffect(() => {
     return () => {
