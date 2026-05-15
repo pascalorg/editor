@@ -159,6 +159,21 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
   system?: SystemContribution
   tool?: LazyComponent
+  /**
+   * Stage-D drag-affordance components — one per kind-owned editor mode
+   * triggered by `useEditor` state. Component receives `{ node }` as its
+   * sole prop. Lazy-loaded by ToolManager when the corresponding editor
+   * state activates (e.g. `curvingFence` → `affordanceTools.curve`).
+   *
+   * Each component is the thin React wrapper around a pure DragAction
+   * primitive that lives in the kind's `actions/` folder. The split keeps
+   * the action data unit-testable while letting the wrapper consume
+   * `useDragAction` + cursor visuals.
+   *
+   * Generic record so per-kind state names don't need to land in the
+   * core type system. ToolManager looks up by string key.
+   */
+  affordanceTools?: Record<string, () => Promise<{ default: ComponentType<any> }>>
   affordances?: Affordance<z.infer<S>>[]
   /**
    * Contextual shortcut hints shown by `HelperManager` when this kind's

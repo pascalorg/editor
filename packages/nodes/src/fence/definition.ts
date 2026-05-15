@@ -67,6 +67,16 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   // Legacy `floorplanFenceEntries` short-circuits to [] when fence is
   // registered (see floorplan-panel.tsx).
   floorplan: buildFenceFloorplan,
+  // Stage D (in progress): drag-affordance components owned by the kind.
+  // ToolManager looks up these lazy modules at runtime when the matching
+  // editor state activates — no static import from editor → nodes
+  // (which would create a circular dep).
+  affordanceTools: {
+    // Triggered by useEditor.curvingFence. Pure DragAction logic in
+    // actions/curve.ts; this component is the React wrapper using
+    // useDragAction + the cursor visuals.
+    curve: () => import('./curve-tool'),
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Set fence start / end' },

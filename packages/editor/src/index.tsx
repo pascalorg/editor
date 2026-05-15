@@ -27,6 +27,10 @@ export type { SidebarTab } from './components/ui/sidebar/tab-bar'
 export type { PresetsAdapter, PresetsTab } from './contexts/presets-context'
 export { PresetsProvider } from './contexts/presets-context'
 export type { SaveStatus } from './hooks/use-auto-save'
+// useDragAction is the React-side glue for the registry's DragAction
+// primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
+// can express their affordances declaratively in their own folder.
+export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'

@@ -49,6 +49,29 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   return Comp
 }
 
+/**
+ * Lazy-loads the kind's drag-affordance component from
+ * `def.affordanceTools[name]`. Lets editor consume kind-owned tools
+ * from `@pascal-app/nodes` without a static import (which would create
+ * a circular dep: nodes already depends on editor).
+ *
+ * Returns null when the kind doesn't declare the affordance — caller
+ * renders the legacy fallback in that case.
+ */
+function getRegistryAffordanceTool(
+  kind: string,
+  affordance: string,
+): ComponentType<{ node: any }> | null {
+  const def = nodeRegistry.get(kind)
+  const loader = def?.affordanceTools?.[affordance]
+  if (!loader) return null
+  const cached = lazyToolCache.get(loader)
+  if (cached) return cached as ComponentType<{ node: any }>
+  const Comp = lazy(loader as () => Promise<{ default: ComponentType<{ node: any }> }>)
+  lazyToolCache.set(loader, Comp as unknown as ComponentType)
+  return Comp
+}
+
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
   site: {
     'property-line': SiteBoundaryEditor,
@@ -191,7 +214,17 @@ export const ToolManager: React.FC = () => {
         {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
         {movingFenceEndpoint && <MoveFenceEndpointTool target={movingFenceEndpoint} />}
         {curvingWall && <CurveWallTool node={curvingWall} />}
-        {curvingFence && <CurveFenceTool node={curvingFence} />}
+        {curvingFence &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(curvingFence.type, 'curve')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance node={curvingFence} />
+              </Suspense>
+            ) : (
+              <CurveFenceTool node={curvingFence} />
+            )
+          })()}
         {movingNode && movingNode.type !== 'building' && (
           <MoveTool
             onNodeMoved={handlePlacedNodeSelected}
