@@ -25,22 +25,14 @@ import {
  *  - **snap**: optional grid snap unless `modifiers.shift` (free place).
  *  - **apply**: write the new curveOffset onto the fence node. Returns
  *    the dirty IDs the cascade resolver should walk.
- *  - **commit**: returns true → drag finalizes. `useDragAction`
- *    resumes history so the post-pause final write lands as a single
- *    undo step.
- *  - **cancel**: restore the original curveOffset. Called on Esc /
- *    component unmount / commit-returns-false.
+ *  - **commit**: single-undo dance — `restoreAll` → `resumeHistory` →
+ *    re-apply final draft so zundo captures the whole drag as one
+ *    Ctrl-Z step. Rejected when the offset didn't actually change.
+ *  - **cancel**: no-op — `createDragSession.cancel()` calls
+ *    `scene.restoreAll()` via the snapshot.
  *
- * Pure data: trivially unit-testable, doesn't import React. The
- * orchestrator (`createDragSession`) handles pauseHistory / resumeHistory
- * automatically.
+ * Pure data: trivially unit-testable, doesn't import React.
  */
-
-const GRID_STEP = 0.5
-
-function snapScalar(value: number): number {
-  return Math.round(value / GRID_STEP) * GRID_STEP
-}
 
 type CurveFenceCtx = {
   nodeId: AnyNodeId
@@ -95,19 +87,24 @@ export const curveFenceDragAction: DragAction<CurveFenceCtx, CurveFenceDraft> = 
     return [ctx.nodeId]
   },
 
-  commit: (_draft, _ctx, _scene) => {
-    // Returning true tells the orchestrator to finalize. The orchestrator
-    // resumes history and re-applies the final draft — yields a single
-    // undo step for the whole drag.
+  commit: (draft, ctx, scene) => {
+    // Reject when the offset didn't actually change — createDragSession
+    // will fall through to cancel + scene.restoreAll() (no zundo entry).
+    if (draft.curveOffset === ctx.originalCurveOffset) return false
+
+    // Single-undo dance: revert via the snapshot (paused history → no
+    // zundo record), resume history, then re-apply the final draft so
+    // zundo captures the whole drag as one undo step. Without this the
+    // pause window's mutations never reach pastStates and Ctrl-Z jumps
+    // past the drag back to the state before activation.
+    scene.restoreAll()
+    scene.resumeHistory()
+    scene.update(ctx.nodeId, { curveOffset: draft.curveOffset } as Partial<AnyNode>)
     return true
   },
 
-  cancel: (ctx, scene) => {
-    // Restore the original curve offset (history was paused, so nothing
-    // intermediate is on the undo stack).
-    scene.update(ctx.nodeId, {
-      curveOffset: ctx.originalCurveOffset,
-    } as Partial<AnyNode>)
-    scene.markDirty(ctx.nodeId)
+  cancel: (_ctx, _scene) => {
+    // No-op — createDragSession.cancel() calls scene.restoreAll() which
+    // puts every touched node back via the snapshot.
   },
 }
