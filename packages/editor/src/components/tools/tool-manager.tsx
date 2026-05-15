@@ -244,7 +244,17 @@ export const ToolManager: React.FC = () => {
               <MoveFenceEndpointTool target={movingFenceEndpoint} />
             )
           })()}
-        {curvingWall && <CurveWallTool node={curvingWall} />}
+        {curvingWall &&
+          (() => {
+            const Registry = getRegistryAffordanceTool(curvingWall.type, 'curve')
+            return Registry ? (
+              <Suspense fallback={null}>
+                <Registry node={curvingWall} />
+              </Suspense>
+            ) : (
+              <CurveWallTool node={curvingWall} />
+            )
+          })()}
         {curvingFence &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool(curvingFence.type, 'curve')

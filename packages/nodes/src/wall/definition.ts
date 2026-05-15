@@ -57,6 +57,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   parametrics: wallParametrics,
 
+  // Stage D (in progress): drag-affordance components owned by the kind.
+  // Only the curve affordance is ported today — the remaining wall
+  // tools (endpoint drag, whole-wall move, placement) are larger and
+  // queued for future sessions.
+  affordanceTools: {
+    curve: () => import('./curve-tool'),
+  },
+
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
