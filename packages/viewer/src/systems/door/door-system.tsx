@@ -35,7 +35,10 @@ export const DoorSystem = () => {
       clearDirty(id as AnyNodeId)
 
       // Rebuild the parent wall so its cutout reflects the updated door geometry
-      if ((node as DoorNode).parentId) {
+      // Avoid triggering expensive wall CSG rebuilds while the door is being interactively moved/duplicated.
+      // The editor tools will request a final wall rebuild on commit.
+      const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
+      if (!isTransient && (node as DoorNode).parentId) {
         useScene.getState().dirtyNodes.add((node as DoorNode).parentId as AnyNodeId)
       }
     })
