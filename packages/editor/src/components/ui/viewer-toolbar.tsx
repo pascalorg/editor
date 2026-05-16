@@ -1,8 +1,9 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun } from 'lucide-react'
+import { Check, ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun, Save } from 'lucide-react'
 import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -366,6 +367,39 @@ function PreviewButton() {
   )
 }
 
+function SaveButton() {
+  const nodes = useScene((state) => state.nodes)
+  const rootNodeIds = useScene((state) => state.rootNodeIds)
+
+  const handleSaveBuild = () => {
+    const sceneData = { nodes, rootNodeIds }
+    const json = JSON.stringify(sceneData, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const date = new Date().toISOString().split('T')[0]
+    link.download = `layout_${date}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          className={cn(TOOLBAR_BTN)}
+          onClick={handleSaveBuild}
+          type="button"
+        >
+          <Save className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Save Build</TooltipContent>
+    </Tooltip>
+  )
+}
+
 // ── Composed toolbar sections ───────────────────────────────────────────────
 
 export function ViewerToolbarLeft() {
@@ -390,6 +424,8 @@ export function ViewerToolbarRight() {
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
       <PreviewButton />
+      <div className="my-1.5 w-px bg-border/50" />
+      <SaveButton />
     </div>
   )
 }
