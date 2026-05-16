@@ -68,6 +68,17 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
     const markWallDirty = (wallId: string | null) => {
       if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
     }
+    const lastWallDirtyAt = new Map<string, number>()
+    const markWallDirtyThrottled = (wallId: string | null) => {
+      if (!wallId) return
+      const now = globalThis.performance?.now?.() ?? Date.now()
+      const last = lastWallDirtyAt.get(wallId) ?? 0
+      // Wall rebuilds can trigger expensive CSG; throttle live previews to avoid FPS collapse.
+      if (now - last > 120) {
+        lastWallDirtyAt.set(wallId, now)
+        markWallDirty(wallId)
+      }
+    }
 
     const getLevelId = () => useViewer.getState().selection.levelId
     const getLevelYOffset = () => {
@@ -144,7 +155,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
       })
 
       if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
-      markWallDirty(event.node.id)
+      markWallDirtyThrottled(event.node.id)
 
       const valid = !hasWallChildOverlap(
         event.node.id,
@@ -212,7 +223,7 @@ export const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNod
         position: [clampedX, clampedY, 0],
         rotation: itemRotation,
       })
-      markWallDirty(event.node.id)
+      markWallDirtyThrottled(event.node.id)
 
       const valid = !hasWallChildOverlap(
         event.node.id,

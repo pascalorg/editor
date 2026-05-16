@@ -285,6 +285,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const basePlaneRef = useRef<Mesh>(null!)
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const lastRawPos = useRef(new Vector3(0, 0, 0))
+  const lastWallDirtyAtRef = useRef(new Map<string, number>())
   const placementState = useRef<PlacementState>(
     config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null },
   )
@@ -722,7 +723,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         }
         // Mark parent wall dirty so it rebuilds geometry — only when position changed
         if (result.dirtyNodeId && posChanged) {
-          useScene.getState().dirtyNodes.add(result.dirtyNodeId)
+          const now = globalThis.performance?.now?.() ?? Date.now()
+          const last = lastWallDirtyAtRef.current.get(result.dirtyNodeId) ?? 0
+          // Wall rebuilds can trigger expensive CSG; throttle live previews to avoid FPS collapse.
+          if (now - last > 120) {
+            lastWallDirtyAtRef.current.set(result.dirtyNodeId, now)
+            useScene.getState().dirtyNodes.add(result.dirtyNodeId)
+          }
         }
 
         // Publish live transform for 2D floorplan
