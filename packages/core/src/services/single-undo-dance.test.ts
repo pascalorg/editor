@@ -209,6 +209,33 @@ describe('Single-undo dance', () => {
     expect((after as { curveOffset: number }).curveOffset).toBe(0)
   })
 
+  test('REAL bend (draft != original): one Ctrl-Z undoes only the bend', () => {
+    useScene.getState().createNode(makeFence(0))
+    const stateAfterCreate = useScene.getState().nodes[FENCE_ID] as { curveOffset: number }
+    expect(stateAfterCreate.curveOffset).toBe(0)
+
+    const scene = createSceneApi(useScene)
+    scene.pauseHistory()
+    // Simulate a real drag: capture original, mutate to non-zero.
+    scene.update(FENCE_ID, { curveOffset: 0.5 } as Partial<AnyNode>)
+    expect((useScene.getState().nodes[FENCE_ID] as { curveOffset: number }).curveOffset).toBe(0.5)
+
+    // Dance.
+    scene.restoreAll()
+    expect((useScene.getState().nodes[FENCE_ID] as { curveOffset: number }).curveOffset).toBe(0)
+    scene.resumeHistory()
+    scene.update(FENCE_ID, { curveOffset: 0.5 } as Partial<AnyNode>)
+    expect((useScene.getState().nodes[FENCE_ID] as { curveOffset: number }).curveOffset).toBe(0.5)
+
+    // First Ctrl-Z should undo the bend.
+    useScene.temporal.getState().undo()
+    const afterFirstUndo = useScene.getState().nodes[FENCE_ID] as
+      | { curveOffset: number }
+      | undefined
+    expect(afterFirstUndo).toBeDefined()
+    expect(afterFirstUndo?.curveOffset).toBe(0)
+  })
+
   test('a SECOND undo rolls the create step back', () => {
     useScene.getState().createNode(makeFence(0))
     const scene = createSceneApi(useScene)

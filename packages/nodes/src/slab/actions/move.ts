@@ -5,10 +5,13 @@ import {
   type FenceNode,
   type LevelNode,
   type SlabNode,
+  sceneRegistry,
+  useLiveTransforms,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { type FencePlanPoint, snapFenceDraftPoint, triggerSFX } from '@pascal-app/editor'
+import type * as THREE from 'three'
 
 function sameSnap(a: FencePlanPoint | null, b: FencePlanPoint): boolean {
   return a !== null && a[0] === b[0] && a[1] === b[1]
@@ -17,17 +20,20 @@ function sameSnap(a: FencePlanPoint | null, b: FencePlanPoint): boolean {
 /**
  * Phase 5 Stage D — whole-slab move drag affordance.
  *
- * Translates the slab's boundary polygon (and any holes) rigidly under
- * the pointer. Snaps to walls / fences / grid at the level. Latches
- * the drag anchor on the first preview tick so the slab doesn't jump
- * to wherever the activation click landed. Emits grid-snap sfx when
- * the snapped position changes between ticks (matches legacy UX).
+ * Uses the **live-drag exception** (same recipe as fence move): the
+ * slab MESH is translated visually via `sceneRegistry.nodes.get(slabId)
+ * .position` plus a mirror entry in `useLiveTransforms`. The scene
+ * store's polygon stays untouched during the drag — no React re-render
+ * per tick, no CSG-with-holes rebuild per frame.
  *
- * Unlike fence move, the slab port does **not** use the live-drag
- * exception — polygon CSG geometry is expensive to rebuild per frame,
- * but the legacy tool already writes the polygon to the scene every
- * pointer tick and the user perceives that as smooth. Matching that
- * for now; optimization is a separate task once we measure.
+ * On commit the final polygon is written to the scene via the single-
+ * undo dance, then the mesh-position offset is cleared. The renderer
+ * picks up the new polygon, the mesh re-mounts at the new world coords,
+ * and zundo records one diff.
+ *
+ * Hosted items don't follow the visual translation (same as legacy —
+ * item.position is independent of slab.polygon). Acceptable: the slab
+ * snaps back into place on commit so the visual mismatch is brief.
  */
 
 function translatePolygon(
@@ -49,10 +55,33 @@ function polygonCenter(polygon: Array<[number, number]>): [number, number] {
   return [sx / polygon.length, sz / polygon.length]
 }
 
+function setMeshOffset(id: AnyNodeId, deltaX: number, deltaZ: number): void {
+  const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D | undefined
+  if (mesh) mesh.position.set(deltaX, 0, deltaZ)
+}
+
+function setLiveTransform(
+  id: AnyNodeId,
+  originalCenter: [number, number],
+  deltaX: number,
+  deltaZ: number,
+): void {
+  useLiveTransforms.getState().set(id, {
+    position: [originalCenter[0] + deltaX, 0, originalCenter[1] + deltaZ],
+    rotation: 0,
+  })
+}
+
+function clearLiveState(id: AnyNodeId): void {
+  setMeshOffset(id, 0, 0)
+  useLiveTransforms.getState().clear(id)
+}
+
 export type MoveSlabCtx = {
   slabId: AnyNodeId
   originalPolygon: Array<[number, number]>
   originalHoles: Array<Array<[number, number]>>
+  originalCenter: [number, number]
   parentId: string | null
   levelWalls: WallNode[]
   levelFences: FenceNode[]
@@ -65,7 +94,6 @@ export type MoveSlabDraft = {
   holes: Array<Array<[number, number]>>
   deltaX: number
   deltaZ: number
-  center: [number, number]
 }
 
 export const moveSlabDragAction: DragAction<MoveSlabCtx, MoveSlabDraft> = {
@@ -100,6 +128,7 @@ export const moveSlabDragAction: DragAction<MoveSlabCtx, MoveSlabDraft> = {
       slabId: slab.id as AnyNodeId,
       originalPolygon,
       originalHoles,
+      originalCenter: polygonCenter(originalPolygon),
       parentId,
       levelWalls,
       levelFences,
@@ -114,7 +143,6 @@ export const moveSlabDragAction: DragAction<MoveSlabCtx, MoveSlabDraft> = {
       walls: ctx.levelWalls,
       fences: ctx.levelFences,
     })
-    // Emit grid-snap sfx when the snapped position changes.
     if (!sameSnap(ctx.lastSnapped, snapped)) {
       if (ctx.lastSnapped !== null) triggerSFX('sfx:grid-snap')
       ctx.lastSnapped = snapped
@@ -122,40 +150,42 @@ export const moveSlabDragAction: DragAction<MoveSlabCtx, MoveSlabDraft> = {
     if (!ctx.dragAnchor) ctx.dragAnchor = snapped
     const deltaX = snapped[0] - ctx.dragAnchor[0]
     const deltaZ = snapped[1] - ctx.dragAnchor[1]
-    const polygon = translatePolygon(ctx.originalPolygon, deltaX, deltaZ)
-    const holes = ctx.originalHoles.map((h) => translatePolygon(h, deltaX, deltaZ))
+    // Translation is computed lazily on commit — preview only needs the
+    // deltas for the mesh-offset visual.
     return {
-      polygon,
-      holes,
+      polygon: ctx.originalPolygon,
+      holes: ctx.originalHoles,
       deltaX,
       deltaZ,
-      center: polygonCenter(polygon),
     }
   },
 
-  apply: (draft, ctx, scene) => {
-    scene.update(ctx.slabId, {
-      polygon: draft.polygon,
-      holes: draft.holes,
-    } as Partial<AnyNode>)
-    return [ctx.slabId]
+  apply: (draft, ctx, _scene) => {
+    // Live-drag exception: visual translate via Three.js mesh.position +
+    // useLiveTransforms. No scene.update during the drag, no React
+    // re-render of the slab geometry, no CSG-with-holes rebuild.
+    setMeshOffset(ctx.slabId, draft.deltaX, draft.deltaZ)
+    setLiveTransform(ctx.slabId, ctx.originalCenter, draft.deltaX, draft.deltaZ)
+    return []
   },
 
   commit: (draft, ctx, scene) => {
-    // Always push — see fence/actions/curve.ts. Even on a no-movement
-    // commit, the dance must push a pastState entry so Ctrl-Z doesn't
-    // cancel whatever was on the stack before activation.
+    // Single-undo dance — snapshot is empty (no scene.update during
+    // apply), restoreAll is a no-op. Resume history, write the final
+    // polygon. Zundo records one diff: original → translated.
     scene.restoreAll()
     scene.resumeHistory()
     scene.update(ctx.slabId, {
-      polygon: draft.polygon,
-      holes: draft.holes,
+      polygon: translatePolygon(ctx.originalPolygon, draft.deltaX, draft.deltaZ),
+      holes: ctx.originalHoles.map((h) => translatePolygon(h, draft.deltaX, draft.deltaZ)),
     } as Partial<AnyNode>)
+    clearLiveState(ctx.slabId)
     return true
   },
 
-  cancel: (_ctx, _scene) => {
-    // No-op — orchestrator's scene.restoreAll() puts the original
-    // polygon/holes back via the snapshot.
+  cancel: (ctx, _scene) => {
+    // Clear live-drag visual state — mesh snaps back to its (unchanged)
+    // scene position.
+    clearLiveState(ctx.slabId)
   },
 }
