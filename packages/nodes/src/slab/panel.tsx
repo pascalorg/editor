@@ -1,16 +1,30 @@
 'use client'
 
 import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
+import {
+  ActionButton,
+  ActionGroup,
+  PanelSection,
+  PanelWrapper,
+  SliderControl,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
-import { ActionButton, ActionGroup } from '../controls/action-button'
-import { PanelSection } from '../controls/panel-section'
-import { SliderControl } from '../controls/slider-control'
-import { PanelWrapper } from './panel-wrapper'
 
+/**
+ * Phase 5 Stage E — slab inspector (kind-owned).
+ *
+ * 1:1 port of the legacy `SlabPanel`. Mounted via
+ * `parametrics.customPanel` because the slab editor has shape-specific
+ * concerns (elevation presets, area display, holes list with auto-
+ * vs-manual provenance) that don't fit the auto-derived
+ * `<ParametricInspector>` field model yet. When the inspector grows
+ * `list` / `computed` / `action` field kinds, this panel collapses
+ * into `parametrics.groups`.
+ */
 export function SlabPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -112,7 +126,7 @@ export function SlabPanel() {
 
   const handleMove = useCallback(() => {
     if (!node) return
-    sfxEmitter.emit('sfx:item-pick')
+    triggerSFX('sfx:item-pick')
     setMovingNode(node)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
@@ -254,3 +268,5 @@ export function SlabPanel() {
     </PanelWrapper>
   )
 }
+
+export default SlabPanel

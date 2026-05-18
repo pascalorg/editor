@@ -9,12 +9,13 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
+import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
 
 /**
@@ -75,6 +76,21 @@ export function ParametricInspector() {
 
   if (!selectedId || !def || !parametrics) return null
 
+  // `parametrics.customPanel` escape hatch — kind owns its panel
+  // entirely (loaded lazily so the bundle isn't eager). Used by kinds
+  // whose editor has non-parametric concerns (slab holes list, ceiling
+  // height presets, etc.) until per-field `customEditor` + missing
+  // field kinds (list/action/computed) graduate the auto-derived
+  // panel to cover them.
+  if (parametrics.customPanel) {
+    const CustomPanel = resolveCustomPanel(parametrics.customPanel)
+    return (
+      <Suspense fallback={null}>
+        <CustomPanel />
+      </Suspense>
+    )
+  }
+
   const presentation = def.presentation
   const title = presentation?.label ?? nodeType ?? ''
   const canMove = !!def.capabilities.movable
@@ -113,6 +129,18 @@ export function ParametricInspector() {
       )}
     </PanelWrapper>
   )
+}
+
+// Cache lazy custom panel components by their loader so React.lazy isn't
+// re-invoked across renders.
+const customPanelCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+
+function resolveCustomPanel(loader: () => Promise<{ default: ComponentType<any> }>): ComponentType {
+  const cached = customPanelCache.get(loader)
+  if (cached) return cached
+  const Comp = lazy(loader)
+  customPanelCache.set(loader, Comp as ComponentType)
+  return Comp as ComponentType
 }
 
 // ─── Per-field renderers ─────────────────────────────────────────────
@@ -159,6 +187,17 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
           step={step}
           unit={field.unit ?? ''}
           value={num}
+        />
+      )
+    }
+
+    case 'boolean': {
+      const checked = value === true
+      return (
+        <ToggleControl
+          checked={checked}
+          label={prettifyKey(key)}
+          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
         />
       )
     }

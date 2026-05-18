@@ -34,6 +34,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
       fields: [
         { key: 'style', kind: 'enum', options: ['slat', 'rail', 'privacy'] },
         { key: 'baseStyle', kind: 'enum', options: ['floating', 'grounded'] },
+        { key: 'showInfill', kind: 'boolean' },
         { key: 'color', kind: 'color' },
       ],
     },

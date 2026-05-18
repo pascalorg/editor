@@ -371,6 +371,7 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
+  | { key: keyof N; kind: 'boolean'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'enum'; options: readonly string[]; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'vec3'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'color'; visibleIf?: (n: N) => boolean }

@@ -1,16 +1,27 @@
 'use client'
 
 import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
+import {
+  ActionButton,
+  ActionGroup,
+  PanelSection,
+  PanelWrapper,
+  SliderControl,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
-import { ActionButton, ActionGroup } from '../controls/action-button'
-import { PanelSection } from '../controls/panel-section'
-import { SliderControl } from '../controls/slider-control'
-import { PanelWrapper } from './panel-wrapper'
 
+/**
+ * Phase 5 Stage E — ceiling inspector (kind-owned).
+ *
+ * 1:1 port of the legacy `CeilingPanel`. Mounted via
+ * `parametrics.customPanel`. Same rationale as slab/panel.tsx — the
+ * holes list + height presets need richer field kinds before this
+ * panel can collapse into auto-derived groups.
+ */
 export function CeilingPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -111,7 +122,7 @@ export function CeilingPanel() {
 
   const handleMove = useCallback(() => {
     if (!node) return
-    sfxEmitter.emit('sfx:item-pick')
+    triggerSFX('sfx:item-pick')
     setMovingNode(node)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
@@ -252,3 +263,5 @@ export function CeilingPanel() {
     </PanelWrapper>
   )
 }
+
+export default CeilingPanel

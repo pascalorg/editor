@@ -24,11 +24,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import { CeilingPanel } from './ceiling-panel'
 import { ColumnPanel } from './column-panel'
 import { DoorPanel } from './door-panel'
 import { ElevatorPanel } from './elevator-panel'
-import { FencePanel } from './fence-panel'
 import { ItemPanel } from './item-panel'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
@@ -38,7 +36,6 @@ import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 import { RoofPanel } from './roof-panel'
 import { RoofSegmentPanel } from './roof-segment-panel'
-import { SlabPanel } from './slab-panel'
 import { SpawnPanel } from './spawn-panel'
 import { StairPanel } from './stair-panel'
 import { StairSegmentPanel } from './stair-segment-panel'
@@ -95,18 +92,12 @@ function panelForType(type: string | null) {
       return <StairPanel />
     case 'stair-segment':
       return <StairSegmentPanel />
-    case 'slab':
-      return <SlabPanel />
     case 'spawn':
       return <SpawnPanel />
-    case 'ceiling':
-      return <CeilingPanel />
     case 'column':
       return <ColumnPanel />
     case 'wall':
       return <WallPanel />
-    case 'fence':
-      return <FencePanel />
     case 'door':
       return <DoorPanel />
     case 'elevator':

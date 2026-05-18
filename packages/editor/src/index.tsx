@@ -32,9 +32,17 @@ export {
 export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
 export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'
+export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
+export { PanelSection } from './components/ui/controls/panel-section'
+export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
+export { ToggleControl } from './components/ui/controls/toggle-control'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
+// Phase 5 Stage E — kinds with bespoke editors (slab holes list,
+// ceiling height presets, etc.) use `parametrics.customPanel` to mount
+// a kind-owned panel and need PanelWrapper for the chrome.
+export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
