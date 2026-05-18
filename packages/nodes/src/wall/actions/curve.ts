@@ -68,7 +68,9 @@ export const curveWallDragAction: DragAction<CurveWallCtx, CurveWallDraft> = {
   },
 
   commit: (draft, ctx, scene) => {
-    if (draft.curveOffset === ctx.originalCurveOffset) return false
+    // Always push a pastState entry — see fence/actions/curve.ts for
+    // the rationale (no-op-bend would otherwise let Ctrl-Z cancel the
+    // wall creation).
     scene.restoreAll()
     scene.resumeHistory()
     scene.update(ctx.nodeId, { curveOffset: draft.curveOffset } as Partial<AnyNode>)

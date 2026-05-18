@@ -22,7 +22,11 @@ export const CeilingMoveTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
   const live = useScene((s) => s.nodes[ceilingId])
   const liveCeiling = live?.type === 'ceiling' ? (live as CeilingNode) : node
   const polygon = liveCeiling.polygon
-  const holes = liveCeiling.holes ?? []
+  // `?? []` would return a NEW empty array per render, busting downstream
+  // useMemo deps and (under StrictMode) potentially triggering the
+  // "getSnapshot result not cached" warning. Memoize against the source.
+  const EMPTY_HOLES = useMemo(() => [] as Array<Array<[number, number]>>, [])
+  const holes = liveCeiling.holes ?? EMPTY_HOLES
 
   const center: [number, number] = useMemo(() => {
     if (polygon.length === 0) return [0, 0]

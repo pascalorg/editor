@@ -88,15 +88,17 @@ export const curveFenceDragAction: DragAction<CurveFenceCtx, CurveFenceDraft> = 
   },
 
   commit: (draft, ctx, scene) => {
-    // Reject when the offset didn't actually change — createDragSession
-    // will fall through to cancel + scene.restoreAll() (no zundo entry).
-    if (draft.curveOffset === ctx.originalCurveOffset) return false
-
-    // Single-undo dance: revert via the snapshot (paused history → no
-    // zundo record), resume history, then re-apply the final draft so
-    // zundo captures the whole drag as one undo step. Without this the
-    // pause window's mutations never reach pastStates and Ctrl-Z jumps
-    // past the drag back to the state before activation.
+    // Single-undo dance — ALWAYS push a pastState entry, even when the
+    // offset didn't actually change. The "no-op" case (small drag that
+    // `normalizeWallCurveOffset` snaps back to 0) used to return false
+    // here, but that bypassed pastStates entirely; the next Ctrl-Z then
+    // fell through to whatever was on the stack before activation
+    // (typically the fence creation), making it look like the bend
+    // cancelled the create.
+    //
+    // Pushing on every commit means a no-op bend's first Ctrl-Z absorbs
+    // a silent entry (no visible change), then subsequent Ctrl-Z's roll
+    // back the real prior actions. Matches typical editor behavior.
     scene.restoreAll()
     scene.resumeHistory()
     scene.update(ctx.nodeId, { curveOffset: draft.curveOffset } as Partial<AnyNode>)

@@ -1,4 +1,5 @@
 import type { AnyNode, AnyNodeId, CeilingNode, DragAction } from '@pascal-app/core'
+import { triggerSFX } from '@pascal-app/editor'
 
 /**
  * Phase 5 Stage D — whole-ceiling move drag affordance.
@@ -6,7 +7,8 @@ import type { AnyNode, AnyNodeId, CeilingNode, DragAction } from '@pascal-app/co
  * Mirrors `slab/actions/move.ts` shape but ceiling snaps purely to a
  * 0.5m grid (no wall/fence corner snap — ceilings are typically
  * placed independent of the floor layout). Drag anchor is latched on
- * the first preview tick so the ceiling doesn't jump.
+ * the first preview tick so the ceiling doesn't jump. Emits a grid-
+ * snap sfx when the snapped position changes between ticks.
  *
  * Single-undo dance on commit, same recipe as slab/fence.
  */
@@ -15,6 +17,10 @@ const GRID_STEP = 0.5
 
 function snap(value: number): number {
   return Math.round(value / GRID_STEP) * GRID_STEP
+}
+
+function sameSnap(a: [number, number] | null, b: [number, number]): boolean {
+  return a !== null && a[0] === b[0] && a[1] === b[1]
 }
 
 function translatePolygon(
@@ -30,6 +36,7 @@ export type MoveCeilingCtx = {
   originalPolygon: Array<[number, number]>
   originalHoles: Array<Array<[number, number]>>
   dragAnchor: [number, number] | null
+  lastSnapped: [number, number] | null
 }
 
 export type MoveCeilingDraft = {
@@ -50,13 +57,19 @@ export const moveCeilingDragAction: DragAction<MoveCeilingCtx, MoveCeilingDraft>
         h.map(([x, z]) => [x, z] as [number, number]),
       ),
       dragAnchor: null,
+      lastSnapped: null,
     }
   },
 
   preview: (ctx, point, _modifiers) => {
     const sx = snap(point[0])
     const sz = snap(point[1])
-    if (!ctx.dragAnchor) ctx.dragAnchor = [sx, sz]
+    const snapped: [number, number] = [sx, sz]
+    if (!sameSnap(ctx.lastSnapped, snapped)) {
+      if (ctx.lastSnapped !== null) triggerSFX('sfx:grid-snap')
+      ctx.lastSnapped = snapped
+    }
+    if (!ctx.dragAnchor) ctx.dragAnchor = snapped
     const deltaX = sx - ctx.dragAnchor[0]
     const deltaZ = sz - ctx.dragAnchor[1]
     return {
@@ -76,7 +89,9 @@ export const moveCeilingDragAction: DragAction<MoveCeilingCtx, MoveCeilingDraft>
   },
 
   commit: (draft, ctx, scene) => {
-    if (draft.deltaX === 0 && draft.deltaZ === 0) return false
+    // Always push — see fence/actions/curve.ts. No-movement still
+    // records a pastState entry so Ctrl-Z doesn't fall through to the
+    // ceiling-create step.
     scene.restoreAll()
     scene.resumeHistory()
     scene.update(ctx.ceilingId, {

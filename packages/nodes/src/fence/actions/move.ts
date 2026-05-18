@@ -9,8 +9,12 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { type FencePlanPoint, snapFenceDraftPoint } from '@pascal-app/editor'
+import { type FencePlanPoint, snapFenceDraftPoint, triggerSFX } from '@pascal-app/editor'
 import type * as THREE from 'three'
+
+function sameSnap(a: FencePlanPoint | null, b: FencePlanPoint): boolean {
+  return a !== null && a[0] === b[0] && a[1] === b[1]
+}
 
 /**
  * Phase 5 Stage D — whole-fence move drag affordance.
@@ -137,6 +141,10 @@ export type MoveFenceCtx = {
   // Mutable: latched on the first preview call to the snapped pointer
   // position. Subsequent previews compute delta = pointer - dragAnchor.
   dragAnchor: FencePlanPoint | null
+  // Mutable: tracks the last snapped pointer so preview can emit a
+  // grid-snap sfx when the snapped value changes. Matches the legacy
+  // MoveFenceTool's per-tick sound.
+  lastSnapped: FencePlanPoint | null
 }
 
 export type MoveFenceDraft = {
@@ -180,6 +188,7 @@ export const moveFenceDragAction: DragAction<MoveFenceCtx, MoveFenceDraft> = {
       levelWalls,
       levelFences,
       dragAnchor: null,
+      lastSnapped: null,
     }
   },
 
@@ -190,6 +199,12 @@ export const moveFenceDragAction: DragAction<MoveFenceCtx, MoveFenceDraft> = {
       fences: ctx.levelFences,
       ignoreFenceIds: [ctx.fenceId as string],
     })
+    // Emit grid-snap sfx when the snapped position changes between
+    // ticks — matches the legacy MoveFenceTool's user feedback.
+    if (!sameSnap(ctx.lastSnapped, snapped)) {
+      if (ctx.lastSnapped !== null) triggerSFX('sfx:grid-snap')
+      ctx.lastSnapped = snapped
+    }
     // Latch the anchor on the first preview tick — matches legacy
     // "drag is delta from first move" semantics so the fence doesn't
     // jump to wherever the activation click landed.
@@ -229,16 +244,15 @@ export const moveFenceDragAction: DragAction<MoveFenceCtx, MoveFenceDraft> = {
   },
 
   commit: (draft, ctx, scene) => {
-    // Reject when nothing moved — falls through to action.cancel which
-    // clears the live-drag visual state.
-    if (draft.deltaX === 0 && draft.deltaZ === 0) return false
-
-    // Single-undo dance — paused history during drag means nothing
-    // was recorded. We didn't scene.update during apply either (live-
-    // drag exception), so the snapshot is empty and restoreAll is a
-    // no-op. Resume history, then write the final draft. Zundo
-    // captures one diff: original → final.
-    scene.restoreAll() // no-op (no scene updates during apply)
+    // Always push a pastState entry — see fence/actions/curve.ts. The
+    // no-movement case would otherwise let Ctrl-Z cancel the fence
+    // creation that preceded the move.
+    //
+    // Single-undo dance: snapshot is empty (live-drag exception, no
+    // scene.update during apply), so restoreAll is a no-op. Resume,
+    // then write the final draft so zundo records original → final
+    // as one diff.
+    scene.restoreAll()
     scene.resumeHistory()
     scene.update(ctx.fenceId, {
       start: draft.start,

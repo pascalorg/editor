@@ -183,11 +183,12 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
     },
 
     commit: (draft, ctx, scene) => {
-      // Reject when the drag didn't move OR the resulting fence would
-      // be shorter than the minimum length. createDragSession.cancel()
-      // restores originals via the snapshot.
-      const hasChanged = !samePoint(draft.movingPoint, ctx.originalMovingPoint)
-      if (!hasChanged) return false
+      // Min-length rejection still matters — too-short fence is invalid
+      // and should bounce back via the cancel path (snapshot restore).
+      // But the "no-change" rejection is removed: see
+      // fence/actions/curve.ts for the rationale (no-op drag must still
+      // push a pastState entry to avoid Ctrl-Z cancelling the fence
+      // creation that preceded the activation).
       if (!isWallLongEnough(draft.start, draft.end)) return false
 
       // Single-undo dance: revert to originals (paused history → no
