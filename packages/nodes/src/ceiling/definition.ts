@@ -58,12 +58,13 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   // with a vertical TSL-gradient connector + ground-shadow lines.
   tool: () => import('./tool'),
 
-  // Stage D — boundary + hole editors ported. Whole-ceiling move kept
-  // on the legacy MoveCeilingTool for the same reason as slab (live-
-  // drag mesh.position one-frame teleport on commit).
+  // Stage D — all four ceiling drag-affordances live in this folder.
+  // 1:1 port of the legacy tools (scene.update per tick + history
+  // dance + preview fill/outline overlay on move).
   affordanceTools: {
     'boundary-edit': () => import('./boundary-editor'),
     'hole-edit': () => import('./hole-editor'),
+    move: () => import('./move-tool'),
   },
 
   renderer: {

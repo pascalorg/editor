@@ -57,14 +57,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   parametrics: wallParametrics,
 
-  // Stage D — deferred for wall. The curve port (`curve-tool.tsx` +
-  // `actions/curve.ts`) needs more work to match the legacy
-  // CurveWallTool's UX (pre-snap on pointer position, 0.5m grid step,
-  // Shift override, smooth scene.update without cascade overhead).
-  // Legacy fallback runs until that lands. Endpoint move / whole-wall
-  // move / placement are all still legacy too — they're the biggest
-  // tools and have linked-wall corner cascade logic that needs a
-  // careful port.
+  // Stage D — wall curve is a 1:1 port of the legacy CurveWallTool,
+  // relocated into this folder and dispatched via the registry. Endpoint
+  // move (linked-wall corner cascade + ALT-detach), whole-wall move, and
+  // placement are still legacy — they're substantially larger and queued
+  // for separate port passes.
+  affordanceTools: {
+    curve: () => import('./curve-tool'),
+  },
 
   renderer: {
     kind: 'parametric',

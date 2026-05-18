@@ -24,7 +24,11 @@ export {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
 } from './components/tools/shared/segment-angle'
-export { isWallLongEnough } from './components/tools/wall/wall-drafting'
+export {
+  getWallGridStep,
+  isWallLongEnough,
+  snapScalarToGrid,
+} from './components/tools/wall/wall-drafting'
 export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
 export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'

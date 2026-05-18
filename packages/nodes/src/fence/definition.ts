@@ -74,16 +74,15 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   // Legacy `floorplanFenceEntries` short-circuits to [] when fence is
   // registered (see floorplan-panel.tsx).
   floorplan: buildFenceFloorplan,
-  // Stage D — partial port. Endpoint drag (with linked-fence cascade,
-  // alt-detach, angle label) is ported here; curve + whole-fence move
-  // are intentionally kept on the legacy CurveFenceTool / MoveFenceTool
-  // because the legacy code is more polished than the ports were
-  // (cursor anchoring, snap step, performance, history). Those ports
-  // remain in `curve-tool.tsx` + `move-tool.tsx` + their `actions/`
-  // siblings for the next iteration; the legacy fallback runs until
-  // they reach parity.
+  // Stage D — all four fence drag-affordances live in this folder.
+  // curve / move-endpoint / move are 1:1 ports of the legacy tools
+  // (same snap pipeline, same history dance, same cursor render),
+  // relocated under `@pascal-app/nodes` and dispatched via
+  // `def.affordanceTools`. Placement lives in `def.tool` (see below).
   affordanceTools: {
+    curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
+    move: () => import('./move-tool'),
   },
 
   toolHints: [
