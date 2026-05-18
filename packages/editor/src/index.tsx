@@ -25,9 +25,12 @@ export {
   getSegmentAngleReferenceAtPoint,
 } from './components/tools/shared/segment-angle'
 export {
+  createWallOnCurrentLevel,
   getWallGridStep,
   isWallLongEnough,
   snapScalarToGrid,
+  snapWallDraftPoint,
+  type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
 export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
 export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
@@ -74,6 +77,7 @@ export { type CommandAction, useCommandRegistry } from './store/use-command-regi
 export type {
   FloorplanSelectionTool,
   MovingFenceEndpoint,
+  MovingWallEndpoint,
   SplitOrientation,
   ViewMode,
 } from './store/use-editor'

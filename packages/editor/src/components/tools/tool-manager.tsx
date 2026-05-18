@@ -229,7 +229,20 @@ export const ToolManager: React.FC = () => {
               <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
             )
           })()}
-        {movingWallEndpoint && <MoveWallEndpointTool target={movingWallEndpoint} />}
+        {movingWallEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingWallEndpoint.wall.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingWallEndpoint} />
+              </Suspense>
+            ) : (
+              <MoveWallEndpointTool target={movingWallEndpoint} />
+            )
+          })()}
         {movingFenceEndpoint &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool(

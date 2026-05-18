@@ -57,13 +57,17 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   parametrics: wallParametrics,
 
-  // Stage D — wall curve is a 1:1 port of the legacy CurveWallTool,
-  // relocated into this folder and dispatched via the registry. Endpoint
-  // move (linked-wall corner cascade + ALT-detach), whole-wall move, and
-  // placement are still legacy — they're substantially larger and queued
-  // for separate port passes.
+  // Stage D — all four wall drag affordances live in this folder.
+  // curve / move-endpoint / move are 1:1 ports of the legacy tools
+  // (same snap pipelines, linked-wall corner cascade with
+  // `planWallMoveJunctions`, ALT-detach, bridge wall previews,
+  // auto-slab live preview, history dances). Placement is wired via
+  // `def.tool`.
+  tool: () => import('./tool'),
   affordanceTools: {
     curve: () => import('./curve-tool'),
+    'move-endpoint': () => import('./move-endpoint-tool'),
+    move: () => import('./move-tool'),
   },
 
   renderer: {
