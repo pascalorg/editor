@@ -14,6 +14,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
+import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -204,6 +205,15 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
 
     case 'enum': {
       const str = typeof value === 'string' ? value : (field.options[0] ?? '')
+      if (field.display === 'segmented') {
+        return (
+          <SegmentedControl
+            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
+            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
+            value={str}
+          />
+        )
+      }
       return (
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>

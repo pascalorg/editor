@@ -32,10 +32,19 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
     {
       label: 'Style',
       fields: [
-        { key: 'style', kind: 'enum', options: ['slat', 'rail', 'privacy'] },
-        { key: 'baseStyle', kind: 'enum', options: ['floating', 'grounded'] },
+        {
+          key: 'style',
+          kind: 'enum',
+          options: ['slat', 'rail', 'privacy'],
+          display: 'segmented',
+        },
+        {
+          key: 'baseStyle',
+          kind: 'enum',
+          options: ['grounded', 'floating'],
+          display: 'segmented',
+        },
         { key: 'showInfill', kind: 'boolean' },
-        { key: 'color', kind: 'color' },
       ],
     },
   ],

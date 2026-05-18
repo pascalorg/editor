@@ -372,7 +372,15 @@ export type ParamField<N> =
       customEditor?: ComponentType
     }
   | { key: keyof N; kind: 'boolean'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'enum'; options: readonly string[]; visibleIf?: (n: N) => boolean }
+  | {
+      key: keyof N
+      kind: 'enum'
+      options: readonly string[]
+      /** Defaults to 'select' (dropdown). 'segmented' renders the inline
+       *  tabbed switcher — better for short option lists (2-4 items). */
+      display?: 'select' | 'segmented'
+      visibleIf?: (n: N) => boolean
+    }
   | { key: keyof N; kind: 'vec3'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'color'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'material'; visibleIf?: (n: N) => boolean }
