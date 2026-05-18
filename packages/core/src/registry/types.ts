@@ -385,6 +385,17 @@ export type ParamField<N> =
   | { key: keyof N; kind: 'color'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'material'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
+  /** Escape hatch for fields that don't map to a single node key —
+   *  derived values (`length` from `start`/`end`), sliders with
+   *  dynamic min/max (curve sagitta bounded by chord length),
+   *  composed editors, etc. The kind owns the rendering and the
+   *  update logic. `key` here is just a stable React key/label. */
+  | {
+      key: string
+      kind: 'custom'
+      component: ComponentType<{ node: N; onUpdate: (patch: Partial<N>) => void }>
+      visibleIf?: (n: N) => boolean
+    }
 
 export type Issue = { field?: string; msg: string; severity?: 'error' | 'warning' }
 

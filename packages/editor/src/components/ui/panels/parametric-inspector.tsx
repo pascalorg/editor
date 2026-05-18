@@ -293,10 +293,33 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
       )
     }
 
+    case 'custom':
+      // The field owns its rendering and update logic — used for
+      // derived values (length from start/end), dynamic-bounded
+      // sliders (curve sagitta), composed editors.
+      return <CustomFieldRenderer Comp={field.component} nodeId={nodeId} onUpdate={onUpdate} />
+
     default:
       // material / ref / unrecognized kinds — not implemented in v1.
       return null
   }
+}
+
+function CustomFieldRenderer({
+  Comp,
+  nodeId,
+  onUpdate,
+}: {
+  Comp: ComponentType<{ node: AnyNode; onUpdate: (patch: Partial<AnyNode>) => void }>
+  nodeId: AnyNodeId
+  onUpdate: (patch: Partial<AnyNode>) => void
+}) {
+  // Subscribe to the full node — the custom editor may read any
+  // field. Tools that don't want this churn should write narrower
+  // selectors inside Comp itself.
+  const node = useScene((s) => s.nodes[nodeId])
+  if (!node) return null
+  return <Comp node={node} onUpdate={onUpdate} />
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────
