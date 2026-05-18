@@ -3,11 +3,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type IconRef,
   nodeRegistry,
   type ParamField,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -94,11 +96,12 @@ export function ParametricInspector() {
 
   const presentation = def.presentation
   const title = presentation?.label ?? nodeType ?? ''
+  const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
 
   return (
-    <PanelWrapper onClose={handleClose} title={title} width={320}>
+    <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
@@ -129,6 +132,27 @@ export function ParametricInspector() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+function renderIcon(ref: IconRef | undefined): React.ReactNode | undefined {
+  if (!ref) return undefined
+  if (ref.kind === 'iconify') {
+    return <Icon height={16} icon={ref.name} width={16} />
+  }
+  if (ref.kind === 'svg') {
+    return (
+      <svg height={16} viewBox={ref.viewBox} width={16}>
+        <path d={ref.path} fill="currentColor" />
+      </svg>
+    )
+  }
+  // `component`: lazy-loaded custom icon component. Suspense-safe.
+  const LazyIcon = lazy(ref.module)
+  return (
+    <Suspense fallback={null}>
+      <LazyIcon />
+    </Suspense>
   )
 }
 
