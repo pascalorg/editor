@@ -1,17 +1,11 @@
 import { useThree } from '@react-three/fiber'
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef } from 'react'
+import { type BufferGeometry, type Group, Mesh } from 'three'
 import {
-  type ReactNode,
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from 'react'
-import { Group, Mesh, type BufferGeometry } from 'three'
-import {
-  SAH,
   acceleratedRaycast,
   computeBoundsTree,
   disposeBoundsTree,
+  SAH,
   type SplitStrategy,
 } from 'three-mesh-bvh'
 

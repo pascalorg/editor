@@ -1,6 +1,6 @@
 'use client'
 
-import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
+import { ElevatorOpeningSystem, ElevatorRuntimeSystem, StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
@@ -12,8 +12,8 @@ import { DoorSystem } from '../../systems/door/door-system'
 import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
 import { FenceSystem } from '../../systems/fence/fence-system'
 import { GuideSystem } from '../../systems/guide/guide-system'
-import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { ItemSystem } from '../../systems/item/item-system'
+import { ItemLightSystem } from '../../systems/item-light/item-light-system'
 import { LevelSystem } from '../../systems/level/level-system'
 import { RoofSystem } from '../../systems/roof/roof-system'
 import { ScanSystem } from '../../systems/scan/scan-system'
@@ -233,6 +233,7 @@ const Viewer: React.FC<ViewerProps> = ({
         <ElevatorRuntimeSystem />
         <ElevatorInteractionSystem />
         <ElevatorOpeningSystem />
+        <StairOpeningSystem />
         <WindowAnimationSystem />
         <DoorSystem />
         <FenceSystem />

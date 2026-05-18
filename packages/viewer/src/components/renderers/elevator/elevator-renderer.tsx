@@ -35,10 +35,11 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { useNodeEvents } from '../../../hooks/use-node-events'
 
-const SHAFT_WALL_COLOR = '#d7dce4'
-const SHAFT_SIDE_COLOR = '#4b5563'
-const SHAFT_TRIM_COLOR = '#eef2f7'
-const CAB_COLOR = '#d7dde5'
+const DEFAULT_STRUCTURE_WHITE = '#f2f0ed'
+const SHAFT_WALL_COLOR = DEFAULT_STRUCTURE_WHITE
+const SHAFT_SIDE_COLOR = DEFAULT_STRUCTURE_WHITE
+const SHAFT_TRIM_COLOR = DEFAULT_STRUCTURE_WHITE
+const CAB_COLOR = DEFAULT_STRUCTURE_WHITE
 const GLASS_COLOR = '#f8fafc'
 const DOOR_COLOR = '#8e98a6'
 const PANEL_COLOR = '#1f2937'

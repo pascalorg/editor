@@ -19,22 +19,30 @@ function createEmptyGeometry() {
 
 function getSlabMaterial(
   cacheKey: string,
-  params: { material?: SlabNode['material']; materialPreset?: string },
+  params: {
+    material?: SlabNode['material']
+    materialPreset?: string
+    preset?: ReturnType<typeof getMaterialPresetByRef>
+  },
 ) {
   const cached = slabMaterialCache.get(cacheKey)
-  if (cached) return cached
+  if (cached) {
+    if (params.preset) {
+      applyMaterialPresetToMaterials(cached, params.preset)
+    }
+    return cached
+  }
 
-  const preset = getMaterialPresetByRef(params.materialPreset)
-  const slabMaterial = preset
+  const slabMaterial = params.preset
     ? new THREE.MeshStandardMaterial()
     : params.material
       ? createMaterial(params.material).clone()
       : DEFAULT_SLAB_MATERIAL.clone()
 
-  if (preset) {
+  if (params.preset) {
     // Apply the preset to the slab-owned material so async texture loads update
     // the instance we actually render after refresh as well.
-    applyMaterialPresetToMaterials(slabMaterial, preset)
+    applyMaterialPresetToMaterials(slabMaterial, params.preset)
   }
 
   // Slabs participate in the WebGPU MRT scene pass. Keeping them opaque avoids
@@ -64,14 +72,17 @@ export const SlabRenderer = ({ node }: { node: SlabNode }) => {
   const material = useMemo(() => {
     const resolvedMaterial = node.material
     const resolvedMaterialPreset = node.materialPreset
+    const preset = getMaterialPresetByRef(resolvedMaterialPreset)
     const cacheKey = JSON.stringify({
       material: resolvedMaterial ?? null,
       materialPreset: resolvedMaterialPreset ?? null,
+      preset: preset ?? null,
     })
 
     return getSlabMaterial(cacheKey, {
       material: resolvedMaterial,
       materialPreset: resolvedMaterialPreset,
+      preset,
     })
   }, [
     node.material,

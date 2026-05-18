@@ -44,6 +44,9 @@ const _quaternion = new THREE.Quaternion()
 const _scale = new THREE.Vector3(1, 1, 1)
 const _yAxis = new THREE.Vector3(0, 1, 0)
 const _uvFaceNormal = new THREE.Vector3()
+const _uvWorldDown = new THREE.Vector3(0, -1, 0)
+const _uvDownSlope = new THREE.Vector3()
+const _uvAcrossSlope = new THREE.Vector3()
 
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
@@ -126,15 +129,19 @@ export const RoofSystem = () => {
         pendingRoofUpdates.delete(id)
         continue
       }
+
       const group = sceneRegistry.nodes.get(id) as THREE.Group
-      if (group) {
-        const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
-        if (mergedMesh?.visible !== false) {
-          // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
-          updateMergedRoofGeometry(node as RoofNode, group, nodes)
-          roofsProcessed++
-        }
+      if (!group) continue
+
+      const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
+      if (!mergedMesh) continue
+
+      if (mergedMesh.visible !== false) {
+        // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
+        updateMergedRoofGeometry(node as RoofNode, group, nodes)
+        roofsProcessed++
       }
+
       pendingRoofUpdates.delete(id)
     }
   }, 5) // Priority 5: run after all other systems have settled
@@ -964,6 +971,28 @@ function createGeometryFromFaces(
     const vA = new THREE.Vector3().subVectors(p1, p0)
     const vB = new THREE.Vector3().subVectors(p2, p0)
     const normal = new THREE.Vector3().crossVectors(vA, vB).normalize()
+    let slopeAlignedDown: THREE.Vector3 | null = null
+    let slopeAlignedAcross: THREE.Vector3 | null = null
+    let slopeAlignedVOrigin = 0
+
+    if (normal.y > SHINGLE_SURFACE_EPSILON) {
+      _uvDownSlope.copy(_uvWorldDown).projectOnPlane(normal)
+      if (_uvDownSlope.lengthSq() > 1e-8) {
+        _uvDownSlope.normalize()
+        _uvAcrossSlope.crossVectors(_uvDownSlope, normal).normalize()
+
+        let highestPoint = face[0]!
+        for (const candidate of face) {
+          if (candidate.y > highestPoint.y) {
+            highestPoint = candidate
+          }
+        }
+
+        slopeAlignedDown = _uvDownSlope.clone()
+        slopeAlignedAcross = _uvAcrossSlope.clone()
+        slopeAlignedVOrigin = highestPoint.dot(slopeAlignedDown)
+      }
+    }
 
     let assignedMatIndex = 0
     if (typeof matRule === 'function') {
@@ -989,9 +1018,15 @@ function createGeometryFromFaces(
       normals.push(normal.x, normal.y, normal.z)
       normals.push(normal.x, normal.y, normal.z)
 
-      pushRoofUv(uvs, p0, normal)
-      pushRoofUv(uvs, fi, normal)
-      pushRoofUv(uvs, fi1, normal)
+      if (slopeAlignedDown && slopeAlignedAcross) {
+        uvs.push(p0.dot(slopeAlignedAcross), slopeAlignedVOrigin - p0.dot(slopeAlignedDown))
+        uvs.push(fi.dot(slopeAlignedAcross), slopeAlignedVOrigin - fi.dot(slopeAlignedDown))
+        uvs.push(fi1.dot(slopeAlignedAcross), slopeAlignedVOrigin - fi1.dot(slopeAlignedDown))
+      } else {
+        pushRoofUv(uvs, p0, normal)
+        pushRoofUv(uvs, fi, normal)
+        pushRoofUv(uvs, fi1, normal)
+      }
 
       indices.push(vertexCount, vertexCount + 1, vertexCount + 2)
 
@@ -1036,12 +1071,22 @@ function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) 
     return
   }
 
+  if (_uvFaceNormal.y > SHINGLE_SURFACE_EPSILON) {
+    _uvDownSlope.copy(_uvWorldDown).projectOnPlane(_uvFaceNormal)
+    if (_uvDownSlope.lengthSq() > 1e-8) {
+      _uvDownSlope.normalize()
+      _uvAcrossSlope.crossVectors(_uvDownSlope, _uvFaceNormal).normalize()
+      uvs.push(point.dot(_uvAcrossSlope), point.dot(_uvDownSlope))
+      return
+    }
+  }
+
   if (absX >= absZ) {
-    uvs.push(point.z, point.y)
+    uvs.push(_uvFaceNormal.x >= 0 ? point.z : -point.z, -point.y)
     return
   }
 
-  uvs.push(point.x, point.y)
+  uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, -point.y)
 }
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {

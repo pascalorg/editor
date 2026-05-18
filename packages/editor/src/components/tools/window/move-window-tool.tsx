@@ -70,17 +70,28 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       metadata: movingWindowNode.metadata,
     }
 
-    if (!isNew) {
-      // Move mode: mark the existing window as transient so it hides while being repositioned
-      useScene.getState().updateNode(movingWindowNode.id, {
-        metadata: { ...meta, isTransient: true },
-      })
-    }
+    // Mark the moving window as transient so it doesn't intercept wall raycasts while repositioning.
+    // Without this, duplicates can block `wall:*` events which breaks the cursor box and can cause
+    // rapid enter/leave churn (triggering expensive wall CSG rebuilds).
+    useScene.getState().updateNode(movingWindowNode.id, {
+      metadata: { ...meta, isTransient: true },
+    })
 
     let currentWallId: string | null = movingWindowNode.parentId
 
     const markWallDirty = (wallId: string | null) => {
       if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
+    }
+    const lastWallDirtyAt = new Map<string, number>()
+    const markWallDirtyThrottled = (wallId: string | null) => {
+      if (!wallId) return
+      const now = globalThis.performance?.now?.() ?? Date.now()
+      const last = lastWallDirtyAt.get(wallId) ?? 0
+      // Wall rebuilds can trigger expensive CSG; throttle live previews to avoid FPS collapse.
+      if (now - last > 120) {
+        lastWallDirtyAt.set(wallId, now)
+        markWallDirty(wallId)
+      }
     }
 
     const getLevelId = () => useViewer.getState().selection.levelId
@@ -151,7 +162,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
       })
 
       if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
-      markWallDirty(event.node.id)
+      markWallDirtyThrottled(event.node.id)
 
       const valid = !hasWallChildOverlap(
         event.node.id,
@@ -224,7 +235,7 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         position: [clampedX, clampedY, 0],
         rotation: itemRotation,
       })
-      markWallDirty(event.node.id)
+      markWallDirtyThrottled(event.node.id)
 
       const valid = !hasWallChildOverlap(
         event.node.id,
@@ -286,28 +297,20 @@ export const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWin
         useScene.getState().deleteNode(movingWindowNode.id)
         useScene.temporal.getState().resume()
 
+        const cloned = structuredClone(movingWindowNode) as any
+        delete cloned.id
+        if (cloned.metadata && typeof cloned.metadata === 'object') {
+          delete cloned.metadata.isNew
+          delete cloned.metadata.isTransient
+        }
+
         const node = WindowNode.parse({
+          ...cloned,
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
           wallId: event.node.id,
           parentId: event.node.id,
-          width: movingWindowNode.width,
-          height: movingWindowNode.height,
-          windowType: movingWindowNode.windowType,
-          operationState: movingWindowNode.operationState,
-          awningDirection: movingWindowNode.awningDirection,
-          casementStyle: movingWindowNode.casementStyle,
-          hingesSide: movingWindowNode.hingesSide,
-          frameThickness: movingWindowNode.frameThickness,
-          frameDepth: movingWindowNode.frameDepth,
-          columnRatios: movingWindowNode.columnRatios,
-          rowRatios: movingWindowNode.rowRatios,
-          columnDividerThickness: movingWindowNode.columnDividerThickness,
-          rowDividerThickness: movingWindowNode.rowDividerThickness,
-          sill: movingWindowNode.sill,
-          sillDepth: movingWindowNode.sillDepth,
-          sillThickness: movingWindowNode.sillThickness,
         })
         useScene.getState().createNode(node, event.node.id as AnyNodeId)
         placedId = node.id

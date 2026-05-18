@@ -319,17 +319,38 @@ export function WindowPanel() {
   const maxRoundedRadius = Math.max(0.01, getMaxSharedWindowRadius(node.width, node.height))
   const displayedWindowType = node.windowType === 'hopper' ? 'awning' : (node.windowType ?? 'fixed')
   const awningDirection = node.windowType === 'hopper' ? 'down' : (node.awningDirection ?? 'up')
-  const isOperableWindow =
-    node.windowType === 'sliding' ||
-    node.windowType === 'casement' ||
-    node.windowType === 'awning' ||
-    node.windowType === 'hopper' ||
-    node.windowType === 'single-hung' ||
-    node.windowType === 'double-hung' ||
-    node.windowType === 'louvered'
+  const windowType = node.windowType ?? 'fixed'
+  const isFixedWindow = windowType === 'fixed'
+  const isTrackSashWindow =
+    windowType === 'sliding' || windowType === 'single-hung' || windowType === 'double-hung'
+  const isOperableSashWindow =
+    windowType === 'casement' ||
+    windowType === 'awning' ||
+    windowType === 'hopper' ||
+    windowType === 'louvered'
+  const isOperableWindow = isTrackSashWindow || isOperableSashWindow
   const supportsWindowShape = shapedWindowTypes.has(node.windowType ?? 'fixed')
-  const supportsGrid = node.windowType === 'fixed'
+  const supportsGrid = isFixedWindow
   const supportsSill = !silllessWindowTypes.has(node.windowType)
+  const showWindowTypeSection = !isOpening
+  const showWindowShapeSection = !isOpening && supportsWindowShape
+  const showOpeningShapeSection = isOpening
+  const showFrameSection = !isOpening
+  const showGridSection = !isOpening && supportsGrid
+  const showSillSection = !isOpening && supportsSill
+  const showOperationSection = !isOpening && isOperableWindow
+  const showAwningDirectionSection = !isOpening && displayedWindowType === 'awning'
+  const showCasementSection = !isOpening && windowType === 'casement'
+  const showFlipSide = !isOpening
+  const operationLabel = isTrackSashWindow
+    ? windowType === 'sliding'
+      ? 'Slide'
+      : 'Raise'
+    : windowType === 'casement'
+      ? 'Swing'
+      : windowType === 'louvered'
+        ? 'Slats'
+        : 'Tilt'
 
   const setOperationState = (value: number) => {
     useInteractive.getState().cancelWindowAnimation(node.id)
@@ -463,7 +484,7 @@ export function WindowPanel() {
         />
       </PanelSection>
 
-      {!isOpening && (
+      {showWindowTypeSection && (
         <PanelSection title="Window Type">
           <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
             {windowTypeOptions.map((option) => {
@@ -494,7 +515,7 @@ export function WindowPanel() {
               )
             })}
           </div>
-          {displayedWindowType === 'awning' && (
+          {showAwningDirectionSection && (
             <div className="mt-2">
               <SegmentedControl
                 onChange={(value) =>
@@ -511,7 +532,7 @@ export function WindowPanel() {
               />
             </div>
           )}
-          {node.windowType === 'casement' && (
+          {showCasementSection && (
             <div className="mt-2 space-y-2">
               <SegmentedControl
                 onChange={(value) =>
@@ -537,10 +558,10 @@ export function WindowPanel() {
               )}
             </div>
           )}
-          {isOperableWindow && (
+          {showOperationSection && (
             <div className="mt-2">
               <SliderControl
-                label="Open"
+                label={operationLabel}
                 max={1}
                 min={0}
                 onChange={setOperationState}
@@ -579,7 +600,7 @@ export function WindowPanel() {
           unit="m"
           value={Math.round(node.position[1] * 100) / 100}
         />
-        {!isOpening && (
+        {showFlipSide && (
           <div className="px-1 pt-2 pb-1">
             <ActionButton
               className="w-full"
@@ -614,8 +635,8 @@ export function WindowPanel() {
         />
       </PanelSection>
 
-      {!isOpening && supportsWindowShape && (
-        <PanelSection title="Corner Shape">
+      {showWindowShapeSection && (
+        <PanelSection title="Top Shape">
           <SegmentedControl
             onChange={(value) =>
               handleUpdate({
@@ -717,7 +738,7 @@ export function WindowPanel() {
         </PanelSection>
       )}
 
-      {isOpening && (
+      {showOpeningShapeSection && (
         <PanelSection title="Opening Shape">
           <SegmentedControl
             onChange={(value) =>
@@ -810,7 +831,8 @@ export function WindowPanel() {
 
       {!isOpening && (
         <>
-          <PanelSection title="Frame">
+          {showFrameSection && (
+            <PanelSection title="Frame">
             <SliderControl
               label="Thickness"
               min={0}
@@ -829,9 +851,10 @@ export function WindowPanel() {
               unit="m"
               value={Math.round(node.frameDepth * 1000) / 1000}
             />
-          </PanelSection>
+            </PanelSection>
+          )}
 
-          {supportsGrid && (
+          {showGridSection && (
             <PanelSection title="Grid">
               <SliderControl
                 label="Columns"
@@ -926,7 +949,7 @@ export function WindowPanel() {
             </PanelSection>
           )}
 
-          {supportsSill && (
+          {showSillSection && (
             <PanelSection title="Sill">
               <ToggleControl
                 checked={node.sill}
