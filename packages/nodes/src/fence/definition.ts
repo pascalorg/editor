@@ -94,7 +94,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   presentation: {
     label: 'Fence',
     description: 'A straight or curved fence segment with configurable posts and infill.',
-    icon: { kind: 'iconify', name: 'lucide:fence' },
+    icon: { kind: 'url', src: '/icons/fence.png' },
     paletteSection: 'structure',
     paletteOrder: 20,
   },

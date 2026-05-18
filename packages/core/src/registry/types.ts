@@ -230,6 +230,10 @@ export type IconRef =
   /** Iconify identifier, e.g. `lucide:square`. Matches the @iconify-react
    * setup the editor app already uses for tool icons. */
   | { kind: 'iconify'; name: string }
+  /** URL path to a raster or vector asset (PNG/SVG/...). Matches the
+   * palette's PNG/SVG assets — use this to share the same artwork
+   * between the bottom toolbar and the inspector title. */
+  | { kind: 'url'; src: string }
   /** Inline SVG path data. Use for asset packs or plugins that want a custom
    * mark without contributing a React component. */
   | { kind: 'svg'; viewBox: string; path: string }

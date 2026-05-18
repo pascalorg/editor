@@ -83,7 +83,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   presentation: {
     label: 'Slab',
     description: 'A polygon-bounded floor surface that hosts items on top.',
-    icon: { kind: 'iconify', name: 'lucide:square' },
+    icon: { kind: 'url', src: '/icons/floor.png' },
     paletteSection: 'structure',
     paletteOrder: 30,
   },

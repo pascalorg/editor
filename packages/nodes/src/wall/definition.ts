@@ -82,7 +82,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   presentation: {
     label: 'Wall',
     description: 'A straight or curved wall segment. Hosts doors, windows, and wall-mounted items.',
-    icon: { kind: 'iconify', name: 'lucide:wall' },
+    icon: { kind: 'url', src: '/icons/wall.png' },
     paletteSection: 'structure',
     paletteOrder: 10,
   },

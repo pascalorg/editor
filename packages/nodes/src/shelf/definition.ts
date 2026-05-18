@@ -64,7 +64,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   presentation: {
     label: 'Shelf',
     description: 'A horizontal surface for stacking other items.',
-    icon: { kind: 'iconify', name: 'lucide:layers' },
+    icon: { kind: 'url', src: '/icons/column.png' },
     paletteSection: 'structure',
     paletteOrder: 50,
   },

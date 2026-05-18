@@ -137,6 +137,12 @@ export function ParametricInspector() {
 
 function renderIcon(ref: IconRef | undefined): React.ReactNode | undefined {
   if (!ref) return undefined
+  if (ref.kind === 'url') {
+    // Plain <img> here so the inspector doesn't pull in next/image's
+    // server-only requirements (the file is `'use client'`). Same
+    // 16x16 box the legacy panels use.
+    return <img alt="" className="h-4 w-4 shrink-0 object-contain" src={ref.src} />
+  }
   if (ref.kind === 'iconify') {
     return <Icon height={16} icon={ref.name} width={16} />
   }
