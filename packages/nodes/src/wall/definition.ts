@@ -57,13 +57,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   parametrics: wallParametrics,
 
-  // Stage D (in progress): drag-affordance components owned by the kind.
-  // Only the curve affordance is ported today — the remaining wall
-  // tools (endpoint drag, whole-wall move, placement) are larger and
-  // queued for future sessions.
-  affordanceTools: {
-    curve: () => import('./curve-tool'),
-  },
+  // Stage D — deferred for wall. The curve port (`curve-tool.tsx` +
+  // `actions/curve.ts`) needs more work to match the legacy
+  // CurveWallTool's UX (pre-snap on pointer position, 0.5m grid step,
+  // Shift override, smooth scene.update without cascade overhead).
+  // Legacy fallback runs until that lands. Endpoint move / whole-wall
+  // move / placement are all still legacy too — they're the biggest
+  // tools and have linked-wall corner cascade logic that needs a
+  // careful port.
 
   renderer: {
     kind: 'parametric',

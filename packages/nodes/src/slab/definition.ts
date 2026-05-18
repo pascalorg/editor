@@ -58,13 +58,15 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   // with axis/45° snap (Shift to defeat).
   tool: () => import('./tool'),
 
-  // Stage D: drag/edit affordances. Boundary editor + hole editor
-  // delegate to the shared `<PolygonEditor>`; move uses the single-
-  // undo dance for the polygon-translate commit.
+  // Stage D — boundary + hole editors ported (thin <PolygonEditor>
+  // wrappers, behaviorally identical to legacy). Whole-slab move kept
+  // on the legacy MoveSlabTool: the live-drag mesh.position port
+  // introduced a one-frame teleport on commit (geometry rebuild lags
+  // the position clear), and the legacy already has acceptable perf
+  // via RAF-batched markDirty.
   affordanceTools: {
     'boundary-edit': () => import('./boundary-editor'),
     'hole-edit': () => import('./hole-editor'),
-    move: () => import('./move-tool'),
   },
 
   // Stage B: pure geometry function.

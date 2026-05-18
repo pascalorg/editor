@@ -74,26 +74,16 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   // Legacy `floorplanFenceEntries` short-circuits to [] when fence is
   // registered (see floorplan-panel.tsx).
   floorplan: buildFenceFloorplan,
-  // Stage D (in progress): drag-affordance components owned by the kind.
-  // ToolManager looks up these lazy modules at runtime when the matching
-  // editor state activates — no static import from editor → nodes
-  // (which would create a circular dep).
+  // Stage D — partial port. Endpoint drag (with linked-fence cascade,
+  // alt-detach, angle label) is ported here; curve + whole-fence move
+  // are intentionally kept on the legacy CurveFenceTool / MoveFenceTool
+  // because the legacy code is more polished than the ports were
+  // (cursor anchoring, snap step, performance, history). Those ports
+  // remain in `curve-tool.tsx` + `move-tool.tsx` + their `actions/`
+  // siblings for the next iteration; the legacy fallback runs until
+  // they reach parity.
   affordanceTools: {
-    // Triggered by useEditor.curvingFence. Pure DragAction logic in
-    // actions/curve.ts; this component is the React wrapper using
-    // useDragAction + the cursor visuals.
-    curve: () => import('./curve-tool'),
-    // Triggered by useEditor.movingFenceEndpoint. Pure logic in
-    // actions/move-endpoint.ts (linked-fence cascade, alt-detach,
-    // single-undo dance). Wrapper owns the angle label + detach badge.
     'move-endpoint': () => import('./move-endpoint-tool'),
-    // Triggered by useEditor.movingNode when the moving node is a
-    // fence. Whole-fence rigid translation with linked-fence cascade.
-    // Pure logic in actions/move.ts uses the live-drag exception
-    // (mesh.position + useLiveTransforms) to avoid rebuilding fence
-    // geometry every pointer tick; commits the final start/end with
-    // the single-undo dance.
-    move: () => import('./move-tool'),
   },
 
   toolHints: [
