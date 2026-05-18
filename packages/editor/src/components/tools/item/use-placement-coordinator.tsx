@@ -7,6 +7,7 @@ import {
   getScaledDimensions,
   type ItemEvent,
   resolveLevelId,
+  type RoofEvent,
   sceneRegistry,
   spatialGridManager,
   useLiveTransforms,
@@ -41,6 +42,7 @@ import {
   checkCanPlace,
   floorStrategy,
   itemSurfaceStrategy,
+  roofStrategy,
   wallStrategy,
 } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
@@ -286,7 +288,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const lastRawPos = useRef(new Vector3(0, 0, 0))
   const placementState = useRef<PlacementState>(
-    config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null },
+    config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null, roofId: null },
   )
   const shiftFreeRef = useRef(false)
   const previewBoundsSignatureRef = useRef<string | null>(null)
@@ -484,7 +486,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       const c = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(c.x, c.y, c.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      if (result.cursorRotation) {
+        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+      } else {
+        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+      }
 
       const draft = draftNode.current
       if (draft) {
@@ -498,12 +504,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       gridPosition.current.set(...result.gridPosition)
       const c = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(c.x, c.y, c.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      if (result.cursorRotation) {
+        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+      } else {
+        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+      }
+
+      const initRotation: [number, number, number] = result.cursorRotation ?? [0, result.cursorRotationY, 0]
 
       draftNode.create(
         gridPosition.current,
         asset,
-        [0, result.cursorRotationY, 0],
+        initRotation,
         configRef.current.defaultScale,
       )
 
@@ -1065,6 +1077,109 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
+    // ---- Roof Segment Handlers ----
+
+    const toRoofLocal = (result: TransitionResult): TransitionResult => {
+      const local = worldToBuildingLocal(...result.cursorPosition)
+      const localPos: [number, number, number] = [local.x, local.y, local.z]
+      return {
+        ...result,
+        gridPosition: localPos,
+        nodeUpdate: { ...result.nodeUpdate, position: localPos },
+      }
+    }
+
+    const onRoofEnter = (event: RoofEvent) => {
+      const result = roofStrategy.enter(getContext(), event)
+      if (!result) return
+
+      event.stopPropagation()
+      const local = toRoofLocal(result)
+      applyTransition(local)
+
+      if (!draftNode.current) {
+        ensureDraft(local)
+      }
+    }
+
+    const onRoofMove = (event: RoofEvent) => {
+      const ctx = getContext()
+
+      if (ctx.state.surface !== 'roof') {
+        const enterResult = roofStrategy.enter(ctx, event)
+        if (!enterResult) return
+
+        event.stopPropagation()
+        const local = toRoofLocal(enterResult)
+        applyTransition(local)
+        if (!draftNode.current) {
+          ensureDraft(local)
+        }
+        return
+      }
+
+      if (!draftNode.current) {
+        const enterResult = roofStrategy.enter(getContext(), event)
+        if (!enterResult) return
+        event.stopPropagation()
+        ensureDraft(toRoofLocal(enterResult))
+        return
+      }
+
+      const result = roofStrategy.move(ctx, event)
+      if (!result) return
+
+      event.stopPropagation()
+
+      const localPos = worldToBuildingLocal(...result.cursorPosition)
+      gridPosition.current.set(localPos.x, localPos.y, localPos.z)
+      cursorGroupRef.current.position.set(localPos.x, localPos.y, localPos.z)
+      if (result.cursorRotation) {
+        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+      } else {
+        cursorGroupRef.current.rotation.y = result.cursorRotationY
+      }
+
+      const draft = draftNode.current
+      if (draft && result.nodeUpdate) {
+        if ('rotation' in result.nodeUpdate)
+          draft.rotation = result.nodeUpdate.rotation as [number, number, number]
+        draft.position = [localPos.x, localPos.y, localPos.z]
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) {
+          mesh.position.set(localPos.x, localPos.y, localPos.z)
+          if (result.cursorRotation) {
+            mesh.rotation.set(...result.cursorRotation)
+          }
+        }
+      }
+
+      revalidate()
+    }
+
+    const onRoofClick = (event: RoofEvent) => {
+      const result = roofStrategy.click(getContext(), event)
+      if (!result) return
+
+      event.stopPropagation()
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
+      draftNode.commit(result.nodeUpdate)
+
+      if (configRef.current.onCommitted()) {
+        revalidate()
+      }
+    }
+
+    const onRoofLeave = (event: RoofEvent) => {
+      const result = roofStrategy.leave(getContext())
+      if (!result) return
+
+      event.stopPropagation()
+      applyTransition(result)
+    }
+
     // ---- Keyboard rotation ----
 
     const ROTATION_STEP = Math.PI / 2
@@ -1239,6 +1354,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
     emitter.on('ceiling:leave', onCeilingLeave)
+    emitter.on('roof:enter', onRoofEnter)
+    emitter.on('roof:move', onRoofMove)
+    emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', onRoofLeave)
 
     return () => {
       tearingDown = true
@@ -1263,6 +1382,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
+      emitter.off('roof:enter', onRoofEnter)
+      emitter.off('roof:move', onRoofMove)
+      emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', onRoofLeave)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
@@ -1307,7 +1430,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
     mesh.visible = true
 
-    if (placementState.current.surface === 'floor') {
+    if (placementState.current.surface === 'roof') {
+      mesh.position.copy(gridPosition.current)
+    } else if (placementState.current.surface === 'floor') {
       const distance = mesh.position.distanceToSquared(gridPosition.current)
       if (distance > 1) {
         mesh.position.copy(gridPosition.current)

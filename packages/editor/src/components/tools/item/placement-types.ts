@@ -12,7 +12,7 @@ import type { Vector3 } from 'three'
 // PLACEMENT STATE
 // ============================================================================
 
-export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface'
+export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface' | 'roof'
 
 /**
  * Tracks which surface the draft item is currently on.
@@ -23,6 +23,7 @@ export interface PlacementState {
   wallId: string | null
   ceilingId: string | null
   surfaceItemId: string | null
+  roofId: string | null
 }
 
 // ============================================================================
@@ -58,6 +59,7 @@ export interface PlacementResult {
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
+  cursorRotation?: [number, number, number]
   nodeUpdate: Partial<ItemNode> | null
   stopPropagation: boolean
   dirtyNodeId: AnyNode['id'] | null
@@ -72,6 +74,7 @@ export interface TransitionResult {
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
+  cursorRotation?: [number, number, number]
   stopPropagation: boolean
 }
 

@@ -40,12 +40,12 @@ function getInitialState(node: {
 }): PlacementState {
   const attachTo = node.asset.attachTo
   if (attachTo === 'wall' || attachTo === 'wall-side') {
-    return { surface: 'wall', wallId: node.parentId, ceilingId: null, surfaceItemId: null }
+    return { surface: 'wall', wallId: node.parentId, ceilingId: null, surfaceItemId: null, roofId: null }
   }
   if (attachTo === 'ceiling') {
-    return { surface: 'ceiling', wallId: null, ceilingId: node.parentId, surfaceItemId: null }
+    return { surface: 'ceiling', wallId: null, ceilingId: node.parentId, surfaceItemId: null, roofId: null }
   }
-  return { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
+  return { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null, roofId: null }
 }
 
 function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {

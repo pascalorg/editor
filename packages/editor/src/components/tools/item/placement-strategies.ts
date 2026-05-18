@@ -6,6 +6,7 @@ import type {
   GridEvent,
   ItemEvent,
   ItemNode,
+  RoofEvent,
   WallEvent,
   WallNode,
 } from '@pascal-app/core'
@@ -19,6 +20,7 @@ import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import {
   calculateCursorRotation,
   calculateItemRotation,
+  calculateRoofRotation,
   getGridAlignedDimensions,
   getSideFromNormal,
   isValidWallSideFace,
@@ -588,6 +590,87 @@ export const itemSurfaceStrategy = {
 }
 
 // ============================================================================
+// ROOF STRATEGY
+// ============================================================================
+
+export const roofStrategy = {
+  enter(ctx: PlacementContext, event: RoofEvent): TransitionResult | null {
+    if (ctx.asset.attachTo) return null
+    if (!ctx.levelId) return null
+
+    const rotation = calculateRoofRotation(event.normal, event.object.matrixWorld)
+
+    return {
+      stateUpdate: { surface: 'roof', roofId: event.node.id },
+      nodeUpdate: {
+        position: [event.position[0], event.position[1], event.position[2]],
+        parentId: ctx.levelId,
+        rotation,
+      },
+      cursorRotationY: rotation[1],
+      cursorRotation: rotation,
+      gridPosition: [event.position[0], event.position[1], event.position[2]],
+      cursorPosition: [event.position[0], event.position[1], event.position[2]],
+      stopPropagation: true,
+    }
+  },
+
+  move(ctx: PlacementContext, event: RoofEvent): PlacementResult | null {
+    if (ctx.state.surface !== 'roof') return null
+    if (!ctx.draftItem) return null
+
+    const rotation = calculateRoofRotation(event.normal, event.object.matrixWorld)
+
+    return {
+      gridPosition: [event.position[0], event.position[1], event.position[2]],
+      cursorPosition: [event.position[0], event.position[1], event.position[2]],
+      cursorRotationY: rotation[1],
+      cursorRotation: rotation,
+      nodeUpdate: {
+        position: [event.position[0], event.position[1], event.position[2]],
+        rotation,
+      },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+
+  click(ctx: PlacementContext, _event: RoofEvent): CommitResult | null {
+    if (ctx.state.surface !== 'roof') return null
+    if (!ctx.draftItem) return null
+
+    return {
+      nodeUpdate: {
+        position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+        parentId: ctx.levelId,
+        rotation: ctx.draftItem.rotation,
+        metadata: stripTransient(ctx.draftItem.metadata),
+      },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+
+  leave(ctx: PlacementContext): TransitionResult | null {
+    if (ctx.state.surface !== 'roof') return null
+
+    return {
+      stateUpdate: { surface: 'floor', roofId: null },
+      nodeUpdate: {
+        position: [ctx.gridPosition.x, 0, ctx.gridPosition.z],
+        parentId: ctx.levelId,
+        rotation: [0, ctx.currentCursorRotationY, 0],
+      },
+      cursorRotationY: ctx.currentCursorRotationY,
+      cursorRotation: [0, ctx.currentCursorRotationY, 0],
+      gridPosition: [ctx.gridPosition.x, 0, ctx.gridPosition.z],
+      cursorPosition: [ctx.gridPosition.x, 0, ctx.gridPosition.z],
+      stopPropagation: true,
+    }
+  },
+}
+
+// ============================================================================
 // VALIDATION
 // ============================================================================
 
@@ -601,6 +684,11 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   // Item surface: valid if we entered (size check was in enter)
   if (ctx.state.surface === 'item-surface') {
     return ctx.state.surfaceItemId !== null
+  }
+
+  // Roof: valid if we entered (no spatial validator yet)
+  if (ctx.state.surface === 'roof') {
+    return ctx.state.roofId !== null
   }
 
   const attachTo = ctx.draftItem.asset.attachTo
