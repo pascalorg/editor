@@ -7,6 +7,8 @@ import {
   type GridEvent,
   type LevelNode,
   type SlabNode,
+  sceneRegistry,
+  useLiveTransforms,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -19,13 +21,24 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type * as THREE from 'three'
 
 /**
- * Phase 5 Stage D — slab whole-move tool (kind-owned).
+ * Phase 5 Stage D — slab whole-move tool.
  *
- * 1:1 port of the legacy `MoveSlabTool`. scene.update writes polygon
- * + holes per tick (renderer keeps up via RAF-batched markDirty),
- * single-undo dance on commit, cursor at polygon center + delta.
+ * Live-drag pattern: translate the slab MESH visually via
+ * `sceneRegistry.nodes.get(id).position` + a mirror entry in
+ * `useLiveTransforms`. No `scene.update` during the drag — the slab's
+ * polygon CSG isn't rebuilt per tick. On commit we write the
+ * translated polygon to the scene exactly once and clear the
+ * useLiveTransforms entry. `GeometrySystem` resets `mesh.position` to
+ * (0,0,0) when it rebuilds, so the visual transitions smoothly with
+ * no teleport.
+ *
+ * History stays UNPAUSED during the drag: the scene state isn't
+ * changing (we're only mutating Three.js mesh transforms), so there's
+ * nothing for zundo to record. The single `scene.update` on commit
+ * becomes the single undo step naturally.
  */
 function translatePolygon(
   polygon: Array<[number, number]>,
@@ -46,22 +59,25 @@ function getPolygonCenter(polygon: Array<[number, number]>): [number, number] {
   return [sumX / polygon.length, sumZ / polygon.length]
 }
 
+function setMeshOffset(id: AnyNodeId, deltaX: number, deltaZ: number): void {
+  const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D | undefined
+  if (mesh) mesh.position.set(deltaX, 0, deltaZ)
+}
+
 export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
   const originalPolygonRef = useRef(node.polygon.map(([x, z]) => [x, z] as [number, number]))
   const originalHolesRef = useRef(
     (node.holes ?? []).map((hole) => hole.map(([x, z]) => [x, z] as [number, number])),
   )
+  const originalCenterRef = useRef(getPolygonCenter(originalPolygonRef.current))
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
-  const previewRef = useRef<{
-    polygon: Array<[number, number]>
-    holes: Array<Array<[number, number]>>
-  } | null>(null)
+  const deltaRef = useRef<[number, number]>([0, 0])
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
-    const center = getPolygonCenter(node.polygon)
-    return [center[0], 0, center[1]]
+    const c = originalCenterRef.current
+    return [c[0], 0, c[1]]
   })
 
   const exitMoveMode = useCallback(() => {
@@ -71,6 +87,9 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
   useEffect(() => {
     const originalPolygon = originalPolygonRef.current
     const originalHoles = originalHolesRef.current
+    const originalCenter = originalCenterRef.current
+    const slabId = node.id
+
     const levelNode =
       node.parentId && useScene.getState().nodes[node.parentId as AnyNodeId]?.type === 'level'
         ? (useScene.getState().nodes[node.parentId as AnyNodeId] as LevelNode)
@@ -83,26 +102,24 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
       .filter((child): child is FenceNode => child?.type === 'fence')
 
-    useScene.temporal.getState().pause()
     let wasCommitted = false
 
-    const applyPreview = (
-      polygon: Array<[number, number]>,
-      holes: Array<Array<[number, number]>>,
-    ) => {
-      previewRef.current = { polygon, holes }
-      const center = getPolygonCenter(polygon)
-      setCursorLocalPos([center[0], 0, center[1]])
-      useScene.getState().updateNode(node.id, { polygon, holes })
-      useScene.getState().markDirty(node.id as AnyNodeId)
+    const applyPreview = (deltaX: number, deltaZ: number) => {
+      deltaRef.current = [deltaX, deltaZ]
+      // Visual: translate the slab MESH only. No scene mutation, no
+      // polygon rebuild, no React re-render of geometry.
+      setMeshOffset(slabId as AnyNodeId, deltaX, deltaZ)
+      useLiveTransforms.getState().set(slabId, {
+        position: [originalCenter[0] + deltaX, 0, originalCenter[1] + deltaZ],
+        rotation: 0,
+      })
+      // Cursor sphere follows the new polygon center.
+      setCursorLocalPos([originalCenter[0] + deltaX, 0, originalCenter[1] + deltaZ])
     }
 
-    const restoreOriginal = () => {
-      useScene.getState().updateNode(node.id, {
-        holes: originalHoles,
-        polygon: originalPolygon,
-      })
-      useScene.getState().markDirty(node.id as AnyNodeId)
+    const clearPreview = () => {
+      setMeshOffset(slabId as AnyNodeId, 0, 0)
+      useLiveTransforms.getState().clear(slabId)
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -123,13 +140,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      const deltaX = localX - anchor[0]
-      const deltaZ = localZ - anchor[1]
-
-      applyPreview(
-        translatePolygon(originalPolygon, deltaX, deltaZ),
-        originalHoles.map((hole) => translatePolygon(hole, deltaX, deltaZ)),
-      )
+      applyPreview(localX - anchor[0], localZ - anchor[1])
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -138,32 +149,35 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         return
       }
 
-      const preview = previewRef.current ?? { polygon: originalPolygon, holes: originalHoles }
-
+      const [deltaX, deltaZ] = deltaRef.current
       wasCommitted = true
 
-      // Restore original baseline while paused so the next resume+update
-      // registers as a single tracked change (undo reverts to original).
-      useScene.getState().updateNode(node.id, {
-        polygon: originalPolygon,
-        holes: originalHoles,
-      })
-
-      useScene.temporal.getState().resume()
-      useScene.getState().updateNode(node.id, preview)
-      useScene.getState().markDirty(node.id as AnyNodeId)
-      useScene.temporal.getState().pause()
+      if (deltaX !== 0 || deltaZ !== 0) {
+        // Single scene.update — recorded as one undo step (history was
+        // never paused). GeometrySystem rebuilds polygon-driven geometry
+        // and resets the group's transform on the next frame.
+        useScene.getState().updateNode(slabId, {
+          polygon: translatePolygon(originalPolygon, deltaX, deltaZ),
+          holes: originalHoles.map((h) => translatePolygon(h, deltaX, deltaZ)),
+        })
+        useScene.getState().markDirty(slabId as AnyNodeId)
+      }
+      // Clear useLiveTransforms but leave mesh.position as-is. The
+      // GeometrySystem rebuild zeros it on the next frame, by which
+      // point the new geometry is in place — visual stays smooth.
+      useLiveTransforms.getState().clear(slabId)
 
       triggerSFX('sfx:item-place')
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      useViewer.getState().setSelection({ selectedIds: [slabId] })
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
 
     const onCancel = () => {
-      restoreOriginal()
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
-      useScene.temporal.getState().resume()
+      // No scene state to roll back — we never wrote anything. Just
+      // restore the mesh visual.
+      clearPreview()
+      useViewer.getState().setSelection({ selectedIds: [slabId] })
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -174,14 +188,15 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
 
     return () => {
       if (!wasCommitted) {
-        restoreOriginal()
+        clearPreview()
+      } else {
+        useLiveTransforms.getState().clear(slabId)
       }
-      useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [exitMoveMode, node.id, node.parentId, node.polygon])
+  }, [exitMoveMode, node.id, node.parentId])
 
   return (
     <group>

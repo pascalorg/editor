@@ -75,6 +75,15 @@ export const GeometrySystem = () => {
       for (const child of [...built.children]) {
         group.add(child)
       }
+      // Reset transform — matches the legacy per-kind systems
+      // (e.g. FenceSystem.updateFenceGeometry) which clear
+      // mesh.position/rotation when rebuilding. Tools that translate
+      // the group via `mesh.position` for live-drag visuals rely on
+      // this reset to restore the canonical position after scene
+      // state catches up (otherwise the geometry rebuild renders on
+      // top of the residual offset → double-translation teleport).
+      group.position.set(0, 0, 0)
+      group.rotation.set(0, 0, 0)
 
       clearDirty(id as AnyNodeId)
     })

@@ -5,19 +5,27 @@ import {
   type CeilingNode,
   emitter,
   type GridEvent,
+  sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 'three'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type * as THREE from 'three'
 
 /**
- * Phase 5 Stage D — ceiling whole-move tool (kind-owned).
+ * Phase 5 Stage D — ceiling whole-move tool.
  *
- * 1:1 port of the legacy `MoveCeilingTool`. 0.5m grid snap, scene.update
- * per tick, history dance on commit, preview fill + outline overlay
- * matching the legacy.
+ * Live-drag pattern: translate the ceiling MESH visually via
+ * `sceneRegistry.nodes.get(id).position` + a mirror in
+ * `useLiveTransforms`. No `scene.update` during the drag — polygon CSG
+ * with holes isn't rebuilt per tick. On commit we write the translated
+ * polygon to the scene once; the legacy `CeilingSystem` resets the
+ * mesh's X/Z position on rebuild (`mesh.position.x = 0`,
+ * `mesh.position.z = 0`) so the visual transitions smoothly.
+ *
+ * 0.5m grid snap (matches legacy).
  */
 function snap(value: number) {
   return Math.round(value * 2) / 2
@@ -42,27 +50,29 @@ function getPolygonCenter(polygon: Array<[number, number]>): [number, number] {
   return [sumX / polygon.length, sumZ / polygon.length]
 }
 
+function setMeshOffset(id: AnyNodeId, deltaX: number, deltaZ: number, height: number): void {
+  const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D | undefined
+  // CeilingSystem positions the mesh at height−0.01 on rebuild; we
+  // preserve the Y while offsetting X/Z during the drag.
+  if (mesh) mesh.position.set(deltaX, height - 0.01, deltaZ)
+}
+
 export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
   const originalPolygonRef = useRef(node.polygon.map(([x, z]) => [x, z] as [number, number]))
   const originalHolesRef = useRef(
     (node.holes ?? []).map((hole) => hole.map(([x, z]) => [x, z] as [number, number])),
   )
+  const originalCenterRef = useRef(getPolygonCenter(originalPolygonRef.current))
+  const heightRef = useRef(node.height ?? 2.5)
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
-  const previousCursorPosRef = useRef<[number, number, number] | null>(null)
-  const previousDeltaRef = useRef<[number, number] | null>(null)
-  const previewRef = useRef<{
-    polygon: Array<[number, number]>
-    holes: Array<Array<[number, number]>>
-  } | null>(null)
+  const deltaRef = useRef<[number, number]>([0, 0])
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
-    const center = getPolygonCenter(node.polygon)
-    return [center[0], node.height ?? 2.5, center[1]]
+    const c = originalCenterRef.current
+    return [c[0], heightRef.current, c[1]]
   })
-  const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]>>(node.polygon)
-  const [previewHoles, setPreviewHoles] = useState<Array<Array<[number, number]>>>(node.holes ?? [])
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -71,40 +81,30 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
   useEffect(() => {
     const originalPolygon = originalPolygonRef.current
     const originalHoles = originalHolesRef.current
+    const originalCenter = originalCenterRef.current
+    const height = heightRef.current
+    const ceilingId = node.id
 
-    useScene.temporal.getState().pause()
     let wasCommitted = false
 
-    const applyPreview = (
-      polygon: Array<[number, number]>,
-      holes: Array<Array<[number, number]>>,
-    ) => {
-      previewRef.current = { polygon, holes }
-      setPreviewPolygon(polygon)
-      setPreviewHoles(holes)
-      const center = getPolygonCenter(polygon)
-      const nextCursorPos: [number, number, number] = [center[0], node.height ?? 2.5, center[1]]
-      if (
-        !previousCursorPosRef.current ||
-        previousCursorPosRef.current[0] !== nextCursorPos[0] ||
-        previousCursorPosRef.current[1] !== nextCursorPos[1] ||
-        previousCursorPosRef.current[2] !== nextCursorPos[2]
-      ) {
-        previousCursorPosRef.current = nextCursorPos
-        setCursorLocalPos(nextCursorPos)
-      }
-      useScene.getState().updateNode(node.id, { polygon, holes })
-      useScene.getState().markDirty(node.id as AnyNodeId)
+    const applyPreview = (deltaX: number, deltaZ: number) => {
+      deltaRef.current = [deltaX, deltaZ]
+      setMeshOffset(ceilingId as AnyNodeId, deltaX, deltaZ, height)
+      useLiveTransforms.getState().set(ceilingId, {
+        position: [originalCenter[0] + deltaX, height, originalCenter[1] + deltaZ],
+        rotation: 0,
+      })
+      setCursorLocalPos([originalCenter[0] + deltaX, height, originalCenter[1] + deltaZ])
     }
 
-    const restoreOriginal = () => {
-      setPreviewPolygon(originalPolygon)
-      setPreviewHoles(originalHoles)
-      useScene.getState().updateNode(node.id, {
-        holes: originalHoles,
-        polygon: originalPolygon,
-      })
-      useScene.getState().markDirty(node.id as AnyNodeId)
+    const clearPreview = () => {
+      const mesh = sceneRegistry.nodes.get(ceilingId as AnyNodeId) as THREE.Object3D | undefined
+      if (mesh) {
+        mesh.position.x = 0
+        mesh.position.z = 0
+        // Leave Y at whatever the CeilingSystem set it to.
+      }
+      useLiveTransforms.getState().clear(ceilingId)
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -122,22 +122,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      const deltaX = localX - anchor[0]
-      const deltaZ = localZ - anchor[1]
-
-      if (
-        previousDeltaRef.current &&
-        previousDeltaRef.current[0] === deltaX &&
-        previousDeltaRef.current[1] === deltaZ
-      ) {
-        return
-      }
-      previousDeltaRef.current = [deltaX, deltaZ]
-
-      applyPreview(
-        translatePolygon(originalPolygon, deltaX, deltaZ),
-        originalHoles.map((hole) => translatePolygon(hole, deltaX, deltaZ)),
-      )
+      applyPreview(localX - anchor[0], localZ - anchor[1])
     }
 
     const onGridClick = (event: GridEvent) => {
@@ -146,32 +131,27 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
         return
       }
 
-      const preview = previewRef.current ?? { polygon: originalPolygon, holes: originalHoles }
-
+      const [deltaX, deltaZ] = deltaRef.current
       wasCommitted = true
 
-      // Restore original baseline while paused so the next resume+update
-      // registers as a single tracked change (undo reverts to original).
-      useScene.getState().updateNode(node.id, {
-        polygon: originalPolygon,
-        holes: originalHoles,
-      })
-
-      useScene.temporal.getState().resume()
-      useScene.getState().updateNode(node.id, preview)
-      useScene.getState().markDirty(node.id as AnyNodeId)
-      useScene.temporal.getState().pause()
+      if (deltaX !== 0 || deltaZ !== 0) {
+        useScene.getState().updateNode(ceilingId, {
+          polygon: translatePolygon(originalPolygon, deltaX, deltaZ),
+          holes: originalHoles.map((h) => translatePolygon(h, deltaX, deltaZ)),
+        })
+        useScene.getState().markDirty(ceilingId as AnyNodeId)
+      }
+      useLiveTransforms.getState().clear(ceilingId)
 
       triggerSFX('sfx:item-place')
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      useViewer.getState().setSelection({ selectedIds: [ceilingId] })
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
 
     const onCancel = () => {
-      restoreOriginal()
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
-      useScene.temporal.getState().resume()
+      clearPreview()
+      useViewer.getState().setSelection({ selectedIds: [ceilingId] })
       markToolCancelConsumed()
       exitMoveMode()
     }
@@ -182,89 +162,21 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
 
     return () => {
       if (!wasCommitted) {
-        restoreOriginal()
+        clearPreview()
+      } else {
+        useLiveTransforms.getState().clear(ceilingId)
       }
-      useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [exitMoveMode, node.height, node.id])
-
-  const previewFillGeometry = useMemo(
-    () => createCeilingPreviewGeometry(previewPolygon, previewHoles),
-    [previewHoles, previewPolygon],
-  )
-
-  const previewOutlineGeometry = useMemo(
-    () => createCeilingOutlineGeometry(previewPolygon),
-    [previewPolygon],
-  )
+  }, [exitMoveMode, node.id])
 
   return (
     <group>
-      <mesh geometry={previewFillGeometry} position={[0, (node.height ?? 2.5) + 0.012, 0]}>
-        <meshBasicMaterial
-          color="#f5f5f4"
-          depthWrite={false}
-          opacity={0.3}
-          side={DoubleSide}
-          transparent
-        />
-      </mesh>
-      {/* @ts-ignore */}
-      <line geometry={previewOutlineGeometry} position={[0, (node.height ?? 2.5) + 0.02, 0]}>
-        <lineBasicMaterial color="#ffffff" depthWrite={false} opacity={0.95} transparent />
-      </line>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
     </group>
   )
-}
-
-function createCeilingPreviewGeometry(
-  polygon: Array<[number, number]>,
-  holes: Array<Array<[number, number]>>,
-): BufferGeometry {
-  if (polygon.length < 3) return new BufferGeometry()
-
-  const shape = new Shape()
-  const [firstX, firstZ] = polygon[0]!
-  shape.moveTo(firstX, -firstZ)
-
-  for (let i = 1; i < polygon.length; i++) {
-    const [x, z] = polygon[i]!
-    shape.lineTo(x, -z)
-  }
-  shape.closePath()
-
-  for (const holePolygon of holes) {
-    if (holePolygon.length < 3) continue
-    const hole = new Path()
-    const [hx, hz] = holePolygon[0]!
-    hole.moveTo(hx, -hz)
-    for (let i = 1; i < holePolygon.length; i++) {
-      const [x, z] = holePolygon[i]!
-      hole.lineTo(x, -z)
-    }
-    hole.closePath()
-    shape.holes.push(hole)
-  }
-
-  const geometry = new ShapeGeometry(shape)
-  geometry.rotateX(-Math.PI / 2)
-  geometry.computeVertexNormals()
-  return geometry
-}
-
-function createCeilingOutlineGeometry(polygon: Array<[number, number]>): BufferGeometry {
-  const geometry = new BufferGeometry()
-  if (polygon.length < 2) return geometry
-
-  const points = polygon.map(([x, z]) => new Vector3(x, 0, z))
-  const [firstX, firstZ] = polygon[0]!
-  points.push(new Vector3(firstX, 0, firstZ))
-  geometry.setFromPoints(points)
-  return geometry
 }
 
 export default MoveCeilingTool
