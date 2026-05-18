@@ -104,17 +104,14 @@ function setMeshOffset(fenceId: FenceNode['id'], deltaX: number, deltaZ: number)
   if (mesh) mesh.position.set(deltaX, 0, deltaZ)
 }
 
-function setFenceLiveTransform(
-  fenceId: FenceNode['id'],
-  start: [number, number],
-  end: [number, number],
-  deltaX: number,
-  deltaZ: number,
-): void {
-  const cx = (start[0] + end[0]) / 2
-  const cz = (start[1] + end[1]) / 2
+function setFenceLiveTransform(fenceId: FenceNode['id'], deltaX: number, deltaZ: number): void {
+  // useLiveTransforms holds the SAME delta the direct mesh.position
+  // mutation uses — ParametricNodeRenderer reads it and reconciles
+  // `<group position={liveTransform.position}>` via React. Mismatched
+  // values here cause the two systems to fight per frame (jitter
+  // during drag).
   useLiveTransforms.getState().set(fenceId, {
-    position: [cx + deltaX, 0, cz + deltaZ],
+    position: [deltaX, 0, deltaZ],
     rotation: 0,
   })
 }
@@ -168,10 +165,10 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     const applyPreview = (deltaX: number, deltaZ: number) => {
       deltaRef.current = [deltaX, deltaZ]
       setMeshOffset(fenceId, deltaX, deltaZ)
-      setFenceLiveTransform(fenceId, originalStart, originalEnd, deltaX, deltaZ)
+      setFenceLiveTransform(fenceId, deltaX, deltaZ)
       for (const linked of linkedOriginals) {
         setMeshOffset(linked.id, deltaX, deltaZ)
-        setFenceLiveTransform(linked.id, linked.start, linked.end, deltaX, deltaZ)
+        setFenceLiveTransform(linked.id, deltaX, deltaZ)
       }
       // Cursor at translated polygon center.
       const centerX = (originalStart[0] + originalEnd[0]) / 2

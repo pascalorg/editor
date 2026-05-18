@@ -90,8 +90,12 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     const applyPreview = (deltaX: number, deltaZ: number) => {
       deltaRef.current = [deltaX, deltaZ]
       setMeshOffset(ceilingId as AnyNodeId, deltaX, deltaZ, height)
+      // Aligned with slab/fence: the delta matches the direct mesh
+      // mutation. CeilingRenderer doesn't bind position via React, so
+      // this entry isn't consumed for rendering, but kept consistent
+      // in case other systems read it.
       useLiveTransforms.getState().set(ceilingId, {
-        position: [originalCenter[0] + deltaX, height, originalCenter[1] + deltaZ],
+        position: [deltaX, 0, deltaZ],
         rotation: 0,
       })
       setCursorLocalPos([originalCenter[0] + deltaX, height, originalCenter[1] + deltaZ])

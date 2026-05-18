@@ -109,11 +109,17 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       // Visual: translate the slab MESH only. No scene mutation, no
       // polygon rebuild, no React re-render of geometry.
       setMeshOffset(slabId as AnyNodeId, deltaX, deltaZ)
+      // useLiveTransforms holds the same delta the direct mesh.position
+      // mutation uses — ParametricNodeRenderer reads it and reconciles
+      // `<group position={liveTransform.position}>` via React. Mismatched
+      // values here cause the two systems to fight per frame (jitter
+      // during drag).
       useLiveTransforms.getState().set(slabId, {
-        position: [originalCenter[0] + deltaX, 0, originalCenter[1] + deltaZ],
+        position: [deltaX, 0, deltaZ],
         rotation: 0,
       })
-      // Cursor sphere follows the new polygon center.
+      // Cursor sphere follows the new polygon center (independent of
+      // group position).
       setCursorLocalPos([originalCenter[0] + deltaX, 0, originalCenter[1] + deltaZ])
     }
 
