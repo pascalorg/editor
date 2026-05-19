@@ -3,11 +3,11 @@
 import { emitter } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Bot, Check, Shield } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { cn } from '../lib/utils'
 import useNavigation, {
-  type NavigationRobotModel,
   type NavigationRobotMode,
+  type NavigationRobotModel,
 } from '../store/use-navigation'
 import {
   DropdownMenu,
@@ -31,12 +31,19 @@ const ROBOT_MODEL_LABELS: Record<NavigationRobotModel, string> = {
   pascal: 'Pascal robot',
 }
 
+const ROBOT_MODEL_OPTIONS: Array<{ label: string; model: NavigationRobotModel }> = [
+  { label: ROBOT_MODEL_LABELS.pascal, model: 'pascal' },
+  { label: ROBOT_MODEL_LABELS.armored, model: 'armored' },
+]
+
 export function NavigationToolbarButton() {
   const robotModel = useNavigation((state) => state.robotModel)
   const robotMode = useNavigation((state) => state.robotMode)
   const setRobotModel = useNavigation((state) => state.setRobotModel)
   const setFollowRobotEnabled = useNavigation((state) => state.setFollowRobotEnabled)
   const setRobotMode = useNavigation((state) => state.setRobotMode)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false)
 
   const activateRobotMode = useCallback(
     (mode: NavigationRobotMode) => {
@@ -54,11 +61,6 @@ export function NavigationToolbarButton() {
     [setFollowRobotEnabled, setRobotMode],
   )
 
-  const toggleRobotModel = useCallback(() => {
-    setRobotModel(robotModel === 'pascal' ? 'armored' : 'pascal')
-  }, [robotModel, setRobotModel])
-
-  const nextRobotModel = robotModel === 'pascal' ? 'armored' : 'pascal'
   const tooltipLabel =
     robotMode === 'normal'
       ? `Robot: manual mode (${ROBOT_MODEL_LABELS[robotModel]})`
@@ -67,8 +69,19 @@ export function NavigationToolbarButton() {
         : `Robot (${ROBOT_MODEL_LABELS[robotModel]})`
 
   return (
-    <DropdownMenu>
-      <Tooltip>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        setIsDropdownOpen(open)
+        if (open) {
+          setIsTooltipOpen(false)
+        }
+      }}
+      open={isDropdownOpen}
+    >
+      <Tooltip
+        onOpenChange={(open) => setIsTooltipOpen(open && !isDropdownOpen)}
+        open={isTooltipOpen && !isDropdownOpen}
+      >
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <button
@@ -77,7 +90,6 @@ export function NavigationToolbarButton() {
                 TOOLBAR_BTN,
                 robotMode && 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20',
               )}
-              title={tooltipLabel}
               type="button"
             >
               <Bot className="h-4 w-4" />
@@ -99,16 +111,23 @@ export function NavigationToolbarButton() {
           )
         })}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={toggleRobotModel}>
-          <span className="flex min-w-28 items-center justify-between gap-3">
-            <span>{ROBOT_MODEL_LABELS[nextRobotModel]}</span>
-            {nextRobotModel === 'armored' ? (
-              <Shield className="h-3.5 w-3.5" />
-            ) : (
-              <Bot className="h-3.5 w-3.5" />
-            )}
-          </span>
-        </DropdownMenuItem>
+        {ROBOT_MODEL_OPTIONS.map((option) => {
+          const isActive = robotModel === option.model
+          const ModelIcon = option.model === 'armored' ? Shield : Bot
+
+          return (
+            <DropdownMenuItem key={option.model} onSelect={() => setRobotModel(option.model)}>
+              <span className="flex min-w-28 items-center justify-between gap-3">
+                <span>{option.label}</span>
+                {isActive ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <ModelIcon className="h-3.5 w-3.5" />
+                )}
+              </span>
+            </DropdownMenuItem>
+          )
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   )

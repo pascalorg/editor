@@ -244,8 +244,8 @@ function getCardinalRearDirectionTowardTarget(
 
   if (Math.abs(deltaX) >= Math.abs(deltaZ)) {
     return deltaX >= 0
-      ? { directionX: 1, directionZ: 0, yaw: Math.PI }
-      : { directionX: -1, directionZ: 0, yaw: 0 }
+      ? { directionX: 1, directionZ: 0, yaw: 0 }
+      : { directionX: -1, directionZ: 0, yaw: Math.PI }
   }
 
   return deltaZ >= 0

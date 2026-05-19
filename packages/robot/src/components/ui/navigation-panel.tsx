@@ -54,7 +54,7 @@ export function NavigationPanel() {
                 aria-pressed={true}
                 className={cn(
                   PANEL_BUTTON_CLASS,
-                  'border-red-400/50 bg-red-500/15 text-red-200 hover:border-red-300 hover:bg-red-500/20 hover:text-red-100',
+                  'border-red-300 bg-red-600 text-white shadow-red-950/35 hover:border-red-200 hover:bg-red-500 hover:text-white',
                 )}
                 data-testid="navigation-toggle"
                 onClick={handleRobotOff}

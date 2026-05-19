@@ -439,7 +439,6 @@ export function FloatingActionMenu() {
                 ? handleMove
                 : undefined
             }
-            onRepair={node?.type === 'item' ? handleRepair : undefined}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
           />

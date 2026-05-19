@@ -1565,8 +1565,13 @@ function disposeObjectMaterials(material: Material | Material[]) {
 function normalizeRobotBaseMaterials(material: Material | Material[]) {
   const materials = Array.isArray(material) ? material : [material]
   for (const entry of materials) {
-    entry.side = entry.side ?? FrontSide
-    entry.needsUpdate = true
+    const robotMaterial = entry as RobotRenderableMaterial
+    robotMaterial.side = robotMaterial.side ?? FrontSide
+    robotMaterial.transparent = false
+    robotMaterial.opacity = 1
+    robotMaterial.depthTest = true
+    robotMaterial.depthWrite = true
+    robotMaterial.needsUpdate = true
   }
 }
 

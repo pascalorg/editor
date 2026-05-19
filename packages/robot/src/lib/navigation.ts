@@ -10,6 +10,7 @@ import {
   type ItemNode,
   type LevelNode,
   type Point2D,
+  type SiteNode,
   type SlabNode,
   type StairNode,
   type StairSegmentNode,
@@ -31,6 +32,7 @@ import {
   toWalkablePlanPolygon,
   WALKABLE_CELL_SIZE,
   WALKABLE_CLEARANCE,
+  type WalkableSlabPolygonEntry,
   type WalkableSurfaceCell,
   type WallOverlayDebugCell,
 } from './walkable-surface'
@@ -48,6 +50,7 @@ const NAV_LINE_OF_SIGHT_HEIGHT_TOLERANCE = Math.max(0.22, WALKABLE_CELL_SIZE * 1
 const NAV_PORTAL_RELIEF_EPSILON = WALKABLE_CELL_SIZE * 0.08
 const NAV_MIN_WALKABLE_SLAB_ELEVATION = -0.01
 const NAV_MAX_WALKABLE_SLAB_ELEVATION = 0.75
+const NAV_SITE_GROUND_SURFACE_Y = 0
 
 // The walkable surface is already eroded by this radius, so valid nav points are
 // valid robot-center positions for this footprint.
@@ -62,12 +65,64 @@ const NAV_DOOR_ENTRY_OFFSET = Math.max(WALKABLE_CELL_SIZE * 0.9, NAVIGATION_AGEN
 
 function isNavigationWalkableSlab(slab: SlabNode) {
   const elevation = slab.elevation ?? 0.05
-  return elevation >= NAV_MIN_WALKABLE_SLAB_ELEVATION && elevation <= NAV_MAX_WALKABLE_SLAB_ELEVATION
+  return (
+    elevation >= NAV_MIN_WALKABLE_SLAB_ELEVATION && elevation <= NAV_MAX_WALKABLE_SLAB_ELEVATION
+  )
 }
 
 function isNavigationBlockedZone(zone: ZoneNode) {
   const name = (zone.name ?? '').toLowerCase()
   return /\b(pool|pond|water|spa)\b/.test(name)
+}
+
+function getNavigationSite(nodes: Record<string, AnyNode>, rootNodeIds: string[]): SiteNode | null {
+  for (const rootNodeId of rootNodeIds) {
+    const rootNode = nodes[rootNodeId]
+    if (rootNode?.type === 'site') {
+      return rootNode as SiteNode
+    }
+  }
+
+  return Object.values(nodes).find((node): node is SiteNode => node?.type === 'site') ?? null
+}
+
+function getNavigationSiteGroundPolygon(
+  nodes: Record<string, AnyNode>,
+  rootNodeIds: string[],
+): Point2D[] {
+  const site = getNavigationSite(nodes, rootNodeIds)
+  const points = site?.polygon?.points ?? []
+  if (points.length < 3) {
+    return []
+  }
+
+  return toWalkablePlanPolygon(points)
+}
+
+function getSiteGroundLevelId(levels: LevelNode[]): LevelNode['id'] | null {
+  const groundLevel = levels.find((level) => level.level === 0) ?? levels[0]
+  return groundLevel?.id ?? null
+}
+
+function buildSiteGroundSurfaceEntries(
+  siteGroundPolygon: Point2D[],
+  coveredSurfaces: WalkableSlabPolygonEntry[],
+): WalkableSlabPolygonEntry[] {
+  if (siteGroundPolygon.length < 3) {
+    return []
+  }
+
+  const holes = coveredSurfaces
+    .map(({ polygon }) => polygon)
+    .filter((polygon) => polygon.length >= 3)
+
+  return [
+    {
+      holes,
+      polygon: siteGroundPolygon,
+      surfaceY: NAV_SITE_GROUND_SURFACE_Y,
+    },
+  ]
 }
 
 export type NavigationCell = {
@@ -128,6 +183,10 @@ type NavigationLevelResult = {
 
 type NavigationBuildOptions = {
   includeDoorPortals?: boolean
+}
+
+type NavigationLevelBuildOptions = NavigationBuildOptions & {
+  siteGroundPolygon?: Point2D[]
 }
 
 export type NavigationDoorPortal = {
@@ -382,7 +441,7 @@ function getLevelNavigationResult(
   level: LevelNode,
   nodes: Record<string, AnyNode>,
   levelBaseY: number,
-  options: NavigationBuildOptions = {},
+  options: NavigationLevelBuildOptions = {},
 ): NavigationLevelResult {
   const includeDoorPortals = options.includeDoorPortals ?? true
   const walls = level.children
@@ -592,7 +651,7 @@ function getLevelNavigationResult(
           },
         },
       ]
-      }),
+    }),
   )
   const zoneObstacleSamples = measureNavigationPerf('navigation.build.zoneObstacleSamplesMs', () =>
     zones.flatMap((zone) => {
@@ -659,10 +718,18 @@ function getLevelNavigationResult(
     }),
   ])
   const obstaclePolygons = obstacleSamples.map(({ polygon }) => polygon)
+  const walkableSurfaces = measureNavigationPerf('navigation.build.walkableSurfacesMs', () => [
+    ...buildSiteGroundSurfaceEntries(options.siteGroundPolygon ?? [], [
+      ...slabPolygons,
+      ...stairSurfacePolygons,
+    ]),
+    ...slabPolygons,
+    ...stairSurfacePolygons,
+  ])
 
   const overlay = measureNavigationPerf('navigation.build.walkableOverlayMs', () =>
     buildWalkableSurfaceOverlay(
-      [...slabPolygons, ...stairSurfacePolygons],
+      walkableSurfaces,
       wallPolygons,
       obstaclePolygons,
       WALKABLE_CELL_SIZE,
@@ -1914,6 +1981,10 @@ export function buildNavigationGraph(
     return null
   }
 
+  const siteGroundPolygon = measureNavigationPerf('navigation.build.siteGroundPolygonMs', () =>
+    getNavigationSiteGroundPolygon(nodes, rootNodeIds),
+  )
+  const siteGroundLevelId = getSiteGroundLevelId(levels)
   const levelBaseYById = measureNavigationPerf('navigation.build.levelBaseYMs', () =>
     getLevelBaseYById(levels, nodes),
   )
@@ -1931,7 +2002,10 @@ export function buildNavigationGraph(
   measureNavigationPerf('navigation.build.levelResultsMs', () => {
     for (const level of levels) {
       const levelBaseY = levelBaseYById.get(level.id) ?? 0
-      const levelResult = getLevelNavigationResult(level, nodes, levelBaseY, options)
+      const levelResult = getLevelNavigationResult(level, nodes, levelBaseY, {
+        ...options,
+        siteGroundPolygon: level.id === siteGroundLevelId ? siteGroundPolygon : undefined,
+      })
       collisionByLevel.set(level.id, levelResult.collision)
       obstacleBlockedCellsByLevel.set(level.id, levelResult.obstacleBlockedCells)
       wallDebugCellsByLevel.set(level.id, levelResult.wallDebugCells)
