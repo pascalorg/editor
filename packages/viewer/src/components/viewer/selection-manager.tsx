@@ -304,6 +304,11 @@ export const SelectionManager = () => {
     const onEnter = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
+      // Ceilings are selected via their floor-plan helper and the
+      // boundary-editor vertex handles, never via a direct 3D click on
+      // the polygon. Skipping selection routing here means a click on a
+      // ceiling falls through to the item / wall / floor below it.
+      if (event.node.type === 'ceiling') return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
         if (event.node.type === 'slab') {
@@ -317,6 +322,7 @@ export const SelectionManager = () => {
     const onLeave = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
+      if (event.node.type === 'ceiling') return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
         useViewer.setState({ hoveredId: null })
@@ -326,6 +332,7 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
+      if (event.node.type === 'ceiling') return
       if (!strategy.isValid(event.node)) return
 
       event.stopPropagation()

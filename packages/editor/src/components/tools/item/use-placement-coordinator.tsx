@@ -298,6 +298,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   )
   const shiftFreeRef = useRef(false)
   const previewBoundsSignatureRef = useRef<string | null>(null)
+  // Goes true the first time a 3D pointer event drives this coordinator.
+  // The per-frame mesh-position lerp below is only useful for that path;
+  // when the move is being driven externally (2D `FloorplanRegistryMoveOverlay`
+  // writing scene.position directly), the lerp fights React's render and
+  // pulls the rendered item back toward its pre-move position. Gating
+  // the lerp on this flag keeps 3D placement smooth without hijacking
+  // 2D drags that share the same draft.
+  const has3DPointerDrivenMoveRef = useRef(false)
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
 
   // Store config callbacks in refs to avoid re-running effect when they change
@@ -561,6 +569,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         configRef.current.initDraft(gridPosition.current)
       }
 
+      has3DPointerDrivenMoveRef.current = true
       lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
       const result = floorStrategy.move(getContext(), event)
       if (!result) return
@@ -618,6 +627,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Wall Handlers ----
 
     const onWallEnter = (event: WallEvent) => {
+      has3DPointerDrivenMoveRef.current = true
       const nodes = useScene.getState().nodes
       const result = wallStrategy.enter(
         getContext(),
@@ -643,6 +653,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallMove = (event: WallEvent) => {
+      has3DPointerDrivenMoveRef.current = true
       const ctx = getContext()
 
       if (ctx.state.surface !== 'wall') {
@@ -833,6 +844,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onItemEnter = (event: ItemEvent) => {
       if (event.node.id === draftNode.current?.id) return
+      has3DPointerDrivenMoveRef.current = true
       const result = itemSurfaceStrategy.enter(getContext(), event)
       if (!result) return
 
@@ -849,6 +861,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onItemMove = (event: ItemEvent) => {
       if (event.node.id === draftNode.current?.id) return
+      has3DPointerDrivenMoveRef.current = true
       const ctx = getContext()
 
       if (ctx.state.surface !== 'item-surface') {
@@ -990,6 +1003,41 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             }
           }
         }
+        // Ceiling-hosted draft: when placing a ceiling-attached item the
+        // draft hangs below the ceiling and intercepts the click ray
+        // before the ceiling-grid mesh does — so `ceiling:click` never
+        // fires and the user's commit click is dropped. Forward the
+        // self-click to `ceilingStrategy.click` so placement commits the
+        // same way it would from a click on the ceiling itself.
+        if (ctx.state.surface === 'ceiling' && ctx.state.ceilingId) {
+          const ceilingNode = useScene.getState().nodes[ctx.state.ceilingId as AnyNodeId]
+          if (ceilingNode && ceilingNode.type === 'ceiling') {
+            const synthetic = { ...event, node: ceilingNode } as unknown as CeilingEvent
+            const result = ceilingStrategy.click(ctx, synthetic, getActiveValidators())
+            if (result) {
+              event.stopPropagation()
+              if (draftNode.current) {
+                useLiveTransforms.getState().clear(draftNode.current.id)
+              }
+              draftNode.commit(result.nodeUpdate)
+              if (configRef.current.onCommitted()) {
+                const nodes = useScene.getState().nodes
+                const enterResult = ceilingStrategy.enter(
+                  getContext(),
+                  synthetic,
+                  resolveLevelId,
+                  nodes,
+                )
+                if (enterResult) {
+                  applyTransition(enterResult)
+                } else {
+                  revalidate()
+                }
+              }
+              return
+            }
+          }
+        }
         return
       }
 
@@ -1017,6 +1065,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // ---- Ceiling Handlers ----
 
     const onCeilingEnter = (event: CeilingEvent) => {
+      has3DPointerDrivenMoveRef.current = true
       const nodes = useScene.getState().nodes
       const result = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
       if (!result) return
@@ -1036,6 +1085,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingMove = (event: CeilingEvent) => {
+      has3DPointerDrivenMoveRef.current = true
       if (!draftNode.current && placementState.current.surface === 'ceiling') {
         const nodes = useScene.getState().nodes
         const setup = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
@@ -1142,6 +1192,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // to the cursor's local-Y so the user can target a specific row.
 
     const onShelfEnter = (event: ShelfEvent) => {
+      has3DPointerDrivenMoveRef.current = true
       const result = shelfSurfaceStrategy.enter(getContext(), event)
       if (!result) return
 
@@ -1156,6 +1207,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onShelfMove = (event: ShelfEvent) => {
+      has3DPointerDrivenMoveRef.current = true
       const ctx = getContext()
       if (ctx.state.surface !== 'shelf-surface') {
         // Cursor entered via a move event without an enter — try
@@ -1466,6 +1518,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   useFrame((_, delta) => {
     if (!asset) return
     if (!draftNode.current) return
+    // The mesh-position lerp below only makes sense once this coordinator
+    // owns the move via a 3D pointer event. Skip until then so that
+    // external drivers (e.g. the 2D `FloorplanRegistryMoveOverlay`
+    // writing scene.position directly) aren't fought by useFrame pulling
+    // the mesh back to its pre-move location.
+    if (!has3DPointerDrivenMoveRef.current) return
     const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
 

@@ -209,6 +209,27 @@ export function FloorplanRegistryMoveOverlay() {
         // inside the SVG viewport, including empty grid background.
         if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
 
+        // Apply once more at the pointer-up coords before committing.
+        // Browsers don't guarantee a pointermove fires right before
+        // pointerup — a quick click after a drag can land pointerup a
+        // few pixels past the last pointermove. Without this re-apply,
+        // the commit would freeze the item at the stale pointermove
+        // position, leaving a visible drift between where the user
+        // released the click and where the item lands.
+        const finalPlanPoint = toMeters(event.clientX, event.clientY)
+        if (finalPlanPoint) {
+          hasMovedSinceStart = true
+          session.apply({
+            planPoint: finalPlanPoint,
+            modifiers: {
+              shiftKey: event.shiftKey,
+              altKey: event.altKey,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+            },
+          })
+        }
+
         commitFinalStateOrRevert()
         setMovingNode(null)
 
