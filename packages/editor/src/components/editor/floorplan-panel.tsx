@@ -82,7 +82,6 @@ import {
 } from '../editor-2d/floorplan-render-context'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
-import type { LinearMeasurementOverlay } from '../editor-2d/renderers/floorplan-measurements-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
@@ -158,48 +157,16 @@ const FLOORPLAN_MARQUEE_OUTLINE_WIDTH = 0.055
 const FLOORPLAN_MARQUEE_GLOW_WIDTH = 0.14
 const FLOORPLAN_HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const FLOORPLAN_WALL_HIT_STROKE_WIDTH = 18
-const FLOORPLAN_WALL_HOVER_GLOW_STROKE_WIDTH = 18
-const FLOORPLAN_WALL_HOVER_RING_STROKE_WIDTH = 8
-const FLOORPLAN_ITEM_HOVER_GLOW_STROKE_WIDTH = 6
-const FLOORPLAN_ITEM_HOVER_RING_STROKE_WIDTH = 2
 const FLOORPLAN_WALL_STROKE_WIDTH = '1'
-const FLOORPLAN_SELECTED_WALL_STROKE_WIDTH = '1.5'
 const FLOORPLAN_OPENING_HIT_STROKE_WIDTH = 16
 const noopFloorplanStairHandler = () => {}
 const FLOORPLAN_OPENING_STROKE_WIDTH = 0.05
-const FLOORPLAN_OPENING_DETAIL_STROKE_WIDTH = 0.02
-const FLOORPLAN_OPENING_DASHED_STROKE_WIDTH = 0.02
 const FLOORPLAN_ENDPOINT_HIT_STROKE_WIDTH = 18
 const FLOORPLAN_ENDPOINT_HOVER_GLOW_STROKE_WIDTH = 16
 const FLOORPLAN_ENDPOINT_HOVER_RING_STROKE_WIDTH = 7
 const FLOORPLAN_MARQUEE_DRAG_THRESHOLD_PX = 4
-const FLOORPLAN_MEASUREMENT_OFFSET = 0.46
-const FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT = 0.08
-const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_WIDTH = 0
-const FLOORPLAN_MEASUREMENT_LINE_OUTLINE_OPACITY = 0
-const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE = 0.15
-const FLOORPLAN_SLAB_LABEL_FONT_SIZE = 0.2
-const FLOORPLAN_MEASUREMENT_LABEL_STROKE_WIDTH = 0
-const FLOORPLAN_MEASUREMENT_LABEL_GAP = 0.56
-const FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING = 0.14
-const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.34
-const FLOORPLAN_WALL_INNER_MEASUREMENT_OFFSET = 0.24
-const FLOORPLAN_WALL_OUTER_MEASUREMENT_STROKE = 'rgba(59, 130, 246, 0.95)'
-const FLOORPLAN_WALL_OUTER_MEASUREMENT_TEXT = 'rgba(37, 99, 235, 0.98)'
-const FLOORPLAN_WALL_OUTER_MEASUREMENT_EXTENSION = 'rgba(96, 165, 250, 0.9)'
-const FLOORPLAN_WALL_INNER_MEASUREMENT_STROKE = 'rgba(96, 165, 250, 0.95)'
-const FLOORPLAN_WALL_INNER_MEASUREMENT_TEXT = 'rgba(59, 130, 246, 0.98)'
-const FLOORPLAN_WALL_INNER_MEASUREMENT_EXTENSION = 'rgba(147, 197, 253, 0.9)'
-const FLOORPLAN_OPENING_MEASUREMENT_STROKE = 'rgba(249, 115, 22, 0.98)'
-const FLOORPLAN_OPENING_MEASUREMENT_TEXT = 'rgba(234, 88, 12, 0.98)'
-const FLOORPLAN_OPENING_MEASUREMENT_EXTENSION = 'rgba(251, 146, 60, 0.9)'
-const FLOORPLAN_ITEM_DIMENSION_OFFSET = 0.24
-const FLOORPLAN_ITEM_CLEARANCE_MAX_DISTANCE = 12
-const FLOORPLAN_ITEM_CLEARANCE_MIN_DISTANCE = 0.05
-const FLOORPLAN_ITEM_CLEARANCE_EDGE_PARALLEL_THRESHOLD = 0.65
 const FLOORPLAN_ACTION_MENU_HORIZONTAL_PADDING = 60
 const FLOORPLAN_ACTION_MENU_MIN_ANCHOR_Y = 56
-const FLOORPLAN_ACTION_MENU_OFFSET_Y = 10
 const FLOORPLAN_DEFAULT_WINDOW_LOCAL_Y = 1.5
 
 // Match the guide plane footprint used in the 3D renderer so the 2D overlay aligns.
@@ -213,18 +180,7 @@ const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_X = 92
 const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_Y = 48
 const FLOORPLAN_GUIDE_ROTATION_SNAP_DEGREES = 45
 const FLOORPLAN_GUIDE_ROTATION_FINE_SNAP_DEGREES = 1
-const FLOORPLAN_TRACE_SURFACE_FILL_OPACITY = 0.08
-const FLOORPLAN_TRACE_STRUCTURE_FILL_OPACITY = 0.22
-const FLOORPLAN_TRACE_STRUCTURE_SELECTED_FILL_OPACITY = 0.34
 const FLOORPLAN_SITE_COLOR = '#10b981'
-const FLOORPLAN_NODE_FOOTPRINT_STROKE_WIDTH = FLOORPLAN_OPENING_STROKE_WIDTH / 2
-const FLOORPLAN_NODE_FOOTPRINT_CROSS_STROKE_WIDTH = FLOORPLAN_NODE_FOOTPRINT_STROKE_WIDTH * 0.7
-const FLOORPLAN_SPAWN_RING_RADIUS = 0.34
-const FLOORPLAN_SPAWN_RING_STROKE_WIDTH = 0.08
-const FLOORPLAN_SPAWN_HIT_RADIUS = 0.62
-const FLOORPLAN_SPAWN_ARROW_POINTS = '0,-0.62 -0.19,-0.2 0.19,-0.2'
-const FLOORPLAN_SPAWN_BODY_WIDTH = 0.3
-const FLOORPLAN_SPAWN_BODY_HEIGHT = 0.46
 const FLOORPLAN_VIEW_ROTATION_DEG = 90
 type FloorplanViewport = {
   centerX: number
@@ -419,92 +375,6 @@ type WallCurveDraft = {
   curveOffset: number
 }
 
-type SlabBoundaryDraft = {
-  slabId: SlabNode['id']
-  polygon: WallPlanPoint[]
-  visualOffsets?: Point2D[]
-}
-
-type SlabHoleBoundaryDraft = {
-  slabId: SlabNode['id']
-  holeIndex: number
-  polygon: WallPlanPoint[]
-}
-
-type SlabVertexDragState = {
-  pointerId: number
-  slabId: SlabNode['id']
-  mode?: 'vertex' | 'edge'
-  vertexIndex: number
-  visualOffset: Point2D
-  edgeIndex?: number
-  edgeNormal?: WallPlanPoint
-  initialPlanPoint?: WallPlanPoint
-  initialPolygon?: WallPlanPoint[]
-}
-
-type SlabHoleVertexDragState = {
-  pointerId: number
-  slabId: SlabNode['id']
-  holeIndex: number
-  mode?: 'vertex' | 'edge'
-  vertexIndex: number
-  edgeIndex?: number
-  edgeNormal?: WallPlanPoint
-  initialPlanPoint?: WallPlanPoint
-  initialPolygon?: WallPlanPoint[]
-}
-
-type SlabHoleMoveDraft = {
-  slabId: SlabNode['id']
-  holeIndex: number
-  polygon: WallPlanPoint[]
-  originalPolygon: WallPlanPoint[]
-  startPlanPoint: WallPlanPoint
-}
-
-type CeilingBoundaryDraft = {
-  ceilingId: CeilingNode['id']
-  polygon: WallPlanPoint[]
-}
-
-type CeilingVertexDragState = {
-  pointerId: number
-  ceilingId: CeilingNode['id']
-  mode?: 'vertex' | 'edge'
-  vertexIndex: number
-  edgeIndex?: number
-  edgeNormal?: WallPlanPoint
-  initialPlanPoint?: WallPlanPoint
-  initialPolygon?: WallPlanPoint[]
-}
-
-type CeilingHoleBoundaryDraft = {
-  ceilingId: CeilingNode['id']
-  holeIndex: number
-  polygon: WallPlanPoint[]
-}
-
-type CeilingHoleVertexDragState = {
-  pointerId: number
-  ceilingId: CeilingNode['id']
-  holeIndex: number
-  mode?: 'vertex' | 'edge'
-  vertexIndex: number
-  edgeIndex?: number
-  edgeNormal?: WallPlanPoint
-  initialPlanPoint?: WallPlanPoint
-  initialPolygon?: WallPlanPoint[]
-}
-
-type CeilingHoleMoveDraft = {
-  ceilingId: CeilingNode['id']
-  holeIndex: number
-  polygon: WallPlanPoint[]
-  originalPolygon: WallPlanPoint[]
-  startPlanPoint: WallPlanPoint
-}
-
 type SiteBoundaryDraft = {
   siteId: SiteNode['id']
   polygon: WallPlanPoint[]
@@ -513,17 +383,6 @@ type SiteBoundaryDraft = {
 type SiteVertexDragState = {
   pointerId: number
   siteId: SiteNode['id']
-  vertexIndex: number
-}
-
-type ZoneBoundaryDraft = {
-  zoneId: ZoneNodeType['id']
-  polygon: WallPlanPoint[]
-}
-
-type ZoneVertexDragState = {
-  pointerId: number
-  zoneId: ZoneNodeType['id']
   vertexIndex: number
 }
 
@@ -2403,220 +2262,6 @@ function formatArea(
       </tspan>
     </>
   )
-}
-
-function getWallMeasurementOverlay(
-  wall: WallNode,
-  centerX: number,
-  centerZ: number,
-  unit: 'metric' | 'imperial',
-  metersPerUnit: number | null = null,
-): LinearMeasurementOverlay | null {
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const length = getWallCurveLength(wall)
-
-  if (length < 0.1) {
-    return null
-  }
-
-  const nx = -dz / length
-  const nz = dx / length
-  const midX = (wall.start[0] + wall.end[0]) / 2
-  const midZ = (wall.start[1] + wall.end[1]) / 2
-  const cx = midX - centerX
-  const cz = midZ - centerZ
-  const dot = cx * nx + cz * nz
-  const outX = dot >= 0 ? nx : -nx
-  const outZ = dot >= 0 ? nz : -nz
-  const label = formatMeasurement(length, unit, metersPerUnit)
-  const dimensionLine = {
-    x1: toSvgX(wall.start[0] + outX * FLOORPLAN_MEASUREMENT_OFFSET),
-    y1: toSvgY(wall.start[1] + outZ * FLOORPLAN_MEASUREMENT_OFFSET),
-    x2: toSvgX(wall.end[0] + outX * FLOORPLAN_MEASUREMENT_OFFSET),
-    y2: toSvgY(wall.end[1] + outZ * FLOORPLAN_MEASUREMENT_OFFSET),
-  }
-
-  const extensionStart = {
-    x1: toSvgX(wall.start[0]),
-    y1: toSvgY(wall.start[1]),
-    x2: toSvgX(
-      wall.start[0] +
-        outX * (FLOORPLAN_MEASUREMENT_OFFSET + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT),
-    ),
-    y2: toSvgY(
-      wall.start[1] +
-        outZ * (FLOORPLAN_MEASUREMENT_OFFSET + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT),
-    ),
-  }
-
-  const extensionEnd = {
-    x1: toSvgX(wall.end[0]),
-    y1: toSvgY(wall.end[1]),
-    x2: toSvgX(
-      wall.end[0] +
-        outX * (FLOORPLAN_MEASUREMENT_OFFSET + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT),
-    ),
-    y2: toSvgY(
-      wall.end[1] +
-        outZ * (FLOORPLAN_MEASUREMENT_OFFSET + FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT),
-    ),
-  }
-
-  const svgDx = dimensionLine.x2 - dimensionLine.x1
-  const svgDy = dimensionLine.y2 - dimensionLine.y1
-  const svgLength = Math.hypot(svgDx, svgDy)
-  let labelAngleDeg = (Math.atan2(svgDy, svgDx) * 180) / Math.PI
-
-  if (labelAngleDeg > 90) {
-    labelAngleDeg -= 180
-  } else if (labelAngleDeg <= -90) {
-    labelAngleDeg += 180
-  }
-
-  if (svgLength < 1e-6) {
-    return null
-  }
-
-  const dirSvgX = svgDx / svgLength
-  const dirSvgY = svgDy / svgLength
-  const labelGapHalf = Math.min(
-    FLOORPLAN_MEASUREMENT_LABEL_GAP / 2,
-    Math.max(0, svgLength / 2 - FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING),
-  )
-  const labelX = (dimensionLine.x1 + dimensionLine.x2) / 2
-  const labelY = (dimensionLine.y1 + dimensionLine.y2) / 2
-  const dimensionLineStart = {
-    x1: dimensionLine.x1,
-    y1: dimensionLine.y1,
-    x2: labelX - dirSvgX * labelGapHalf,
-    y2: labelY - dirSvgY * labelGapHalf,
-  }
-  const dimensionLineEnd = {
-    x1: labelX + dirSvgX * labelGapHalf,
-    y1: labelY + dirSvgY * labelGapHalf,
-    x2: dimensionLine.x2,
-    y2: dimensionLine.y2,
-  }
-
-  return {
-    id: `${wall.id}:centerline`,
-    dimensionLineEnd,
-    dimensionLineStart,
-    extensionStart,
-    extensionEnd,
-    label,
-    labelX,
-    labelY,
-    labelAngleDeg,
-  }
-}
-
-function getLinearMeasurementOverlay(
-  id: string,
-  start: Point2D,
-  end: Point2D,
-  label: string,
-  options?: {
-    extensionOvershoot?: number
-    offsetDistance?: number
-    offsetVector?: Point2D
-  },
-): LinearMeasurementOverlay | null {
-  const extensionOvershoot =
-    options?.extensionOvershoot ?? FLOORPLAN_MEASUREMENT_EXTENSION_OVERSHOOT
-  const offsetDistance = options?.offsetDistance ?? 0
-  const offsetVector = options?.offsetVector
-  const offsetStart =
-    offsetVector && offsetDistance !== 0
-      ? {
-          x: start.x + offsetVector.x * offsetDistance,
-          y: start.y + offsetVector.y * offsetDistance,
-        }
-      : start
-  const offsetEnd =
-    offsetVector && offsetDistance !== 0
-      ? {
-          x: end.x + offsetVector.x * offsetDistance,
-          y: end.y + offsetVector.y * offsetDistance,
-        }
-      : end
-  const dimensionLine = {
-    x1: toSvgX(offsetStart.x),
-    y1: toSvgY(offsetStart.y),
-    x2: toSvgX(offsetEnd.x),
-    y2: toSvgY(offsetEnd.y),
-  }
-
-  const svgDx = dimensionLine.x2 - dimensionLine.x1
-  const svgDy = dimensionLine.y2 - dimensionLine.y1
-  const svgLength = Math.hypot(svgDx, svgDy)
-  let labelAngleDeg = (Math.atan2(svgDy, svgDx) * 180) / Math.PI
-
-  if (labelAngleDeg > 90) {
-    labelAngleDeg -= 180
-  } else if (labelAngleDeg <= -90) {
-    labelAngleDeg += 180
-  }
-
-  if (svgLength < 1e-6) {
-    return null
-  }
-
-  const dirSvgX = svgDx / svgLength
-  const dirSvgY = svgDy / svgLength
-  const labelGapHalf = Math.min(
-    FLOORPLAN_MEASUREMENT_LABEL_GAP / 2,
-    Math.max(0, svgLength / 2 - FLOORPLAN_MEASUREMENT_LABEL_LINE_PADDING),
-  )
-  const labelX = (dimensionLine.x1 + dimensionLine.x2) / 2
-  const labelY = (dimensionLine.y1 + dimensionLine.y2) / 2
-
-  return {
-    id,
-    dimensionLineStart: {
-      x1: dimensionLine.x1,
-      y1: dimensionLine.y1,
-      x2: labelX - dirSvgX * labelGapHalf,
-      y2: labelY - dirSvgY * labelGapHalf,
-    },
-    dimensionLineEnd: {
-      x1: labelX + dirSvgX * labelGapHalf,
-      y1: labelY + dirSvgY * labelGapHalf,
-      x2: dimensionLine.x2,
-      y2: dimensionLine.y2,
-    },
-    extensionStart: {
-      x1: toSvgX(start.x),
-      y1: toSvgY(start.y),
-      x2: toSvgX(
-        offsetVector ? start.x + offsetVector.x * (offsetDistance + extensionOvershoot) : start.x,
-      ),
-      y2: toSvgY(
-        offsetVector ? start.y + offsetVector.y * (offsetDistance + extensionOvershoot) : start.y,
-      ),
-    },
-    extensionEnd: {
-      x1: toSvgX(end.x),
-      y1: toSvgY(end.y),
-      x2: toSvgX(
-        offsetVector ? end.x + offsetVector.x * (offsetDistance + extensionOvershoot) : end.x,
-      ),
-      y2: toSvgY(
-        offsetVector ? end.y + offsetVector.y * (offsetDistance + extensionOvershoot) : end.y,
-      ),
-    },
-    label,
-    labelX,
-    labelY,
-    labelAngleDeg,
-    isSelected: true,
-  }
-}
-
-type WallFaceLine = {
-  start: Point2D
-  end: Point2D
 }
 
 function getOpeningFootprint(wall: WallNode, node: WindowNode | DoorNode): Point2D[] {
