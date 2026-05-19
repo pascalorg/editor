@@ -1,9 +1,12 @@
 export {
+  discoverPlugins,
   getSelectableKinds,
   isRegistrySelectable,
   loadPlugin,
   nodeRegistry,
+  type PluginDiscovery,
   registerNode,
+  setPluginDiscovery,
 } from './registry'
 export {
   type CascadeContext,
@@ -22,7 +25,14 @@ export type {
   CuttableConfig,
   DragAction,
   EditorCtx,
+  FloorplanAffordance,
+  FloorplanAffordanceModifiers,
+  FloorplanAffordancePoint,
+  FloorplanAffordanceSession,
   FloorplanGeometry,
+  FloorplanMoveTarget,
+  FloorplanMoveTargetSession,
+  FloorplanPalette,
   FloorplanPoint,
   FloorplanStyle,
   GeometryContext,

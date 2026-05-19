@@ -95,3 +95,41 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
     registerNode(def)
   }
 }
+
+/**
+ * App-level plugin discovery hook. The bootstrap loads `builtinPlugin`
+ * unconditionally and then awaits this to pick up any extra plugins
+ * (third-party node packs, AI-authored bundles, user-installed kinds).
+ * Defaults to returning `[]` — apps that want external plugins call
+ * {@link setPluginDiscovery} before the bootstrap module runs.
+ *
+ * Kept async so a future loader can fetch over the network without
+ * changing the contract. See `wiki/editor-plugin-authoring.md` for the
+ * plugin author surface this enables.
+ */
+export type PluginDiscovery = () => Promise<Plugin[]>
+
+let pluginDiscovery: PluginDiscovery = async () => []
+
+/**
+ * Replace the plugin discovery implementation. Call once at app startup
+ * before {@link discoverPlugins} is invoked (bootstrap order matters).
+ *
+ * The contract is intentionally minimal — just "return a list of
+ * plugins to load." The loader can be a static `import.meta.glob`, a
+ * `fetch` against a registry endpoint, a worker IPC, etc. Each returned
+ * plugin still goes through {@link loadPlugin} so the same API-version
+ * gate + duplicate-kind protection applies.
+ */
+export function setPluginDiscovery(fn: PluginDiscovery): void {
+  pluginDiscovery = fn
+}
+
+/**
+ * Run the active plugin discovery and return the discovered plugins.
+ * Bootstrap code is expected to call this after `loadPlugin(builtinPlugin)`
+ * and then `await loadPlugin(...)` each result in order.
+ */
+export function discoverPlugins(): Promise<Plugin[]> {
+  return pluginDiscovery()
+}

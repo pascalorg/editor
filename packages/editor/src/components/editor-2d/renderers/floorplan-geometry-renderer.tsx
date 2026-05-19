@@ -1,7 +1,7 @@
 'use client'
 
-import type { FloorplanGeometry } from '@pascal-app/core'
-import { memo } from 'react'
+import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
+import { memo, useEffect, useState } from 'react'
 
 /**
  * Pure-data → SVG converter. Walks a `FloorplanGeometry` tree returned by
@@ -29,92 +29,103 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
   return renderNode(geometry, 0)
 })
 
+function styleAttrs(g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> }) {
+  // Shared SVG attribute mapping for any styled primitive. Keeps the per-
+  // primitive switch arms terse and ensures new style fields land
+  // everywhere at once. `as any` avoids re-asserting every variant
+  // includes the style fields — they all do, except `group` (which is
+  // filtered out by the caller's type bound).
+  const s = g as unknown as {
+    fill?: string
+    fillOpacity?: number
+    stroke?: string
+    strokeWidth?: number
+    strokeDasharray?: string
+    strokeLinecap?: 'butt' | 'round' | 'square'
+    strokeLinejoin?: 'miter' | 'round' | 'bevel'
+    strokeOpacity?: number
+    opacity?: number
+    vectorEffect?: 'non-scaling-stroke'
+  }
+  return {
+    fill: s.fill ?? 'none',
+    fillOpacity: s.fillOpacity,
+    stroke: s.stroke,
+    strokeWidth: s.strokeWidth,
+    strokeDasharray: s.strokeDasharray,
+    strokeLinecap: s.strokeLinecap,
+    strokeLinejoin: s.strokeLinejoin,
+    strokeOpacity: s.strokeOpacity,
+    opacity: s.opacity,
+    vectorEffect: s.vectorEffect,
+  }
+}
+
 function renderNode(g: FloorplanGeometry, keyHint: number): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
-      return (
-        <path
-          d={g.d}
-          fill={g.fill ?? 'none'}
-          key={keyHint}
-          opacity={g.opacity}
-          stroke={g.stroke}
-          strokeDasharray={g.strokeDasharray}
-          strokeWidth={g.strokeWidth}
-        />
-      )
+      return <path d={g.d} key={keyHint} {...styleAttrs(g)} />
 
     case 'polygon':
-      return (
-        <polygon
-          fill={g.fill ?? 'none'}
-          key={keyHint}
-          opacity={g.opacity}
-          points={pointsToAttr(g.points)}
-          stroke={g.stroke}
-          strokeDasharray={g.strokeDasharray}
-          strokeWidth={g.strokeWidth}
-        />
-      )
+      return <polygon key={keyHint} points={pointsToAttr(g.points)} {...styleAttrs(g)} />
 
     case 'polyline':
-      return (
-        <polyline
-          fill={g.fill ?? 'none'}
-          key={keyHint}
-          opacity={g.opacity}
-          points={pointsToAttr(g.points)}
-          stroke={g.stroke}
-          strokeDasharray={g.strokeDasharray}
-          strokeWidth={g.strokeWidth}
-        />
-      )
+      return <polyline key={keyHint} points={pointsToAttr(g.points)} {...styleAttrs(g)} />
 
     case 'rect':
       return (
         <rect
-          fill={g.fill ?? 'none'}
           height={g.height}
           key={keyHint}
-          opacity={g.opacity}
           rx={g.rx}
           ry={g.ry}
-          stroke={g.stroke}
-          strokeDasharray={g.strokeDasharray}
-          strokeWidth={g.strokeWidth}
           width={g.width}
           x={g.x}
           y={g.y}
+          {...styleAttrs(g)}
         />
       )
 
     case 'circle':
-      return (
-        <circle
-          cx={g.cx}
-          cy={g.cy}
-          fill={g.fill ?? 'none'}
-          key={keyHint}
-          opacity={g.opacity}
-          r={g.r}
-          stroke={g.stroke}
-          strokeDasharray={g.strokeDasharray}
-          strokeWidth={g.strokeWidth}
-        />
-      )
+      return <circle cx={g.cx} cy={g.cy} key={keyHint} r={g.r} {...styleAttrs(g)} />
 
     case 'line':
+      return <line key={keyHint} x1={g.x1} x2={g.x2} y1={g.y1} y2={g.y2} {...styleAttrs(g)} />
+
+    case 'text':
       return (
-        <line
+        <text
+          dominantBaseline={g.dominantBaseline ?? 'middle'}
+          fill={g.fill ?? '#171717'}
+          fontFamily={g.fontFamily}
+          fontSize={g.fontSize}
+          fontWeight={g.fontWeight}
           key={keyHint}
           opacity={g.opacity}
+          paintOrder={g.paintOrder}
           stroke={g.stroke}
-          strokeDasharray={g.strokeDasharray}
+          strokeLinecap={g.stroke ? 'round' : undefined}
+          strokeLinejoin={g.stroke ? 'round' : undefined}
           strokeWidth={g.strokeWidth}
-          x1={g.x1}
-          x2={g.x2}
-          y1={g.y1}
-          y2={g.y2}
+          textAnchor={g.textAnchor ?? 'start'}
+          x={g.x}
+          y={g.y}
+        >
+          {g.text}
+        </text>
+      )
+
+    case 'image':
+      return (
+        <FloorplanImage
+          center={g.center}
+          height={g.height}
+          key={keyHint}
+          opacity={g.opacity}
+          preserveAspectRatio={g.preserveAspectRatio ?? 'xMidYMid meet'}
+          rotation={g.rotation ?? 0}
+          url={g.url}
+          width={g.width}
         />
       )
 
@@ -126,6 +137,15 @@ function renderNode(g: FloorplanGeometry, keyHint: number): React.ReactElement |
         </g>
       )
     }
+
+    // The interactive primitives (hatch / hit-line / endpoint-handle /
+    // dimension-label) need the SVG context + theme palette + units-per-
+    // pixel that only the registry layer has access to. They're rendered
+    // by `floorplan-registry-layer.tsx`'s interactive walker instead. If
+    // a caller routes one of these through this pure renderer it
+    // silently drops — the static renderer is for static output.
+    default:
+      return null
   }
 }
 
@@ -142,4 +162,62 @@ function formatTransform(t?: {
   if (t.translate) parts.push(`translate(${t.translate[0]} ${t.translate[1]})`)
   if (t.rotate !== undefined) parts.push(`rotate(${(t.rotate * 180) / Math.PI})`)
   return parts.length > 0 ? parts.join(' ') : undefined
+}
+
+/**
+ * `image` primitive renderer. Resolves the URL asynchronously via
+ * `loadAssetUrl` (handles CDN / Supabase storage) and renders an SVG
+ * `<image>` centered at `center`, rotated around it, sized in plan-local
+ * metres. While the resolution is in flight, renders nothing.
+ */
+function FloorplanImage({
+  url,
+  center,
+  width,
+  height,
+  rotation,
+  preserveAspectRatio,
+  opacity,
+}: {
+  url: string
+  center: readonly [number, number]
+  width: number
+  height: number
+  rotation: number
+  preserveAspectRatio: string
+  opacity?: number
+}) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!url) {
+      setResolvedUrl(null)
+      return
+    }
+    let cancelled = false
+    setResolvedUrl(null)
+    loadAssetUrl(url).then((next) => {
+      if (!cancelled) setResolvedUrl(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [url])
+  if (!resolvedUrl) return null
+  const rotationDeg = (rotation * 180) / Math.PI
+  return (
+    <g
+      pointerEvents="none"
+      transform={`translate(${center[0]} ${center[1]}) rotate(${rotationDeg})`}
+    >
+      <image
+        height={height}
+        href={resolvedUrl}
+        opacity={opacity}
+        preserveAspectRatio={preserveAspectRatio}
+        width={width}
+        x={-width / 2}
+        y={-height / 2}
+      />
+    </g>
+  )
 }
