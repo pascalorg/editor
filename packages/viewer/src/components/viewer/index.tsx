@@ -205,6 +205,11 @@ const Viewer: React.FC<ViewerProps> = ({
           <SceneRenderer />
         )}
 
+        {/* Generic slab-elevation lift for any kind that declares
+            `capabilities.floorPlaced`. Runs at frame priority 1 so it
+            lands its mesh.position.y override before the priority-2
+            systems below clear the dirty mark. */}
+        <FloorElevationSystem />
         {/* Generic geometry rebuild loop for any registered kind that
             ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
             builder, swaps the registered group's children. See

@@ -27,6 +27,11 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
     duplicable: false, // singleton per level
     deletable: true,
     selectable: { hitVolume: 'bbox' },
+    // Slab elevation lift via the generic `<FloorElevationSystem>`. The
+    // spawn marker is a 1.8m-tall figure with a ~0.6m ring footprint.
+    floorPlaced: {
+      footprint: () => ({ dimensions: [0.6, 1.8, 0.6], rotation: [0, 0, 0] }),
+    },
   },
 
   parametrics: spawnParametrics,

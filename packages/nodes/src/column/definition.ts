@@ -34,6 +34,16 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Slab elevation lift via the generic `<FloorElevationSystem>`.
+    floorPlaced: {
+      footprint: (node) => {
+        const column = node as ColumnNodeType
+        return {
+          dimensions: [column.width, column.height, column.depth] as [number, number, number],
+          rotation: column.rotation,
+        }
+      },
+    },
   },
 
   parametrics: columnParametrics,

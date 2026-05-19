@@ -735,6 +735,7 @@ export type Capabilities = {
   groupable?: boolean
   selectable?: SelectableConfig
   interactive?: boolean
+  floorPlaced?: FloorPlacedConfig
 }
 
 export type CapabilityCtx = { node: AnyNode }
@@ -793,6 +794,23 @@ export type SurfacePoint = {
 export type SelectableConfig = {
   hitVolume?: 'bbox' | 'mesh' | 'none'
   override?: (ctx: CapabilityCtx) => SelectableConfig | null
+}
+
+/**
+ * Floor-placed kinds rest directly on a level and need their Y lifted by
+ * any slab the footprint overlaps. The generic `<FloorElevationSystem>`
+ * computes `slabElevation + node.position[1]` and writes it onto the
+ * registered mesh on every dirty mark. `footprint` returns the world-space
+ * footprint the spatial-grid manager uses to find overlapping slabs;
+ * `applies` is an optional predicate to skip nodes that share a kind but
+ * are mounted off-floor (items attached to a wall / ceiling).
+ */
+export type FloorPlacedConfig = {
+  footprint: (node: AnyNode) => {
+    dimensions: [number, number, number]
+    rotation: [number, number, number]
+  }
+  applies?: (node: AnyNode) => boolean
 }
 
 // ─── Relations ───────────────────────────────────────────────────────

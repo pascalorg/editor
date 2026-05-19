@@ -59,6 +59,11 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.
 export { FenceSystem, generateFenceGeometry } from './systems/fence/fence-system'
+// Generic floor-elevation system. Lifts the rendered mesh of any kind
+// whose definition declares `capabilities.floorPlaced` by the slab
+// elevation under its footprint. Replaces the per-kind elevation block
+// that used to live inside `ItemSystem`.
+export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 // Item systems for the registry-driven item definition. ItemSystem

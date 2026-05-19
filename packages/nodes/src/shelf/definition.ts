@@ -59,6 +59,17 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Slab elevation lift via the generic `<FloorElevationSystem>` — a
+    // shelf sitting over a raised slab visually rests on top of it.
+    floorPlaced: {
+      footprint: (node) => {
+        const shelf = node as ShelfNode
+        return {
+          dimensions: [shelf.width, shelf.height, shelf.depth] as [number, number, number],
+          rotation: shelf.rotation,
+        }
+      },
+    },
   },
 
   // Items host on shelves the same way they host on slabs / other items —
