@@ -50,18 +50,75 @@ export const GeometrySystem = () => {
     if (dirtyNodes.size === 0) return
     const nodes = useScene.getState().nodes
 
+    // Phase 1 — group dirty nodes by (kind, parentId). Kinds that
+    // declare `def.computeLevelData` get one batch precompute per
+    // group; the result lands in `ctx.levelData` for every node in
+    // the same batch. Avoids O(N²) recomputation when many siblings
+    // of the same kind are dirty in one frame (wall mitering is the
+    // motivating case).
+    type BatchKey = string // `${kind}::${parentId ?? ''}`
+    const batches = new Map<
+      BatchKey,
+      { kind: string; parentId: AnyNodeId | null; ids: AnyNodeId[] }
+    >()
+    const dirtyIds: AnyNodeId[] = []
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node) return
+      const def = nodeRegistry.get(node.type)
+      if (!def?.geometry) return
+      dirtyIds.push(id as AnyNodeId)
+      const parentId = (node.parentId ?? null) as AnyNodeId | null
+      const key: BatchKey = `${node.type}::${parentId ?? ''}`
+      const existing = batches.get(key)
+      if (existing) existing.ids.push(id as AnyNodeId)
+      else batches.set(key, { kind: node.type, parentId, ids: [id as AnyNodeId] })
+    })
+
+    // Phase 2 — for each batch whose kind declares `computeLevelData`,
+    // collect every sibling in the level + run the precompute once.
+    const levelDataByBatch = new Map<BatchKey, unknown>()
+    for (const [key, batch] of batches) {
+      const def = nodeRegistry.get(batch.kind)
+      if (!def?.computeLevelData) continue
+      const siblings: AnyNode[] = []
+      if (batch.parentId) {
+        const parent = nodes[batch.parentId]
+        const childIds = (parent as unknown as { children?: AnyNodeId[] })?.children
+        if (Array.isArray(childIds)) {
+          for (const cid of childIds) {
+            const child = nodes[cid]
+            if (child?.type === batch.kind) siblings.push(child)
+          }
+        }
+      } else {
+        for (const node of Object.values(nodes)) {
+          if (node?.type === batch.kind && !node.parentId) siblings.push(node)
+        }
+      }
+      levelDataByBatch.set(
+        key,
+        (def.computeLevelData as (s: ReadonlyArray<AnyNode>) => unknown)(siblings),
+      )
+    }
+
+    // Phase 3 — per-node rebuild. Each node receives its batch's
+    // precomputed `levelData` in ctx.
+    for (const id of dirtyIds) {
+      const node = nodes[id]
+      if (!node) continue
 
       const def = nodeRegistry.get(node.type)
       const builder = def?.geometry
-      if (!builder) return
+      if (!builder) continue
 
       const group = sceneRegistry.nodes.get(id) as Group | undefined
-      if (!group) return // mount hasn't run — keep dirty for next frame
+      if (!group) continue // mount hasn't run — keep dirty for next frame
 
-      const ctx = buildGeometryContext(node, nodes)
+      const parentId = (node.parentId ?? null) as AnyNodeId | null
+      const key: BatchKey = `${node.type}::${parentId ?? ''}`
+      const levelData = levelDataByBatch.get(key)
+      const ctx = buildGeometryContext(node, nodes, levelData)
 
       // The builder is typed against the kind's specific node — at the
       // generic system level we lose that refinement, so the cast lands
@@ -73,26 +130,42 @@ export const GeometrySystem = () => {
 
       disposeChildren(group)
       for (const child of [...built.children]) {
+        // Tag every child the builder produced so a subsequent rebuild
+        // can dispose only THIS rebuild's outputs and leave React-
+        // mounted siblings (hosted items inside a shelf / slab / etc.)
+        // alone. Without this, a parent rebuild triggered by a child
+        // event (e.g. an item reparenting onto a shelf calls
+        // `dirtyNodes.add(parent)` in `ItemRenderer`'s effect) would
+        // wipe ALL of the parent group's children — including the
+        // freshly-mounted item — leaving the item in scene state but
+        // invisible.
+        ;(child as { userData?: Record<string, unknown> }).userData = {
+          ...(child as { userData?: Record<string, unknown> }).userData,
+          __fromGeometry: true,
+        }
         group.add(child)
       }
-      // Reset transform — matches the legacy per-kind systems
-      // (e.g. FenceSystem.updateFenceGeometry) which clear
-      // mesh.position/rotation when rebuilding. Tools that translate
-      // the group via `mesh.position` for live-drag visuals rely on
-      // this reset to restore the canonical position after scene
-      // state catches up (otherwise the geometry rebuild renders on
-      // top of the residual offset → double-translation teleport).
-      group.position.set(0, 0, 0)
-      group.rotation.set(0, 0, 0)
+      // NOTE: we intentionally do NOT reset `group.position` / `group.rotation`
+      // here. The `ParametricNodeRenderer` binds them via JSX (`position={...}`
+      // / `rotation={...}`) driven by `useLiveTransforms` during drag and
+      // `node.position` / `node.rotation` after commit. Zeroing them out
+      // during a rebuild would clobber the React-applied transform — and
+      // because the renderer doesn't necessarily re-render on the rebuild
+      // tick, R3F wouldn't re-apply the props, leaving the group stuck at
+      // origin. Geometry builders are expected to emit local-space children.
 
       clearDirty(id as AnyNodeId)
-    })
+    }
   }, 2)
 
   return null
 }
 
-function buildGeometryContext(node: AnyNode, nodes: Record<string, AnyNode>): GeometryContext {
+function buildGeometryContext(
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+  levelData: unknown,
+): GeometryContext {
   const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
 
   const childIds = (node as unknown as { children?: AnyNodeId[] }).children
@@ -122,11 +195,19 @@ function buildGeometryContext(node: AnyNode, nodes: Record<string, AnyNode>): Ge
     }
   }
 
-  return { resolve, children, siblings, parent }
+  return { resolve, children, siblings, parent, levelData }
 }
 
 function disposeChildren(group: Group) {
+  // Only dispose meshes the geometry builder produced on the previous
+  // rebuild (marked via `userData.__fromGeometry`). React-managed
+  // children (hosted node renderers) get left in place — they have
+  // their own React-driven lifecycle and would lose their meshes /
+  // materials if we disposed them here.
   for (const child of [...group.children]) {
+    const fromGeometry = (child as { userData?: { __fromGeometry?: boolean } }).userData
+      ?.__fromGeometry
+    if (!fromGeometry) continue
     group.remove(child)
     const mesh = child as Partial<Mesh> & { geometry?: { dispose?: () => void } }
     if (mesh.geometry?.dispose) mesh.geometry.dispose()

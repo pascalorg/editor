@@ -5,10 +5,13 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
+  type EventSuffix,
   emitter,
   type GridEvent,
+  type NodeEvent,
   nodeRegistry,
   sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -34,14 +37,36 @@ const roundToHalf = (value: number) => Math.round(value * 2) / 2
  * Cancel imperatively snaps the mesh back to its original position and
  * resumes history without ever having touched the store mid-drag.
  *
- * This is faster than the items pattern (which updates the store per tick
- * and re-renders the renderer on every mouse move). Trade-off: if the
- * renderer happens to re-render for some other reason mid-drag, R3F will
- * reapply node.position and snap the mesh back. Mitigation: history is
- * paused, no upstream state subscribed by the renderer changes during the
- * drag, so re-renders are rare in practice. If a kind needs guaranteed
- * stability, it can opt into a "live position" hook in Phase 4.
+ * **Commit triggers**: the tool listens for `grid:click` *and* the
+ * common node click events (shelf / item / slab / ceiling / wall /
+ * fence / column / roof / stair). A click on the grid plane fires
+ * `grid:click`; a click on the moved node itself (or any other 3D
+ * geometry the ray happens to land on) fires the corresponding node
+ * click event. Without the node-click listeners, clicking on the
+ * cursor's own mesh during a move would silently drop the commit —
+ * the user perceives "click did nothing" because the click hit the
+ * vertical face of e.g. a shelf instead of the grid plane below it.
+ *
+ * The latest cursor position from `grid:move` is stored in a ref so
+ * any of these click variants commit at the same spot the cursor was
+ * indicating.
  */
+type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
+
+const CLICK_TRIGGER_KINDS = [
+  'shelf',
+  'item',
+  'slab',
+  'ceiling',
+  'wall',
+  'fence',
+  'column',
+  'roof',
+  'roof-segment',
+  'stair',
+  'stair-segment',
+] as const
+
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   const originalPosition: [number, number, number] = useMemo(
     () =>
@@ -50,33 +75,88 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         : [0, 0, 0],
     [node],
   )
+  /**
+   * Y-axis rotation of the node at move-start. Captured so the
+   * imperative drag preview (and the `useLiveTransforms` mirror) keeps
+   * the original orientation — otherwise hardcoding `rotation: 0` in
+   * `useLiveTransforms.set` would override `node.rotation[1]` during
+   * the drag, the shelf would visually un-rotate to 0, then snap back
+   * to its true rotation on commit (when the live transform clears).
+   * The user reads that snap as "reverts to a weird position".
+   */
+  const originalRotationY: number = useMemo(() => {
+    if ('rotation' in node) {
+      const r = (node as { rotation?: unknown }).rotation
+      if (typeof r === 'number') return r
+      if (Array.isArray(r)) return (r as [number, number, number])[1] ?? 0
+    }
+    return 0
+  }, [node])
   const [cursorPosition, setCursorPosition] = useState<[number, number, number]>(originalPosition)
   const previousSnapRef = useRef<[number, number] | null>(null)
+  /**
+   * The latest snapped cursor position from `grid:move`. We commit at
+   * THIS position regardless of which event variant fires the click —
+   * a `grid:click` carries the same coords, but a node-click (e.g.
+   * `shelf:click`) carries the hit point on the clicked node's mesh,
+   * which can be slightly off-cursor when the user clicks the vertical
+   * face of the moved node itself. Reading from the ref keeps the
+   * commit position consistent with the visible cursor.
+   */
+  const lastCursorRef = useRef<[number, number, number]>(originalPosition)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
 
   useEffect(() => {
-    // Pause history so the eventual commit lands as a single undoable step,
-    // not the per-tick spam that would happen if we updated the store on
-    // each move.
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
     let committed = false
+
+    // Disable raycast on the moved node's meshes for the duration of
+    // the drag. As the shelf follows the cursor, the cursor ray would
+    // otherwise hit the moved mesh first → only `${kind}:move` fires →
+    // `grid:move` stops updating `lastCursorRef` → clicks would commit
+    // at the stale (initial) position. With raycast disabled, the ray
+    // passes through the moved mesh and continues to the grid plane,
+    // so `grid:move` keeps firing and the cursor tracks correctly.
+    // We restore the original raycast on cleanup.
+    const mesh = sceneRegistry.nodes.get(node.id)
+    const restoreRaycasts: Array<() => void> = []
+    if (mesh) {
+      mesh.traverse((child) => {
+        const original = child.raycast
+        child.raycast = () => {}
+        restoreRaycasts.push(() => {
+          child.raycast = original
+        })
+      })
+    }
 
     const onGridMove = (event: GridEvent) => {
       const x = roundToHalf(event.localPosition[0])
       const z = roundToHalf(event.localPosition[2])
       setCursorPosition([x, 0, z])
+      lastCursorRef.current = [x, 0, z]
 
       // Pure imperative: move the mesh via its registered Object3D ref.
-      // No React re-render. No store update. The shelf (or any registry
-      // kind) follows the cursor smoothly because nothing competes with
-      // this position write until commit.
       sceneRegistry.nodes.get(node.id)?.position.set(x, 0, z)
+      // Publish to `useLiveTransforms` so the 2D floor plan can mirror
+      // the drag in real-time (the floor-plan layer subscribes to this
+      // store and overrides the node's rendered position when an entry
+      // is set). Without this the 2D representation stays at the
+      // committed scene position until the move ends.
+      //
+      // For position-based kinds (shelf, item, column, spawn) we write
+      // the absolute world plan position here. Polygon-based kinds
+      // (slab / ceiling / fence) follow a different delta contract —
+      // their floor-plan move-targets handle the override themselves.
+      useLiveTransforms.getState().set(node.id, {
+        position: [x, 0, z],
+        rotation: originalRotationY,
+      })
 
-      // SFX on cell-cross, matching placement.
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== x || prev[1] !== z) {
         sfxEmitter.emit('sfx:grid-snap')
@@ -84,17 +164,25 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
     }
 
-    const onGridClick = (event: GridEvent) => {
-      const position: [number, number, number] = [
-        roundToHalf(event.localPosition[0]),
-        0,
-        roundToHalf(event.localPosition[2]),
-      ]
+    /** Commit the move at the latest cursor position. Shared by every
+     *  click variant — grid plane, the moved node itself, or any other
+     *  3D surface the user happens to click on during the move.
+     *
+     *  Order is deliberate: write scene FIRST, then clear
+     *  `useLiveTransforms`. If we cleared the live transform first,
+     *  `ParametricNodeRenderer` would re-render with
+     *  `position = liveTransform?.position ?? node.position` → undefined
+     *  → original `node.position` (the scene write hasn't happened yet),
+     *  briefly snapping the mesh back to its starting spot before the
+     *  next render lands the new position. Writing scene first means
+     *  every render shows either the live drag position (liveTransform
+     *  still set) or the new committed position (liveTransform cleared
+     *  AND scene updated) — never the original.
+     */
+    const commitAtCursor = (event: ClickTriggerEvent) => {
+      const position: [number, number, number] = [...lastCursorRef.current]
 
       if (useScene.getState().nodes[node.id]) {
-        // Store still has the original position (we didn't touch it during
-        // drag). Resume history and do one tracked update. Undo replays the
-        // (original → final) single step.
         useScene.temporal.getState().resume()
         useScene.getState().updateNode(node.id, { position } as Partial<AnyNode>)
         useScene.temporal.getState().pause()
@@ -116,40 +204,76 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         }
       }
 
+      // Keep mesh.position aligned with the just-committed scene position
+      // so the next R3F frame paints at the right spot even if React's
+      // reconciliation lags by a tick.
+      const mesh = sceneRegistry.nodes.get(node.id)
+      if (mesh) mesh.position.set(position[0], position[1], position[2])
+
+      // Now safe to clear — node.position is already the new value, so
+      // `ParametricNodeRenderer`'s next render lands at `[x, 0, z]`.
+      useLiveTransforms.getState().clear(node.id)
+
       sfxEmitter.emit('sfx:item-place')
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+
+      // Stop further propagation so other listeners (e.g. a selection
+      // change on the clicked node) don't fire during the commit click.
+      const native = (event as { nativeEvent?: unknown }).nativeEvent
+      if (
+        native &&
+        typeof (native as { stopPropagation?: () => void }).stopPropagation === 'function'
+      ) {
+        ;(native as { stopPropagation: () => void }).stopPropagation()
+      }
+      const direct = (event as { stopPropagation?: () => void }).stopPropagation
+      if (typeof direct === 'function') direct.call(event)
+    }
+
+    emitter.on('grid:move', onGridMove)
+    emitter.on('grid:click', commitAtCursor)
+
+    // Listen on every common kind's click event too. mitt's typing keeps
+    // `${kind}:click` as a fixed union so the cast is safe at runtime —
+    // we're just routing them through the shared commit path.
+    type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
+    type ClickKey = SuffixedKey<(typeof CLICK_TRIGGER_KINDS)[number]>
+    for (const kind of CLICK_TRIGGER_KINDS) {
+      const key = `${kind}:click` as ClickKey
+      emitter.on(key, commitAtCursor as never)
     }
 
     const onCancel = () => {
-      // Snap mesh back to original visually. Store was never touched.
       sceneRegistry.nodes
         .get(node.id)
         ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
+      useLiveTransforms.getState().clear(node.id)
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
     }
-
-    emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
+      emitter.off('grid:click', commitAtCursor)
+      for (const kind of CLICK_TRIGGER_KINDS) {
+        const key = `${kind}:click` as ClickKey
+        emitter.off(key, commitAtCursor as never)
+      }
       emitter.off('tool:cancel', onCancel)
-      // If we unmount without committing (e.g., the user switches tools or
-      // navigates away), restore the mesh imperatively and resume history.
-      // Store was never touched so no data revert is needed.
+      // Restore the moved meshes' raycast so they're hoverable / selectable
+      // again after the drag ends.
+      for (const restore of restoreRaycasts) restore()
       if (!committed) {
         sceneRegistry.nodes
           .get(node.id)
           ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
+        useLiveTransforms.getState().clear(node.id)
         useScene.temporal.getState().resume()
       }
     }
-  }, [exitMoveMode, node, originalPosition])
+  }, [exitMoveMode, node, originalPosition, originalRotationY])
 
   return <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
 }
