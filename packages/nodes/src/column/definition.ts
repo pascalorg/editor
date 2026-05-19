@@ -44,7 +44,9 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
         const column = node as ColumnNodeType
         return {
           dimensions: [column.width, column.height, column.depth] as [number, number, number],
-          rotation: column.rotation,
+          // Column stores Y rotation as a scalar; the slab-overlap query
+          // expects the full Euler tuple.
+          rotation: [0, column.rotation, 0] as [number, number, number],
         }
       },
     },
