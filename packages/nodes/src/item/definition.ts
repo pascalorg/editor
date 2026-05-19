@@ -1,4 +1,8 @@
-import type { ItemNode as ItemNodeType, NodeDefinition } from '@pascal-app/core'
+import {
+  getScaledDimensions,
+  type ItemNode as ItemNodeType,
+  type NodeDefinition,
+} from '@pascal-app/core'
 import { buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemParametrics } from './parametrics'

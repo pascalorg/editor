@@ -1,4 +1,8 @@
-import { ColumnNode as ColumnNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import {
+  ColumnNode as ColumnNodeSchema,
+  type ColumnNode as ColumnNodeType,
+  type NodeDefinition,
+} from '@pascal-app/core'
 import { buildColumnFloorplan } from './floorplan'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
