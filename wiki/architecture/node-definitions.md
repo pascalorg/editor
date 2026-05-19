@@ -173,10 +173,37 @@ If the system also handles cascades, animations, or material updates, keep `def.
 ## Rules
 
 - **Builders must be pure.** No `useScene` import inside a `def.geometry` function. Read scene state via `ctx`. Mutating the store from a builder breaks idempotence.
+- **Builders emit local-space children.** The registered `<group>` is positioned/rotated by `<ParametricNodeRenderer>` via JSX (`position={liveTransform?.position ?? node.position}`). Builders return geometry as if the parent were at the origin — never bake the node's world position into vertex coords.
 - **One mesh registered per node ID.** The generic renderer registers a single `<group>` per node. If a custom renderer mounts multiple meshes, register the parent group (or whichever object the system needs to address).
 - **Custom systems run in addition to the generic system, not instead of it.** A kind with `def.geometry` + `def.system` will see the generic system rebuild children on dirty AND the per-kind system run its `useFrame`. Plan priorities accordingly: door-animation runs at priority 2, geometry rebuild at priority 3.
 - **Dispose on rebuild.** The generic system disposes the previous children's geometry + material before swapping. Custom systems that imperatively add children must dispose what they replace, or accept the GPU-memory cost.
 - **`def.renderer` overrides the generic renderer.** Once you set it, you own the mount — `<ParametricNodeRenderer>` is not invoked. The generic geometry system still runs for the kind if `def.geometry` is set, so a custom renderer can register an empty group and let the system fill it.
+
+## Pitfalls
+
+### `<GeometrySystem>` must not mutate `group.position` / `group.rotation`
+
+`ParametricNodeRenderer` binds `<group position={liveTransform?.position ?? node.position}>` and the matching rotation via JSX. React only re-applies the prop when its underlying value changes. If the geometry system imperatively zeroes `group.position` after a rebuild — as legacy per-kind systems used to — R3F has no reason to re-render on the next tick and the group stays at the origin. Symptom: the node visually snaps to `(0, 0, 0)` whenever its geometry rebuilds (move commit, dimension change, paint).
+
+The contract is the other way around now: builders produce local-space children; the renderer owns the transform; the system only swaps children.
+
+### Tag geometry-built children with `userData.__fromGeometry`
+
+A registered `<group>` can host **two** kinds of children: meshes the geometry builder created (boards, posts, dividers) and React-rendered hosted nodes (items reparented onto a shelf surface). When the system rebuilds, it must dispose only the previous geometry pass — disposing React-mounted children would tear out their meshes mid-mount, leaving the hosted node in scene state but invisible. Symptom: dragging an item onto a shelf makes the item disappear and never come back.
+
+`<GeometrySystem>` tags every child returned by the builder with `userData.__fromGeometry = true` and `disposeChildren` only removes/disposes children carrying the marker. Custom systems that imperatively add children to a registered group must follow the same convention if hosted children are possible.
+
+### Previews must clone materials before mutating them
+
+`def.preview` typically calls the kind's geometry builder, then walks the resulting meshes and sets `material.transparent = true; material.opacity = 0.5` for a ghosted look. If the builder caches materials at module scope — and shelf, item, and most cache-friendly kinds do, keyed on `material` / `materialPreset` — every committed instance of the kind in the scene shares one material instance. Mutating it in the preview leaks the translucency into every real node that uses the default material; placed shelves render see-through, placed items lose their opacity, etc.
+
+The fix is to clone in the preview, mutate the clone, and reassign `mesh.material` to the clone. On unmount, dispose only the clones — **never** the original returned by the builder, which other nodes still reference. `nodes/src/shelf/preview.tsx` is the reference implementation.
+
+### Host kinds need a `children` field on the schema
+
+If your kind declares `relations.hosts: [...]`, add `children: z.array(...).default([])` to the schema. `useScene.createNode(child, parentId)` writes `child.parentId = parentId` **and** appends `child.id` to `parent.children`. Without the field, the parent-side write is a no-op — `<ParametricNodeRenderer>`'s `n.children.map(...)` then has nothing to mount and the host renderer never sees the new child. Symptom: hosted node lives in `useScene.nodes` but no React mount fires, so the host's tree-node sidebar entry is empty and the 3D scene shows nothing where the host should pick it up.
+
+Migrations matter: if your kind shipped before hosting was added, patch existing nodes in `migrateNodes` so `Array.isArray(node.children)` holds for every loaded scene before the renderer reads it.
 
 ## See also
 

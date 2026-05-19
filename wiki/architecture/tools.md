@@ -77,3 +77,100 @@ export function MyTool() {
 2. Register the tool in `ToolManager` under the correct phase and mode.
 3. Add the tool identifier to the `useEditor` tool union type.
 4. If the tool requires new node types, add schema + renderer + system first.
+
+## Move coexistence: 2D `FloorplanRegistryMoveOverlay` + legacy 3D mover
+
+While a kind is mid-migration its move can run through two paths at once: the registry-driven 2D `FloorplanRegistryMoveOverlay` (`def.floorplanMoveTarget`) and the legacy 3D mover (e.g. `MoveItemContent`). Both react to `setMovingNode(node)`, both mount, both want to commit. Two pitfalls surfaced and have stable fixes; replicate the patterns when porting another kind to coexist.
+
+### Pitfall: the 2D cleanup clobbering the 3D commit
+
+`FloorplanRegistryMoveOverlay` pauses scene history at mount and snapshots the moving node. If the user actually commits in 3D, the 3D path writes new state and clears `movingNode`. The 2D overlay then unmounts — and its cleanup `useEffect` would call `updateNodes(snapshot)`, overwriting the just-committed 3D state with the original.
+
+Fix in `floorplan-registry-move-overlay.tsx`: gate the cleanup revert on a `hasMovedSinceStart` flag that is only set inside `onMove` **after** the `target.closest('[data-floorplan-scene]')` guard. If no 2D apply ever ran, the divergence in scene state must be an external committer's — skip the revert, just resume history. Symptom when missing: items snap back to their pre-drag position / rotation on 3D commit.
+
+### Pitfall: `useDraftNode.destroy()` clobbering the 2D commit
+
+Mirror problem in the other direction. The legacy 3D mover's `usePlacementCoordinator` cleanup unconditionally calls `draftNode.destroy()`, which for adopted moves writes the original position back to scene. If the 2D path committed first, the destroy reverts it.
+
+Fix in `use-draft-node.ts`: in move-mode `destroy()`, compare the live scene position to the `adopt()`-time snapshot. If they diverge, an external committer has already written the new value — skip the restore (and the mesh reset). Cancellation paths (Escape) still revert, because they revert before unmount so live == snapshot at destroy time.
+
+### Pitfall: pointermove fires globally; treat 3D-canvas events as out of scope
+
+`FloorplanRegistryMoveOverlay` listens to `window` pointermove. When the user drags in 3D the listener still fires — without a target check it converts 3D-canvas client coords through the floor-plan SVG's CTM, producing garbage plan coordinates that fight the 3D mover's mesh updates.
+
+Always gate `onMove` (and `onPointerUp`) with `target.closest('[data-floorplan-scene]')` so the 2D path only acts when the pointer is actually over the floor plan scene.
+
+## `useLiveTransforms` contract is per-kind, not generic
+
+The store name suggests a uniform contract; the writes in practice are not. Document the frame on the writer side; consumers must either know the kind or be narrowed.
+
+| Writer | `position` frame | `rotation` frame |
+|---|---|---|
+| `usePlacementCoordinator` (item floor / wall / ceiling) | world plan (level-local) | world Y |
+| `door` / `window` move tools | wall-local | wall-local (0 or π) |
+| `slab` / `ceiling` / `fence` / polygon-based movers | position **delta** (`[Δx, 0, Δz]`) | unused / 0 |
+| `column` / `roof` / `elevator` / `spawn` / single-position kinds | world plan | world Y |
+
+Anything that subscribes to `useLiveTransforms` to inform 2D rendering needs to handle these frames explicitly. The `FloorplanRegistryLayer` currently narrows its override to `node.type === 'item'` and sets `parentId: null` on the effective node so the resolver treats the live position as world plan coords. Extending the override to other kinds requires either standardising the frame at the writer (preferred long-term) or per-kind handling in the consumer.
+
+## Wall-attached node rotations must be wall-local
+
+`door` / `window` / wall-attached `item` are children of the wall mesh in 3D. The wall's `mesh.rotation.y = -atan2(dy, dx)`. The child node's `rotation.y` therefore lives in the wall's local frame and composes with the wall's rotation at render time.
+
+The 3D source of truth is `calculateItemRotation(normal)` in `editor/src/components/tools/item/placement-math.ts`, which returns 0 (front face) or π (back face). Any 2D move helper that writes `node.rotation[1]` for wall-attached nodes must produce the same wall-local value. Writing a world-space rotation gets you orientation bugs that vary with wall direction — typically 90° on horizontal walls and 180° on vertical walls (which sometimes "looks OK" by symmetry, which is worse — silent corruption).
+
+See `nodes/src/shared/wall-attach-target.ts`'s `WallHit.itemRotation`. Side determination there is calibrated to the same convention: in wall-local space the wall extends along +X, the front-face normal is +Z, and `perpRaw >= 0` is the front side.
+
+## Move / placement: disable raycast on the moved mesh
+
+A 3D move tool that follows the cursor by writing `mesh.position.set(x, 0, z)` runs into a feedback loop: as the mesh tracks the cursor it sits between the camera and the grid plane, so R3F's raycaster hits the moved mesh first → only `${kind}:move` fires → `grid:move` stops firing → the cursor snapshot (used as the commit position) freezes at its initial value. The user clicks at a new spot and the node commits at the starting one.
+
+Fix in `MoveRegistryNodeTool`: at drag-start, traverse the moved mesh and overwrite `child.raycast = () => {}` on every descendant; restore the originals in the effect's cleanup. The ray now passes through the moved mesh, hits the grid plane, and `grid:move` keeps firing.
+
+The same applies to placement previews — see `nodes/src/shelf/preview.tsx` for the `(obj as { raycast: () => void }).raycast = () => {}` pattern. A preview that captures rays starves the placement tool's own `grid:move` snapshot.
+
+## Move / placement: commit handlers listen to every `${kind}:click`
+
+R3F's pointer raycaster dispatches the click event to whichever mesh is closest, even when the user thinks they're clicking the ground. A tool that only listens to `grid:click` misses commits whenever the click ray lands on a wall face, a shelf side, an item, or the still-being-placed cursor mesh itself. Symptom: clicks visibly hit "near" the cursor but the tool does nothing.
+
+The fix is the pattern used by `ShelfTool` and `MoveRegistryNodeTool`: keep the latest `grid:move` snapshot in a ref, then register one shared commit handler against `grid:click` **and** every common kind-click event:
+
+```ts
+const CLICK_TRIGGER_KINDS = [
+  'shelf', 'item', 'slab', 'ceiling', 'wall',
+  'fence', 'column', 'roof', 'roof-segment',
+  'stair', 'stair-segment',
+] as const
+
+emitter.on('grid:click', commitAtCursor)
+for (const kind of CLICK_TRIGGER_KINDS) {
+  emitter.on(`${kind}:click` as `${typeof kind}:${EventSuffix}`, commitAtCursor as never)
+}
+```
+
+The commit reads `lastCursorRef.current` (set by `grid:move`), not the click event's position — clicks on vertical surfaces carry the hit point on that surface, which can be metres away from the cursor the user was visually targeting.
+
+## Move tools must preserve the node's actual rotation in `useLiveTransforms`
+
+A tool that writes `useLiveTransforms.set(id, { position: [x, 0, z], rotation: 0 })` during drag wipes the node's true Y-rotation for the duration of the drag. `ParametricNodeRenderer` reads `liveTransform.rotation` and applies `<group rotation={[0, liveTransform.rotation, 0]}>`, so the moved node visually un-rotates to 0 the moment the tool mounts, then snaps back to its real rotation on commit when the live transform clears. Users perceive that snap as "the node went to a weird position."
+
+Capture the original `node.rotation[1]` at mount time and forward it on every `set`:
+
+```ts
+const originalRotationY = useMemo(() => {
+  const r = (node as { rotation?: unknown }).rotation
+  return typeof r === 'number' ? r : Array.isArray(r) ? (r[1] ?? 0) : 0
+}, [node])
+
+// in onMove:
+useLiveTransforms.getState().set(node.id, {
+  position: [x, 0, z],
+  rotation: originalRotationY,
+})
+```
+
+If the tool *also* rotates the node during the drag, it should drive `rotation` from the current tool state — not from 0, not from the stale node value.
+
+## SVG `fill="none"` is click-through
+
+When emitting a `FloorplanGeometry` polygon that should remain interactive but visually invisible (e.g. an item with a thumbnail image carrying the visual weight), use `fill="transparent"`, not `fill="none"`. The default `pointer-events: visiblePainted` only hit-tests the interior when there's a paint server — `none` is not paint, `transparent` is. Without this the floor-plan layer's wrapping `<g>` never sees the `onPointerDown` and clicks don't select the node.
