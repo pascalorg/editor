@@ -17,4 +17,10 @@ export const spawnParametrics: ParametricDescriptor<SpawnNode> = {
       ],
     },
   ],
+  // Stage E — kind-owned panel. Spawn has a derived position +
+  // rotation-degrees binding (legacy SpawnPanel converts radians to
+  // degrees in the slider and uses `useLiveTransforms` for smooth yaw
+  // dragging). Auto-inspector doesn't express the deg ↔ rad
+  // transform or the live-yaw preview yet — kept as a custom panel.
+  customPanel: () => import('./panel'),
 }

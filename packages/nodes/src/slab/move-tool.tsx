@@ -64,6 +64,29 @@ function setMeshOffset(id: AnyNodeId, deltaX: number, deltaZ: number): void {
   if (mesh) mesh.position.set(deltaX, 0, deltaZ)
 }
 
+/**
+ * Distinguish 3D-canvas grid events (which this tool handles) from
+ * 2D floor-plan grid events (which `slabFloorplanMoveTarget` +
+ * `FloorplanRegistryMoveOverlay` Path 1 handle). The 2D scene wraps
+ * everything in `[data-floorplan-scene]`; if the native event's target
+ * is inside that subtree, the event belongs to the 2D mover. Without
+ * this guard, both paths would write the polygon on commit and produce
+ * two history entries / a double-translation.
+ */
+function isFloorplanSourcedEvent(event: GridEvent): boolean {
+  // ThreeEvent (3D) wraps the DOM PointerEvent under `.nativeEvent`;
+  // the 2D emitter passes the raw PointerEvent directly. Cover both.
+  const native: unknown = event.nativeEvent
+  const candidate =
+    (native as { target?: unknown; nativeEvent?: { target?: unknown } } | null) ?? null
+  const target =
+    (candidate?.target as Element | null | undefined) ??
+    (candidate?.nativeEvent as { target?: Element | null } | undefined)?.target ??
+    null
+  if (!target || typeof (target as Element).closest !== 'function') return false
+  return (target as Element).closest('[data-floorplan-scene]') != null
+}
+
 export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
   const originalPolygonRef = useRef(node.polygon.map(([x, z]) => [x, z] as [number, number]))
@@ -129,6 +152,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (isFloorplanSourcedEvent(event)) return
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
@@ -150,6 +174,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (isFloorplanSourcedEvent(event)) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
         return

@@ -3,18 +3,14 @@
 // Public so registry-driven kinds can compose children without reaching
 // into viewer's internal paths.
 
-// Ceiling internals re-exported for the registry-driven ceiling definition.
-// The ceiling renderer uses TSL shaders for a grid pattern — too much code
-// to duplicate at Stage A. Wrap-exported here, ported into the nodes
-// folder in a later stage.
-export { CeilingRenderer } from './components/renderers/ceiling/ceiling-renderer'
-// Door + window internals for registry-driven door / window definitions.
-// Each kind has a geometry system + animation system to mount via
-// RegisteredSystems when the kind is registry-driven.
-export { DoorRenderer } from './components/renderers/door/door-renderer'
-export { ItemRenderer } from './components/renderers/item/item-renderer'
+export { ErrorBoundary } from './components/error-boundary'
+// Stage A wrap-exports for the rest of the kinds — `@pascal-app/nodes`
+// registers each via `def.renderer` (and `def.system` when present)
+// Generic dispatch component used by recursive renderers (e.g. level →
+// children, building → children). The per-kind renderers live in
+// `@pascal-app/nodes/<kind>/renderer.tsx` and are loaded by the registry
+// — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
-export { WindowRenderer } from './components/renderers/window/window-renderer'
 export { default as Viewer } from './components/viewer'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
@@ -22,11 +18,14 @@ export {
   SSGI_PARAMS,
 } from './components/viewer/post-processing'
 export { WalkthroughControls } from './components/viewer/walkthrough-controls'
+export { useAssetUrl } from './hooks/use-asset-url'
+export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
+  baseMaterial,
   clearMaterialCache,
   createDefaultMaterial,
   createMaterial,
@@ -34,6 +33,7 @@ export {
   DEFAULT_CEILING_MATERIAL,
   DEFAULT_DOOR_MATERIAL,
   DEFAULT_ROOF_MATERIAL,
+  DEFAULT_SHELF_MATERIAL,
   DEFAULT_SLAB_MATERIAL,
   DEFAULT_STAIR_MATERIAL,
   DEFAULT_WALL_MATERIAL,
@@ -42,27 +42,46 @@ export {
   glassMaterial,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
+export { unionPolygons } from './lib/polygon-union'
+export { useItemLightPool } from './store/use-item-light-pool'
 export { default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
+export {
+  createColumnBoxGeometry,
+  createColumnCylinderGeometry,
+  createColumnSphereGeometry,
+  createColumnTorusGeometry,
+} from './systems/column/column-geometry'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
 export { DoorSystem } from './systems/door/door-system'
+export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.
 export { FenceSystem, generateFenceGeometry } from './systems/fence/fence-system'
+export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 // Item systems for the registry-driven item definition. ItemSystem
 // applies attachTo-driven transforms each frame; ItemLightSystem
 // manages item-mounted light sources.
 export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
+export { LevelSystem } from './systems/level/level-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
+export { RoofSystem } from './systems/roof/roof-system'
+export { ScanSystem } from './systems/scan/scan-system'
 // Slab system follows the wall + fence re-export pattern — composed into
 // the registry-driven slab definition's `def.system`. Removed in Phase 6
 // alongside the legacy slab mount point.
 export { generateSlabGeometry, SlabSystem } from './systems/slab/slab-system'
-export { getStairBodyMaterials, getStairRailingMaterial } from './systems/stair/stair-materials'
+export {
+  getStairBodyMaterials,
+  getStairRailingMaterial,
+  getStraightStairSegmentBodyMaterials,
+  type StairBodyMaterials,
+} from './systems/stair/stair-materials'
+export { StairSystem } from './systems/stair/stair-system'
 export { WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
@@ -72,3 +91,4 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 export { WallSystem } from './systems/wall/wall-system'
 export { WindowAnimationSystem } from './systems/window/window-animation-system'
 export { WindowSystem } from './systems/window/window-system'
+export { ZoneSystem } from './systems/zone/zone-system'

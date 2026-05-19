@@ -13,6 +13,7 @@ import type {
   LevelNode,
   RoofNode,
   RoofSegmentNode,
+  ScanNode,
   ShelfNode,
   SiteNode,
   SlabNode,
@@ -36,7 +37,14 @@ export interface GridEvent {
    */
   localPosition: [number, number, number]
   faceIndex?: number
-  object: Object3D
+  /**
+   * Optional: the hit Three.js object. Present when the grid event was
+   * synthesized from a R3F mesh hit (the legacy grid-plane mesh path);
+   * absent when emitted by the canvas-level raycaster in
+   * `use-grid-events.ts`, where there is no specific mesh to attribute
+   * the intersection to.
+   */
+  object?: Object3D
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
@@ -70,6 +78,8 @@ export type StairSegmentEvent = NodeEvent<StairSegmentNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
+export type ScanEvent = NodeEvent<ScanNode>
+export type GuideEvent = NodeEvent<GuideNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -201,6 +211,8 @@ type EditorEvents = GridEvents &
   NodeEvents<'stair-segment', StairSegmentEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
+  NodeEvents<'scan', ScanEvent> &
+  NodeEvents<'guide', GuideEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

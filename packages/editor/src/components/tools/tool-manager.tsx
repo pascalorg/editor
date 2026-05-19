@@ -9,29 +9,13 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
-import { CeilingBoundaryEditor } from './ceiling/ceiling-boundary-editor'
-import { CeilingHoleEditor } from './ceiling/ceiling-hole-editor'
-import { CeilingTool } from './ceiling/ceiling-tool'
 import { ColumnTool } from './column/column-tool'
-import { DoorTool } from './door/door-tool'
 import { ElevatorTool } from './elevator/elevator-tool'
-import { CurveFenceTool } from './fence/curve-fence-tool'
-import { FenceTool } from './fence/fence-tool'
-import { MoveFenceEndpointTool } from './fence/move-fence-endpoint-tool'
-import { ItemTool } from './item/item-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
-import { SlabBoundaryEditor } from './slab/slab-boundary-editor'
-import { SlabHoleEditor } from './slab/slab-hole-editor'
-import { SlabTool } from './slab/slab-tool'
-import { SpawnTool } from './spawn/spawn-tool'
 import { StairTool } from './stair/stair-tool'
-import { CurveWallTool } from './wall/curve-wall-tool'
-import { MoveWallEndpointTool } from './wall/move-wall-endpoint-tool'
-import { WallTool } from './wall/wall-tool'
-import { WindowTool } from './window/window-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
 
@@ -50,25 +34,19 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   return Comp
 }
 
+// Legacy tool fallbacks — kinds whose placement tools haven't migrated
+// to `def.tool` yet. Wall / fence / slab / ceiling / door / window /
+// item / shelf / spawn now go through the registry path above.
 const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
   site: {
     'property-line': SiteBoundaryEditor,
   },
   structure: {
-    wall: WallTool,
-    fence: FenceTool,
-    slab: SlabTool,
-    ceiling: CeilingTool,
     roof: RoofTool,
     stair: StairTool,
-    door: DoorTool,
-    item: ItemTool,
     zone: ZoneTool,
-    window: WindowTool,
   },
-  furnish: {
-    item: ItemTool,
-  },
+  furnish: {},
 }
 
 export const ToolManager: React.FC = () => {
@@ -146,9 +124,7 @@ export const ToolManager: React.FC = () => {
   const showBuildTool = mode === 'build' && tool !== null
 
   // Registry-first: if the active tool's kind has a NodeDefinition with a
-  // tool contribution, the registry-driven tool takes over. Otherwise fall
-  // through to the legacy `tools` map below. Today the registry is empty so
-  // RegistryToolComponent is always null — zero behavior change.
+  // tool contribution, the registry-driven tool takes over.
   const RegistryToolComponent = showBuildTool ? getRegistryTool(tool) : null
   const useRegistryTool = RegistryToolComponent != null
 
@@ -187,9 +163,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <Registry slabId={selectedSlabId} />
               </Suspense>
-            ) : (
-              <SlabBoundaryEditor slabId={selectedSlabId} />
-            )
+            ) : null
           })()}
         {showSlabHoleEditor &&
           selectedSlabId &&
@@ -200,9 +174,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <Registry holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
               </Suspense>
-            ) : (
-              <SlabHoleEditor holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
-            )
+            ) : null
           })()}
         {showCeilingBoundaryEditor &&
           selectedCeilingId &&
@@ -212,9 +184,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <Registry ceilingId={selectedCeilingId} />
               </Suspense>
-            ) : (
-              <CeilingBoundaryEditor ceilingId={selectedCeilingId} />
-            )
+            ) : null
           })()}
         {showCeilingHoleEditor &&
           selectedCeilingId &&
@@ -225,9 +195,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <Registry ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
               </Suspense>
-            ) : (
-              <CeilingHoleEditor ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
-            )
+            ) : null
           })()}
         {movingWallEndpoint &&
           (() => {
@@ -239,9 +207,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <RegistryAffordance target={movingWallEndpoint} />
               </Suspense>
-            ) : (
-              <MoveWallEndpointTool target={movingWallEndpoint} />
-            )
+            ) : null
           })()}
         {movingFenceEndpoint &&
           (() => {
@@ -253,9 +219,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <RegistryAffordance target={movingFenceEndpoint} />
               </Suspense>
-            ) : (
-              <MoveFenceEndpointTool target={movingFenceEndpoint} />
-            )
+            ) : null
           })()}
         {curvingWall &&
           (() => {
@@ -264,9 +228,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <Registry node={curvingWall} />
               </Suspense>
-            ) : (
-              <CurveWallTool node={curvingWall} />
-            )
+            ) : null
           })()}
         {curvingFence &&
           (() => {
@@ -275,9 +237,7 @@ export const ToolManager: React.FC = () => {
               <Suspense fallback={null}>
                 <RegistryAffordance node={curvingFence} />
               </Suspense>
-            ) : (
-              <CurveFenceTool node={curvingFence} />
-            )
+            ) : null
           })()}
         {movingNode && movingNode.type !== 'building' && (
           <MoveTool
@@ -286,15 +246,11 @@ export const ToolManager: React.FC = () => {
           />
         )}
         {/* Registry-first: when the active tool's kind has a registered
-            NodeDefinition with a tool contribution, mount it here. Today
-            the registry is empty so this branch never fires. */}
+            NodeDefinition with a tool contribution, mount it here. */}
         {!movingNode && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
             <RegistryToolComponent />
           </Suspense>
-        )}
-        {!movingNode && !useRegistryTool && showBuildTool && tool === 'spawn' && (
-          <SpawnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'column' && (
           <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
@@ -306,11 +262,7 @@ export const ToolManager: React.FC = () => {
             onPlaced={handlePlacedElevatorSelected}
           />
         )}
-        {!movingNode &&
-        BuildToolComponent &&
-        tool !== 'spawn' &&
-        tool !== 'column' &&
-        tool !== 'elevator' ? (
+        {!movingNode && BuildToolComponent && tool !== 'column' && tool !== 'elevator' ? (
           <BuildToolComponent />
         ) : null}
       </group>

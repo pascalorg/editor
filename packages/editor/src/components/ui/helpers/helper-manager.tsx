@@ -4,12 +4,9 @@ import { nodeRegistry } from '@pascal-app/core'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import useEditor from '../../../store/use-editor'
 import { BuildingHelper } from './building-helper'
-import { CeilingHelper } from './ceiling-helper'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
 import { RoofHelper } from './roof-helper'
-import { SlabHelper } from './slab-helper'
-import { WallHelper } from './wall-helper'
 
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
@@ -29,10 +26,9 @@ export function HelperManager() {
     return null
   }
 
-  // Registry-first: if the active tool matches a registered kind whose
-  // definition supplies `toolHints`, render via the generic helper.
-  // Otherwise fall through to the hand-written per-tool helpers below.
-  // Legacy helpers get deleted as their kind migrates `toolHints` in.
+  // Registry-first: kinds with `def.toolHints` render through the generic
+  // `RegisteredToolHelper`. Today that covers ceiling / door / fence /
+  // item / shelf / slab / spawn / wall / window.
   if (tool) {
     const def = nodeRegistry.get(tool)
     if (def?.toolHints && def.toolHints.length > 0) {
@@ -40,19 +36,9 @@ export function HelperManager() {
     }
   }
 
-  // Show appropriate helper based on current tool
-  switch (tool) {
-    case 'wall':
-      return <WallHelper />
-    case 'item':
-      return <ItemHelper />
-    case 'slab':
-      return <SlabHelper />
-    case 'ceiling':
-      return <CeilingHelper />
-    case 'roof':
-      return <RoofHelper />
-    default:
-      return null
-  }
+  // Legacy fallback — only `roof` remains because it hasn't migrated to
+  // `def.tool` / `def.toolHints` yet (no Stage D port). When roof
+  // migrates, this switch deletes outright.
+  if (tool === 'roof') return <RoofHelper />
+  return null
 }

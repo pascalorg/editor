@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildWallFloorplan } from './floorplan'
+import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
 
@@ -82,6 +83,20 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   // Stage C: floor-plan rendering. ctx.siblings provides other walls in
   // the level so `calculateLevelMiters` can compute correct corner joins.
   floorplan: buildWallFloorplan,
+  // 2D drag affordances triggered by `endpoint-handle` primitives in
+  // `def.floorplan`'s output. Sister to `affordanceTools` (3D) — the
+  // same legacy `MoveWallEndpointTool` flow, reachable from both the
+  // R3F canvas and the floor-plan SVG.
+  floorplanAffordances: {
+    'move-endpoint': wallMoveEndpointAffordance,
+    curve: wallCurveAffordance,
+  },
+
+  toolHints: [
+    { key: 'Left click', label: 'Set wall start / end' },
+    { key: 'Shift', label: 'Allow non-45° angles' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
 
   presentation: {
     label: 'Wall',

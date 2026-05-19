@@ -1,34 +1,14 @@
 'use client'
 
-import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import useViewer from '../../store/use-viewer'
-import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
-import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
-import { DoorSystem } from '../../systems/door/door-system'
-import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
-import { FenceSystem } from '../../systems/fence/fence-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
-import { GuideSystem } from '../../systems/guide/guide-system'
-import { ItemSystem } from '../../systems/item/item-system'
-import { ItemLightSystem } from '../../systems/item-light/item-light-system'
-import { LevelSystem } from '../../systems/level/level-system'
-import { RoofSystem } from '../../systems/roof/roof-system'
-import { ScanSystem } from '../../systems/scan/scan-system'
-import { SlabSystem } from '../../systems/slab/slab-system'
-import { StairSystem } from '../../systems/stair/stair-system'
-import { WallCutout } from '../../systems/wall/wall-cutout'
-import { WallSystem } from '../../systems/wall/wall-system'
-import { WindowAnimationSystem } from '../../systems/window/window-animation-system'
-import { WindowSystem } from '../../systems/window/window-system'
-import { ZoneSystem } from '../../systems/zone/zone-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
-import { LegacySystem } from './legacy-system'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
@@ -225,84 +205,16 @@ const Viewer: React.FC<ViewerProps> = ({
           <SceneRenderer />
         )}
 
-        {/* Default Systems */}
-        <LegacySystem kind="level">
-          <LevelSystem />
-        </LegacySystem>
-        <LegacySystem kind="guide">
-          <GuideSystem />
-        </LegacySystem>
-        <LegacySystem kind="scan">
-          <ScanSystem />
-        </LegacySystem>
-        <LegacySystem kind="wall">
-          <WallCutout />
-        </LegacySystem>
-        {/* Core systems */}
-        <LegacySystem kind="ceiling">
-          <CeilingSystem />
-        </LegacySystem>
-        <LegacySystem kind="door">
-          <DoorAnimationSystem />
-        </LegacySystem>
-        <LegacySystem kind="elevator">
-          <ElevatorRuntimeSystem />
-        </LegacySystem>
-        <LegacySystem kind="elevator">
-          <ElevatorInteractionSystem />
-        </LegacySystem>
-        <LegacySystem kind="elevator">
-          <ElevatorOpeningSystem />
-        </LegacySystem>
-        <LegacySystem kind="window">
-          <WindowAnimationSystem />
-        </LegacySystem>
-        <LegacySystem kind="door">
-          <DoorSystem />
-        </LegacySystem>
-        <LegacySystem kind="fence">
-          <FenceSystem />
-        </LegacySystem>
-        <LegacySystem kind="item">
-          <ItemSystem />
-        </LegacySystem>
-        <LegacySystem kind="roof">
-          <RoofSystem />
-        </LegacySystem>
-        <LegacySystem kind="slab">
-          <SlabSystem />
-        </LegacySystem>
-        <LegacySystem kind="stair">
-          <StairSystem />
-        </LegacySystem>
-        <LegacySystem kind="wall">
-          <WallSystem />
-        </LegacySystem>
-        <LegacySystem kind="window">
-          <WindowSystem />
-        </LegacySystem>
-        <LegacySystem kind="zone">
-          <ZoneSystem />
-        </LegacySystem>
         {/* Generic geometry rebuild loop for any registered kind that
             ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
-            builder, swaps the registered group's children. Runs alongside
-            per-kind systems — they coexist, this system only acts on
-            kinds whose definition exposes a `geometry` function. See
+            builder, swaps the registered group's children. See
             wiki/architecture/node-definitions.md. */}
         <GeometrySystem />
-        {/* Mounts systems contributed by registry-backed kinds. Today the
-            registry is empty so this renders nothing. Once kinds register
-            (Phase 2+), each kind's registered system runs here and its
-            legacy counterpart above short-circuits via the LegacySystem
-            wrapper (which checks nodeRegistry.has). */}
+        {/* Mounts systems contributed by registry-backed kinds. Each
+            kind's `def.system` is loaded via lazy() and rendered here,
+            ordered by `system.priority`. */}
         <RegisteredSystems />
         <PostProcessing hoverStyles={hoverStyles} />
-        {/* <DebugRenderer /> */}
-
-        <LegacySystem kind="item">
-          <ItemLightSystem />
-        </LegacySystem>
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}

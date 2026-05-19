@@ -9,9 +9,6 @@ import { ItemLightSystem, ItemSystem } from '@pascal-app/viewer'
  *    (wall-side z-offset, slab elevation, ceiling mounting).
  *  - **`ItemLightSystem`** — manages light sources attached to items
  *    (lamps, ceiling lights, etc.).
- *
- * Both are wrapped in `<LegacySystem kind="item">` legacy mounts; with
- * item registered, those short-circuit and this bundle takes over.
  */
 const ItemSystems = () => {
   return (

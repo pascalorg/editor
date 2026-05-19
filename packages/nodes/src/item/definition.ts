@@ -1,5 +1,6 @@
 import type { ItemNode as ItemNodeType, NodeDefinition } from '@pascal-app/core'
 import { buildItemFloorplan } from './floorplan'
+import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemParametrics } from './parametrics'
 import { ItemNode } from './schema'
 
@@ -79,9 +80,31 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     // Same priority as the legacy ItemSystem.
     priority: 2,
   },
+  // Catalog placement tool — mounted when `useEditor.tool === 'item'`.
+  // Wraps the same placement coordinator the move-tool uses (surface
+  // strategies for floor / wall / ceiling / item-surface). Replaces
+  // the legacy `editor/src/components/tools/item/item-tool.tsx`.
+  tool: () => import('./tool'),
+
+  // Stage D — 3D move-tool (registry-driven). Adopts the moving node
+  // and runs the placement coordinator with surface strategies for
+  // floor / wall / ceiling / item-surface, including attachTo
+  // *transitions* (drop a wall item on a ceiling and have it switch).
+  // Replaces the legacy `MoveItemContent` in editor's dispatcher; the
+  // `getRegistryAffordanceTool('item', 'move')` lookup picks this up.
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
+
   // Stage C: floor-plan polygon. ctx.resolve walks the parent chain
   // (wall / nested item / level) to compute the world-space transform.
   floorplan: buildItemFloorplan,
+  // 2D move-on-floorplan handler. Branches on `asset.attachTo`:
+  // wall items snap to walls (like door / window), ceiling items
+  // snap to ceiling polygons, floor items snap to slabs. attachTo
+  // *transitions* (drop a wall item on a ceiling) remain canonical
+  // in the 3D path; 2D only re-anchors within the same family.
+  floorplanMoveTarget: itemFloorplanMoveTarget,
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },
@@ -94,7 +117,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   presentation: {
     label: 'Item',
     description: 'A catalog-backed item (furniture, fixtures, decorations).',
-    icon: { kind: 'iconify', name: 'lucide:armchair' },
+    icon: { kind: 'url', src: '/icons/item.png' },
     paletteSection: 'furnish',
     paletteOrder: 10,
   },

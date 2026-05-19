@@ -1,32 +1,376 @@
-import type { FloorplanGeometry, FloorplanPoint } from '@pascal-app/core'
-import { isCurvedWall, sampleWallCenterline } from '@pascal-app/core'
+import {
+  type FloorplanGeometry,
+  type GeometryContext,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  isCurvedWall,
+  sampleWallCenterline,
+} from '@pascal-app/core'
 import type { FenceNode } from './schema'
 
 /**
- * Stage C floor-plan builder for fence. Draws the fence centerline as
- * a polyline; thickness becomes the stroke width.
+ * Stage C floor-plan builder for fence. 1:1 visual port of the legacy
+ * `FloorplanFenceLayer` from `floorplan-panel.tsx`:
  *
- * Curved fences sample the centerline at 24 segments — same density the
- * legacy `floorplanFenceEntries` useMemo uses, so straight + curved
- * fences look comparable to the legacy rendering.
+ *   1. Three stacked stroke paths along the centerline, all with
+ *      `vectorEffect: 'non-scaling-stroke'` so widths stay constant on
+ *      screen at any zoom:
+ *        a. Optional glow (semi-transparent, only when active/hovered).
+ *        b. White underlay — the visual "fence body" base layer.
+ *        c. Dark accent — the actual fence outline.
+ *   2. Style-aware markers at computed positions along the centerline:
+ *        - `privacy`: rotated rectangle (vertical slat).
+ *        - `rail`: concentric circle stack (post + ring + tiny center).
+ *        - default `slat`: white X mark with a coloured X on top.
+ *   3. Markers thinned when `showInfill === false` — only first + last
+ *      remain (matches legacy "endpoints only" mode).
+ *   4. Selection chrome: dots on the endpoints + centered length label
+ *      (same shape as the wall builder).
  *
- * Visual nuances the legacy ships (side hatching to indicate thickness
- * direction, post markers along the centerline) are deferred — Phase 5
- * Stage D will revisit if real visual parity is needed.
+ * `getFloorplanFenceMarkerTs` is inlined here — it was a private helper
+ * in the legacy panel and is fence-specific, so it lives with the kind.
  */
-export function buildFenceFloorplan(node: FenceNode): FloorplanGeometry {
-  const points: FloorplanPoint[] = isCurvedWall(node)
-    ? sampleWallCenterline(node, 24).map((p) => [p.x, p.y] as FloorplanPoint)
-    : [
-        [node.start[0], node.start[1]],
-        [node.end[0], node.end[1]],
-      ]
 
-  return {
-    kind: 'polyline',
-    points,
-    stroke: node.color || '#475569',
-    strokeWidth: Math.max(node.thickness, 0.05),
-    opacity: 0.9,
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getFloorplanFenceLength(fence: FenceNode): number {
+  return isCurvedWall(fence)
+    ? getWallCurveLength(fence)
+    : Math.hypot(fence.end[0] - fence.start[0], fence.end[1] - fence.start[1])
+}
+
+/**
+ * Distribute markers along the fence centerline. Spacing depends on
+ * `postSpacing` (tighter for privacy style); `inset` keeps the first /
+ * last marker away from the endpoints. Returns a list of t-values in
+ * [0, 1] suitable for `getWallCurveFrameAt`.
+ */
+function getFloorplanFenceMarkerTs(fence: FenceNode): number[] {
+  const length = getFloorplanFenceLength(fence)
+  if (length <= 0.24) return [0.5]
+
+  const spacing = clamp(
+    fence.style === 'privacy' ? fence.postSpacing * 0.72 : fence.postSpacing,
+    0.34,
+    1.5,
+  )
+  const inset = clamp(
+    Math.max(fence.postSize * 1.25, fence.edgeInset * 10),
+    0.18,
+    Math.min(0.48, length * 0.22),
+  )
+  const usableLength = Math.max(length - inset * 2, 0)
+  if (usableLength <= 0.001) return [0.5]
+
+  const markerCount = Math.max(1, Math.min(24, Math.floor(usableLength / spacing) + 1))
+  if (markerCount === 1) return [0.5]
+
+  return Array.from({ length: markerCount }, (_, index) =>
+    clamp((inset + (usableLength * index) / (markerCount - 1)) / length, 0.08, 0.92),
+  )
+}
+
+function buildCenterlinePathD(points: ReadonlyArray<{ x: number; y: number }>): string {
+  if (points.length < 2) return ''
+  const first = points[0]!
+  return [`M ${first.x} ${first.y}`, ...points.slice(1).map((p) => `L ${p.x} ${p.y}`)].join(' ')
+}
+
+function buildMarker(
+  fence: FenceNode,
+  point: { x: number; y: number },
+  angleRadians: number,
+  accentColor: string,
+  surfaceColor: string,
+  isActive: boolean,
+): FloorplanGeometry {
+  const markerStrokeWidth = isActive ? 1.65 : 1.35
+
+  if (fence.style === 'privacy') {
+    const w = clamp(fence.postSize * 0.58, 0.038, 0.068)
+    const h = clamp(Math.max(fence.baseHeight * 0.5, fence.postSize * 1.4), 0.1, 0.17)
+    // Surface plate underneath + accent rectangle on top — gives a clean
+    // "punched out of the underlay stroke" look at all zooms.
+    return {
+      kind: 'group',
+      transform: { translate: [point.x, point.y], rotate: angleRadians },
+      children: [
+        {
+          kind: 'rect',
+          x: -(w + 0.032) / 2,
+          y: -(h + 0.038) / 2,
+          width: w + 0.032,
+          height: h + 0.038,
+          rx: 0.014,
+          ry: 0.014,
+          fill: surfaceColor,
+        },
+        {
+          kind: 'rect',
+          x: -w / 2,
+          y: -h / 2,
+          width: w,
+          height: h,
+          rx: 0.01,
+          ry: 0.01,
+          fill: accentColor,
+        },
+      ],
+    }
   }
+
+  if (fence.style === 'rail') {
+    const r = clamp(fence.postSize * 0.52, 0.048, 0.078)
+    return {
+      kind: 'group',
+      transform: { translate: [point.x, point.y] },
+      children: [
+        { kind: 'circle', cx: 0, cy: 0, r: r + 0.018, fill: surfaceColor },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r,
+          fill: surfaceColor,
+          stroke: accentColor,
+          strokeWidth: markerStrokeWidth,
+          vectorEffect: 'non-scaling-stroke',
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: r * 0.34,
+          fill: accentColor,
+          fillOpacity: isActive ? 0.24 : 0.18,
+          vectorEffect: 'non-scaling-stroke',
+        },
+      ],
+    }
+  }
+
+  // Default — slat X mark.
+  const half = clamp(fence.postSize * 0.42, 0.03, 0.055)
+  return {
+    kind: 'group',
+    transform: { translate: [point.x, point.y], rotate: angleRadians },
+    children: [
+      // White underlay so the X shows against any background.
+      {
+        kind: 'line',
+        x1: -half,
+        y1: -half,
+        x2: half,
+        y2: half,
+        stroke: surfaceColor,
+        strokeWidth: 2.8,
+        strokeLinecap: 'round',
+        vectorEffect: 'non-scaling-stroke',
+      },
+      {
+        kind: 'line',
+        x1: half,
+        y1: -half,
+        x2: -half,
+        y2: half,
+        stroke: surfaceColor,
+        strokeWidth: 2.8,
+        strokeLinecap: 'round',
+        vectorEffect: 'non-scaling-stroke',
+      },
+      // Accent X on top.
+      {
+        kind: 'line',
+        x1: -half,
+        y1: -half,
+        x2: half,
+        y2: half,
+        stroke: accentColor,
+        strokeWidth: markerStrokeWidth,
+        strokeLinecap: 'round',
+        vectorEffect: 'non-scaling-stroke',
+      },
+      {
+        kind: 'line',
+        x1: half,
+        y1: -half,
+        x2: -half,
+        y2: half,
+        stroke: accentColor,
+        strokeWidth: markerStrokeWidth,
+        strokeLinecap: 'round',
+        vectorEffect: 'non-scaling-stroke',
+      },
+    ],
+  }
+}
+
+export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): FloorplanGeometry {
+  const view = ctx.viewState
+  const palette = view?.palette
+  const isSelected = view?.selected ?? false
+  const isHighlighted = view?.highlighted ?? false
+  const isHovered = view?.hovered ?? false
+  const isActive = isSelected || isHighlighted
+  const showInteractiveChrome = isActive || isHovered
+
+  // Centerline path — sampled for curved fences so the underlay /
+  // accent / glow all trace the same shape.
+  const centerlinePoints = isCurvedWall(node)
+    ? sampleWallCenterline(node, 24)
+    : [
+        { x: node.start[0], y: node.start[1] },
+        { x: node.end[0], y: node.end[1] },
+      ]
+  const pathD = buildCenterlinePathD(centerlinePoints)
+
+  // Stroke shifts: selected wins; hover (not selected) → `wallHoverStroke`
+  // (light blue from the legacy palette, same as walls); otherwise dark
+  // accent. Mirrors the `fenceStroke` ternary in the legacy panel.
+  const accentStroke =
+    isActive && palette
+      ? palette.selectedStroke
+      : isHovered && palette
+        ? palette.wallHoverStroke
+        : '#111827'
+  const glowStroke =
+    isActive && palette
+      ? palette.selectedStroke
+      : isHovered && palette
+        ? palette.wallHoverStroke
+        : accentStroke
+  const underlayStroke = 'rgba(255, 255, 255, 0.98)'
+  // Surface (white) for marker plates — themed dark surface would look
+  // wrong on the white underlay, so we hardcode white here.
+  const markerSurface = '#ffffff'
+
+  // Widths step up on hover (between idle and active) — same pattern the
+  // legacy panel uses for `fenceUnderlayWidth` / `fenceStrokeWidth`.
+  const underlayWidth = isActive ? 6.5 : isHovered ? 6 : 5.2
+  const accentWidth = isActive ? 2.6 : isHovered ? 2.35 : 2.05
+  // Glow only appears when active or hovered. Opacity gradient matches
+  // the legacy (0.22 active / 0.14 hover / 0 idle).
+  const glowOpacity = isActive ? 0.22 : isHovered ? 0.14 : 0
+
+  // Marker frames. Filter to first+last when infill is off so the user
+  // still sees end posts (matches legacy).
+  const markerTs = getFloorplanFenceMarkerTs(node)
+  const markerFrames = markerTs.map((t) => {
+    const frame = getWallCurveFrameAt(node, t)
+    return {
+      point: frame.point,
+      angle: Math.atan2(frame.tangent.y, frame.tangent.x),
+    }
+  })
+  const visibleMarkers =
+    (node.showInfill ?? true)
+      ? markerFrames
+      : markerFrames.filter((_, i) => i === 0 || i === markerFrames.length - 1)
+
+  const children: FloorplanGeometry[] = []
+
+  // 1. Glow (only when active / highlighted / hovered). Wide,
+  // low-opacity ring. Width steps with the interaction level so hover
+  // is subtler than active.
+  if (glowOpacity > 0) {
+    children.push({
+      kind: 'path',
+      d: pathD,
+      fill: 'none',
+      stroke: glowStroke,
+      strokeWidth: isActive ? 9.5 : isHovered ? 8.8 : 8.2,
+      strokeOpacity: glowOpacity,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      vectorEffect: 'non-scaling-stroke',
+    })
+  }
+
+  // 2. White underlay — visible fence body base layer.
+  children.push({
+    kind: 'path',
+    d: pathD,
+    fill: 'none',
+    stroke: underlayStroke,
+    strokeOpacity: 0.98,
+    strokeWidth: underlayWidth,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    vectorEffect: 'non-scaling-stroke',
+  })
+
+  // 3. Dark accent on top.
+  children.push({
+    kind: 'path',
+    d: pathD,
+    fill: 'none',
+    stroke: accentStroke,
+    strokeWidth: accentWidth,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    vectorEffect: 'non-scaling-stroke',
+  })
+
+  // 4. Style-aware markers. Pass `showInteractiveChrome` so hover also
+  // bumps marker stroke widths slightly (legacy panel does the same).
+  for (const marker of visibleMarkers) {
+    children.push(
+      buildMarker(
+        node,
+        marker.point,
+        marker.angle,
+        accentStroke,
+        markerSurface,
+        showInteractiveChrome,
+      ),
+    )
+  }
+
+  // 5. Hit-line for click detection.
+  children.push({
+    kind: 'hit-line',
+    x1: node.start[0],
+    y1: node.start[1],
+    x2: node.end[0],
+    y2: node.end[1],
+    strokeWidthPx: 18,
+    cursor: 'pointer',
+  })
+
+  // 6. Endpoint handles + length label when selected.
+  if (isSelected) {
+    children.push({
+      kind: 'endpoint-handle',
+      point: [node.start[0], node.start[1]],
+      state: 'idle',
+      affordance: 'move-endpoint',
+      payload: { fenceId: node.id, endpoint: 'start' as const },
+    })
+    children.push({
+      kind: 'endpoint-handle',
+      point: [node.end[0], node.end[1]],
+      state: 'idle',
+      affordance: 'move-endpoint',
+      payload: { fenceId: node.id, endpoint: 'end' as const },
+    })
+
+    const length = getWallCurveLength(node)
+    if (length >= 0.1) {
+      const midX = (node.start[0] + node.end[0]) / 2
+      const midZ = (node.start[1] + node.end[1]) / 2
+      const dx = node.end[0] - node.start[0]
+      const dz = node.end[1] - node.start[1]
+      children.push({
+        kind: 'dimension-label',
+        cx: midX,
+        cy: midZ,
+        text: `${Number.parseFloat(length.toFixed(2))}m`,
+        angle: Math.atan2(dz, dx),
+      })
+    }
+  }
+
+  return { kind: 'group', children }
 }

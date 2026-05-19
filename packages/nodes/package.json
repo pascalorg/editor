@@ -30,7 +30,8 @@
     "@react-three/fiber": "^9",
     "lucide-react": "^1",
     "react": "^18 || ^19",
-    "three": "^0.184"
+    "three": "^0.184",
+    "zustand": "^5"
   },
   "devDependencies": {
     "@pascal-app/core": "^0.8.0",

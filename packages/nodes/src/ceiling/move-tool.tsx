@@ -11,8 +11,9 @@ import {
 } from '@pascal-app/core'
 import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
+import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 'three'
 
 /**
  * Phase 5 Stage D — ceiling whole-move tool.
@@ -55,6 +56,24 @@ function setMeshOffset(id: AnyNodeId, deltaX: number, deltaZ: number, height: nu
   // CeilingSystem positions the mesh at height−0.01 on rebuild; we
   // preserve the Y while offsetting X/Z during the drag.
   if (mesh) mesh.position.set(deltaX, height - 0.01, deltaZ)
+}
+
+/**
+ * Distinguish 3D-canvas grid events (this tool) from 2D floor-plan
+ * grid events (`ceilingFloorplanMoveTarget` + `FloorplanRegistryMoveOverlay`
+ * Path 1). See the equivalent helper in `slab/move-tool.tsx` for the
+ * full rationale.
+ */
+function isFloorplanSourcedEvent(event: GridEvent): boolean {
+  const native: unknown = event.nativeEvent
+  const candidate =
+    (native as { target?: unknown; nativeEvent?: { target?: unknown } } | null) ?? null
+  const target =
+    (candidate?.target as Element | null | undefined) ??
+    (candidate?.nativeEvent as { target?: Element | null } | undefined)?.target ??
+    null
+  if (!target || typeof (target as Element).closest !== 'function') return false
+  return (target as Element).closest('[data-floorplan-scene]') != null
 }
 
 export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
@@ -112,6 +131,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (isFloorplanSourcedEvent(event)) return
       const localX = snap(event.localPosition[0])
       const localZ = snap(event.localPosition[2])
 
@@ -130,6 +150,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (isFloorplanSourcedEvent(event)) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
         return
@@ -177,10 +198,125 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
   }, [exitMoveMode, node.id])
 
   return (
+    <CeilingMovePreview
+      ceilingId={node.id}
+      cursorLocalPos={cursorLocalPos}
+      height={node.height ?? 2.5}
+      originalHoles={originalHolesRef.current}
+      originalPolygon={originalPolygonRef.current}
+    />
+  )
+}
+
+/**
+ * Translucent fill + bright outline showing where the ceiling will land
+ * during the drag. Mirrors the legacy `MoveCeilingTool` overlay so the
+ * 3D viewer has a visible cue from above (the ceiling's child grid mesh
+ * is hidden by default — without this preview the only mesh that shows
+ * from above is the (translated) translucent ceiling itself, which is
+ * easy to miss). Works for both the 3D `grid:move` path (this tool
+ * writes `useLiveTransforms.position = [Δx, 0, Δz]` directly) and the
+ * 2D floor-plan move path (`slab/ceiling/floorplan-move.ts` writes the
+ * same value); we subscribe to that store so the preview tracks the
+ * current delta regardless of which mover is driving it.
+ */
+function CeilingMovePreview({
+  ceilingId,
+  cursorLocalPos,
+  height,
+  originalHoles,
+  originalPolygon,
+}: {
+  ceilingId: AnyNodeId
+  cursorLocalPos: [number, number, number]
+  height: number
+  originalHoles: Array<Array<[number, number]>>
+  originalPolygon: Array<[number, number]>
+}) {
+  const live = useLiveTransforms((s) => s.get(ceilingId))
+  const dx = live?.position[0] ?? 0
+  const dz = live?.position[2] ?? 0
+
+  const previewPolygon = useMemo(
+    () => originalPolygon.map(([x, z]) => [x + dx, z + dz] as [number, number]),
+    [originalPolygon, dx, dz],
+  )
+  const previewHoles = useMemo(
+    () => originalHoles.map((hole) => hole.map(([x, z]) => [x + dx, z + dz] as [number, number])),
+    [originalHoles, dx, dz],
+  )
+
+  const previewFillGeometry = useMemo(
+    () => createCeilingPreviewGeometry(previewPolygon, previewHoles),
+    [previewPolygon, previewHoles],
+  )
+  const previewOutlineGeometry = useMemo(
+    () => createCeilingOutlineGeometry(previewPolygon),
+    [previewPolygon],
+  )
+
+  return (
     <group>
+      <mesh geometry={previewFillGeometry} position={[0, height + 0.012, 0]}>
+        <meshBasicMaterial
+          color="#f5f5f4"
+          depthWrite={false}
+          opacity={0.3}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+      {/* @ts-ignore - `<line>` is a valid R3F intrinsic but conflicts with SVG line typing */}
+      <line geometry={previewOutlineGeometry} position={[0, height + 0.02, 0]}>
+        <lineBasicMaterial color="#ffffff" depthWrite={false} opacity={0.95} transparent />
+      </line>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
     </group>
   )
+}
+
+function createCeilingPreviewGeometry(
+  polygon: Array<[number, number]>,
+  holes: Array<Array<[number, number]>>,
+): BufferGeometry {
+  if (polygon.length < 3) return new BufferGeometry()
+
+  const shape = new Shape()
+  const first = polygon[0]!
+  shape.moveTo(first[0], -first[1])
+  for (let i = 1; i < polygon.length; i++) {
+    const pt = polygon[i]!
+    shape.lineTo(pt[0], -pt[1])
+  }
+  shape.closePath()
+
+  for (const holePolygon of holes) {
+    if (holePolygon.length < 3) continue
+    const hole = new Path()
+    const hf = holePolygon[0]!
+    hole.moveTo(hf[0], -hf[1])
+    for (let i = 1; i < holePolygon.length; i++) {
+      const pt = holePolygon[i]!
+      hole.lineTo(pt[0], -pt[1])
+    }
+    hole.closePath()
+    shape.holes.push(hole)
+  }
+
+  const geometry = new ShapeGeometry(shape)
+  geometry.rotateX(-Math.PI / 2)
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+function createCeilingOutlineGeometry(polygon: Array<[number, number]>): BufferGeometry {
+  const geometry = new BufferGeometry()
+  if (polygon.length < 2) return geometry
+  const points = polygon.map(([x, z]) => new Vector3(x, 0, z))
+  const first = polygon[0]!
+  points.push(new Vector3(first[0], 0, first[1]))
+  geometry.setFromPoints(points)
+  return geometry
 }
 
 export default MoveCeilingTool

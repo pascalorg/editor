@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type CeilingNode,
+  nodeRegistry,
+  type SlabNode,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -18,9 +25,13 @@ import { NodeActionMenu } from '../editor/node-action-menu'
  * an HTML overlay positioned at the top of the bounding box.
  *
  * Buttons:
- *  - Move: sets `movingNode` in useEditor. The `<FloorplanRegistryMove
- *    Overlay>` component picks that up and lets the user click in the
- *    floor plan to commit the new position.
+ *  - Move: sets `movingNode` in useEditor. Enabled when the kind has
+ *    `capabilities.movable`, `def.floorplanMoveTarget`, OR
+ *    `def.affordanceTools.move` (slab / ceiling). The
+ *    `<FloorplanRegistryMoveOverlay>` / dispatcher picks the right path.
+ *  - Add hole (slab + ceiling only): inserts a small default-square
+ *    hole at the polygon centroid via `updateNode`. Mirrors the legacy
+ *    `handleAddHole` in `floating-action-menu.tsx`.
  *  - Duplicate: deep-clones the node, marks it new, sets it as the
  *    movingNode (placement cursor) — same UX pattern as 3D duplicate.
  *  - Delete: calls `deleteNode(id)`. Cascade is handled by the registry's
@@ -70,14 +81,66 @@ export function FloorplanRegistryActionMenu() {
   const node = useScene.getState().nodes[selectedId]
   if (!node) return null
 
-  const canMove = !!def.capabilities.movable
+  // Move button is enabled when any of:
+  //   - `capabilities.movable` (generic translate-on-XZ — shelf / spawn / fence)
+  //   - `def.floorplanMoveTarget` (anchor-aware 2D — door / window / item)
+  //   - `def.affordanceTools.move` (kind-owned 3D mover — slab / ceiling)
+  // From the menu's perspective all three are "this kind can move from
+  // the floor plan." The `MoveTool` dispatcher resolves the right path.
+  const canMove =
+    !!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
+  const canAddHole = node.type === 'slab' || node.type === 'ceiling'
 
   const handleMove = () => {
     sfxEmitter.emit('sfx:item-pick')
     setMovingNode(node as never)
-    // Selection stays — the move overlay reads movingNode, not selection.
+    // Match the legacy 3D `floating-action-menu`: clear selection so
+    // selection-gated affordances unmount during the drag. Specifically
+    // the slab / ceiling boundary editor (`ToolManager` shows it when
+    // `selectedSlabId !== undefined`) would otherwise stay visible
+    // and render its vertex / edge handles on top of the moving mesh
+    // in split-view 3D. The move overlay reads `movingNode`, not the
+    // selection, so clearing it doesn't disturb the move itself; the
+    // commit path re-selects the node when it ends.
+    useViewer.getState().setSelection({ selectedIds: [] })
+  }
+
+  const handleAddHole = () => {
+    if (!canAddHole) return
+    const surfaceNode = node as SlabNode | CeilingNode
+    const polygon = surfaceNode.polygon
+    if (!polygon || polygon.length < 3) return
+
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of polygon) {
+      cx += x
+      cz += z
+    }
+    cx /= polygon.length
+    cz /= polygon.length
+
+    const holeSize = 0.5
+    const newHole: Array<[number, number]> = [
+      [cx - holeSize, cz - holeSize],
+      [cx + holeSize, cz - holeSize],
+      [cx + holeSize, cz + holeSize],
+      [cx - holeSize, cz + holeSize],
+    ]
+    const currentHoles = surfaceNode.holes ?? []
+    const currentMetadata = currentHoles.map(
+      (_, index) => surfaceNode.holeMetadata?.[index] ?? { source: 'manual' as const },
+    )
+    sfxEmitter.emit('sfx:structure-build')
+    useScene.getState().updateNode(
+      selectedId as AnyNodeId,
+      {
+        holes: [...currentHoles, newHole],
+        holeMetadata: [...currentMetadata, { source: 'manual' as const }],
+      } as Partial<AnyNode>,
+    )
   }
 
   const handleDuplicate = () => {
@@ -113,6 +176,7 @@ export function FloorplanRegistryActionMenu() {
       }}
     >
       <NodeActionMenu
+        onAddHole={canAddHole ? handleAddHole : undefined}
         onDelete={canDelete ? handleDelete : undefined}
         onDuplicate={canDuplicate ? handleDuplicate : undefined}
         onMove={canMove ? handleMove : undefined}

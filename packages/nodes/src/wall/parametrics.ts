@@ -24,4 +24,10 @@ export const wallParametrics: ParametricDescriptor<WallNode> = {
       ],
     },
   ],
+  // Stage E — kind-owned panel. Wall's panel has a derived Length
+  // slider (computes from start/end + dirX/dirZ) and a hosted-child-
+  // aware Curve slider that's only shown when no door / window / wall-
+  // attached item lives on the wall. The auto-inspector can't express
+  // "derived" or "conditionally visible" yet — kept as a custom panel.
+  customPanel: () => import('./panel'),
 }

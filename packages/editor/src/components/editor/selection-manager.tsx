@@ -17,6 +17,7 @@ import {
   type RoofSegmentEvent,
   resolveLevelId,
   resolveMaterial,
+  type ShelfNode,
   type SlabNode,
   type StairEvent,
   type StairNode,
@@ -341,7 +342,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode,
+  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -401,6 +402,23 @@ function applySingleSurfacePaintPreview(
       restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
     })
 
+    if (restores.length === 0) return null
+    return () => {
+      for (let index = restores.length - 1; index >= 0; index -= 1) {
+        restores[index]?.()
+      }
+    }
+  }
+
+  if (node.type === 'shelf') {
+    // Shelf is a registered Group, not a Mesh. Traverse children and
+    // preview-swap every child mesh — same approach `column` uses.
+    if (!registeredObject) return null
+    const restores: PaintPreviewCleanup[] = []
+    registeredObject.traverse((object) => {
+      if (!(object as Mesh).isMesh) return
+      restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
+    })
     if (restores.length === 0) return null
     return () => {
       for (let index = restores.length - 1; index >= 0; index -= 1) {
@@ -934,7 +952,8 @@ export const SelectionManager = () => {
         node.type === 'fence' ||
         node.type === 'column' ||
         node.type === 'slab' ||
-        node.type === 'ceiling'
+        node.type === 'ceiling' ||
+        node.type === 'shelf'
       ) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
@@ -949,7 +968,7 @@ export const SelectionManager = () => {
                   .updateNode(
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
-                      FenceNode | ColumnNode | SlabNode | CeilingNode
+                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
                     >(activePaintMaterial.material, activePaintMaterial.materialPreset),
                   )
               }
@@ -957,7 +976,7 @@ export const SelectionManager = () => {
           preview: compatible
             ? () =>
                 applySingleSurfacePaintPreview(
-                  node as FenceNode | ColumnNode | SlabNode | CeilingNode,
+                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
                   activePaintMaterial,
                 )
             : () => previewCursor('not-allowed'),
@@ -1193,7 +1212,10 @@ export const SelectionManager = () => {
         }
 
         if (
-          (node.type === 'fence' || node.type === 'slab' || node.type === 'ceiling') &&
+          (node.type === 'fence' ||
+            node.type === 'slab' ||
+            node.type === 'ceiling' ||
+            node.type === 'shelf') &&
           nodeToSelect.type === node.type
         ) {
           setSelectedMaterialTargetForNode(nodeToSelect, 'surface')

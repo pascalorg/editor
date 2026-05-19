@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildWindowFloorplan } from './floorplan'
+import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
 
@@ -47,6 +48,14 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
   // + thickness — same shape as door.
   floorplan: buildWindowFloorplan,
+  // Stage D — placement + move-on-wall. Same recipe as door. See
+  // `nodes/src/window/{tool,move-tool,window-math}.ts`.
+  tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
+  // 2D move-on-floorplan handler — same shape as door.
+  floorplanMoveTarget: windowFloorplanMoveTarget,
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },
@@ -56,7 +65,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   presentation: {
     label: 'Window',
     description: 'A window cut into a wall. Animated open/close for opening windows.',
-    icon: { kind: 'iconify', name: 'lucide:rectangle-horizontal' },
+    icon: { kind: 'url', src: '/icons/window.png' },
     paletteSection: 'structure',
     paletteOrder: 60,
   },

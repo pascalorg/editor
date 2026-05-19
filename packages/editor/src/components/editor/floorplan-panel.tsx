@@ -16,7 +16,6 @@ import {
   type GuideNode,
   getRenderableSlabPolygon,
   getWallChordFrame,
-  getWallCurveFrameAt,
   getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
@@ -30,7 +29,6 @@ import {
   type Point2D,
   type RoofNode,
   type RoofSegmentNode,
-  resolveElevatorServiceLevelIds,
   type SiteNode,
   SlabNode,
   type SpawnNode,
@@ -87,6 +85,10 @@ import {
 } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
+import {
+  type FloorplanRenderContextValue,
+  FloorplanRenderProvider,
+} from '../editor-2d/floorplan-render-context'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import {
@@ -8440,364 +8442,29 @@ export function FloorplanPanel() {
 
     return hasPreviewWalls ? nextFloorplanWallById : floorplanWallById
   }, [displayWallById, floorplanWallById, wallCurveDraft, wallEndpointDraft])
-  const floorplanFenceEntries = useMemo(() => {
-    // Fence migrated to def.floorplan (Phase 5 Stage C). When registered,
-    // FloorplanRegistryLayer renders the fence polyline; this legacy
-    // path short-circuits to avoid double-render. Removed entirely in
-    // Phase 6 cleanup.
-    if (nodeRegistry.has('fence')) return []
-    return fences.flatMap((fence) => {
-      const live = useLiveTransforms.getState().get(fence.id)
-      const fenceCenterX = (fence.start[0] + fence.end[0]) / 2
-      const fenceCenterZ = (fence.start[1] + fence.end[1]) / 2
-      const displayFence = live
-        ? {
-            ...fence,
-            start: [
-              fence.start[0] + (live.position[0] - fenceCenterX),
-              fence.start[1] + (live.position[2] - fenceCenterZ),
-            ] as typeof fence.start,
-            end: [
-              fence.end[0] + (live.position[0] - fenceCenterX),
-              fence.end[1] + (live.position[2] - fenceCenterZ),
-            ] as typeof fence.end,
-          }
-        : fence
-      const centerline = isCurvedWall(displayFence)
-        ? sampleWallCenterline(displayFence, 24)
-        : [
-            { x: displayFence.start[0], y: displayFence.start[1] },
-            { x: displayFence.end[0], y: displayFence.end[1] },
-          ]
-      const path = buildSvgPolylinePath(centerline)
-      if (!path) {
-        return []
-      }
+  // Fence is fully registry-driven (`def.floorplan` + `buildFenceFloorplan`).
+  // The legacy entry list is permanently empty; kept as a typed stable
+  // reference so downstream prop sites stay typed without each having to
+  // declare its own `[]`.
+  const floorplanFenceEntries = useMemo<FloorplanFenceEntry[]>(() => [], [])
+  // Wall is fully registry-driven. Empty stable arrays for the legacy
+  // entry lists; consumers' map / iteration paths become no-ops.
+  const wallPolygons = useMemo<WallPolygonEntry[]>(() => [], [])
+  const displayWallPolygons = useMemo<WallPolygonEntry[]>(() => [], [])
 
-      const markerFrames = getFloorplanFenceMarkerTs(displayFence).map((t) => {
-        const frame = getWallCurveFrameAt(displayFence, t)
-
-        return {
-          angleDeg: (Math.atan2(frame.tangent.y, frame.tangent.x) * 180) / Math.PI,
-          point: frame.point,
-        }
-      })
-
-      return [{ fence: displayFence, centerline, markerFrames, path }]
-    })
-  }, [fences, movingFloorplanNodeRevision])
-  const wallPolygons = useMemo(() => {
-    // Wall migrated to def.floorplan (Phase 5 Stage C). When registered,
-    // FloorplanRegistryLayer renders the mitered wall polygon; this
-    // legacy path short-circuits. Removed entirely in Phase 6 cleanup.
-    if (nodeRegistry.has('wall')) return []
-    return walls.map((wall) => {
-      const floorplanWall = floorplanWallById.get(wall.id) ?? getFloorplanWall(wall)
-      const polygon = getWallPlanFootprint(floorplanWall, wallMiterData)
-      return {
-        points: formatPolygonPoints(polygon),
-        wall,
-        polygon,
-      }
-    })
-  }, [floorplanWallById, wallMiterData, walls])
-  const displayWallPolygons = useMemo(() => {
-    if (!(wallEndpointDraft || wallCurveDraft)) {
-      return wallPolygons
-    }
-
-    const previewWalls = new Map<WallNode['id'], WallNode>()
-
-    if (wallEndpointDraft) {
-      for (const draftUpdate of getWallEndpointDraftUpdates(wallEndpointDraft)) {
-        const previewWall = displayWallById.get(draftUpdate.id)
-        if (previewWall) {
-          previewWalls.set(previewWall.id, previewWall)
-        }
-      }
-    }
-
-    if (wallCurveDraft) {
-      const previewWall = displayWallById.get(wallCurveDraft.wallId)
-      if (previewWall) {
-        previewWalls.set(previewWall.id, previewWall)
-      }
-    }
-
-    if (previewWalls.size === 0) {
-      return wallPolygons
-    }
-
-    return wallPolygons.map((entry) =>
-      (() => {
-        const previewWall = previewWalls.get(entry.wall.id)
-        if (!previewWall) {
-          return entry
-        }
-
-        const previewPolygon = getWallPlanFootprint(
-          getFloorplanWall(previewWall),
-          EMPTY_WALL_MITER_DATA,
-        )
-
-        return {
-          wall: previewWall,
-          polygon: previewPolygon,
-          points: formatPolygonPoints(previewPolygon),
-        }
-      })(),
-    )
-  }, [displayWallById, wallCurveDraft, wallEndpointDraft, wallPolygons])
-
-  const openingsPolygons = useMemo(() => {
-    // Doors + windows migrated to def.floorplan (Phase 5 Stage C). When
-    // both registered, FloorplanRegistryLayer renders each opening's
-    // polygon via its kind's builder; this legacy path short-circuits
-    // to avoid double-render. Filter per kind so a partial migration
-    // would still work.
-    const doorRegistered = nodeRegistry.has('door')
-    const windowRegistered = nodeRegistry.has('window')
-    if (doorRegistered && windowRegistered) return []
-    return openings.flatMap((opening) => {
-      if (doorRegistered && opening.type === 'door') return []
-      if (windowRegistered && opening.type === 'window') return []
-      const wall = displayFloorplanWallById.get(opening.parentId as WallNode['id'])
-      if (!wall) return []
-      const live = useLiveTransforms.getState().get(opening.id)
-      const displayOpening =
-        live &&
-        (movingNode?.type === 'door' || movingNode?.type === 'window') &&
-        movingNode.id === opening.id
-          ? {
-              ...opening,
-              position: [
-                live.position[0],
-                opening.position[1],
-                live.position[2],
-              ] as typeof opening.position,
-              rotation: [
-                opening.rotation[0],
-                live.rotation,
-                opening.rotation[2],
-              ] as typeof opening.rotation,
-            }
-          : opening
-      const polygon = getOpeningFootprint(wall, displayOpening)
-      return [
-        {
-          opening: displayOpening,
-          points: formatPolygonPoints(polygon),
-          polygon,
-        },
-      ]
-    })
-  }, [displayFloorplanWallById, movingFloorplanNodeRevision, movingNode, openings])
-  const slabPolygons = useMemo(() => {
-    // Slab migrated to def.floorplan (Phase 5 Stage C). When registered,
-    // FloorplanRegistryLayer renders the slab polygon; this legacy
-    // path short-circuits to avoid double-render. Removed entirely in
-    // Phase 6 cleanup.
-    if (nodeRegistry.has('slab')) return []
-    return slabs.flatMap((slab) => {
-      const polygon = toFloorplanPolygon(slab.polygon)
-      if (polygon.length < 3) {
-        return []
-      }
-
-      const holes = (slab.holes ?? [])
-        .map((hole) => toFloorplanPolygon(hole))
-        .filter((hole) => hole.length >= 3)
-      const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
-      const visualHoles = holes
-
-      return [
-        {
-          slab,
-          polygon,
-          holes,
-          visualPolygon,
-          visualHoles,
-          path: formatPolygonPath(visualPolygon, visualHoles),
-        },
-      ]
-    })
-  }, [slabs])
-  const displaySlabPolygons = useMemo(() => {
-    if (!(slabBoundaryDraft || slabHoleBoundaryDraft || slabHoleMoveDraft)) {
-      return slabPolygons
-    }
-
-    return slabPolygons.map((entry) => {
-      let nextEntry = entry
-
-      if (slabBoundaryDraft && entry.slab.id === slabBoundaryDraft.slabId) {
-        nextEntry = (() => {
-          const draftVisualPolygon =
-            slabBoundaryDraft.visualOffsets?.length === slabBoundaryDraft.polygon.length
-              ? getDraftSlabVisualPolygon(slabBoundaryDraft)
-              : toFloorplanPolygon(
-                  getRenderableSlabPolygon({
-                    ...entry.slab,
-                    polygon: slabBoundaryDraft.polygon,
-                  }),
-                )
-
-          return {
-            ...entry,
-            polygon: slabBoundaryDraft.polygon.map(toPoint2D),
-            visualPolygon: draftVisualPolygon,
-            path: formatPolygonPath(draftVisualPolygon, entry.visualHoles),
-          }
-        })()
-      }
-
-      const activeHoleDraft =
-        slabHoleBoundaryDraft && entry.slab.id === slabHoleBoundaryDraft.slabId
-          ? slabHoleBoundaryDraft
-          : slabHoleMoveDraft && entry.slab.id === slabHoleMoveDraft.slabId
-            ? slabHoleMoveDraft
-            : null
-
-      if (activeHoleDraft) {
-        const draftHole = activeHoleDraft.polygon.map(toPoint2D)
-        const draftHoles = nextEntry.holes.map((hole, index) =>
-          index === activeHoleDraft.holeIndex ? draftHole : hole,
-        )
-        const draftVisualHoles = nextEntry.visualHoles.map((hole, index) =>
-          index === activeHoleDraft.holeIndex ? draftHole : hole,
-        )
-
-        nextEntry = {
-          ...nextEntry,
-          holes: draftHoles,
-          visualHoles: draftVisualHoles,
-          path: formatPolygonPath(nextEntry.visualPolygon, draftVisualHoles),
-        }
-      }
-
-      return nextEntry
-    })
-  }, [slabBoundaryDraft, slabHoleBoundaryDraft, slabHoleMoveDraft, slabPolygons])
-  const ceilingPolygons = useMemo(() => {
-    // Ceiling migrated to def.floorplan (Phase 5 Stage C). When registered,
-    // FloorplanRegistryLayer renders the ceiling polygon; this legacy
-    // path short-circuits. Removed entirely in Phase 6 cleanup.
-    if (nodeRegistry.has('ceiling')) return []
-    return ceilings.flatMap((ceiling) => {
-      const polygon = toFloorplanPolygon(ceiling.polygon)
-      if (polygon.length < 3) {
-        return []
-      }
-
-      const holes = (ceiling.holes ?? [])
-        .map((hole) => toFloorplanPolygon(hole))
-        .filter((hole) => hole.length >= 3)
-
-      return [
-        {
-          ceiling,
-          polygon,
-          holes,
-          path: formatPolygonPath(polygon, holes),
-        },
-      ]
-    })
-  }, [ceilings])
-  const displayCeilingPolygons = useMemo(() => {
-    if (!(ceilingBoundaryDraft || ceilingHoleBoundaryDraft || ceilingHoleMoveDraft)) {
-      return ceilingPolygons
-    }
-
-    return ceilingPolygons.map((entry) => {
-      let nextEntry = entry
-
-      if (ceilingBoundaryDraft && entry.ceiling.id === ceilingBoundaryDraft.ceilingId) {
-        const polygon = ceilingBoundaryDraft.polygon.map(toPoint2D)
-        nextEntry = {
-          ...entry,
-          polygon,
-          path: formatPolygonPath(polygon, entry.holes),
-        }
-      }
-
-      const activeHoleDraft =
-        ceilingHoleBoundaryDraft && entry.ceiling.id === ceilingHoleBoundaryDraft.ceilingId
-          ? ceilingHoleBoundaryDraft
-          : ceilingHoleMoveDraft && entry.ceiling.id === ceilingHoleMoveDraft.ceilingId
-            ? ceilingHoleMoveDraft
-            : null
-
-      if (activeHoleDraft) {
-        const draftHole = activeHoleDraft.polygon.map(toPoint2D)
-        const holes = nextEntry.holes.map((hole, index) =>
-          index === activeHoleDraft.holeIndex ? draftHole : hole,
-        )
-
-        nextEntry = {
-          ...nextEntry,
-          holes,
-          path: formatPolygonPath(nextEntry.polygon, holes),
-        }
-      }
-
-      return nextEntry
-    })
-  }, [ceilingBoundaryDraft, ceilingHoleBoundaryDraft, ceilingHoleMoveDraft, ceilingPolygons])
-  const zonePolygons = useMemo(
-    () =>
-      zones.flatMap((zone) => {
-        const polygon = toFloorplanPolygon(zone.polygon)
-        if (polygon.length < 3) {
-          return []
-        }
-
-        return [
-          {
-            zone,
-            polygon,
-            points: formatPolygonPoints(polygon),
-          },
-        ]
-      }),
-    [zones],
-  )
-  const displayZonePolygons = useMemo(() => {
-    if (!zoneBoundaryDraft) {
-      return zonePolygons
-    }
-
-    return zonePolygons.map((entry) =>
-      entry.zone.id === zoneBoundaryDraft.zoneId
-        ? {
-            ...entry,
-            polygon: zoneBoundaryDraft.polygon.map(toPoint2D),
-            points: formatPolygonPoints(zoneBoundaryDraft.polygon.map(toPoint2D)),
-          }
-        : entry,
-    )
-  }, [zoneBoundaryDraft, zonePolygons])
-  const floorplanColumnEntries = useMemo<FloorplanColumnEntry[]>(
-    () =>
-      levelDescendantNodes.flatMap((node) => {
-        if (!(node.type === 'column' && node.visible !== false)) {
-          return []
-        }
-
-        const polygon = getColumnPlanFootprint(node)
-        if (polygon.length < 3) {
-          return []
-        }
-
-        return [
-          {
-            column: node,
-            points: formatPolygonPoints(polygon),
-            polygon,
-          },
-        ]
-      }),
-    [levelDescendantNodes],
-  )
+  // Doors + windows fully registry-driven via `def.floorplan`.
+  const openingsPolygons = useMemo<OpeningPolygonEntry[]>(() => [], [])
+  // Slab + ceiling fully registry-driven via `def.floorplan`. Same
+  // empty-stable-array pattern.
+  const slabPolygons = useMemo<SlabPolygonEntry[]>(() => [], [])
+  const displaySlabPolygons = useMemo<SlabPolygonEntry[]>(() => [], [])
+  const ceilingPolygons = useMemo<CeilingPolygonEntry[]>(() => [], [])
+  const displayCeilingPolygons = useMemo<CeilingPolygonEntry[]>(() => [], [])
+  // Zone fully registry-driven via `def.floorplan`.
+  const zonePolygons = useMemo<ZonePolygonEntry[]>(() => [], [])
+  const displayZonePolygons = useMemo<ZonePolygonEntry[]>(() => [], [])
+  // Column fully registry-driven via `def.floorplan`.
+  const floorplanColumnEntries = useMemo<FloorplanColumnEntry[]>(() => [], [])
   const levelDescendantNodeById = useMemo(
     () => new Map(levelDescendantNodes.map((node) => [node.id, node] as const)),
     [levelDescendantNodes],
@@ -8820,184 +8487,11 @@ export function FloorplanPanel() {
       ),
     [levelDescendantNodes],
   )
-  const floorplanSpawnEntries = useMemo<FloorplanSpawnEntry[]>(() => {
-    // Spawn migrated to the registry-driven floor-plan layer (Phase 5
-    // Stage C). When registered, FloorplanRegistryLayer renders the
-    // spawn marker via def.floorplan; FloorplanRegistryActionMenu
-    // handles select / move / delete. Returning [] here skips the
-    // legacy rendering + action menu paths to avoid double-render.
-    // Removed entirely in Phase 6 cleanup.
-    if (nodeRegistry.has('spawn')) return []
-    return spawns
-      .filter((spawn) => spawn.visible !== false)
-      .map((spawn) => {
-        const live = useLiveTransforms.getState().get(spawn.id)
-        return {
-          spawn,
-          position: {
-            x: live?.position[0] ?? spawn.position[0],
-            y: live?.position[2] ?? spawn.position[2],
-          },
-          rotation: live?.rotation ?? spawn.rotation,
-        }
-      })
-  }, [movingFloorplanNodeRevision, spawns])
-  const floorplanItemEntries = useMemo(() => {
-    // Item migrated to def.floorplan (Phase 5 Stage C). When registered,
-    // FloorplanRegistryLayer renders the item rectangle via the
-    // parent-chain transform walker; this legacy path short-circuits.
-    // Removed entirely in Phase 6 cleanup.
-    if (nodeRegistry.has('item')) return []
-    const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
-
-    return floorplanItems.flatMap((item) => {
-      const entry = buildFloorplanItemEntry(item, levelDescendantNodeById, transformCache)
-      if (!entry) {
-        return []
-      }
-
-      return [
-        {
-          dimensionPolygon: entry.dimensionPolygon,
-          item: entry.item,
-          points: formatPolygonPoints(entry.polygon),
-          polygon: entry.polygon,
-          usesRealMesh: entry.usesRealMesh,
-          center: entry.center,
-          rotation: entry.rotation,
-          width: entry.width,
-          depth: entry.depth,
-        },
-      ]
-    })
-  }, [cursorPoint, floorplanItems, levelDescendantNodeById, movingFloorplanNodeRevision])
-  const floorplanElevatorEntries = useMemo<FloorplanElevatorEntry[]>(() => {
-    // These keys subscribe the memo to imperative floorplan stores read with getState().
-    void elevatorLiveOverrideKey
-    void elevatorRuntimeKey
-    void movingFloorplanNodeRevision
-
-    if (!levelNode) {
-      return []
-    }
-
-    const nodes = useScene.getState().nodes
-    const interactiveElevators = useInteractive.getState().elevators
-
-    return elevators.flatMap((elevator) => {
-      const liveOverrides = useLiveNodeOverrides.getState().get(elevator.id)
-      const displayElevator = liveOverrides
-        ? ({ ...elevator, ...liveOverrides } as ElevatorNode)
-        : elevator
-      const serviceLevelIds = resolveElevatorServiceLevelIds(displayElevator, nodes)
-      if (!serviceLevelIds.includes(levelNode.id)) {
-        return []
-      }
-
-      const live = useLiveTransforms.getState().get(displayElevator.id)
-      const position = live?.position ?? displayElevator.position
-      const rotation = live?.rotation ?? displayElevator.rotation
-      const center = { x: position[0], y: position[2] }
-      const wallThickness = Math.max(displayElevator.shaftWallThickness ?? 0.09, 0.04)
-      const cabWidth = Math.max(displayElevator.width, 0.8)
-      const cabDepth = Math.max(displayElevator.depth, 0.8)
-      const shaftWidth = Math.max(
-        displayElevator.shaftWidth ?? displayElevator.width,
-        cabWidth,
-        0.8,
-      )
-      const shaftDepth = Math.max(
-        displayElevator.shaftDepth ?? displayElevator.depth,
-        cabDepth,
-        0.8,
-      )
-      const doorWidth = Math.min(
-        Math.max(displayElevator.doorWidth, 0.45),
-        cabWidth - 0.18,
-        shaftWidth - 0.18,
-      )
-      const halfWidth = Math.max(0.1, shaftWidth / 2 + wallThickness)
-      const halfDepth = Math.max(0.1, shaftDepth / 2 + wallThickness)
-      const footprintCorners: Array<readonly [number, number]> = [
-        [-halfWidth, -halfDepth],
-        [halfWidth, -halfDepth],
-        [halfWidth, halfDepth],
-        [-halfWidth, halfDepth],
-      ]
-      const polygon = footprintCorners.map(([localX, localY]) => {
-        const [offsetX, offsetY] = rotatePlanVector(localX, localY, rotation)
-        return {
-          x: center.x + offsetX,
-          y: center.y + offsetY,
-        }
-      })
-      const frontStart = polygon[0]
-      const frontEnd = polygon[1]
-      if (!(frontStart && frontEnd)) {
-        return []
-      }
-      const [frontNormalX, frontNormalY] = rotatePlanVector(0, -1, rotation)
-      const runtime = interactiveElevators[displayElevator.id]
-      const disabledLevelIds = new Set(displayElevator.disabledLevelIds ?? [])
-      const serviceOnlyLevelIds = new Set(displayElevator.serviceOnlyLevelIds ?? [])
-      const servedLevels = serviceLevelIds.flatMap((levelId) => {
-        const level = nodes[levelId as AnyNodeId]
-        if (level?.type !== 'level') {
-          return []
-        }
-
-        return [
-          {
-            id: level.id,
-            isCurrent: runtime?.currentLevelId === level.id,
-            isDisabled: disabledLevelIds.has(level.id),
-            isQueued: runtime?.queue.includes(level.id) ?? false,
-            isServiceOnly: serviceOnlyLevelIds.has(level.id),
-            isTarget: runtime?.targetLevelId === level.id,
-            label: level.name || `L${level.level}`,
-          },
-        ]
-      })
-
-      return [
-        {
-          cabCenterLocalY: -shaftDepth / 2 + cabDepth / 2,
-          cabDepth,
-          cabWidth,
-          center,
-          doorStyle: displayElevator.doorStyle ?? 'center-opening',
-          doorWidth,
-          elevator: displayElevator,
-          frontEdge: {
-            start: frontStart,
-            end: frontEnd,
-          },
-          frontNormal: {
-            x: frontNormalX,
-            y: frontNormalY,
-          },
-          isCarOnLevel: runtime?.currentLevelId === levelNode.id,
-          isQueuedLevel: runtime?.queue.includes(levelNode.id) ?? false,
-          isTargetLevel: runtime?.targetLevelId === levelNode.id,
-          outerHalfDepth: halfDepth,
-          outerHalfWidth: halfWidth,
-          points: formatPolygonPoints(polygon),
-          polygon,
-          rotation,
-          servedLevels,
-          shaftDepth,
-          shaftWallThickness: wallThickness,
-          shaftWidth,
-        },
-      ]
-    })
-  }, [
-    elevatorLiveOverrideKey,
-    elevatorRuntimeKey,
-    elevators,
-    levelNode,
-    movingFloorplanNodeRevision,
-  ])
+  // Spawn + item fully registry-driven.
+  const floorplanSpawnEntries = useMemo<FloorplanSpawnEntry[]>(() => [], [])
+  const floorplanItemEntries = useMemo<FloorplanItemEntry[]>(() => [], [])
+  // Elevator fully registry-driven via `def.floorplan`.
+  const floorplanElevatorEntries = useMemo<FloorplanElevatorEntry[]>(() => [], [])
   const referenceFloorLevel = useMemo(() => {
     if (!(showReferenceFloor && levelNode)) {
       return null
@@ -9192,171 +8686,30 @@ export function FloorplanPanel() {
       wallPolygons,
     }
   }, [referenceFloorDescendants, referenceFloorLevel])
-  const hasPendingItemMeshFootprints = floorplanItemEntries.some((entry) => !entry.usesRealMesh)
-  const floorplanStairEntries = useMemo(
-    () =>
-      floorplanStairs.flatMap((stair) => {
-        const displayStair =
-          movingNode?.type === 'stair' && movingNode.id === stair.id
-            ? (() => {
-                const live = useLiveTransforms.getState().get(stair.id)
-                const liveX = cursorPoint?.[0] ?? live?.position[0] ?? stair.position[0]
-                const liveZ = cursorPoint?.[1] ?? live?.position[2] ?? stair.position[2]
-                const liveRotation = live?.rotation ?? stair.rotation
-
-                return {
-                  ...stair,
-                  position: [liveX, stair.position[1], liveZ] as StairNode['position'],
-                  rotation: liveRotation,
-                }
-              })()
-            : stair
-        const segments = (displayStair.children ?? [])
-          .map((childId) => levelDescendantNodeById.get(childId as AnyNodeId))
-          .filter(
-            (node): node is StairSegmentNode =>
-              node?.type === 'stair-segment' && node.visible !== false,
-          )
-        const entry = buildSharedFloorplanStairEntry(displayStair, segments)
-        if (!entry) {
-          return []
-        }
-        const hitPolygons =
-          (displayStair.stairType ?? 'straight') === 'straight'
-            ? entry.segments.map((segmentEntry) => segmentEntry.polygon)
-            : [getFloorplanCurvedStairHitPolygon(displayStair)]
-
-        return [
-          {
-            ...entry,
-            hitPolygons,
-            segments: entry.segments.map((segmentEntry) => ({
-              ...segmentEntry,
-              innerPoints: formatPolygonPoints(segmentEntry.innerPolygon),
-              points: formatPolygonPoints(segmentEntry.polygon),
-              treadBars: segmentEntry.treadBars.map((polygon) => ({
-                points: formatPolygonPoints(polygon),
-                polygon,
-              })),
-            })),
-          },
-        ]
-      }),
-    [
-      cursorPoint,
-      floorplanStairs,
-      levelDescendantNodeById,
-      movingFloorplanNodeRevision,
-      movingNode,
-    ],
-  )
-  const floorplanRoofEntries = useMemo(
-    () =>
-      roofs.flatMap((roof) => {
-        const liveRoofTransform =
-          movingNode?.type === 'roof' && movingNode.id === roof.id
-            ? useLiveTransforms.getState().get(roof.id)
-            : null
-        const liveRoofPosition = liveRoofTransform
-          ? worldToBuildingLocalPlanPoint(
-              liveRoofTransform.position,
-              buildingPosition,
-              buildingRotationY,
-            )
-          : null
-        const displayRoof = liveRoofTransform
-          ? {
-              ...roof,
-              position: [
-                liveRoofPosition?.x ?? roof.position[0],
-                roof.position[1],
-                liveRoofPosition?.y ?? roof.position[2],
-              ] as RoofNode['position'],
-              rotation: liveRoofTransform.rotation,
-            }
-          : roof
-        const segments = (displayRoof.children ?? [])
-          .map((childId) => levelDescendantNodeById.get(childId as AnyNodeId))
-          .filter(
-            (node): node is RoofSegmentNode =>
-              node?.type === 'roof-segment' && node.visible !== false,
-          )
-          .flatMap((segment) => {
-            const liveSegmentTransform =
-              movingNode?.type === 'roof-segment' && movingNode.id === segment.id
-                ? useLiveTransforms.getState().get(segment.id)
-                : null
-            const worldPositionOverride = liveSegmentTransform
-              ? worldToBuildingLocalPlanPoint(
-                  liveSegmentTransform.position,
-                  buildingPosition,
-                  buildingRotationY,
-                )
-              : undefined
-            const polygon = getRoofSegmentPolygon(displayRoof, segment, {
-              localRotation: liveSegmentTransform?.rotation,
-              worldPositionOverride,
-            })
-
-            if (polygon.length < 3) {
-              return []
-            }
-
-            return [
-              {
-                segment,
-                polygon,
-                points: formatPolygonPoints(polygon),
-                ridgeLine: getRoofSegmentRidgeLine(displayRoof, segment, {
-                  localRotation: liveSegmentTransform?.rotation,
-                  worldPositionOverride,
-                }),
-              },
-            ]
-          })
-
-        if (segments.length === 0) {
-          return []
-        }
-
-        return [
-          {
-            roof: displayRoof,
-            center: { x: displayRoof.position[0], y: displayRoof.position[2] },
-            segments,
-          },
-        ]
-      }),
-    [
-      buildingPosition,
-      buildingRotationY,
-      levelDescendantNodeById,
-      movingFloorplanNodeRevision,
-      movingNode,
-      roofs,
-    ],
-  )
-  const selectedOpeningEntry = useMemo(() => {
-    if (selectedIds.length !== 1) {
-      return null
-    }
-
-    return openingsPolygons.find(({ opening }) => opening.id === selectedIds[0]) ?? null
-  }, [openingsPolygons, selectedIds])
-  const selectedItemEntry = useMemo(() => {
-    if (selectedIds.length !== 1) {
-      return null
-    }
-
-    return floorplanItemEntries.find(({ item }) => item.id === selectedIds[0]) ?? null
-  }, [floorplanItemEntries, selectedIds])
-  const selectedSpawnEntry = useMemo(() => {
-    if (selectedIds.length !== 1) {
-      return null
-    }
-
-    return floorplanSpawnEntries.find(({ spawn }) => spawn.id === selectedIds[0]) ?? null
-  }, [floorplanSpawnEntries, selectedIds])
+  // Pending-mesh check was a flag the legacy active-level item entries
+  // raised when their polygon was the dimension fallback (waiting for
+  // the GLB to load to produce a tighter convex hull). Items are now
+  // registry-rendered, so the active-level entry list is always empty
+  // and this flag is permanently false.
+  const hasPendingItemMeshFootprints = false
+  // Stair fully registry-driven via `def.floorplan` (the parent walks
+  // its `stair-segment` children inside `buildStairFloorplan` to handle
+  // the cumulative-transform chain). `FloorplanRegistryLayer` renders
+  // the result; this legacy list stays empty.
+  const floorplanStairEntries = useMemo<FloorplanStairEntry[]>(() => [], [])
+  // Roof / roof-segment fully registry-driven via def.floorplan.
+  const floorplanRoofEntries = useMemo<FloorplanRoofEntry[]>(() => [], [])
+  // Selection lookups against the legacy entry lists. The active-level
+  // door / window / item / spawn paths are registry-driven now, so each
+  // source array is permanently empty and the lookups always return
+  // `null`. Selection chrome for those kinds comes from
+  // `FloorplanRegistryLayer` reading `viewState.selected`. Wrapping the
+  // `null` in `useMemo` (instead of a bare literal) preserves the
+  // declared type at consumer sites — bare `null` would narrow to
+  // `never` after `if (!entry) return`, breaking every `entry.field` read.
+  const selectedOpeningEntry = useMemo<OpeningPolygonEntry | null>(() => null, [])
+  const selectedItemEntry = useMemo<FloorplanItemEntry | null>(() => null, [])
+  const selectedSpawnEntry = useMemo<FloorplanSpawnEntry | null>(() => null, [])
   const selectedElevatorEntry = useMemo(() => {
     if (selectedIds.length !== 1) {
       return null
@@ -11149,6 +10502,29 @@ export function FloorplanPanel() {
     [theme],
   )
   const wallSelectionHatchId = useMemo(() => `floorplan-wall-selection-hatch-${theme}`, [theme])
+  // Subset of the legacy palette surfaced to registry-driven kinds via
+  // <FloorplanRenderProvider>. Mirrors `FloorplanPalette` in `@pascal-app/
+  // core` — keep slot names + meanings in sync.
+  const floorplanRegistryPalette = useMemo<FloorplanRenderContextValue['palette']>(
+    () => ({
+      selectedStroke: palette.selectedStroke,
+      selectedFill: palette.selectedFill,
+      selectedHatch: palette.selectedStroke,
+      wallHoverStroke: palette.wallHoverStroke,
+      endpointHandleFill: palette.endpointHandleFill,
+      endpointHandleStroke: palette.endpointHandleStroke,
+      endpointHandleHoverStroke: palette.endpointHandleHoverStroke,
+      endpointHandleActiveFill: palette.endpointHandleActiveFill,
+      endpointHandleActiveStroke: palette.endpointHandleActiveStroke,
+      curveHandleFill: palette.curveHandleFill,
+      curveHandleStroke: palette.curveHandleStroke,
+      curveHandleHoverStroke: palette.curveHandleHoverStroke,
+      measurementStroke: palette.measurementStroke,
+      measurementLabelBackground: theme === 'dark' ? '#0f172a' : '#ffffff',
+      measurementLabelText: theme === 'dark' ? '#e2e8f0' : '#171717',
+    }),
+    [palette, theme],
+  )
   const slabSelectionHatchId = useMemo(() => `floorplan-slab-selection-hatch-${theme}`, [theme])
   const gridSteps = useMemo(
     () => getVisibleGridSteps(viewBox.width, surfaceSize.width),
@@ -13613,20 +12989,21 @@ export function FloorplanPanel() {
         return
       }
 
-      if (isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
-        setCursorPoint((previousPoint) =>
-          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
-        )
-        return
-      }
-
+      // Slab / zone polygon build — local draft state + grid emit, same
+      // reordering rationale as `handleBackgroundPlacementClick`: must
+      // run BEFORE the `isFloorplanGridInteractionActive` catch-all so
+      // the local polygon-draft state actually updates as the cursor
+      // moves (the catch-all would otherwise swallow the move event).
       if (isPolygonBuildActive) {
         const snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
         })
+
+        // Emit `grid:move` so the registry-driven slab tool also tracks
+        // the cursor (its 3D preview needs it).
+        emitFloorplanGridEvent('move', snappedPoint, event)
 
         setCursorPoint((previousPoint) => {
           const hasChanged = !(previousPoint && pointsEqual(previousPoint, snappedPoint))
@@ -13635,6 +13012,19 @@ export function FloorplanPanel() {
           }
           return snappedPoint
         })
+        return
+      }
+
+      // Wall build also needs to run before the catch-all — see the
+      // wall branch in `handleBackgroundPlacementClick` for the same
+      // restructuring. The wall branch lives further below in this
+      // handler (`if (!isWallBuildActive) ... setDraftEnd(...)`); the
+      // grid emit is inlined there.
+      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
+        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
         return
       }
 
@@ -13694,6 +13084,10 @@ export function FloorplanPanel() {
         angleSnap: Boolean(draftStart) && !shiftPressed,
       })
 
+      // Emit `grid:move` so the registry-driven wall tool's 3D preview
+      // tracks the cursor. The local draftEnd update below is what
+      // drives the 2D draft polygon — both views update in parallel.
+      emitFloorplanGridEvent('move', snappedPoint, event)
       setCursorPoint(snappedPoint)
 
       if (!draftStart) {
@@ -17720,8 +17114,20 @@ export function FloorplanPanel() {
                   their SVG via <FloorplanGeometryRenderer>. Sits above the
                   legacy inline content so newly-registered kinds (shelf
                   today) overlay on top until their inline equivalent is
-                  removed in their Phase 5 migration PR. */}
-              <FloorplanRegistryLayer />
+                  removed in their Phase 5 migration PR.
+
+                  Wrapped in <FloorplanRenderProvider> so registry-driven
+                  kinds receive the same themed palette / units-per-pixel
+                  the legacy layers compute. The hatch pattern id is the
+                  legacy wall hatch — kinds that opt into selection hatch
+                  fills reuse this <defs> pattern via fill="url(...)". */}
+              <FloorplanRenderProvider
+                hatchPatternId={wallSelectionHatchId}
+                palette={floorplanRegistryPalette}
+                unitsPerPixel={floorplanUnitsPerPixel}
+              >
+                <FloorplanRegistryLayer />
+              </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal
                   into the floor-plan scene <g> (the data-floorplan-scene

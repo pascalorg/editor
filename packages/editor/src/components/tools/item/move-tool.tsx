@@ -1,132 +1,50 @@
 import type {
   AnyNodeId,
   BuildingNode,
-  CeilingNode,
-  ColumnNode,
-  DoorNode,
   ElevatorNode,
-  FenceNode,
-  ItemNode,
   RoofNode,
   RoofSegmentNode,
-  SlabNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
-  WallNode,
-  WindowNode,
 } from '@pascal-app/core'
 import { nodeRegistry } from '@pascal-app/core'
 import { Suspense } from 'react'
-import { Vector3 } from 'three'
-import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { MoveBuildingContent } from '../building/move-building-tool'
-import { MoveCeilingTool } from '../ceiling/move-ceiling-tool'
-import { MoveColumnTool } from '../column/move-column-tool'
-import { MoveDoorTool } from '../door/move-door-tool'
 import { MoveElevatorTool } from '../elevator/move-elevator-tool'
-import { MoveFenceTool } from '../fence/move-fence-tool'
 import { MoveRegistryNodeTool } from '../registry/move-registry-node-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
 import { getRegistryAffordanceTool } from '../shared/affordance-dispatch'
-import { MoveSlabTool } from '../slab/move-slab-tool'
-import { MoveSpawnTool } from '../spawn/move-spawn-tool'
-import { MoveWallTool } from '../wall/move-wall-tool'
-import { MoveWindowTool } from '../window/move-window-tool'
-import type { PlacementState } from './placement-types'
-import { useDraftNode } from './use-draft-node'
-import { usePlacementCoordinator } from './use-placement-coordinator'
 
-function getInitialState(node: {
-  asset: { attachTo?: string }
-  parentId: string | null
-}): PlacementState {
-  const attachTo = node.asset.attachTo
-  if (attachTo === 'wall' || attachTo === 'wall-side') {
-    return { surface: 'wall', wallId: node.parentId, ceilingId: null, surfaceItemId: null }
-  }
-  if (attachTo === 'ceiling') {
-    return { surface: 'ceiling', wallId: null, ceilingId: node.parentId, surfaceItemId: null }
-  }
-  return { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
-}
-
-function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
-  const draftNode = useDraftNode()
-
-  const meta =
-    typeof movingNode.metadata === 'object' && movingNode.metadata !== null
-      ? (movingNode.metadata as Record<string, unknown>)
-      : {}
-  const isNew = !!meta.isNew
-
-  const cursor = usePlacementCoordinator({
-    asset: movingNode.asset,
-    draftNode,
-    // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft
-    initialState: isNew
-      ? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null }
-      : getInitialState(movingNode),
-    // Preserve the original item's scale so Y-position calculations use the correct height
-    defaultScale: isNew ? movingNode.scale : undefined,
-    initDraft: (gridPosition) => {
-      if (isNew) {
-        // Duplicate: use the same create() path as ItemTool so ghost rendering works correctly.
-        // Floor items get a draft immediately; wall/ceiling items are created lazily on surface entry.
-        gridPosition.copy(new Vector3(...movingNode.position))
-        if (!movingNode.asset.attachTo) {
-          draftNode.create(gridPosition, movingNode.asset, movingNode.rotation, movingNode.scale)
-        }
-      } else {
-        draftNode.adopt(movingNode)
-        gridPosition.copy(new Vector3(...movingNode.position))
-      }
-    },
-    onCommitted: () => {
-      sfxEmitter.emit('sfx:item-place')
-      useEditor.getState().setMovingNode(null)
-      return false
-    },
-    onCancel: () => {
-      draftNode.destroy()
-      useEditor.getState().setMovingNode(null)
-    },
-  })
-
-  return <>{cursor}</>
-}
-
+/**
+ * MoveTool dispatcher. Routes to (in order):
+ *
+ *   1. `MoveRegistryNodeTool` — generic translate-on-XZ for kinds that
+ *      declare `capabilities.movable` (shelf, spawn, item-with-floor-attach,
+ *      …).
+ *   2. `def.affordanceTools.move` — kind-owned move component
+ *      (slab / ceiling / wall / fence / column / item / door / window).
+ *      Lazy-loaded via `getRegistryAffordanceTool`.
+ *   3. The narrow set of kinds that still have legacy movers because no
+ *      registry equivalent has been written yet (building / elevator /
+ *      roof / stair). Each of these has bespoke move semantics that
+ *      don't fit the generic mover and are not yet ported to a
+ *      kind-owned affordance.
+ */
 export const MoveTool: React.FC<{
   onNodeMoved?: (nodeId: AnyNodeId) => void
   onSpawnMoved?: (nodeId: SpawnNode['id']) => void
-}> = ({ onNodeMoved, onSpawnMoved }) => {
+}> = ({ onNodeMoved }) => {
   const movingNode = useEditor((state) => state.movingNode)
 
   if (!movingNode) return null
 
-  // Capability-driven dispatch. A registered kind opts INTO the generic
-  // mover by declaring `capabilities.movable` — that's the "I'm a simple
-  // translate-on-the-X/Z-plane node" signal (shelf, spawn, future
-  // single-position items). Kinds with bespoke move semantics (wall
-  // endpoint drag + linked-wall corner cascade + ALT-detach, fence
-  // endpoint drag + curve sagitta, slab polygon vertex edit, stair
-  // endpoint drag, etc.) deliberately OMIT `capabilities.movable` so
-  // this branch falls through to their legacy per-kind movers below.
-  //
-  // Without this guard, every registered kind would be force-routed
-  // through MoveRegistryNodeTool's "translate position" pattern,
-  // breaking wall / fence / slab / stair endpoint UX (the smart
-  // sims-style arrows that move the dragged endpoint while cascading
-  // to linked walls / re-anchoring hosted children / etc.).
   const def = nodeRegistry.get(movingNode.type)
   if (def?.capabilities?.movable) {
     return <MoveRegistryNodeTool node={movingNode} />
   }
 
-  // Phase 5 Stage D: registry-driven move affordance (kind-owned
-  // `DragAction` with bespoke semantics). Falls through to the legacy
-  // per-kind chain below when the kind hasn't ported its move tool.
   const RegistryMove = getRegistryAffordanceTool(movingNode.type, 'move')
   if (RegistryMove) {
     return (
@@ -138,20 +56,11 @@ export const MoveTool: React.FC<{
 
   if (movingNode.type === 'building')
     return <MoveBuildingContent node={movingNode as BuildingNode} />
-  if (movingNode.type === 'door') return <MoveDoorTool node={movingNode as DoorNode} />
   if (movingNode.type === 'elevator')
     return <MoveElevatorTool node={movingNode as ElevatorNode} onCommitted={onNodeMoved} />
-  if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
-  if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />
-  if (movingNode.type === 'column') return <MoveColumnTool node={movingNode as ColumnNode} />
-  if (movingNode.type === 'slab') return <MoveSlabTool node={movingNode as SlabNode} />
-  if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
-  if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
-  if (movingNode.type === 'spawn')
-    return <MoveSpawnTool node={movingNode as SpawnNode} onCommitted={onSpawnMoved} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
     return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
-  return <MoveItemContent movingNode={movingNode as ItemNode} />
+  return null
 }

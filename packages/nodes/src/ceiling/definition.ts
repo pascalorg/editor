@@ -1,5 +1,11 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildCeilingFloorplan } from './floorplan'
+import {
+  ceilingAddVertexAffordance,
+  ceilingMoveEdgeAffordance,
+  ceilingMoveVertexAffordance,
+} from './floorplan-affordances'
+import { ceilingFloorplanMoveTarget } from './floorplan-move'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
 
@@ -76,6 +82,18 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     priority: 4,
   },
   floorplan: buildCeilingFloorplan,
+  // 2D move handler — translates polygon by cursor delta from first
+  // pointer position. Mirror of slab; 3D `MoveCeilingTool` skips
+  // 2D-sourced grid events so they don't double-write on commit.
+  floorplanMoveTarget: ceilingFloorplanMoveTarget,
+  // Sister to `affordanceTools['boundary-edit']`. Same `polygon` field;
+  // SVG vertex handles dispatch to this affordance via the floor-plan
+  // registry layer.
+  floorplanAffordances: {
+    'move-vertex': ceilingMoveVertexAffordance,
+    'add-vertex': ceilingAddVertexAffordance,
+    'move-edge': ceilingMoveEdgeAffordance,
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Trace ceiling outline' },

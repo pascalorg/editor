@@ -18,4 +18,8 @@ export const windowParametrics: ParametricDescriptor<WindowNode> = {
       ],
     },
   ],
+  // Stage E — kind-owned panel mounted by <ParametricInspector>. Window
+  // has 15+ controls (sashes, dividers, sill, frame, opening shape)
+  // that don't fit the generic auto-inspector.
+  customPanel: () => import('./panel'),
 }

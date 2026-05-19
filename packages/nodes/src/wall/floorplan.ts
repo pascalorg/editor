@@ -4,7 +4,10 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getWallCurveLength,
+  getWallMidpointHandlePoint,
   getWallPlanFootprint,
+  isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
 
@@ -28,16 +31,30 @@ function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
 }
 
+function formatLengthMetric(meters: number): string {
+  return `${Number.parseFloat(meters.toFixed(2))}m`
+}
+
 /**
- * Stage C floor-plan builder for wall. Returns the mitered plan
- * footprint polygon. Uses `ctx.siblings` to gather other walls in the
- * level so `calculateLevelMiters` produces the correct corner joins.
+ * Stage C floor-plan builder for wall — emits the full chrome stack the
+ * legacy `floorplan-panel.tsx` rendered inline:
+ *
+ *   1. The mitered footprint polygon (themed fill + stroke).
+ *   2. A diagonal hatch overlay when selected.
+ *   3. A transparent hit-line on the centerline so the user can grab the
+ *      wall body easily.
+ *   4. Two endpoint handles (start + end) when selected — the registry
+ *      layer hosts the 5-circle stack + hover transitions + 2D drag.
+ *   5. A small dimension label at the midpoint when selected.
+ *
+ * `ctx.siblings` provides other walls in the level so
+ * `calculateLevelMiters` computes correct corner joins.
  *
  * Performance note: this recomputes level miter data per wall (O(N²)
  * across N walls in the level). For < 100 walls per level this is
- * sub-millisecond. If a real perf hotspot surfaces, the `ctx.levelData?.
- * miters` extension flagged in the plan moves the batch computation to
- * the dispatcher.
+ * sub-millisecond. If a real perf hotspot surfaces, the
+ * `ctx.levelData?.miters` extension flagged in the plan moves the batch
+ * computation to the dispatcher.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
   const siblings = ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall')
@@ -49,12 +66,170 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   const polygon = getWallPlanFootprint(self, miters)
   if (!polygon || polygon.length < 3) return null
 
-  return {
-    kind: 'polygon',
-    points: polygon.map((p) => [p.x, p.y] as FloorplanPoint),
-    fill: '#374151',
-    stroke: '#1f2937',
-    strokeWidth: 0.02,
-    opacity: 0.92,
+  const view = ctx.viewState
+  const palette = view?.palette
+  const isSelected = view?.selected ?? false
+  const isHighlighted = view?.highlighted ?? false
+  const isHovered = view?.hovered ?? false
+  const showSelectedChrome = isSelected || isHighlighted
+
+  const points = polygon.map((p) => [p.x, p.y] as FloorplanPoint)
+
+  // Stroke colour shifts: selected → theme accent; hover (when not
+  // selected) → palette.wallHoverStroke (light blue from the legacy);
+  // otherwise the dark grey carries through. Mirrors the legacy
+  // `wallStroke` ternary in floorplan-panel.tsx around line 4356.
+  const stroke =
+    showSelectedChrome && palette
+      ? palette.selectedStroke
+      : isHovered && palette
+        ? palette.wallHoverStroke
+        : '#1f2937'
+  const fill = showSelectedChrome ? '#ffffff' : '#374151'
+
+  const children: FloorplanGeometry[] = [
+    {
+      kind: 'polygon',
+      points,
+      fill,
+      stroke,
+      strokeWidth: showSelectedChrome ? 0.03 : 0.02,
+      opacity: 0.92,
+    },
+  ]
+
+  // Selection hatch overlay — only when the wall is *the* selected item
+  // (not when it's just marquee-highlighted), matching the legacy.
+  if (isSelected && palette) {
+    children.push({
+      kind: 'hatch',
+      points,
+      color: palette.selectedHatch,
+      opacity: 1,
+    })
   }
+
+  // Hit-line on the centerline. Stroke width is in screen pixels so it
+  // stays clickable at any zoom.
+  children.push({
+    kind: 'hit-line',
+    x1: node.start[0],
+    y1: node.start[1],
+    x2: node.end[0],
+    y2: node.end[1],
+    strokeWidthPx: 18,
+    cursor: 'pointer',
+  })
+
+  // Endpoint handles only when the user has actively selected this wall.
+  if (isSelected) {
+    children.push({
+      kind: 'endpoint-handle',
+      point: [node.start[0], node.start[1]],
+      state: 'idle',
+      affordance: 'move-endpoint',
+      payload: { wallId: node.id, endpoint: 'start' as const },
+    })
+    children.push({
+      kind: 'endpoint-handle',
+      point: [node.end[0], node.end[1]],
+      state: 'idle',
+      affordance: 'move-endpoint',
+      payload: { wallId: node.id, endpoint: 'end' as const },
+    })
+
+    // Curve sagitta handle — teal dot at the wall midpoint that
+    // controls `curveOffset`. Hidden when the wall hosts a door /
+    // window / wall-attached item: bending the wall would tear those
+    // children, so the legacy disables the handle in that case (see
+    // `wallCurveHandles.hasWallChildrenBlockingCurve`).
+    if (!hasCurveBlockingChildren(ctx.children)) {
+      const handle = getWallMidpointHandlePoint(node)
+      children.push({
+        kind: 'endpoint-handle',
+        point: [handle.x, handle.y],
+        state: 'idle',
+        variant: 'curve',
+        affordance: 'curve',
+        payload: { wallId: node.id },
+      })
+    }
+
+    // Length measurement. Curved walls use the simple rounded label
+    // (the chord-vs-arc thing is hard to express with a dimension line);
+    // straight walls get the full architect's overlay with extension
+    // marks + ticks, offset to the side facing away from the level
+    // centroid (matches the legacy `getWallMeasurementOverlay`).
+    const length = getWallCurveLength(node)
+    if (length >= 0.1) {
+      const dx = node.end[0] - node.start[0]
+      const dz = node.end[1] - node.start[1]
+      const midX = (node.start[0] + node.end[0]) / 2
+      const midZ = (node.start[1] + node.end[1]) / 2
+
+      if (isCurvedWall(node)) {
+        children.push({
+          kind: 'dimension-label',
+          cx: midX,
+          cy: midZ,
+          text: formatLengthMetric(length),
+          angle: Math.atan2(dz, dx),
+        })
+      } else {
+        // Outward unit normal = perpendicular to (dx, dz), choose the
+        // side facing away from other walls' centroid so the dimension
+        // line sits outside the building.
+        const nx = -dz / length
+        const nz = dx / length
+        const wallSiblings = ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall')
+        const centroid = wallCentroid([node, ...wallSiblings])
+        const cx = midX - centroid[0]
+        const cz = midZ - centroid[1]
+        const facingAway = cx * nx + cz * nz >= 0 ? 1 : -1
+        children.push({
+          kind: 'dimension',
+          start: [node.start[0], node.start[1]],
+          end: [node.end[0], node.end[1]],
+          offsetNormal: [nx * facingAway, nz * facingAway],
+          offsetDistance: 0.42,
+          extensionOvershoot: 0.12,
+          text: formatLengthMetric(length),
+        })
+      }
+    }
+  }
+
+  return { kind: 'group', children }
+}
+
+function wallCentroid(walls: WallNode[]): [number, number] {
+  // Mean of every wall endpoint — cheap approximation of "where the
+  // building lives" so we can offset the dimension line away from it.
+  let sumX = 0
+  let sumZ = 0
+  let count = 0
+  for (const wall of walls) {
+    sumX += wall.start[0] + wall.end[0]
+    sumZ += wall.start[1] + wall.end[1]
+    count += 2
+  }
+  if (count === 0) return [0, 0]
+  return [sumX / count, sumZ / count]
+}
+
+/**
+ * Doors, windows, and wall-attached items would tear if the wall bent
+ * around them, so the curve sagitta handle hides when any of those
+ * children exist. Mirrors the legacy
+ * `wallCurveHandles.hasWallChildrenBlockingCurve` check.
+ */
+function hasCurveBlockingChildren(children: AnyNode[]): boolean {
+  for (const child of children) {
+    if (child.type === 'door' || child.type === 'window') return true
+    if (child.type === 'item') {
+      const attachTo = (child as { asset?: { attachTo?: string } }).asset?.attachTo
+      if (attachTo === 'wall' || attachTo === 'wall-side') return true
+    }
+  }
+  return false
 }

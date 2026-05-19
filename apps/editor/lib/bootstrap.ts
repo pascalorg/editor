@@ -1,4 +1,4 @@
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { discoverPlugins, loadPlugin, nodeRegistry } from '@pascal-app/core'
 import { builtinPlugin } from '@pascal-app/nodes'
 
 // Idempotency guard: HMR can reload this module, but `registerNode` throws on
@@ -12,10 +12,19 @@ function isDev(): boolean {
   return env?.NODE_ENV !== 'production'
 }
 
-export function loadBuiltinNodes(): void {
+export async function loadBuiltinNodes(): Promise<void> {
   if (loaded) return
   loaded = true
-  void loadPlugin(builtinPlugin)
+  await loadPlugin(builtinPlugin)
+
+  // Phase 6 plugin discovery hook. Always called; default impl returns
+  // `[]`. Apps that ship external node packs override the discovery via
+  // `setPluginDiscovery(...)` before this module loads. See
+  // `wiki/editor-plugin-authoring.md` for the contract.
+  const externals = await discoverPlugins()
+  for (const plugin of externals) {
+    await loadPlugin(plugin)
+  }
 
   if (isDev()) {
     const kinds = Array.from(nodeRegistry.entries(), ([k]) => k)
@@ -24,7 +33,7 @@ export function loadBuiltinNodes(): void {
       // "which path is running this kind?" Empty array = every kind is on
       // the legacy path. Kind in the array = registry path is live for it.
       console.info(
-        `[pascal:registry] loaded ${builtinPlugin.id} v${builtinPlugin.apiVersion} (${kinds.length} kinds: ${kinds.join(', ') || '∅'})`,
+        `[pascal:registry] loaded ${builtinPlugin.id} v${builtinPlugin.apiVersion} (${kinds.length} kinds: ${kinds.join(', ') || '∅'})${externals.length > 0 ? ` + ${externals.length} discovered plugin(s)` : ''}`,
       )
     }
     // Expose the registry on window for ad-hoc dev inspection. In prod the
@@ -38,4 +47,4 @@ export function loadBuiltinNodes(): void {
 
 // Run as a side effect on first import so any consumer of this module gets a
 // populated registry without remembering to call the function explicitly.
-loadBuiltinNodes()
+void loadBuiltinNodes()

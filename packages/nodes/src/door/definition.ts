@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildDoorFloorplan } from './floorplan'
+import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
 
@@ -58,6 +59,23 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  // Stage D — placement (`def.tool`) + move-on-wall (`def.
+  // affordanceTools.move`). Both ports of the legacy tools at
+  // `editor/components/tools/door/`, relocated into the kind folder and
+  // wired through ToolManager's registry-first dispatch (`def.tool` for
+  // build-mode placement, `getRegistryAffordanceTool` for the move-on-
+  // pick flow). Same legacy semantics: wall-event-driven snap, clamped
+  // wall-local coords, hasWallChildOverlap guard, live mesh updates.
+  tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
+  // 2D move-on-floorplan handler. When `useEditor.movingNode` is a
+  // door and the floor plan is active, `FloorplanRegistryMoveOverlay`
+  // dispatches to this instead of the generic translate path — pointer
+  // snaps to the nearest wall, projects onto the wall axis, snaps
+  // local-X to 0.5m, clamps inside wall bounds.
+  floorplanMoveTarget: doorFloorplanMoveTarget,
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
@@ -67,7 +85,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   presentation: {
     label: 'Door',
     description: 'A door cut into a wall. Animated open/close state.',
-    icon: { kind: 'iconify', name: 'lucide:door-open' },
+    icon: { kind: 'url', src: '/icons/door.png' },
     paletteSection: 'structure',
     paletteOrder: 50,
   },

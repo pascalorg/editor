@@ -352,7 +352,7 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
   const nodes = useScene.getState().nodes
   const meshes: ElevatorColliderMesh[] = []
 
-  for (const elevatorId of sceneRegistry.byType.elevator) {
+  for (const elevatorId of sceneRegistry.byType.elevator!) {
     const typedElevatorId = elevatorId as AnyNodeId
     const node = nodes[typedElevatorId]
     if (node?.type !== 'elevator' || node.visible === false) continue
@@ -585,7 +585,7 @@ export const FirstPersonControls = () => {
     let closestDoorId: AnyNodeId | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
 
-    for (const doorId of sceneRegistry.byType.door) {
+    for (const doorId of sceneRegistry.byType.door!) {
       const node = nodes[doorId as AnyNodeId]
       if (node?.type !== 'door') continue
       if (node.openingKind === 'opening') continue
@@ -683,7 +683,7 @@ export const FirstPersonControls = () => {
     let closestWindowId: AnyNodeId | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
 
-    for (const windowId of sceneRegistry.byType.window) {
+    for (const windowId of sceneRegistry.byType.window!) {
       const node = nodes[windowId as AnyNodeId]
       if (node?.type !== 'window') continue
       if (node.openingKind === 'opening') continue
@@ -713,7 +713,7 @@ export const FirstPersonControls = () => {
       let closestTarget: FirstPersonInteractableTarget | null = null
       let closestDistance = DOOR_INTERACTION_DISTANCE
 
-      for (const elevatorId of sceneRegistry.byType.elevator) {
+      for (const elevatorId of sceneRegistry.byType.elevator!) {
         const typedElevatorId = elevatorId as AnyNodeId
         const node = nodes[typedElevatorId]
         if (node?.type !== 'elevator') continue
@@ -1088,11 +1088,11 @@ export const FirstPersonControls = () => {
       const elevatorIds = activeRide
         ? [
             activeRide.elevatorId,
-            ...Array.from(sceneRegistry.byType.elevator).filter(
+            ...Array.from(sceneRegistry.byType.elevator!).filter(
               (elevatorId) => elevatorId !== activeRide.elevatorId,
             ),
           ]
-        : Array.from(sceneRegistry.byType.elevator)
+        : Array.from(sceneRegistry.byType.elevator!)
 
       for (const elevatorId of elevatorIds) {
         const typedElevatorId = elevatorId as AnyNodeId

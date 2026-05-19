@@ -1,5 +1,11 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildSlabFloorplan } from './floorplan'
+import {
+  slabAddVertexAffordance,
+  slabMoveEdgeAffordance,
+  slabMoveVertexAffordance,
+} from './floorplan-affordances'
+import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
 import { slabParametrics } from './parametrics'
 import { SlabNode } from './schema'
@@ -73,6 +79,19 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
   // to [] when slab is registered (see floorplan-panel.tsx).
   floorplan: buildSlabFloorplan,
+  // 2D move handler — translates polygon by cursor delta from first
+  // pointer position. The 3D `MoveSlabTool` in `affordanceTools.move`
+  // skips events sourced from the 2D scene so the two paths don't
+  // double-write on commit.
+  floorplanMoveTarget: slabFloorplanMoveTarget,
+  // Sister to `affordanceTools['boundary-edit']` (the 3D `PolygonEditor`
+  // wrapper). The 2D version edits the same `polygon` field via SVG
+  // pointer events on the vertex handles emitted by `def.floorplan`.
+  floorplanAffordances: {
+    'move-vertex': slabMoveVertexAffordance,
+    'add-vertex': slabAddVertexAffordance,
+    'move-edge': slabMoveEdgeAffordance,
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Trace slab outline' },

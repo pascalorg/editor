@@ -207,7 +207,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const restoreNodeVisibility = (() => {
           const saved = new Map<THREE.Object3D, boolean>()
           for (const type of ['scan', 'guide'] as const) {
-            const ids = sceneRegistry.byType[type]
+            const ids = sceneRegistry.byType[type]!
             ids.forEach((id) => {
               const node = sceneRegistry.nodes.get(id)
               if (node) {

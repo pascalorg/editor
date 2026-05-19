@@ -7,6 +7,7 @@ import {
   getScaledDimensions,
   type ItemEvent,
   resolveLevelId,
+  type ShelfEvent,
   sceneRegistry,
   spatialGridManager,
   useLiveTransforms,
@@ -41,6 +42,7 @@ import {
   checkCanPlace,
   floorStrategy,
   itemSurfaceStrategy,
+  shelfSurfaceStrategy,
   wallStrategy,
 } from './placement-strategies'
 import type { PlacementState, TransitionResult } from './placement-types'
@@ -286,7 +288,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const lastRawPos = useRef(new Vector3(0, 0, 0))
   const placementState = useRef<PlacementState>(
-    config.initialState ?? { surface: 'floor', wallId: null, ceilingId: null, surfaceItemId: null },
+    config.initialState ?? {
+      surface: 'floor',
+      wallId: null,
+      ceilingId: null,
+      surfaceItemId: null,
+      shelfId: null,
+    },
   )
   const shiftFreeRef = useRef(false)
   const previewBoundsSignatureRef = useRef<string | null>(null)
@@ -435,6 +443,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       wallId: null,
       ceilingId: null,
       surfaceItemId: null,
+      shelfId: null,
     }
     if (!asset.attachTo && placementState.current.surface === 'floor') {
       gridPosition.current.y = 0
@@ -923,7 +932,67 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onItemClick = (event: ItemEvent) => {
-      if (event.node.id === draftNode.current?.id) return
+      // Click on the draft item itself. R3F dispatches click events to
+      // the closest intersected mesh only — when the draft is hovering
+      // on a host (shelf / table / etc.) the draft's mesh is *above*
+      // the host's mesh, so the host's `${kind}:click` never fires.
+      // If we're currently hosting on a shelf-surface, treat the
+      // self-click as a commit on the active shelf so the user doesn't
+      // have to aim around the cursor preview to drop the item.
+      if (event.node.id === draftNode.current?.id) {
+        const ctx = getContext()
+        if (ctx.state.surface === 'shelf-surface' && ctx.state.shelfId) {
+          const shelfNode = useScene.getState().nodes[ctx.state.shelfId as AnyNodeId]
+          if (shelfNode && shelfNode.type === 'shelf') {
+            const synthetic = { ...event, node: shelfNode } as unknown as ItemEvent
+            const result = shelfSurfaceStrategy.click(ctx, synthetic as never)
+            if (result) {
+              event.stopPropagation()
+              if (draftNode.current) {
+                useLiveTransforms.getState().clear(draftNode.current.id)
+              }
+              draftNode.commit(result.nodeUpdate)
+              if (configRef.current.onCommitted()) {
+                const enterResult = shelfSurfaceStrategy.enter(ctx, synthetic as never)
+                if (enterResult) {
+                  applyTransition(enterResult)
+                } else {
+                  revalidate()
+                }
+              }
+              return
+            }
+          }
+        }
+        // Same self-click forwarding for item-surface hosts (tables,
+        // counters) — the draft mesh sits on top of the host mesh, so
+        // the host's own click event is blocked by the cursor preview.
+        if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId) {
+          const hostNode = useScene.getState().nodes[ctx.state.surfaceItemId as AnyNodeId]
+          if (hostNode && hostNode.type === 'item') {
+            const synthetic = { ...event, node: hostNode } as ItemEvent
+            const result = itemSurfaceStrategy.click(ctx, synthetic)
+            if (result) {
+              event.stopPropagation()
+              if (draftNode.current) {
+                useLiveTransforms.getState().clear(draftNode.current.id)
+              }
+              draftNode.commit(result.nodeUpdate)
+              if (configRef.current.onCommitted()) {
+                const enterResult = itemSurfaceStrategy.enter(ctx, synthetic)
+                if (enterResult) {
+                  applyTransition(enterResult)
+                } else {
+                  revalidate()
+                }
+              }
+              return
+            }
+          }
+        }
+        return
+      }
+
       const result = itemSurfaceStrategy.click(getContext(), event)
       if (!result) return
 
@@ -1062,6 +1131,98 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         }
       } else {
         applyTransition(result)
+      }
+    }
+
+    // ---- Shelf Handlers ----
+    //
+    // Items can host on shelves the same way they host on tables and
+    // counters (item-surface). The shelf's `surfaces.custom` exposes one
+    // candidate Y per row; `shelfSurfaceStrategy` picks the closest one
+    // to the cursor's local-Y so the user can target a specific row.
+
+    const onShelfEnter = (event: ShelfEvent) => {
+      const result = shelfSurfaceStrategy.enter(getContext(), event)
+      if (!result) return
+
+      event.stopPropagation()
+      applyTransition(result)
+
+      if (!draftNode.current) {
+        ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+      }
+    }
+
+    const onShelfMove = (event: ShelfEvent) => {
+      const ctx = getContext()
+      if (ctx.state.surface !== 'shelf-surface') {
+        // Cursor entered via a move event without an enter — try
+        // transitioning in so the user doesn't need to mouse out + back
+        // in to start hosting.
+        const enterResult = shelfSurfaceStrategy.enter(ctx, event)
+        if (!enterResult) return
+        event.stopPropagation()
+        applyTransition(enterResult)
+        if (!draftNode.current) {
+          ensureDraft(enterResult)
+        } else if (enterResult.nodeUpdate.parentId) {
+          useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+        }
+        return
+      }
+      const result = shelfSurfaceStrategy.move(ctx, event)
+      if (!result) return
+
+      event.stopPropagation()
+
+      gridPosition.current.set(...result.gridPosition)
+      const ic = worldToBuildingLocal(...result.cursorPosition)
+      cursorGroupRef.current.position.set(ic.x, ic.y, ic.z)
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
+
+      const draft = draftNode.current
+      if (draft) {
+        draft.position = result.gridPosition
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        if (mesh) mesh.position.set(...result.gridPosition)
+        useLiveTransforms.getState().set(draft.id, {
+          position: result.cursorPosition,
+          rotation: result.cursorRotationY,
+        })
+      }
+
+      revalidate()
+    }
+
+    const onShelfLeave = (event: ShelfEvent) => {
+      if (placementState.current.surface !== 'shelf-surface') return
+      if (event.node.id !== placementState.current.shelfId) return
+      event.stopPropagation()
+      // Drop back to floor — same pattern as item-leave but without the
+      // detachItemSurfaceToFloor (no scaled rotation hand-off to deal
+      // with since the shelf rotation already composed cleanly).
+      Object.assign(placementState.current, { surface: 'floor', shelfId: null })
+    }
+
+    const onShelfClick = (event: ShelfEvent) => {
+      const result = shelfSurfaceStrategy.click(getContext(), event)
+      if (!result) return
+
+      event.stopPropagation()
+      if (draftNode.current) {
+        useLiveTransforms.getState().clear(draftNode.current.id)
+      }
+      draftNode.commit(result.nodeUpdate)
+
+      if (configRef.current.onCommitted()) {
+        const enterResult = shelfSurfaceStrategy.enter(getContext(), event)
+        if (enterResult) {
+          applyTransition(enterResult)
+        } else {
+          revalidate()
+        }
       }
     }
 
@@ -1239,6 +1400,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
     emitter.on('ceiling:leave', onCeilingLeave)
+    emitter.on('shelf:enter', onShelfEnter)
+    emitter.on('shelf:move', onShelfMove)
+    emitter.on('shelf:click', onShelfClick)
+    emitter.on('shelf:leave', onShelfLeave)
 
     return () => {
       tearingDown = true
@@ -1263,6 +1428,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
+      emitter.off('shelf:enter', onShelfEnter)
+      emitter.off('shelf:move', onShelfMove)
+      emitter.off('shelf:click', onShelfClick)
+      emitter.off('shelf:leave', onShelfLeave)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)

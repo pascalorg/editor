@@ -6,6 +6,7 @@ import {
   type GeometryContext,
   getScaledDimensions,
   type ItemNode,
+  useLiveTransforms,
 } from '@pascal-app/core'
 
 /**
@@ -25,10 +26,17 @@ import {
  */
 type Transform = { x: number; y: number; rotation: number }
 
+// Plan-space rotation convention used by the legacy `rotatePlanVector`
+// in `editor/src/lib/floorplan/geometry.ts`. This is a CLOCKWISE rotation
+// — the registry-side equivalent of the canonical floor-plan transform
+// math. Don't switch to a standard counter-clockwise rotation; the wall
+// items math (wallRotation = -atan2(dy, dx)) is calibrated against this
+// convention, and the legacy item floor-plan stack reads from these
+// offsets across many sites.
 function rotateVec(x: number, y: number, angle: number): [number, number] {
   const c = Math.cos(angle)
   const s = Math.sin(angle)
-  return [x * c - y * s, x * s + y * c]
+  return [x * c + y * s, -x * s + y * c]
 }
 
 function resolveItemTransform(
@@ -75,6 +83,35 @@ function resolveItemTransform(
         rotation: parentT.rotation + localRotation,
       }
     }
+  } else if (parentNode?.type === 'shelf') {
+    // Shelf-hosted item: `item.position` is in shelf-local coords. The
+    // shelf has its own `position` + `rotation[1]` in its parent (level)
+    // frame, so the item's plan-space position composes the shelf's
+    // pose with the item's local offset. Without this branch the
+    // `else` below would treat shelf-local coords as level-local and
+    // the item would render at the wrong spot whenever the shelf is
+    // anywhere other than (0, 0, 0).
+    //
+    // We also check `useLiveTransforms` for the shelf — if the shelf is
+    // mid-move (3D or 2D), its scene-state `position` is still at the
+    // pre-move spot but the live transform carries the cursor-tracked
+    // position. Reading the live value here keeps the hosted item
+    // following the shelf in 2D throughout the drag, mirroring how the
+    // shelf's own entry follows via the layer's effectiveNode override.
+    const shelf = parentNode as AnyNode & {
+      position: [number, number, number]
+      rotation: [number, number, number]
+    }
+    const live = useLiveTransforms.getState().get(shelf.id as AnyNodeId)
+    const shelfX = live?.position[0] ?? shelf.position[0]
+    const shelfZ = live?.position[2] ?? shelf.position[2]
+    const shelfRotationY = live?.rotation ?? shelf.rotation[1] ?? 0
+    const [offsetX, offsetY] = rotateVec(item.position[0], item.position[2], shelfRotationY)
+    result = {
+      x: shelfX + offsetX,
+      y: shelfZ + offsetY,
+      rotation: shelfRotationY + localRotation,
+    }
   } else {
     // Level / slab / ceiling parent — item.position is level-local.
     result = {
@@ -116,12 +153,45 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
     return [cx + rx, cy + ry] as FloorplanPoint
   })
 
-  return {
-    kind: 'polygon',
-    points,
-    fill: '#fef3c7',
-    stroke: '#92400e',
-    strokeWidth: 0.012,
-    opacity: 0.85,
+  const isSelected = ctx.viewState?.selected ?? false
+  const floorPlanUrl = node.asset.floorPlanUrl
+  const children: FloorplanGeometry[] = [
+    {
+      kind: 'polygon',
+      points,
+      // When an asset thumbnail is present, the polygon is a transparent
+      // hit-target — the image carries the visual weight. Without a
+      // thumbnail the polygon needs a light fill to read at all.
+      //
+      // `transparent` (not `none`) so the interior remains hit-testable —
+      // the registry layer's wrapping `<g>` only fires onPointerDown when
+      // the child renders a paintable surface. `fill="none"` would make
+      // clicks pass through to whatever's beneath, breaking selection.
+      fill: floorPlanUrl ? 'transparent' : '#fef3c7',
+      stroke: '#92400e',
+      strokeWidth: 0.012,
+      opacity: 0.85,
+    },
+  ]
+  // Asset thumbnail — top-down PNG capture from the asset modal. Drawn
+  // inside the footprint with the item's rotation applied. Matches the
+  // legacy `FloorplanItemImage` overlay.
+  if (floorPlanUrl) {
+    children.push({
+      kind: 'image',
+      url: floorPlanUrl,
+      center: [cx, cy],
+      width,
+      height: depth,
+      rotation: transform.rotation,
+    })
   }
+  // Move handle — orange dot at the item center. Only when selected.
+  if (isSelected) {
+    children.push({
+      kind: 'move-handle',
+      point: [cx, cy],
+    })
+  }
+  return { kind: 'group', children }
 }

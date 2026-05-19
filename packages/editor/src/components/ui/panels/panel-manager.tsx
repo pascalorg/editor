@@ -24,23 +24,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
-import { ColumnPanel } from './column-panel'
-import { DoorPanel } from './door-panel'
-import { ElevatorPanel } from './elevator-panel'
-import { ItemPanel } from './item-panel'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
 import { getNodeDisplay } from './node-display'
 import { PaintPanel } from './paint-panel'
 import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
-import { RoofPanel } from './roof-panel'
-import { RoofSegmentPanel } from './roof-segment-panel'
-import { SpawnPanel } from './spawn-panel'
-import { StairPanel } from './stair-panel'
-import { StairSegmentPanel } from './stair-segment-panel'
-import { WallPanel } from './wall-panel'
-import { WindowPanel } from './window-panel'
 
 type MovableNode =
   | ItemNode
@@ -81,37 +70,15 @@ function isMovableNode(node: AnyNode | null): node is MovableNode {
 
 function panelForType(type: string | null) {
   if (!type) return null
-  switch (type) {
-    case 'item':
-      return <ItemPanel />
-    case 'roof':
-      return <RoofPanel />
-    case 'roof-segment':
-      return <RoofSegmentPanel />
-    case 'stair':
-      return <StairPanel />
-    case 'stair-segment':
-      return <StairSegmentPanel />
-    case 'spawn':
-      return <SpawnPanel />
-    case 'column':
-      return <ColumnPanel />
-    case 'wall':
-      return <WallPanel />
-    case 'door':
-      return <DoorPanel />
-    case 'elevator':
-      return <ElevatorPanel />
-    case 'window':
-      return <WindowPanel />
-    default:
-      // Registry fallback: any kind registered via @pascal-app/nodes with a
-      // `parametrics` descriptor on its NodeDefinition gets an auto-derived
-      // panel. Phase 4 will replace the hardcoded switch above with the
-      // registry-first path; until then this fallback lets new kinds (shelf,
-      // etc.) have a working inspector without per-kind panel files.
-      return <ParametricInspector />
-  }
+  // Every kind now renders through `<ParametricInspector>`, which either
+  // composes auto-derived editors from `parametrics.groups` or lazy-
+  // loads the kind-owned panel via `parametrics.customPanel`. The
+  // hardcoded switch is gone — all per-kind panel layout lives in
+  // `nodes/src/<kind>/panel.tsx`. The `type` arg is preserved for
+  // future cases where we might want a non-registry fallback (e.g.
+  // reference scale, paint mode); leave the function shape intact.
+  void type
+  return <ParametricInspector />
 }
 
 function MobilePanelLayer({

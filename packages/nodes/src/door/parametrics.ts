@@ -2,15 +2,12 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { DoorNode } from './schema'
 
 /**
- * Minimal inspector descriptor for door. The legacy `<DoorPanel>` has
- * 29 SliderControls covering segments, hardware, hinges, panic bar,
- * opening shape, etc. — too elaborate for the auto-inspector at Stage A.
- * Legacy panel keeps rendering via the hardcoded `case 'door':` in
- * panel-manager.tsx. This descriptor only exposes the simple dimension
- * fields so the registry knows door has parametric data. Phase 5 Stage E
- * (drop legacy panel) will extend this — likely via
- * `parametrics.customPanel?` since door has too much non-numeric UI
- * (segmented controls, presets) to fit the generic auto-UI.
+ * Stage E inspector for door. Mounts the kind-owned panel
+ * (`panel.tsx`) via `customPanel` — door has 29+ controls (segments,
+ * hardware, hinges, panic bar, opening shape, etc.) that can't fit
+ * into the generic auto-inspector. The `groups` entries stay populated
+ * so the registry still considers door "parametric" (for tooling that
+ * lists kinds with editable schema).
  */
 export const doorParametrics: ParametricDescriptor<DoorNode> = {
   groups: [
@@ -29,4 +26,5 @@ export const doorParametrics: ParametricDescriptor<DoorNode> = {
       ],
     },
   ],
+  customPanel: () => import('./panel'),
 }
