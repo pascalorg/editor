@@ -1,50 +1,85 @@
 'use client'
 
-import { useMemo } from 'react'
-import { Color } from 'three'
+import { useEffect, useMemo } from 'react'
+import type { MeshStandardMaterial } from 'three'
+import { buildShelfGeometry } from './geometry'
 import type { ShelfNode } from './schema'
 
 /**
- * Translucent preview of a shelf. Used by:
- * - The placement tool's cursor (ShelfTool) — at the cursor position
- * - The move tool (MoveRegistryNodeTool) — at the drag target position
+ * Translucent preview of a shelf — used by the placement tool's cursor
+ * and the registry mover. Defers to `buildShelfGeometry` so the preview
+ * shape stays in lockstep with whatever the actual shelf will render,
+ * then walks the result, **clones** each mesh's material, and mutates
+ * the clone for a translucent ghost.
  *
- * Renders the same primitives as the actual ShelfRenderer, but with
- * `transparent: true, opacity: 0.5` so the user can see what they're
- * placing/moving without it being a hard solid.
+ * Cloning is non-negotiable: `getShelfMaterial` caches the default
+ * `MeshStandardMaterial` instance in a module-scoped map keyed on
+ * `material` / `materialPreset`, so every unpainted shelf in the scene
+ * shares the same material. Mutating `mat.transparent = true` here
+ * would leak into every committed shelf and render them all see-through.
+ *
+ * Building the full geometry tree per-frame would be wasteful, so we
+ * memoize the group + dispose the per-mesh material clones on unmount.
+ * Geometry is intentionally NOT disposed — `buildShelfGeometry` creates
+ * fresh BufferGeometry per call, but if a future revision returns
+ * cached geometry, disposing here would corrupt later renders. Keep the
+ * cleanup focused on what the preview itself created (the clones).
+ *
+ * **Raycast is disabled** on every preview mesh: the cursor follows the
+ * shelf, so without this the preview itself would intercept the cursor
+ * ray, `grid:move` would stop firing as soon as the preview entered the
+ * cursor cone, and the placement tool would lose track of the cursor's
+ * grid position. Disabling raycast lets the ray pass through the ghost
+ * to the grid plane below.
  */
 const ShelfPreview = ({ node }: { node: ShelfNode }) => {
-  const color = useMemo(() => new Color(node.color), [node.color])
-  const topY = node.height + node.thickness / 2
+  const built = useMemo(() => buildShelfGeometry(node), [node])
 
-  const inset = Math.min(0.12, node.width / 6)
-  const bracketHeight = Math.max(0.01, node.height)
-  const bracketWidth =
-    node.bracketStyle === 'industrial'
-      ? Math.max(0.04, node.depth * 0.2)
-      : Math.max(0.02, node.depth * 0.12)
-  const bracketDepth = node.bracketStyle === 'industrial' ? node.depth * 0.95 : node.depth * 0.7
+  useEffect(() => {
+    const cloned: MeshStandardMaterial[] = []
+    built.traverse((obj) => {
+      // Skip pointer events: see component-level note above.
+      ;(obj as unknown as { raycast: () => void }).raycast = () => {}
 
-  return (
-    <group>
-      <mesh position={[0, topY, 0]}>
-        <boxGeometry args={[node.width, node.thickness, node.depth]} />
-        <meshStandardMaterial color={color} transparent opacity={0.5} />
-      </mesh>
-      {node.bracketStyle !== 'hidden' && (
-        <>
-          <mesh position={[-(node.width / 2 - inset), bracketHeight / 2, 0]}>
-            <boxGeometry args={[bracketWidth, bracketHeight, bracketDepth]} />
-            <meshStandardMaterial color={color} transparent opacity={0.5} />
-          </mesh>
-          <mesh position={[node.width / 2 - inset, bracketHeight / 2, 0]}>
-            <boxGeometry args={[bracketWidth, bracketHeight, bracketDepth]} />
-            <meshStandardMaterial color={color} transparent opacity={0.5} />
-          </mesh>
-        </>
-      )}
-    </group>
-  )
+      // `Mesh.material` is typed as `Material | Material[]` upstream;
+      // every shelf board carries a `MeshStandardMaterial` from
+      // `getShelfMaterial`. Access through a structural cast keeps the
+      // assignment well-typed without depending on the Mesh union.
+      const mesh = obj as {
+        material?: MeshStandardMaterial | MeshStandardMaterial[]
+      }
+      if (!mesh.material) return
+
+      const cloneAndSwap = (mat: MeshStandardMaterial): MeshStandardMaterial => {
+        const c = mat.clone()
+        c.transparent = true
+        c.opacity = 0.5
+        c.depthWrite = false
+        cloned.push(c)
+        return c
+      }
+
+      if (Array.isArray(mesh.material)) {
+        mesh.material = mesh.material.map(cloneAndSwap)
+      } else {
+        mesh.material = cloneAndSwap(mesh.material)
+      }
+    })
+
+    return () => {
+      // Dispose only the clones we made — never the shared cached
+      // material returned by `getShelfMaterial`, which other shelves in
+      // the scene still reference. Geometry is left alone for the same
+      // reason; the builder may move to a cached strategy in future.
+      for (const c of cloned) c.dispose()
+      built.traverse((obj) => {
+        const mesh = obj as { geometry?: { dispose: () => void } }
+        mesh.geometry?.dispose()
+      })
+    }
+  }, [built])
+
+  return <primitive object={built} />
 }
 
 export default ShelfPreview
