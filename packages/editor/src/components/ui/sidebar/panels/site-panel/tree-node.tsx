@@ -56,6 +56,7 @@ export function focusTreeNode(nodeId: AnyNodeId) {
 import { cn } from '../../../../../lib/utils'
 import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
+import { ChimneyTreeNode } from './chimney-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
 import { DoorTreeNode } from './door-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
@@ -94,6 +95,7 @@ const treeNodeByType: Record<
     nodeId: AnyNodeId
   }>,
   ceiling: CeilingTreeNode,
+  chimney: ChimneyTreeNode,
   column: ColumnTreeNode,
   elevator: ElevatorTreeNode,
   level: LevelTreeNode as React.ComponentType<{

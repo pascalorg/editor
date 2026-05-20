@@ -11,6 +11,7 @@ import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pas
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { buildChimneyGeometry } from './geometry'
+import { trimChimneyBodyAgainstRoof } from './roof-trim'
 
 const bodyMaterial = new THREE.MeshStandardMaterial({
   color: 0xb8_88_72,
@@ -78,16 +79,41 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
     node.rotation,
   ])
 
+  // CSG-trim the body against the parent roof segment so the portion
+  // passing through the wall and shingles is hidden. Runs once per
+  // chimney/segment shape change. Returns the original body geometry
+  // on any CSG failure (logged via console.error).
+  const trimmedBody = useMemo(() => {
+    if (!geo || !segment) return null
+    return trimChimneyBodyAgainstRoof(geo.body, segment, node)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    geo,
+    segment?.width,
+    segment?.depth,
+    segment?.wallHeight,
+    segment?.roofHeight,
+    segment?.roofType,
+    segment?.wallThickness,
+    segment?.deckThickness,
+    segment?.overhang,
+    segment?.shingleThickness,
+  ])
+
   useEffect(
     () => () => {
       if (geo) {
-        geo.body.dispose()
+        // The body may have been replaced by the trimmed version —
+        // `trimChimneyBodyAgainstRoof` disposes the original on
+        // success. Dispose `trimmedBody` if present, else the
+        // original body.
+        ;(trimmedBody ?? geo.body).dispose()
         geo.cap?.dispose()
         geo.flues?.dispose()
         geo.cricket?.dispose()
       }
     },
-    [geo],
+    [geo, trimmedBody],
   )
 
   const surfaceMaterial = useMemo(() => {
@@ -114,7 +140,7 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
     <group position={[0, 0, 0]} ref={ref} visible={node.visible}>
       <mesh
         castShadow
-        geometry={geo.body}
+        geometry={trimmedBody ?? geo.body}
         material={surfaceMaterial}
         name="chimney-body"
         receiveShadow

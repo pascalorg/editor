@@ -73,8 +73,20 @@ export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { LevelSystem } from './systems/level/level-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
+// CSG primitives — used by chimney's roof-trim and other kinds whose
+// geometry subtracts pieces against their host. Lives in viewer
+// because three-bvh-csg / three-mesh-bvh are viewer-only deps.
+export {
+  Brush,
+  csgEvaluator,
+  csgGeometry,
+  csgMaterials,
+  computeGeometryBoundsTree,
+  prepareBrushForCSG,
+  SUBTRACTION,
+} from './lib/csg-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
-export { RoofSystem } from './systems/roof/roof-system'
+export { getRoofSegmentBrushes, RoofSystem } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
 // Slab system follows the wall + fence re-export pattern — composed into
 // the registry-driven slab definition's `def.system`. Removed in Phase 6
