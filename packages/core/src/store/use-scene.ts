@@ -352,6 +352,18 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = { ...node, children: [] }
     }
 
+    // Roof-segment hosting was added in this migration cycle (the same
+    // pattern as shelf above). Older segments saved before the schema
+    // gained `children` need the field initialised so
+    // `createNode(chimney, segmentId)` finds an array to append to —
+    // without this every "Add Element" click on the roof panel results
+    // in an orphaned accessory (parented in scene state but never
+    // appended to `seg.children`, so the renderer's recursive
+    // `<NodeRenderer>` mount never sees it).
+    if (node.type === 'roof-segment' && !Array.isArray((node as { children?: unknown }).children)) {
+      patchedNodes[id] = { ...node, children: [] } as AnyNode
+    }
+
     if (node.type === 'roof') {
       patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }

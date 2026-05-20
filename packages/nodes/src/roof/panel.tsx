@@ -20,16 +20,18 @@ import {
   duplicateRoofSubtree,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 export default function RoofPanel() {
+  const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -110,26 +112,20 @@ export default function RoofPanel() {
     }),
   )
 
-  const ridgeVents = useScene(
+  // Box vents and ridge vents share the "Vents" UI group — same list,
+  // type shown as the right-side label, and an `Add Vent` button with
+  // a Box/Ridge segmented picker.
+  const vents = useScene(
     useShallow((s) => {
       if (segmentIdSet.size === 0) return []
-      const out: RidgeVentNode[] = []
+      const out: (BoxVentNode | RidgeVentNode)[] = []
       for (const n of Object.values(s.nodes)) {
-        if (n?.type === 'ridge-vent' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
-          out.push(n as RidgeVentNode)
-        }
-      }
-      return out
-    }),
-  )
-
-  const boxVents = useScene(
-    useShallow((s) => {
-      if (segmentIdSet.size === 0) return []
-      const out: BoxVentNode[] = []
-      for (const n of Object.values(s.nodes)) {
-        if (n?.type === 'box-vent' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
-          out.push(n as BoxVentNode)
+        if (
+          (n?.type === 'box-vent' || n?.type === 'ridge-vent') &&
+          n.roofSegmentId &&
+          segmentIdSet.has(n.roofSegmentId)
+        ) {
+          out.push(n as BoxVentNode | RidgeVentNode)
         }
       }
       return out
@@ -419,43 +415,35 @@ export default function RoofPanel() {
           </div>
 
           <div className="flex flex-col gap-1">
-            {boxVents.map((vent, i) => (
+            {vents.map((vent, i) => (
               <button
                 className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
                 key={vent.id}
                 onClick={() => handleSelectElement(vent.id)}
                 type="button"
               >
-                <span className="truncate">{vent.name || `Box Vent ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">box vent</span>
+                <span className="truncate">
+                  {vent.name ||
+                    (vent.type === 'box-vent' ? `Box Vent ${i + 1}` : `Ridge Vent ${i + 1}`)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {vent.type === 'box-vent' ? 'box vent' : 'ridge vent'}
+                </span>
               </button>
             ))}
+            <SegmentedControl<'box-vent' | 'ridge-vent'>
+              onChange={setVentType}
+              options={[
+                { label: 'Box', value: 'box-vent' },
+                { label: 'Ridge', value: 'ridge-vent' },
+              ]}
+              value={ventType}
+            />
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Box Vent"
-                onClick={() => activateTool('box-vent')}
-              />
-            </ActionGroup>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            {ridgeVents.map((vent, i) => (
-              <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
-                key={vent.id}
-                onClick={() => handleSelectElement(vent.id)}
-                type="button"
-              >
-                <span className="truncate">{vent.name || `Ridge Vent ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">ridge vent</span>
-              </button>
-            ))}
-            <ActionGroup>
-              <ActionButton
-                icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Ridge Vent"
-                onClick={() => activateTool('ridge-vent')}
+                label="Add Vent"
+                onClick={() => activateTool(ventType)}
               />
             </ActionGroup>
           </div>
