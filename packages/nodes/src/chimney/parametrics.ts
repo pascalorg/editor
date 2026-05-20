@@ -2,6 +2,12 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { ChimneyNode } from './schema'
 
 export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
+  // The chimney panel is a bespoke tabbed UI (Cap / Flues / Shoulder /
+  // Bands / Cricket / Panels) ported from the archive — auto-derived
+  // groups can't reproduce its layout. `groups` stays declared for the
+  // MCP path and for any future fallback consumer, but the inspector
+  // mounts the custom panel.
+  customPanel: () => import('./panel'),
   groups: [
     {
       label: 'Body',
