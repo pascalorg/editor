@@ -5,7 +5,6 @@ import {
   emitter,
   type RoofEvent,
   type RoofNode,
-  type RoofSegmentNode,
   sceneRegistry,
   SkylightNode,
   useScene,
@@ -14,41 +13,13 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { resolveRoofSegmentHit } from '../roof/segment-hit'
 import { skylightDefinition } from './definition'
 import { getAnalyticalNormal, getSurfaceY } from './geometry'
 import { surfaceQuatFromNormal } from '../solar-panel/geometry'
 import SkylightPreview from './preview'
 
 const worldPoint = new THREE.Vector3()
-
-type SegmentHit = {
-  segment: RoofSegmentNode
-  localX: number
-  localY: number
-  localZ: number
-}
-
-function resolveSegmentFromWorldPoint(
-  roof: RoofNode,
-  wx: number,
-  wy: number,
-  wz: number,
-  state: ReturnType<typeof useScene.getState>,
-): SegmentHit | null {
-  worldPoint.set(wx, wy, wz)
-  for (const childId of roof.children ?? []) {
-    const seg = state.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
-    if (seg?.type !== 'roof-segment') continue
-    const segObj = sceneRegistry.nodes.get(seg.id)
-    if (!segObj) continue
-    segObj.updateWorldMatrix(true, false)
-    const local = segObj.worldToLocal(worldPoint.clone())
-    if (Math.abs(local.x) <= seg.width / 2 && Math.abs(local.z) <= seg.depth / 2) {
-      return { segment: seg, localX: local.x, localY: local.y, localZ: local.z }
-    }
-  }
-  return null
-}
 
 const SkylightTool = () => {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
@@ -98,8 +69,7 @@ const SkylightTool = () => {
         lastSnapRef.current = [sx, sz]
       }
 
-      const state = useScene.getState()
-      const hit = resolveSegmentFromWorldPoint(event.node as RoofNode, wx, wy, wz, state)
+      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return
 
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
@@ -110,15 +80,14 @@ const SkylightTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const state = useScene.getState()
-      const hit = resolveSegmentFromWorldPoint(
+      const hit = resolveRoofSegmentHit(
         event.node as RoofNode,
         event.position[0],
         event.position[1],
         event.position[2],
-        state,
       )
       if (!hit) return
+      const state = useScene.getState()
 
       const surfaceY = getSurfaceY(hit.localX, hit.localZ, hit.segment)
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
