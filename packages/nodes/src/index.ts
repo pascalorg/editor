@@ -1,6 +1,7 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
+import { chimneyDefinition } from './chimney'
 import { ridgeVentDefinition } from './ridge-vent'
 import { ceilingDefinition } from './ceiling'
 import { columnDefinition } from './column'
@@ -70,11 +71,13 @@ export const builtinPlugin: Plugin = {
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
+    chimneyDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
+export { chimneyDefinition } from './chimney'
 export { ridgeVentDefinition } from './ridge-vent'
 export { ceilingDefinition } from './ceiling'
 export { columnDefinition } from './column'
