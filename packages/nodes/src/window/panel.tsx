@@ -842,24 +842,24 @@ export default function WindowPanel() {
         <>
           {showFrameSection && (
             <PanelSection title="Frame">
-            <SliderControl
-              label="Thickness"
-              min={0}
-              onChange={(v) => handleUpdate({ frameThickness: v })}
-              precision={3}
-              step={0.01}
-              unit="m"
-              value={Math.round(node.frameThickness * 1000) / 1000}
-            />
-            <SliderControl
-              label="Depth"
-              min={0}
-              onChange={(v) => handleUpdate({ frameDepth: v })}
-              precision={3}
-              step={0.01}
-              unit="m"
-              value={Math.round(node.frameDepth * 1000) / 1000}
-            />
+              <SliderControl
+                label="Thickness"
+                min={0}
+                onChange={(v) => handleUpdate({ frameThickness: v })}
+                precision={3}
+                step={0.01}
+                unit="m"
+                value={Math.round(node.frameThickness * 1000) / 1000}
+              />
+              <SliderControl
+                label="Depth"
+                min={0}
+                onChange={(v) => handleUpdate({ frameDepth: v })}
+                precision={3}
+                step={0.01}
+                unit="m"
+                value={Math.round(node.frameDepth * 1000) / 1000}
+              />
             </PanelSection>
           )}
 

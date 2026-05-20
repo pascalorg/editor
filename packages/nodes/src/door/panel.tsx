@@ -393,10 +393,7 @@ export default function DoorPanel() {
   const isGarageDoor = node.doorCategory === 'garage' || doorType.startsWith('garage-')
   const isSwingDoor = doorType === 'hinged' || doorType === 'double' || doorType === 'french'
   const isSlideFoldDoor =
-    doorType === 'folding' ||
-    doorType === 'pocket' ||
-    doorType === 'barn' ||
-    doorType === 'sliding'
+    doorType === 'folding' || doorType === 'pocket' || doorType === 'barn' || doorType === 'sliding'
   const isSlidingDoor = doorType === 'pocket' || doorType === 'barn' || doorType === 'sliding'
   const isFoldingDoor = doorType === 'folding'
   const isSectionalGarageDoor = doorType === 'garage-sectional'
@@ -1027,26 +1024,26 @@ export default function DoorPanel() {
         <>
           {showFrameSection && (
             <PanelSection title="Frame">
-            <SliderControl
-              label="Thickness"
-              max={0.2}
-              min={0.01}
-              onChange={(v) => handleUpdate({ frameThickness: v })}
-              precision={3}
-              step={0.01}
-              unit="m"
-              value={Math.round(node.frameThickness * 1000) / 1000}
-            />
-            <SliderControl
-              label="Depth"
-              max={0.3}
-              min={0.01}
-              onChange={(v) => handleUpdate({ frameDepth: v })}
-              precision={3}
-              step={0.01}
-              unit="m"
-              value={Math.round(node.frameDepth * 1000) / 1000}
-            />
+              <SliderControl
+                label="Thickness"
+                max={0.2}
+                min={0.01}
+                onChange={(v) => handleUpdate({ frameThickness: v })}
+                precision={3}
+                step={0.01}
+                unit="m"
+                value={Math.round(node.frameThickness * 1000) / 1000}
+              />
+              <SliderControl
+                label="Depth"
+                max={0.3}
+                min={0.01}
+                onChange={(v) => handleUpdate({ frameDepth: v })}
+                precision={3}
+                step={0.01}
+                unit="m"
+                value={Math.round(node.frameDepth * 1000) / 1000}
+              />
             </PanelSection>
           )}
 

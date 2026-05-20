@@ -11,9 +11,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
-  buildRoofSurfaceMaterialPatch,
   duplicateRoofSubtree,
-  MaterialPicker,
   PanelSection,
   PanelWrapper,
   SliderControl,

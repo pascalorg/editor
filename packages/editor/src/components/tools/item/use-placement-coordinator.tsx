@@ -1496,7 +1496,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('contextmenu', onContextMenu)
     }
-  }, [asset, canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling, draftNode])
+  }, [
+    asset,
+    canPlaceOnFloor,
+    canPlaceOnWall,
+    canPlaceOnCeiling,
+    draftNode,
+    gridSnapStep,
+    updateDimensionGuides,
+    updatePreviewGeometry,
+  ])
 
   // Refresh wireframe when the grid step changes mid-placement so the green/red
   // box snaps to the new cell size right away.
@@ -1510,7 +1519,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     )
     updatePreviewGeometry(previewBounds)
     updateDimensionGuides(previewBounds)
-  }, [gridSnapStep, asset, draftNode])
+  }, [gridSnapStep, asset, draftNode, updateDimensionGuides, updatePreviewGeometry])
   // Wall/ceiling items are managed by their own surface entry events (ensureDraft / reparent).
   const viewerLevelId = useViewer((s) => s.selection.levelId)
   useEffect(() => {
@@ -1588,6 +1597,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       initialDimensionBounds.dimensions[0],
       initialDimensionBounds.dimensions[1],
       initialDimensionBounds.dimensions[2],
+      initialDimensionBounds,
     ],
   )
   const basePlaneGeometry = useMemo(() => {

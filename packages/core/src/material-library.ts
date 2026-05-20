@@ -123,16 +123,13 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     label: 'Hungarian Parquet 10',
     category: 'wood',
     description: 'Parquet wood finish',
-    previewThumbnailUrl:
-      '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_baseColor.webp',
+    previewThumbnailUrl: '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_baseColor.webp',
     preset: {
       maps: {
         albedoMap: '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_baseColor.webp',
-        metalnessMap:
-          '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_specularLevel.webp',
+        metalnessMap: '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_specularLevel.webp',
         normalMap: '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_normal.webp',
-        roughnessMap:
-          '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_roughness.webp',
+        roughnessMap: '/material/wood/hungarian_parquet_10/Hungarian Parquet_10_roughness.webp',
       },
       mapProperties: {
         color: '#ffffff',
@@ -163,13 +160,11 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     label: 'Hungarian Parquet 2',
     category: 'wood',
     description: 'Parquet wood finish',
-    previewThumbnailUrl:
-      '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_baseColor.webp',
+    previewThumbnailUrl: '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_baseColor.webp',
     preset: {
       maps: {
         albedoMap: '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_baseColor.webp',
-        metalnessMap:
-          '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_specularLevel.webp',
+        metalnessMap: '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_specularLevel.webp',
         normalMap: '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_normal.webp',
         roughnessMap: '/material/wood/hungarian_parquet_2/Hungarian Parquet_2_roughness.webp',
       },
@@ -210,8 +205,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         metalnessMap:
           '/material/wood/square_parquet_21/Square Pattern Parquet_21_specularLevel.webp',
         normalMap: '/material/wood/square_parquet_21/Square Pattern Parquet_21_normal.webp',
-        roughnessMap:
-          '/material/wood/square_parquet_21/Square Pattern Parquet_21_roughness.webp',
+        roughnessMap: '/material/wood/square_parquet_21/Square Pattern Parquet_21_roughness.webp',
       },
       mapProperties: {
         color: '#ffffff',
@@ -246,12 +240,10 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
       '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_baseColor.webp',
     preset: {
       maps: {
-        albedoMap:
-          '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_baseColor.webp',
+        albedoMap: '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_baseColor.webp',
         metalnessMap:
           '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_specularLevel.webp',
-        normalMap:
-          '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_normal.webp',
+        normalMap: '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_normal.webp',
         roughnessMap:
           '/material/wood/square_wood_parquet_23/Square Pattern Parquet_23_roughness.webp',
       },

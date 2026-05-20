@@ -18,9 +18,9 @@ import {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   markToolCancelConsumed,
+  type SegmentAngleReference,
   snapWallDraftPoint,
   triggerSFX,
-  type SegmentAngleReference,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'

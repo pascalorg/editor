@@ -16,10 +16,8 @@ import {
 import {
   ActionButton,
   ActionGroup,
-  buildStairSurfaceMaterialPatch,
   DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
   duplicateStairSubtree,
-  MaterialPicker,
   MetricControl,
   PanelSection,
   PanelWrapper,

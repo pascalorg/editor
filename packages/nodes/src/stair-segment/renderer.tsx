@@ -45,6 +45,8 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
     parentNode?.sideMaterial,
     parentNode?.treadMaterialPreset,
     parentNode?.treadMaterial,
+    node,
+    parentNode,
   ])
 
   const placeholderGeometry = useMemo(() => {

@@ -240,6 +240,7 @@ export default function ElevatorPanel() {
     node?.type,
     selectedId,
     updateNode,
+    node,
   ])
 
   const previewMetric = useCallback(
@@ -314,7 +315,7 @@ export default function ElevatorPanel() {
   }, [clearLivePreview, node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!(node && node.parentId)) return
+    if (!node?.parentId) return
     triggerSFX('sfx:item-pick')
 
     const duplicate = ElevatorNodeSchema.parse({
@@ -596,9 +597,7 @@ export default function ElevatorPanel() {
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-sm text-foreground"
-              onChange={(event) =>
-                handleServiceBoundaryChange('fromLevelId', event.target.value)
-              }
+              onChange={(event) => handleServiceBoundaryChange('fromLevelId', event.target.value)}
               value={fromLevelId}
             >
               {levels.map((level) => (

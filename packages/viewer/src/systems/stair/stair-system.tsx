@@ -9,7 +9,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -610,7 +609,7 @@ function generateStairRailingGeometry(
   for (let index = 1; index < segmentRailPaths.length; index++) {
     const previousPath = segmentRailPaths[index - 1]
     const currentPath = segmentRailPaths[index]
-    if (!(previousPath && currentPath && currentPath.connectFromPrevious)) continue
+    if (!(previousPath && currentPath?.connectFromPrevious)) continue
     if (previousPath.segment.segmentType === 'landing') continue
 
     for (const sidePath of currentPath.sidePaths) {

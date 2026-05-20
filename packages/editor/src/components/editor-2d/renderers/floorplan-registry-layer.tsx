@@ -269,8 +269,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     levelId,
     nodes,
     liveTransforms,
-    liveOverrides,
-    interactiveElevators,
     selectedIdSet,
     highlightedIdSet,
     hoveredId,
@@ -518,9 +516,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           higher-rank kinds (slabs, then walls / items / shelves) layer
           on top in the expected document-order z-stack. */}
       <g className="floorplan-registry-base">
-        {entries.map(({ id, base }) =>
-          base ? renderEntry(id, base, `base-${id}`) : null,
-        )}
+        {entries.map(({ id, base }) => (base ? renderEntry(id, base, `base-${id}`) : null))}
       </g>
       {/* Overlay pass — interactive handles (vertex / midpoint / edge /
           move) and labels (text / dimensions). Painted after every base

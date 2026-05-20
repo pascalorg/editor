@@ -404,12 +404,10 @@ function getCurvedOpeningPolygon(stair: StairNode, offset: number = 0): Point2D[
   const totalSweep = stair.sweepAngle ?? Math.PI / 2
   const baseOpeningSweep =
     Math.abs(totalSweep) *
-    Math.max(
-      CURVED_STAIR_SLAB_OPENING_RATIO,
-      1 / Math.max(stair.stepCount ?? 1, 1),
-    )
+    Math.max(CURVED_STAIR_SLAB_OPENING_RATIO, 1 / Math.max(stair.stepCount ?? 1, 1))
   const angleOffset = offset / Math.max(innerRadius, 0.1)
-  const openingSweep = Math.sign(totalSweep || 1) * Math.min(Math.abs(totalSweep), baseOpeningSweep + angleOffset * 2)
+  const openingSweep =
+    Math.sign(totalSweep || 1) * Math.min(Math.abs(totalSweep), baseOpeningSweep + angleOffset * 2)
 
   const startAngle = totalSweep / 2 - openingSweep
   const endAngle = totalSweep / 2
@@ -562,7 +560,12 @@ function getStairOpeningPolygons(
   }
 
   if (stair.stairType === 'curved') {
-    return [getCurvedOpeningPolygon(stair, Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0.15))]
+    return [
+      getCurvedOpeningPolygon(
+        stair,
+        Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0.15),
+      ),
+    ]
   }
 
   if (stair.stairType === 'spiral') {
