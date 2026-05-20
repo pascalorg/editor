@@ -1,6 +1,8 @@
 'use client'
 
-import '../lib/bootstrap'
+// Node registry bootstrap is loaded once at the root via
+// `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
+// import here.
 import {
   applySceneGraphToEditor,
   Editor,
