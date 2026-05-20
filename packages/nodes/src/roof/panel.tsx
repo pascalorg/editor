@@ -19,7 +19,15 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, Move, Plus, Trash2 } from 'lucide-react'
+import {
+  Copy,
+  Move,
+  Plus,
+  SquareStack,
+  Sun,
+  Trash2,
+  Wind,
+} from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -104,6 +112,28 @@ export default function RoofPanel() {
     }
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
+
+  // Each "Add" button activates the kind's registered placement tool
+  // via `setTool(kind)`. The tool listens for `roof:*` events and
+  // commits a new node parented to whichever segment the user clicks.
+  // Same code path as the top palette — see `tool-manager.tsx:28`'s
+  // `nodeRegistry.get(tool)?.tool` dispatch.
+  const activateTool = useCallback(
+    (kind:
+      | 'box-vent'
+      | 'ridge-vent'
+      | 'chimney'
+      | 'solar-panel'
+      | 'skylight'
+      | 'dormer') => {
+      triggerSFX('sfx:item-pick')
+      useEditor.getState().setTool(kind)
+      if (useEditor.getState().mode !== 'build') {
+        useEditor.getState().setMode('build')
+      }
+    },
+    [],
+  )
 
   if (!(node && node.type === 'roof' && selectedId)) return null
 
@@ -208,6 +238,43 @@ export default function RoofPanel() {
             }}
           />
         </div>
+      </PanelSection>
+
+      <PanelSection title="Add element">
+        <ActionGroup>
+          <ActionButton
+            icon={<SquareStack className="h-3.5 w-3.5" />}
+            label="Chimney"
+            onClick={() => activateTool('chimney')}
+          />
+          <ActionButton
+            icon={<SquareStack className="h-3.5 w-3.5" />}
+            label="Dormer"
+            onClick={() => activateTool('dormer')}
+          />
+          <ActionButton
+            icon={<SquareStack className="h-3.5 w-3.5" />}
+            label="Skylight"
+            onClick={() => activateTool('skylight')}
+          />
+        </ActionGroup>
+        <ActionGroup>
+          <ActionButton
+            icon={<Sun className="h-3.5 w-3.5" />}
+            label="Solar Panel"
+            onClick={() => activateTool('solar-panel')}
+          />
+          <ActionButton
+            icon={<Wind className="h-3.5 w-3.5" />}
+            label="Box Vent"
+            onClick={() => activateTool('box-vent')}
+          />
+          <ActionButton
+            icon={<Wind className="h-3.5 w-3.5" />}
+            label="Ridge Vent"
+            onClick={() => activateTool('ridge-vent')}
+          />
+        </ActionGroup>
       </PanelSection>
 
       <PanelSection title="Actions">
