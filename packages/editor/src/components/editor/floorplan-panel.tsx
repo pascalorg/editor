@@ -3475,7 +3475,7 @@ function FloorplanZoneLabel({
     if (textRef.current) {
       setTextWidth(textRef.current.getComputedTextLength())
     }
-  }, [zone.name])
+  }, [])
 
   const isDeleteMode = mode === 'delete'
 
@@ -5136,7 +5136,7 @@ export function FloorplanPanel() {
 
   useEffect(() => {
     setHoveredGuideCorner(null)
-  }, [selectedGuide?.id])
+  }, [])
 
   useEffect(() => {
     if (!(selectedGuide && showGuides && canInteractWithGuides)) {
@@ -6087,7 +6087,7 @@ export function FloorplanPanel() {
     }
 
     scheduleMovingFloorplanNodeRefresh()
-  }, [hasPendingItemMeshFootprints, scheduleMovingFloorplanNodeRefresh])
+  }, [scheduleMovingFloorplanNodeRefresh])
 
   // Subscribe to the live-transforms store so rotation/position changes that
   // *don't* go through pointer events still refresh the floorplan — e.g. R/T
@@ -6631,7 +6631,7 @@ export function FloorplanPanel() {
     pendingFenceDragRef.current = null
     clearWallEndpointDrag()
     clearWallCurveDrag()
-  }, [clearWallCurveDrag, clearWallEndpointDrag, levelId])
+  }, [clearWallCurveDrag, clearWallEndpointDrag])
 
   useEffect(() => {
     if (shouldShowSiteBoundaryHandles) {

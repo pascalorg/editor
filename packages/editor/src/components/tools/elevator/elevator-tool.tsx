@@ -69,6 +69,10 @@ function createElevatorPreviewGeometry(): THREE.BufferGeometry {
   )
 }
 
+function createElevatorPreviewEdgeGeometry(): THREE.BufferGeometry {
+  return new THREE.EdgesGeometry(createElevatorPreviewGeometry())
+}
+
 function commitElevatorPlacement(
   buildingId: BuildingNode['id'],
   selectedLevelId: LevelNode['id'] | null,
@@ -113,6 +117,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
   const rotationRef = useRef(0)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const previewGeometry = useMemo(() => createElevatorPreviewGeometry(), [])
+  const previewEdgeGeometry = useMemo(() => createElevatorPreviewEdgeGeometry(), [])
 
   useEffect(() => {
     const currentBuildingId = resolveCurrentBuildingId({
@@ -201,12 +206,44 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
     <group>
       <CursorSphere ref={cursorRef} />
       <group ref={previewRef}>
-        <mesh castShadow geometry={previewGeometry}>
-          <meshStandardMaterial color="#38bdf8" depthWrite={false} opacity={0.32} transparent />
+        <mesh geometry={previewGeometry}>
+          <meshStandardMaterial color="#38bdf8" depthWrite={false} opacity={0.12} transparent />
         </mesh>
-        <mesh position={[0, DEFAULT_ELEVATOR_CAB_HEIGHT / 2, -DEFAULT_ELEVATOR_DEPTH / 2 - 0.03]}>
+        <lineSegments geometry={previewEdgeGeometry}>
+          <lineBasicMaterial color="#38bdf8" opacity={0.9} transparent />
+        </lineSegments>
+        <mesh
+          position={[0, -DEFAULT_ELEVATOR_CAB_HEIGHT / 2 + 0.015, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[DEFAULT_ELEVATOR_WIDTH, DEFAULT_ELEVATOR_DEPTH]} />
+          <meshBasicMaterial color="#38bdf8" opacity={0.16} transparent />
+        </mesh>
+        <mesh position={[0, 0, -DEFAULT_ELEVATOR_DEPTH / 2 - 0.01]}>
+          <planeGeometry args={[DEFAULT_ELEVATOR_WIDTH, DEFAULT_ELEVATOR_CAB_HEIGHT]} />
+          <meshBasicMaterial color="#e0f2fe" opacity={0.18} transparent />
+        </mesh>
+        <mesh
+          position={[
+            0,
+            -DEFAULT_ELEVATOR_CAB_HEIGHT / 2 + DEFAULT_ELEVATOR_DOOR_HEIGHT / 2,
+            -DEFAULT_ELEVATOR_DEPTH / 2 - 0.03,
+          ]}
+        >
           <boxGeometry args={[DEFAULT_ELEVATOR_DOOR_WIDTH, DEFAULT_ELEVATOR_DOOR_HEIGHT, 0.035]} />
           <meshStandardMaterial color="#e5e7eb" depthWrite={false} opacity={0.45} transparent />
+        </mesh>
+        <mesh
+          position={[
+            0,
+            -DEFAULT_ELEVATOR_CAB_HEIGHT / 2 + DEFAULT_ELEVATOR_DOOR_HEIGHT / 2,
+            -DEFAULT_ELEVATOR_DEPTH / 2 - 0.049,
+          ]}
+        >
+          <boxGeometry
+            args={[DEFAULT_ELEVATOR_DOOR_WIDTH + 0.14, DEFAULT_ELEVATOR_DOOR_HEIGHT + 0.14, 0.01]}
+          />
+          <meshBasicMaterial color="#38bdf8" opacity={0.5} transparent />
         </mesh>
       </group>
     </group>

@@ -358,7 +358,7 @@ export function FloorplanRegistryMoveOverlay() {
       // plan scene; otherwise we'd react to 3D-canvas moves with garbage
       // plan coords.
       const target = event.target as Element | null
-      if (!target || !target.closest('[data-floorplan-scene]')) return
+      if (!target?.closest('[data-floorplan-scene]')) return
       const m = toMeters(event.clientX, event.clientY)
       if (!m) return
       const [sx, sz] = snapPointToGrid([m[0], m[1]], GRID_STEP)
@@ -371,7 +371,7 @@ export function FloorplanRegistryMoveOverlay() {
     const onPointerUp = (event: PointerEvent) => {
       if (event.button !== 0) return
       const target = event.target as Element | null
-      if (!target || !target.closest('[data-floorplan-scene]')) return
+      if (!target?.closest('[data-floorplan-scene]')) return
 
       const snapped = lastSnapped
       if (snapped) {

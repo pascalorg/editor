@@ -127,11 +127,12 @@ const PostProcessingPasses = ({
 }: {
   hoverStyles?: HoverStyles
 }) => {
-  const { gl: renderer, invalidate, scene, camera } = useThree()
+  const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
   const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const skippedZeroSizeRef = useRef(false)
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current theme so there's no flash on first render.
@@ -207,6 +208,9 @@ const PostProcessingPasses = ({
 
   // Build / rebuild the post-processing pipeline
   useEffect(() => {
+    const width = Math.floor(size.width)
+    const height = Math.floor(size.height)
+
     if (!(renderer && scene && camera)) {
       console.warn('[viewer/post-processing] Skipping pipeline build — missing dependency.', {
         hasRenderer: !!renderer,
@@ -214,6 +218,24 @@ const PostProcessingPasses = ({
         hasCamera: !!camera,
       })
       return
+    }
+
+    if (width < 1 || height < 1) {
+      skippedZeroSizeRef.current = true
+      hasPipelineErrorRef.current = false
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
+      renderPipelineRef.current = null
+      return
+    }
+
+    if (skippedZeroSizeRef.current) {
+      console.log('[viewer/post-processing] Rebuilding pipeline after zero-sized viewport.', {
+        width,
+        height,
+      })
+      skippedZeroSizeRef.current = false
     }
 
     const perfDisable = readPerfDisableFlags()
@@ -230,6 +252,8 @@ const PostProcessingPasses = ({
       hoverHighlightMode,
       projectId,
       rendererCtor: (renderer as any).constructor?.name,
+      width,
+      height,
     })
 
     hasPipelineErrorRef.current = false
@@ -413,10 +437,16 @@ const PostProcessingPasses = ({
     projectId,
     renderer,
     scene,
+    size.height,
+    size.width,
     zoneLayers,
   ])
 
   useFrame((_, delta) => {
+    if (size.width < 1 || size.height < 1) {
+      return
+    }
+
     // Animate background colour toward the current theme target (same lerp as AnimatedBackground)
     bgTarget.current.set(useViewer.getState().theme === 'dark' ? DARK_BG : LIGHT_BG)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)

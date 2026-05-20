@@ -49,6 +49,7 @@ export type ElevatorInteractiveState = {
   phase: ElevatorPhase
   phaseStartedAt: number | null
   queue: AnyNodeId[]
+  requestedStops: AnyNodeId[]
 }
 
 type InteractiveStore = {
@@ -241,6 +242,7 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
           phase: 'idle',
           phaseStartedAt: null,
           queue: [],
+          requestedStops: [],
         },
       },
     }))

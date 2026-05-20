@@ -85,7 +85,7 @@ export const StairEditSystem = () => {
     }
 
     prevActiveStairIds.current = activeStairIds
-  }, [selectedIds, selectedStairSignature])
+  }, [selectedIds])
 
   return null
 }

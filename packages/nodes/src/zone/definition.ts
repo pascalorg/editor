@@ -1,10 +1,10 @@
 import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
+import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,
   zoneMoveEdgeAffordance,
   zoneMoveVertexAffordance,
 } from './floorplan-affordances'
-import { buildZoneFloorplan } from './floorplan'
 import { zoneParametrics } from './parametrics'
 import { ZoneNode } from './schema'
 

@@ -673,7 +673,7 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
       rotationDeltaPos.current.copy(totalPlatformDeltaPos.current)
       characterGroupRef.current.position.add(rotationDeltaPos.current)
       yawQuaternion.current.setFromUnitVectors(upAxis.current, floatHitNormal.current)
-    }, [upAxis])
+    }, [])
 
     const updateCharacterAnimation = useCallback(
       (run: boolean, jump: boolean): CharacterAnimationStatus => {
@@ -756,7 +756,7 @@ const BVHEcctrl = forwardRef<BVHEcctrlApi, EcctrlProps>(
       moveDirRef.current?.position.copy(characterSegment.current.end)
       moveDirRef.current?.setDirection(currentLinVel.current)
       moveDirRef.current?.setLength(currentLinVel.current.length() / maxWalkSpeed)
-    }, [characterSegment, maxWalkSpeed])
+    }, [maxWalkSpeed])
 
     useFrame((_, delta) => {
       elapsedRef.current += delta

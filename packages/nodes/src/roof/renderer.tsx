@@ -1,8 +1,8 @@
 'use client'
 
-import { type RoofNode, useRegistry } from '@pascal-app/core'
+import { type RoofNode, useRegistry, useScene } from '@pascal-app/core'
 import { getRoofMaterialArray, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { roofDebugMaterials, roofMaterials } from './roof-materials'
 
@@ -10,6 +10,9 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
 
   useRegistry(node.id, 'roof', ref)
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
 
   const handlers = useNodeEvents(node, 'roof')
   const debugColors = useViewer((s) => s.debugColors)
