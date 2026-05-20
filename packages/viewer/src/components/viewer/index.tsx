@@ -1,5 +1,6 @@
 'use client'
 
+import { StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
@@ -216,6 +217,9 @@ const Viewer: React.FC<ViewerProps> = ({
             builder, swaps the registered group's children. See
             wiki/architecture/node-definitions.md. */}
         <GeometrySystem />
+        {/* Automated stair opening sync — updates slab/ceiling cutouts
+            whenever stairs, slabs, or levels change. */}
+        <StairOpeningSystem />
         {/* Mounts systems contributed by registry-backed kinds. Each
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}

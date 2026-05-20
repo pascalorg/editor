@@ -1,22 +1,32 @@
-'use client'
-
-import { emitter, type GridEvent, type LevelNode, useScene, type WallNode } from '@pascal-app/core'
+import {
+  calculateLevelMiters,
+  emitter,
+  type GridEvent,
+  getWallMiterBoundaryPoints,
+  type LevelNode,
+  type Point2D,
+  useScene,
+  type WallMiterData,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
+  getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   markToolCancelConsumed,
+  type SegmentAngleReference,
   snapWallDraftPoint,
   triggerSFX,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useRef, useState } from 'react'
-import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 
 /**
  * Phase 5 Stage D — wall placement tool (kind-owned).
@@ -32,13 +42,25 @@ import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from
  * Mounted via `def.tool` from `wall/definition.ts`.
  */
 const WALL_HEIGHT = 2.5
+const DRAFT_WALL_THICKNESS = 0.1
 const DRAFT_LABEL_Y = WALL_HEIGHT + 0.22
-const DRAFT_ANGLE_LABEL_Y = 0.28
+const DRAFT_ANGLE_LABEL_Y = WALL_HEIGHT + 0.08
+const DRAFT_ANGLE_ARC_Y = WALL_HEIGHT + 0.012
+const DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
+const DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
+const DRAFT_ANGLE_ARC_SEGMENTS = 24
 
 type DraftAngleLabel = {
   id: string
   label: string
   position: [number, number, number]
+  arc: {
+    center: WallPlanPoint
+    radius: number
+    startAngle: number
+    endAngle: number
+    y: number
+  }
 }
 
 type DraftMeasurementState = {
@@ -46,6 +68,24 @@ type DraftMeasurementState = {
   lengthPosition: [number, number, number]
   angleLabels: DraftAngleLabel[]
 } | null
+
+type FaceAngleCandidate = {
+  index: number
+  point: WallPlanPoint
+  vector: WallPlanPoint
+}
+
+type FaceAnglePair = {
+  draft: FaceAngleCandidate
+  connected: FaceAngleCandidate
+  distance: number
+}
+
+type AngleSource = {
+  arcCenter: WallPlanPoint
+  connectedVector: WallPlanPoint
+  draftVector: WallPlanPoint
+}
 
 function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
   if (unit === 'imperial') {
@@ -58,13 +98,171 @@ function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
   return `${Number.parseFloat(value.toFixed(2))}m`
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function distanceSquared(a: WallPlanPoint, b: WallPlanPoint) {
+  const dx = a[0] - b[0]
+  const dz = a[1] - b[1]
+
+  return dx * dx + dz * dz
+}
+
+function pointMatches(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-5) {
+  return distanceSquared(a, b) <= tolerance * tolerance
+}
+
+function toWallPlanPoint(point: Point2D): WallPlanPoint {
+  return [point.x, point.y]
+}
+
+function getWallEndpointKind(point: WallPlanPoint, wall: WallNode): 'start' | 'end' | null {
+  if (pointMatches(point, wall.start)) return 'start'
+  if (pointMatches(point, wall.end)) return 'end'
+
+  return null
+}
+
+function buildDraftWall(start: WallPlanPoint, end: WallPlanPoint): WallNode {
+  return {
+    object: 'node',
+    id: 'wall_draft' as WallNode['id'],
+    type: 'wall',
+    name: 'Draft wall',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    start,
+    end,
+    thickness: DRAFT_WALL_THICKNESS,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+  }
+}
+
+function getWallFaceAngleCandidates(
+  point: WallPlanPoint,
+  wall: WallNode,
+  miterData: WallMiterData,
+): FaceAngleCandidate[] {
+  const endpoint = getWallEndpointKind(point, wall)
+  const reference = getSegmentAngleReferenceAtPoint(point, wall)
+  if (!(endpoint && reference)) return []
+
+  const boundaryPoints = getWallMiterBoundaryPoints(wall, miterData)
+  if (!boundaryPoints) return []
+
+  const points =
+    endpoint === 'start'
+      ? [boundaryPoints.startLeft, boundaryPoints.startRight]
+      : [boundaryPoints.endLeft, boundaryPoints.endRight]
+
+  return points.map((facePoint, index) => ({
+    index,
+    point: toWallPlanPoint(facePoint),
+    vector: reference.vector,
+  }))
+}
+
+function getMatchingFaceAnglePairs(
+  draftCandidates: FaceAngleCandidate[],
+  connectedCandidates: FaceAngleCandidate[],
+) {
+  const candidates: FaceAnglePair[] = []
+
+  for (const draftCandidate of draftCandidates) {
+    for (const connectedCandidate of connectedCandidates) {
+      candidates.push({
+        draft: draftCandidate,
+        connected: connectedCandidate,
+        distance: distanceSquared(draftCandidate.point, connectedCandidate.point),
+      })
+    }
+  }
+
+  candidates.sort((a, b) => a.distance - b.distance)
+
+  const exactPairs = candidates.filter((pair) => pair.distance <= 1e-6)
+  const sourcePairs = exactPairs.length > 0 ? exactPairs : candidates.slice(0, 1)
+  const usedDraftIndexes = new Set<number>()
+  const usedConnectedIndexes = new Set<number>()
+  const pairs: FaceAnglePair[] = []
+
+  for (const pair of sourcePairs) {
+    if (usedDraftIndexes.has(pair.draft.index) || usedConnectedIndexes.has(pair.connected.index)) {
+      continue
+    }
+
+    usedDraftIndexes.add(pair.draft.index)
+    usedConnectedIndexes.add(pair.connected.index)
+    pairs.push(pair)
+
+    if (pairs.length === 2) break
+  }
+
+  return pairs
+}
+
+function getAngleSource(
+  endpointPoint: WallPlanPoint,
+  endpointDraftVector: WallPlanPoint,
+  connectedReference: SegmentAngleReference,
+  facePairs: FaceAnglePair[],
+): AngleSource {
+  if (facePairs.length === 0) {
+    return {
+      arcCenter: endpointPoint,
+      connectedVector: connectedReference.vector,
+      draftVector: endpointDraftVector,
+    }
+  }
+
+  const arc = getAngleArcToSegmentReference(endpointDraftVector, connectedReference)
+  const angleDirection: WallPlanPoint = arc
+    ? [Math.cos(arc.midAngle), Math.sin(arc.midAngle)]
+    : [endpointDraftVector[0], endpointDraftVector[1]]
+  const bestPair =
+    facePairs
+      .map((pair) => {
+        const arcCenter: WallPlanPoint = [
+          (pair.draft.point[0] + pair.connected.point[0]) / 2,
+          (pair.draft.point[1] + pair.connected.point[1]) / 2,
+        ]
+        const fromEndpoint: WallPlanPoint = [
+          arcCenter[0] - endpointPoint[0],
+          arcCenter[1] - endpointPoint[1],
+        ]
+
+        return {
+          arcCenter,
+          pair,
+          score: fromEndpoint[0] * angleDirection[0] + fromEndpoint[1] * angleDirection[1],
+        }
+      })
+      .sort((a, b) => b.score - a.score)[0]?.pair ?? facePairs[0]!
+
+  return {
+    arcCenter: [
+      (bestPair.draft.point[0] + bestPair.connected.point[0]) / 2,
+      (bestPair.draft.point[1] + bestPair.connected.point[1]) / 2,
+    ],
+    connectedVector: bestPair.connected.vector,
+    draftVector: bestPair.draft.vector,
+  }
+}
+
 function getDraftAngleLabels(
   start: WallPlanPoint,
   end: WallPlanPoint,
   walls: WallNode[],
+  baseY: number,
 ): DraftAngleLabel[] {
   const draftFromStart: WallPlanPoint = [end[0] - start[0], end[1] - start[1]]
   const draftFromEnd: WallPlanPoint = [start[0] - end[0], start[1] - end[1]]
+  const draftWall = buildDraftWall(start, end)
+  const miterData = calculateLevelMiters([...walls, draftWall])
   const endpoints = [
     { id: 'start', point: start, draftVector: draftFromStart },
     { id: 'end', point: end, draftVector: draftFromEnd },
@@ -78,12 +276,52 @@ function getDraftAngleLabels(
     if (!connectedWall) continue
     const connectedReference = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
     if (!connectedReference) continue
-    const angle = getAngleToSegmentReference(endpoint.draftVector, connectedReference)
+
+    const draftFaceCandidates = getWallFaceAngleCandidates(endpoint.point, draftWall, miterData)
+    const connectedFaceCandidates = getWallFaceAngleCandidates(
+      endpoint.point,
+      connectedWall,
+      miterData,
+    )
+    const facePairs = getMatchingFaceAnglePairs(draftFaceCandidates, connectedFaceCandidates)
+    const { arcCenter, connectedVector, draftVector } = getAngleSource(
+      endpoint.point,
+      endpoint.draftVector,
+      connectedReference,
+      facePairs,
+    )
+    const angle = getAngleToSegmentReference(draftVector, {
+      ...connectedReference,
+      vector: connectedVector,
+    })
     if (angle === null) continue
+    const arc = getAngleArcToSegmentReference(draftVector, {
+      ...connectedReference,
+      vector: connectedVector,
+    })
+    if (!arc || arc.angle < 0.01) continue
+    const draftLength = Math.hypot(draftVector[0], draftVector[1])
+    const referenceLength = Math.hypot(connectedVector[0], connectedVector[1])
+    const radius = clamp(
+      Math.min(draftLength, referenceLength) * 0.28,
+      DRAFT_ANGLE_ARC_MIN_RADIUS,
+      DRAFT_ANGLE_ARC_MAX_RADIUS,
+    )
     labels.push({
       id: endpoint.id,
       label: formatAngleRadians(angle),
-      position: [endpoint.point[0], DRAFT_ANGLE_LABEL_Y, endpoint.point[1]],
+      position: [
+        arcCenter[0] + Math.cos(arc.midAngle) * (radius + 0.16),
+        baseY + DRAFT_ANGLE_LABEL_Y,
+        arcCenter[1] + Math.sin(arc.midAngle) * (radius + 0.16),
+      ],
+      arc: {
+        center: arcCenter,
+        radius,
+        startAngle: arc.startAngle,
+        endAngle: arc.endAngle,
+        y: baseY + DRAFT_ANGLE_ARC_Y,
+      },
     })
   }
 
@@ -95,6 +333,7 @@ function getDraftMeasurementState(
   end: WallPlanPoint,
   walls: WallNode[],
   unit: 'metric' | 'imperial',
+  baseY: number,
 ): DraftMeasurementState {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
@@ -102,8 +341,8 @@ function getDraftMeasurementState(
   if (length < 0.01) return null
   return {
     lengthLabel: formatMeasurement(length, unit),
-    lengthPosition: [(start[0] + end[0]) / 2, DRAFT_LABEL_Y, (start[1] + end[1]) / 2],
-    angleLabels: getDraftAngleLabels(start, end, walls),
+    lengthPosition: [(start[0] + end[0]) / 2, baseY + DRAFT_LABEL_Y, (start[1] + end[1]) / 2],
+    angleLabels: getDraftAngleLabels(start, end, walls, baseY),
   }
 }
 
@@ -117,20 +356,15 @@ function updateWallPreview(mesh: Mesh, start: Vector3, end: Vector3) {
   mesh.visible = true
   direction.normalize()
 
-  const shape = new Shape()
-  shape.moveTo(0, 0)
-  shape.lineTo(length, 0)
-  shape.lineTo(length, WALL_HEIGHT)
-  shape.lineTo(0, WALL_HEIGHT)
-  shape.closePath()
+  const geometry = new BoxGeometry(length, WALL_HEIGHT, DRAFT_WALL_THICKNESS)
+  const angle = Math.atan2(direction.z, direction.x)
 
-  const geometry = new ShapeGeometry(shape)
-  const angle = -Math.atan2(direction.z, direction.x)
+  mesh.position.set((start.x + end.x) / 2, start.y + WALL_HEIGHT / 2, (start.z + end.z) / 2)
+  mesh.rotation.y = -angle
 
-  mesh.position.set(start.x, start.y, start.z)
-  mesh.rotation.y = angle
-
-  if (mesh.geometry) mesh.geometry.dispose()
+  if (mesh.geometry) {
+    mesh.geometry.dispose()
+  }
   mesh.geometry = geometry
 }
 
@@ -147,6 +381,7 @@ function getCurrentLevelWalls(): WallNode[] {
 
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
+  const theme = useViewer((state) => state.theme)
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -154,10 +389,18 @@ export const WallTool: React.FC = () => {
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  const measurementColor = theme === 'dark' ? '#ffffff' : '#111111'
+  const measurementShadowColor = theme === 'dark' ? '#111111' : '#ffffff'
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
     let previousWallEnd: [number, number] | null = null
+
+    const stopDrafting = () => {
+      buildingState.current = 0
+      wallPreviewRef.current.visible = false
+      setDraftMeasurement(null)
+    }
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
@@ -192,6 +435,7 @@ export const WallTool: React.FC = () => {
             snappedLocal,
             walls,
             unit,
+            startingPoint.current.y,
           ),
         )
       } else {
@@ -201,6 +445,11 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+        stopDrafting()
+        return
+      }
+
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
@@ -222,9 +471,18 @@ export const WallTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
-        createWallOnCurrentLevel([startingPoint.current.x, startingPoint.current.z], snappedEnd)
-        wallPreviewRef.current.visible = false
-        buildingState.current = 0
+        // Both start and end are building-local ✓
+        const createdWall = createWallOnCurrentLevel(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedEnd,
+        )
+        if (!createdWall) return
+
+        const nextStart = createdWall.end
+        startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
+        endingPoint.current.copy(startingPoint.current)
+        cursorRef.current?.position.copy(startingPoint.current)
+        buildingState.current = 1
         setDraftMeasurement(null)
       }
     }
@@ -240,9 +498,7 @@ export const WallTool: React.FC = () => {
     const onCancel = () => {
       if (buildingState.current === 1) {
         markToolCancelConsumed()
-        buildingState.current = 0
-        wallPreviewRef.current.visible = false
-        setDraftMeasurement(null)
+        stopDrafting()
       }
     }
 
@@ -278,15 +534,21 @@ export const WallTool: React.FC = () => {
       {draftMeasurement && (
         <>
           <DraftMeasurementLabel
+            color={measurementColor}
             label={draftMeasurement.lengthLabel}
             position={draftMeasurement.lengthPosition}
+            shadowColor={measurementShadowColor}
           />
           {draftMeasurement.angleLabels.map((angleLabel) => (
-            <DraftMeasurementLabel
-              key={angleLabel.id}
-              label={angleLabel.label}
-              position={angleLabel.position}
-            />
+            <group key={angleLabel.id}>
+              <DraftAngleArc arc={angleLabel.arc} color={measurementColor} />
+              <DraftMeasurementLabel
+                color={measurementColor}
+                label={angleLabel.label}
+                position={angleLabel.position}
+                shadowColor={measurementShadowColor}
+              />
+            </group>
           ))}
         </>
       )}
@@ -294,16 +556,67 @@ export const WallTool: React.FC = () => {
   )
 }
 
+function DraftAngleArc({ arc, color }: { arc: DraftAngleLabel['arc']; color: string }) {
+  const geometry = useMemo(() => {
+    const segmentCount = Math.max(
+      8,
+      Math.ceil((Math.abs(arc.endAngle - arc.startAngle) / Math.PI) * DRAFT_ANGLE_ARC_SEGMENTS),
+    )
+
+    const points = Array.from({ length: segmentCount + 1 }, (_, index) => {
+      const t = index / segmentCount
+      const angle = arc.startAngle + (arc.endAngle - arc.startAngle) * t
+
+      return new Vector3(
+        arc.center[0] + Math.cos(angle) * arc.radius,
+        arc.y,
+        arc.center[1] + Math.sin(angle) * arc.radius,
+      )
+    })
+
+    return new BufferGeometry().setFromPoints(points)
+  }, [arc])
+
+  return (
+    // @ts-expect-error - R3F accepts Three line primitives, matching the other editor drawing tools.
+    <line frustumCulled={false} geometry={geometry} layers={EDITOR_LAYER} renderOrder={2}>
+      <lineBasicNodeMaterial
+        color={color}
+        depthTest={false}
+        depthWrite={false}
+        linewidth={2}
+        opacity={0.95}
+        transparent
+      />
+    </line>
+  )
+}
+
 function DraftMeasurementLabel({
+  color,
   label,
   position,
+  shadowColor,
 }: {
+  color: string
   label: string
   position: [number, number, number]
+  shadowColor: string
 }) {
   return (
-    <Html center position={position} style={{ pointerEvents: 'none' }} zIndexRange={[100, 0]}>
-      <div className="whitespace-nowrap rounded-full border border-border bg-background/95 px-2 py-1 font-mono font-semibold text-[11px] text-foreground shadow-lg backdrop-blur-md">
+    <Html
+      center
+      position={position}
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+      zIndexRange={[100, 0]}
+    >
+      <div
+        className="whitespace-nowrap font-bold font-mono text-[15px]"
+        style={{
+          color,
+          textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
+        }}
+      >
         {label}
       </div>
     </Html>

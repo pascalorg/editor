@@ -14,7 +14,7 @@ export type FloorplanActionMenuHandler = (event: ReactMouseEvent<HTMLButtonEleme
 export type FloorplanActionMenuEntry = {
   position: SvgPoint | null
   onDelete: FloorplanActionMenuHandler
-  onMove: FloorplanActionMenuHandler
+  onMove?: FloorplanActionMenuHandler
   onAddHole?: FloorplanActionMenuHandler
   onCurve?: FloorplanActionMenuHandler
   onDuplicate?: FloorplanActionMenuHandler
