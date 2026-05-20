@@ -116,11 +116,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       {/* Render children (buildings and items) */}
-      {node.children.map((child) => (
-        <NodeRenderer
-          key={typeof child === 'string' ? child : child.id}
-          nodeId={typeof child === 'string' ? child : child.id}
-        />
+      {node.children.map((childId) => (
+        <NodeRenderer key={childId} nodeId={childId} />
       ))}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}

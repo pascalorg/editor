@@ -439,7 +439,7 @@ export function selectDefaultBuildingAndLevel() {
     const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
     if (siteNode?.type === 'site') {
       const firstBuilding = siteNode.children
-        .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
+        .map((childId) => scene.nodes[childId as AnyNodeId])
         .find((node) => node?.type === 'building')
       if (firstBuilding) {
         buildingId = firstBuilding.id as BuildingNode['id']
