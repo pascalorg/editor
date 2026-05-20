@@ -1,4 +1,5 @@
 export type {
+  BoxVentEvent,
   BuildingEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,

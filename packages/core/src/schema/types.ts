@@ -1,4 +1,5 @@
 import z from 'zod'
+import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
 import { ColumnNode } from './nodes/column'
@@ -43,6 +44,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   SpawnNode,
   WindowNode,
   DoorNode,
+  BoxVentNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>

@@ -24,6 +24,7 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export { BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
 export {

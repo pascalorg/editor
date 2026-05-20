@@ -2,6 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BoxVentNode,
   BuildingNode,
   CeilingNode,
   ColumnNode,
@@ -80,6 +81,7 @@ export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
+export type BoxVentEvent = NodeEvent<BoxVentNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -213,6 +215,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &
   NodeEvents<'guide', GuideEvent> &
+  NodeEvents<'box-vent', BoxVentEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &
