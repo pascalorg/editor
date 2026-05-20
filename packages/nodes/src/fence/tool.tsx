@@ -509,27 +509,7 @@ export const FenceTool: React.FC = () => {
         const nextStart = createdFence.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
-        cursorRef.current.position.copy(startingPoint.current)
-        previewRef.current.visible = false
-        buildingState.current = 1
-        setDraftMeasurement(null)
-      }
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-    }
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-
-    const onCancel = () => {
-      if (buildingState.current === 1) {
-        markToolCancelConsumed()
-        stopDrafting()
-      }
-    }
+        cursorRef.current?.position.copy(startingPoint.current)
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)

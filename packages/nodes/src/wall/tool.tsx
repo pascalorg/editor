@@ -481,8 +481,7 @@ export const WallTool: React.FC = () => {
         const nextStart = createdWall.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
-        cursorRef.current.position.copy(startingPoint.current)
-        wallPreviewRef.current.visible = false
+        cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
         setDraftMeasurement(null)
       }
