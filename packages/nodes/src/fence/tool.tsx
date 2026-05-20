@@ -20,6 +20,7 @@ import {
   EDITOR_LAYER,
   type FencePlanPoint,
   formatAngleRadians,
+  formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -92,17 +93,6 @@ type AngleSource = {
   arcCenter: FencePlanPoint
   connectedVector: FencePlanPoint
   draftVector: FencePlanPoint
-}
-
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -365,7 +355,7 @@ function getDraftMeasurementState(
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatMeasurement(length, unit),
+    lengthLabel: formatLinearMeasurement(length, unit),
     lengthPosition: [
       (start[0] + end[0]) / 2,
       baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
