@@ -34,17 +34,12 @@ export const tools: ToolConfig[] = [
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
   { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
-  // Roof-mounted accessories — placement tools are registry-driven
-  // (`def.tool` on each kind's `NodeDefinition`). Each tool listens
-  // for `roof:*` events, so clicking these palette buttons and then
-  // clicking on a roof segment commits a new node parented to that
-  // segment.
-  { id: 'box-vent', iconSrc: '/icons/roof.png', label: 'Box Vent' },
-  { id: 'ridge-vent', iconSrc: '/icons/roof.png', label: 'Ridge Vent' },
-  { id: 'chimney', iconSrc: '/icons/roof.png', label: 'Chimney' },
-  { id: 'solar-panel', iconSrc: '/icons/roof.png', label: 'Solar Panel' },
-  { id: 'skylight', iconSrc: '/icons/roof.png', label: 'Skylight' },
-  { id: 'dormer', iconSrc: '/icons/roof.png', label: 'Dormer' },
+  // Roof-mounted accessories (box-vent / ridge-vent / chimney /
+  // solar-panel / skylight / dormer) are intentionally NOT in the top
+  // palette — they only make sense in the context of a selected roof.
+  // The roof inspector's "Add element" section is the entry point
+  // (`packages/nodes/src/roof/panel.tsx`), which activates the same
+  // registry-driven placement tools via `setTool(kind)`.
 ]
 
 export function StructureTools() {
