@@ -22,6 +22,7 @@ export type {
   ShelfEvent,
   SiteEvent,
   SlabEvent,
+  SolarPanelEvent,
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,

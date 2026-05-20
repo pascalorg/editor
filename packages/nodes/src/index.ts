@@ -3,6 +3,7 @@ import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { chimneyDefinition } from './chimney'
 import { ridgeVentDefinition } from './ridge-vent'
+import { solarPanelDefinition } from './solar-panel'
 import { ceilingDefinition } from './ceiling'
 import { columnDefinition } from './column'
 import { doorDefinition } from './door'
@@ -72,6 +73,7 @@ export const builtinPlugin: Plugin = {
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
     chimneyDefinition as unknown as AnyNodeDefinition,
+    solarPanelDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -79,6 +81,7 @@ export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export { chimneyDefinition } from './chimney'
 export { ridgeVentDefinition } from './ridge-vent'
+export { solarPanelDefinition } from './solar-panel'
 export { ceilingDefinition } from './ceiling'
 export { columnDefinition } from './column'
 export { doorDefinition } from './door'

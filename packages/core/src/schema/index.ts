@@ -78,6 +78,16 @@ export { ScanNode } from './nodes/scan'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'
 export { ShelfNode } from './nodes/shelf'
+export {
+  SolarPanelMaterialRole,
+  SolarPanelNode,
+} from './nodes/solar-panel'
+export {
+  SOLAR_PANEL_PRESET_LABELS,
+  SOLAR_PANEL_PRESETS,
+  type SolarPanelPresetDims,
+  SolarPanelPresetKey,
+} from '../solar-panel-presets'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
 export { SpawnNode } from './nodes/spawn'

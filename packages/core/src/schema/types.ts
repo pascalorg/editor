@@ -15,6 +15,7 @@ import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
 import { ShelfNode } from './nodes/shelf'
+import { SolarPanelNode } from './nodes/solar-panel'
 import { SiteNode } from './nodes/site'
 import { SlabNode } from './nodes/slab'
 import { SpawnNode } from './nodes/spawn'
@@ -49,6 +50,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   BoxVentNode,
   RidgeVentNode,
   ChimneyNode,
+  SolarPanelNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>
