@@ -79,6 +79,16 @@ export { ScanNode } from './nodes/scan'
 export { RidgeVentNode } from './nodes/ridge-vent'
 export { ShelfNode } from './nodes/shelf'
 export {
+  SKYLIGHT_TYPE_ORDER,
+  SKYLIGHT_TYPE_PRESETS,
+  SkylightMaterialRole,
+  SkylightNode,
+  SkylightOpeningSide,
+  SkylightSlideDirection,
+  type SkylightTypePreset,
+  SkylightType,
+} from './nodes/skylight'
+export {
   SolarPanelMaterialRole,
   SolarPanelNode,
 } from './nodes/solar-panel'

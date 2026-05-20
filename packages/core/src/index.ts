@@ -21,6 +21,7 @@ export type {
   ScanEvent,
   ShelfEvent,
   SiteEvent,
+  SkylightEvent,
   SlabEvent,
   SolarPanelEvent,
   SpawnEvent,
