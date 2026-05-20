@@ -1,6 +1,6 @@
 ---
 name: review-architecture
-description: Review a PR against the Pascal architectural rules — layer boundaries (core/viewer/editor), systems/renderers/tools separation, hook hygiene (useEditor/useScene/useViewer), and selector performance. Use when the user asks to review a PR, audit a branch, or check that changes respect the codebase's architecture.
+description: Review a PR against the Pascal architectural rules — package boundaries (core/viewer/editor/nodes), the registry-driven composition model (def.geometry / def.renderer / def.system), legacy-dispatch regressions, hook hygiene (useEditor/useScene/useViewer), and selector performance. Use when the user asks to review a PR, audit a branch, or check that changes respect the codebase's architecture.
 allowed-tools: Bash(git *) Bash(gh *) Read Grep Glob
 ---
 
@@ -10,18 +10,23 @@ Architectural review for Pascal PRs. The user will provide a PR URL, branch name
 
 Read these before reviewing any diff. They are the source of truth, not your training data:
 
+- `wiki/architecture/layers.md`
 - `wiki/architecture/systems.md` — core systems vs viewer systems, what each may do
 - `wiki/architecture/renderers.md` — renderer responsibilities and prohibitions
-- `wiki/architecture/tools.md` — editor tools live only in `apps/editor/components/tools/`
+- `wiki/architecture/tools.md` — editor tools live only in `apps/editor/components/tools/` or `packages/nodes/src/<kind>/`
 - `wiki/architecture/viewer-isolation.md` — viewer must stay editor-agnostic
-- `wiki/architecture/layers.md`
+- `wiki/architecture/node-definitions.md` — the three-checkbox composition model (`geometry` / `renderer` / `system`)
+- `wiki/architecture/plugin-authoring.md` — public contract for external node packs
+
+Required on every review. Read the remaining pages on demand when the diff touches their subject area:
+
 - `wiki/architecture/selection-managers.md`
 - `wiki/architecture/scene-registry.md`
 - `wiki/architecture/spatial-queries.md`
 - `wiki/architecture/node-schemas.md`
 - `wiki/architecture/events.md`
 
-Only the first four are required on every review; read the rest when the diff touches their subject area.
+If anything in the diff looks like a new dispatch surface or registry concept, also skim the live charter at `plans/editor-node-registry.md` (in the private-editor repo) — it owns the current contract and which kind sits at which migration stage.
 
 ## 2. Fetch the diff
 
@@ -43,59 +48,89 @@ git diff --name-only main...HEAD
 
 ## 3. Layer classification — do this BEFORE the checklist
 
-For every new file, new type, new store field, or new exported helper introduced by the diff, answer one question: **which layer does this belong to — core, viewer, or editor?** If the answer is "editor" but the code lives in `packages/core` or `packages/viewer` (or vice versa), flag it as a **blocker**. This is the most common and most damaging class of violation, and the checklist below won't reliably catch it on its own — do this pass explicitly.
+For every new file, new type, new store field, or new exported helper introduced by the diff, answer one question: **which package does this belong to — `core`, `viewer`, `editor`, or `nodes`?** If the answer is "editor" but the code lives in `packages/core` or `packages/viewer` (or vice versa), or if kind-specific code lands anywhere other than `packages/nodes/src/<kind>/`, flag it as a **blocker**. This is the most common and most damaging class of violation, and the checklist below won't reliably catch it on its own — do this pass explicitly.
 
-### The three layers and what they own
+### The four packages and what they own
 
 **`packages/core` — domain data + pure logic.**
-Owns: node schemas, the scene store (`useScene`), live transforms store, core systems (wall mitering, slab polygons, space detection), event bus, plain 2D/3D math helpers, `sceneRegistry`. Consumed by every downstream package, including read-only embeds. Must not know about: Three.js/R3F, `packages/viewer`, `apps/editor`, any rendering or UI concept, any tool/mode/phase concept, or any *view*-specific concept (floorplan, paint preview, cursor indicators, selection outline styling, etc.).
+Owns: node schemas, the scene store (`useScene`), live transforms store, core systems (wall mitering, slab polygons, space detection), event bus, plain 2D/3D math helpers, `sceneRegistry`, the registry primitives (`nodeRegistry`, `registerNode`, `loadPlugin`, `discoverPlugins`/`setPluginDiscovery`, `SceneApi`, `Plugin`/`NodeDefinition` types). Consumed by every downstream package, including read-only embeds. Must not know about: Three.js/R3F, `packages/viewer`, `apps/editor`, `packages/nodes`, any rendering or UI concept, any tool/mode/phase concept, or any *view*-specific concept (floorplan, paint preview, cursor indicators, selection outline styling).
 
 **`packages/viewer` — the 3D canvas, shippable standalone.**
-Owns: `<Viewer>`, renderers, viewer systems (cutouts, zones, level positions, scans), the viewer store (`useViewer`) *for genuine presentation state only* (selection path, camera/level/wall/view modes, theme, display toggles, hover id). Consumed by both the editor and the read-only `/viewer/[id]` route. Must not know about: editor state (`useEditor`, tools, phases, modes), editor-only names baked into presentation modes (`'delete'`, `'paint-ready'`), editor-only state types (material preview, active paint target, floorplan anything).
+Owns: `<Viewer>`, the generic `<NodeRenderer>` / `<ParametricNodeRenderer>` / `<GeometrySystem>` / `<RegisteredSystems>` / `<FloorplanRegistryLayer>` plumbing, viewer systems (cutouts, zones, level positions, scans), the viewer store (`useViewer`) *for genuine presentation state only* (selection path, camera/level/wall/view modes, theme, display toggles, hover id), `useNodeEvents`. Consumed by both the editor and the read-only `/viewer/[id]` route. Must not know about: editor state (`useEditor`, tools, phases, modes), editor-only names baked into presentation modes (`'delete'`, `'paint-ready'`), editor-only state types (material preview, active paint target, floorplan anything), `packages/nodes`.
 
-**`apps/editor` (and editor-scoped packages) — the editing experience.**
-Owns: tools, `useEditor`, action menus, panels, the floorplan panel and its helpers, paint mode, selection-manager phase/mode logic, cursor badges, command palette, keyboard shortcuts — anything absent from the read-only viewer route. Injects itself into `<Viewer>` via children and props, never the reverse.
+**`packages/editor` (and `apps/editor`) — the editing experience.**
+Owns: the tool framework (`useDragAction`, `ParametricInspector`, `<MoveRegistryNodeTool>`, the registry-aware dispatchers in `tool-manager.tsx` / `MoveTool` / `panel-manager.tsx` / `helper-manager.tsx`), `useEditor`, action menus, panels, the floorplan panel and its helpers, paint mode, selection-manager phase/mode logic, cursor badges, command palette, keyboard shortcuts — anything absent from the read-only viewer route. Injects itself into `<Viewer>` via children and props, never the reverse. Must not import from `packages/nodes`.
 
-### Five triggers that mean "this is probably editor"
+**`packages/nodes` — the built-in plugin (`pascal:core`).**
+Owns: one folder per node kind (`packages/nodes/src/<kind>/`) containing `definition.ts`, `schema.ts`, optionally `geometry.ts` / `renderer.tsx` / `system.tsx` / `floorplan.ts` / `tool.tsx` / `move-tool.tsx` / `panel.tsx` / `parametrics.ts` / `preview.tsx`. Exports `builtinPlugin`. Depends on `editor`, `viewer`, and `core` via their public surfaces — the same surfaces a third-party plugin uses (peer-dep style). **Nothing in `core/`, `viewer/`, or `editor/` may import from `@pascal-app/nodes`.** The dependency arrow is one-way: framework code consults `nodeRegistry`, never reaches into a specific kind's folder.
 
-1. **Would the read-only `/viewer/[id]` route need this?** If no, it belongs in `apps/editor`.
+### Triggers that mean "this is probably in the wrong package"
+
+1. **Would the read-only `/viewer/[id]` route need this?** If no, it belongs in `apps/editor` / `packages/editor`.
 2. **Does the name contain an editor-specific word?** (`Floorplan`, `Paint…`, `Draft…`, `Marquee`, `CursorBadge`, `HoverMode`, `…Tool`, `Moving…`, `Curving…`.) Default to editor and justify loudly if it's anywhere else.
 3. **Does the type or field reference a tool/mode/phase vocabulary?** (`'delete'`, `'paint-ready'`, `'material-paint'`, `'site'`/`'structure'`/`'furnish'`, `'build'`/`'edit'`.) Belongs in `useEditor`, not `useViewer` or core.
 4. **Does the helper compute something only a 2D editor view needs?** (Floorplan transforms, measurement offsets, SVG path builders, marquee bounds scoped to floorplan.) Editor. Generic 2D geometry that any view could use (polygon math, rotation, clamping, line thickening) can live in core *as long as its names are generic* — no `Floorplan` prefix.
 5. **Does a new store field have a setter that no part of the target layer ever calls?** (e.g. `setMaterialPreview` in `useViewer` that only the editor would ever invoke.) That's a layering smell — the state belongs in the caller's layer.
+6. **Does the new file mention a specific kind by name?** (`door-…`, `wall-…`, `item-…`, etc.) Then it belongs in `packages/nodes/src/<kind>/`, **not** under `packages/viewer/src/components/renderers/<kind>/`, `packages/viewer/src/systems/<kind>.ts`, `packages/editor/src/components/tools/<kind>/`, or `packages/editor/src/components/ui/panels/<kind>-panel.tsx`. Those legacy locations were deleted at Phase 6 cleanup — reintroducing one is a regression to the dispatch model.
+7. **Does an `import` line read `from '@pascal-app/nodes'` inside `core/`, `viewer/`, or `editor/`?** Blocker. The Biome `noRestrictedImports` rule already bans this; if it slipped through, the framework is reaching down into the plugin.
 
-Write the classification down before writing findings. If core gains "Floorplan" types, or the viewer gains paint-mode vocabulary, or a renderer grows editor awareness — those are the blockers to lead with, not downstream symptoms.
+Write the classification down before writing findings. If core gains "Floorplan" types, the viewer gains paint-mode vocabulary, a renderer grows editor awareness, or a kind-specific file appears outside `packages/nodes/src/<kind>/` — those are the blockers to lead with, not downstream symptoms.
 
 ## 4. Review checklist
 
-### A. Layer boundaries
-- `packages/viewer/**` does not import from `apps/editor` or reference `useEditor`, tool state, phase, or mode.
-- `packages/core/**` does not import Three.js, react-three-fiber, or anything from `packages/viewer` / `apps/editor`.
+### A. Package boundaries
+
+- `packages/viewer/**` does not import from `@pascal-app/editor`, `apps/editor`, or `@pascal-app/nodes`, and does not reference `useEditor`, tool state, phase, or mode.
+- `packages/core/**` does not import Three.js, react-three-fiber, `@pascal-app/viewer`, `@pascal-app/editor`, or `@pascal-app/nodes`.
+- `packages/editor/**` does not import from `@pascal-app/nodes`.
 - `packages/core/**` does not introduce types or helpers named after an editor view (`Floorplan*`, `Paint*`, `Draft*`). Generic plan-geometry helpers are fine; view-specific vocabulary is not.
-- Renderers contain no geometry generation or domain logic — that belongs in a system.
+- No new `case '<kind>':` clauses (or equivalent kind-specific branching keyed on `node.type`) inside `packages/viewer/**` or `packages/editor/**`. Phase 6 deleted these; the dispatch happens via `nodeRegistry`. The exceptions left in tree are `treeNodeByType` (a lookup *map*, not a switch) and unit-formatting switches (`centimeters` / `feet` / `inches`). Any new `case 'door'|'wall'|'item'…` in a framework package is a blocker — the behavior belongs on the kind's `NodeDefinition`.
 - Tools mutate `useScene` (committed state) and `useLiveTransforms` (ephemeral drag state); direct `sceneRegistry` mesh transforms are allowed only under the live-drag exception in `wiki/architecture/tools.md`. No business logic, no imports from `packages/viewer`.
 
-### B. Hook hygiene (`useEditor`, `useScene`, `useViewer`)
+### B. Node registry & composition (`packages/nodes`)
+
+If the PR adds or modifies a node kind, check against `wiki/architecture/node-definitions.md` and `wiki/architecture/plugin-authoring.md`:
+
+- **Three independent fields**: `def.geometry?: (node, ctx) => Object3D`, `def.renderer?: () => Promise<{ default }>`, `def.system?: () => Promise<{ default }>`. There is no discriminator — presence is participation. Setting all three is fine if the kind genuinely needs them; setting a `def.system` whose only job is to rebuild geometry on dirty is a smell — collapse to `def.geometry` and let `<GeometrySystem>` do the work.
+- **Builders must be pure.** A `def.geometry` function must not import `useScene`, must not mutate the store, and must not depend on React context. Read other nodes via `GeometryContext` (`ctx.resolve` / `ctx.children` / `ctx.siblings` / `ctx.parent`).
+- **Builders emit local-space children.** `<ParametricNodeRenderer>` binds `<group position={liveTransform?.position ?? node.position}>` in JSX. A builder that bakes world position into vertex coords, or a system that imperatively writes `group.position` / `group.rotation`, will desync R3F's prop binding — the node will snap to `(0,0,0)` after rebuild. Flag any imperative `group.position.set(...)` inside `def.geometry` or a registered system. (Tool-driven `sceneRegistry.nodes.get(id).position.set(...)` during a live drag is fine and is the documented pattern — see hook hygiene below.)
+- **Tag geometry-built children.** `<GeometrySystem>` only disposes children carrying `userData.__fromGeometry = true`. Custom systems that imperatively add children to a registered group must follow the same convention if the group can host React-mounted children (e.g. shelf surfaces hosting items).
+- **One registered mesh per node ID.** If a custom renderer mounts multiple objects, register the parent group (or whichever object the system needs to address via `sceneRegistry.nodes.get(id)`).
+- **Previews must clone cached materials.** If `def.preview` calls the geometry builder and then sets `material.opacity = 0.5`, but the builder caches materials at module scope (most do, keyed on `material` / `materialPreset`), the mutation leaks into every committed instance. Clone, mutate the clone, reassign `mesh.material`, dispose only the clone on unmount. Reference: `nodes/src/shelf/preview.tsx`.
+- **Host kinds need `children` on the schema.** If `def.relations.hosts` is set, the schema must declare `children: z.array(z.string()).default([])` (and `migrateNodes` must patch existing scenes). Otherwise `useScene.createNode(child, parentId)` writes a `parent.children` entry into nothing and the host never sees the new child.
+- **Movable opt-in.** `MoveTool` dispatches to `MoveRegistryNodeTool` only when `def.capabilities.movable` is set. Kinds with bespoke move semantics (wall endpoint drag with linked-wall cascade, slab vertex edit, etc.) deliberately omit `movable` and supply `def.affordanceTools.move` instead. Force-routing a bespoke-move kind through generic dispatch (`nodeRegistry.has(kind)` instead of `def.capabilities.movable`) is a regression — call it out. The bug history is documented in `plans/editor-node-registry.md` ("Capability-driven move dispatch").
+- **Per-kind files in legacy locations are a regression.** New `viewer/src/components/renderers/<kind>/*`, `viewer/src/systems/<kind>-system.tsx`, `editor/src/components/tools/<kind>/*`, `editor/src/components/ui/panels/<kind>-panel.tsx`, `editor/src/components/ui/helpers/<kind>-helper.tsx`, or inline `useMemo` floor-plan entry-builders inside `editor/src/components/editor/floorplan-panel.tsx` — all of these were systematically deleted at Phase 6. The behavior belongs on the kind's `NodeDefinition` (`def.renderer` / `def.system` / `def.geometry` / `def.tool` / `def.affordanceTools` / `parametrics.customPanel` / `def.toolHints` / `def.floorplan`).
+- **Floor-plan output via `def.floorplan`.** New per-kind floor-plan rendering must return `FloorplanGeometry` from `def.floorplan(node, ctx)` and be rendered by `<FloorplanRegistryLayer>`. New inline branches in `floorplan-panel.tsx` are a blocker.
+- **Plugin contract surface.** A PR that extends the v1 plugin surface — adding `plugin.materials`, `plugin.systems`, `plugin.panels`, or making plugins extend host stores (`useScene` / `useEditor` / `useViewer`) — is out of scope for the v1 contract documented in `wiki/architecture/plugin-authoring.md`. Either the change belongs as a new field on `NodeDefinition` (additive, doesn't bump `apiVersion`) or it needs its own plan.
+
+### C. Hook hygiene (`useEditor`, `useScene`, `useViewer`)
+
 - Stores hold state + setters only. No business logic, side effects, async work, or derived computations inside the store definition.
 - Derived values belong in selectors or systems, not in the store body.
 - No cross-store coupling: a store's action should not call another store's actions inside itself.
 - New state added to `useViewer` must be presentation-only (selection, camera, level mode, display toggles). Editor-only state (active tool, phase, edit mode, paint preview, floorplan state) goes in `useEditor`.
+- **Node code does not import `useScene` directly.** A kind's geometry / system / tool should read and write through `SceneApi` (passed in by the framework) or `GeometryContext`. Direct `useScene.getState()` calls inside `packages/nodes/src/<kind>/` are a smell — they bypass the registry's IoC point and make the code harder to test.
+- **Live drag motion is imperative, not store-driven.** Tools must not call `useLiveTransforms.set(...)` per `grid:move` tick to animate registered parametric kinds — the selector path doesn't reliably re-render and the mesh visibly disappears mid-drag. Use `sceneRegistry.nodes.get(node.id)?.position.set(x, y, z)` instead, and commit once at the end via `useScene.temporal.getState().resume() → updateNode → pause()`. The reference implementation is `MoveRegistryNodeTool`. This is the *only* sanctioned use of imperative mesh transforms by a tool; flag any other location that does the same.
 
-### C. Selector performance
+### D. Selector performance
+
 - Top-level components (pages, layouts, providers, `<Viewer>` siblings) must not subscribe to large or frequently-changing slices — e.g. `useScene(s => s.nodes)`, `useScene(s => s)`. Flag these: they re-render the whole subtree on every mutation.
 - Selectors that return new object or array references each call (e.g. `s => ({ a: s.a, b: s.b })`, `s => s.items.filter(...)`) without a custom equality function (shallow or custom) are re-render hazards.
 - Prefer subscribing by ID deep in the tree (one node per renderer) over subscribing to the full collection high up.
+- Inside a `<XxxPanel>` (legacy or `parametrics.customPanel`-mounted), avoid `useScene(s => s.nodes[selectedId])` as a callback dep — it changes every tick and pushes `useCallback` into infinite-loop territory. The recipe is in `plans/editor-node-registry.md` under "Panel slider-drag fix recipe".
 
-### D. Separation of concerns
+### E. Separation of concerns
+
 - Viewer and core stay unaware of editor-specific concepts (tools, phases, active modes, editor UI state, view-specific helpers).
 - Editor-only overlays and systems are injected as children of `<Viewer>`, not added inside the viewer package.
-- New node types added correctly: schema → core system (if derived geometry) → viewer renderer → register in `NodeRenderer`.
+- New node types are added by creating one folder under `packages/nodes/src/<kind>/` and registering its definition in `builtinPlugin.nodes`. Adding to a hand-maintained list elsewhere is a sign the registry hasn't absorbed that surface yet — check `plans/editor-node-registry.md` § "Known un-shimmed hardcoded lists" before assuming it's a violation.
+- `AnyNode` is hand-maintained for now (full runtime derivation would lose static typing); `packages/nodes/src/index.test.ts` is the drift gate. If a PR adds a kind to `AnyNode` without adding it to `builtinPlugin.nodes` (or vice versa), the parity test catches it — but flag it in review too.
 
 ## 5. Output format
 
 Group findings by severity:
 
-- **Blocker** — violates a rule in `wiki/architecture/` or breaks a layer boundary. Must be fixed before merge.
+- **Blocker** — violates a rule in `wiki/architecture/` or breaks a layer/package boundary. Must be fixed before merge.
 - **Suggestion** — likely problem, worth discussing. Not a hard block.
 - **Nit** — minor, optional.
 
@@ -103,7 +138,7 @@ For each finding, include:
 
 1. File and line: `path/to/file.ts:42`
 2. The offending snippet (short — 1–5 lines)
-3. The rule it violates, linked to the wiki page (e.g. `wiki/architecture/viewer-isolation.md`)
+3. The rule it violates, linked to the wiki page (e.g. `wiki/architecture/viewer-isolation.md`, `wiki/architecture/node-definitions.md`)
 4. A concrete proposed fix
 
 Skip formatting, import ordering, and anything CI already covers.
