@@ -71,7 +71,7 @@ export function snapLevelsToTruePositions(): () => void {
   }
 
   const entries: LevelEntry[] = []
-  sceneRegistry.byType.level.forEach((levelId) => {
+  sceneRegistry.byType.level!.forEach((levelId) => {
     const obj = sceneRegistry.nodes.get(levelId)
     const level = nodes[levelId as LevelNode['id']]
     if (obj && level) {

@@ -42,7 +42,10 @@ describe('elevator runtime helpers', () => {
   })
 
   test('moves to a queued level and clears the served request on arrival', () => {
-    const queued = queueElevatorRequest(createElevatorInteractiveState(groundLevelId, 0), upperLevelId)
+    const queued = queueElevatorRequest(
+      createElevatorInteractiveState(groundLevelId, 0),
+      upperLevelId,
+    )
     const moving = stepElevatorRuntimeState({
       defaultEntry: entries[0]!,
       delta: 0.016,

@@ -46,7 +46,7 @@ export const CeilingSystem = () => {
       }
     }
 
-    const ceilings = sceneRegistry.byType.ceiling
+    const ceilings = sceneRegistry.byType.ceiling!
     ceilings.forEach((ceiling) => {
       const mesh = sceneRegistry.nodes.get(ceiling)
       if (mesh) {

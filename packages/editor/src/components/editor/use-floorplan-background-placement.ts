@@ -179,18 +179,24 @@ export function useFloorplanBackgroundPlacement({
         return true
       }
 
-      if (isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('click', planPoint, event)
-        setCursorPoint(snappedPoint)
-        return true
-      }
-
+      // Slab / zone polygon build — local draft state + grid emit.
+      // Must run BEFORE the `isFloorplanGridInteractionActive` catch-all
+      // (since slab is registry-driven, the catch-all would otherwise
+      // swallow the click and skip local draft state updates — leaving
+      // the 2D draft polygon invisible while the 3D tool builds fine).
       if (isPolygonBuildActive) {
         const snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
         })
+
+        // Emit the grid event so the registry-driven slab tool also
+        // sees the click (parity with ceiling / fence / roof branches
+        // above). Zone has no registry tool — emit-or-not is irrelevant.
+        if (!isZoneBuildActive) {
+          emitFloorplanGridEvent('click', snappedPoint, event)
+        }
 
         if (isZoneBuildActive) {
           handleZonePlacementPoint(snappedPoint)
@@ -200,19 +206,34 @@ export function useFloorplanBackgroundPlacement({
         return true
       }
 
-      if (!isWallBuildActive) {
-        return false
+      // Wall placement — local draft state + grid emit. Same reasoning
+      // as slab above: wall is registry-driven, so without this branch
+      // the catch-all would swallow the click and the local draftStart
+      // / draftEnd state in the floor plan would never update, leaving
+      // the dashed-line draft preview invisible.
+      if (isWallBuildActive) {
+        const snappedPoint = snapWallDraftPoint({
+          point: planPoint,
+          walls,
+          start: draftStart ?? undefined,
+          angleSnap: Boolean(draftStart) && !shiftPressed,
+        })
+
+        emitFloorplanGridEvent('click', snappedPoint, event)
+        handleWallPlacementPoint(snappedPoint)
+        return true
       }
 
-      const snappedPoint = snapWallDraftPoint({
-        point: planPoint,
-        walls,
-        start: draftStart ?? undefined,
-        angleSnap: Boolean(draftStart) && !shiftPressed,
-      })
+      // Generic catch-all — registry-driven tool whose kind has no
+      // local floor-plan draft handler (column / spawn / shelf / etc.).
+      // The tool's `grid:click` subscriber owns the placement.
+      if (isFloorplanGridInteractionActive) {
+        const snappedPoint = emitFloorplanGridEvent('click', planPoint, event)
+        setCursorPoint(snappedPoint)
+        return true
+      }
 
-      handleWallPlacementPoint(snappedPoint)
-      return true
+      return false
     },
     [
       activePolygonDraftPoints,

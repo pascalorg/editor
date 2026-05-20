@@ -1,35 +1,19 @@
 'use client'
 
-import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import useViewer from '../../store/use-viewer'
-import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
-import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
-import { DoorSystem } from '../../systems/door/door-system'
-import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
-import { FenceSystem } from '../../systems/fence/fence-system'
-import { GuideSystem } from '../../systems/guide/guide-system'
-import { ItemLightSystem } from '../../systems/item-light/item-light-system'
-import { ItemSystem } from '../../systems/item/item-system'
-import { LevelSystem } from '../../systems/level/level-system'
-import { RoofSystem } from '../../systems/roof/roof-system'
-import { ScanSystem } from '../../systems/scan/scan-system'
-import { SlabSystem } from '../../systems/slab/slab-system'
-import { StairSystem } from '../../systems/stair/stair-system'
-import { WallCutout } from '../../systems/wall/wall-cutout'
-import { WallSystem } from '../../systems/wall/wall-system'
-import { WindowAnimationSystem } from '../../systems/window/window-animation-system'
-import { WindowSystem } from '../../systems/window/window-system'
-import { ZoneSystem } from '../../systems/zone/zone-system'
+import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
+import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
+import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
@@ -222,31 +206,21 @@ const Viewer: React.FC<ViewerProps> = ({
           <SceneRenderer />
         )}
 
-        {/* Default Systems */}
-        <LevelSystem />
-        <GuideSystem />
-        <ScanSystem />
-        <WallCutout />
-        {/* Core systems */}
-        <CeilingSystem />
-        <DoorAnimationSystem />
-        <ElevatorRuntimeSystem />
-        <ElevatorInteractionSystem />
-        <ElevatorOpeningSystem />
-        <WindowAnimationSystem />
-        <DoorSystem />
-        <FenceSystem />
-        <ItemSystem />
-        <RoofSystem />
-        <SlabSystem />
-        <StairSystem />
-        <WallSystem />
-        <WindowSystem />
-        <ZoneSystem />
+        {/* Generic slab-elevation lift for any kind that declares
+            `capabilities.floorPlaced`. Runs at frame priority 1 so it
+            lands its mesh.position.y override before the priority-2
+            systems below clear the dirty mark. */}
+        <FloorElevationSystem />
+        {/* Generic geometry rebuild loop for any registered kind that
+            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
+            builder, swaps the registered group's children. See
+            wiki/architecture/node-definitions.md. */}
+        <GeometrySystem />
+        {/* Mounts systems contributed by registry-backed kinds. Each
+            kind's `def.system` is loaded via lazy() and rendered here,
+            ordered by `system.priority`. */}
+        <RegisteredSystems />
         <PostProcessing hoverStyles={hoverStyles} />
-        {/* <DebugRenderer /> */}
-
-        <ItemLightSystem />
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}

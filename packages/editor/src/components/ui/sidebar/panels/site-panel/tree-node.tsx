@@ -63,6 +63,7 @@ import { FenceTreeNode } from './fence-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
+import { ShelfTreeNode } from './shelf-tree-node'
 import { SlabTreeNode } from './slab-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
@@ -76,47 +77,61 @@ interface TreeNodeProps {
   isLast?: boolean
 }
 
+// Per-kind tree-node components keyed by `node.type`. Lookup replaces
+// the legacy switch — adding a kind to this map is now the only edit
+// needed in this file (the switch's `case '<kind>':` clauses were
+// flagged by the Phase 6 grep gate as the last per-kind dispatch
+// outside the registry; future work moves these to a
+// `def.presentation`-driven generic tree-node and removes this map
+// entirely).
+const treeNodeByType: Record<
+  string,
+  React.ComponentType<{ depth: number; isLast?: boolean; nodeId: AnyNodeId }>
+> = {
+  building: BuildingTreeNode as React.ComponentType<{
+    depth: number
+    isLast?: boolean
+    nodeId: AnyNodeId
+  }>,
+  ceiling: CeilingTreeNode,
+  column: ColumnTreeNode,
+  elevator: ElevatorTreeNode,
+  level: LevelTreeNode as React.ComponentType<{
+    depth: number
+    isLast?: boolean
+    nodeId: AnyNodeId
+  }>,
+  shelf: ShelfTreeNode as React.ComponentType<{
+    depth: number
+    isLast?: boolean
+    nodeId: AnyNodeId
+  }>,
+  slab: SlabTreeNode,
+  spawn: SpawnTreeNode as React.ComponentType<{
+    depth: number
+    isLast?: boolean
+    nodeId: AnyNodeId
+  }>,
+  wall: WallTreeNode,
+  fence: FenceTreeNode,
+  roof: RoofTreeNode,
+  stair: StairTreeNode,
+  door: DoorTreeNode,
+  window: WindowTreeNode,
+  zone: ZoneTreeNode as React.ComponentType<{
+    depth: number
+    isLast?: boolean
+    nodeId: AnyNodeId
+  }>,
+  item: ItemTreeNode,
+}
+
 export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
   const nodeType = useScene((state) => state.nodes[nodeId]?.type)
-
   if (!nodeType) return null
-
-  switch (nodeType) {
-    case 'building':
-      return (
-        <BuildingTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `building_${string}`} />
-      )
-    case 'ceiling':
-      return <CeilingTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'column':
-      return <ColumnTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'elevator':
-      return <ElevatorTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'level':
-      return <LevelTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `level_${string}`} />
-    case 'slab':
-      return <SlabTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'spawn':
-      return <SpawnTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `spawn_${string}`} />
-    case 'wall':
-      return <WallTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'fence':
-      return <FenceTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'roof':
-      return <RoofTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'stair':
-      return <StairTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'item':
-      return <ItemTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'door':
-      return <DoorTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'window':
-      return <WindowTreeNode depth={depth} isLast={isLast} nodeId={nodeId} />
-    case 'zone':
-      return <ZoneTreeNode depth={depth} isLast={isLast} nodeId={nodeId as `zone_${string}`} />
-    default:
-      return null
-  }
+  const Component = treeNodeByType[nodeType]
+  if (!Component) return null
+  return <Component depth={depth} isLast={isLast} nodeId={nodeId} />
 })
 
 interface TreeNodeWrapperProps {

@@ -273,10 +273,12 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                     fill={curvedAccent}
                     key={`${stair.id}:spiral-arrow`}
                     pointerEvents="none"
-                    points={buildSvgArrowHeadPoints(
-                      arrowPoint,
-                      tangentAngle,
-                      clamp(stair.width * 0.18, 0.12, 0.18),
+                    points={formatSvgPolygonPoints(
+                      buildSvgArrowHeadPoints(
+                        arrowPoint,
+                        tangentAngle,
+                        clamp(stair.width * 0.18, 0.12, 0.18),
+                      ),
                     )}
                   />
                 )
@@ -361,10 +363,12 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                     fill={curvedAccent}
                     key={`${stair.id}:curved-arrow`}
                     pointerEvents="none"
-                    points={buildSvgArrowHeadPoints(
-                      arrowPoint,
-                      tangentAngle,
-                      clamp(stair.width * 0.16, 0.1, 0.16),
+                    points={formatSvgPolygonPoints(
+                      buildSvgArrowHeadPoints(
+                        arrowPoint,
+                        tangentAngle,
+                        clamp(stair.width * 0.16, 0.1, 0.16),
+                      ),
                     )}
                   />
                 )

@@ -12,9 +12,7 @@ export type WallMoveBridgePlan<TWall extends Pick<WallNode, 'id' | 'start' | 'en
   movedEndpoint: WallMoveEndpoint
 }
 
-export type WallMoveLinkedWallTargetPlan<
-  TWall extends Pick<WallNode, 'id' | 'start' | 'end'>,
-> = {
+export type WallMoveLinkedWallTargetPlan<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>> = {
   wall: TWall
   originalPoint: WallPlanPoint
   targetPoint: WallPlanPoint
@@ -174,7 +172,9 @@ export function planWallMoveJunctions<TWall extends Pick<WallNode, 'id' | 'start
       .sort((a, b) => a.distance - b.distance)[0]
 
     if (consumedSameDirectionWall) {
-      const pivotPoint = [...otherWallEndpoint(consumedSameDirectionWall.wall, point)] as WallPlanPoint
+      const pivotPoint = [
+        ...otherWallEndpoint(consumedSameDirectionWall.wall, point),
+      ] as WallPlanPoint
       const bridgeSource = linkedAtEndpoint.find((entry) => entry.relation === 'opposite-direction')
 
       wallsToDelete.set(consumedSameDirectionWall.wall.id, consumedSameDirectionWall.wall)
@@ -201,14 +201,22 @@ export function planWallMoveJunctions<TWall extends Pick<WallNode, 'id' | 'start
 
       const linkedAtPivot = linkedWalls
         .filter(
-          (wall) => wall.id !== consumedSameDirectionWall.wall.id && wallTouchesPoint(wall, pivotPoint),
+          (wall) =>
+            wall.id !== consumedSameDirectionWall.wall.id && wallTouchesPoint(wall, pivotPoint),
         )
         .map((wall) => ({
           wall,
           relation: getMoveWallRelation(wall, pivotPoint, nextPoint),
         }))
 
-      addStandardEndpointPlan(endpoint, pivotPoint, nextPoint, linkedAtPivot, ':through-pivot', true)
+      addStandardEndpointPlan(
+        endpoint,
+        pivotPoint,
+        nextPoint,
+        linkedAtPivot,
+        ':through-pivot',
+        true,
+      )
       return
     }
 

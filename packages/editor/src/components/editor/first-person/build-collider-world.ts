@@ -176,7 +176,7 @@ function buildRegisteredNodeTypeLookup() {
   const nodeTypes = new Map<string, ColliderNodeType>()
 
   for (const type of COLLIDER_NODE_TYPES) {
-    for (const nodeId of sceneRegistry.byType[type]) {
+    for (const nodeId of sceneRegistry.byType[type]!) {
       nodeTypes.set(nodeId, type)
     }
   }
@@ -238,7 +238,7 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
   }
 
   for (const type of COLLIDER_NODE_TYPES) {
-    for (const nodeId of sceneRegistry.byType[type]) {
+    for (const nodeId of sceneRegistry.byType[type]!) {
       if (shouldSkipColliderNode(nodeId, type)) continue
 
       const root = sceneRegistry.nodes.get(nodeId)

@@ -311,38 +311,67 @@ function assignWallMaterialGroups(
 // ============================================================================
 
 let useFrameNb = 0
+
+// ─── Drag-throttle state (singleton — one WallSystem mounted globally) ──
+//
+// Endpoint drags fire `markDirty(wallId)` on every pointermove tick. Without
+// throttling, each tick rebuilds the dragged wall (~1 CSG + miter pass) AND
+// every adjacent wall sharing a corner (3–4× in a t-junction or room).
+// Visible as drag lag, especially on walls with door/window cutouts.
+//
+// Strategy: rebuild the dragged wall every tick (so the drag follows the
+// cursor with full fidelity), but defer adjacent rebuilds to a trailing-
+// edge flush DRAG_FLUSH_MS after the dirty stream stops. Visually, neighbor
+// corners stay at their pre-drag miter until release, then snap into place
+// within ~80ms. Standard CAD-app behavior. Speeds up t-junction drags ~3×,
+// 4-corner-room drags ~4×.
+const DRAG_FLUSH_MS = 80
+let lastWallDirtyAtMs = 0
+const pendingAdjacentByLevel = new Map<string, Set<string>>()
+
 export const WallSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    const hasDirty = dirtyNodes.size > 0
+    const hasPending = pendingAdjacentByLevel.size > 0
+    if (!hasDirty && !hasPending) return
 
     const nodes = useScene.getState().nodes
+    const now = performance.now()
 
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
 
     useFrameNb += 1
-    dirtyNodes.forEach((id) => {
-      const node = nodes[id]
-      if (!node || node.type !== 'wall') return
+    if (hasDirty) {
+      dirtyNodes.forEach((id) => {
+        const node = nodes[id]
+        if (!node || node.type !== 'wall') return
 
-      const levelId = node.parentId
-      if (!levelId) return
+        const levelId = node.parentId
+        if (!levelId) return
 
-      if (!dirtyWallsByLevel.has(levelId)) {
-        dirtyWallsByLevel.set(levelId, new Set())
-      }
-      dirtyWallsByLevel.get(levelId)?.add(id)
-    })
+        if (!dirtyWallsByLevel.has(levelId)) {
+          dirtyWallsByLevel.set(levelId, new Set())
+        }
+        dirtyWallsByLevel.get(levelId)?.add(id)
+      })
+    }
+
+    const hasDirtyWalls = dirtyWallsByLevel.size > 0
+    if (hasDirtyWalls) {
+      lastWallDirtyAtMs = now
+    }
 
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
       const levelWalls = getLevelWalls(levelId)
       const miterData = calculateLevelMiters(levelWalls)
 
-      // Update dirty walls
+      // Update dirty walls — always, no throttling. The dragged wall must
+      // follow the cursor with full fidelity (cutouts and all).
       for (const wallId of dirtyWallIds) {
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
@@ -352,16 +381,36 @@ export const WallSystem = () => {
         // If mesh not found, keep it dirty for next frame
       }
 
-      // Update adjacent walls that share junctions
+      // Adjacent walls sharing junctions — *defer* during active drag
+      // (dirty arrived this frame), flush on the trailing edge.
       const adjacentWallIds = getAdjacentWallIds(levelWalls, dirtyWallIds)
+      let pending = pendingAdjacentByLevel.get(levelId)
+      if (!pending) {
+        pending = new Set()
+        pendingAdjacentByLevel.set(levelId, pending)
+      }
       for (const wallId of adjacentWallIds) {
         if (!dirtyWallIds.has(wallId)) {
-          const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
-          if (mesh) {
-            updateWallGeometry(wallId, miterData)
-          }
+          pending.add(wallId)
         }
       }
+    }
+
+    // Trailing-edge flush: if no new dirty marks for DRAG_FLUSH_MS, the
+    // drag has ended — rebuild the queued neighbors so corners snap into
+    // their correct miter joins.
+    const quiet = !hasDirtyWalls && now - lastWallDirtyAtMs >= DRAG_FLUSH_MS
+    if (quiet && pendingAdjacentByLevel.size > 0) {
+      for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
+        if (pendingIds.size === 0) continue
+        const levelWalls = getLevelWalls(levelId)
+        const miterData = calculateLevelMiters(levelWalls)
+        for (const wallId of pendingIds) {
+          const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
+          if (mesh) updateWallGeometry(wallId, miterData)
+        }
+      }
+      pendingAdjacentByLevel.clear()
     }
   }, 4)
 
