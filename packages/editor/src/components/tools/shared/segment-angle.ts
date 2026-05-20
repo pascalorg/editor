@@ -15,6 +15,13 @@ export type SegmentAngleReference = {
   orientation: 'directed' | 'axis'
 }
 
+export type SegmentAngleArc = {
+  angle: number
+  startAngle: number
+  endAngle: number
+  midAngle: number
+}
+
 const POINT_MATCH_TOLERANCE = 1e-5
 const SEGMENT_POINT_TOLERANCE = 0.15
 const CURVE_TANGENT_SAMPLE_SPACING = 0.08
@@ -92,6 +99,36 @@ export function getAngleBetweenVectors(first: PlanPoint, second: PlanPoint): num
   return Math.acos(cosine)
 }
 
+function normalizeSignedAngle(angle: number) {
+  let nextAngle = angle
+
+  while (nextAngle <= -Math.PI) {
+    nextAngle += Math.PI * 2
+  }
+
+  while (nextAngle > Math.PI) {
+    nextAngle -= Math.PI * 2
+  }
+
+  return nextAngle
+}
+
+function getSignedAngleArc(vector: PlanPoint, referenceVector: PlanPoint): SegmentAngleArc | null {
+  const angle = getAngleBetweenVectors(vector, referenceVector)
+  if (angle === null) return null
+
+  const startAngle = Math.atan2(referenceVector[1], referenceVector[0])
+  const vectorAngle = Math.atan2(vector[1], vector[0])
+  const signedDelta = normalizeSignedAngle(vectorAngle - startAngle)
+
+  return {
+    angle: Math.abs(signedDelta),
+    startAngle,
+    endAngle: startAngle + signedDelta,
+    midAngle: startAngle + signedDelta / 2,
+  }
+}
+
 export function getAngleToSegmentReference(
   vector: PlanPoint,
   reference: SegmentAngleReference,
@@ -109,6 +146,25 @@ export function getAngleToSegmentReference(
   }
 
   return Math.min(angle, reverseAngle)
+}
+
+export function getAngleArcToSegmentReference(
+  vector: PlanPoint,
+  reference: SegmentAngleReference,
+): SegmentAngleArc | null {
+  const directArc = getSignedAngleArc(vector, reference.vector)
+
+  if (!directArc || reference.orientation === 'directed') {
+    return directArc
+  }
+
+  const reverseArc = getSignedAngleArc(vector, [-reference.vector[0], -reference.vector[1]])
+
+  if (!reverseArc) {
+    return directArc
+  }
+
+  return reverseArc.angle < directArc.angle ? reverseArc : directArc
 }
 
 export function getSegmentAngleReferenceAtPoint(

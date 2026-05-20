@@ -34,7 +34,7 @@ export default function SpawnPanel() {
 
     setDraftRotation(node.rotation)
     useLiveTransforms.getState().clear(node.id)
-  }, [node?.id, node?.rotation, node?.type])
+  }, [node?.id, node?.rotation, node?.type, node])
 
   const handleUpdate = useCallback(
     (updates: Partial<SpawnNode>) => {

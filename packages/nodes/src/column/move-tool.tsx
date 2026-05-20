@@ -40,6 +40,11 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
   useEffect(() => {
     useScene.temporal.getState().pause()
     let committed = false
+    const meta =
+      typeof node.metadata === 'object' && node.metadata !== null
+        ? (node.metadata as Record<string, unknown>)
+        : {}
+    const isNew = !!meta.isNew
 
     const applyPreview = (position: [number, number, number]) => {
       setPreviewPosition(position)
@@ -66,7 +71,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
         committed = true
         useLiveTransforms.getState().clear(nodeId)
         useScene.temporal.getState().resume()
-        useScene.getState().updateNode(nodeId, { position })
+        useScene.getState().updateNode(nodeId, { position, ...(isNew ? { metadata: {} } : {}) })
       } else if (node.parentId) {
         const column = ColumnNodeSchema.parse({
           ...node,
