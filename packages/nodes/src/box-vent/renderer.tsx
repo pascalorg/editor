@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   type BoxVentNode,
   type RoofSegmentNode,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -50,15 +49,6 @@ const BoxVentRenderer = ({ node }: { node: BoxVentNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
-  const segmentLiveTransform = useLiveTransforms((state) =>
-    node.roofSegmentId ? state.get(node.roofSegmentId as AnyNodeId) : undefined,
-  )
-
-  // Effective segment transform: live override during drag, store value
-  // otherwise. Matches the legacy `useFollowSegmentDrag` helper without
-  // pulling it forward.
-  const segmentPosition = segmentLiveTransform?.position ?? segment?.position
-  const segmentRotationY = segmentLiveTransform?.rotation ?? segment?.rotation ?? 0
 
   const geometry = useMemo(() => buildBoxVentGeometry(node), [
     node.width,
@@ -84,22 +74,28 @@ const BoxVentRenderer = ({ node }: { node: BoxVentNode }) => {
     return defaultMaterial
   }, [node.material, node.materialPreset])
 
-  if (!segment || !segmentPosition) return null
+  if (!segment) return null
 
+  // Position is segment-local. The box-vent renderer is mounted *inside*
+  // the segment's React subtree (see `roof-segment/renderer.tsx`), so the
+  // segment's world transform is already on the React parent — we only
+  // apply the vent's own offset + slope tilt + Y rotation here.
   return (
-    <group position={segmentPosition} ref={ref} rotation-y={segmentRotationY} visible={node.visible}>
-      <group position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}>
-        <group rotation-x={tiltX}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
-              castShadow
-              geometry={geometry}
-              material={material}
-              name="box-vent-surface"
-              receiveShadow
-              {...handlers}
-            />
-          </group>
+    <group
+      position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+      ref={ref}
+      visible={node.visible}
+    >
+      <group rotation-x={tiltX}>
+        <group rotation-y={node.rotation ?? 0}>
+          <mesh
+            castShadow
+            geometry={geometry}
+            material={material}
+            name="box-vent-surface"
+            receiveShadow
+            {...handlers}
+          />
         </group>
       </group>
     </group>

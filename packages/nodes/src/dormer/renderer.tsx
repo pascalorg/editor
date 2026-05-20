@@ -5,7 +5,6 @@ import {
   type DormerNode,
   getEffectiveDormerSurfaceMaterial,
   type RoofSegmentNode,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -49,12 +48,6 @@ const DormerRenderer = ({ node }: { node: DormerNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
-  const segmentLiveTransform = useLiveTransforms((state) =>
-    node.roofSegmentId ? state.get(node.roofSegmentId as AnyNodeId) : undefined,
-  )
-
-  const segmentPosition = segmentLiveTransform?.position ?? segment?.position
-  const segmentRotationY = segmentLiveTransform?.rotation ?? segment?.rotation ?? 0
 
   const geo = useMemo(() => buildDormerGeometry(node), [
     node.width,
@@ -99,7 +92,7 @@ const DormerRenderer = ({ node }: { node: DormerNode }) => {
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.surfaceNormal, node.position[0], node.position[2]])
 
-  if (!segment || !segmentPosition) return null
+  if (!segment) return null
 
   const surfaceY =
     (node.position[1] ?? 0) !== 0
@@ -107,26 +100,28 @@ const DormerRenderer = ({ node }: { node: DormerNode }) => {
       : getSurfaceY(node.position[0] ?? 0, node.position[2] ?? 0, segment)
 
   return (
-    <group position={segmentPosition} ref={ref} rotation-y={segmentRotationY} visible={node.visible}>
-      <group position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}>
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
-              castShadow
-              geometry={geo.body}
-              material={wallMaterial}
-              name="dormer-body"
-              receiveShadow
-              {...handlers}
-            />
-            <mesh
-              castShadow
-              geometry={geo.roof}
-              material={roofMaterial}
-              name="dormer-roof"
-              receiveShadow
-            />
-          </group>
+    <group
+      position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
+      ref={ref}
+      visible={node.visible}
+    >
+      <group quaternion={surfaceQuat}>
+        <group rotation-y={node.rotation ?? 0}>
+          <mesh
+            castShadow
+            geometry={geo.body}
+            material={wallMaterial}
+            name="dormer-body"
+            receiveShadow
+            {...handlers}
+          />
+          <mesh
+            castShadow
+            geometry={geo.roof}
+            material={roofMaterial}
+            name="dormer-roof"
+            receiveShadow
+          />
         </group>
       </group>
     </group>

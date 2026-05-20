@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   type RidgeVentNode,
   type RoofSegmentNode,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -58,12 +57,6 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
-  const segmentLiveTransform = useLiveTransforms((state) =>
-    node.roofSegmentId ? state.get(node.roofSegmentId as AnyNodeId) : undefined,
-  )
-
-  const segmentPosition = segmentLiveTransform?.position ?? segment?.position
-  const segmentRotationY = segmentLiveTransform?.rotation ?? segment?.rotation ?? 0
 
   const geometry = useMemo(() => buildRidgeVentGeometry(node), [
     node.length,
@@ -86,23 +79,23 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
         : standardMaterial
   }, [node.material, node.materialPreset, node.style])
 
-  if (!segment || !segmentPosition) return null
+  if (!segment) return null
 
   return (
-    <group position={segmentPosition} ref={ref} rotation-y={segmentRotationY} visible={node.visible}>
-      <group
-        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
-        rotation-y={node.rotation ?? 0}
-      >
-        <mesh
-          castShadow
-          geometry={geometry}
-          material={material}
-          name="ridge-vent-surface"
-          receiveShadow
-          {...handlers}
-        />
-      </group>
+    <group
+      position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+      ref={ref}
+      rotation-y={node.rotation ?? 0}
+      visible={node.visible}
+    >
+      <mesh
+        castShadow
+        geometry={geometry}
+        material={material}
+        name="ridge-vent-surface"
+        receiveShadow
+        {...handlers}
+      />
     </group>
   )
 }

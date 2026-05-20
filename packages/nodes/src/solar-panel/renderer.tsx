@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   type RoofSegmentNode,
   type SolarPanelNode,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -52,12 +51,6 @@ const SolarPanelRenderer = ({ node }: { node: SolarPanelNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
-  const segmentLiveTransform = useLiveTransforms((state) =>
-    node.roofSegmentId ? state.get(node.roofSegmentId as AnyNodeId) : undefined,
-  )
-
-  const segmentPosition = segmentLiveTransform?.position ?? segment?.position
-  const segmentRotationY = segmentLiveTransform?.rotation ?? segment?.rotation ?? 0
 
   const geometry = useMemo(() => buildSolarPanelGeometry(node), [
     node.rows,
@@ -91,7 +84,7 @@ const SolarPanelRenderer = ({ node }: { node: SolarPanelNode }) => {
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.surfaceNormal, node.position[0], node.position[2]])
 
-  if (!segment || !segmentPosition || !geometry) return null
+  if (!segment || !geometry) return null
 
   const surfaceY =
     (node.position[1] ?? 0) !== 0
@@ -101,21 +94,26 @@ const SolarPanelRenderer = ({ node }: { node: SolarPanelNode }) => {
   const tiltRad =
     node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
 
+  // Mounted inside the segment's React subtree, so segment transform is
+  // already on the parent. Apply only the panel's segment-local offset
+  // + surface quat + Y rotation + tilt.
   return (
-    <group position={segmentPosition} ref={ref} rotation-y={segmentRotationY} visible={node.visible}>
-      <group position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}>
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <group rotation-x={tiltRad}>
-              <mesh
-                castShadow
-                geometry={geometry}
-                material={[frameMaterial, panelMaterial]}
-                name="solar-panel-surface"
-                receiveShadow
-                {...handlers}
-              />
-            </group>
+    <group
+      position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
+      ref={ref}
+      visible={node.visible}
+    >
+      <group quaternion={surfaceQuat}>
+        <group rotation-y={node.rotation ?? 0}>
+          <group rotation-x={tiltRad}>
+            <mesh
+              castShadow
+              geometry={geometry}
+              material={[frameMaterial, panelMaterial]}
+              name="solar-panel-surface"
+              receiveShadow
+              {...handlers}
+            />
           </group>
         </group>
       </group>

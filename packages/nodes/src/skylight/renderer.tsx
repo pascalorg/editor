@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   type RoofSegmentNode,
   type SkylightNode,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -53,12 +52,6 @@ const SkylightRenderer = ({ node }: { node: SkylightNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
-  const segmentLiveTransform = useLiveTransforms((state) =>
-    node.roofSegmentId ? state.get(node.roofSegmentId as AnyNodeId) : undefined,
-  )
-
-  const segmentPosition = segmentLiveTransform?.position ?? segment?.position
-  const segmentRotationY = segmentLiveTransform?.rotation ?? segment?.rotation ?? 0
 
   const geo = useMemo(() => buildSkylightGeometry(node), [
     node.width,
@@ -96,7 +89,7 @@ const SkylightRenderer = ({ node }: { node: SkylightNode }) => {
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.surfaceNormal, node.position[0], node.position[2]])
 
-  if (!segment || !segmentPosition) return null
+  if (!segment) return null
 
   const surfaceY =
     (node.position[1] ?? 0) !== 0
@@ -104,25 +97,27 @@ const SkylightRenderer = ({ node }: { node: SkylightNode }) => {
       : getSurfaceY(node.position[0] ?? 0, node.position[2] ?? 0, segment)
 
   return (
-    <group position={segmentPosition} ref={ref} rotation-y={segmentRotationY} visible={node.visible}>
-      <group position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}>
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
-              castShadow
-              geometry={geo.frame}
-              material={frameMaterial}
-              name="skylight-frame"
-              receiveShadow
-              {...handlers}
-            />
-            <mesh
-              geometry={geo.glass}
-              material={glassMaterial}
-              name="skylight-glass"
-              receiveShadow
-            />
-          </group>
+    <group
+      position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
+      ref={ref}
+      visible={node.visible}
+    >
+      <group quaternion={surfaceQuat}>
+        <group rotation-y={node.rotation ?? 0}>
+          <mesh
+            castShadow
+            geometry={geo.frame}
+            material={frameMaterial}
+            name="skylight-frame"
+            receiveShadow
+            {...handlers}
+          />
+          <mesh
+            geometry={geo.glass}
+            material={glassMaterial}
+            name="skylight-glass"
+            receiveShadow
+          />
         </group>
       </group>
     </group>

@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   type ChimneyNode,
   type RoofSegmentNode,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -46,12 +45,6 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
-  const segmentLiveTransform = useLiveTransforms((state) =>
-    node.roofSegmentId ? state.get(node.roofSegmentId as AnyNodeId) : undefined,
-  )
-
-  const segmentPosition = segmentLiveTransform?.position ?? segment?.position
-  const segmentRotationY = segmentLiveTransform?.rotation ?? segment?.rotation ?? 0
 
   const geo = useMemo(() => {
     if (!segment) return null
@@ -112,10 +105,13 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
     return bodyPreset ?? topMaterial
   }, [node.topMaterial, node.topMaterialPreset, node.material, node.materialPreset])
 
-  if (!segment || !segmentPosition || !geo) return null
+  if (!segment || !geo) return null
 
+  // The chimney's geometry bakes its baseY using segment.wallHeight inside
+  // the builder, so the outer group only needs the segment-local X/Z
+  // offset. Y stays at 0 here.
   return (
-    <group position={segmentPosition} ref={ref} rotation-y={segmentRotationY} visible={node.visible}>
+    <group position={[0, 0, 0]} ref={ref} visible={node.visible}>
       <mesh
         castShadow
         geometry={geo.body}
