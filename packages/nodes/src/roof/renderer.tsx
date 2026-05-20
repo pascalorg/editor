@@ -51,11 +51,16 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
         name="merged-roof"
         receiveShadow
       />
-      <group name="segments-wrapper" visible={false}>
-        {(node.children ?? []).map((childId) => (
-          <NodeRenderer key={childId} nodeId={childId} />
-        ))}
-      </group>
+      {/* Segments hold per-segment data + mount any hosted accessories
+          (chimney, dormer, skylight, box-vent, ridge-vent, solar-panel)
+          via the roof-segment renderer's recursive `NodeRenderer`. The
+          segment placeholder meshes themselves stay empty (`RoofSystem`
+          only fills the `merged-roof` mesh above) so they don't z-fight
+          with the merged visual — no `visible={false}` wrapper needed,
+          and the accessory grandchildren render correctly. */}
+      {(node.children ?? []).map((childId) => (
+        <NodeRenderer key={childId} nodeId={childId} />
+      ))}
     </group>
   )
 }

@@ -3,9 +3,15 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type BoxVentNode,
+  type ChimneyNode,
+  type DormerNode,
+  type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  type SkylightNode,
+  type SolarPanelNode,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -19,15 +25,7 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import {
-  Copy,
-  Move,
-  Plus,
-  SquareStack,
-  Sun,
-  Trash2,
-  Wind,
-} from 'lucide-react'
+import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -49,6 +47,100 @@ export default function RoofPanel() {
         .map((childId) => s.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
         .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
     }),
+  )
+
+  // Flatten roof accessories hosted by any segment of this roof. Each
+  // selector re-runs only when the relevant child list changes.
+  const segmentIdSet = useScene(
+    useShallow((s) => {
+      if (!node) return new Set<string>()
+      return new Set((node.children ?? []) as string[])
+    }),
+  )
+
+  const chimneys = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: ChimneyNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'chimney' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as ChimneyNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const skylights = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: SkylightNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'skylight' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as SkylightNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const solarPanels = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: SolarPanelNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'solar-panel' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as SolarPanelNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const dormers = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: DormerNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'dormer' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as DormerNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const ridgeVents = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: RidgeVentNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'ridge-vent' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as RidgeVentNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const boxVents = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: BoxVentNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'box-vent' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as BoxVentNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const handleSelectElement = useCallback(
+    (id: string) => {
+      setSelection({ selectedIds: [id as AnyNode['id']] })
+    },
+    [setSelection],
   )
 
   const handleUpdate = useCallback(
@@ -240,41 +332,134 @@ export default function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Add element">
-        <ActionGroup>
-          <ActionButton
-            icon={<SquareStack className="h-3.5 w-3.5" />}
-            label="Chimney"
-            onClick={() => activateTool('chimney')}
-          />
-          <ActionButton
-            icon={<SquareStack className="h-3.5 w-3.5" />}
-            label="Dormer"
-            onClick={() => activateTool('dormer')}
-          />
-          <ActionButton
-            icon={<SquareStack className="h-3.5 w-3.5" />}
-            label="Skylight"
-            onClick={() => activateTool('skylight')}
-          />
-        </ActionGroup>
-        <ActionGroup>
-          <ActionButton
-            icon={<Sun className="h-3.5 w-3.5" />}
-            label="Solar Panel"
-            onClick={() => activateTool('solar-panel')}
-          />
-          <ActionButton
-            icon={<Wind className="h-3.5 w-3.5" />}
-            label="Box Vent"
-            onClick={() => activateTool('box-vent')}
-          />
-          <ActionButton
-            icon={<Wind className="h-3.5 w-3.5" />}
-            label="Ridge Vent"
-            onClick={() => activateTool('ridge-vent')}
-          />
-        </ActionGroup>
+      <PanelSection title="Elements">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            {chimneys.map((chimney, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={chimney.id}
+                onClick={() => handleSelectElement(chimney.id)}
+                type="button"
+              >
+                <span className="truncate">{chimney.name || `Chimney ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">chimney</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Chimney"
+                onClick={() => activateTool('chimney')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {dormers.map((dormer, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={dormer.id}
+                onClick={() => handleSelectElement(dormer.id)}
+                type="button"
+              >
+                <span className="truncate">{dormer.name || `Dormer ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">dormer</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Dormer"
+                onClick={() => activateTool('dormer')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {skylights.map((skylight, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={skylight.id}
+                onClick={() => handleSelectElement(skylight.id)}
+                type="button"
+              >
+                <span className="truncate">{skylight.name || `Skylight ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">skylight</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Skylight"
+                onClick={() => activateTool('skylight')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {solarPanels.map((panel, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={panel.id}
+                onClick={() => handleSelectElement(panel.id)}
+                type="button"
+              >
+                <span className="truncate">{panel.name || `Solar Panel ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">solar panel</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Solar Panel"
+                onClick={() => activateTool('solar-panel')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {boxVents.map((vent, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={vent.id}
+                onClick={() => handleSelectElement(vent.id)}
+                type="button"
+              >
+                <span className="truncate">{vent.name || `Box Vent ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">box vent</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Box Vent"
+                onClick={() => activateTool('box-vent')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {ridgeVents.map((vent, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={vent.id}
+                onClick={() => handleSelectElement(vent.id)}
+                type="button"
+              >
+                <span className="truncate">{vent.name || `Ridge Vent ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">ridge vent</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Ridge Vent"
+                onClick={() => activateTool('ridge-vent')}
+              />
+            </ActionGroup>
+          </div>
+        </div>
       </PanelSection>
 
       <PanelSection title="Actions">
