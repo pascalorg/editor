@@ -171,3 +171,12 @@ export {
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'
+export {
+  type BuildStats,
+  type ParsedBuildJson,
+  type SchemaIssue,
+  type ValidateBuildJsonResult,
+  type ValidationIssue,
+  type ValidationSeverity,
+  validateBuildJson,
+} from './validation/validate-build-json'
