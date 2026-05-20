@@ -14,6 +14,7 @@ export type {
   ItemEvent,
   LevelEvent,
   NodeEvent,
+  RidgeVentEvent,
   RoofEvent,
   RoofSegmentEvent,
   ScanEvent,

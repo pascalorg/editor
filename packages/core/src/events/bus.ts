@@ -12,6 +12,7 @@ import type {
   GuideNode,
   ItemNode,
   LevelNode,
+  RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
   ScanNode,
@@ -82,6 +83,7 @@ export type ElevatorEvent = NodeEvent<ElevatorNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
+export type RidgeVentEvent = NodeEvent<RidgeVentNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -216,6 +218,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'scan', ScanEvent> &
   NodeEvents<'guide', GuideEvent> &
   NodeEvents<'box-vent', BoxVentEvent> &
+  NodeEvents<'ridge-vent', RidgeVentEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &
