@@ -6,12 +6,8 @@ import type {
   GridEvent,
   ItemEvent,
   ItemNode,
-<<<<<<< HEAD
-  RoofEvent,
-=======
   ShelfEvent,
   ShelfNode,
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
   WallEvent,
   WallNode,
 } from '@pascal-app/core'
@@ -596,29 +592,6 @@ export const itemSurfaceStrategy = {
 }
 
 // ============================================================================
-<<<<<<< HEAD
-// ROOF STRATEGY
-// ============================================================================
-
-export const roofStrategy = {
-  enter(ctx: PlacementContext, event: RoofEvent): TransitionResult | null {
-    if (ctx.asset.attachTo) return null
-    if (!ctx.levelId) return null
-
-    const rotation = calculateRoofRotation(event.normal, event.object.matrixWorld)
-
-    return {
-      stateUpdate: { surface: 'roof', roofId: event.node.id },
-      nodeUpdate: {
-        position: [event.position[0], event.position[1], event.position[2]],
-        parentId: ctx.levelId,
-        rotation,
-      },
-      cursorRotationY: rotation[1],
-      cursorRotation: rotation,
-      gridPosition: [event.position[0], event.position[1], event.position[2]],
-      cursorPosition: [event.position[0], event.position[1], event.position[2]],
-=======
 // SHELF SURFACE STRATEGY
 // ============================================================================
 
@@ -703,28 +676,10 @@ export const shelfSurfaceStrategy = {
       cursorRotationY: ctx.currentCursorRotationY,
       gridPosition: [x, rowY, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
       stopPropagation: true,
     }
   },
 
-<<<<<<< HEAD
-  move(ctx: PlacementContext, event: RoofEvent): PlacementResult | null {
-    if (ctx.state.surface !== 'roof') return null
-    if (!ctx.draftItem) return null
-
-    const rotation = calculateRoofRotation(event.normal, event.object.matrixWorld)
-
-    return {
-      gridPosition: [event.position[0], event.position[1], event.position[2]],
-      cursorPosition: [event.position[0], event.position[1], event.position[2]],
-      cursorRotationY: rotation[1],
-      cursorRotation: rotation,
-      nodeUpdate: {
-        position: [event.position[0], event.position[1], event.position[2]],
-        rotation,
-      },
-=======
   /**
    * Handle shelf:move — re-derive the closest row each tick so the user
    * can slide between rows without leaving the shelf.
@@ -753,17 +708,11 @@ export const shelfSurfaceStrategy = {
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       cursorRotationY: ctx.currentCursorRotationY,
       nodeUpdate: { position: [x, rowY, z] },
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
       stopPropagation: true,
       dirtyNodeId: null,
     }
   },
 
-<<<<<<< HEAD
-  click(ctx: PlacementContext, _event: RoofEvent): CommitResult | null {
-    if (ctx.state.surface !== 'roof') return null
-    if (!ctx.draftItem) return null
-=======
   /**
    * Handle shelf:click — commit placement on the active row.
    */
@@ -771,43 +720,17 @@ export const shelfSurfaceStrategy = {
     if (ctx.state.surface !== 'shelf-surface') return null
     if (!(ctx.draftItem && ctx.state.shelfId)) return null
     if (event.node.id !== ctx.state.shelfId) return null
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 
     return {
       nodeUpdate: {
         position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
-<<<<<<< HEAD
-        parentId: ctx.levelId,
-        rotation: ctx.draftItem.rotation,
-=======
         parentId: ctx.state.shelfId,
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
         metadata: stripTransient(ctx.draftItem.metadata),
       },
       stopPropagation: true,
       dirtyNodeId: null,
     }
   },
-<<<<<<< HEAD
-
-  leave(ctx: PlacementContext): TransitionResult | null {
-    if (ctx.state.surface !== 'roof') return null
-
-    return {
-      stateUpdate: { surface: 'floor', roofId: null },
-      nodeUpdate: {
-        position: [ctx.gridPosition.x, 0, ctx.gridPosition.z],
-        parentId: ctx.levelId,
-        rotation: [0, ctx.currentCursorRotationY, 0],
-      },
-      cursorRotationY: ctx.currentCursorRotationY,
-      cursorRotation: [0, ctx.currentCursorRotationY, 0],
-      gridPosition: [ctx.gridPosition.x, 0, ctx.gridPosition.z],
-      cursorPosition: [ctx.gridPosition.x, 0, ctx.gridPosition.z],
-      stopPropagation: true,
-    }
-  },
-=======
 }
 
 /** Same upward-normal heuristic as `isUpwardItemSurfaceHit`, but typed
@@ -816,7 +739,6 @@ export const shelfSurfaceStrategy = {
  *  `event.normal` + `event.object`. */
 function isUpwardShelfSurfaceHit(event: ShelfEvent): boolean {
   return isUpwardItemSurfaceHit(event as unknown as ItemEvent)
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 }
 
 // ============================================================================
@@ -835,15 +757,9 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
     return ctx.state.surfaceItemId !== null
   }
 
-<<<<<<< HEAD
-  // Roof: valid if we entered (no spatial validator yet)
-  if (ctx.state.surface === 'roof') {
-    return ctx.state.roofId !== null
-=======
   // Shelf surface: same — size check already happened on enter
   if (ctx.state.surface === 'shelf-surface') {
     return ctx.state.shelfId !== null
->>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
   }
 
   const attachTo = ctx.draftItem.asset.attachTo
