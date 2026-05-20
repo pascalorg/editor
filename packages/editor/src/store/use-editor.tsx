@@ -66,6 +66,12 @@ export type StructureTool =
   | 'window'
   | 'door'
   | 'shelf'
+  | 'box-vent'
+  | 'ridge-vent'
+  | 'chimney'
+  | 'solar-panel'
+  | 'skylight'
+  | 'dormer'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'

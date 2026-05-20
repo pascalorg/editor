@@ -34,6 +34,17 @@ export const tools: ToolConfig[] = [
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
   { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
+  // Roof-mounted accessories — placement tools are registry-driven
+  // (`def.tool` on each kind's `NodeDefinition`). Each tool listens
+  // for `roof:*` events, so clicking these palette buttons and then
+  // clicking on a roof segment commits a new node parented to that
+  // segment.
+  { id: 'box-vent', iconSrc: '/icons/roof.png', label: 'Box Vent' },
+  { id: 'ridge-vent', iconSrc: '/icons/roof.png', label: 'Ridge Vent' },
+  { id: 'chimney', iconSrc: '/icons/roof.png', label: 'Chimney' },
+  { id: 'solar-panel', iconSrc: '/icons/roof.png', label: 'Solar Panel' },
+  { id: 'skylight', iconSrc: '/icons/roof.png', label: 'Skylight' },
+  { id: 'dormer', iconSrc: '/icons/roof.png', label: 'Dormer' },
 ]
 
 export function StructureTools() {
