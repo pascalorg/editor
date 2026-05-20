@@ -242,7 +242,7 @@ function createFenceParts(fence: FenceNode): FencePart[] {
   return parts
 }
 
-function generateFenceGeometry(fence: FenceNode) {
+export function generateFenceGeometry(fence: FenceNode) {
   const parts = createFenceParts(fence)
   const geometries = parts.map(createFencePartGeometry)
 

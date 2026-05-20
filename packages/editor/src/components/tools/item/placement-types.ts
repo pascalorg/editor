@@ -12,7 +12,11 @@ import type { Vector3 } from 'three'
 // PLACEMENT STATE
 // ============================================================================
 
+<<<<<<< HEAD
 export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface' | 'roof'
+=======
+export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface' | 'shelf-surface'
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 
 /**
  * Tracks which surface the draft item is currently on.
@@ -23,7 +27,17 @@ export interface PlacementState {
   wallId: string | null
   ceilingId: string | null
   surfaceItemId: string | null
+<<<<<<< HEAD
   roofId: string | null
+=======
+  /**
+   * Active shelf when `surface === 'shelf-surface'`. Items host on the
+   * shelf board closest to the cursor's local Y; the row index isn't
+   * stored separately because every move re-derives it from cursor
+   * position via `shelfRowSurfaceYs`.
+   */
+  shelfId: string | null
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 }
 
 // ============================================================================

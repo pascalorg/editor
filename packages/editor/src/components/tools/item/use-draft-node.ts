@@ -179,9 +179,28 @@ export function useDraftNode(): DraftNodeHandle {
     if (!draftRef.current) return
 
     if (adoptedRef.current && originalStateRef.current) {
-      // Move mode: restore original state instead of deleting
+      // Move mode: restore original state instead of deleting — but only
+      // if no other system has already committed a new position for this
+      // node. The 2D `FloorplanRegistryMoveOverlay` commits via
+      // `useScene.updateNodes` before unmounting the legacy mover, and
+      // an unconditional restore here would wipe that commit. By
+      // comparing the live state to the snapshot we took in `adopt()`,
+      // we let an external committer's write stick.
       const original = originalStateRef.current
       const id = draftRef.current.id
+      const live = useScene.getState().nodes[id as AnyNodeId] as ItemNode | undefined
+      const livePosition = live?.position
+      const externallyMoved =
+        !!livePosition &&
+        (livePosition[0] !== original.position[0] ||
+          livePosition[1] !== original.position[1] ||
+          livePosition[2] !== original.position[2])
+      if (externallyMoved) {
+        draftRef.current = null
+        adoptedRef.current = false
+        originalStateRef.current = null
+        return
+      }
 
       useScene.getState().updateNode(id, {
         position: original.position,

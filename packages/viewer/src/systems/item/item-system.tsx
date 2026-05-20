@@ -1,10 +1,7 @@
 import {
   type AnyNodeId,
-  getScaledDimensions,
   type ItemNode,
-  resolveLevelId,
   sceneRegistry,
-  spatialGridManager,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -15,6 +12,13 @@ import type * as THREE from 'three'
 // ITEM SYSTEM
 // ============================================================================
 
+/**
+ * Per-frame wall-side offset for items mounted to wall faces. The slab-
+ * elevation lift for floor items lives in the generic
+ * `<FloorElevationSystem>` and runs at priority 1 — it has already
+ * landed `mesh.position.y` by the time this system clears the dirty
+ * mark at priority 2.
+ */
 export const ItemSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
@@ -38,20 +42,6 @@ export const ItemSystem = () => {
           const wallThickness = (parentWall as WallNode).thickness ?? 0.1
           const side = item.side === 'front' ? 1 : -1
           mesh.position.z = (wallThickness / 2) * side
-        }
-      } else if (!item.asset.attachTo) {
-        // If parented to another item (surface placement), R3F handles positioning via the hierarchy
-        const parentNode = item.parentId ? nodes[item.parentId as AnyNodeId] : undefined
-        if (parentNode?.type !== 'item') {
-          // Floor item: elevate by slab height (using full footprint overlap)
-          const levelId = resolveLevelId(item, nodes)
-          const slabElevation = spatialGridManager.getSlabElevationForItem(
-            levelId,
-            item.position,
-            getScaledDimensions(item),
-            item.rotation,
-          )
-          mesh.position.y = slabElevation + item.position[1]
         }
       }
 

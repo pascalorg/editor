@@ -6,13 +6,19 @@ import type {
   GridEvent,
   ItemEvent,
   ItemNode,
+<<<<<<< HEAD
   RoofEvent,
+=======
+  ShelfEvent,
+  ShelfNode,
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
   WallEvent,
   WallNode,
 } from '@pascal-app/core'
 import {
   getScaledDimensions,
   isLowProfileItemSurface,
+  nodeRegistry,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -590,6 +596,7 @@ export const itemSurfaceStrategy = {
 }
 
 // ============================================================================
+<<<<<<< HEAD
 // ROOF STRATEGY
 // ============================================================================
 
@@ -611,10 +618,97 @@ export const roofStrategy = {
       cursorRotation: rotation,
       gridPosition: [event.position[0], event.position[1], event.position[2]],
       cursorPosition: [event.position[0], event.position[1], event.position[2]],
+=======
+// SHELF SURFACE STRATEGY
+// ============================================================================
+
+/**
+ * Resolve the row Y closest to the cursor's local Y. Reads candidate row
+ * positions from the kind's `capabilities.surfaces.custom` — the shelf
+ * declaration emits one `SurfacePoint` per board's top surface. The
+ * strategy stays kind-agnostic at this level: any future "multi-board"
+ * kind that declares `surfaces.custom` with upward normals gets the
+ * same hit behaviour for free.
+ */
+function getShelfRowSurfaceY(shelfNode: ShelfNode, localY: number): number | null {
+  const def = nodeRegistry.get('shelf')
+  const custom = def?.capabilities?.surfaces?.custom
+  if (!custom) return null
+  const candidates = custom(shelfNode as AnyNode)
+  if (candidates.length === 0) return null
+  let best = candidates[0]
+  let bestDist = Math.abs(best!.position[1] - localY)
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i]
+    if (!c) continue
+    const dist = Math.abs(c.position[1] - localY)
+    if (dist < bestDist) {
+      best = c
+      bestDist = dist
+    }
+  }
+  return best?.position[1] ?? null
+}
+
+export const shelfSurfaceStrategy = {
+  /**
+   * Handle shelf:enter — transition the draft onto the closest shelf
+   * row. Mirrors `itemSurfaceStrategy.enter` but reads candidate
+   * surface heights from the shelf kind's `surfaces.custom` (one Y per
+   * board) instead of `asset.surface.height`. Picks the row whose
+   * surface Y is nearest the cursor's local Y so the user can target a
+   * specific row by hovering near it.
+   */
+  enter(ctx: PlacementContext, event: ShelfEvent): TransitionResult | null {
+    if (ctx.asset.attachTo) return null
+    const shelfNode = event.node as ShelfNode
+
+    if (ctx.state.surface === 'shelf-surface' && ctx.state.shelfId === shelfNode.id) {
+      return null
+    }
+    if (!isUpwardShelfSurfaceHit(event)) return null
+
+    // Size check: draft footprint must fit on the shelf board (width × depth).
+    const ourDims = ctx.draftItem
+      ? getScaledDimensions(ctx.draftItem)
+      : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+    if (ourDims[0] > shelfNode.width || ourDims[2] > shelfNode.depth) return null
+
+    const shelfMesh = sceneRegistry.nodes.get(shelfNode.id)
+    if (!shelfMesh) return null
+
+    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
+    const localPos = shelfMesh.worldToLocal(worldPos)
+    const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
+    if (rowY === null) return null
+
+    const x = snapToGrid(localPos.x, ourDims[0])
+    const z = snapToGrid(localPos.z, ourDims[2])
+
+    const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
+
+    const surfaceQuat = new Quaternion()
+    shelfMesh.getWorldQuaternion(surfaceQuat)
+    const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
+    const localRotationY = ctx.currentCursorRotationY - surfaceWorldY
+    const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
+
+    return {
+      stateUpdate: { surface: 'shelf-surface', shelfId: shelfNode.id },
+      nodeUpdate: {
+        position: [x, rowY, z],
+        parentId: shelfNode.id,
+        rotation: [draftRotation[0], localRotationY, draftRotation[2]],
+      },
+      cursorRotationY: ctx.currentCursorRotationY,
+      gridPosition: [x, rowY, z],
+      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
       stopPropagation: true,
     }
   },
 
+<<<<<<< HEAD
   move(ctx: PlacementContext, event: RoofEvent): PlacementResult | null {
     if (ctx.state.surface !== 'roof') return null
     if (!ctx.draftItem) return null
@@ -630,26 +724,71 @@ export const roofStrategy = {
         position: [event.position[0], event.position[1], event.position[2]],
         rotation,
       },
+=======
+  /**
+   * Handle shelf:move — re-derive the closest row each tick so the user
+   * can slide between rows without leaving the shelf.
+   */
+  move(ctx: PlacementContext, event: ShelfEvent): PlacementResult | null {
+    if (ctx.state.surface !== 'shelf-surface') return null
+    if (!(ctx.state.shelfId && ctx.draftItem)) return null
+    if (event.node.id !== ctx.state.shelfId) return null
+
+    const shelfNode = event.node as ShelfNode
+    const shelfMesh = sceneRegistry.nodes.get(shelfNode.id)
+    if (!shelfMesh) return null
+
+    const ourDims = getScaledDimensions(ctx.draftItem)
+    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
+    const localPos = shelfMesh.worldToLocal(worldPos)
+    const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
+    if (rowY === null) return null
+
+    const x = snapToGrid(localPos.x, ourDims[0])
+    const z = snapToGrid(localPos.z, ourDims[2])
+    const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
+
+    return {
+      gridPosition: [x, rowY, z],
+      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      cursorRotationY: ctx.currentCursorRotationY,
+      nodeUpdate: { position: [x, rowY, z] },
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
       stopPropagation: true,
       dirtyNodeId: null,
     }
   },
 
+<<<<<<< HEAD
   click(ctx: PlacementContext, _event: RoofEvent): CommitResult | null {
     if (ctx.state.surface !== 'roof') return null
     if (!ctx.draftItem) return null
+=======
+  /**
+   * Handle shelf:click — commit placement on the active row.
+   */
+  click(ctx: PlacementContext, event: ShelfEvent): CommitResult | null {
+    if (ctx.state.surface !== 'shelf-surface') return null
+    if (!(ctx.draftItem && ctx.state.shelfId)) return null
+    if (event.node.id !== ctx.state.shelfId) return null
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 
     return {
       nodeUpdate: {
         position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+<<<<<<< HEAD
         parentId: ctx.levelId,
         rotation: ctx.draftItem.rotation,
+=======
+        parentId: ctx.state.shelfId,
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
         metadata: stripTransient(ctx.draftItem.metadata),
       },
       stopPropagation: true,
       dirtyNodeId: null,
     }
   },
+<<<<<<< HEAD
 
   leave(ctx: PlacementContext): TransitionResult | null {
     if (ctx.state.surface !== 'roof') return null
@@ -668,6 +807,16 @@ export const roofStrategy = {
       stopPropagation: true,
     }
   },
+=======
+}
+
+/** Same upward-normal heuristic as `isUpwardItemSurfaceHit`, but typed
+ *  for `ShelfEvent`. Re-uses the matrix-driven world normal calculation
+ *  via a tiny `ItemEvent`-shaped adapter — the function only reads
+ *  `event.normal` + `event.object`. */
+function isUpwardShelfSurfaceHit(event: ShelfEvent): boolean {
+  return isUpwardItemSurfaceHit(event as unknown as ItemEvent)
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 }
 
 // ============================================================================
@@ -686,9 +835,15 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
     return ctx.state.surfaceItemId !== null
   }
 
+<<<<<<< HEAD
   // Roof: valid if we entered (no spatial validator yet)
   if (ctx.state.surface === 'roof') {
     return ctx.state.roofId !== null
+=======
+  // Shelf surface: same — size check already happened on enter
+  if (ctx.state.surface === 'shelf-surface') {
+    return ctx.state.shelfId !== null
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
   }
 
   const attachTo = ctx.draftItem.asset.attachTo

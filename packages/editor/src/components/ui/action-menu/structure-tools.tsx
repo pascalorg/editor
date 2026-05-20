@@ -33,6 +33,7 @@ export const tools: ToolConfig[] = [
   { id: 'fence', iconSrc: '/icons/fence.png', label: 'Fence' },
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
+  { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
 ]
 
 export function StructureTools() {

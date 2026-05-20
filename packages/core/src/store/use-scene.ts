@@ -342,6 +342,16 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
     }
 
+    // Shelf v2: hosting was added in this migration cycle. Older shelves
+    // (saved before the schema gained `children`) need the field
+    // initialised so `createNode(item, shelfId)` finds an array to
+    // append the child id to — without this the host item ends up
+    // orphaned (parented in scene state but not in the shelf's
+    // children list, so the renderer doesn't mount it).
+    if (node.type === 'shelf' && !Array.isArray(node.children)) {
+      patchedNodes[id] = { ...node, children: [] }
+    }
+
     if (node.type === 'roof') {
       patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }

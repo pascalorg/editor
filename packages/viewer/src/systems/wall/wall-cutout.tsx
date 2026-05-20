@@ -74,7 +74,7 @@ export const WallCutout = () => {
     if (
       ((distanceMoved > 0.5 || directionChanged > 0.3) && timeSinceUpdate > 0.1) ||
       lastWallMode.current !== wallMode ||
-      sceneRegistry.byType.wall.size !== lastNumberOfWalls.current ||
+      sceneRegistry.byType.wall!.size !== lastNumberOfWalls.current ||
       lastHighlightKey.current !== highlightKey
     ) {
       lastCameraPosition.current.copy(currentCameraPosition)
@@ -82,7 +82,7 @@ export const WallCutout = () => {
       lastUpdateTime.current = currentTime
       camera.getWorldDirection(u)
 
-      const walls = sceneRegistry.byType.wall
+      const walls = sceneRegistry.byType.wall!
       walls.forEach((wallId) => {
         const wallMesh = sceneRegistry.nodes.get(wallId)
         if (!wallMesh) return
@@ -109,7 +109,7 @@ export const WallCutout = () => {
         }
       })
       lastWallMode.current = wallMode
-      lastNumberOfWalls.current = sceneRegistry.byType.wall.size
+      lastNumberOfWalls.current = sceneRegistry.byType.wall!.size
       lastHighlightKey.current = highlightKey
     }
   })
@@ -118,7 +118,7 @@ export const WallCutout = () => {
     const snapshot = new Map<Mesh, Material | Material[]>()
 
     const restoreForCapture = () => {
-      sceneRegistry.byType.wall.forEach((wallId) => {
+      sceneRegistry.byType.wall!.forEach((wallId) => {
         const wallMesh = sceneRegistry.nodes.get(wallId) as Mesh | undefined
         if (!wallMesh) return
         const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined

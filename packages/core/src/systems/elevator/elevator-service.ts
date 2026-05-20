@@ -1,4 +1,11 @@
-import type { AnyNode, AnyNodeId, CeilingNode, ElevatorNode, LevelNode, WallNode } from '../../schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CeilingNode,
+  ElevatorNode,
+  LevelNode,
+  WallNode,
+} from '../../schema'
 
 export const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
 

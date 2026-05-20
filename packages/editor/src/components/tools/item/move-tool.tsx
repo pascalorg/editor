@@ -1,31 +1,21 @@
 import type {
   AnyNodeId,
   BuildingNode,
-  CeilingNode,
-  ColumnNode,
-  DoorNode,
   ElevatorNode,
-  FenceNode,
-  ItemNode,
   RoofNode,
   RoofSegmentNode,
-  SlabNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
-  WallNode,
-  WindowNode,
 } from '@pascal-app/core'
-import { Vector3 } from 'three'
-import { sfxEmitter } from '../../../lib/sfx-bus'
+import { nodeRegistry } from '@pascal-app/core'
+import { Suspense } from 'react'
 import useEditor from '../../../store/use-editor'
 import { MoveBuildingContent } from '../building/move-building-tool'
-import { MoveCeilingTool } from '../ceiling/move-ceiling-tool'
-import { MoveColumnTool } from '../column/move-column-tool'
-import { MoveDoorTool } from '../door/move-door-tool'
 import { MoveElevatorTool } from '../elevator/move-elevator-tool'
-import { MoveFenceTool } from '../fence/move-fence-tool'
+import { MoveRegistryNodeTool } from '../registry/move-registry-node-tool'
 import { MoveRoofTool } from '../roof/move-roof-tool'
+<<<<<<< HEAD
 import { MoveSlabTool } from '../slab/move-slab-tool'
 import { MoveSpawnTool } from '../spawn/move-spawn-tool'
 import { MoveWallTool } from '../wall/move-wall-tool'
@@ -92,30 +82,54 @@ function MoveItemContent({ movingNode }: { movingNode: ItemNode }) {
 
   return <>{cursor}</>
 }
+=======
+import { getRegistryAffordanceTool } from '../shared/affordance-dispatch'
+>>>>>>> 0bcec8e6ba2a86a9fa9efeee83307491b90dbdf5
 
+/**
+ * MoveTool dispatcher. Routes to (in order):
+ *
+ *   1. `MoveRegistryNodeTool` — generic translate-on-XZ for kinds that
+ *      declare `capabilities.movable` (shelf, spawn, item-with-floor-attach,
+ *      …).
+ *   2. `def.affordanceTools.move` — kind-owned move component
+ *      (slab / ceiling / wall / fence / column / item / door / window).
+ *      Lazy-loaded via `getRegistryAffordanceTool`.
+ *   3. The narrow set of kinds that still have legacy movers because no
+ *      registry equivalent has been written yet (building / elevator /
+ *      roof / stair). Each of these has bespoke move semantics that
+ *      don't fit the generic mover and are not yet ported to a
+ *      kind-owned affordance.
+ */
 export const MoveTool: React.FC<{
   onNodeMoved?: (nodeId: AnyNodeId) => void
   onSpawnMoved?: (nodeId: SpawnNode['id']) => void
-}> = ({ onNodeMoved, onSpawnMoved }) => {
+}> = ({ onNodeMoved }) => {
   const movingNode = useEditor((state) => state.movingNode)
 
   if (!movingNode) return null
+
+  const def = nodeRegistry.get(movingNode.type)
+  if (def?.capabilities?.movable) {
+    return <MoveRegistryNodeTool node={movingNode} />
+  }
+
+  const RegistryMove = getRegistryAffordanceTool(movingNode.type, 'move')
+  if (RegistryMove) {
+    return (
+      <Suspense fallback={null}>
+        <RegistryMove node={movingNode} />
+      </Suspense>
+    )
+  }
+
   if (movingNode.type === 'building')
     return <MoveBuildingContent node={movingNode as BuildingNode} />
-  if (movingNode.type === 'door') return <MoveDoorTool node={movingNode as DoorNode} />
   if (movingNode.type === 'elevator')
     return <MoveElevatorTool node={movingNode as ElevatorNode} onCommitted={onNodeMoved} />
-  if (movingNode.type === 'window') return <MoveWindowTool node={movingNode as WindowNode} />
-  if (movingNode.type === 'ceiling') return <MoveCeilingTool node={movingNode as CeilingNode} />
-  if (movingNode.type === 'column') return <MoveColumnTool node={movingNode as ColumnNode} />
-  if (movingNode.type === 'slab') return <MoveSlabTool node={movingNode as SlabNode} />
-  if (movingNode.type === 'wall') return <MoveWallTool node={movingNode as WallNode} />
-  if (movingNode.type === 'fence') return <MoveFenceTool node={movingNode as FenceNode} />
   if (movingNode.type === 'roof' || movingNode.type === 'roof-segment')
     return <MoveRoofTool node={movingNode as RoofNode | RoofSegmentNode} />
-  if (movingNode.type === 'spawn')
-    return <MoveSpawnTool node={movingNode as SpawnNode} onCommitted={onSpawnMoved} />
   if (movingNode.type === 'stair' || movingNode.type === 'stair-segment')
     return <MoveRoofTool node={movingNode as StairNode | StairSegmentNode} />
-  return <MoveItemContent movingNode={movingNode as ItemNode} />
+  return null
 }

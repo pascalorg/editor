@@ -74,6 +74,7 @@ export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
 export { ScanNode } from './nodes/scan'
 // Nodes
+export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
 export { SpawnNode } from './nodes/spawn'

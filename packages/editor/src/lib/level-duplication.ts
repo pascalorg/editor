@@ -33,50 +33,62 @@ function shouldKeepNode(node: AnyNode, preset: LevelDuplicatePreset) {
   return true
 }
 
+/**
+ * Material field keys per kind, used by the `structure` duplicate preset
+ * to strip materials from the cloned subtree. Lookup table replaces the
+ * legacy per-kind switch — the Phase 6 grep gate flagged `case '<kind>':`
+ * in this file as the remaining per-kind dispatch outside the registry.
+ *
+ * Future: move this to a `capabilities.materialFields` declaration on
+ * each kind's `NodeDefinition` so adding a new kind with materials is a
+ * registry-only edit. Today the registry doesn't surface material fields
+ * in a uniform way (each kind's panel reads / writes them directly), so
+ * this map mirrors the legacy behavior 1:1.
+ */
+const MATERIAL_FIELDS_BY_KIND: Record<string, ReadonlyArray<string>> = {
+  wall: [
+    'material',
+    'materialPreset',
+    'interiorMaterial',
+    'interiorMaterialPreset',
+    'exteriorMaterial',
+    'exteriorMaterialPreset',
+  ],
+  slab: ['material', 'materialPreset'],
+  ceiling: ['material', 'materialPreset'],
+  fence: ['material', 'materialPreset'],
+  shelf: ['material', 'materialPreset'],
+  'roof-segment': ['material', 'materialPreset'],
+  'stair-segment': ['material', 'materialPreset'],
+  window: ['material', 'materialPreset'],
+  door: ['material', 'materialPreset'],
+  roof: [
+    'material',
+    'materialPreset',
+    'topMaterial',
+    'topMaterialPreset',
+    'edgeMaterial',
+    'edgeMaterialPreset',
+    'wallMaterial',
+    'wallMaterialPreset',
+  ],
+  stair: [
+    'material',
+    'materialPreset',
+    'railingMaterial',
+    'railingMaterialPreset',
+    'treadMaterial',
+    'treadMaterialPreset',
+    'sideMaterial',
+    'sideMaterialPreset',
+  ],
+}
+
 function stripMaterials(node: AnyNode): AnyNode {
+  const fields = MATERIAL_FIELDS_BY_KIND[node.type]
+  if (!fields) return node
   const next = { ...node } as Record<string, unknown>
-
-  switch (node.type) {
-    case 'wall':
-      delete next.material
-      delete next.materialPreset
-      delete next.interiorMaterial
-      delete next.interiorMaterialPreset
-      delete next.exteriorMaterial
-      delete next.exteriorMaterialPreset
-      break
-    case 'slab':
-    case 'ceiling':
-    case 'fence':
-    case 'roof-segment':
-    case 'stair-segment':
-    case 'window':
-    case 'door':
-      delete next.material
-      delete next.materialPreset
-      break
-    case 'roof':
-      delete next.material
-      delete next.materialPreset
-      delete next.topMaterial
-      delete next.topMaterialPreset
-      delete next.edgeMaterial
-      delete next.edgeMaterialPreset
-      delete next.wallMaterial
-      delete next.wallMaterialPreset
-      break
-    case 'stair':
-      delete next.material
-      delete next.materialPreset
-      delete next.railingMaterial
-      delete next.railingMaterialPreset
-      delete next.treadMaterial
-      delete next.treadMaterialPreset
-      delete next.sideMaterial
-      delete next.sideMaterialPreset
-      break
-  }
-
+  for (const field of fields) delete next[field]
   return next as AnyNode
 }
 
