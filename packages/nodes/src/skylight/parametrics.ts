@@ -2,6 +2,7 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { SkylightNode } from './schema'
 
 export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
+  customPanel: () => import('./panel'),
   groups: [
     {
       label: 'Type',

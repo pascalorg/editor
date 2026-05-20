@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
-export const ChimneyMaterialRole = z.enum(['surface', 'top'])
+export const ChimneyMaterialRole = z.enum(['body', 'top'])
 export type ChimneyMaterialRole = z.infer<typeof ChimneyMaterialRole>
 
 export const ChimneyNode = BaseNode.extend({

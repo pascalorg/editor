@@ -3,21 +3,10 @@ import { skylightParametrics } from './parametrics'
 import { SkylightNode } from './schema'
 
 /**
- * Skylight — a framed glass opening hosted on a roof segment.
- *
- * **Scope of this port — stub.** Schema is complete (all 25 fields from
- * the archive carry through, including the type-specific variants and
- * the animation state fields). Geometry renders frame + glass as
- * boxes for ALL types — the lantern slope, opening swing, and sliding
- * panel offset from the archive are NOT yet rebuilt. Animation
- * (open/close interpolation driven by `useInteractive.skylight
- * Animations`) is also not rebuilt — `operationState` and
- * `slideFraction` round-trip via the inspector as static knobs.
- *
- * Three-checkbox model: custom `def.renderer`, no `geometry` field
- * (the builder lives in `./geometry` and is shared), no `def.system`
- * (animation comes back when `useInteractive` gains the skylight
- * animation surface).
+ * Skylight — a framed glass opening hosted on a roof segment. All five
+ * type variants (flat / walk-on / lantern / opening / sliding) render
+ * with the archive's full geometry; the animation system advances
+ * `operationState` via `useInteractive.skylightAnimations`.
  */
 export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   kind: 'skylight',
@@ -46,8 +35,15 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  system: {
+    module: () => import('./system'),
+    priority: 3,
+  },
 
   tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
   toolHints: [
     { key: 'Left click', label: 'Place skylight on roof' },
     { key: 'Esc', label: 'Cancel' },

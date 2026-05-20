@@ -86,7 +86,12 @@ export {
   SUBTRACTION,
 } from './lib/csg-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
-export { getRoofSegmentBrushes, RoofSystem } from './systems/roof/roof-system'
+export {
+  getRoofOuterSurfaceFrameAtPoint,
+  getRoofSegmentBrushes,
+  RoofSystem,
+  type SurfaceFrame,
+} from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
 // Slab system follows the wall + fence re-export pattern — composed into
 // the registry-driven slab definition's `def.system`. Removed in Phase 6

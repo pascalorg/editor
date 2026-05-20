@@ -1,3 +1,4 @@
 export { skylightDefinition } from './definition'
-export { buildSkylightGeometry } from './geometry'
+export { buildFrameGeometry } from './frame-csg'
+export { buildLanternGlassGeometry } from './geometry'
 export { SkylightNode } from './schema'

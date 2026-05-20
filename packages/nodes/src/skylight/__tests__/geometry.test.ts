@@ -1,30 +1,30 @@
 import { describe, expect, test } from 'bun:test'
-import { buildSkylightGeometry } from '../geometry'
-import { SkylightNode } from '../schema'
+import { buildLanternGlassGeometry, clamp01, paneSize } from '../geometry'
 
-describe('buildSkylightGeometry (stub)', () => {
-  test('returns non-empty frame + glass geometries', () => {
-    const geo = buildSkylightGeometry(SkylightNode.parse({}))
-    expect(geo.frame.getAttribute('position').count).toBeGreaterThan(0)
-    expect(geo.glass.getAttribute('position').count).toBeGreaterThan(0)
+describe('buildLanternGlassGeometry', () => {
+  test('returns non-empty geometry across topScale variants', () => {
+    const flatTop = buildLanternGlassGeometry(1, 1, 0.3, 0.5)
+    const pointed = buildLanternGlassGeometry(1, 1, 0.3, 0)
+    expect(flatTop.getAttribute('position').count).toBeGreaterThan(0)
+    expect(pointed.getAttribute('position').count).toBeGreaterThan(0)
   })
 
-  test('frame depth = frameDepth + curbHeight when curb=true', () => {
-    const withCurb = buildSkylightGeometry(SkylightNode.parse({ curb: true, curbHeight: 0.1, frameDepth: 0.08 }))
-    const withoutCurb = buildSkylightGeometry(SkylightNode.parse({ curb: false, frameDepth: 0.08 }))
-    // Without curb, frame is shorter overall. Compare bounding box on Y.
-    withCurb.frame.computeBoundingBox()
-    withoutCurb.frame.computeBoundingBox()
-    const tallY = withCurb.frame.boundingBox!.max.y - withCurb.frame.boundingBox!.min.y
-    const shortY = withoutCurb.frame.boundingBox!.max.y - withoutCurb.frame.boundingBox!.min.y
-    expect(tallY).toBeGreaterThan(shortY)
+  test('lantern height drives top vertex Y', () => {
+    const geo = buildLanternGlassGeometry(1, 1, 0.4, 0)
+    geo.computeBoundingBox()
+    expect(geo.boundingBox!.max.y).toBeCloseTo(0.4)
+  })
+})
+
+describe('paneSize / clamp01 helpers', () => {
+  test('paneSize floors at 0.02', () => {
+    expect(paneSize(0.001)).toBe(0.02)
+    expect(paneSize(1)).toBe(1)
   })
 
-  test('width × height drive the glass footprint', () => {
-    const geo = buildSkylightGeometry(SkylightNode.parse({ width: 2, height: 1.5 }))
-    geo.glass.computeBoundingBox()
-    const bb = geo.glass.boundingBox!
-    expect(bb.max.x - bb.min.x).toBeCloseTo(2)
-    expect(bb.max.z - bb.min.z).toBeCloseTo(1.5)
+  test('clamp01 clamps to [0,1]', () => {
+    expect(clamp01(-0.5)).toBe(0)
+    expect(clamp01(1.5)).toBe(1)
+    expect(clamp01(0.4)).toBe(0.4)
   })
 })

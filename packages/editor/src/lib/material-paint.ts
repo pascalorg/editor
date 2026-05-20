@@ -2,6 +2,8 @@
 
 import {
   type CeilingNode,
+  type ChimneyMaterialRole,
+  type ChimneyNode,
   type ColumnNode,
   type FenceNode,
   getCatalogMaterialById,
@@ -23,7 +25,7 @@ import {
 
 export type PaintableMaterialTarget = Extract<
   MaterialTarget,
-  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling' | 'shelf'
+  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling' | 'shelf' | 'chimney'
 >
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -142,6 +144,30 @@ export function buildSingleSurfaceMaterialPatch<
   } as Partial<TNode>
 }
 
+export function buildChimneyMaterialPatch(
+  role: ChimneyMaterialRole,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<ChimneyNode> {
+  if (role === 'top') {
+    return { topMaterial: material, topMaterialPreset: materialPreset }
+  }
+  return { material, materialPreset }
+}
+
+export function getEffectiveChimneyMaterial(
+  node: ChimneyNode,
+  role: ChimneyMaterialRole,
+): { material: MaterialSchema | undefined; materialPreset: string | undefined } {
+  if (role === 'top') {
+    const hasTop = node.topMaterial !== undefined || node.topMaterialPreset !== undefined
+    if (hasTop) {
+      return { material: node.topMaterial, materialPreset: node.topMaterialPreset }
+    }
+  }
+  return { material: node.material, materialPreset: node.materialPreset }
+}
+
 export function resolveActivePaintMaterialFromSelection(params: {
   nodes: Record<string, any>
   selectedId: string | null
@@ -151,6 +177,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       | WallSurfaceSide
       | StairSurfaceMaterialRole
       | RoofSurfaceMaterialRole
+      | ChimneyMaterialRole
       | SingleSurfaceMaterialRole
   } | null
 }): ActivePaintMaterial | null {
@@ -220,6 +247,27 @@ export function resolveActivePaintMaterialFromSelection(params: {
   }
 
   if (
+    selectedNode.type === 'chimney' &&
+    (selectedMaterialTarget.role === 'body' || selectedMaterialTarget.role === 'top')
+  ) {
+    const surface = getEffectiveChimneyMaterial(
+      selectedNode,
+      selectedMaterialTarget.role as ChimneyMaterialRole,
+    )
+    return hasActivePaintMaterial({
+      material: surface.material,
+      materialPreset: surface.materialPreset,
+      sourceTarget: 'chimney',
+    })
+      ? {
+          material: surface.material,
+          materialPreset: surface.materialPreset,
+          sourceTarget: 'chimney',
+        }
+      : null
+  }
+
+  if (
     (selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
       selectedNode.type === 'slab' ||
@@ -284,6 +332,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'shelf') {
     return 'shelf'
+  }
+
+  if (selectedNode.type === 'chimney') {
+    return 'chimney'
   }
 
   return null

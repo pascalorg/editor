@@ -2,23 +2,11 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { SolarPanelNode } from './schema'
 
 export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
+  // Bespoke panel ported from the archive — preset cards, auto-fit,
+  // and flip orientation can't be expressed by auto-derived groups.
+  // `groups` stays declared so the MCP path keeps a structured view.
+  customPanel: () => import('./panel'),
   groups: [
-    {
-      label: 'Preset',
-      fields: [
-        // Treated as an enum field; the picker labels live in
-        // `solar-panel-presets.ts`. The framework's preset picker
-        // syncs the four dims via `derive` (TODO once derive is wired
-        // for inspector edits) — until then, picking a preset is
-        // a marker only; the dims editor below is authoritative.
-        {
-          key: 'panelTypePreset',
-          kind: 'enum',
-          options: ['residential', 'residential-large', 'compact', 'frameless'],
-          display: 'select',
-        },
-      ],
-    },
     {
       label: 'Grid',
       fields: [

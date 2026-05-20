@@ -88,6 +88,8 @@ export {
   type ElevatorInteractiveState,
   type ElevatorPhase,
   type ItemInteractiveState,
+  type SkylightAnimationState,
+  type SkylightInteractiveState,
   useInteractive,
   type WindowAnimationState,
   type WindowInteractiveState,

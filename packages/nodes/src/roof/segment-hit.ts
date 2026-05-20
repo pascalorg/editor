@@ -17,31 +17,58 @@ export type RoofSegmentHit = {
 }
 
 /**
+ * Analytical surface Y for `seg` at segment-local (lx, lz). Mirrors
+ * the per-roof-type slope math in `solar-panel/geometry.ts` so the
+ * disambiguator below stays free of cross-kind imports. Returns the
+ * roof's local surface height; the value is only used to compare
+ * candidates, never written to the scene.
+ */
+function analyticalSurfaceY(seg: RoofSegmentNode, lx: number, lz: number): number {
+  const rh = seg.roofType === 'flat' ? 0 : seg.roofHeight
+  const peakY = seg.wallHeight + rh
+  if (rh === 0) return seg.wallHeight
+
+  if (seg.roofType === 'gable' || seg.roofType === 'gambrel' || seg.roofType === 'mansard' || seg.roofType === 'dutch') {
+    const t = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
+    return peakY - t * rh
+  }
+  if (seg.roofType === 'shed') {
+    const t = (lz + seg.depth / 2) / (seg.depth || 1)
+    return peakY - t * rh
+  }
+  if (seg.roofType === 'hip') {
+    const fx = seg.width > 0 ? Math.abs(lx) / (seg.width / 2) : 0
+    const fz = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
+    return peakY - Math.max(fx, fz) * rh
+  }
+  const t = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
+  return peakY - t * rh
+}
+
+/**
  * Resolve which roof-segment the user clicked. Used by every placement
  * tool that drops a new node onto a roof (box-vent, ridge-vent,
  * chimney, solar-panel, skylight, dormer).
  *
- * The resolution is two-pass and forgiving:
+ * The hip/gable case puts every slope at the same roof origin and
+ * differs them only by `rotation-y`. After `worldToLocal`, the hit
+ * point's (x, z) lies inside *every* segment's axis-aligned half-
+ * extents, so a naive first-match returns the wrong slope (typically
+ * segments[0]). We instead score each candidate by
+ * `|localY − analyticalSurfaceY(localX, localZ)|` and pick the
+ * smallest — the slope the user actually clicked is the one whose
+ * sloped surface passes through the hit point.
  *
- *  1. Exact pass — iterate the roof's children, transform the world
- *     click point into each segment's local frame, and accept the
- *     first whose local (x, z) lies inside `[width/2 + overhang,
- *     depth/2 + overhang]`. The overhang inclusion matters because
- *     the visible merged-roof mesh extends past `width/2` by the
- *     overhang on each side; without it, clicks on the eave bands
- *     produced `null` and silently no-op'd the placement (the bug
- *     this helper fixes).
+ *  - Overhang is included in the bbox filter because the visible
+ *    merged-roof mesh extends past `width/2` by the overhang on each
+ *    side; without it, clicks on the eave bands produced `null`.
  *
- *  2. Fallback pass — if no segment passed the exact test (the user
- *     clicked beyond every segment's outer overhang, OR the segment
- *     bounds are stale), return the FIRST segment with the click
- *     point projected into its local frame. This matches the legacy
- *     `roof-panel.tsx`'s "use segments[0]" fallback so add operations
- *     always commit somewhere. The user can move the placed node
- *     afterward via the standard move tool.
+ *  - Fallback: if no segment passes the bbox filter (clicked beyond
+ *    every outer overhang, or registry is stale), return the first
+ *    segment with the click projected into its frame — matches the
+ *    legacy "always commit somewhere" behaviour.
  *
- * Returns null only if the roof has zero registered segments —
- * effectively "no roof to drop onto."
+ * Returns null only if the roof has zero registered segments.
  */
 export function resolveRoofSegmentHit(
   roof: RoofNode,
@@ -52,6 +79,7 @@ export function resolveRoofSegmentHit(
   worldPoint.set(wx, wy, wz)
   const state = useScene.getState()
   let firstSegment: { seg: RoofSegmentNode; segObj: THREE.Object3D } | null = null
+  let best: { hit: RoofSegmentHit; score: number } | null = null
 
   for (const childId of roof.children ?? []) {
     const seg = state.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
@@ -67,9 +95,18 @@ export function resolveRoofSegmentHit(
     const halfW = seg.width / 2 + overhang
     const halfD = seg.depth / 2 + overhang
     if (Math.abs(local.x) <= halfW && Math.abs(local.z) <= halfD) {
-      return { segment: seg, localX: local.x, localY: local.y, localZ: local.z }
+      const surfaceY = analyticalSurfaceY(seg, local.x, local.z)
+      const score = Math.abs(local.y - surfaceY)
+      if (!best || score < best.score) {
+        best = {
+          hit: { segment: seg, localX: local.x, localY: local.y, localZ: local.z },
+          score,
+        }
+      }
     }
   }
+
+  if (best) return best.hit
 
   if (firstSegment) {
     const local = firstSegment.segObj.worldToLocal(worldPoint.clone())

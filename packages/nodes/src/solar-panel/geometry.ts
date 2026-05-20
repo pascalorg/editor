@@ -4,6 +4,93 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 const SOLAR_CELL_SIZE_M = 0.16
 
+// Procedurally generated cell texture used by the default panel material.
+// Drawn once into an offscreen canvas, wrapped, and tiled per cell by the
+// stretched UVs assigned in `buildSolarPanelGeometry`.
+export function createSolarPanelTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null
+
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  ctx.fillStyle = '#dde3ec'
+  ctx.fillRect(0, 0, size, size)
+
+  const pad = size * 0.04
+  const x = pad
+  const y = pad
+  const cellW = size - pad * 2
+  const cellH = size - pad * 2
+  const chamfer = cellW * 0.16
+
+  ctx.beginPath()
+  ctx.moveTo(x + chamfer, y)
+  ctx.lineTo(x + cellW - chamfer, y)
+  ctx.lineTo(x + cellW, y + chamfer)
+  ctx.lineTo(x + cellW, y + cellH - chamfer)
+  ctx.lineTo(x + cellW - chamfer, y + cellH)
+  ctx.lineTo(x + chamfer, y + cellH)
+  ctx.lineTo(x, y + cellH - chamfer)
+  ctx.lineTo(x, y + chamfer)
+  ctx.closePath()
+
+  const grad = ctx.createLinearGradient(x, y, x + cellW, y + cellH)
+  grad.addColorStop(0, '#0f1b3a')
+  grad.addColorStop(1, '#162546')
+  ctx.fillStyle = grad
+  ctx.fill()
+
+  ctx.save()
+  ctx.clip()
+  ctx.strokeStyle = 'rgba(120, 150, 200, 0.10)'
+  ctx.lineWidth = 0.5
+  const fingers = 16
+  for (let f = 1; f < fingers; f++) {
+    const fx = x + (cellW * f) / fingers
+    ctx.beginPath()
+    ctx.moveTo(fx, y)
+    ctx.lineTo(fx, y + cellH)
+    ctx.stroke()
+  }
+
+  ctx.strokeStyle = 'rgba(200, 210, 225, 0.35)'
+  ctx.lineWidth = Math.max(1, cellH * 0.008)
+  for (let b = 1; b <= 2; b++) {
+    const by = y + (cellH * b) / 3
+    ctx.beginPath()
+    ctx.moveTo(x, by)
+    ctx.lineTo(x + cellW, by)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.RepeatWrapping
+  tex.anisotropy = 8
+  tex.needsUpdate = true
+  return tex
+}
+
+let _defaultPanelMaterial: THREE.Material | null = null
+export function getDefaultPanelMaterial(): THREE.Material {
+  if (_defaultPanelMaterial) return _defaultPanelMaterial
+  const map = createSolarPanelTexture()
+  _defaultPanelMaterial = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(map ? 0xffffff : 0x0c0c1f),
+    roughness: 0.22,
+    metalness: 0.35,
+    map: map ?? null,
+  })
+  _defaultPanelMaterial.needsUpdate = true
+  return _defaultPanelMaterial
+}
+
 /**
  * Pure builder for a solar panel array. Generates one merged
  * BufferGeometry containing every cell of the rows × columns grid,
@@ -137,12 +224,19 @@ export function getAnalyticalNormal(
     return new THREE.Vector3(0, depth, -rh).normalize()
   }
   if (roofType === 'hip') {
+    // All four hip faces share the same slope angle, set by `rh` over
+    // `min(w/2, d/2)` (the eave-to-ridge horizontal reach perpendicular
+    // to the ridge — short axis for both the trapezoidal long faces and
+    // the triangular short faces). Using `depth/2` for the front/back
+    // normal and `width/2` for the sides was correct only when w == d;
+    // for any other aspect ratio it tilted the long-axis faces wrong.
     const fx = width > 0 ? Math.abs(lx) / (width / 2) : 0
     const fz = depth > 0 ? Math.abs(lz) / (depth / 2) : 0
+    const slopeReach = Math.min(width, depth) / 2
     if (fz >= fx) {
-      return new THREE.Vector3(0, depth / 2, lz >= 0 ? rh : -rh).normalize()
+      return new THREE.Vector3(0, slopeReach, lz >= 0 ? rh : -rh).normalize()
     }
-    return new THREE.Vector3(lx >= 0 ? rh : -rh, width / 2, 0).normalize()
+    return new THREE.Vector3(lx >= 0 ? rh : -rh, slopeReach, 0).normalize()
   }
   const halfD = depth / 2
   return new THREE.Vector3(0, halfD, lz >= 0 ? rh : -rh).normalize()

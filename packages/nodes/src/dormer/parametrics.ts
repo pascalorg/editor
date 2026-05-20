@@ -3,6 +3,10 @@ import { dormerSupportsArch, dormerSupportsCornerRadii } from './geometry'
 import type { DormerNode } from './schema'
 
 export const dormerParametrics: ParametricDescriptor<DormerNode> = {
+  // Bespoke tabbed UI (Dormer / Window / Frame / Grid / Sill) — same
+  // pattern as chimney. `groups` stays for the MCP path / fallback
+  // consumer, but the inspector mounts the custom panel.
+  customPanel: () => import('./panel'),
   groups: [
     {
       label: 'Dormer',

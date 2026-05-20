@@ -8,6 +8,11 @@ import {
   pasteEditorClipboardToLevel,
 } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
+import {
+  closeSkylightOpenState,
+  isOperableSkylightType,
+  toggleSkylightOpenState,
+} from '../lib/skylight-interaction'
 import { closeWindowOpenState, toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
 
@@ -197,6 +202,10 @@ export const useKeyboard = ({
             e.preventDefault()
             toggleWindowOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
+          } else if (node?.type === 'skylight' && isOperableSkylightType(node.skylightType)) {
+            e.preventDefault()
+            toggleSkylightOpenState(node.id)
+            sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
             const ROTATION_STEP = Math.PI / 4
@@ -236,6 +245,10 @@ export const useKeyboard = ({
           ) {
             e.preventDefault()
             closeWindowOpenState(node.id)
+            sfxEmitter.emit('sfx:item-rotate')
+          } else if (node?.type === 'skylight' && isOperableSkylightType(node.skylightType)) {
+            e.preventDefault()
+            closeSkylightOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()

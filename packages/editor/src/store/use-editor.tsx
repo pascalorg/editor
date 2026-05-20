@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type ChimneyMaterialRole,
   type ColumnNode,
   type DoorNode,
   type ElevatorNode,
@@ -111,6 +112,7 @@ export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
   | RoofSurfaceMaterialRole
+  | ChimneyMaterialRole
   | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {

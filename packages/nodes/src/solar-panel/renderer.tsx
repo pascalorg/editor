@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type RoofSegmentNode,
   type SolarPanelNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -13,6 +14,7 @@ import * as THREE from 'three'
 import {
   buildSolarPanelGeometry,
   getAnalyticalNormal,
+  getDefaultPanelMaterial,
   getSurfaceY,
   surfaceQuatFromNormal,
 } from './geometry'
@@ -21,12 +23,6 @@ const defaultFrameMaterial = new THREE.MeshStandardMaterial({
   color: new THREE.Color(0.6, 0.6, 0.65),
   roughness: 0.4,
   metalness: 0.8,
-})
-
-const defaultPanelMaterial = new THREE.MeshStandardMaterial({
-  color: new THREE.Color(0.05, 0.05, 0.12),
-  roughness: 0.18,
-  metalness: 0.35,
 })
 
 /**
@@ -41,10 +37,17 @@ const defaultPanelMaterial = new THREE.MeshStandardMaterial({
  * changes still propagate immediately through the outer `rotation-y`
  * binding.
  */
-const SolarPanelRenderer = ({ node }: { node: SolarPanelNode }) => {
+const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
   const ref = useRef<THREE.Group>(null!)
-  useRegistry(node.id, 'solar-panel', ref)
-  const handlers = useNodeEvents(node, 'solar-panel')
+  useRegistry(storeNode.id, 'solar-panel', ref)
+  const handlers = useNodeEvents(storeNode, 'solar-panel')
+
+  // Merge live overrides written by slider drags so the mesh updates in
+  // real time before the value is committed to the scene store.
+  const overrides = useLiveNodeOverrides((s) =>
+    s.get(storeNode.id) as Partial<SolarPanelNode> | undefined,
+  )
+  const node = overrides ? ({ ...storeNode, ...overrides } as SolarPanelNode) : storeNode
 
   const segment = useScene((state) =>
     node.roofSegmentId
@@ -73,7 +76,7 @@ const SolarPanelRenderer = ({ node }: { node: SolarPanelNode }) => {
 
   const panelMaterial = useMemo(() => {
     if (node.panelMaterial) return createMaterial(node.panelMaterial)
-    return createMaterialFromPresetRef(node.panelMaterialPreset) ?? defaultPanelMaterial
+    return createMaterialFromPresetRef(node.panelMaterialPreset) ?? getDefaultPanelMaterial()
   }, [node.panelMaterial, node.panelMaterialPreset])
 
   const surfaceQuat = useMemo(() => {
@@ -94,26 +97,30 @@ const SolarPanelRenderer = ({ node }: { node: SolarPanelNode }) => {
   const tiltRad =
     node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
 
-  // Mounted inside the segment's React subtree, so segment transform is
-  // already on the parent. Apply only the panel's segment-local offset
-  // + surface quat + Y rotation + tilt.
+  // Roof accessories are mounted under `<group name="roof-elements">`
+  // in the roof renderer — that group has NO transform, so the segment
+  // frame is NOT inherited from the React tree. Apply segment.position
+  // and segment.rotation here, then the panel's segment-local offset,
+  // then surface quat / yaw / tilt.
   return (
-    <group
-      position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
-      ref={ref}
-      visible={node.visible}
-    >
-      <group quaternion={surfaceQuat}>
-        <group rotation-y={node.rotation ?? 0}>
-          <group rotation-x={tiltRad}>
-            <mesh
-              castShadow
-              geometry={geometry}
-              material={[frameMaterial, panelMaterial]}
-              name="solar-panel-surface"
-              receiveShadow
-              {...handlers}
-            />
+    <group position={segment.position} rotation-y={segment.rotation}>
+      <group
+        position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
+        ref={ref}
+        visible={node.visible}
+      >
+        <group quaternion={surfaceQuat}>
+          <group rotation-y={node.rotation ?? 0}>
+            <group rotation-x={tiltRad}>
+              <mesh
+                castShadow
+                geometry={geometry}
+                material={[frameMaterial, panelMaterial]}
+                name="solar-panel-surface"
+                receiveShadow
+                {...handlers}
+              />
+            </group>
           </group>
         </group>
       </group>

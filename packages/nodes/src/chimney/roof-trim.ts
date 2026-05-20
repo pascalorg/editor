@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { partitionTopFaceGroups } from './holes'
 
 const visibleMat = new THREE.MeshBasicMaterial()
 
@@ -69,6 +70,15 @@ export function trimChimneyBodyAgainstRoof(
     if (ic > 0) out.addGroup(0, ic, 0)
     out.computeVertexNormals()
 
+    // Re-partition the top rim face into group 1 so the body mesh's
+    // `[bodyMaterial, topMaterial]` array routes the rim to the top
+    // material — the CSG step above wiped the partition we set inside
+    // `holes.ts:carveChimneyHoles`. Same threshold as the carve step
+    // (top rim is at `topY`, just below it for safety).
+    const peakY = segment.wallHeight + (segment.roofType === 'flat' ? 0 : segment.roofHeight)
+    const topY = peakY + node.heightAboveRidge
+    partitionTopFaceGroups(out, topY - 0.05)
+
     body.dispose()
     step1.geometry.dispose()
     step2.geometry.dispose()
@@ -86,10 +96,6 @@ export function trimChimneyBodyAgainstRoof(
     wallBrush.geometry.dispose()
     innerBrush.geometry.dispose()
   }
-
-  // Silence unused-parameter warning — kept in the signature so the
-  // bands / panels CSG ports (when they come back) match this shape.
-  void node
 
   return result
 }

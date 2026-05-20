@@ -66,6 +66,7 @@ import { LevelTreeNode } from './level-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
 import { ShelfTreeNode } from './shelf-tree-node'
 import { SlabTreeNode } from './slab-tree-node'
+import { SolarPanelTreeNode } from './solar-panel-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
 import { WallTreeNode } from './wall-tree-node'
@@ -96,6 +97,7 @@ const treeNodeByType: Record<
   }>,
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,
+  'solar-panel': SolarPanelTreeNode,
   column: ColumnTreeNode,
   elevator: ElevatorTreeNode,
   level: LevelTreeNode as React.ComponentType<{

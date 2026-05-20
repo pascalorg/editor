@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type ChimneyNode,
   type RoofSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -11,6 +12,7 @@ import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pas
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { buildChimneyGeometry } from './geometry'
+import { carveChimneyHoles } from './holes'
 import { trimChimneyBodyAgainstRoof } from './roof-trim'
 
 const bodyMaterial = new THREE.MeshStandardMaterial({
@@ -36,10 +38,21 @@ const topMaterial = new THREE.MeshStandardMaterial({
  * until the roof-segment Stage B migration introduces a `roofCutout`
  * capability the parent can read.
  */
-const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
+const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
   const ref = useRef<THREE.Group>(null!)
-  useRegistry(node.id, 'chimney', ref)
-  const handlers = useNodeEvents(node, 'chimney')
+  useRegistry(storeNode.id, 'chimney', ref)
+  const handlers = useNodeEvents(storeNode, 'chimney')
+
+  // Merge in-flight slider drags from `useLiveNodeOverrides` so the mesh
+  // updates while the user is still holding the slider. On release the
+  // panel commits to the store and clears the override.
+  const overrides = useLiveNodeOverrides((state) =>
+    state.get(storeNode.id as AnyNodeId) as Partial<ChimneyNode> | undefined,
+  )
+  const node = useMemo<ChimneyNode>(
+    () => (overrides ? { ...storeNode, ...overrides } : storeNode),
+    [storeNode, overrides],
+  )
 
   const segment = useScene((state) =>
     node.roofSegmentId
@@ -49,7 +62,12 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
 
   const geo = useMemo(() => {
     if (!segment) return null
-    return buildChimneyGeometry(node, segment)
+    const raw = buildChimneyGeometry(node, segment)
+    // Carve the smoke shaft (body cavity), cap holes, and hollow flue
+    // bores. Matches the v1 roof-system visual.
+    const carved = carveChimneyHoles(raw.body, raw.cap, raw.flues, node, segment)
+    return { ...raw, body: carved.body, cap: carved.cap, flues: carved.flues }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     segment?.wallHeight,
     segment?.roofHeight,
@@ -58,6 +76,8 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
     node.depth,
     node.heightAboveRidge,
     node.bodyShape,
+    node.bodyHollowDepth,
+    node.bodyHollowMargin,
     node.shoulderStyle,
     node.shoulderHeight,
     node.shoulderExtent,
@@ -70,10 +90,20 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
     node.flueHeight,
     node.flueDiameter,
     node.flueSpacing,
+    node.flueWallThickness,
     node.cricketStyle,
     node.cricketSide,
     node.cricketLength,
     node.cricketHeight,
+    node.bandStyle,
+    node.bandHeight,
+    node.bandExtent,
+    node.bandOffset,
+    node.panelStyle,
+    node.panelDepth,
+    node.panelHeight,
+    node.panelOffsetTop,
+    node.panelMargin,
     node.position[0],
     node.position[2],
     node.rotation,
@@ -111,6 +141,7 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
         geo.cap?.dispose()
         geo.flues?.dispose()
         geo.cricket?.dispose()
+        geo.bands?.dispose()
       }
     },
     [geo, trimmedBody],
@@ -136,22 +167,30 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
   // The chimney's geometry bakes its baseY using segment.wallHeight inside
   // the builder, so the outer group only needs the segment-local X/Z
   // offset. Y stays at 0 here.
+  // Two-material array: index 0 = body/surface, index 1 = top. The
+  // geometry buffers are partitioned in `holes.ts:partitionTopFaceGroups`
+  // so the very top face of body/cap/flues lands in group 1 and picks up
+  // the top material — matching the v1 roof-system visual.
+  const surfaceArray = useMemo(
+    () => [surfaceMaterial, capSurfaceMaterial],
+    [surfaceMaterial, capSurfaceMaterial],
+  )
+
   return (
-    <group position={[0, 0, 0]} ref={ref} visible={node.visible}>
+    <group position={[0, 0, 0]} ref={ref} visible={node.visible} {...handlers}>
       <mesh
         castShadow
         geometry={trimmedBody ?? geo.body}
-        material={surfaceMaterial}
-        name="chimney-body"
+        material={surfaceArray}
+        name="chimney-surface"
         receiveShadow
-        {...handlers}
       />
       {geo.cap && (
         <mesh
           castShadow
           geometry={geo.cap}
-          material={capSurfaceMaterial}
-          name="chimney-cap"
+          material={surfaceArray}
+          name="chimney-surface"
           receiveShadow
         />
       )}
@@ -159,8 +198,8 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
         <mesh
           castShadow
           geometry={geo.flues}
-          material={surfaceMaterial}
-          name="chimney-flues"
+          material={surfaceArray}
+          name="chimney-surface"
           receiveShadow
         />
       )}
@@ -169,7 +208,16 @@ const ChimneyRenderer = ({ node }: { node: ChimneyNode }) => {
           castShadow
           geometry={geo.cricket}
           material={surfaceMaterial}
-          name="chimney-cricket"
+          name="chimney-surface"
+          receiveShadow
+        />
+      )}
+      {geo.bands && (
+        <mesh
+          castShadow
+          geometry={geo.bands}
+          material={surfaceMaterial}
+          name="chimney-surface"
           receiveShadow
         />
       )}

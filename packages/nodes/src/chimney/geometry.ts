@@ -24,6 +24,7 @@ export type ChimneyGeometry = {
   cap: THREE.BufferGeometry | null
   flues: THREE.BufferGeometry | null
   cricket: THREE.BufferGeometry | null
+  bands: THREE.BufferGeometry | null
 }
 
 export function buildChimneyGeometry(
@@ -55,7 +56,12 @@ export function buildChimneyGeometry(
     cricket = buildCricketGeometry(node, baseY)
   }
 
-  return { body, cap, flues, cricket }
+  let bands: THREE.BufferGeometry | null = null
+  if (node.bandStyle !== 'none') {
+    bands = buildBandsGeometry(node, baseY, topY)
+  }
+
+  return { body, cap, flues, cricket, bands }
 }
 
 // ─── Body ────────────────────────────────────────────────────────────
@@ -227,10 +233,14 @@ function buildCricketGeometry(
   const sZ = slopeSign * (d / 2)
   const sZFar = sZ + slopeSign * cL
   const peakY = baseY + cH
+  const slopeLen = Math.hypot(cL, cH)
 
   const positions: number[] = []
   const uvs: number[] = []
 
+  // Vertex layout (back = against the chimney face):
+  //   v0/v1  back-bottom (left/right)   v4/v5  back-top (left/right)
+  //   v3/v2  front-bottom (left/right)
   const v0: [number, number, number] = [-w / 2, baseY, sZ]
   const v1: [number, number, number] = [w / 2, baseY, sZ]
   const v2: [number, number, number] = [w / 2, baseY, sZFar]
@@ -238,19 +248,107 @@ function buildCricketGeometry(
   const v4: [number, number, number] = [-w / 2, peakY, sZ]
   const v5: [number, number, number] = [w / 2, peakY, sZ]
 
-  const pushTri = (a: number[], b: number[], c: number[]) => {
-    if (slopeSign > 0) positions.push(...a, ...b, ...c)
-    else positions.push(...a, ...c, ...b)
-    uvs.push(0, 0, 0, 0, 0, 0)
+  // Planar UVs per face — each face mapped to its own 2D extent so the
+  // texture tiles correctly (u along width, v along the in-face axis).
+  const u0_: [number, number] = [0, 0]
+  const u1_: [number, number] = [w, 0]
+  const uvBottom: Record<'v0' | 'v1' | 'v2' | 'v3', [number, number]> = {
+    v0: u0_, v1: u1_, v2: [w, cL], v3: [0, cL],
   }
-  pushTri(v0, v1, v2)
-  pushTri(v0, v2, v3)
-  pushTri(v3, v2, v5)
-  pushTri(v3, v5, v4)
-  pushTri(v0, v4, v5)
-  pushTri(v0, v5, v1)
-  pushTri(v0, v3, v4)
-  pushTri(v1, v5, v2)
+  const uvSlope: Record<'v3' | 'v2' | 'v5' | 'v4', [number, number]> = {
+    v3: [0, 0], v2: [w, 0], v5: [w, slopeLen], v4: [0, slopeLen],
+  }
+  const uvBack: Record<'v0' | 'v1' | 'v5' | 'v4', [number, number]> = {
+    v0: [0, 0], v1: [w, 0], v5: [w, cH], v4: [0, cH],
+  }
+  const uvLeft: Record<'v0' | 'v3' | 'v4', [number, number]> = {
+    v0: [0, 0], v3: [cL, 0], v4: [0, cH],
+  }
+  const uvRight: Record<'v1' | 'v5' | 'v2', [number, number]> = {
+    v1: [0, 0], v5: [0, cH], v2: [cL, 0],
+  }
+
+  const pushTri = (
+    a: [number, number, number],
+    b: [number, number, number],
+    c: [number, number, number],
+    ua: [number, number],
+    ub: [number, number],
+    uc: [number, number],
+  ) => {
+    if (slopeSign > 0) {
+      positions.push(...a, ...b, ...c)
+      uvs.push(...ua, ...ub, ...uc)
+    } else {
+      positions.push(...a, ...c, ...b)
+      uvs.push(...ua, ...uc, ...ub)
+    }
+  }
+
+  // Bottom (quad split into 2 tris)
+  pushTri(v0, v1, v2, uvBottom.v0, uvBottom.v1, uvBottom.v2)
+  pushTri(v0, v2, v3, uvBottom.v0, uvBottom.v2, uvBottom.v3)
+  // Sloped top (v3 v2 v5 v4)
+  pushTri(v3, v2, v5, uvSlope.v3, uvSlope.v2, uvSlope.v5)
+  pushTri(v3, v5, v4, uvSlope.v3, uvSlope.v5, uvSlope.v4)
+  // Back face against the chimney (v0 v1 v5 v4)
+  pushTri(v0, v4, v5, uvBack.v0, uvBack.v4, uvBack.v5)
+  pushTri(v0, v5, v1, uvBack.v0, uvBack.v5, uvBack.v1)
+  // Left side triangle
+  pushTri(v0, v3, v4, uvLeft.v0, uvLeft.v3, uvLeft.v4)
+  // Right side triangle
+  pushTri(v1, v5, v2, uvRight.v1, uvRight.v5, uvRight.v2)
+
+  const geo = buildBufferGeometry(positions, uvs)
+  applyNodeTransform(geo, node)
+  geo.computeVertexNormals()
+  return geo
+}
+
+// ─── Bands ───────────────────────────────────────────────────────────
+// Decorative horizontal stripes around the chimney (soldier-course
+// brick / stone band). Single or double; each band protrudes outward
+// by `bandExtent` per side.
+
+function buildBandsGeometry(
+  node: ChimneyNode,
+  baseY: number,
+  topY: number,
+): THREE.BufferGeometry | null {
+  const isRound = node.bodyShape === 'round'
+  const w = node.width
+  const d = isRound ? node.width : node.depth
+  const r = w / 2
+  const bandExt = Math.max(0, node.bandExtent)
+  const bandH = Math.max(0.02, node.bandHeight)
+  const bandOffset = Math.max(0, node.bandOffset)
+  const count = node.bandStyle === 'double' ? 2 : 1
+  const gap = bandH * 0.6
+
+  const positions: number[] = []
+  const uvs: number[] = []
+
+  for (let i = 0; i < count; i++) {
+    const bandTop = topY - bandOffset - i * (bandH + gap)
+    const bandBot = bandTop - bandH
+    if (bandBot <= baseY + 0.01) break
+    if (isRound) {
+      pushCylinderFaces(positions, uvs, bandBot, bandTop, r + bandExt, r + bandExt)
+    } else {
+      pushSlabFaces(
+        positions,
+        uvs,
+        bandBot,
+        bandTop,
+        w / 2 + bandExt,
+        d / 2 + bandExt,
+        w / 2 + bandExt,
+        d / 2 + bandExt,
+      )
+    }
+  }
+
+  if (positions.length === 0) return null
 
   const geo = buildBufferGeometry(positions, uvs)
   applyNodeTransform(geo, node)

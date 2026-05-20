@@ -42,6 +42,9 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   },
 
   tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
   toolHints: [
     { key: 'Left click', label: 'Place solar panel array on roof' },
     { key: 'Esc', label: 'Cancel' },

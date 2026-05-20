@@ -3,6 +3,8 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type ChimneyMaterialRole,
+  type ChimneyNode,
   type ColumnNode,
   emitter,
   type FenceNode,
@@ -44,6 +46,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ActivePaintMaterial,
+  buildChimneyMaterialPatch,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -449,6 +452,50 @@ function applySingleSurfacePaintPreview(
   }
 
   return previewMeshMaterial(mesh, previewMaterial)
+}
+
+function resolveChimneyMaterialTarget(event: NodeEvent): ChimneyMaterialRole {
+  // Chimney surfaces are partitioned by `holes.ts:partitionTopFaceGroups`
+  // so material index 0 = body, 1 = top. Faces outside any group
+  // (cricket mesh, which uses a single material) fall back to 'body'.
+  const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
+  return materialIndex === 1 ? 'top' : 'body'
+}
+
+function applyChimneyPaintPreview(
+  node: ChimneyNode,
+  role: ChimneyMaterialRole,
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  const root = getRegisteredNodeObject(node.id)
+  if (!root) return null
+  const previewMaterial = getSingleSurfacePreviewMaterial(material)
+  if (!previewMaterial) return null
+
+  const restores: PaintPreviewCleanup[] = []
+  root.traverse((object) => {
+    const mesh = object as Mesh
+    if (!mesh.isMesh) return
+    const current = mesh.material as Material | Material[]
+    if (Array.isArray(current)) {
+      const idx = role === 'top' ? 1 : 0
+      const previousAtIdx = current[idx]
+      if (!previousAtIdx) return
+      const previousArray = [...current]
+      const nextArray = [...current]
+      nextArray[idx] = previewMaterial
+      mesh.material = nextArray
+      restores.push(() => {
+        mesh.material = previousArray
+      })
+    } else if (role === 'body') {
+      restores.push(previewMeshMaterial(mesh, previewMaterial))
+    }
+  })
+  if (restores.length === 0) return null
+  return () => {
+    for (let i = restores.length - 1; i >= 0; i -= 1) restores[i]?.()
+  }
 }
 
 function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRole | null) {
@@ -948,6 +995,33 @@ export const SelectionManager = () => {
         }
       }
 
+      if (node.type === 'chimney') {
+        const role = resolveChimneyMaterialTarget(event)
+        const compatible = hasActivePaintMaterial(activePaintMaterial)
+        return {
+          key: `chimney:${node.id}:${role}`,
+          hoveredId: node.id as AnyNodeId,
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
+          apply: compatible
+            ? () => {
+                useScene
+                  .getState()
+                  .updateNode(
+                    node.id as AnyNodeId,
+                    buildChimneyMaterialPatch(
+                      role,
+                      activePaintMaterial.material,
+                      activePaintMaterial.materialPreset,
+                    ),
+                  )
+              }
+            : null,
+          preview: compatible
+            ? () => applyChimneyPaintPreview(node as ChimneyNode, role, activePaintMaterial)
+            : () => previewCursor('not-allowed'),
+        }
+      }
+
       if (
         node.type === 'fence' ||
         node.type === 'column' ||
@@ -1219,6 +1293,11 @@ export const SelectionManager = () => {
           nodeToSelect.type === node.type
         ) {
           setSelectedMaterialTargetForNode(nodeToSelect, 'surface')
+          nextMaterialTargetHandled = true
+        }
+
+        if (node.type === 'chimney' && nodeToSelect.type === 'chimney') {
+          setSelectedMaterialTargetForNode(nodeToSelect, resolveChimneyMaterialTarget(event))
           nextMaterialTargetHandled = true
         }
 

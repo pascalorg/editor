@@ -27,8 +27,8 @@ export const SolarPanelNode = BaseNode.extend({
   rotation: z.number().default(0),
 
   // Grid layout.
-  rows: z.number().int().min(1).max(20).default(4),
-  columns: z.number().int().min(1).max(20).default(5),
+  rows: z.number().int().min(1).max(20).default(2),
+  columns: z.number().int().min(1).max(20).default(3),
 
   // Individual panel dimensions (meters). Defaults match the 'residential' preset.
   panelWidth: z.number().default(1.0),

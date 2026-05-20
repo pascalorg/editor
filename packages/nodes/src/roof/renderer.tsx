@@ -1,9 +1,16 @@
 'use client'
 
-import { type RoofNode, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { getRoofMaterialArray, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import { roofDebugMaterials, roofMaterials } from './roof-materials'
 
 export const RoofRenderer = ({ node }: { node: RoofNode }) => {
@@ -16,6 +23,22 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
 
   const handlers = useNodeEvents(node, 'roof')
   const debugColors = useViewer((s) => s.debugColors)
+
+  // Collect roof element IDs (chimneys, skylights, etc.) hosted by any segment.
+  // Rendered outside segments-wrapper (invisible during normal mode) so elements
+  // stay visible at all times.
+  const roofElementIds = useScene(
+    useShallow((state) => {
+      const ids: AnyNodeId[] = []
+      for (const segmentId of node.children ?? []) {
+        const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
+        if (!seg) continue
+        for (const childId of seg.children ?? []) ids.push(childId as AnyNodeId)
+      }
+      return ids
+    }),
+  )
+
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
@@ -51,16 +74,16 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
         name="merged-roof"
         receiveShadow
       />
-      {/* Segments hold per-segment data + mount any hosted accessories
-          (chimney, dormer, skylight, box-vent, ridge-vent, solar-panel)
-          via the roof-segment renderer's recursive `NodeRenderer`. The
-          segment placeholder meshes themselves stay empty (`RoofSystem`
-          only fills the `merged-roof` mesh above) so they don't z-fight
-          with the merged visual — no `visible={false}` wrapper needed,
-          and the accessory grandchildren render correctly. */}
-      {(node.children ?? []).map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId} />
-      ))}
+      <group name="segments-wrapper" visible={false}>
+        {(node.children ?? []).map((childId) => (
+          <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
+        ))}
+      </group>
+      <group name="roof-elements">
+        {roofElementIds.map((childId) => (
+          <NodeRenderer key={childId} nodeId={childId} />
+        ))}
+      </group>
     </group>
   )
 }

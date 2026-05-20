@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
 import { solarPanelDefinition } from './definition'
-import { getAnalyticalNormal, getSurfaceY, surfaceQuatFromNormal } from './geometry'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from './geometry'
 import SolarPanelPreview from './preview'
 
 const worldPoint = new THREE.Vector3()
@@ -37,6 +37,9 @@ const SolarPanelTool = () => {
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
+  // Compact 2×3 ghost (rows × columns) — small enough to read as a
+  // pointer, large enough to show the array's orientation/aspect.
+  // The committed panel still uses the full residential defaults (4×5).
   const previewNode = useMemo(
     () =>
       SolarPanelNode.parse({
@@ -44,6 +47,8 @@ const SolarPanelTool = () => {
         name: 'Solar Panel',
         position: [0, 0, 0],
         rotation: 0,
+        rows: 2,
+        columns: 3,
       }),
     [],
   )
@@ -96,14 +101,18 @@ const SolarPanelTool = () => {
       if (!hit) return
       const state = useScene.getState()
 
-      const surfaceY = getSurfaceY(hit.localX, hit.localZ, hit.segment)
+      // Use the raycast hit Y (segment-local) and analytical normal so the
+      // committed panel sits exactly where the ghost was rendered. The
+      // analytical `getSurfaceY` is the bare-rafter height — it ignores
+      // deck/shingle layers and sinks the panel into the roof, producing
+      // a visible jump between ghost and committed mesh.
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
 
       const panel = SolarPanelNode.parse({
         ...solarPanelDefinition.defaults(),
         name: 'Solar Panel',
         roofSegmentId: hit.segment.id,
-        position: [hit.localX, surfaceY, hit.localZ],
+        position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
         surfaceNormal: [normal.x, normal.y, normal.z],
       })

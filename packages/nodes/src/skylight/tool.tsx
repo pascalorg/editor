@@ -15,8 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
 import { skylightDefinition } from './definition'
-import { getAnalyticalNormal, getSurfaceY } from './geometry'
-import { surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
 import SkylightPreview from './preview'
 
 const worldPoint = new THREE.Vector3()
@@ -89,16 +88,12 @@ const SkylightTool = () => {
       if (!hit) return
       const state = useScene.getState()
 
-      const surfaceY = getSurfaceY(hit.localX, hit.localZ, hit.segment)
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
-
       const skylight = SkylightNode.parse({
         ...skylightDefinition.defaults(),
         name: 'Skylight',
         roofSegmentId: hit.segment.id,
-        position: [hit.localX, surfaceY, hit.localZ],
+        position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
-        surfaceNormal: [normal.x, normal.y, normal.z],
       })
       state.createNode(skylight, hit.segment.id as AnyNodeId)
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
