@@ -29,6 +29,12 @@ export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
 export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
+  DormerNode,
+  type DormerSurfaceMaterialRole,
+  type DormerSurfaceMaterialSpec,
+  getEffectiveDormerSurfaceMaterial,
+} from './nodes/dormer'
+export {
   COLUMN_PRESETS,
   ColumnBaseStyle,
   ColumnCapitalStyle,
