@@ -27,6 +27,44 @@ export type ChimneyGeometry = {
   bands: THREE.BufferGeometry | null
 }
 
+// Small air gap between the body top and the cap bottom — without it
+// the cap reads as glued onto the body; this slot catches a shadow
+// line and sells the cap as a separate stone/metal piece.
+const CAP_REVEAL = 0.003
+
+/**
+ * Smooth-shaded indexed cylinder. Used for every round body / cap /
+ * band section. `THREE.CylinderGeometry` gives us:
+ *  - shared side vertices across adjacent radial segments → smooth
+ *    cylindrical shading (the previous unindexed pusher made every
+ *    24-segment chimney visibly faceted),
+ *  - separate cap-rim vertices → crisp top/bottom edges,
+ *  - radial UV projection on the caps (vs. the previous (0,0) smear).
+ */
+function buildSmoothCylinder(
+  yBot: number,
+  yTop: number,
+  rBot: number,
+  rTop: number,
+  segments = 24,
+): THREE.BufferGeometry {
+  const h = Math.max(1e-4, yTop - yBot)
+  const cy = (yTop + yBot) / 2
+  // CylinderGeometry params: radiusTop, radiusBottom, height, radialSegments,
+  // heightSegments, openEnded.
+  const geo = new THREE.CylinderGeometry(rTop, rBot, h, segments, 1, false)
+  geo.translate(0, cy, 0)
+  return geo
+}
+
+function mergeAndDispose(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  if (parts.length === 1) return parts[0]!
+  const merged = mergeGeometries(parts, false)
+  if (!merged) return parts[0]!
+  for (const p of parts) p.dispose()
+  return merged
+}
+
 export function buildChimneyGeometry(
   node: ChimneyNode,
   segment: RoofSegmentNode,
@@ -42,8 +80,11 @@ export function buildChimneyGeometry(
   let cap: THREE.BufferGeometry | null = null
   let capTopY = topY
   if (node.cap && node.capShape !== 'none') {
-    cap = buildCapGeometry(node, topY)
-    capTopY = topY + node.capThickness
+    // Inset the cap by `CAP_REVEAL` above the body top so a shadow
+    // line separates them.
+    const capBaseY = topY + CAP_REVEAL
+    cap = buildCapGeometry(node, capBaseY)
+    capTopY = capBaseY + node.capThickness
   }
 
   let flues: THREE.BufferGeometry | null = null
@@ -76,43 +117,60 @@ function buildBodyGeometry(
   const d = isRound ? node.width : node.depth
   const r = w / 2
 
-  const positions: number[] = []
-  const uvs: number[] = []
-
   const style = node.shoulderStyle
   const ext = Math.max(0, node.shoulderExtent)
   const sh = Math.max(0.05, Math.min(node.shoulderHeight, topY - baseY - 0.05))
 
-  if (style === 'none') {
-    if (isRound) pushCylinderFaces(positions, uvs, baseY, topY, r, r)
-    else pushSlabFaces(positions, uvs, baseY, topY, w / 2, d / 2, w / 2, d / 2)
-  } else if (style === 'tapered') {
-    if (isRound) {
-      pushCylinderFaces(positions, uvs, baseY, baseY + sh, r + ext, r)
-      pushCylinderFaces(positions, uvs, baseY + sh, topY, r, r)
+  if (isRound) {
+    // Round body — assemble from smooth-shaded indexed cylinder pieces.
+    // Each shoulder tier is its own cylinder so corbeled steps stay
+    // crisp; the merge below preserves indices.
+    const parts: THREE.BufferGeometry[] = []
+    if (style === 'none') {
+      parts.push(buildSmoothCylinder(baseY, topY, r, r))
+    } else if (style === 'tapered') {
+      parts.push(buildSmoothCylinder(baseY, baseY + sh, r + ext, r))
+      parts.push(buildSmoothCylinder(baseY + sh, topY, r, r))
     } else {
-      pushSlabFaces(positions, uvs, baseY, baseY + sh, w / 2 + ext, d / 2 + ext, w / 2, d / 2)
-      pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2)
+      // corbeled — three stepped tiers, then the straight shaft above.
+      const tiers = 3
+      const tierH = sh / tiers
+      for (let i = 0; i < tiers; i++) {
+        const f = i / tiers
+        const yBot = baseY + i * tierH
+        const yTop = baseY + (i + 1) * tierH
+        const rr = r + ext * (1 - f)
+        parts.push(buildSmoothCylinder(yBot, yTop, rr, rr))
+      }
+      parts.push(buildSmoothCylinder(baseY + sh, topY, r, r))
     }
+    const merged = mergeAndDispose(parts)
+    applyNodeTransform(merged, node)
+    return merged
+  }
+
+  // Square body — keep the original unindexed face emitter so the
+  // 90° corners stay crisp under `computeVertexNormals`.
+  const positions: number[] = []
+  const uvs: number[] = []
+
+  if (style === 'none') {
+    pushSlabFaces(positions, uvs, baseY, topY, w / 2, d / 2, w / 2, d / 2)
+  } else if (style === 'tapered') {
+    pushSlabFaces(positions, uvs, baseY, baseY + sh, w / 2 + ext, d / 2 + ext, w / 2, d / 2)
+    pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2)
   } else {
-    // corbeled — three steps
     const tiers = 3
     const tierH = sh / tiers
     for (let i = 0; i < tiers; i++) {
       const f = i / tiers
       const yBot = baseY + i * tierH
       const yTop = baseY + (i + 1) * tierH
-      if (isRound) {
-        const rr = r + ext * (1 - f)
-        pushCylinderFaces(positions, uvs, yBot, yTop, rr, rr)
-      } else {
-        const hw = w / 2 + ext * (1 - f)
-        const hd = d / 2 + ext * (1 - f)
-        pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd)
-      }
+      const hw = w / 2 + ext * (1 - f)
+      const hd = d / 2 + ext * (1 - f)
+      pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd)
     }
-    if (isRound) pushCylinderFaces(positions, uvs, baseY + sh, topY, r, r)
-    else pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2)
+    pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2)
   }
 
   const geo = buildBufferGeometry(positions, uvs)
@@ -123,7 +181,7 @@ function buildBodyGeometry(
 
 // ─── Cap ─────────────────────────────────────────────────────────────
 
-function buildCapGeometry(node: ChimneyNode, topY: number): THREE.BufferGeometry {
+function buildCapGeometry(node: ChimneyNode, capBaseY: number): THREE.BufferGeometry {
   const overhang = Math.max(0, node.capOverhang)
   const t = node.capThickness
   const isRound = node.bodyShape === 'round'
@@ -132,15 +190,43 @@ function buildCapGeometry(node: ChimneyNode, topY: number): THREE.BufferGeometry
   const halfWInner = node.width / 2
   const halfDInner = (isRound ? node.width : node.depth) / 2
 
+  const y0 = capBaseY
+  const y1 = capBaseY + t
+
+  if (isRound) {
+    const parts: THREE.BufferGeometry[] = []
+    switch (node.capShape) {
+      case 'flat':
+        parts.push(buildSmoothCylinder(y0, y1, halfW, halfW))
+        break
+      case 'stepped': {
+        const tiers = 3
+        const tT = t / tiers
+        for (let i = 0; i < tiers; i++) {
+          const f = i / tiers
+          const yBot = y0 + i * tT
+          const yTop = y0 + (i + 1) * tT
+          const rr = halfW + (halfWInner - halfW) * f
+          parts.push(buildSmoothCylinder(yBot, yTop, rr, rr))
+        }
+        break
+      }
+      default:
+        // 'sloped' — taper from overhang base to chimney footprint at top
+        parts.push(buildSmoothCylinder(y0, y1, halfW, halfWInner))
+        break
+    }
+    const merged = mergeAndDispose(parts)
+    applyNodeTransform(merged, node)
+    return merged
+  }
+
+  // Square cap — unindexed slabs for crisp 90° corners.
   const positions: number[] = []
   const uvs: number[] = []
-  const y0 = topY
-  const y1 = topY + t
-
   switch (node.capShape) {
     case 'flat':
-      if (isRound) pushCylinderFaces(positions, uvs, y0, y1, halfW, halfW)
-      else pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfW, halfD)
+      pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfW, halfD)
       break
     case 'stepped': {
       const tiers = 3
@@ -149,21 +235,14 @@ function buildCapGeometry(node: ChimneyNode, topY: number): THREE.BufferGeometry
         const f = i / tiers
         const yBot = y0 + i * tT
         const yTop = y0 + (i + 1) * tT
-        if (isRound) {
-          const rr = halfW + (halfWInner - halfW) * f
-          pushCylinderFaces(positions, uvs, yBot, yTop, rr, rr)
-        } else {
-          const hw = halfW + (halfWInner - halfW) * f
-          const hd = halfD + (halfDInner - halfD) * f
-          pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd)
-        }
+        const hw = halfW + (halfWInner - halfW) * f
+        const hd = halfD + (halfDInner - halfD) * f
+        pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd)
       }
       break
     }
     default:
-      // 'sloped' — taper from overhang base to chimney footprint at top
-      if (isRound) pushCylinderFaces(positions, uvs, y0, y1, halfW, halfWInner)
-      else pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfWInner, halfDInner)
+      pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfWInner, halfDInner)
       break
   }
 
@@ -192,6 +271,16 @@ export function flueXPositions(
   return xs
 }
 
+// Flue-pot proportions. The previous renderer drew each flue as a
+// single straight cylinder/box — visually a "drainpipe", not a chimney
+// pot. Real terracotta pots have a tall shaft topped by a short
+// overhanging rim; this two-tier silhouette is the cheapest geometry
+// that reads as a pot. Total height still equals `flueHeight`, so the
+// bore cutter in `holes.ts` covers the whole envelope unchanged.
+const FLUE_RIM_HEIGHT_RATIO = 0.12 // 12 % of total height, capped below
+const FLUE_RIM_HEIGHT_MAX = 0.04 // 4 cm — bigger than this looks chunky
+const FLUE_RIM_OVERHANG_RATIO = 0.12 // 12 % of flue diameter, radially
+
 function buildFluesGeometry(node: ChimneyNode, capTopY: number): THREE.BufferGeometry | null {
   const count = Math.max(0, Math.min(4, node.flueCount))
   if (count === 0) return null
@@ -201,20 +290,39 @@ function buildFluesGeometry(node: ChimneyNode, capTopY: number): THREE.BufferGeo
   const xs = flueXPositions(count, node.width, d, node.flueSpacing)
   const parts: THREE.BufferGeometry[] = []
 
+  const rimHeight = Math.min(h * FLUE_RIM_HEIGHT_RATIO, FLUE_RIM_HEIGHT_MAX)
+  const shaftHeight = h - rimHeight
+  const rimOverhang = d * FLUE_RIM_OVERHANG_RATIO
+
   for (const x of xs) {
-    const flueGeo: THREE.BufferGeometry =
-      node.flueShape === 'square'
-        ? new THREE.BoxGeometry(d, h, d)
-        : new THREE.CylinderGeometry(d / 2, d / 2, h, 24, 1, false)
-    flueGeo.translate(x, capTopY + h / 2, 0)
-    parts.push(flueGeo)
+    const yBot = capTopY
+    const yShaftTop = capTopY + shaftHeight
+
+    if (node.flueShape === 'square') {
+      const shaft = new THREE.BoxGeometry(d, shaftHeight, d)
+      shaft.translate(x, yBot + shaftHeight / 2, 0)
+      parts.push(shaft)
+      const rimSide = d + 2 * rimOverhang
+      const rim = new THREE.BoxGeometry(rimSide, rimHeight, rimSide)
+      rim.translate(x, yShaftTop + rimHeight / 2, 0)
+      parts.push(rim)
+    } else {
+      // Round flues: indexed CylinderGeometry — smooth shafts, crisp
+      // rim edges, radial cap UVs (same #1/#2 fixes already applied to
+      // the body / cap / bands).
+      const shaft = buildSmoothCylinder(yBot, yShaftTop, d / 2, d / 2)
+      shaft.translate(x, 0, 0)
+      parts.push(shaft)
+      const rimR = d / 2 + rimOverhang
+      const rim = buildSmoothCylinder(yShaftTop, yShaftTop + rimHeight, rimR, rimR)
+      rim.translate(x, 0, 0)
+      parts.push(rim)
+    }
   }
 
-  const merged = parts.length === 1 ? parts[0]! : (mergeGeometries(parts, false) ?? parts[0]!)
-  if (merged !== parts[0]) for (const p of parts) p.dispose()
-
+  if (parts.length === 0) return null
+  const merged = mergeAndDispose(parts)
   applyNodeTransform(merged, node)
-  merged.computeVertexNormals()
   return merged
 }
 
@@ -325,27 +433,36 @@ function buildBandsGeometry(
   const count = node.bandStyle === 'double' ? 2 : 1
   const gap = bandH * 0.6
 
+  if (isRound) {
+    const parts: THREE.BufferGeometry[] = []
+    for (let i = 0; i < count; i++) {
+      const bandTop = topY - bandOffset - i * (bandH + gap)
+      const bandBot = bandTop - bandH
+      if (bandBot <= baseY + 0.01) break
+      parts.push(buildSmoothCylinder(bandBot, bandTop, r + bandExt, r + bandExt))
+    }
+    if (parts.length === 0) return null
+    const merged = mergeAndDispose(parts)
+    applyNodeTransform(merged, node)
+    return merged
+  }
+
   const positions: number[] = []
   const uvs: number[] = []
-
   for (let i = 0; i < count; i++) {
     const bandTop = topY - bandOffset - i * (bandH + gap)
     const bandBot = bandTop - bandH
     if (bandBot <= baseY + 0.01) break
-    if (isRound) {
-      pushCylinderFaces(positions, uvs, bandBot, bandTop, r + bandExt, r + bandExt)
-    } else {
-      pushSlabFaces(
-        positions,
-        uvs,
-        bandBot,
-        bandTop,
-        w / 2 + bandExt,
-        d / 2 + bandExt,
-        w / 2 + bandExt,
-        d / 2 + bandExt,
-      )
-    }
+    pushSlabFaces(
+      positions,
+      uvs,
+      bandBot,
+      bandTop,
+      w / 2 + bandExt,
+      d / 2 + bandExt,
+      w / 2 + bandExt,
+      d / 2 + bandExt,
+    )
   }
 
   if (positions.length === 0) return null
@@ -415,47 +532,4 @@ function pushSlabFaces(
   pushQuad(bBR, bTR, tTR, tBR, [-halfDB, 0], [halfDB, 0], [halfDT, t], [-halfDT, t])
   pushQuad(bTR, bTL, tTL, tTR, [halfWB, 0], [-halfWB, 0], [-halfWT, t], [halfWT, t])
   pushQuad(bTL, bBL, tBL, tTL, [halfDB, 0], [-halfDB, 0], [-halfDT, t], [halfDT, t])
-}
-
-function pushCylinderFaces(
-  positions: number[],
-  uvs: number[],
-  y0: number,
-  y1: number,
-  rB: number,
-  rT: number,
-  segments = 24,
-) {
-  const t = y1 - y0
-  for (let i = 0; i < segments; i++) {
-    const a0 = (i / segments) * Math.PI * 2
-    const a1 = ((i + 1) / segments) * Math.PI * 2
-    const c0 = Math.cos(a0)
-    const s0 = Math.sin(a0)
-    const c1 = Math.cos(a1)
-    const s1 = Math.sin(a1)
-    const bL: [number, number, number] = [rB * c0, y0, rB * s0]
-    const bR: [number, number, number] = [rB * c1, y0, rB * s1]
-    const tL: [number, number, number] = [rT * c0, y1, rT * s0]
-    const tR: [number, number, number] = [rT * c1, y1, rT * s1]
-    positions.push(...bL, ...tR, ...bR)
-    positions.push(...bL, ...tL, ...tR)
-    const u0 = i / segments
-    const u1 = (i + 1) / segments
-    uvs.push(u0, 0, u1, t, u1, 0)
-    uvs.push(u0, 0, u0, t, u1, t)
-  }
-  // Bottom + top caps
-  for (let i = 0; i < segments; i++) {
-    const a0 = (i / segments) * Math.PI * 2
-    const a1 = ((i + 1) / segments) * Math.PI * 2
-    const p0B: [number, number, number] = [rB * Math.cos(a0), y0, rB * Math.sin(a0)]
-    const p1B: [number, number, number] = [rB * Math.cos(a1), y0, rB * Math.sin(a1)]
-    positions.push(0, y0, 0, ...p0B, ...p1B)
-    uvs.push(0, 0, 0, 0, 0, 0)
-    const p0T: [number, number, number] = [rT * Math.cos(a0), y1, rT * Math.sin(a0)]
-    const p1T: [number, number, number] = [rT * Math.cos(a1), y1, rT * Math.sin(a1)]
-    positions.push(0, y1, 0, ...p1T, ...p0T)
-    uvs.push(0, 0, 0, 0, 0, 0)
-  }
 }
