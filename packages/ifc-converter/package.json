@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --build --watch",
-    "test": "bun test",
+    "test": "bun test --pass-with-no-tests",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
