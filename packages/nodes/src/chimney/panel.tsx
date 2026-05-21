@@ -382,6 +382,20 @@ export default function ChimneyPanel() {
           unit="m"
           value={Math.round((node.bodyHollowMargin ?? 0.08) * 1000) / 1000}
         />
+        {(node.bodyShape ?? 'square') !== 'round' && (
+          <SliderControl
+            label="Corner Bevel"
+            max={Math.max(0, Math.min(node.width, node.depth) / 2 - 0.005)}
+            min={0}
+            onChange={(v) => previewProp({ cornerBevel: v })}
+            onCommit={(v) => commitProp({ cornerBevel: v })}
+            precision={3}
+            restoreOnCommit={false}
+            step={0.005}
+            unit="m"
+            value={Math.round((node.cornerBevel ?? 0) * 1000) / 1000}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Height">

@@ -31,6 +31,12 @@ export const ChimneyNode = BaseNode.extend({
   depth: z.number().default(0.6),
   heightAboveRidge: z.number().default(1.0),
   cutoutOffset: z.number().default(0),
+  // Chamfered corners on the body / cap / bands. 0 = sharp 90° corners
+  // (existing behaviour, kept as default so previously-saved chimneys
+  // look identical). A small positive value (~0.01-0.02 m) breaks up
+  // the silhouette and reads as a stone or chamfered-brick chimney.
+  // Square bodies only — round bodies have no corners to bevel.
+  cornerBevel: z.number().default(0),
 
   cap: z.boolean().default(true),
   capShape: z.enum(['none', 'sloped', 'flat', 'stepped']).default('sloped'),

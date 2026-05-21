@@ -29,6 +29,15 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           visibleIf: (n) => n.bodyShape === 'square',
         },
         { key: 'heightAboveRidge', kind: 'number', unit: 'm', min: 0.2, max: 3, step: 0.05 },
+        {
+          key: 'cornerBevel',
+          kind: 'number',
+          unit: 'm',
+          min: 0,
+          max: 0.1,
+          step: 0.005,
+          visibleIf: (n) => n.bodyShape === 'square',
+        },
       ],
     },
     {

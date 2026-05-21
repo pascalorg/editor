@@ -149,16 +149,19 @@ function buildBodyGeometry(
     return merged
   }
 
-  // Square body — keep the original unindexed face emitter so the
-  // 90° corners stay crisp under `computeVertexNormals`.
+  // Square body — keep the unindexed face emitter; pass cornerBevel
+  // so each slab section's vertical corners are chamfered into 45°
+  // faces. The chamfer catches a highlight on every edge and reads as
+  // a masonry chimney instead of a plastic box.
   const positions: number[] = []
   const uvs: number[] = []
+  const bevel = Math.max(0, node.cornerBevel ?? 0)
 
   if (style === 'none') {
-    pushSlabFaces(positions, uvs, baseY, topY, w / 2, d / 2, w / 2, d / 2)
+    pushSlabFaces(positions, uvs, baseY, topY, w / 2, d / 2, w / 2, d / 2, bevel)
   } else if (style === 'tapered') {
-    pushSlabFaces(positions, uvs, baseY, baseY + sh, w / 2 + ext, d / 2 + ext, w / 2, d / 2)
-    pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2)
+    pushSlabFaces(positions, uvs, baseY, baseY + sh, w / 2 + ext, d / 2 + ext, w / 2, d / 2, bevel)
+    pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2, bevel)
   } else {
     const tiers = 3
     const tierH = sh / tiers
@@ -168,9 +171,9 @@ function buildBodyGeometry(
       const yTop = baseY + (i + 1) * tierH
       const hw = w / 2 + ext * (1 - f)
       const hd = d / 2 + ext * (1 - f)
-      pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd)
+      pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd, bevel)
     }
-    pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2)
+    pushSlabFaces(positions, uvs, baseY + sh, topY, w / 2, d / 2, w / 2, d / 2, bevel)
   }
 
   const geo = buildBufferGeometry(positions, uvs)
@@ -221,12 +224,13 @@ function buildCapGeometry(node: ChimneyNode, capBaseY: number): THREE.BufferGeom
     return merged
   }
 
-  // Square cap — unindexed slabs for crisp 90° corners.
+  // Square cap — unindexed slabs, optional corner chamfer.
   const positions: number[] = []
   const uvs: number[] = []
+  const bevel = Math.max(0, node.cornerBevel ?? 0)
   switch (node.capShape) {
     case 'flat':
-      pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfW, halfD)
+      pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfW, halfD, bevel)
       break
     case 'stepped': {
       const tiers = 3
@@ -237,12 +241,12 @@ function buildCapGeometry(node: ChimneyNode, capBaseY: number): THREE.BufferGeom
         const yTop = y0 + (i + 1) * tT
         const hw = halfW + (halfWInner - halfW) * f
         const hd = halfD + (halfDInner - halfD) * f
-        pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd)
+        pushSlabFaces(positions, uvs, yBot, yTop, hw, hd, hw, hd, bevel)
       }
       break
     }
     default:
-      pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfWInner, halfDInner)
+      pushSlabFaces(positions, uvs, y0, y1, halfW, halfD, halfWInner, halfDInner, bevel)
       break
   }
 
@@ -449,6 +453,7 @@ function buildBandsGeometry(
 
   const positions: number[] = []
   const uvs: number[] = []
+  const bevel = Math.max(0, node.cornerBevel ?? 0)
   for (let i = 0; i < count; i++) {
     const bandTop = topY - bandOffset - i * (bandH + gap)
     const bandBot = bandTop - bandH
@@ -462,6 +467,7 @@ function buildBandsGeometry(
       d / 2 + bandExt,
       w / 2 + bandExt,
       d / 2 + bandExt,
+      bevel,
     )
   }
 
@@ -496,7 +502,20 @@ function pushSlabFaces(
   halfDB: number,
   halfWT: number,
   halfDT: number,
+  bevel = 0,
 ) {
+  // Clamp bevel so it never eats more than the slab can spare on
+  // either ring (a wider bottom plus a narrower top, e.g. an inverted
+  // taper, has different limits per ring).
+  const cB = Math.max(0, Math.min(bevel, halfWB - 0.001, halfDB - 0.001))
+  const cT = Math.max(0, Math.min(bevel, halfWT - 0.001, halfDT - 0.001))
+  if (cB > 0.001 || cT > 0.001) {
+    pushOctagonalSlabFaces(
+      positions, uvs, y0, y1, halfWB, halfDB, halfWT, halfDT, cB, cT,
+    )
+    return
+  }
+
   const t = y1 - y0
   const bBL: [number, number, number] = [-halfWB, y0, -halfDB]
   const bBR: [number, number, number] = [halfWB, y0, -halfDB]
@@ -532,4 +551,79 @@ function pushSlabFaces(
   pushQuad(bBR, bTR, tTR, tBR, [-halfDB, 0], [halfDB, 0], [halfDT, t], [-halfDT, t])
   pushQuad(bTR, bTL, tTL, tTR, [halfWB, 0], [-halfWB, 0], [-halfWT, t], [halfWT, t])
   pushQuad(bTL, bBL, tBL, tTL, [halfDB, 0], [-halfDB, 0], [-halfDT, t], [halfDT, t])
+}
+
+/**
+ * Octagonal-footprint variant of `pushSlabFaces`. Each corner of the
+ * usual 4-corner slab is replaced by a 45° chamfer, giving an
+ * 8-vertex ring at each y-level. Eight side faces (four axis-aligned
+ * + four chamfer) plus two fan-triangulated octagonal caps. UVs use
+ * the same physical-meter convention as the unchamfered path so
+ * textures (brick, stone) tile at a consistent rate either way.
+ */
+function pushOctagonalSlabFaces(
+  positions: number[],
+  uvs: number[],
+  y0: number,
+  y1: number,
+  halfWB: number,
+  halfDB: number,
+  halfWT: number,
+  halfDT: number,
+  cB: number,
+  cT: number,
+) {
+  // Eight ring vertices per y-level, traced so consecutive entries
+  // share an outward-facing wall edge. Order (looking down +Y):
+  //   p0 (+x, -z+c)  p1 (+x, +z-c)  p2 (+x-c, +z)  p3 (-x+c, +z)
+  //   p4 (-x, +z-c)  p5 (-x, -z+c)  p6 (-x+c, -z)  p7 (+x-c, -z)
+  const ring = (hw: number, hd: number, c: number, y: number) =>
+    [
+      [hw, y, -hd + c],
+      [hw, y, hd - c],
+      [hw - c, y, hd],
+      [-hw + c, y, hd],
+      [-hw, y, hd - c],
+      [-hw, y, -hd + c],
+      [-hw + c, y, -hd],
+      [hw - c, y, -hd],
+    ] as Array<[number, number, number]>
+
+  const bot = ring(halfWB, halfDB, cB, y0)
+  const top = ring(halfWT, halfDT, cT, y1)
+  const t = y1 - y0
+
+  // Eight walls. UVs: u = signed perimeter offset (in meters) from
+  // the start of each wall, v = height.
+  for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8
+    const bA = bot[i]!
+    const bB = bot[j]!
+    const tA = top[i]!
+    const tB = top[j]!
+    const wallLen = Math.hypot(bB[0] - bA[0], bB[2] - bA[2])
+    // Two CCW-from-outside triangles per quad: (bA, bB, tB) + (bA, tB, tA).
+    positions.push(...bA, ...bB, ...tB, ...bA, ...tB, ...tA)
+    uvs.push(0, 0, wallLen, 0, wallLen, t, 0, 0, wallLen, t, 0, t)
+  }
+
+  // Top cap: fan from centre. CCW from above → +Y normal.
+  const cTop: [number, number, number] = [0, y1, 0]
+  for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8
+    const a = top[i]!
+    const b = top[j]!
+    positions.push(...cTop, ...b, ...a)
+    uvs.push(0, 0, b[0], b[2], a[0], a[2])
+  }
+
+  // Bottom cap: reverse winding → -Y normal.
+  const cBot: [number, number, number] = [0, y0, 0]
+  for (let i = 0; i < 8; i++) {
+    const j = (i + 1) % 8
+    const a = bot[i]!
+    const b = bot[j]!
+    positions.push(...cBot, ...a, ...b)
+    uvs.push(0, 0, a[0], a[2], b[0], b[2])
+  }
 }
