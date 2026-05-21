@@ -263,10 +263,6 @@ function buildTemplate(): SceneGraph {
     ],
   } as unknown as AnyNode
 
-  // SiteNode.children is a discriminatedUnion of BuildingNode/ItemNode objects
-  // (not string ids) per the schema — embed the full building node here.
-  ;(nodes.site_garden as unknown as { children: unknown[] }).children = [nodes.building_garden!]
-
   return {
     nodes: nodes as Record<AnyNodeId, AnyNode>,
     rootNodeIds: ['site_garden'] as AnyNodeId[],
