@@ -18,7 +18,7 @@ import useViewer from '../../store/use-viewer'
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
 let baseMaterial = getBaseMaterial()
-let glassMaterial = defaultGlassMaterial
+let glassMaterial: THREE.Material = defaultGlassMaterial
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
 export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'
