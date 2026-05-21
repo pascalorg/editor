@@ -1,4 +1,4 @@
-import type { BoxVentNode } from '@pascal-app/core'
+import { type BoxVentNode, getActiveRoofHeight, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -514,10 +514,13 @@ function pushTri(
  * source of truth.
  */
 export function computeBoxVentSlopeTilt(
-  segment: { roofType: string; roofHeight: number; depth: number } | undefined,
+  segment:
+    | { roofType: RoofType; pitch: number; width: number; depth: number }
+    | undefined,
   localZ: number,
 ): number {
   if (!segment || segment.roofType === 'flat' || localZ === 0) return 0
-  const slopeAngle = Math.atan2(segment.roofHeight, segment.depth / 2)
+  const rh = getActiveRoofHeight(segment)
+  const slopeAngle = Math.atan2(rh, segment.depth / 2)
   return localZ > 0 ? slopeAngle : -slopeAngle
 }

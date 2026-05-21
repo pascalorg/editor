@@ -1,4 +1,4 @@
-import type { ChimneyNode, RoofSegmentNode } from '@pascal-app/core'
+import { type ChimneyNode, getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
 import {
   Brush,
   csgEvaluator,
@@ -80,7 +80,7 @@ export function trimChimneyBodyAgainstRoof(
     // material — the CSG step above wiped the partition we set inside
     // `holes.ts:carveChimneyHoles`. Same threshold as the carve step
     // (top rim is at `topY`, just below it for safety).
-    const peakY = segment.wallHeight + (segment.roofType === 'flat' ? 0 : segment.roofHeight)
+    const peakY = segment.wallHeight + getActiveRoofHeight(segment)
     const topY = peakY + node.heightAboveRidge
     partitionTopFaceGroups(out, topY - 0.05)
 

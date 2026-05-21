@@ -49,7 +49,7 @@ function makeSegment(id: AnyNodeId, children: AnyNodeId[] = []): AnyNode {
     width: 8,
     depth: 6,
     wallHeight: 0.5,
-    roofHeight: 2.5,
+    pitch: 40,
     wallThickness: 0.1,
     deckThickness: 0.1,
     overhang: 0.3,

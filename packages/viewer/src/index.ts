@@ -87,12 +87,16 @@ export {
 } from './lib/csg-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 export {
+  buildDormerFallbackGeometry,
+  createDormerArchShape,
+  createDormerRoundedShape,
   DORMER_GABLE_MATERIAL_INDEX,
   generateDormerGeometry,
   getDormerExposedFaces,
   getDormerSkirtWindowDims,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
+  normalizeDormerCornerRadii,
   RoofSystem,
   type SurfaceFrame,
 } from './systems/roof/roof-system'

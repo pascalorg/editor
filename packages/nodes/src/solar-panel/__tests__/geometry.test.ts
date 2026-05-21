@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { RoofSegmentNode } from '@pascal-app/core'
+import { getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
 import {
   buildSolarPanelGeometry,
   computeAutoFit,
@@ -8,6 +8,10 @@ import {
   getSurfaceY,
 } from '../geometry'
 import { SolarPanelNode } from '../schema'
+
+// atan(2 / 3) in degrees — gives `getActiveRoofHeight` ≈ 2.0 on the
+// default 8×6 gable so peak / slope assertions keep their previous values.
+const FIXTURE_PITCH_DEG = (Math.atan2(2, 3) * 180) / Math.PI
 
 const fixtureSegment = (overrides?: Partial<RoofSegmentNode>): RoofSegmentNode =>
   ({
@@ -23,7 +27,7 @@ const fixtureSegment = (overrides?: Partial<RoofSegmentNode>): RoofSegmentNode =
     width: 8,
     depth: 6,
     wallHeight: 2.5,
-    roofHeight: 2.0,
+    pitch: FIXTURE_PITCH_DEG,
     wallThickness: 0.1,
     deckThickness: 0.1,
     overhang: 0.3,
@@ -60,9 +64,9 @@ describe('getSurfaceY', () => {
     expect(getSurfaceY(0, 0, seg)).toBe(seg.wallHeight)
     expect(getSurfaceY(2, -1, seg)).toBe(seg.wallHeight)
   })
-  test('gable peak (z=0) reads at wallHeight+roofHeight', () => {
+  test('gable peak (z=0) reads at wallHeight + active roof height', () => {
     const seg = fixtureSegment()
-    expect(getSurfaceY(0, 0, seg)).toBeCloseTo(seg.wallHeight + seg.roofHeight)
+    expect(getSurfaceY(0, 0, seg)).toBeCloseTo(seg.wallHeight + getActiveRoofHeight(seg))
   })
   test('gable eave (|z|=depth/2) reads at wallHeight', () => {
     const seg = fixtureSegment()

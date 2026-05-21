@@ -98,17 +98,33 @@ describe('buildBoxVentGeometry', () => {
 })
 
 describe('computeBoxVentSlopeTilt', () => {
+  // For a gable, getActiveRoofHeight = (depth/2) * tan(pitch). Picking
+  // these pitches makes the active roof height match the legacy fixtures.
+  const pitchForRise = (rise: number, depth: number) =>
+    (Math.atan2(rise, depth / 2) * 180) / Math.PI
+
   test('flat segment returns 0 regardless of position', () => {
-    expect(computeBoxVentSlopeTilt({ roofType: 'flat', roofHeight: 2, depth: 6 }, 2)).toBe(0)
-    expect(computeBoxVentSlopeTilt({ roofType: 'flat', roofHeight: 2, depth: 6 }, -2)).toBe(0)
+    const seg = { roofType: 'flat' as const, pitch: 30, width: 6, depth: 6 }
+    expect(computeBoxVentSlopeTilt(seg, 2)).toBe(0)
+    expect(computeBoxVentSlopeTilt(seg, -2)).toBe(0)
   })
 
   test('ridge (localZ=0) returns 0', () => {
-    expect(computeBoxVentSlopeTilt({ roofType: 'gable', roofHeight: 2, depth: 6 }, 0)).toBe(0)
+    expect(
+      computeBoxVentSlopeTilt(
+        { roofType: 'gable', pitch: pitchForRise(2, 6), width: 6, depth: 6 },
+        0,
+      ),
+    ).toBe(0)
   })
 
   test('positive Z tilts down by slope angle; negative Z tilts up by the same angle', () => {
-    const seg = { roofType: 'gable', roofHeight: 2.5, depth: 6 }
+    const seg = {
+      roofType: 'gable' as const,
+      pitch: pitchForRise(2.5, 6),
+      width: 6,
+      depth: 6,
+    }
     const expected = Math.atan2(2.5, 3)
     expect(computeBoxVentSlopeTilt(seg, 1)).toBeCloseTo(expected)
     expect(computeBoxVentSlopeTilt(seg, -1)).toBeCloseTo(-expected)

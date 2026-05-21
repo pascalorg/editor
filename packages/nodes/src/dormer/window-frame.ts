@@ -1,10 +1,11 @@
+import { createDormerArchShape, createDormerRoundedShape } from '@pascal-app/viewer'
 import * as THREE from 'three'
 
 /**
  * Frame + glass geometry for the window opening on a dormer's gable
- * face. Ported from the legacy `dormer-window-geometry` module — the
- * extruded frame profile follows the same shape as the CSG cut, so the
- * frame sits flush in the wall.
+ * face. The extruded frame profile uses the same shape builders as the
+ * CSG cut in the viewer (`generateDormerGeometry`), so the frame sits
+ * flush in the wall — keeping the cut and the frame visually in sync.
  *
  * Only the frame bars and glass panes are produced here; the wall
  * opening itself is CSG-subtracted from the dormer body inside the
@@ -15,66 +16,6 @@ export type DormerWindowShape = 'rectangle' | 'rounded' | 'arch'
 export type WindowGeometries = {
   frameBars: { geo: THREE.BufferGeometry; pos: [number, number, number] }[]
   glassPanes: { geo: THREE.BufferGeometry; pos: [number, number, number] }[]
-}
-
-function makeArchShape(hw: number, hh: number, archHeight: number): THREE.Shape {
-  const clampedArch = Math.min(Math.max(archHeight, 0.01), Math.max(hh * 2, 0.01))
-  const springY = hh - clampedArch
-  const segments = 32
-  const shape = new THREE.Shape()
-  shape.moveTo(-hw, -hh)
-  shape.lineTo(hw, -hh)
-  shape.lineTo(hw, springY)
-  for (let i = 1; i <= segments; i++) {
-    const x = hw + (-hw - hw) * (i / segments)
-    const t = Math.min(Math.abs(x) / Math.max(hw, 1e-6), 1)
-    const y = springY + clampedArch * Math.sqrt(Math.max(1 - t * t, 0))
-    shape.lineTo(x, y)
-  }
-  shape.lineTo(-hw, -hh)
-  shape.closePath()
-  return shape
-}
-
-function normalizeRadii(
-  radii: [number, number, number, number],
-  w: number,
-  h: number,
-): [number, number, number, number] {
-  const r = radii.map((v) => Math.max(v, 0)) as [number, number, number, number]
-  const scale = Math.min(
-    1,
-    Math.max(w, 0) / Math.max(r[0] + r[1], 1e-6),
-    Math.max(w, 0) / Math.max(r[3] + r[2], 1e-6),
-    Math.max(h, 0) / Math.max(r[0] + r[3], 1e-6),
-    Math.max(h, 0) / Math.max(r[1] + r[2], 1e-6),
-  )
-  if (scale >= 1) return r
-  return r.map((v) => v * scale) as [number, number, number, number]
-}
-
-function makeRoundedShape(
-  hw: number,
-  hh: number,
-  radii: [number, number, number, number],
-): THREE.Shape {
-  const [tl, tr, br, bl] = normalizeRadii(radii, hw * 2, hh * 2)
-  const shape = new THREE.Shape()
-  shape.moveTo(-hw + bl, -hh)
-  shape.lineTo(hw - br, -hh)
-  if (br > 0) shape.absarc(hw - br, -hh + br, br, -Math.PI / 2, 0, false)
-  else shape.lineTo(hw, -hh)
-  shape.lineTo(hw, hh - tr)
-  if (tr > 0) shape.absarc(hw - tr, hh - tr, tr, 0, Math.PI / 2, false)
-  else shape.lineTo(hw, hh)
-  shape.lineTo(-hw + tl, hh)
-  if (tl > 0) shape.absarc(-hw + tl, hh - tl, tl, Math.PI / 2, Math.PI, false)
-  else shape.lineTo(-hw, hh)
-  shape.lineTo(-hw, -hh + bl)
-  if (bl > 0) shape.absarc(-hw + bl, -hh + bl, bl, Math.PI, (3 * Math.PI) / 2, false)
-  else shape.lineTo(-hw, -hh)
-  shape.closePath()
-  return shape
 }
 
 export function buildDormerWindowGeometries(
@@ -108,13 +49,13 @@ export function buildDormerWindowGeometries(
     ]
     const outerShape =
       shape === 'arch'
-        ? makeArchShape(hw, hh, archHeight)
-        : makeRoundedShape(hw, hh, cornerRadii)
+        ? createDormerArchShape(winW, winH, archHeight)
+        : createDormerRoundedShape(winW, winH, cornerRadii)
 
     const innerHole =
       shape === 'arch'
-        ? makeArchShape(hw - safeFt, hh - safeFt, Math.max(archHeight - safeFt, 0.01))
-        : makeRoundedShape(hw - safeFt, hh - safeFt, insetRadii)
+        ? createDormerArchShape(winW - 2 * safeFt, winH - 2 * safeFt, Math.max(archHeight - safeFt, 0.01))
+        : createDormerRoundedShape(winW - 2 * safeFt, winH - 2 * safeFt, insetRadii)
 
     outerShape.holes.push(innerHole)
     const frameGeo = new THREE.ExtrudeGeometry(outerShape, {
@@ -147,8 +88,8 @@ export function buildDormerWindowGeometries(
 
     const glassShape =
       shape === 'arch'
-        ? makeArchShape(hw - safeFt, hh - safeFt, Math.max(archHeight - safeFt, 0.01))
-        : makeRoundedShape(hw - safeFt, hh - safeFt, insetRadii)
+        ? createDormerArchShape(winW - 2 * safeFt, winH - 2 * safeFt, Math.max(archHeight - safeFt, 0.01))
+        : createDormerRoundedShape(winW - 2 * safeFt, winH - 2 * safeFt, insetRadii)
     const glassGeo = new THREE.ExtrudeGeometry(glassShape, {
       depth: 0.008,
       bevelEnabled: false,

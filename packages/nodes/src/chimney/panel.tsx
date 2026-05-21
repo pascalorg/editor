@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ChimneyNode,
+  getActiveRoofHeight,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
@@ -255,8 +256,7 @@ export default function ChimneyPanel() {
     if (!segment) return
     const oldWorldRotation = worldRotation_now
     const oldHeightAboveRidge = node.heightAboveRidge ?? 1
-    const oldPeakY =
-      segment.wallHeight + (segment.roofType === 'flat' ? 0 : segment.roofHeight)
+    const oldPeakY = segment.wallHeight + getActiveRoofHeight(segment)
     // Compute the chimney's current world top Y by transforming the segment-
     // local top point through the chimney's matrix.
     let oldWorldTopY = 0
@@ -272,9 +272,7 @@ export default function ChimneyPanel() {
     const target = findSegmentForWorldPoint(newWorldX, newWorldZ)
     if (target && target.segment.id !== segment.id) {
       const newSegObj = sceneRegistry.nodes.get(target.segment.id)
-      const newPeakY =
-        target.segment.wallHeight +
-        (target.segment.roofType === 'flat' ? 0 : target.segment.roofHeight)
+      const newPeakY = target.segment.wallHeight + getActiveRoofHeight(target.segment)
 
       // World Y of the new chimney's group origin (at target localX,Z, y=0).
       let newOriginWorldY = 0

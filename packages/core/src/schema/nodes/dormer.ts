@@ -10,6 +10,38 @@ export type DormerSurfaceMaterialSpec = {
   materialPreset?: string
 }
 
+/**
+ * Default dormer dimensions and window controls. Values match the
+ * legacy archive so existing scenes don't shift visually.
+ */
+export const DORMER_DEFAULTS = {
+  WIDTH: 1.21,
+  DEPTH: 1.55,
+  WALL_HEIGHT: 0,
+  ROOF_HEIGHT: 0.49,
+  WALL_SKIRT_HEIGHT: 2.73,
+  WINDOW_WIDTH: 0.76,
+  WINDOW_HEIGHT: 0.68,
+  WINDOW_OFFSET_X: 0.02,
+  WINDOW_OFFSET_Y: 0.99,
+  WINDOW_FRAME_THICKNESS: 0.05,
+  WINDOW_FRAME_DEPTH: 0.06,
+  WINDOW_COLUMNS: 3,
+  WINDOW_ROWS: 3,
+  WINDOW_DIVIDER_THICKNESS: 0.02,
+  WINDOW_ARCH_HEIGHT: 0.35,
+  WINDOW_CORNER_RADIUS: 0.15,
+  WINDOW_SILL_DEPTH: 0.08,
+  WINDOW_SILL_THICKNESS: 0.03,
+} as const
+
+const DEFAULT_CORNER_RADII: [number, number, number, number] = [
+  DORMER_DEFAULTS.WINDOW_CORNER_RADIUS,
+  DORMER_DEFAULTS.WINDOW_CORNER_RADIUS,
+  DORMER_DEFAULTS.WINDOW_CORNER_RADIUS,
+  DORMER_DEFAULTS.WINDOW_CORNER_RADIUS,
+]
+
 export const DormerNode = BaseNode.extend({
   id: objectId('dormer'),
   type: nodeType('dormer'),
@@ -26,42 +58,42 @@ export const DormerNode = BaseNode.extend({
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
-  surfaceNormal: z.tuple([z.number(), z.number(), z.number()]).optional(),
 
-  width: z.number().default(1.21),
-  depth: z.number().default(1.55),
-  height: z.number().default(0),
+  width: z.number().default(DORMER_DEFAULTS.WIDTH),
+  depth: z.number().default(DORMER_DEFAULTS.DEPTH),
+  height: z.number().default(DORMER_DEFAULTS.WALL_HEIGHT),
 
   roofType: RoofType.default('gable'),
-  roofHeight: z.number().default(0.49),
+  roofHeight: z.number().default(DORMER_DEFAULTS.ROOF_HEIGHT),
 
   // Height of the hung wall (the "skirt") that extends below the eave
   // into the host roof — this is the wall area the window opening is
   // cut through. Larger values let the dormer host taller windows.
-  wallSkirtHeight: z.number().default(2.73),
+  wallSkirtHeight: z.number().default(DORMER_DEFAULTS.WALL_SKIRT_HEIGHT),
 
   // Window is rendered as parametric geometry on the dormer's front
   // face — not a child node. The fields below mirror the legacy panel
   // controls; geometry beyond the simple opening box is deferred.
-  windowWidth: z.number().default(0.76),
-  windowHeight: z.number().default(0.68),
-  windowOffsetX: z.number().default(0.02),
-  windowOffsetY: z.number().default(0.99),
-  windowFrameThickness: z.number().default(0.05),
-  windowFrameDepth: z.number().default(0.06),
-  windowColumns: z.number().int().min(1).max(8).default(3),
-  windowRows: z.number().int().min(1).max(8).default(3),
-  windowDividerThickness: z.number().default(0.02),
+  windowWidth: z.number().default(DORMER_DEFAULTS.WINDOW_WIDTH),
+  windowHeight: z.number().default(DORMER_DEFAULTS.WINDOW_HEIGHT),
+  windowOffsetX: z.number().default(DORMER_DEFAULTS.WINDOW_OFFSET_X),
+  windowOffsetY: z.number().default(DORMER_DEFAULTS.WINDOW_OFFSET_Y),
+  windowFrameThickness: z.number().default(DORMER_DEFAULTS.WINDOW_FRAME_THICKNESS),
+  windowFrameDepth: z.number().default(DORMER_DEFAULTS.WINDOW_FRAME_DEPTH),
+  windowColumns: z.number().int().min(1).max(8).default(DORMER_DEFAULTS.WINDOW_COLUMNS),
+  windowRows: z.number().int().min(1).max(8).default(DORMER_DEFAULTS.WINDOW_ROWS),
+  windowDividerThickness: z.number().default(DORMER_DEFAULTS.WINDOW_DIVIDER_THICKNESS),
   windowShape: z.enum(['rectangle', 'rounded', 'arch']).default('rectangle'),
-  windowArchHeight: z.number().default(0.35),
-  windowCornerRadius: z.number().default(0.15),
-  windowRadiusMode: z.enum(['all', 'individual']).default('all'),
+  windowArchHeight: z.number().default(DORMER_DEFAULTS.WINDOW_ARCH_HEIGHT),
+  // Single source of truth for the rounded-shape corner radii. Tuple is
+  // [topLeft, topRight, bottomRight, bottomLeft]. "All vs Individual"
+  // is a UI-only view mode derived from whether the tuple is uniform.
   windowCornerRadii: z
     .tuple([z.number(), z.number(), z.number(), z.number()])
-    .default([0.15, 0.15, 0.15, 0.15]),
+    .default(DEFAULT_CORNER_RADII),
   windowSill: z.boolean().default(true),
-  windowSillDepth: z.number().default(0.08),
-  windowSillThickness: z.number().default(0.03),
+  windowSillDepth: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_DEPTH),
+  windowSillThickness: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_THICKNESS),
 }).describe(
   dedent`
   Dormer — a small house-shaped protrusion sitting on top of a roof
@@ -74,43 +106,37 @@ export const DormerNode = BaseNode.extend({
 
 export type DormerNode = z.infer<typeof DormerNode>
 
-function getLegacyDormerSurfaceMaterial(node: DormerNode): DormerSurfaceMaterialSpec {
-  return { material: node.material, materialPreset: node.materialPreset }
-}
-
 /**
- * Per-surface material resolution. Same fall-through order as the
- * archive: explicit role → cross-fallback between side/wall → legacy
- * `material`/`materialPreset`.
+ * Per-surface material resolution. Fall-through order:
+ *   top  → topMaterial[Preset]                              → legacy
+ *   side → sideMaterial[Preset] → wallMaterial[Preset]      → legacy
+ *   wall → wallMaterial[Preset] → sideMaterial[Preset]      → legacy
+ * where legacy is `node.material` / `node.materialPreset`.
  */
 export function getEffectiveDormerSurfaceMaterial(
   node: DormerNode,
   role: DormerSurfaceMaterialRole,
 ): DormerSurfaceMaterialSpec {
-  if (role === 'top') {
-    if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
-      return { material: node.topMaterial, materialPreset: node.topMaterialPreset }
-    }
+  const top: DormerSurfaceMaterialSpec = {
+    material: node.topMaterial,
+    materialPreset: node.topMaterialPreset,
   }
-  if (role === 'side') {
-    if (node.sideMaterial !== undefined || typeof node.sideMaterialPreset === 'string') {
-      return { material: node.sideMaterial, materialPreset: node.sideMaterialPreset }
-    }
+  const side: DormerSurfaceMaterialSpec = {
+    material: node.sideMaterial,
+    materialPreset: node.sideMaterialPreset,
   }
-  if (role === 'wall') {
-    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
-      return { material: node.wallMaterial, materialPreset: node.wallMaterialPreset }
-    }
+  const wall: DormerSurfaceMaterialSpec = {
+    material: node.wallMaterial,
+    materialPreset: node.wallMaterialPreset,
   }
-  if (role === 'side') {
-    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
-      return { material: node.wallMaterial, materialPreset: node.wallMaterialPreset }
-    }
+  const legacy: DormerSurfaceMaterialSpec = {
+    material: node.material,
+    materialPreset: node.materialPreset,
   }
-  if (role === 'wall') {
-    if (node.sideMaterial !== undefined || typeof node.sideMaterialPreset === 'string') {
-      return { material: node.sideMaterial, materialPreset: node.sideMaterialPreset }
-    }
-  }
-  return getLegacyDormerSurfaceMaterial(node)
+  const has = (spec: DormerSurfaceMaterialSpec) =>
+    spec.material !== undefined || typeof spec.materialPreset === 'string'
+
+  if (role === 'top') return has(top) ? top : legacy
+  if (role === 'side') return has(side) ? side : has(wall) ? wall : legacy
+  return has(wall) ? wall : has(side) ? side : legacy
 }

@@ -1,4 +1,4 @@
-import type { RoofSegmentNode, SolarPanelNode } from '@pascal-app/core'
+import { getActiveRoofHeight, type RoofSegmentNode, type SolarPanelNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -188,8 +188,8 @@ export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeome
 // `surfaceNormal` is absent (legacy data or simplified placement).
 
 export function getSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): number {
-  const { roofType, wallHeight, roofHeight, depth, width } = seg
-  const rh = roofType === 'flat' ? 0 : roofHeight
+  const { roofType, wallHeight, depth, width } = seg
+  const rh = getActiveRoofHeight(seg)
   const peakY = wallHeight + rh
   if (rh === 0) return wallHeight
 
@@ -215,8 +215,8 @@ export function getAnalyticalNormal(
   lz: number,
   seg: RoofSegmentNode,
 ): THREE.Vector3 {
-  const { roofType, roofHeight, depth, width } = seg
-  const rh = roofType === 'flat' ? 0 : roofHeight
+  const { roofType, depth, width } = seg
+  const rh = getActiveRoofHeight(seg)
   if (rh === 0) return new THREE.Vector3(0, 1, 0)
 
   if (roofType === 'gable') {

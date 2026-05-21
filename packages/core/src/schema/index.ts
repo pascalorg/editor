@@ -79,7 +79,15 @@ export {
 export { LevelNode } from './nodes/level'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
-export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
+export type { SegmentSlopeFrame } from './nodes/roof-segment'
+export {
+  getActiveRoofHeight,
+  getPitchFromActiveRoofHeight,
+  getSegmentSlopeFrame,
+  ROOF_SHAPE_DEFAULTS,
+  RoofSegmentNode,
+  RoofType,
+} from './nodes/roof-segment'
 export { ScanNode } from './nodes/scan'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'

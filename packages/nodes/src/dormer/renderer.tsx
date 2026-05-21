@@ -10,18 +10,16 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  buildDormerFallbackGeometry,
   createMaterial,
   createMaterialFromPresetRef,
   DORMER_GABLE_MATERIAL_INDEX,
   generateDormerGeometry,
-  getDormerExposedFaces,
-  getDormerSkirtWindowDims,
-  glassMaterial,
   useNodeEvents,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { buildDormerWindowGeometries, type DormerWindowShape } from './window-frame'
+import DormerWindowAssembly from './window-assembly'
 
 // Three distinct default materials: wall, side, roof top.
 // All three use FrontSide — chimney / skylight do the same, and
@@ -65,8 +63,14 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   useRegistry(storeNode.id, 'dormer', ref)
   const handlers = useNodeEvents(storeNode, 'dormer')
 
-  // Live overrides so slider drag re-runs CSG without committing to the store.
+  // Live overrides so slider drag updates the dormer without committing
+  // to the store. While any override is live we render the cheap
+  // fallback silhouette — running the full CSG on every pointer move is
+  // far too expensive (multiple boolean ops + ground subtract +
+  // 32-segment arch curves). Commit clears the override and the real
+  // CSG mesh kicks back in.
   const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id as AnyNodeId))
+  const isLiveDrag = !!liveOverrides && Object.keys(liveOverrides).length > 0
   const node = useMemo(
     () =>
       liveOverrides ? ({ ...storeNode, ...liveOverrides } as DormerNode) : storeNode,
@@ -115,8 +119,13 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const frameSideMat = resolvedMaterials ? resolvedMaterials[1]! : defaultSideMat
 
   const geometry = useMemo(
-    () => (segment ? generateDormerGeometry(node, segment) : null),
+    () => {
+      if (!segment) return null
+      if (isLiveDrag) return buildDormerFallbackGeometry(node)
+      return generateDormerGeometry(node, segment)
+    },
     [
+      isLiveDrag,
       segment,
       node.id,
       node.roofType,
@@ -135,131 +144,16 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
       node.windowOffsetY,
       node.windowShape,
       node.windowArchHeight,
-      node.windowCornerRadius,
-      node.windowRadiusMode,
-      node.windowCornerRadii?.[0],
-      node.windowCornerRadii?.[1],
-      node.windowCornerRadii?.[2],
-      node.windowCornerRadii?.[3],
+      node.windowCornerRadii[0],
+      node.windowCornerRadii[1],
+      node.windowCornerRadii[2],
+      node.windowCornerRadii[3],
     ],
   )
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
-  // Window dimensions on the gable face, derived to match the CSG cut.
-  const skirtWin = useMemo(
-    () => getDormerSkirtWindowDims(node),
-    [
-      node.width,
-      node.windowWidth,
-      node.windowHeight,
-      node.windowOffsetX,
-      node.windowOffsetY,
-      node.wallSkirtHeight,
-    ],
-  )
-
-  const ft = node.windowFrameThickness ?? 0.05
-  const fd = node.windowFrameDepth ?? 0.06
-  const cols = node.windowColumns ?? 1
-  const rows = node.windowRows ?? 1
-  const dt = node.windowDividerThickness ?? 0.02
-
-  const winW = skirtWin.width
-  const winH = skirtWin.height
-  const winShape: DormerWindowShape = (node.windowShape ?? 'rectangle') as DormerWindowShape
-  const archH = node.windowArchHeight ?? 0.35
-  const cornerR = node.windowCornerRadius ?? 0.15
-  const radiusMode = node.windowRadiusMode ?? 'all'
-  const individualRadii = (node.windowCornerRadii ?? [0.15, 0.15, 0.15, 0.15]) as [
-    number,
-    number,
-    number,
-    number,
-  ]
-  const resolvedRadii: [number, number, number, number] =
-    radiusMode === 'individual'
-      ? individualRadii
-      : [cornerR, cornerR, cornerR, cornerR]
-
-  const winGeo = useMemo(
-    () =>
-      buildDormerWindowGeometries(
-        winW,
-        winH,
-        ft,
-        fd,
-        cols,
-        rows,
-        dt,
-        winShape,
-        archH,
-        resolvedRadii,
-      ),
-    [winW, winH, ft, fd, cols, rows, dt, winShape, archH, ...resolvedRadii],
-  )
-
-  useEffect(() => {
-    return () => {
-      const disposed = new Set<THREE.BufferGeometry>()
-      for (const bar of winGeo.frameBars) {
-        if (!disposed.has(bar.geo)) {
-          bar.geo.dispose()
-          disposed.add(bar.geo)
-        }
-      }
-      for (const pane of winGeo.glassPanes) {
-        if (!disposed.has(pane.geo)) {
-          pane.geo.dispose()
-          disposed.add(pane.geo)
-        }
-      }
-    }
-  }, [winGeo])
-
-  const exposed = useMemo(
-    () => (segment ? getDormerExposedFaces(node, segment) : { front: true, back: false }),
-    [
-      segment,
-      node.roofType,
-      node.width,
-      node.depth,
-      node.height,
-      node.roofHeight,
-      node.position[0],
-      node.position[1],
-      node.position[2],
-    ],
-  )
-
   if (!(segment && geometry)) return null
-
-  const gableHalfZ = node.depth / 2
-  const winX = skirtWin.offsetX
-  const winY = skirtWin.centerY
-
-  const renderWindowAssembly = (zPos: number, keyPrefix: string) => (
-    <group name={`dormer-window-${keyPrefix}`} position={[winX, winY, zPos]}>
-      {winGeo.glassPanes.map((pane, i) => (
-        <mesh
-          geometry={pane.geo}
-          // biome-ignore lint/suspicious/noArrayIndexKey: glass panes are derived from grid indices, no stable id.
-          key={`${keyPrefix}-glass-${i}`}
-          material={glassMaterial}
-          position={pane.pos}
-        />
-      ))}
-      {winGeo.frameBars.map((bar, i) => (
-        <mesh
-          geometry={bar.geo}
-          // biome-ignore lint/suspicious/noArrayIndexKey: frame bars are derived from grid indices, no stable id.
-          key={`${keyPrefix}-bar-${i}`}
-          material={frameSideMat}
-          position={bar.pos}
-        />
-      ))}
-    </group>
-  )
 
   // Dormers are mounted inside `RoofRenderer`'s `roof-elements` group
   // (at the roof origin — NOT inside the host segment's transform), so
@@ -286,8 +180,11 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
             name="dormer-body"
             receiveShadow
           />
-          {exposed.front && renderWindowAssembly(gableHalfZ, 'front')}
-          {exposed.back && renderWindowAssembly(-gableHalfZ, 'back')}
+          <DormerWindowAssembly
+            frameMaterial={frameSideMat}
+            node={node}
+            segment={segment}
+          />
         </group>
       </group>
     </group>

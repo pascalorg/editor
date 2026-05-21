@@ -1,4 +1,4 @@
-import type { ChimneyNode, RoofSegmentNode } from '@pascal-app/core'
+import { type ChimneyNode, getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
 import {
   Brush,
   csgEvaluator,
@@ -34,7 +34,7 @@ export function carveChimneyHoles(
   cap: THREE.BufferGeometry | null
   flues: THREE.BufferGeometry | null
 } {
-  const peakY = segment.wallHeight + (segment.roofType === 'flat' ? 0 : segment.roofHeight)
+  const peakY = segment.wallHeight + getActiveRoofHeight(segment)
   const topY = peakY + node.heightAboveRidge
   const capPresent = !!cap && node.cap && node.capShape !== 'none'
   const capTopY = topY + (capPresent ? node.capThickness : 0)

@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getActiveRoofHeight,
   RidgeVentNode as RidgeVentSchema,
   type RoofSegmentNode,
   useScene,
@@ -217,7 +218,7 @@ export default function RidgeVentPanel() {
         <SliderControl
           label="Y"
           max={Math.max(
-            (segment?.wallHeight ?? 3) + (segment?.roofHeight ?? 3) + 2,
+            (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
             (node.position[1] ?? 0) + 0.1,
           )}
           min={Math.min(0, (node.position[1] ?? 0) - 0.5)}

@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  getActiveRoofHeight,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
@@ -24,7 +25,7 @@ export type RoofSegmentHit = {
  * candidates, never written to the scene.
  */
 function analyticalSurfaceY(seg: RoofSegmentNode, lx: number, lz: number): number {
-  const rh = seg.roofType === 'flat' ? 0 : seg.roofHeight
+  const rh = getActiveRoofHeight(seg)
   const peakY = seg.wallHeight + rh
   if (rh === 0) return seg.wallHeight
 

@@ -1,4 +1,4 @@
-import type { ChimneyNode, RoofSegmentNode } from '@pascal-app/core'
+import { type ChimneyNode, getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -69,7 +69,7 @@ export function buildChimneyGeometry(
   node: ChimneyNode,
   segment: RoofSegmentNode,
 ): ChimneyGeometry {
-  const peakY = segment.wallHeight + (segment.roofType === 'flat' ? 0 : segment.roofHeight)
+  const peakY = segment.wallHeight + getActiveRoofHeight(segment)
   const topY = peakY + node.heightAboveRidge
   // Embed the body 0.2m below the eave so the bottom isn't visible
   // above the roof when the chimney sits over a low-slope segment.

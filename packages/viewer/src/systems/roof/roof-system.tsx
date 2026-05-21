@@ -2,6 +2,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   type DormerNode,
+  getActiveRoofHeight,
+  getPitchFromActiveRoofHeight,
+  getSegmentSlopeFrame,
+  ROOF_SHAPE_DEFAULTS,
   type RoofNode,
   type RoofSegmentNode,
   type RoofType,
@@ -448,39 +452,18 @@ export function getRoofSegmentBrushes(
     width,
     depth,
     wallHeight,
-    roofHeight,
     wallThickness,
     deckThickness,
     overhang,
     shingleThickness,
   } = node
 
-  const activeRh = roofType === 'flat' ? 0 : roofHeight
-
-  let run = Math.min(width, depth) / 2
-  let rise = activeRh
-  if (roofType === 'shed') {
-    run = depth
+  const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
+  const shapeRatios: ShapeWidthRatios = {
+    gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: node.mansardSteepWidthRatio,
+    dutchHipWidthRatio: node.dutchHipWidthRatio,
   }
-  if (roofType === 'gable') {
-    run = depth / 2
-  }
-  if (roofType === 'gambrel') {
-    run = depth / 4
-    rise = activeRh * 0.6
-  }
-  if (roofType === 'mansard') {
-    run = Math.min(width, depth) * 0.15
-    rise = activeRh * 0.7
-  }
-  if (roofType === 'dutch') {
-    run = Math.min(width, depth) * 0.25
-    rise = activeRh * 0.5
-  }
-
-  const tanTheta = run > 0 ? rise / run : 0
-  const cosTheta = Math.cos(Math.atan2(rise, run)) || 1
-  const sinTheta = Math.sin(Math.atan2(rise, run)) || 0
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
   const baseI = Math.min(width, depth) * 0.25
@@ -522,6 +505,7 @@ export function getRoofSegmentBrushes(
       width,
       depth,
       tanTheta,
+      shapeRatios,
     )
     return createGeometryFromFaces(faces, matIndex)
   }
@@ -623,6 +607,7 @@ export function getRoofSegmentBrushes(
     width,
     depth,
     tanTheta,
+    shapeRatios,
   )
   const topFaces = getModuleFaces(
     roofType,
@@ -635,6 +620,7 @@ export function getRoofSegmentBrushes(
     width,
     depth,
     tanTheta,
+    shapeRatios,
   )
 
   const shinBotGeo = createGeometryFromFaces(botFaces, 1)
@@ -898,9 +884,19 @@ function getRakeAxis(node: RoofSegmentNode): 'x' | 'z' | null {
   return null
 }
 
+type ShapeWidthRatios = {
+  gambrelLowerWidthRatio: number
+  mansardSteepWidthRatio: number
+  dutchHipWidthRatio: number
+}
+
 /**
  * Generates faces for a roof module volume.
  * Supports: hip, gable, shed, gambrel, dutch, mansard, flat.
+ *
+ * `shapeRatios` controls the kink positions on multi-slope roofs. The
+ * height ratios are already baked into `tanTheta` (via the slope frame)
+ * so they don't need to be threaded again.
  */
 function getModuleFaces(
   type: RoofType,
@@ -913,6 +909,7 @@ function getModuleFaces(
   baseW: number,
   baseD: number,
   tanTheta: number,
+  shapeRatios: ShapeWidthRatios,
 ): THREE.Vector3[][] {
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = insets
@@ -957,7 +954,7 @@ function getModuleFaces(
     const t2 = v(w / 2, h, -d / 2)
     faces.push([e1, e2, t2, t1], [e2, e3, t2], [e3, e4, t1, t2], [e4, e1, t1])
   } else if (type === 'gambrel') {
-    const mz = (baseD / 2) * 0.5
+    const mz = (baseD / 2) * shapeRatios.gambrelLowerWidthRatio
     const dist = d / 2 - mz
     const mh = wh + dist * (tanTheta || 0)
 
@@ -976,7 +973,7 @@ function getModuleFaces(
       [m3, m4, r1, r2],
     )
   } else if (type === 'mansard') {
-    const i = Math.min(baseW, baseD) * 0.15
+    const i = Math.min(baseW, baseD) * shapeRatios.mansardSteepWidthRatio
     const mh = wh + i * (tanTheta || 0)
 
     const m1 = v(-w / 2 + i, mh, d / 2 - i)
@@ -1011,7 +1008,10 @@ function getModuleFaces(
       )
     }
   } else if (type === 'dutch') {
-    const i = insets.dutchI !== undefined ? insets.dutchI : Math.min(baseW, baseD) * 0.25
+    const i =
+      insets.dutchI !== undefined
+        ? insets.dutchI
+        : Math.min(baseW, baseD) * shapeRatios.dutchHipWidthRatio
     const mh = wh + i * (tanTheta || 0)
 
     if (w >= d) {
@@ -1293,14 +1293,13 @@ export function getRoofOuterSurfaceFrameAtPoint(
     width,
     depth,
     wallHeight,
-    roofHeight,
     wallThickness,
     deckThickness,
     overhang,
     shingleThickness,
   } = segment
 
-  const activeRh = roofType === 'flat' ? 0 : roofHeight
+  const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
 
   if (roofType === 'flat' || activeRh === 0) {
     return {
@@ -1308,31 +1307,6 @@ export function getRoofOuterSurfaceFrameAtPoint(
       normal: new THREE.Vector3(0, 1, 0),
     }
   }
-
-  let run = Math.min(width, depth) / 2
-  let rise = activeRh
-  if (roofType === 'shed') {
-    run = depth
-  }
-  if (roofType === 'gable') {
-    run = depth / 2
-  }
-  if (roofType === 'gambrel') {
-    run = depth / 4
-    rise = activeRh * 0.6
-  }
-  if (roofType === 'mansard') {
-    run = Math.min(width, depth) * 0.15
-    rise = activeRh * 0.7
-  }
-  if (roofType === 'dutch') {
-    run = Math.min(width, depth) * 0.25
-    rise = activeRh * 0.5
-  }
-
-  const tanTheta = run > 0 ? rise / run : 0
-  const cosTheta = Math.cos(Math.atan2(rise, run)) || 1
-  const sinTheta = Math.sin(Math.atan2(rise, run)) || 0
 
   const verticalRt = deckThickness / cosTheta
   const horizontalOverhang = overhang * cosTheta
@@ -1409,6 +1383,11 @@ export function getRoofOuterSurfaceFrameAtPoint(
   }
 
   const insetsTop = getInsets(shinTopWh, topBaseY, false, shinTopW, shinTopD)
+  const shapeRatios: ShapeWidthRatios = {
+    gambrelLowerWidthRatio: segment.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: segment.mansardSteepWidthRatio,
+    dutchHipWidthRatio: segment.dutchHipWidthRatio,
+  }
   const topFaces = getModuleFaces(
     roofType,
     shinTopW,
@@ -1420,6 +1399,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
     width,
     depth,
     tanTheta,
+    shapeRatios,
   )
 
   const topGeo = createGeometryFromFaces(topFaces, (normal) =>
@@ -1497,22 +1477,6 @@ export function buildSkylightCutBrush(
   const surfaceY = surfaceFrame.point.y
   const normal = surfaceFrame.normal
 
-  // eslint-disable-next-line no-console
-  console.log('[skylight-cut]', skylight.id, {
-    lx,
-    lz,
-    surfaceY,
-    surfacePointXZ: [surfaceFrame.point.x, surfaceFrame.point.z],
-    normal: normal.toArray(),
-    skyRotation: skylight.rotation,
-    segPos: segment.position,
-    segRot: segment.rotation,
-    segRoofType: segment.roofType,
-    segWHD: [segment.width, segment.depth],
-    cutW: w,
-    cutD: d,
-  })
-
   const h = 2.0
   const geo = new THREE.BoxGeometry(w, h, d)
 
@@ -1574,23 +1538,37 @@ function dormerSkirtHeight(dormer: DormerNode): number {
 export const DORMER_GABLE_MATERIAL_INDEX = 4
 
 /**
- * Fallback geometry used when CSG cannot run (missing host brushes,
- * thrown exception, degenerate inputs). Builds a simple gable
- * silhouette (rectangular body + triangular gable extruded along the
- * dormer's depth) in dormer-mesh-local. The wall sits at material slot
- * 0 and the roof at slot 3 so it picks up the same material array the
- * renderer passes for the CSG output.
+ * Cheap silhouette geometry. Used as a fallback when CSG cannot run
+ * (missing host brushes, thrown exception, degenerate inputs) and as
+ * the live preview during slider drags so we don't re-run CSG on every
+ * pointer move. Also used by the placement / move-tool ghost.
+ *
+ * Builds a rectangular body + simple roof in dormer-mesh-local. For
+ * `flat` dormers the roof triangle is skipped. Other roof types use
+ * the gable approximation — it's a rough silhouette by design.
+ *
+ * The wall sits at material slot 0 and the roof at slot 3 so it picks
+ * up the same material array the renderer passes for the CSG output.
  */
-function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeometry {
+export function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeometry {
   const w = Math.max(0.05, dormer.width)
   const d = Math.max(0.05, dormer.depth)
   const wallH = Math.max(0.05, dormer.height)
   const roofH = Math.max(0, dormer.roofHeight)
   const skirt = dormerSkirtHeight(dormer)
+  const isFlat = dormer.roofType === 'flat' || roofH === 0
 
   // Body box: foot at y = -skirt, top at y = wallH.
   const body = new THREE.BoxGeometry(w, wallH + skirt, d)
   body.translate(0, (wallH - skirt) / 2, 0)
+  const bIdx = body.getIndex()?.count ?? 0
+  body.clearGroups()
+  body.addGroup(0, bIdx, 0)
+
+  if (isFlat) {
+    if (!body.getAttribute('normal')) body.computeVertexNormals()
+    return body
+  }
 
   // Roof: extruded triangle from eave (y = wallH) to peak (y = wallH + roofH).
   // Apex points along +Y, base spans the width. Extrude along Z (depth).
@@ -1602,10 +1580,6 @@ function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeometry {
   const roof = new THREE.ExtrudeGeometry(roofShape, { depth: d, bevelEnabled: false })
   roof.translate(0, wallH, -d / 2)
 
-  // Tag each as a single group: body → slot 0 (wall), roof → slot 3 (roof).
-  const bIdx = body.getIndex()?.count ?? 0
-  body.clearGroups()
-  body.addGroup(0, bIdx, 0)
   const rIdx = roof.getIndex()?.count ?? 0
   roof.clearGroups()
   roof.addGroup(0, rIdx, 3)
@@ -1617,7 +1591,7 @@ function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeometry {
   return merged
 }
 
-function createDormerArchShape(w: number, h: number, archHeight: number): THREE.Shape {
+export function createDormerArchShape(w: number, h: number, archHeight: number): THREE.Shape {
   const hw = w / 2
   const hh = h / 2
   const clampedArch = Math.min(Math.max(archHeight, 0.01), Math.max(h, 0.01))
@@ -1639,7 +1613,7 @@ function createDormerArchShape(w: number, h: number, archHeight: number): THREE.
   return shape
 }
 
-function normalizeDormerCornerRadii(
+export function normalizeDormerCornerRadii(
   radii: [number, number, number, number],
   w: number,
   h: number,
@@ -1656,7 +1630,7 @@ function normalizeDormerCornerRadii(
   return r.map((v) => v * scale) as [number, number, number, number]
 }
 
-function createDormerRoundedShape(
+export function createDormerRoundedShape(
   w: number,
   h: number,
   radii: [number, number, number, number],
@@ -1688,15 +1662,7 @@ function resolveDormerRadii(
   w: number,
   h: number,
 ): [number, number, number, number] {
-  if ((dormer.windowRadiusMode ?? 'all') === 'individual') {
-    return normalizeDormerCornerRadii(
-      dormer.windowCornerRadii ?? [0.15, 0.15, 0.15, 0.15],
-      w,
-      h,
-    )
-  }
-  const r = dormer.windowCornerRadius ?? 0.15
-  return normalizeDormerCornerRadii([r, r, r, r], w, h)
+  return normalizeDormerCornerRadii(dormer.windowCornerRadii, w, h)
 }
 
 function createDormerWindowCutGeometry(
@@ -1745,7 +1711,7 @@ export function getDormerExposedFaces(
   const dormerWallTop = dormerY + dormer.height
 
   const hostWh = hostSegment.wallHeight ?? 0.5
-  const hostRh = hostSegment.roofType === 'flat' ? 0 : hostSegment.roofHeight ?? 2.5
+  const hostRh = getActiveRoofHeight(hostSegment)
   const hostDepth = hostSegment.depth ?? 4
 
   const roofHeightAtZ = (segZ: number): number => {
@@ -1811,6 +1777,9 @@ export function generateDormerGeometry(
   const segDepth = isShed ? dormer.depth : dormer.width
   const skirt = dormerSkirtHeight(dormer)
 
+  const vsWidth = Math.max(0.05, segWidth)
+  const vsDepth = Math.max(0.05, segDepth)
+  const vsActiveRh = Math.max(0, dormer.roofHeight)
   const virtualSegment: RoofSegmentNode = {
     object: 'node',
     id: `rseg_dormer_${dormer.id}` as RoofSegmentNode['id'],
@@ -1822,10 +1791,21 @@ export function generateDormerGeometry(
     position: [0, 0, 0],
     rotation: 0,
     roofType: dormer.roofType,
-    width: Math.max(0.05, segWidth),
-    depth: Math.max(0.05, segDepth),
+    width: vsWidth,
+    depth: vsDepth,
     wallHeight: Math.max(0.05, dormer.height) + skirt,
-    roofHeight: Math.max(0, dormer.roofHeight),
+    // The dormer schema still expresses its roof as a height; translate
+    // to the pitch the segment math now expects so the virtual segment
+    // produces an identical peak.
+    pitch: getPitchFromActiveRoofHeight({
+      roofType: dormer.roofType,
+      width: vsWidth,
+      depth: vsDepth,
+      roofHeight: vsActiveRh,
+    }),
+    // Dormers don't expose multi-slope shape tuning; bake the schema
+    // defaults so the virtualSegment renders the canonical kink positions.
+    ...ROOF_SHAPE_DEFAULTS,
     wallThickness: 0.05,
     deckThickness: 0.04,
     overhang: 0.08,

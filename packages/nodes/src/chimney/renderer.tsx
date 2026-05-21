@@ -81,7 +81,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
       segment?.width,
       segment?.depth,
       segment?.wallHeight,
-      segment?.roofHeight,
+      segment?.pitch,
       segment?.wallThickness,
       segment?.deckThickness,
       segment?.overhang,

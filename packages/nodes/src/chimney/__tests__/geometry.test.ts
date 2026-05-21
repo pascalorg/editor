@@ -17,7 +17,8 @@ const fixtureSegment = (): RoofSegmentNode =>
     width: 8,
     depth: 6,
     wallHeight: 2.5,
-    roofHeight: 2.0,
+    // atan(2 / 3)° — gives getActiveRoofHeight ≈ 2.0 on this 8×6 gable.
+    pitch: (Math.atan2(2, 3) * 180) / Math.PI,
     wallThickness: 0.1,
     deckThickness: 0.1,
     overhang: 0.3,

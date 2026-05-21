@@ -1,5 +1,5 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
-import { dormerSupportsArch, dormerSupportsCornerRadii } from './geometry'
+import { dormerSupportsArch } from './geometry'
 import type { DormerNode } from './schema'
 
 export const dormerParametrics: ParametricDescriptor<DormerNode> = {
@@ -70,15 +70,6 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
           max: 1,
           step: 0.05,
           visibleIf: dormerSupportsArch,
-        },
-        {
-          key: 'windowCornerRadius',
-          kind: 'number',
-          unit: 'm',
-          min: 0,
-          max: 0.5,
-          step: 0.01,
-          visibleIf: dormerSupportsCornerRadii,
         },
       ],
     },

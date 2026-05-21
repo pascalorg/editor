@@ -157,7 +157,7 @@ export default function RoofPanel() {
       width: 6,
       depth: 6,
       wallHeight: 0.5,
-      roofHeight: 2.5,
+      pitch: 40,
       roofType: 'gable',
       position: [2, 0, 2],
     })

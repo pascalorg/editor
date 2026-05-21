@@ -15,7 +15,7 @@ const ghostMaterial = new THREE.MeshStandardMaterial({
 const DormerPreview = ({ node }: { node: DormerNode }) => {
   const geo = useMemo(
     () => buildDormerGhostGeometry(node),
-    [node.width, node.depth, node.height, node.roofHeight, node.roofType],
+    [node.width, node.depth, node.height, node.roofHeight, node.roofType, node.wallSkirtHeight],
   )
 
   useEffect(() => () => geo.dispose(), [geo])

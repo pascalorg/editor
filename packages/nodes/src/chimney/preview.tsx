@@ -30,8 +30,10 @@ const ChimneyPreview = ({
 }) => {
   const geo = useMemo(() => buildChimneyGeometry(node, segment), [
     segment.wallHeight,
-    segment.roofHeight,
+    segment.pitch,
     segment.roofType,
+    segment.width,
+    segment.depth,
     node.width,
     node.depth,
     node.heightAboveRidge,
