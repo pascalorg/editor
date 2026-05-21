@@ -9,12 +9,14 @@ import {
   createColumnTorusGeometry,
   createMaterial,
   createMaterialFromPresetRef,
+  type RenderShading,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { createContext, useContext, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
 
-const ColumnMaterialContext = createContext<Material>(baseMaterial as Material)
+const ColumnMaterialContext = createContext<Material>(baseMaterial())
 const ColumnEdgeSoftnessContext = createContext(0.025)
 
 function ColumnMaterial() {
@@ -25,11 +27,12 @@ function ColumnMaterial() {
 function createColumnMaterial({
   material,
   materialPreset,
-}: Pick<ColumnNode, 'material' | 'materialPreset'>) {
-  const presetMaterial = createMaterialFromPresetRef(materialPreset)
+  shading,
+}: Pick<ColumnNode, 'material' | 'materialPreset'> & { shading: RenderShading }) {
+  const presetMaterial = createMaterialFromPresetRef(materialPreset, shading)
   if (presetMaterial) return presetMaterial
-  if (material) return createMaterial(material)
-  return baseMaterial
+  if (material) return createMaterial(material, shading)
+  return baseMaterial(shading)
 }
 
 function getSegments(node: ColumnNode) {
@@ -2062,13 +2065,16 @@ export const ColumnRenderer = ({ node }: { node: ColumnNode }) => {
   const ref = useRef<Group>(null!)
   const handlers = useNodeEvents(node, 'column')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
+  const shading = useViewer((state) => state.shading)
   const material = useMemo(
     () =>
       createColumnMaterial({
         material: node.material,
         materialPreset: node.materialPreset,
+        shading,
       }),
     [
+      shading,
       node.material,
       node.material?.preset,
       node.material?.properties,

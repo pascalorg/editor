@@ -1,11 +1,13 @@
 import { getMaterialPresetByRef, type SlabNode } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
+  createDefaultMaterial,
   createMaterial,
   DEFAULT_SLAB_MATERIAL,
   generateSlabGeometry,
+  type RenderShading,
 } from '@pascal-app/viewer'
-import { DoubleSide, Group, Mesh, MeshStandardMaterial } from 'three'
+import { DoubleSide, Group, type Material, Mesh, type Texture } from 'three'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
@@ -17,10 +19,18 @@ import { DoubleSide, Group, Mesh, MeshStandardMaterial } from 'three'
  * (preset apply) is preserved — async texture loads still update the
  * rendered material after re-mount.
  */
-const slabMaterialCache = new Map<string, MeshStandardMaterial>()
+type SlabMaterial = Material & {
+  alphaMap?: Texture | null
+  depthWrite: boolean
+  opacity: number
+  transparent: boolean
+}
 
-function getSlabMaterial(node: SlabNode): MeshStandardMaterial {
+const slabMaterialCache = new Map<string, Material>()
+
+function getSlabMaterial(node: SlabNode, shading: RenderShading): Material {
   const cacheKey = JSON.stringify({
+    shading,
     material: node.material ?? null,
     materialPreset: node.materialPreset ?? null,
   })
@@ -29,30 +39,35 @@ function getSlabMaterial(node: SlabNode): MeshStandardMaterial {
 
   const preset = getMaterialPresetByRef(node.materialPreset)
   const material = preset
-    ? new MeshStandardMaterial()
+    ? createDefaultMaterial('#ffffff', 0.5, shading)
     : node.material
-      ? createMaterial(node.material).clone()
-      : DEFAULT_SLAB_MATERIAL.clone()
+      ? createMaterial(node.material, shading).clone()
+      : DEFAULT_SLAB_MATERIAL(shading).clone()
 
   if (preset) {
     applyMaterialPresetToMaterials(material, preset)
   }
 
-  material.transparent = false
-  material.opacity = 1
-  material.alphaMap = null
-  material.side = DoubleSide
-  material.depthWrite = true
-  material.needsUpdate = true
+  const slabMaterial = material as SlabMaterial
+  slabMaterial.transparent = false
+  slabMaterial.opacity = 1
+  slabMaterial.alphaMap = null
+  slabMaterial.side = DoubleSide
+  slabMaterial.depthWrite = true
+  slabMaterial.needsUpdate = true
 
   slabMaterialCache.set(cacheKey, material)
   return material
 }
 
-export function buildSlabGeometry(node: SlabNode): Group {
+export function buildSlabGeometry(
+  node: SlabNode,
+  _ctx?: unknown,
+  shading: RenderShading = 'rendered',
+): Group {
   const group = new Group()
   const geometry = generateSlabGeometry(node)
-  const material = getSlabMaterial(node)
+  const material = getSlabMaterial(node, shading)
   const mesh = new Mesh(geometry, material)
   mesh.castShadow = true
   mesh.receiveShadow = true

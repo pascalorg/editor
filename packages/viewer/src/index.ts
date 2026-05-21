@@ -40,6 +40,7 @@ export {
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
   glassMaterial,
+  type RenderShading,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'

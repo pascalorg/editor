@@ -250,12 +250,14 @@ function previewCursor(cursor: string): PaintPreviewCleanup {
 }
 
 function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Material | null {
+  const shading = useViewer.getState().shading
+
   if (material.materialPreset) {
-    return createMaterialFromPresetRef(material.materialPreset)
+    return createMaterialFromPresetRef(material.materialPreset, shading)
   }
 
   if (material.material) {
-    return createMaterial(material.material)
+    return createMaterial(material.material, shading)
   }
 
   return null
@@ -274,7 +276,7 @@ function applyWallPaintPreview(
     ...buildWallSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
 
-  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode))
+  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode, useViewer.getState().shading))
 }
 
 function applyRoofPaintPreview(
@@ -290,7 +292,7 @@ function applyRoofPaintPreview(
     ...node,
     ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const previewMaterial = getRoofMaterialArray(previewNode)
+  const previewMaterial = getRoofMaterialArray(previewNode, useViewer.getState().shading)
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)
@@ -308,8 +310,9 @@ function applyStairPaintPreview(
     ...node,
     ...buildStairSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const bodyMaterials = getStairBodyMaterials(previewNode)
-  const railingMaterial = getStairRailingMaterial(previewNode)
+  const shading = useViewer.getState().shading
+  const bodyMaterials = getStairBodyMaterials(previewNode, shading)
+  const railingMaterial = getStairRailingMaterial(previewNode, shading)
   const restores: PaintPreviewCleanup[] = []
 
   root.traverse((object) => {

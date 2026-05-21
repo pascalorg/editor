@@ -1,7 +1,7 @@
 'use client'
 
 import { useRegistry, useScene, type WallNode } from '@pascal-app/core'
-import { getVisibleWallMaterials, NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
+import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
 
@@ -56,7 +56,8 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   }, [collisionPlaceholderGeometry, placeholderGeometry])
 
   const handlers = useNodeEvents(node, 'wall')
-  const material = getVisibleWallMaterials(node)
+  const shading = useViewer((s) => s.shading)
+  const material = getVisibleWallMaterials(node, shading)
 
   return (
     <mesh

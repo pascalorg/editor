@@ -4,7 +4,12 @@ import {
   type RoofSegmentNode,
 } from '@pascal-app/core'
 import * as THREE from 'three'
-import { createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
+import {
+  createDefaultMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
+  type RenderShading,
+} from '../../lib/materials'
 
 export type RoofMaterialArray = [THREE.Material, THREE.Material, THREE.Material, THREE.Material]
 
@@ -22,23 +27,28 @@ function getSurfaceMaterialSignature(
 function createResolvedMaterial(
   material: RoofNode['material'] | RoofSegmentNode['material'] | undefined,
   materialPreset: string | undefined,
+  shading: RenderShading,
 ): THREE.Material | null {
   if (materialPreset) {
-    return createMaterialFromPresetRef(materialPreset)
+    return createMaterialFromPresetRef(materialPreset, shading)
   }
 
   if (material) {
-    return createMaterial(material)
+    return createMaterial(material, shading)
   }
 
   return null
 }
 
-export function getRoofMaterialArray(node: RoofNode): RoofMaterialArray | null {
+export function getRoofMaterialArray(
+  node: RoofNode,
+  shading: RenderShading = 'rendered',
+): RoofMaterialArray | null {
   const top = getEffectiveRoofSurfaceMaterial(node, 'top')
   const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
   const wall = getEffectiveRoofSurfaceMaterial(node, 'wall')
   const cacheKey = JSON.stringify({
+    shading,
     top: getSurfaceMaterialSignature(top),
     edge: getSurfaceMaterialSignature(edge),
     wall: getSurfaceMaterialSignature(wall),
@@ -47,19 +57,19 @@ export function getRoofMaterialArray(node: RoofNode): RoofMaterialArray | null {
   const cached = roofMaterialArrayCache.get(cacheKey)
   if (cached) return cached
 
-  const topMaterial = createResolvedMaterial(top.material, top.materialPreset)
-  const edgeMaterial = createResolvedMaterial(edge.material, edge.materialPreset)
-  const wallMaterial = createResolvedMaterial(wall.material, wall.materialPreset)
+  const topMaterial = createResolvedMaterial(top.material, top.materialPreset, shading)
+  const edgeMaterial = createResolvedMaterial(edge.material, edge.materialPreset, shading)
+  const wallMaterial = createResolvedMaterial(wall.material, wall.materialPreset, shading)
 
   if (!(topMaterial || edgeMaterial || wallMaterial)) {
     return null
   }
 
   const materialArray: RoofMaterialArray = [
-    edgeMaterial ?? wallMaterial ?? topMaterial ?? new THREE.MeshStandardMaterial(),
-    wallMaterial ?? edgeMaterial ?? topMaterial ?? new THREE.MeshStandardMaterial(),
-    wallMaterial ?? edgeMaterial ?? topMaterial ?? new THREE.MeshStandardMaterial(),
-    topMaterial ?? wallMaterial ?? edgeMaterial ?? new THREE.MeshStandardMaterial(),
+    edgeMaterial ?? wallMaterial ?? topMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
+    wallMaterial ?? edgeMaterial ?? topMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
+    wallMaterial ?? edgeMaterial ?? topMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
+    topMaterial ?? wallMaterial ?? edgeMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
   ]
 
   roofMaterialArrayCache.set(cacheKey, materialArray)

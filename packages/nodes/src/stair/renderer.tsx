@@ -16,6 +16,7 @@ import {
   NodeRenderer,
   type StairBodyMaterials,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -61,14 +62,16 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair')
+  const shading = useViewer((s) => s.shading)
 
   const material = useMemo(() => {
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material
-    if (!mat) return DEFAULT_STAIR_MATERIAL
-    return createMaterial(mat)
+    if (!mat) return DEFAULT_STAIR_MATERIAL(shading)
+    return createMaterial(mat, shading)
   }, [
+    shading,
     node.materialPreset,
     node.material,
     node.material?.preset,
@@ -76,9 +79,9 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
     node.material?.texture,
   ])
 
-  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node), [node])
+  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node, shading), [node, shading])
 
-  const railingMaterial = useMemo(() => getStairRailingMaterial(node), [node])
+  const railingMaterial = useMemo(() => getStairRailingMaterial(node, shading), [node, shading])
 
   const straightPlaceholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()

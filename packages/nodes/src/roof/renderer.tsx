@@ -4,7 +4,7 @@ import { type RoofNode, useRegistry, useScene } from '@pascal-app/core'
 import { getRoofMaterialArray, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { roofDebugMaterials, roofMaterials } from './roof-materials'
+import { getRoofDebugMaterials, getRoofMaterials } from './roof-materials'
 
 export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -16,6 +16,7 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
 
   const handlers = useNodeEvents(node, 'roof')
   const debugColors = useViewer((s) => s.debugColors)
+  const shading = useViewer((s) => s.shading)
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
@@ -26,9 +27,11 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     return geometry
   }, [])
 
-  const customMaterial = useMemo(() => getRoofMaterialArray(node), [node])
+  const customMaterial = useMemo(() => getRoofMaterialArray(node, shading), [node, shading])
 
-  const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
+  const material = debugColors
+    ? getRoofDebugMaterials(shading)
+    : customMaterial || getRoofMaterials(shading)
 
   useEffect(() => {
     return () => {

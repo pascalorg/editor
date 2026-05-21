@@ -6,11 +6,14 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
-import { baseMaterial, glassMaterial } from '../../lib/materials'
+import { baseMaterial as getBaseMaterial, glassMaterial } from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
+let baseMaterial = getBaseMaterial()
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
 export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'
@@ -25,9 +28,22 @@ export const HOPPER_WINDOW_SASH_NAME = 'hopper-window-sash'
 export const WindowSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  const shading = useViewer((state) => state.shading)
+
+  baseMaterial = getBaseMaterial(shading)
+
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type === 'window') {
+        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+      }
+    }
+  }, [shading])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+    baseMaterial = getBaseMaterial(shading)
 
     const nodes = useScene.getState().nodes
 

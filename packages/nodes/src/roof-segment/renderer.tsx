@@ -10,7 +10,7 @@ import {
 import { getRoofMaterialArray, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { roofDebugMaterials, roofMaterials } from '../roof/roof-materials'
+import { getRoofDebugMaterials, getRoofMaterials } from '../roof/roof-materials'
 
 export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const ref = useRef<THREE.Mesh>(null!)
@@ -20,6 +20,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
 
   const handlers = useNodeEvents(node, 'roof-segment')
   const debugColors = useViewer((s) => s.debugColors)
+  const shading = useViewer((s) => s.shading)
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
@@ -38,10 +39,12 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
       return null
     }
 
-    return parentNode ? getRoofMaterialArray(parentNode) : null
-  }, [node, parentNode])
+    return parentNode ? getRoofMaterialArray(parentNode, shading) : null
+  }, [node, parentNode, shading])
 
-  const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
+  const material = debugColors
+    ? getRoofDebugMaterials(shading)
+    : customMaterial || getRoofMaterials(shading)
 
   useEffect(() => {
     return () => {

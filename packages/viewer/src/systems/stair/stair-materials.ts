@@ -8,6 +8,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   DEFAULT_STAIR_MATERIAL,
+  type RenderShading,
 } from '../../lib/materials'
 
 export type StairBodyMaterials = [THREE.Material, THREE.Material]
@@ -27,22 +28,27 @@ function getSurfaceMaterialSignature(
 function createResolvedMaterial(
   material: StairNode['material'] | StairSegmentNode['material'] | undefined,
   materialPreset: string | undefined,
+  shading: RenderShading,
 ): THREE.Material {
   if (materialPreset) {
-    return createMaterialFromPresetRef(materialPreset) ?? DEFAULT_STAIR_MATERIAL
+    return createMaterialFromPresetRef(materialPreset, shading) ?? DEFAULT_STAIR_MATERIAL(shading)
   }
 
   if (material) {
-    return createMaterial(material)
+    return createMaterial(material, shading)
   }
 
-  return DEFAULT_STAIR_MATERIAL
+  return DEFAULT_STAIR_MATERIAL(shading)
 }
 
-export function getStairBodyMaterials(stair: StairNode): StairBodyMaterials {
+export function getStairBodyMaterials(
+  stair: StairNode,
+  shading: RenderShading = 'rendered',
+): StairBodyMaterials {
   const tread = getEffectiveStairSurfaceMaterial(stair, 'tread')
   const side = getEffectiveStairSurfaceMaterial(stair, 'side')
   const cacheKey = JSON.stringify({
+    shading,
     tread: getSurfaceMaterialSignature(tread),
     side: getSurfaceMaterialSignature(side),
   })
@@ -51,21 +57,27 @@ export function getStairBodyMaterials(stair: StairNode): StairBodyMaterials {
   if (cached) return cached
 
   const materials: StairBodyMaterials = [
-    createResolvedMaterial(tread.material, tread.materialPreset),
-    createResolvedMaterial(side.material, side.materialPreset),
+    createResolvedMaterial(tread.material, tread.materialPreset, shading),
+    createResolvedMaterial(side.material, side.materialPreset, shading),
   ]
 
   stairBodyMaterialCache.set(cacheKey, materials)
   return materials
 }
 
-export function getStairRailingMaterial(stair: StairNode): THREE.Material {
+export function getStairRailingMaterial(
+  stair: StairNode,
+  shading: RenderShading = 'rendered',
+): THREE.Material {
   const railing = getEffectiveStairSurfaceMaterial(stair, 'railing')
-  const cacheKey = getSurfaceMaterialSignature(railing)
+  const cacheKey = JSON.stringify({
+    shading,
+    railing: getSurfaceMaterialSignature(railing),
+  })
   const cached = stairRailingMaterialCache.get(cacheKey)
   if (cached) return cached
 
-  const material = createResolvedMaterial(railing.material, railing.materialPreset)
+  const material = createResolvedMaterial(railing.material, railing.materialPreset, shading)
   stairRailingMaterialCache.set(cacheKey, material)
   return material
 }
@@ -73,15 +85,16 @@ export function getStairRailingMaterial(stair: StairNode): THREE.Material {
 export function getStraightStairSegmentBodyMaterials(
   segment: StairSegmentNode,
   parentNode?: StairNode,
+  shading: RenderShading = 'rendered',
 ): StairBodyMaterials {
   if (segment.material !== undefined || typeof segment.materialPreset === 'string') {
-    const override = createResolvedMaterial(segment.material, segment.materialPreset)
+    const override = createResolvedMaterial(segment.material, segment.materialPreset, shading)
     return [override, override]
   }
 
   if (parentNode) {
-    return getStairBodyMaterials(parentNode)
+    return getStairBodyMaterials(parentNode, shading)
   }
 
-  return [DEFAULT_STAIR_MATERIAL, DEFAULT_STAIR_MATERIAL]
+  return [DEFAULT_STAIR_MATERIAL(shading), DEFAULT_STAIR_MATERIAL(shading)]
 }

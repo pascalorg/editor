@@ -1,10 +1,12 @@
 import { getMaterialPresetByRef } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
+  createDefaultMaterial,
   createMaterial,
   DEFAULT_SHELF_MATERIAL,
+  type RenderShading,
 } from '@pascal-app/viewer'
-import { BoxGeometry, FrontSide, Group, Mesh, MeshStandardMaterial } from 'three'
+import { BoxGeometry, FrontSide, Group, type Material, Mesh } from 'three'
 import type { ShelfNode } from './schema'
 
 /**
@@ -31,10 +33,15 @@ import type { ShelfNode } from './schema'
  * Style dispatch lives at the top of the function; each style helper
  * mutates the same `group`.
  */
-const shelfMaterialCache = new Map<string, MeshStandardMaterial>()
+type ShelfMaterial = Material & {
+  depthWrite: boolean
+}
 
-function getShelfMaterial(node: ShelfNode): MeshStandardMaterial {
+const shelfMaterialCache = new Map<string, Material>()
+
+function getShelfMaterial(node: ShelfNode, shading: RenderShading): Material {
   const cacheKey = JSON.stringify({
+    shading,
     material: node.material ?? null,
     materialPreset: node.materialPreset ?? null,
   })
@@ -43,28 +50,33 @@ function getShelfMaterial(node: ShelfNode): MeshStandardMaterial {
 
   const preset = getMaterialPresetByRef(node.materialPreset)
   const material = preset
-    ? new MeshStandardMaterial()
+    ? createDefaultMaterial('#ffffff', 0.5, shading)
     : node.material
-      ? createMaterial(node.material).clone()
-      : DEFAULT_SHELF_MATERIAL.clone()
+      ? createMaterial(node.material, shading).clone()
+      : DEFAULT_SHELF_MATERIAL(shading).clone()
 
   if (preset) {
     applyMaterialPresetToMaterials(material, preset)
   }
 
-  material.side = FrontSide
-  material.depthWrite = true
-  material.needsUpdate = true
+  const shelfMaterial = material as ShelfMaterial
+  shelfMaterial.side = FrontSide
+  shelfMaterial.depthWrite = true
+  shelfMaterial.needsUpdate = true
 
   shelfMaterialCache.set(cacheKey, material)
   return material
 }
 
-export function buildShelfGeometry(node: ShelfNode): Group {
+export function buildShelfGeometry(
+  node: ShelfNode,
+  _ctx?: unknown,
+  shading: RenderShading = 'rendered',
+): Group {
   const group = new Group()
   group.name = 'shelf-geometry'
 
-  const material = getShelfMaterial(node)
+  const material = getShelfMaterial(node, shading)
 
   switch (node.style) {
     case 'wall-shelf':
@@ -91,7 +103,7 @@ export function buildShelfGeometry(node: ShelfNode): Group {
  * evenly-spaced boards from `height/rows` up to `height`. Brackets
  * span from floor to the topmost board.
  */
-function buildWallShelf(group: Group, node: ShelfNode, material: MeshStandardMaterial) {
+function buildWallShelf(group: Group, node: ShelfNode, material: Material) {
   for (const y of boardCenterYs(node)) {
     const board = new Mesh(new BoxGeometry(node.width, node.thickness, node.depth), material)
     board.name = `shelf-board-${boardRowIndex(node, y)}`
@@ -123,7 +135,7 @@ function buildWallShelf(group: Group, node: ShelfNode, material: MeshStandardMat
  * `withSides === false`, side panels become slim corner posts (a rack
  * silhouette).
  */
-function buildBookshelf(group: Group, node: ShelfNode, material: MeshStandardMaterial) {
+function buildBookshelf(group: Group, node: ShelfNode, material: Material) {
   const unitHeight = node.height + node.thickness
   const innerWidth = node.withSides ? node.width - 2 * node.thickness : node.width
 
@@ -179,7 +191,7 @@ function buildBookshelf(group: Group, node: ShelfNode, material: MeshStandardMat
  * X-brace on the back face for stability. `withSides` / `bracketStyle`
  * are ignored (the rack defines its own posts).
  */
-function buildOpenRack(group: Group, node: ShelfNode, material: MeshStandardMaterial) {
+function buildOpenRack(group: Group, node: ShelfNode, material: Material) {
   const unitHeight = node.height + node.thickness
   const innerWidth = node.width
   const boardThickness = Math.max(0.02, node.thickness * 0.8)
@@ -212,7 +224,7 @@ function buildOpenRack(group: Group, node: ShelfNode, material: MeshStandardMate
  * boards + vertical dividers. `withBack` / `withSides` are forced on
  * because the cubby shape requires them.
  */
-function buildCubby(group: Group, node: ShelfNode, material: MeshStandardMaterial) {
+function buildCubby(group: Group, node: ShelfNode, material: Material) {
   const unitHeight = node.height + node.thickness
   const innerWidth = node.width - 2 * node.thickness
 
@@ -294,7 +306,7 @@ function boardRowIndex(node: ShelfNode, y: number): number {
 function addCornerPosts(
   group: Group,
   node: ShelfNode,
-  material: MeshStandardMaterial,
+  material: Material,
   unitHeight: number,
   postStyle: 'rack' | 'leg',
 ) {

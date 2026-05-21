@@ -8,8 +8,13 @@ import {
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { baseMaterial, createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
+import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import {
+  baseMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
+  type RenderShading,
+} from '../../lib/materials'
 
 const DEFAULT_WALL_COLOR = '#f2f0ed'
 
@@ -61,16 +66,16 @@ const dotPattern = Fn(() => {
   return dots.mul(yFade)
 })
 
-function getSurfaceVisibleMaterial(spec: WallSurfaceMaterialSpec): Material {
+function getSurfaceVisibleMaterial(spec: WallSurfaceMaterialSpec, shading: RenderShading): Material {
   if (spec.materialPreset) {
-    return createMaterialFromPresetRef(spec.materialPreset) ?? baseMaterial
+    return createMaterialFromPresetRef(spec.materialPreset, shading) ?? baseMaterial(shading)
   }
 
   if (spec.material) {
-    return createMaterial(spec.material)
+    return createMaterial(spec.material, shading)
   }
 
-  return baseMaterial
+  return baseMaterial(shading)
 }
 
 function getSurfaceColor(spec: WallSurfaceMaterialSpec, fallback = DEFAULT_WALL_COLOR): string {
@@ -119,14 +124,24 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
   return highlightedMaterial
 }
 
-function createInvisibleWallMaterial(color: string): MeshStandardNodeMaterial {
-  return new MeshStandardNodeMaterial({
-    transparent: true,
-    opacityNode: mix(float(0.0), float(0.24), dotPattern()),
-    color,
-    depthWrite: false,
-    emissive: color,
-  })
+function createInvisibleWallMaterial(color: string, shading: RenderShading): Material {
+  const material =
+    shading === 'solid'
+      ? new MeshLambertNodeMaterial({
+          transparent: true,
+          color,
+          depthWrite: false,
+          emissive: color,
+        })
+      : new MeshStandardNodeMaterial({
+          transparent: true,
+          color,
+          depthWrite: false,
+          emissive: color,
+        })
+
+  material.opacityNode = mix(float(0.0), float(0.24), dotPattern())
+  return material
 }
 
 function mapWallMaterialArray(
@@ -148,8 +163,9 @@ function disposeOwnedMaterials(materials: WallMaterialArray[]) {
   })
 }
 
-export function getWallMaterialHash(wallNode: WallNode): string {
+export function getWallMaterialHash(wallNode: WallNode, shading: RenderShading): string {
   return JSON.stringify({
+    shading,
     interior: getWallSurfaceMaterialSignature(
       getEffectiveWallSurfaceMaterial(wallNode, 'interior'),
     ),
@@ -159,9 +175,12 @@ export function getWallMaterialHash(wallNode: WallNode): string {
   })
 }
 
-export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
-  const cacheKey = wallNode.id
-  const materialHash = getWallMaterialHash(wallNode)
+export function getMaterialsForWall(
+  wallNode: WallNode,
+  shading: RenderShading = 'rendered',
+): WallMaterials {
+  const cacheKey = `${wallNode.id}-${shading}`
+  const materialHash = getWallMaterialHash(wallNode, shading)
 
   const existing = wallMaterialCache.get(cacheKey)
   if (existing && existing.materialHash === materialHash) {
@@ -182,15 +201,15 @@ export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   const exteriorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'exterior')
 
   const visible: WallMaterialArray = [
-    baseMaterial,
-    getSurfaceVisibleMaterial(interiorSpec),
-    getSurfaceVisibleMaterial(exteriorSpec),
+    baseMaterial(shading),
+    getSurfaceVisibleMaterial(interiorSpec, shading),
+    getSurfaceVisibleMaterial(exteriorSpec, shading),
   ]
 
   const invisible: WallMaterialArray = [
-    createInvisibleWallMaterial(DEFAULT_WALL_COLOR),
-    createInvisibleWallMaterial(getSurfaceColor(interiorSpec, DEFAULT_WALL_COLOR)),
-    createInvisibleWallMaterial(getSurfaceColor(exteriorSpec, DEFAULT_WALL_COLOR)),
+    createInvisibleWallMaterial(DEFAULT_WALL_COLOR, shading),
+    createInvisibleWallMaterial(getSurfaceColor(interiorSpec, DEFAULT_WALL_COLOR), shading),
+    createInvisibleWallMaterial(getSurfaceColor(exteriorSpec, DEFAULT_WALL_COLOR), shading),
   ]
 
   const highlightedVisible = mapWallMaterialArray(visible, (material) =>
@@ -220,6 +239,9 @@ export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   return result
 }
 
-export function getVisibleWallMaterials(wallNode: WallNode): WallMaterialArray {
-  return getMaterialsForWall(wallNode).visible
+export function getVisibleWallMaterials(
+  wallNode: WallNode,
+  shading: RenderShading = 'rendered',
+): WallMaterialArray {
+  return getMaterialsForWall(wallNode, shading).visible
 }

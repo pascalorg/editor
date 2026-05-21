@@ -9,7 +9,10 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import type { Group, Mesh } from 'three'
+import type { RenderShading } from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 /**
  * Generic geometry system.
@@ -45,6 +48,17 @@ import type { Group, Mesh } from 'three'
 export const GeometrySystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
   const clearDirty = useScene((s) => s.clearDirty)
+  const shading = useViewer((s) => s.shading)
+
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      const def = nodeRegistry.get(node.type)
+      if (def?.geometry) {
+        useScene.getState().markDirty(node.id as AnyNodeId)
+      }
+    }
+  }, [shading])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -123,10 +137,13 @@ export const GeometrySystem = () => {
       // The builder is typed against the kind's specific node — at the
       // generic system level we lose that refinement, so the cast lands
       // here. Builders are responsible for trusting their schema.
-      const built = (builder as (n: AnyNode, c: GeometryContext) => { children: unknown[] })(
-        node,
-        ctx,
-      ) as unknown as Group
+      const built = (
+        builder as (
+          n: AnyNode,
+          c: GeometryContext,
+          shading: RenderShading,
+        ) => { children: unknown[] }
+      )(node, ctx, shading) as unknown as Group
 
       disposeChildren(group)
       for (const child of [...built.children]) {

@@ -1,4 +1,8 @@
-import { DEFAULT_STAIR_MATERIAL, generateFenceGeometry } from '@pascal-app/viewer'
+import {
+  DEFAULT_STAIR_MATERIAL,
+  generateFenceGeometry,
+  type RenderShading,
+} from '@pascal-app/viewer'
 import { Group, Mesh } from 'three'
 import type { FenceNode } from './schema'
 
@@ -18,10 +22,14 @@ import type { FenceNode } from './schema'
  * once the legacy system file is deleted. Until then `generateFenceGeometry`
  * is publicly re-exported from viewer.
  */
-export function buildFenceGeometry(node: FenceNode): Group {
+export function buildFenceGeometry(
+  node: FenceNode,
+  _ctx?: unknown,
+  shading: RenderShading = 'rendered',
+): Group {
   const group = new Group()
   const geometry = generateFenceGeometry(node)
-  const mesh = new Mesh(geometry, DEFAULT_STAIR_MATERIAL)
+  const mesh = new Mesh(geometry, DEFAULT_STAIR_MATERIAL(shading))
   mesh.castShadow = true
   mesh.receiveShadow = true
   group.add(mesh)
