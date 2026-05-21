@@ -65,12 +65,12 @@ export function Lights() {
         light2Ref.current.color.set(isDark ? '#8090ff' : '#ffffff')
       }
       if (hemiRef.current) {
-        hemiRef.current.intensity = isDark ? 0.35 : 0.5
+        hemiRef.current.intensity = isDark ? 0.4 : 0.6
         hemiRef.current.color.set(isDark ? '#3a4666' : '#ffffff')
-        hemiRef.current.groundColor.set(isDark ? '#0e111c' : '#d8d6cf')
+        hemiRef.current.groundColor.set(isDark ? '#0e111c' : '#aaa49a')
       }
       if (ambientRef.current) {
-        ambientRef.current.intensity = isDark ? 0.1 : 0.25
+        ambientRef.current.intensity = isDark ? 0.07 : 0.15
         ambientRef.current.color.set(isDark ? '#a0b0ff' : '#ffffff')
       }
       initialized.current = true
@@ -110,19 +110,19 @@ export function Lights() {
     if (hemiRef.current) {
       hemiRef.current.intensity = THREE.MathUtils.lerp(
         hemiRef.current.intensity,
-        isDark ? 0.35 : 0.5,
+        isDark ? 0.4 : 0.6,
         dt,
       )
       targets.hemiSky.set(isDark ? '#3a4666' : '#ffffff')
       hemiRef.current.color.lerp(targets.hemiSky, dt)
-      targets.hemiGround.set(isDark ? '#0e111c' : '#d8d6cf')
+      targets.hemiGround.set(isDark ? '#0e111c' : '#aaa49a')
       hemiRef.current.groundColor.lerp(targets.hemiGround, dt)
     }
 
     if (ambientRef.current) {
       ambientRef.current.intensity = THREE.MathUtils.lerp(
         ambientRef.current.intensity,
-        isDark ? 0.1 : 0.25,
+        isDark ? 0.07 : 0.15,
         dt,
       )
       targets.ambColor.set(isDark ? '#a0b0ff' : '#ffffff')
