@@ -5,6 +5,7 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { ColorPreset, RenderShading } from '../lib/materials'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -33,14 +34,14 @@ type ViewerState = {
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
-  shading: 'solid' | 'rendered'
-  setShading: (shading: 'solid' | 'rendered') => void
+  shading: RenderShading
+  setShading: (shading: RenderShading) => void
 
   textures: boolean
   setTextures: (textures: boolean) => void
 
-  colorPreset: string
-  setColorPreset: (preset: string) => void
+  colorPreset: ColorPreset
+  setColorPreset: (preset: ColorPreset) => void
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void

@@ -4,6 +4,7 @@ import { StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
+import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import useViewer from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
@@ -137,9 +138,9 @@ interface ViewerProps {
   perf?: boolean
   useBvh?: boolean
   defaultRender?: {
-    shading?: 'solid' | 'rendered'
+    shading?: RenderShading
     textures?: boolean
-    colorPreset?: string
+    colorPreset?: ColorPreset
   }
 }
 

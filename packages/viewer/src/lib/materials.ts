@@ -4,12 +4,65 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  type SurfaceRole,
   resolveMaterial,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 export type RenderShading = 'solid' | 'rendered'
+export type ColorPreset = 'clay' | 'white' | 'mono' | 'blueprint'
+
+export const CLAY_PALETTE: Record<SurfaceRole, string> = {
+  wall: '#dcd6c7',
+  floor: '#cfc8b6',
+  ceiling: '#e4ded0',
+  roof: '#b8ad96',
+  joinery: '#c4bba6',
+  glazing: '#c8d4dc',
+  furnishing: '#d2ccbe',
+}
+
+export const WHITE_PALETTE: Record<SurfaceRole, string> = {
+  wall: '#f4f3ef',
+  floor: '#ece9e2',
+  ceiling: '#fbfaf6',
+  roof: '#dedbd2',
+  joinery: '#e8e5dc',
+  glazing: '#dbe8ee',
+  furnishing: '#efede7',
+}
+
+export const MONO_PALETTE: Record<SurfaceRole, string> = {
+  wall: '#c8c8c8',
+  floor: '#b8b8b8',
+  ceiling: '#d8d8d8',
+  roof: '#9a9a9a',
+  joinery: '#adadad',
+  glazing: '#c2cbd0',
+  furnishing: '#c0c0c0',
+}
+
+export const BLUEPRINT_PALETTE: Record<SurfaceRole, string> = {
+  wall: '#90a9c7',
+  floor: '#7f98ba',
+  ceiling: '#aec0d8',
+  roof: '#5f789b',
+  joinery: '#6f86a8',
+  glazing: '#b6d7ea',
+  furnishing: '#8ba2bf',
+}
+
+export const PRESET_PALETTES: Record<ColorPreset, Record<SurfaceRole, string>> = {
+  clay: CLAY_PALETTE,
+  white: WHITE_PALETTE,
+  mono: MONO_PALETTE,
+  blueprint: BLUEPRINT_PALETTE,
+}
+
+export function resolveSurfaceColor(role: SurfaceRole, preset: ColorPreset): string {
+  return PRESET_PALETTES[preset][role]
+}
 
 export const glassMaterial = new MeshLambertNodeMaterial({
   color: '#e0f2fe',
@@ -26,6 +79,7 @@ const sideMap: Record<MaterialProperties['side'], THREE.Side> = {
 
 const materialCache = new Map<string, THREE.Material>()
 const defaultMaterialCache = new Map<string, THREE.Material>()
+const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
 const textureLoader = new THREE.TextureLoader()
@@ -432,6 +486,35 @@ function cachedDefaultMaterial(
   return material
 }
 
+export function createSurfaceRoleMaterial(
+  role: SurfaceRole,
+  preset: ColorPreset,
+  side: THREE.Side = THREE.FrontSide,
+): THREE.Material {
+  const resolvedSide = role === 'glazing' ? THREE.DoubleSide : side
+  const cacheKey = `${role}-${preset}-${resolvedSide}`
+  const cached = surfaceRoleMaterialCache.get(cacheKey)
+  if (cached) return cached
+
+  const material =
+    role === 'glazing'
+      ? new MeshLambertNodeMaterial({
+          color: resolveSurfaceColor(role, preset),
+          depthWrite: false,
+          opacity: 0.25,
+          side: resolvedSide,
+          transparent: true,
+        })
+      : new MeshLambertNodeMaterial({
+          color: resolveSurfaceColor(role, preset),
+          side: resolvedSide,
+        })
+
+  material.userData.__pascalCachedMaterial = true
+  surfaceRoleMaterialCache.set(cacheKey, material)
+  return material
+}
+
 export function baseMaterial(shading: RenderShading = 'rendered'): THREE.Material {
   return cachedDefaultMaterial('base', '#f2f0ed', 0.5, shading)
 }
@@ -501,6 +584,11 @@ export function clearMaterialCache(): void {
     material.dispose()
   }
   defaultMaterialCache.clear()
+
+  for (const material of surfaceRoleMaterialCache.values()) {
+    material.dispose()
+  }
+  surfaceRoleMaterialCache.clear()
 
   for (const texture of textureCache.values()) {
     texture.dispose()

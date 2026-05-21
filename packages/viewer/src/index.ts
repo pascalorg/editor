@@ -30,6 +30,9 @@ export {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  BLUEPRINT_PALETTE,
+  CLAY_PALETTE,
   DEFAULT_CEILING_MATERIAL,
   DEFAULT_DOOR_MATERIAL,
   DEFAULT_ROOF_MATERIAL,
@@ -40,8 +43,14 @@ export {
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
   glassMaterial,
+  MONO_PALETTE,
+  PRESET_PALETTES,
+  resolveSurfaceColor,
+  WHITE_PALETTE,
+  type ColorPreset,
   type RenderShading,
 } from './lib/materials'
+export type { SurfaceRole } from '@pascal-app/core'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
 export { useItemLightPool } from './store/use-item-light-pool'

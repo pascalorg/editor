@@ -23,6 +23,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   schemaVersion: 1,
   schema: WallNode,
   category: 'structure',
+  surfaceRole: 'wall',
 
   defaults: () => ({
     object: 'node',

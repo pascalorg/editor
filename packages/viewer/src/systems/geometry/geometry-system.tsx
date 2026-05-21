@@ -6,12 +6,17 @@ import {
   type GeometryContext,
   nodeRegistry,
   sceneRegistry,
+  type SurfaceRole,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
-import type { Group, Mesh } from 'three'
-import type { RenderShading } from '../../lib/materials'
+import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import {
+  createSurfaceRoleMaterial,
+  type ColorPreset,
+  type RenderShading,
+} from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 
 /**
@@ -49,6 +54,8 @@ export const GeometrySystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
   const clearDirty = useScene((s) => s.clearDirty)
   const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
@@ -58,7 +65,7 @@ export const GeometrySystem = () => {
         useScene.getState().markDirty(node.id as AnyNodeId)
       }
     }
-  }, [shading])
+  }, [shading, textures, colorPreset])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -142,8 +149,14 @@ export const GeometrySystem = () => {
           n: AnyNode,
           c: GeometryContext,
           shading: RenderShading,
+          textures: boolean,
+          colorPreset: ColorPreset,
         ) => { children: unknown[] }
-      )(node, ctx, shading) as unknown as Group
+      )(node, ctx, shading, textures, colorPreset) as unknown as Group
+
+      if (!textures && def.surfaceRole) {
+        applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset)
+      }
 
       disposeChildren(group)
       for (const child of [...built.children]) {
@@ -232,15 +245,58 @@ function disposeChildren(group: Group) {
       const m = (mesh as { material: unknown }).material
       if (Array.isArray(m)) {
         for (const mat of m) {
+          if (isCachedMaterial(mat)) continue
           if (mat && typeof (mat as { dispose?: () => void }).dispose === 'function') {
             ;(mat as { dispose: () => void }).dispose()
           }
         }
+      } else if (isCachedMaterial(m)) {
+        continue
       } else if (m && typeof (m as { dispose?: () => void }).dispose === 'function') {
         ;(m as { dispose: () => void }).dispose()
       }
     }
   }
+}
+
+function applyDefaultSurfaceRole(root: Group, defaultRole: SurfaceRole, colorPreset: ColorPreset) {
+  root.traverse((child) => {
+    const mesh = child as Partial<Mesh> & {
+      material?: Material | Material[]
+      userData: Record<string, unknown>
+    }
+    if (!('material' in mesh) || !mesh.material) return
+
+    const role = getMeshSurfaceRole(mesh.userData.surfaceRole, defaultRole)
+    mesh.userData.surfaceRole = role
+    mesh.material = createSurfaceRoleMaterial(role, colorPreset, getMaterialSide(mesh.material))
+  })
+}
+
+function getMeshSurfaceRole(value: unknown, fallback: SurfaceRole): SurfaceRole {
+  return typeof value === 'string' && isSurfaceRole(value) ? value : fallback
+}
+
+function isSurfaceRole(value: string): value is SurfaceRole {
+  return (
+    value === 'wall' ||
+    value === 'floor' ||
+    value === 'ceiling' ||
+    value === 'roof' ||
+    value === 'joinery' ||
+    value === 'glazing' ||
+    value === 'furnishing'
+  )
+}
+
+function getMaterialSide(material: Material | Material[]): Material['side'] {
+  const source = Array.isArray(material) ? material[0] : material
+  return source?.side ?? FrontSide
+}
+
+function isCachedMaterial(value: unknown): boolean {
+  return Boolean((value as { userData?: { __pascalCachedMaterial?: boolean } } | null)?.userData
+    ?.__pascalCachedMaterial)
 }
 
 export default GeometrySystem
