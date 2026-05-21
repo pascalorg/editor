@@ -213,7 +213,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
         castShadow
         geometry={trimmedBody ?? geo.body}
         material={surfaceArray}
-        name="chimney-surface"
+        name="chimney-body"
         receiveShadow
       />
       {geo.cap && (
@@ -221,7 +221,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
           castShadow
           geometry={geo.cap}
           material={surfaceArray}
-          name="chimney-surface"
+          name="chimney-cap"
           receiveShadow
         />
       )}
@@ -230,7 +230,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
           castShadow
           geometry={geo.flues}
           material={surfaceArray}
-          name="chimney-surface"
+          name="chimney-flues"
           receiveShadow
         />
       )}
@@ -239,7 +239,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
           castShadow
           geometry={geo.cricket}
           material={surfaceMaterial}
-          name="chimney-surface"
+          name="chimney-cricket"
           receiveShadow
         />
       )}
@@ -248,7 +248,7 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
           castShadow
           geometry={geo.bands}
           material={surfaceMaterial}
-          name="chimney-surface"
+          name="chimney-bands"
           receiveShadow
         />
       )}
