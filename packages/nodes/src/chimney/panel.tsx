@@ -13,7 +13,7 @@ import {
 import { Vector3 } from 'three'
 import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ActionButton,
   ActionGroup,
@@ -23,6 +23,13 @@ import {
   SliderControl,
   triggerSFX,
 } from '@pascal-app/editor'
+import {
+  CHIMNEY_PRESET_KEYS,
+  CHIMNEY_PRESET_LABELS,
+  type ChimneyPresetKey,
+  chimneyPresets,
+  detectActiveChimneyPreset,
+} from './presets'
 
 // Tiny clsx-equivalent. The editor package doesn't re-export the
 // legacy `cn` helper; inlining keeps this panel self-contained.
@@ -315,6 +322,21 @@ export default function ChimneyPanel() {
     commitProp({ rotation: newWorldRot - ancestorWorldY })
   }
 
+  // Match the current store node against the preset table so the
+  // segmented control highlights "the preset you'd land on if you
+  // applied X again". Compare against the store node, not the live-
+  // override-merged `node`, so the highlight is stable across slider
+  // drags. Null means the user has tweaked away from any preset; the
+  // segmented control will then render with no segment selected.
+  const activePreset = useMemo(() => detectActiveChimneyPreset(storeNode), [storeNode])
+  const applyPreset = useCallback(
+    (key: ChimneyPresetKey) => {
+      commitProp(chimneyPresets[key] as Partial<ChimneyNode>)
+      triggerSFX('sfx:item-pick')
+    },
+    [commitProp],
+  )
+
   return (
     <PanelWrapper
       icon="/icons/roof.png"
@@ -323,6 +345,19 @@ export default function ChimneyPanel() {
       title={node.name || 'Chimney'}
       width={300}
     >
+      <PanelSection title="Style">
+        <SegmentedControl
+          onChange={(v) => applyPreset(v as ChimneyPresetKey)}
+          options={CHIMNEY_PRESET_KEYS.map((k) => ({
+            label: CHIMNEY_PRESET_LABELS[k],
+            value: k,
+          }))}
+          // Empty string when no preset matches — nothing highlighted,
+          // which reads correctly as "custom".
+          value={activePreset ?? ''}
+        />
+      </PanelSection>
+
       <PanelSection title="Footprint">
         <SegmentedControl
           onChange={(v) => handleUpdate({ bodyShape: v })}
