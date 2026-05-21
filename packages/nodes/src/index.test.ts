@@ -33,8 +33,12 @@ describe('builtinPlugin', () => {
     await loadPlugin(builtinPlugin)
     const unionKinds = new Set(
       AnyNode.options.map((option) => {
-        const typeShape = (option as unknown as { shape: { type: { value: string } } }).shape.type
-        return typeShape.value
+        // nodeType() wraps z.literal(kind) in ZodDefault so nodes can be parsed
+        // without an explicit type field. In Zod v4, ZodDefault has no .value;
+        // unwrap one level via .def.innerType to reach the ZodLiteral.
+        const field = (option as unknown as { shape: { type: any } }).shape.type
+        const literal: { value: string } = field.def?.innerType ?? field
+        return literal.value
       }),
     )
     const registryKinds = new Set(Array.from(nodeRegistry.entries(), ([kind]) => kind))

@@ -78,11 +78,14 @@ describe('syncAutoStairOpenings', () => {
     const building = BuildingNode.parse({ name: 'Building' })
     const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id })
     const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
+    // Opening must fully contain the computed stair polygon including the 0.15 m
+    // openingOffset expansion. Stair at position [2,0,0.2], width=1, length=2.6
+    // → expanded opening z ∈ [0.05, 2.95]. Use z ∈ [0, 3] with margin.
     const manualOpening: Array<[number, number]> = [
-      [1.2, 0.8],
-      [2.8, 0.8],
-      [2.8, 2.9],
-      [1.2, 2.9],
+      [1.2, 0],
+      [2.8, 0],
+      [2.8, 3],
+      [1.2, 3],
     ]
     const sourceCeiling = CeilingNode.parse({
       name: 'Source Ceiling',
@@ -205,11 +208,12 @@ describe('syncAutoStairOpenings', () => {
     const building = BuildingNode.parse({ name: 'Building' })
     const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id })
     const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
+    // Must fully contain the computed stair opening (z ∈ [0.05, 2.95] after expansion).
     const manualOpening: Array<[number, number]> = [
-      [1.2, 0.8],
-      [2.8, 0.8],
-      [2.8, 2.9],
-      [1.2, 2.9],
+      [1.2, 0],
+      [2.8, 0],
+      [2.8, 3],
+      [1.2, 3],
     ]
     const staleAutoOpening: Array<[number, number]> = [
       [1.5, 1],
