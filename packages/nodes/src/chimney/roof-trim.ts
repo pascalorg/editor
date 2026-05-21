@@ -3,7 +3,7 @@ import {
   Brush,
   csgEvaluator,
   csgGeometry,
-  getRoofSegmentBrushes,
+  type getRoofSegmentBrushes,
   prepareBrushForCSG,
   SUBTRACTION,
 } from '@pascal-app/viewer'
@@ -12,6 +12,8 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { partitionTopFaceGroups } from './holes'
 
 const visibleMat = new THREE.MeshBasicMaterial()
+
+export type SegmentTrimBrushes = NonNullable<ReturnType<typeof getRoofSegmentBrushes>>
 
 /**
  * CSG-trim the chimney body against the parent roof segment so the
@@ -22,6 +24,11 @@ const visibleMat = new THREE.MeshBasicMaterial()
  * deps; the renderer is the natural seam since it already imports
  * from `@pascal-app/viewer`.
  *
+ * Segment brushes are passed in (built once per segment shape in the
+ * renderer and reused across slider drags); the function does NOT
+ * dispose them. CSG `evaluate` returns a new brush, so the input
+ * brushes survive the call unmutated.
+ *
  * Returns the input geometry untouched on any CSG failure so the
  * chimney still renders (just not trimmed).
  */
@@ -29,11 +36,9 @@ export function trimChimneyBodyAgainstRoof(
   body: THREE.BufferGeometry,
   segment: RoofSegmentNode,
   node: ChimneyNode,
+  segBrushes: SegmentTrimBrushes,
 ): THREE.BufferGeometry {
-  const segBrushes = getRoofSegmentBrushes(segment)
-  if (!segBrushes) return body
-
-  const { deckSlab, shinSlab, wallBrush, innerBrush } = segBrushes
+  const { shinSlab, wallBrush } = segBrushes
 
   // Wrap the chimney body in a Brush. The body has `node.position` /
   // `node.rotation` baked into its vertices via `applyNodeTransform`
@@ -90,11 +95,6 @@ export function trimChimneyBodyAgainstRoof(
     console.error('[chimney] roof-trim CSG failed:', e)
     indexed.dispose()
     result = body
-  } finally {
-    deckSlab.geometry.dispose()
-    shinSlab.geometry.dispose()
-    wallBrush.geometry.dispose()
-    innerBrush.geometry.dispose()
   }
 
   return result

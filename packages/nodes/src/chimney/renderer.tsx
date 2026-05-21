@@ -8,24 +8,17 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import {
+  createMaterial,
+  createMaterialFromPresetRef,
+  getRoofSegmentBrushes,
+  useNodeEvents,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { buildChimneyGeometry } from './geometry'
 import { carveChimneyHoles } from './holes'
 import { trimChimneyBodyAgainstRoof } from './roof-trim'
-
-const bodyMaterial = new THREE.MeshStandardMaterial({
-  color: 0xb8_88_72,
-  roughness: 0.85,
-  metalness: 0,
-})
-
-const topMaterial = new THREE.MeshStandardMaterial({
-  color: 0xa0_a0_a0,
-  roughness: 0.75,
-  metalness: 0,
-})
 
 /**
  * Chimney renderer. Reads the parent roof-segment so the body height
@@ -60,6 +53,13 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
       : undefined,
   )
 
+  // Geometry + carved CSG depend on the chimney's full schema and the
+  // host segment's shape. Both come in as memoised references — `node`
+  // only re-references when the store node or a live-override actually
+  // changes, `segment` only when the segment's own data changes — so a
+  // two-entry dep array is equivalent to enumerating every field, and
+  // adding a new schema field doesn't risk stale geometry from a
+  // forgotten dep.
   const geo = useMemo(() => {
     if (!segment) return null
     const raw = buildChimneyGeometry(node, segment)
@@ -67,68 +67,46 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     // bores. Matches the v1 roof-system visual.
     const carved = carveChimneyHoles(raw.body, raw.cap, raw.flues, node, segment)
     return { ...raw, body: carved.body, cap: carved.cap, flues: carved.flues }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    segment?.wallHeight,
-    segment?.roofHeight,
-    segment?.roofType,
-    node.width,
-    node.depth,
-    node.heightAboveRidge,
-    node.bodyShape,
-    node.bodyHollowDepth,
-    node.bodyHollowMargin,
-    node.shoulderStyle,
-    node.shoulderHeight,
-    node.shoulderExtent,
-    node.cap,
-    node.capShape,
-    node.capOverhang,
-    node.capThickness,
-    node.flueCount,
-    node.flueShape,
-    node.flueHeight,
-    node.flueDiameter,
-    node.flueSpacing,
-    node.flueWallThickness,
-    node.cricketStyle,
-    node.cricketSide,
-    node.cricketLength,
-    node.cricketHeight,
-    node.bandStyle,
-    node.bandHeight,
-    node.bandExtent,
-    node.bandOffset,
-    node.panelStyle,
-    node.panelDepth,
-    node.panelHeight,
-    node.panelOffsetTop,
-    node.panelMargin,
-    node.position[0],
-    node.position[2],
-    node.rotation,
-  ])
+  }, [node, segment])
+
+  // Segment brushes for the body trim. Building these is non-trivial
+  // (4 CSG-ready Brush instances per segment), so memoise by the shape
+  // fields that drive their geometry. A chimney slider drag changes
+  // `node.*` but not these, so the cached brushes survive the drag —
+  // previously each frame rebuilt all four.
+  const segmentBrushes = useMemo(
+    () => (segment ? getRoofSegmentBrushes(segment) : null),
+    [
+      segment?.roofType,
+      segment?.width,
+      segment?.depth,
+      segment?.wallHeight,
+      segment?.roofHeight,
+      segment?.wallThickness,
+      segment?.deckThickness,
+      segment?.overhang,
+      segment?.shingleThickness,
+    ],
+  )
+  useEffect(
+    () => () => {
+      if (segmentBrushes) {
+        segmentBrushes.deckSlab.geometry.dispose()
+        segmentBrushes.shinSlab.geometry.dispose()
+        segmentBrushes.wallBrush.geometry.dispose()
+        segmentBrushes.innerBrush.geometry.dispose()
+      }
+    },
+    [segmentBrushes],
+  )
 
   // CSG-trim the body against the parent roof segment so the portion
-  // passing through the wall and shingles is hidden. Runs once per
-  // chimney/segment shape change. Returns the original body geometry
-  // on any CSG failure (logged via console.error).
+  // passing through the wall and shingles is hidden. Returns the
+  // original body geometry on any CSG failure (logged via console.error).
   const trimmedBody = useMemo(() => {
-    if (!geo || !segment) return null
-    return trimChimneyBodyAgainstRoof(geo.body, segment, node)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    geo,
-    segment?.width,
-    segment?.depth,
-    segment?.wallHeight,
-    segment?.roofHeight,
-    segment?.roofType,
-    segment?.wallThickness,
-    segment?.deckThickness,
-    segment?.overhang,
-    segment?.shingleThickness,
-  ])
+    if (!geo || !segment || !segmentBrushes) return null
+    return trimChimneyBodyAgainstRoof(geo.body, segment, node, segmentBrushes)
+  }, [geo, segment, node, segmentBrushes])
 
   useEffect(
     () => () => {
@@ -147,11 +125,42 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     [geo, trimmedBody],
   )
 
+  // Per-instance fallback materials. Were previously module-scoped
+  // singletons shared across every chimney — a paint-mode or debug
+  // system that mutates `surfaceMaterial` would have flipped the look
+  // of every unpainted chimney on the scene. Owning them here also
+  // lets us dispose them on unmount.
+  const fallbackBodyMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0xb8_88_72,
+        roughness: 0.85,
+        metalness: 0,
+      }),
+    [],
+  )
+  const fallbackTopMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0xa0_a0_a0,
+        roughness: 0.75,
+        metalness: 0,
+      }),
+    [],
+  )
+  useEffect(
+    () => () => {
+      fallbackBodyMaterial.dispose()
+      fallbackTopMaterial.dispose()
+    },
+    [fallbackBodyMaterial, fallbackTopMaterial],
+  )
+
   const surfaceMaterial = useMemo(() => {
     if (node.material) return createMaterial(node.material)
     const preset = createMaterialFromPresetRef(node.materialPreset)
-    return preset ?? bodyMaterial
-  }, [node.material, node.materialPreset])
+    return preset ?? fallbackBodyMaterial
+  }, [node.material, node.materialPreset, fallbackBodyMaterial])
 
   const capSurfaceMaterial = useMemo(() => {
     if (node.topMaterial) return createMaterial(node.topMaterial)
@@ -159,22 +168,32 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     if (preset) return preset
     if (node.material) return createMaterial(node.material)
     const bodyPreset = createMaterialFromPresetRef(node.materialPreset)
-    return bodyPreset ?? topMaterial
-  }, [node.topMaterial, node.topMaterialPreset, node.material, node.materialPreset])
+    return bodyPreset ?? fallbackTopMaterial
+  }, [
+    node.topMaterial,
+    node.topMaterialPreset,
+    node.material,
+    node.materialPreset,
+    fallbackTopMaterial,
+  ])
+
+  // Two-material array: index 0 = body/surface, index 1 = top. The
+  // geometry buffers are partitioned in `holes.ts:partitionTopFaceGroups`
+  // so the very top face of body/cap/flues lands in group 1 and picks up
+  // the top material — matching the v1 roof-system visual.
+  // Must be declared above the early-return below: hooks can't be
+  // called conditionally without changing the hook-call order between
+  // renders.
+  const surfaceArray = useMemo(
+    () => [surfaceMaterial, capSurfaceMaterial],
+    [surfaceMaterial, capSurfaceMaterial],
+  )
 
   if (!segment || !geo) return null
 
   // The chimney's geometry bakes its baseY using segment.wallHeight inside
   // the builder, so the outer group only needs the segment-local X/Z
   // offset. Y stays at 0 here.
-  // Two-material array: index 0 = body/surface, index 1 = top. The
-  // geometry buffers are partitioned in `holes.ts:partitionTopFaceGroups`
-  // so the very top face of body/cap/flues lands in group 1 and picks up
-  // the top material — matching the v1 roof-system visual.
-  const surfaceArray = useMemo(
-    () => [surfaceMaterial, capSurfaceMaterial],
-    [surfaceMaterial, capSurfaceMaterial],
-  )
 
   // Chimneys are mounted inside `RoofRenderer`'s `roof-elements` group,
   // which sits at the ROOF's origin — not inside the host segment's
