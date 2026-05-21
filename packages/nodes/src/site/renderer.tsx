@@ -1,6 +1,6 @@
 'use client'
 
-import { type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
 import { NodeRenderer, unionPolygons, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
@@ -117,7 +117,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     <group ref={ref} {...handlers}>
       {/* Render children (buildings and items) */}
       {node.children.map((childId) => (
-        <NodeRenderer key={childId} nodeId={childId} />
+        <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
