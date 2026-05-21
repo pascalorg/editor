@@ -238,16 +238,6 @@ function buildTemplate(): SceneGraph {
     nodes[node.id as AnyNodeId] = node
   }
 
-  // SiteNode.children is a discriminatedUnion of BuildingNode/ItemNode objects
-  // (not string ids) — so the site must embed the full building node. The
-  // rest of the tree uses string ids per the BaseNode/LevelNode/WallNode
-  // schemas. We mutate the flat-dict copy of the site here so the nested
-  // representation round-trips through AnyNode.safeParse.
-  const siteInDict = nodes['site_empty' as AnyNodeId] as unknown as {
-    children: unknown[]
-  }
-  siteInDict.children = [nodes['building_empty' as AnyNodeId]]
-
   return {
     nodes,
     rootNodeIds: ['site_empty'] as AnyNodeId[],
