@@ -3,6 +3,7 @@
 import { type ColumnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
 import {
   baseMaterial,
+  type ColorPreset,
   createColumnBoxGeometry,
   createColumnCylinderGeometry,
   createColumnSphereGeometry,
@@ -10,7 +11,6 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
-  type ColorPreset,
   type RenderShading,
   useNodeEvents,
   useViewer,

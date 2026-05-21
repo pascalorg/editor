@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNodeId, type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type SiteNode,
+  type SlabNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { NodeRenderer, unionPolygons, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'

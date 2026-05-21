@@ -3,6 +3,7 @@
 // Public so registry-driven kinds can compose children without reaching
 // into viewer's internal paths.
 
+export type { SurfaceRole } from '@pascal-app/core'
 export { ErrorBoundary } from './components/error-boundary'
 // Stage A wrap-exports for the rest of the kinds — `@pascal-app/nodes`
 // registers each via `def.renderer` (and `def.system` when present)
@@ -25,14 +26,15 @@ export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
+  BLUEPRINT_PALETTE,
   baseMaterial,
+  CLAY_PALETTE,
+  type ColorPreset,
   clearMaterialCache,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
-  BLUEPRINT_PALETTE,
-  CLAY_PALETTE,
   DEFAULT_CEILING_MATERIAL,
   DEFAULT_DOOR_MATERIAL,
   DEFAULT_ROOF_MATERIAL,
@@ -45,12 +47,10 @@ export {
   glassMaterial,
   MONO_PALETTE,
   PRESET_PALETTES,
+  type RenderShading,
   resolveSurfaceColor,
   WHITE_PALETTE,
-  type ColorPreset,
-  type RenderShading,
 } from './lib/materials'
-export type { SurfaceRole } from '@pascal-app/core'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
 export { useItemLightPool } from './store/use-item-light-pool'

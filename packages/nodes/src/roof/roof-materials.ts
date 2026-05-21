@@ -1,7 +1,7 @@
 import {
+  type ColorPreset,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
-  type ColorPreset,
   type RenderShading,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'

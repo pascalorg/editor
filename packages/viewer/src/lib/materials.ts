@@ -4,8 +4,8 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
-  type SurfaceRole,
   resolveMaterial,
+  type SurfaceRole,
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
@@ -238,10 +238,7 @@ function createAssignedTexture(
   return applyTextureProperties(texture, props, slot)
 }
 
-function applyTexturePropertiesToMaterial(
-  material: CommonMaterial,
-  props: MaterialMapProperties,
-) {
+function applyTexturePropertiesToMaterial(material: CommonMaterial, props: MaterialMapProperties) {
   const slots = isStandardMaterial(material) ? TEXTURE_SLOTS : (['map'] as const)
   const textureMaterial = material as TextureMaterial
 

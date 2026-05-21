@@ -276,7 +276,10 @@ function applyWallPaintPreview(
     ...buildWallSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
 
-  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode, useViewer.getState().shading))
+  return previewMeshMaterial(
+    mesh,
+    getVisibleWallMaterials(previewNode, useViewer.getState().shading),
+  )
 }
 
 function applyRoofPaintPreview(

@@ -11,12 +11,12 @@ import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } 
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   baseMaterial,
+  type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
-  resolveSurfaceColor,
-  type ColorPreset,
   type RenderShading,
+  resolveSurfaceColor,
 } from '../../lib/materials'
 
 const DEFAULT_WALL_COLOR = '#f2f0ed'

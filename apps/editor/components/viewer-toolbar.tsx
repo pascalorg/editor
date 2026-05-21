@@ -4,9 +4,9 @@ import { Icon as IconifyIcon } from '@iconify/react'
 import { useEditor, useSidebarStore, type ViewMode } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
+  Box,
   ChevronsLeft,
   ChevronsRight,
-  Box,
   Columns2,
   Eye,
   EyeOff,

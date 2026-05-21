@@ -9,9 +9,9 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import {
-  baseMaterial as getBaseMaterial,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
+  baseMaterial as getBaseMaterial,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 

@@ -3,13 +3,13 @@ import {
   type RoofNode,
   type RoofSegmentNode,
 } from '@pascal-app/core'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 import {
+  type ColorPreset,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
-  type ColorPreset,
   type RenderShading,
 } from '../../lib/materials'
 

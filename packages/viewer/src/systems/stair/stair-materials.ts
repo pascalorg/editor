@@ -5,10 +5,10 @@ import {
 } from '@pascal-app/core'
 import type * as THREE from 'three'
 import {
+  type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
-  type ColorPreset,
   DEFAULT_STAIR_MATERIAL,
   type RenderShading,
 } from '../../lib/materials'

@@ -24,9 +24,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  type ColorPreset,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
-  type ColorPreset,
   type RenderShading,
   useNodeEvents,
   useViewer,

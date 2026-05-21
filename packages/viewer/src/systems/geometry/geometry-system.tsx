@@ -5,16 +5,16 @@ import {
   type AnyNodeId,
   type GeometryContext,
   nodeRegistry,
-  sceneRegistry,
   type SurfaceRole,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import { FrontSide, type Group, type Material, type Mesh } from 'three'
 import {
-  createSurfaceRoleMaterial,
   type ColorPreset,
+  createSurfaceRoleMaterial,
   type RenderShading,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
@@ -251,7 +251,6 @@ function disposeChildren(group: Group) {
           }
         }
       } else if (isCachedMaterial(m)) {
-        continue
       } else if (m && typeof (m as { dispose?: () => void }).dispose === 'function') {
         ;(m as { dispose: () => void }).dispose()
       }
@@ -295,8 +294,10 @@ function getMaterialSide(material: Material | Material[]): Material['side'] {
 }
 
 function isCachedMaterial(value: unknown): boolean {
-  return Boolean((value as { userData?: { __pascalCachedMaterial?: boolean } } | null)?.userData
-    ?.__pascalCachedMaterial)
+  return Boolean(
+    (value as { userData?: { __pascalCachedMaterial?: boolean } } | null)?.userData
+      ?.__pascalCachedMaterial,
+  )
 }
 
 export default GeometrySystem

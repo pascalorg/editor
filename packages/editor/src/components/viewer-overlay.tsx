@@ -417,11 +417,7 @@ export const ViewerOverlay = ({
               tooltipSide="top"
               variant="ghost"
             >
-              {shading === 'solid' ? (
-                <Box className="h-6 w-6" />
-              ) : (
-                <Sparkles className="h-6 w-6" />
-              )}
+              {shading === 'solid' ? <Box className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
             </ActionButton>
 
             {/* Level Mode */}
