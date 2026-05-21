@@ -8,6 +8,8 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  type ColorPreset,
   type RenderShading,
 } from '../../lib/materials'
 
@@ -43,12 +45,16 @@ function createResolvedMaterial(
 export function getRoofMaterialArray(
   node: RoofNode,
   shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
 ): RoofMaterialArray | null {
   const top = getEffectiveRoofSurfaceMaterial(node, 'top')
   const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
   const wall = getEffectiveRoofSurfaceMaterial(node, 'wall')
   const cacheKey = JSON.stringify({
     shading,
+    textures,
+    colorPreset,
     top: getSurfaceMaterialSignature(top),
     edge: getSurfaceMaterialSignature(edge),
     wall: getSurfaceMaterialSignature(wall),
@@ -56,6 +62,19 @@ export function getRoofMaterialArray(
 
   const cached = roofMaterialArrayCache.get(cacheKey)
   if (cached) return cached
+
+  if (!textures) {
+    const roofMaterial = createSurfaceRoleMaterial('roof', colorPreset)
+    const ceilingMaterial = createSurfaceRoleMaterial('ceiling', colorPreset)
+    const materialArray: RoofMaterialArray = [
+      roofMaterial,
+      ceilingMaterial,
+      ceilingMaterial,
+      roofMaterial,
+    ]
+    roofMaterialArrayCache.set(cacheKey, materialArray)
+    return materialArray
+  }
 
   const topMaterial = createResolvedMaterial(top.material, top.materialPreset, shading)
   const edgeMaterial = createResolvedMaterial(edge.material, edge.materialPreset, shading)

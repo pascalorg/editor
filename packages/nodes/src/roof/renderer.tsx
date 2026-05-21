@@ -17,6 +17,8 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
   const handlers = useNodeEvents(node, 'roof')
   const debugColors = useViewer((s) => s.debugColors)
   const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
   const placeholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
@@ -27,11 +29,14 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     return geometry
   }, [])
 
-  const customMaterial = useMemo(() => getRoofMaterialArray(node, shading), [node, shading])
+  const customMaterial = useMemo(
+    () => getRoofMaterialArray(node, shading, textures, colorPreset),
+    [node, shading, textures, colorPreset],
+  )
 
   const material = debugColors
     ? getRoofDebugMaterials(shading)
-    : customMaterial || getRoofMaterials(shading)
+    : customMaterial || getRoofMaterials(shading, textures, colorPreset)
 
   useEffect(() => {
     return () => {

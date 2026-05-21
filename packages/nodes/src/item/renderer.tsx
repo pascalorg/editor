@@ -13,10 +13,12 @@ import {
 import {
   baseMaterial,
   createDefaultMaterial,
+  createSurfaceRoleMaterial,
   ErrorBoundary,
   glassMaterial,
   NodeRenderer,
   resolveCdnUrl,
+  type ColorPreset,
   type RenderShading,
   useItemLightPool,
   useNodeEvents,
@@ -39,10 +41,16 @@ type MutableMaterial = Material & {
   wireframe?: boolean
 }
 
-const getMaterialForOriginal = (original: Material, shading: RenderShading): Material => {
+const getMaterialForOriginal = (
+  original: Material,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+): Material => {
   if (original.name.toLowerCase() === 'glass') {
     return glassMaterial
   }
+  if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
   return baseMaterial(shading)
 }
 
@@ -123,6 +131,8 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
   const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
   const interactiveRef = useRef(node.asset.interactive)
 
@@ -157,7 +167,9 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
 
         // Handle both single material and material array cases
         if (Array.isArray(mesh.material)) {
-          mesh.material = mesh.material.map((mat) => getMaterialForOriginal(mat, shading))
+          mesh.material = mesh.material.map((mat) =>
+            getMaterialForOriginal(mat, shading, textures, colorPreset),
+          )
           hasGlass = mesh.material.some((mat) => mat.name === 'glass')
 
           // Fix geometry groups that reference materialIndex beyond the material
@@ -172,14 +184,14 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
             }
           }
         } else {
-          mesh.material = getMaterialForOriginal(mesh.material, shading)
+          mesh.material = getMaterialForOriginal(mesh.material, shading, textures, colorPreset)
           hasGlass = mesh.material.name === 'glass'
         }
         mesh.castShadow = !hasGlass
         mesh.receiveShadow = !hasGlass
       }
     })
-  }, [scene, shading])
+  }, [scene, shading, textures, colorPreset])
 
   const interactive = interactiveRef.current
   const animEffect =

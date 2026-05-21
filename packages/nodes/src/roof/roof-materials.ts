@@ -1,21 +1,38 @@
-import { createDefaultMaterial, type RenderShading } from '@pascal-app/viewer'
+import {
+  createDefaultMaterial,
+  createSurfaceRoleMaterial,
+  type ColorPreset,
+  type RenderShading,
+} from '@pascal-app/viewer'
 import * as THREE from 'three'
 
 // Production materials — match the rest of the scene (white walls, light-gray slabs).
 // Indices: 0 = Wall/Trim, 1 = Deck, 2 = Interior, 3 = Shingle
-const roofMaterialsCache = new Map<RenderShading, THREE.Material[]>()
+const roofMaterialsCache = new Map<string, THREE.Material[]>()
 
-export function getRoofMaterials(shading: RenderShading = 'rendered'): THREE.Material[] {
-  const cached = roofMaterialsCache.get(shading)
+export function getRoofMaterials(
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+): THREE.Material[] {
+  const cacheKey = `${shading}-${textures}-${colorPreset}`
+  const cached = roofMaterialsCache.get(cacheKey)
   if (cached) return cached
 
-  const materials = [
-    createDefaultMaterial('white', 1, shading, THREE.DoubleSide), // 0: Wall/Trim
-    createDefaultMaterial('#e5e5e5', 1, shading, THREE.FrontSide), // 1: Deck
-    createDefaultMaterial('white', 1, shading, THREE.DoubleSide), // 2: Interior
-    createDefaultMaterial('#e5e5e5', 0.9, shading, THREE.FrontSide), // 3: Shingle
-  ]
-  roofMaterialsCache.set(shading, materials)
+  const materials = textures
+    ? [
+        createDefaultMaterial('white', 1, shading, THREE.DoubleSide), // 0: Wall/Trim
+        createDefaultMaterial('#e5e5e5', 1, shading, THREE.FrontSide), // 1: Deck
+        createDefaultMaterial('white', 1, shading, THREE.DoubleSide), // 2: Interior
+        createDefaultMaterial('#e5e5e5', 0.9, shading, THREE.FrontSide), // 3: Shingle
+      ]
+    : [
+        createSurfaceRoleMaterial('roof', colorPreset),
+        createSurfaceRoleMaterial('ceiling', colorPreset),
+        createSurfaceRoleMaterial('ceiling', colorPreset),
+        createSurfaceRoleMaterial('roof', colorPreset),
+      ]
+  roofMaterialsCache.set(cacheKey, materials)
   return materials
 }
 

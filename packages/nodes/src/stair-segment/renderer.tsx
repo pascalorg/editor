@@ -23,14 +23,18 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
 
   const handlers = useNodeEvents(node, 'stair-segment')
   const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined)
     : undefined
 
   const material = useMemo(() => {
-    return getStraightStairSegmentBodyMaterials(node, parentNode, shading)
+    return getStraightStairSegmentBodyMaterials(node, parentNode, shading, textures, colorPreset)
   }, [
     shading,
+    textures,
+    colorPreset,
     node.materialPreset,
     node.material,
     node.material?.preset,

@@ -9,6 +9,8 @@ import {
   createColumnTorusGeometry,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  type ColorPreset,
   type RenderShading,
   useNodeEvents,
   useViewer,
@@ -28,7 +30,15 @@ function createColumnMaterial({
   material,
   materialPreset,
   shading,
-}: Pick<ColumnNode, 'material' | 'materialPreset'> & { shading: RenderShading }) {
+  textures,
+  colorPreset,
+}: Pick<ColumnNode, 'material' | 'materialPreset'> & {
+  shading: RenderShading
+  textures: boolean
+  colorPreset: ColorPreset
+}) {
+  if (!textures) return createSurfaceRoleMaterial('wall', colorPreset)
+
   const presetMaterial = createMaterialFromPresetRef(materialPreset, shading)
   if (presetMaterial) return presetMaterial
   if (material) return createMaterial(material, shading)
@@ -2066,15 +2076,21 @@ export const ColumnRenderer = ({ node }: { node: ColumnNode }) => {
   const handlers = useNodeEvents(node, 'column')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
   const material = useMemo(
     () =>
       createColumnMaterial({
         material: node.material,
         materialPreset: node.materialPreset,
         shading,
+        textures,
+        colorPreset,
       }),
     [
       shading,
+      textures,
+      colorPreset,
       node.material,
       node.material?.preset,
       node.material?.properties,

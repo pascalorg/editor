@@ -6,7 +6,12 @@ import {
   resolveMaterial,
   useRegistry,
 } from '@pascal-app/core'
-import { NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
+import {
+  createSurfaceRoleMaterial,
+  NodeRenderer,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute } from 'three'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
@@ -64,6 +69,8 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
 
   useRegistry(node.id, 'ceiling', ref)
   const handlers = useNodeEvents(node, 'ceiling')
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
 
   useEffect(
     () => () => {
@@ -74,11 +81,20 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   )
 
   const materials = useMemo(() => {
+    if (!textures) {
+      return {
+        topMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide),
+        bottomMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, BackSide),
+      }
+    }
+
     const preset = getMaterialPresetByRef(node.materialPreset)
     const props = preset?.mapProperties ?? resolveMaterial(node.material)
     const color = props.color || '#999999'
     return getCeilingMaterials(color)
   }, [
+    textures,
+    colorPreset,
     node.materialPreset,
     node.material,
     node.material?.preset,

@@ -12,21 +12,29 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import {
   baseMaterial as getBaseMaterial,
-  glassMaterial,
+  createSurfaceRoleMaterial,
+  glassMaterial as defaultGlassMaterial,
 } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
-const revealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
 let baseMaterial = getBaseMaterial()
+let revealMaterial: THREE.Material = defaultRevealMaterial
+let glassMaterial: THREE.Material = defaultGlassMaterial
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
   const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
 
-  baseMaterial = getBaseMaterial(shading)
+  const joineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+  baseMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
+  revealMaterial = textures ? defaultRevealMaterial : joineryMaterial
+  glassMaterial = textures ? defaultGlassMaterial : joineryMaterial
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
@@ -35,11 +43,14 @@ export const DoorSystem = () => {
         useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
       }
     }
-  }, [shading])
+  }, [shading, textures, colorPreset])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
-    baseMaterial = getBaseMaterial(shading)
+    const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+    baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
+    revealMaterial = textures ? defaultRevealMaterial : frameJoineryMaterial
+    glassMaterial = textures ? defaultGlassMaterial : frameJoineryMaterial
 
     const nodes = useScene.getState().nodes
 

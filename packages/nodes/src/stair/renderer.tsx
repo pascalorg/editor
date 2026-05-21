@@ -10,6 +10,7 @@ import {
 import {
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
   DEFAULT_STAIR_MATERIAL,
   getStairBodyMaterials,
   getStairRailingMaterial,
@@ -63,8 +64,11 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
 
   const handlers = useNodeEvents(node, 'stair')
   const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
 
   const material = useMemo(() => {
+    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset)
     const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
     if (presetMaterial) return presetMaterial
     const mat = node.material
@@ -77,11 +81,19 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
     node.material?.preset,
     node.material?.properties,
     node.material?.texture,
+    textures,
+    colorPreset,
   ])
 
-  const straightBodyMaterials = useMemo(() => getStairBodyMaterials(node, shading), [node, shading])
+  const straightBodyMaterials = useMemo(
+    () => getStairBodyMaterials(node, shading, textures, colorPreset),
+    [node, shading, textures, colorPreset],
+  )
 
-  const railingMaterial = useMemo(() => getStairRailingMaterial(node, shading), [node, shading])
+  const railingMaterial = useMemo(
+    () => getStairRailingMaterial(node, shading, textures, colorPreset),
+    [node, shading, textures, colorPreset],
+  )
 
   const straightPlaceholderGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()

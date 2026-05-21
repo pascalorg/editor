@@ -25,6 +25,8 @@ import {
 } from '@pascal-app/core'
 import {
   createDefaultMaterial,
+  createSurfaceRoleMaterial,
+  type ColorPreset,
   type RenderShading,
   useNodeEvents,
   useViewer,
@@ -84,11 +86,12 @@ type ElevatorMaterialParams = {
   transparent?: boolean
 }
 
-function createElevatorMaterial(
-  params: ElevatorMaterialParams,
-  shading: RenderShading,
-): Material {
-  const material = createDefaultMaterial(params.color, params.roughness ?? 0.5, shading) as ElevatorMaterial
+function createElevatorMaterial(params: ElevatorMaterialParams, shading: RenderShading): Material {
+  const material = createDefaultMaterial(
+    params.color,
+    params.roughness ?? 0.5,
+    shading,
+  ) as ElevatorMaterial
 
   if ('metalness' in material) material.metalness = params.metalness ?? 0
   if ('roughness' in material && params.roughness !== undefined) {
@@ -105,7 +108,59 @@ function createElevatorMaterial(
   return material
 }
 
-function createElevatorMaterials(shading: RenderShading) {
+function createElevatorMaterials(
+  shading: RenderShading,
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+) {
+  if (!textures) {
+    const material = createSurfaceRoleMaterial('joinery', colorPreset)
+    return {
+      SHAFT_WALL_MATERIAL: material,
+      SHAFT_SIDE_MATERIAL: material,
+      SHAFT_TRIM_MATERIAL: material,
+      CAB_MATERIAL: material,
+      DOOR_MATERIAL: material,
+      DOOR_GROOVE_MATERIAL: material,
+      GLASS_MATERIAL: material,
+      PANEL_MATERIAL: material,
+      LANDING_PANEL_MATERIAL: material,
+      INDICATOR_SCREEN_MATERIALS: {
+        active: material,
+        idle: material,
+      },
+      INDICATOR_GLYPH_MATERIALS: {
+        active: material,
+        idle: material,
+      },
+      BUTTON_FACE_MATERIALS: {
+        active: material,
+        queued: material,
+        idle: material,
+        disabled: material,
+      },
+      BUTTON_RING_MATERIALS: {
+        active: material,
+        queued: material,
+        idle: material,
+        disabled: material,
+      },
+      BUTTON_GLOW_MATERIALS: {
+        active: material,
+        queued: material,
+      },
+      BUTTON_LABEL_MATERIALS: {
+        lit: material,
+        idle: material,
+        disabled: material,
+      },
+      QUEUE_STRIP_MATERIALS: {
+        queued: material,
+        idle: material,
+      },
+    }
+  }
+
   return {
     SHAFT_WALL_MATERIAL: createElevatorMaterial(
       { color: SHAFT_WALL_COLOR, metalness: 0.08, roughness: 0.56 },
@@ -161,10 +216,7 @@ function createElevatorMaterials(shading: RenderShading) {
         },
         shading,
       ),
-      idle: createElevatorMaterial(
-        { color: '#111827', metalness: 0.12, roughness: 0.38 },
-        shading,
-      ),
+      idle: createElevatorMaterial({ color: '#111827', metalness: 0.12, roughness: 0.38 }, shading),
     },
     INDICATOR_GLYPH_MATERIALS: {
       active: createElevatorMaterial(
@@ -209,10 +261,7 @@ function createElevatorMaterials(shading: RenderShading) {
         },
         shading,
       ),
-      idle: createElevatorMaterial(
-        { color: '#d6dde7', metalness: 0.22, roughness: 0.3 },
-        shading,
-      ),
+      idle: createElevatorMaterial({ color: '#d6dde7', metalness: 0.22, roughness: 0.3 }, shading),
       disabled: createElevatorMaterial(
         { color: '#475569', metalness: 0.12, roughness: 0.52 },
         shading,
@@ -239,10 +288,7 @@ function createElevatorMaterials(shading: RenderShading) {
         },
         shading,
       ),
-      idle: createElevatorMaterial(
-        { color: '#64748b', metalness: 0.48, roughness: 0.28 },
-        shading,
-      ),
+      idle: createElevatorMaterial({ color: '#64748b', metalness: 0.48, roughness: 0.28 }, shading),
       disabled: createElevatorMaterial(
         { color: '#334155', metalness: 0.28, roughness: 0.5 },
         shading,
@@ -273,14 +319,8 @@ function createElevatorMaterials(shading: RenderShading) {
       ),
     },
     BUTTON_LABEL_MATERIALS: {
-      lit: createElevatorMaterial(
-        { color: '#111827', metalness: 0.12, roughness: 0.34 },
-        shading,
-      ),
-      idle: createElevatorMaterial(
-        { color: '#334155', metalness: 0.12, roughness: 0.34 },
-        shading,
-      ),
+      lit: createElevatorMaterial({ color: '#111827', metalness: 0.12, roughness: 0.34 }, shading),
+      idle: createElevatorMaterial({ color: '#334155', metalness: 0.12, roughness: 0.34 }, shading),
       disabled: createElevatorMaterial(
         { color: '#94a3b8', metalness: 0.08, roughness: 0.5 },
         shading,
@@ -297,24 +337,26 @@ function createElevatorMaterials(shading: RenderShading) {
         },
         shading,
       ),
-      idle: createElevatorMaterial(
-        { color: '#64748b', metalness: 0.18, roughness: 0.42 },
-        shading,
-      ),
+      idle: createElevatorMaterial({ color: '#64748b', metalness: 0.18, roughness: 0.42 }, shading),
     },
   }
 }
 
 type ElevatorMaterialSet = ReturnType<typeof createElevatorMaterials>
 
-const elevatorMaterialsCache = new Map<RenderShading, ElevatorMaterialSet>()
+const elevatorMaterialsCache = new Map<string, ElevatorMaterialSet>()
 
-function getElevatorMaterials(shading: RenderShading): ElevatorMaterialSet {
-  const cached = elevatorMaterialsCache.get(shading)
+function getElevatorMaterials(
+  shading: RenderShading,
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+): ElevatorMaterialSet {
+  const cacheKey = `${shading}-${textures}-${colorPreset}`
+  const cached = elevatorMaterialsCache.get(cacheKey)
   if (cached) return cached
 
-  const materials = createElevatorMaterials(shading)
-  elevatorMaterialsCache.set(shading, materials)
+  const materials = createElevatorMaterials(shading, textures, colorPreset)
+  elevatorMaterialsCache.set(cacheKey, materials)
   return materials
 }
 
@@ -337,7 +379,11 @@ let {
   QUEUE_STRIP_MATERIALS,
 } = getElevatorMaterials('rendered')
 
-function setElevatorMaterials(shading: RenderShading) {
+function setElevatorMaterials(
+  shading: RenderShading,
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+) {
   ;({
     SHAFT_WALL_MATERIAL,
     SHAFT_SIDE_MATERIAL,
@@ -355,7 +401,7 @@ function setElevatorMaterials(shading: RenderShading) {
     BUTTON_GLOW_MATERIALS,
     BUTTON_LABEL_MATERIALS,
     QUEUE_STRIP_MATERIALS,
-  } = getElevatorMaterials(shading))
+  } = getElevatorMaterials(shading, textures, colorPreset))
 }
 
 type ElevatorButtonAction = 'open-door' | 'request-level'
@@ -1071,6 +1117,8 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const cabRef = useRef<Group>(null)
   const handlers = useNodeEvents(node, 'elevator')
   const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
   const liveOverrides = useLiveNodeOverrides((state) => state.get(node.id))
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const renderNode = useMemo(
@@ -1081,7 +1129,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
     useShallow((state) => getElevatorLevelContextNodes(renderNode, state.nodes)),
   )
 
-  setElevatorMaterials(shading)
+  setElevatorMaterials(shading, textures, colorPreset)
 
   useRegistry(node.id, 'elevator', ref)
 
