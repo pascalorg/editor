@@ -11,17 +11,15 @@ import type { ChimneyNode } from './schema'
  *
  * Presets are intentionally distinct silhouettes:
  *  - `brick`      — straight body, double band, flat overhanging cap
- *  - `stone`      — corbeled shoulder, sloped cap, chamfered corners
  *  - `modern`     — minimal flat cap, recessed decorative panels
  *  - `round`      — cylindrical body, single band, industrial look
  */
-export type ChimneyPresetKey = 'brick' | 'stone' | 'modern' | 'round'
+export type ChimneyPresetKey = 'brick' | 'modern' | 'round'
 
-export const CHIMNEY_PRESET_KEYS: ChimneyPresetKey[] = ['brick', 'stone', 'modern', 'round']
+export const CHIMNEY_PRESET_KEYS: ChimneyPresetKey[] = ['brick', 'modern', 'round']
 
 export const CHIMNEY_PRESET_LABELS: Record<ChimneyPresetKey, string> = {
   brick: 'Brick',
-  stone: 'Stone',
   modern: 'Modern',
   round: 'Round',
 }
@@ -45,27 +43,6 @@ export const chimneyPresets: Record<ChimneyPresetKey, Partial<ChimneyNode>> = {
     flueShape: 'round',
     flueDiameter: 0.2,
     flueHeight: 0.25,
-    flueSpacing: 1,
-  },
-  stone: {
-    bodyShape: 'square',
-    shoulderStyle: 'corbeled',
-    shoulderHeight: 0.6,
-    shoulderExtent: 0.08,
-    cap: true,
-    capShape: 'sloped',
-    capOverhang: 0.06,
-    capThickness: 0.1,
-    bandStyle: 'none',
-    cricketStyle: 'simple',
-    cricketLength: 0.7,
-    cricketHeight: 0.35,
-    cornerBevel: 0.025,
-    panelStyle: 'none',
-    flueCount: 1,
-    flueShape: 'square',
-    flueDiameter: 0.18,
-    flueHeight: 0.22,
     flueSpacing: 1,
   },
   modern: {
