@@ -8,7 +8,9 @@ export const RidgeVentNode = BaseNode.extend({
   type: nodeType('ridge-vent'),
 
   material: MaterialSchema.optional(),
-  materialPreset: z.string().optional(),
+  // See note on box-vent: default to white so the paint inspector
+  // reflects the current visual state instead of "no material".
+  materialPreset: z.string().default('preset-white'),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

@@ -4,13 +4,15 @@ import {
   type AnyNodeId,
   type BoxVentNode,
   type RoofSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
 import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { buildBoxVentGeometry, computeBoxVentSlopeTilt } from './geometry'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { buildBoxVentGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -39,10 +41,19 @@ const defaultMaterial = new THREE.MeshStandardMaterial({
  * carries the in-progress position/rotation and the vent follows
  * smoothly without waiting for a commit.
  */
-const BoxVentRenderer = ({ node }: { node: BoxVentNode }) => {
+const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   const ref = useRef<THREE.Group>(null!)
-  useRegistry(node.id, 'box-vent', ref)
-  const handlers = useNodeEvents(node, 'box-vent')
+  useRegistry(storeNode.id, 'box-vent', ref)
+  const handlers = useNodeEvents(storeNode, 'box-vent')
+
+  // Merge live overrides (panel slider drags) on top of the store node.
+  // Sliders write here on every `onChange` and only flush to the scene
+  // store on `onCommit`, so the mesh updates frame-by-frame without
+  // polluting undo history or triggering a full store-driven re-render.
+  const overrides = useLiveNodeOverrides((s) =>
+    s.get(storeNode.id as AnyNodeId) as Partial<BoxVentNode> | undefined,
+  )
+  const node: BoxVentNode = overrides ? ({ ...storeNode, ...overrides } as BoxVentNode) : storeNode
 
   const segment = useScene((state) =>
     node.roofSegmentId
@@ -50,52 +61,89 @@ const BoxVentRenderer = ({ node }: { node: BoxVentNode }) => {
       : undefined,
   )
 
+  // Rebuild geometry whenever any shape-bearing field changes — that's
+  // every parametric field, including the per-style ones. Listing them
+  // explicitly keeps the dep array tight (vs. `[node]` which would
+  // also fire on `name` / `visible` flips).
   const geometry = useMemo(() => buildBoxVentGeometry(node), [
+    node.style,
     node.width,
     node.depth,
     node.height,
     node.hoodOverhang,
-    node.style,
+    node.topTaper,
+    node.capHeight,
+    node.capGap,
+    node.domeCurvature,
+    node.baseInset,
+    node.baseHeight,
+    node.cornerBevel,
   ])
 
   useEffect(() => () => geometry.dispose(), [geometry])
 
-  const tiltX = useMemo(
-    () => computeBoxVentSlopeTilt(segment, node.position[2] ?? 0),
-    [segment, node.position[2]],
-  )
+  // Orient the vent to whatever roof face it sits on. The analytical
+  // normal (shared with solar-panel + skylight) handles every roof type
+  // — gable, shed, hip front, hip side — instead of the previous
+  // X-tilt-from-Z-sign trick, which only worked on slopes whose dip
+  // ran along segment-local Z.
+  const surfaceQuat = useMemo(() => {
+    if (!segment) return new THREE.Quaternion()
+    const normal = getAnalyticalNormal(
+      node.position[0] ?? 0,
+      node.position[2] ?? 0,
+      segment,
+    )
+    return surfaceQuatFromNormal(normal, new THREE.Quaternion())
+  }, [segment, node.position[0], node.position[2]])
 
   // Paint surface: explicit material wins, then preset, then the cached
-  // default. Mirrors the slab / stair / wall pattern.
+  // default. Mirrors the slab / stair / wall pattern. Preset materials
+  // come from the shared cache with `side: FrontSide`; clone + force
+  // DoubleSide locally so back faces of the vent body / hood don't drop
+  // out when the camera looks up at the eaves.
   const material = useMemo(() => {
-    if (node.material) return createMaterial(node.material)
-    const preset = createMaterialFromPresetRef(node.materialPreset)
-    if (preset) return preset
-    return defaultMaterial
+    const base = node.material
+      ? createMaterial(node.material)
+      : (createMaterialFromPresetRef(node.materialPreset) ?? defaultMaterial)
+    if (base.side === THREE.DoubleSide) return base
+    const cloned = base.clone()
+    cloned.side = THREE.DoubleSide
+    return cloned
   }, [node.material, node.materialPreset])
 
   if (!segment) return null
 
-  // Position is segment-local. The box-vent renderer is mounted *inside*
-  // the segment's React subtree (see `roof-segment/renderer.tsx`), so the
-  // segment's world transform is already on the React parent — we only
-  // apply the vent's own offset + slope tilt + Y rotation here.
+  // `node.position` is segment-local (the placement + move tools resolve
+  // the click via `segObj.worldToLocal`). The vent is mounted in the
+  // roof's `roof-elements` group, which carries only the roof transform
+  // — so we replicate the segment's roof-local transform here to bridge
+  // the two frames. Without this, segment-local coords would be rendered
+  // *as if* they were roof-local; on gable / hip roofs (where every
+  // segment shares the roof origin but differs by Y rotation), the vent
+  // would land rotated away from the click — the "slight shift" between
+  // ghost and committed mesh.
+  const segPos = segment.position ?? [0, 0, 0]
+  const segRotY = segment.rotation ?? 0
+
   return (
-    <group
-      position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
-      ref={ref}
-      visible={node.visible}
-    >
-      <group rotation-x={tiltX}>
-        <group rotation-y={node.rotation ?? 0}>
-          <mesh
-            castShadow
-            geometry={geometry}
-            material={material}
-            name="box-vent-surface"
-            receiveShadow
-            {...handlers}
-          />
+    <group position={segPos} rotation-y={segRotY}>
+      <group
+        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        ref={ref}
+        visible={node.visible}
+      >
+        <group quaternion={surfaceQuat}>
+          <group rotation-y={node.rotation ?? 0}>
+            <mesh
+              castShadow
+              geometry={geometry}
+              material={material}
+              name="box-vent-surface"
+              receiveShadow
+              {...handlers}
+            />
+          </group>
         </group>
       </group>
     </group>

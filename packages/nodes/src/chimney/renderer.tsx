@@ -176,8 +176,20 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     [surfaceMaterial, capSurfaceMaterial],
   )
 
+  // Chimneys are mounted inside `RoofRenderer`'s `roof-elements` group,
+  // which sits at the ROOF's origin — not inside the host segment's
+  // transform. Apply the segment's own position/rotation here so a
+  // chimney parented to segment N lands on segment N (and not on the
+  // first segment) once the chimney's segment-local `node.position[0/2]`
+  // is layered in by `geometry.ts`. Mirrors skylight's renderer.
   return (
-    <group position={[0, 0, 0]} ref={ref} visible={node.visible} {...handlers}>
+    <group
+      position={segment.position}
+      ref={ref}
+      rotation-y={segment.rotation}
+      visible={node.visible}
+      {...handlers}
+    >
       <mesh
         castShadow
         geometry={trimmedBody ?? geo.body}

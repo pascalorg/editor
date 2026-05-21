@@ -279,29 +279,58 @@ function buildShingledEndCaps(
 
 // ─── Metal profile ───────────────────────────────────────────────────
 
+/**
+ * Bent-sheet-metal ridge cap cross-section. Real metal vents read as a
+ * smooth arched cap riding above two flat mounting flanges — not the
+ * old angular peak + bead, which looked like a stamped novelty. Profile:
+ *
+ *   flange ─┐                                            ┌─ flange
+ *           │   ◜╶─────  rounded ridge cap  ─────╶◝      │
+ *           │  ╱                                   ╲     │
+ *           └─╯                                     ╰────┘
+ *
+ * Built from outer points (Z, Y); the inner shell is offset inward so the
+ * cap reads as a real folded-metal thickness instead of paper-thin.
+ */
 function metalProfile(halfW: number, h: number, t: number) {
-  const lipH = h * 0.3
-  const lipW = halfW * 0.15
-  const beadW = halfW * 0.05
-  const beadH = h * 0.12
-  const outer: [number, number][] = [
-    [-halfW, 0],
-    [-halfW + lipW, lipH],
-    [-beadW, h],
-    [0, h + beadH],
-    [beadW, h],
-    [halfW - lipW, lipH],
-    [halfW, 0],
-  ]
-  const inner: [number, number][] = [
-    [-halfW, t],
-    [-halfW + lipW, lipH + t],
-    [-beadW, h - t],
-    [0, h - t],
-    [beadW, h - t],
-    [halfW - lipW, lipH + t],
-    [halfW, t],
-  ]
+  // Horizontal mounting flange that hugs the shingles on each side. Wide
+  // enough to read as a real screw-down tab, not a sliver.
+  const flangeW = halfW * 0.22
+  // Where the arched cap takes off from the flange tip — gentle rise so
+  // the corner reads as a soft fold instead of a hard kink.
+  const liftH = h * 0.12
+  const liftDZ = halfW * 0.04
+  // Span and height of the rounded cap. Span stays narrower than the
+  // overall width so the cap "rides" on the flanges rather than swallow-
+  // ing them.
+  const capHalfSpan = halfW * 0.7
+  const capPeakY = h
+  const capStartY = h * 0.45
+  const capSegs = 12
+
+  const outer: [number, number][] = []
+  // Left flange — flat horizontal tab.
+  outer.push([-halfW, 0])
+  outer.push([-halfW + flangeW, 0])
+  // Soft fold up to the cap's starting shoulder.
+  outer.push([-halfW + flangeW + liftDZ, liftH])
+  outer.push([-capHalfSpan, capStartY])
+  // Rounded ridge: half-sine from left shoulder over the top to right
+  // shoulder. Using sin() (not cos+sin sphere math) keeps the cap's
+  // tangents continuous with the slope below — no visible kinks.
+  for (let i = 1; i < capSegs; i++) {
+    const frac = i / capSegs
+    const z = -capHalfSpan + frac * (2 * capHalfSpan)
+    const y = capStartY + (capPeakY - capStartY) * Math.sin(frac * Math.PI)
+    outer.push([z, y])
+  }
+  // Mirror down the right side.
+  outer.push([capHalfSpan, capStartY])
+  outer.push([halfW - flangeW - liftDZ, liftH])
+  outer.push([halfW - flangeW, 0])
+  outer.push([halfW, 0])
+
+  const inner = offsetProfileInward(outer, t)
   return { outer, inner }
 }
 
@@ -435,10 +464,25 @@ function pushQuad(
   d: number[] | readonly number[],
   n: number[] | readonly number[],
 ) {
-  positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
+  // Dimension-based planar UVs: U follows |b-a|, V follows |d-a|, so
+  // textures tile at world scale across the ridge length, the arched
+  // shell, and the end caps. Hardcoded 0..1 UVs stretched each face
+  // independently — a 2m ridge tile looked the same as a 4cm lip.
+  const abx = b[0]! - a[0]!
+  const aby = b[1]! - a[1]!
+  const abz = b[2]! - a[2]!
+  const adx = d[0]! - a[0]!
+  const ady = d[1]! - a[1]!
+  const adz = d[2]! - a[2]!
+  const u = Math.sqrt(abx * abx + aby * aby + abz * abz)
+  const v = Math.sqrt(adx * adx + ady * ady + adz * adz)
+
+  // Winding is (a, c, b) + (a, d, c) so the triangle face direction
+  // matches the stored normal — same fix as box-vent's pushQuad.
+  positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
   normals.push(n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!)
-  uvs.push(0, 0, 1, 0, 1, 1)
-  positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
+  uvs.push(0, 0, u, v, u, 0)
+  positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
   normals.push(n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!)
-  uvs.push(0, 0, 1, 1, 0, 1)
+  uvs.push(0, 0, 0, v, u, v)
 }

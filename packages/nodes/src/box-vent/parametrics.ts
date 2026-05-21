@@ -7,6 +7,12 @@ import type { BoxVentNode } from './schema'
  * move tool — not in this descriptor.
  */
 export const boxVentParametrics: ParametricDescriptor<BoxVentNode> = {
+  // Move + Duplicate need the kind-owned ghost-preview flow (see
+  // `./move-tool.tsx`), so the panel hosts those actions itself instead
+  // of relying on the generic inspector — which only knows about Move
+  // for `capabilities.movable` kinds and routes those through the
+  // grid-plane mover.
+  customPanel: () => import('./panel'),
   groups: [
     {
       label: 'Style',

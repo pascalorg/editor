@@ -1,6 +1,17 @@
-import { type NodeDefinition, ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
+import {
+  type NodeDefinition,
+  ChimneyNode as ChimneyNodeSchema,
+  toLibraryMaterialRef,
+} from '@pascal-app/core'
 import { chimneyParametrics } from './parametrics'
 import { ChimneyNode } from './schema'
+
+// Default material refs — body picks up a brick wall texture and the
+// top a stone-wall texture so a fresh chimney reads as masonry instead
+// of the flat fallback color (which can look washed-out / "white"
+// under bright scene lighting).
+const DEFAULT_BODY_MATERIAL_PRESET = toLibraryMaterialRef('flooring-rusticbrick')
+const DEFAULT_TOP_MATERIAL_PRESET = toLibraryMaterialRef('flooring-wallstone1')
 
 /**
  * Chimney — a vertical masonry stack hosted on a roof segment.
@@ -26,6 +37,8 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
     const stub = ChimneyNodeSchema.parse({
       id: 'chimney_default' as never,
       type: 'chimney',
+      materialPreset: DEFAULT_BODY_MATERIAL_PRESET,
+      topMaterialPreset: DEFAULT_TOP_MATERIAL_PRESET,
     })
     const { id: _id, type: _type, ...rest } = stub
     return rest
@@ -35,6 +48,13 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+  },
+
+  affordanceTools: {
+    // Drag-to-place tool for duplicate + move. Reuses the placement
+    // ghost preview but seeds it from the moving (cloned) node so the
+    // duplicate keeps the source's body shape, materials, panels, etc.
+    move: () => import('./move-tool'),
   },
 
   parametrics: chimneyParametrics,

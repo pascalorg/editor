@@ -14,12 +14,54 @@ describe('buildBoxVentGeometry', () => {
     expect(uvs.count).toBe(positions.count)
   })
 
-  test('dome style yields more triangles than pyramid (sphere sampling adds quads)', () => {
-    const pyramid = buildBoxVentGeometry(BoxVentNode.parse({ style: 'standard' }))
-    const dome = buildBoxVentGeometry(BoxVentNode.parse({ style: 'dome' }))
-    expect(dome.getAttribute('position').count).toBeGreaterThan(
-      pyramid.getAttribute('position').count,
+  test('box style is two stacked rounded extrusions (riser + cover)', () => {
+    // Two rounded-rect extrusions (4 corners × 4 segs = 16 profile pts each).
+    // Per layer: 16 wall quads (96 verts) + 32 cap triangles (96 verts) = 192 verts.
+    // Two layers stacked → 384 verts total when bevel > 0.
+    const box = buildBoxVentGeometry(BoxVentNode.parse({ style: 'box' }))
+    expect(box.getAttribute('position').count).toBe(384)
+  })
+
+  test('box style: zero bevel still produces a valid closed solid', () => {
+    // With bevel=0 the wall-edge dedupe drops the degenerate corner
+    // quads, but the bottom + top fan triangulations always include
+    // every profile edge (including the degenerate ones — they're
+    // zero-area triangles that survive the buffer).
+    const box = buildBoxVentGeometry(
+      BoxVentNode.parse({ style: 'box', cornerBevel: 0 }),
     )
+    expect(box.getAttribute('position').count).toBeGreaterThan(0)
+    // Confirm the position attribute carries finite values only.
+    const positions = box.getAttribute('position').array as Float32Array
+    for (let i = 0; i < positions.length; i++) {
+      expect(Number.isFinite(positions[i])).toBe(true)
+    }
+  })
+
+  test('cap style: body walls + flange + 4 chamfer faces + top (closed)', () => {
+    // 5 body quads (4 walls + bottom) + 1 flange + 4 chamfered faces +
+    // 1 flat top = 11 quads = 66 vertices. Confirms the cap is closed
+    // and uses the dedicated builder (not the dome fallback).
+    const cap = buildBoxVentGeometry(BoxVentNode.parse({ style: 'cap' }))
+    expect(cap.getAttribute('position').count).toBe(66)
+  })
+
+  test('cap style: zero overhang drops the flange quad', () => {
+    const noFlange = buildBoxVentGeometry(
+      BoxVentNode.parse({ style: 'cap', hoodOverhang: 0 }),
+    )
+    // 10 quads × 6 vertices/quad = 60.
+    expect(noFlange.getAttribute('position').count).toBe(60)
+  })
+
+  test('dome style still uses the unified dome+skirt geometry (Step 1)', () => {
+    const dome = buildBoxVentGeometry(BoxVentNode.parse({ style: 'dome' }))
+    expect(dome.getAttribute('position').count).toBeGreaterThan(60)
+  })
+
+  test('legacy `standard` / `low-profile` style names migrate to new enum', () => {
+    expect(BoxVentNode.parse({ style: 'standard' }).style).toBe('cap')
+    expect(BoxVentNode.parse({ style: 'low-profile' }).style).toBe('box')
   })
 
   test('low-profile reduces overall vent height proportionally', () => {

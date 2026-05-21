@@ -12,24 +12,15 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { buildRidgeVentGeometry } from './geometry'
 
-const standardMaterial = new THREE.MeshStandardMaterial({
+// Single white fallback for every style. Paint customisation comes from
+// `node.material` / `node.materialPreset` (default: `preset-white`); the
+// fallback only fires for legacy nodes that pre-date the schema default
+// and shouldn't punish them with style-specific grey/metal that diverges
+// from the "default white" the inspector advertises.
+const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.85,
   metalness: 0.1,
-  side: THREE.DoubleSide,
-})
-
-const shingledMaterial = new THREE.MeshStandardMaterial({
-  color: 0x55_55_55,
-  roughness: 0.92,
-  metalness: 0.0,
-  side: THREE.DoubleSide,
-})
-
-const metalMaterial = new THREE.MeshStandardMaterial({
-  color: 0xa8_a8_a8,
-  roughness: 0.35,
-  metalness: 0.75,
   side: THREE.DoubleSide,
 })
 
@@ -68,16 +59,20 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
 
   useEffect(() => () => geometry.dispose(), [geometry])
 
+  // The preset cache returns materials with `side: FrontSide` (that's
+  // what the preset payload encodes). For a thin extruded ridge cap that
+  // makes the underside disappear when the camera dips below the eaves
+  // — so clone the resolved material and force `DoubleSide` locally
+  // without mutating the shared cache entry.
   const material = useMemo(() => {
-    if (node.material) return createMaterial(node.material)
-    const preset = createMaterialFromPresetRef(node.materialPreset)
-    if (preset) return preset
-    return node.style === 'metal'
-      ? metalMaterial
-      : node.style === 'shingled'
-        ? shingledMaterial
-        : standardMaterial
-  }, [node.material, node.materialPreset, node.style])
+    const base = node.material
+      ? createMaterial(node.material)
+      : (createMaterialFromPresetRef(node.materialPreset) ?? defaultMaterial)
+    if (base.side === THREE.DoubleSide) return base
+    const cloned = base.clone()
+    cloned.side = THREE.DoubleSide
+    return cloned
+  }, [node.material, node.materialPreset])
 
   if (!segment) return null
 

@@ -55,6 +55,9 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
   toolHints: [
     { key: 'Left click', label: 'Place box vent on roof' },
     { key: 'Esc', label: 'Cancel' },

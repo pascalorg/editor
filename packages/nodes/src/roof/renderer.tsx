@@ -49,7 +49,15 @@ export const RoofRenderer = ({ node }: { node: RoofNode }) => {
     return geometry
   }, [])
 
-  const customMaterial = useMemo(() => getRoofMaterialArray(node), [node])
+  const segments = useScene(
+    useShallow((state) =>
+      (node.children ?? [])
+        .map((id) => state.nodes[id as AnyNodeId] as RoofSegmentNode | undefined)
+        .filter((seg): seg is RoofSegmentNode => Boolean(seg)),
+    ),
+  )
+
+  const customMaterial = useMemo(() => getRoofMaterialArray(node, segments), [node, segments])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 

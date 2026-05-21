@@ -44,6 +44,9 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
   toolHints: [
     { key: 'Left click', label: 'Place ridge vent on roof' },
     { key: 'Esc', label: 'Cancel' },

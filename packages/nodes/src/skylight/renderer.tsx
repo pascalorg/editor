@@ -29,18 +29,17 @@ const defaultFrameMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.5,
 })
 
-const defaultGlassMaterial = new THREE.MeshPhysicalMaterial({
-  color: 0xdf_f7_ff,
-  roughness: 0.015,
-  metalness: 0,
+// Matches the `preset-glass` entry in packages/core/src/material-library.ts
+// (color #87ceeb, roughness 0.1, metalness 0.1, opacity 0.3, double-sided).
+// MeshStandardMaterial is the right base for it — the preset has no
+// transmission / IOR / clearcoat, so the physical extensions were why
+// the old skylight glass looked unlike glass elsewhere in the app.
+const defaultGlassMaterial = new THREE.MeshStandardMaterial({
+  color: 0x87_ce_eb,
+  roughness: 0.1,
+  metalness: 0.1,
   transparent: true,
-  opacity: 0.28,
-  transmission: 0.96,
-  ior: 1.5,
-  thickness: 0.018,
-  reflectivity: 0.75,
-  clearcoat: 1,
-  clearcoatRoughness: 0.02,
+  opacity: 0.3,
   side: THREE.DoubleSide,
 })
 
@@ -614,14 +613,20 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   const openAmount = runtimeOpenAmount ?? node.operationState ?? typePreset.operationState
 
   const glassMaterial = useMemo(() => {
-    const mat = (
+    const mat =
       node.glassMaterial
         ? createMaterial(node.glassMaterial)
         : (createMaterialFromPresetRef(node.glassMaterialPreset) ?? defaultGlassMaterial.clone())
-    ) as THREE.MeshPhysicalMaterial
     if (mat && typeof mat === 'object') {
-      ;(mat as THREE.MeshPhysicalMaterial).thickness = glassThickness
+      // Some presets ship single-sided; force double so the underside of
+      // the pane (visible from inside the building) doesn't render black.
+      // `thickness` only exists on MeshPhysicalMaterial — set it when
+      // present so user-supplied physical glass still picks up the
+      // current pane thickness.
       ;(mat as THREE.Material).side = THREE.DoubleSide
+      if (mat instanceof THREE.MeshPhysicalMaterial) {
+        mat.thickness = glassThickness
+      }
     }
     return mat
   }, [glassThickness, node.glassMaterial, node.glassMaterialPreset])

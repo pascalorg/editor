@@ -28,12 +28,12 @@ const BoxVentPreview = ({ node }: { node: BoxVentNode }) => {
     () =>
       new THREE.MeshStandardMaterial({
         color: 0xff_ff_ff,
-        emissive: 0xff_ff_ff,
-        emissiveIntensity: 0.12,
+        emissive: 0x6c_a3_ff,
+        emissiveIntensity: 0.18,
         roughness: 0.85,
         metalness: 0.05,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.35,
         depthWrite: false,
         side: THREE.DoubleSide,
       }),
@@ -64,7 +64,7 @@ const BoxVentPreview = ({ node }: { node: BoxVentNode }) => {
         <lineBasicMaterial
           color={0x6c_a3_ff}
           depthTest={false}
-          opacity={0.9}
+          opacity={0.95}
           transparent
         />
       </lineSegments>

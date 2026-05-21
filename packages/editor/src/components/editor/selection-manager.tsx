@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type BoxVentNode,
   type BuildingNode,
   type CeilingNode,
   type ChimneyMaterialRole,
@@ -19,6 +20,7 @@ import {
   type RoofSegmentEvent,
   resolveLevelId,
   resolveMaterial,
+  type RidgeVentNode,
   type ShelfNode,
   type SlabNode,
   type StairEvent,
@@ -47,6 +49,7 @@ import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } f
 import {
   type ActivePaintMaterial,
   buildChimneyMaterialPatch,
+  buildRoofSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
@@ -345,7 +348,14 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
+  node:
+    | FenceNode
+    | ColumnNode
+    | SlabNode
+    | CeilingNode
+    | ShelfNode
+    | BoxVentNode
+    | RidgeVentNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -413,9 +423,10 @@ function applySingleSurfacePaintPreview(
     }
   }
 
-  if (node.type === 'shelf') {
-    // Shelf is a registered Group, not a Mesh. Traverse children and
-    // preview-swap every child mesh — same approach `column` uses.
+  if (node.type === 'shelf' || node.type === 'box-vent' || node.type === 'ridge-vent') {
+    // These kinds register a `<group>` (not a Mesh) with `useRegistry`,
+    // so we walk the subtree and preview-swap every child mesh — same
+    // approach `column` uses.
     if (!registeredObject) return null
     const restores: PaintPreviewCleanup[] = []
     registeredObject.traverse((object) => {
@@ -934,17 +945,16 @@ export const SelectionManager = () => {
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      roofNode.id as AnyNodeId,
-                      buildRoofSurfaceMaterialPatch(
-                        roofNode as RoofNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
-                      ),
+                  const sceneState = useScene.getState()
+                  sceneState.updateNodes(
+                    buildRoofSurfaceMaterialUpdates(
+                      sceneState.nodes,
+                      roofNode as RoofNode,
+                      role!,
+                      activePaintMaterial.material,
+                      activePaintMaterial.materialPreset,
                     )
+                  )
                 }
               : null,
           preview:
@@ -1027,7 +1037,9 @@ export const SelectionManager = () => {
         node.type === 'column' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
-        node.type === 'shelf'
+        node.type === 'shelf' ||
+        node.type === 'box-vent' ||
+        node.type === 'ridge-vent'
       ) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
@@ -1042,7 +1054,13 @@ export const SelectionManager = () => {
                   .updateNode(
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
-                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
+                      | FenceNode
+                      | ColumnNode
+                      | SlabNode
+                      | CeilingNode
+                      | ShelfNode
+                      | BoxVentNode
+                      | RidgeVentNode
                     >(activePaintMaterial.material, activePaintMaterial.materialPreset),
                   )
               }
@@ -1050,7 +1068,14 @@ export const SelectionManager = () => {
           preview: compatible
             ? () =>
                 applySingleSurfacePaintPreview(
-                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
+                  node as
+                    | FenceNode
+                    | ColumnNode
+                    | SlabNode
+                    | CeilingNode
+                    | ShelfNode
+                    | BoxVentNode
+                    | RidgeVentNode,
                   activePaintMaterial,
                 )
             : () => previewCursor('not-allowed'),

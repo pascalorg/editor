@@ -6,6 +6,7 @@ import {
   type BuildingNode,
   type CeilingNode,
   type ChimneyMaterialRole,
+  type ChimneyNode,
   type ColumnNode,
   type DoorNode,
   type ElevatorNode,
@@ -150,6 +151,7 @@ type EditorState = {
     | DoorNode
     | ElevatorNode
     | CeilingNode
+    | ChimneyNode
     | ColumnNode
     | SlabNode
     | WallNode
@@ -168,6 +170,7 @@ type EditorState = {
       | DoorNode
       | ElevatorNode
       | CeilingNode
+      | ChimneyNode
       | ColumnNode
       | SlabNode
       | WallNode

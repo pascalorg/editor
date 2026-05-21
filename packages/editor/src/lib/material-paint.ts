@@ -1,6 +1,9 @@
 'use client'
 
 import {
+  type AnyNode,
+  type AnyNodeId,
+  type BoxVentNode,
   type CeilingNode,
   type ChimneyMaterialRole,
   type ChimneyNode,
@@ -13,7 +16,9 @@ import {
   getLibraryMaterialIdFromRef,
   type MaterialSchema,
   type MaterialTarget,
+  type RidgeVentNode,
   type RoofNode,
+  type RoofSegmentNode,
   type RoofSurfaceMaterialRole,
   type ShelfNode,
   type SlabNode,
@@ -25,7 +30,17 @@ import {
 
 export type PaintableMaterialTarget = Extract<
   MaterialTarget,
-  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling' | 'shelf' | 'chimney'
+  | 'wall'
+  | 'roof'
+  | 'stair'
+  | 'fence'
+  | 'column'
+  | 'slab'
+  | 'ceiling'
+  | 'shelf'
+  | 'chimney'
+  | 'box-vent'
+  | 'ridge-vent'
 >
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -107,6 +122,36 @@ export function buildRoofSurfaceMaterialPatch(
   }
 }
 
+export function buildRoofSurfaceMaterialUpdates(
+  nodes: Record<string, AnyNode>,
+  node: RoofNode,
+  targetRole: RoofSurfaceMaterialRole,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [
+    {
+      id: node.id as AnyNodeId,
+      data: buildRoofSurfaceMaterialPatch(node, targetRole, material, materialPreset) as Partial<
+        AnyNode
+      >,
+    },
+  ]
+
+  if (targetRole !== 'top') return updates
+
+  for (const segmentId of node.children ?? []) {
+    const segment = nodes[segmentId as AnyNodeId]
+    if (segment?.type !== 'roof-segment') continue
+    updates.push({
+      id: segment.id as AnyNodeId,
+      data: { material, materialPreset } as Partial<RoofSegmentNode> as Partial<AnyNode>,
+    })
+  }
+
+  return updates
+}
+
 export function buildStairSurfaceMaterialPatch(
   node: StairNode,
   targetRole: StairSurfaceMaterialRole,
@@ -136,7 +181,14 @@ export function buildStairSurfaceMaterialPatch(
 }
 
 export function buildSingleSurfaceMaterialPatch<
-  TNode extends FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
+  TNode extends
+    | FenceNode
+    | ColumnNode
+    | SlabNode
+    | CeilingNode
+    | ShelfNode
+    | BoxVentNode
+    | RidgeVentNode,
 >(material: MaterialSchema | undefined, materialPreset: string | undefined): Partial<TNode> {
   return {
     material,
@@ -212,7 +264,27 @@ export function resolveActivePaintMaterialFromSelection(params: {
       selectedMaterialTarget.role === 'edge' ||
       selectedMaterialTarget.role === 'wall')
   ) {
-    const surface = getEffectiveRoofSurfaceMaterial(selectedNode, selectedMaterialTarget.role)
+    let surface = getEffectiveRoofSurfaceMaterial(selectedNode, selectedMaterialTarget.role)
+    if (
+      selectedMaterialTarget.role === 'top' &&
+      surface.material === undefined &&
+      surface.materialPreset === undefined
+    ) {
+      const roofNode = selectedNode as RoofNode
+      const fallbackSegment = (roofNode.children ?? [])
+        .map((id: AnyNodeId) => nodes[id as AnyNodeId] as RoofSegmentNode | undefined)
+        .find(
+          (segment: RoofSegmentNode | undefined) =>
+            segment?.type === 'roof-segment' &&
+            (segment.material !== undefined || segment.materialPreset !== undefined),
+        )
+      if (fallbackSegment) {
+        surface = {
+          material: fallbackSegment.material,
+          materialPreset: fallbackSegment.materialPreset,
+        }
+      }
+    }
     return hasActivePaintMaterial({
       material: surface.material,
       materialPreset: surface.materialPreset,
@@ -272,7 +344,9 @@ export function resolveActivePaintMaterialFromSelection(params: {
       selectedNode.type === 'column' ||
       selectedNode.type === 'slab' ||
       selectedNode.type === 'ceiling' ||
-      selectedNode.type === 'shelf') &&
+      selectedNode.type === 'shelf' ||
+      selectedNode.type === 'box-vent' ||
+      selectedNode.type === 'ridge-vent') &&
     selectedMaterialTarget.role === 'surface'
   ) {
     const target = selectedNode.type
@@ -336,6 +410,14 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'chimney') {
     return 'chimney'
+  }
+
+  if (selectedNode.type === 'box-vent') {
+    return 'box-vent'
+  }
+
+  if (selectedNode.type === 'ridge-vent') {
+    return 'ridge-vent'
   }
 
   return null

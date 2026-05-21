@@ -2,6 +2,10 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { RidgeVentNode } from './schema'
 
 export const ridgeVentParametrics: ParametricDescriptor<RidgeVentNode> = {
+  // Custom panel exposes Position sliders + Move/Duplicate actions
+  // alongside the style/dimensions controls. See box-vent's parametrics
+  // for the same pattern.
+  customPanel: () => import('./panel'),
   groups: [
     {
       label: 'Style',

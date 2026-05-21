@@ -90,6 +90,30 @@ export const RoofSystem = () => {
       const node = nodes[id]
       if (!node) return
 
+      // A chimney, skylight, solar-panel, dormer, ridge-vent or box-vent
+      // edit dirties its host roof so the merged geometry rebuilds. Without
+      // this branch, moving/resizing an accessory leaves the merged-roof
+      // showing the previous cut shape (stale CSG) once the user exits
+      // segment edit mode.
+      if (
+        node.type === 'chimney' ||
+        node.type === 'skylight' ||
+        node.type === 'solar-panel' ||
+        node.type === 'dormer' ||
+        node.type === 'ridge-vent' ||
+        node.type === 'box-vent'
+      ) {
+        const segId = (node as { roofSegmentId?: string }).roofSegmentId
+        const seg = segId
+          ? (nodes[segId as AnyNodeId] as RoofSegmentNode | undefined)
+          : undefined
+        if (seg?.parentId) {
+          pendingRoofUpdates.add(seg.parentId as AnyNodeId)
+        }
+        clearDirty(id as AnyNodeId)
+        return
+      }
+
       if (node.type === 'roof-segment') {
         const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
         if (mesh) {
@@ -127,31 +151,44 @@ export const RoofSystem = () => {
       } else if (node.type === 'roof') {
         pendingRoofUpdates.add(id as AnyNodeId)
         clearDirty(id as AnyNodeId)
-      } else if (node.type === 'skylight') {
-        // Edits to a skylight (move, resize, type change) re-cut the merged
-        // roof — dirty the host segment so its parent roof rebuilds.
-        const segmentId = (node as SkylightNode).roofSegmentId as AnyNodeId | undefined
-        if (segmentId) useScene.getState().dirtyNodes.add(segmentId)
-        clearDirty(id as AnyNodeId)
       }
     })
 
     // --- Pass 2: Process pending merged-roof updates (max 1 per frame) ---
+    if (pendingRoofUpdates.size > 0) {
+      // eslint-disable-next-line no-console
+      console.log('[roof-system] Pass2 pending=', Array.from(pendingRoofUpdates))
+    }
     let roofsProcessed = 0
     for (const id of pendingRoofUpdates) {
       if (roofsProcessed >= MAX_ROOFS_PER_FRAME) break
 
       const node = nodes[id]
       if (!node || node.type !== 'roof') {
+        // eslint-disable-next-line no-console
+        console.log('[roof-system] Pass2 skip id=', id, 'reason=node-missing-or-wrong-type', node?.type)
         pendingRoofUpdates.delete(id)
         continue
       }
 
       const group = sceneRegistry.nodes.get(id) as THREE.Group
-      if (!group) continue
+      if (!group) {
+        // eslint-disable-next-line no-console
+        console.log('[roof-system] Pass2 skip id=', id, 'reason=no-group-in-registry')
+        continue
+      }
 
       const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
-      if (!mergedMesh) continue
+      if (!mergedMesh) {
+        // eslint-disable-next-line no-console
+        console.log('[roof-system] Pass2 skip id=', id, 'reason=no-merged-roof-child',
+          'group-children=', group.children.map((c) => c.name || c.type))
+        continue
+      }
+
+      // eslint-disable-next-line no-console
+      console.log('[roof-system] Pass2 process id=', id, 'mergedVisible=', mergedMesh.visible,
+        'childSegments=', (node as RoofNode).children?.length ?? 0)
 
       if (mergedMesh.visible !== false) {
         // Only rebuild when visible — RoofEditSystem re-triggers via markDirty on edit mode exit
@@ -207,6 +244,11 @@ function updateMergedRoofGeometry(
 
   for (const child of children) {
     const brushes = getRoofSegmentBrushes(child)
+    // eslint-disable-next-line no-console
+    console.log('[merged-roof] child', child.id, 'type=', child.type,
+      'roofType=', child.roofType, 'w=', child.width, 'd=', child.depth,
+      'wH=', child.wallHeight, 'rH=', child.roofHeight,
+      'brushes=', brushes ? 'OK' : 'NULL')
     if (!brushes) continue
 
     // Per-child cuts in SEGMENT-LOCAL space: subtract every skylight on this
@@ -309,14 +351,28 @@ function updateMergedRoofGeometry(
     }
   }
 
+  // eslint-disable-next-line no-console
+  console.log('[merged-roof] totals',
+    'shin=', !!totalShinSlab, 'deck=', !!totalDeckSlab,
+    'wall=', !!totalWall, 'inner=', !!totalInner)
   if (totalShinSlab && totalDeckSlab && totalWall && totalInner) {
+    // Use globalThis so it can't be filtered out / namespaced.
+    const log = (msg: string) => {
+      ;(globalThis as { console: Console }).console.warn(`!!![merged-roof] ${msg}`)
+    }
     try {
+      log('step=A about to SUBTRACT shin')
       const finalShinTrimmed = csgEvaluator.evaluate(totalShinSlab, totalInner, SUBTRACTION)
+      log('step=B shin-trim done')
       const finalDeckTrimmed = csgEvaluator.evaluate(totalDeckSlab, totalInner, SUBTRACTION)
+      log('step=C deck-trim done')
       const finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
+      log('step=D wall-trim done')
 
       const shinDeck = csgEvaluator.evaluate(finalShinTrimmed, finalDeckTrimmed, ADDITION)
+      log('step=E shin+deck done')
       const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
+      log('step=F combined done')
 
       const resultGeo = csgGeometry(combined)
 
@@ -329,20 +385,25 @@ function updateMergedRoofGeometry(
         [dummyMats[3], 3],
       ])
 
+      log(`step=G resultGeo groups=${resultGeo.groups.length} resultMats=${resultMaterials.length}`)
       for (const g of resultGeo.groups) {
         g.materialIndex = mapRoofGroupMaterialIndex(g.materialIndex, resultMaterials, matToIndex)
       }
+      log('step=H groups remapped')
 
       resultGeo.computeVertexNormals()
       ensureUv2Attribute(resultGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = resultGeo
+      log('step=I geometry assigned, DONE')
 
       finalShinTrimmed.geometry.dispose()
       finalDeckTrimmed.geometry.dispose()
       finalWallTrimmed.geometry.dispose()
       shinDeck.geometry.dispose()
     } catch (e) {
+      ;(globalThis as { console: Console }).console.warn('!!![merged-roof] ★ CSG THREW:', e,
+        (e as Error)?.stack)
       console.error('Merged roof CSG failed:', e)
     }
 
@@ -351,6 +412,7 @@ function updateMergedRoofGeometry(
     totalWall.geometry.dispose()
     totalInner.geometry.dispose()
   }
+  ;(globalThis as { console: Console }).console.warn('!!![merged-roof] function returned')
 }
 
 const dummyMats: [

@@ -2,7 +2,8 @@
 
 import {
   type AnyNodeId,
-  ChimneyNode,
+  ChimneyNode as ChimneyNodeSchema,
+  type ChimneyNode,
   emitter,
   type RoofEvent,
   type RoofNode,
@@ -10,21 +11,13 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { chimneyDefinition } from './definition'
 import ChimneyPreview from './preview'
 
-/**
- * Chimney placement tool. Listens to `roof:*` events; the preview
- * follows the cursor across the segment with the segment's yaw applied
- * (chimney itself stays world-vertical, so no slope tilt wrap). Click
- * creates a new ChimneyNode parented to that segment with
- * segment-local position.
- */
 const tmpMatrix = new THREE.Matrix4()
 const tmpInv = new THREE.Matrix4()
 const tmpPos = new THREE.Vector3()
@@ -36,30 +29,41 @@ type SegmentTransform = {
   quaternion: [number, number, number, number]
 }
 
-const ChimneyTool = () => {
+/**
+ * Drag-to-place tool for chimney duplicate / move. Receives the moving
+ * node (a clone with `id` stripped + `metadata.isNew = true` after a
+ * Duplicate action) via `node` prop, shows the same ghost preview as
+ * placement, and on click commits the cloned chimney to the hit
+ * segment with that segment's local coords.
+ *
+ * Mirrors `tool.tsx`'s placement preview — the only differences are
+ * (a) the ghost is built from the moving node so the duplicate
+ * preserves the original's body shape/material/etc., and (b) on click
+ * we keep all of the clone's fields and only overwrite host segment +
+ * position. Mounted via `def.affordanceTools.move`.
+ */
+const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
-  // Building-local matrix of the host segment — drives the ghost's
-  // outer-group transform so the preview lands inside the actual
-  // segment's frame (matches the real renderer in `renderer.tsx`).
   const [segmentXform, setSegmentXform] = useState<SegmentTransform | null>(null)
-  // Cursor position expressed in segment-local coords. Layered inside
-  // the segment frame so the ghost slides with the cursor across the
-  // segment's footprint.
   const [hitLocal, setHitLocal] = useState<[number, number, number] | null>(null)
   const [previewSegment, setPreviewSegment] = useState<RoofSegmentNode | null>(null)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
+  // Ghost data — same as the moving clone but pinned to position[0,0,0]
+  // (the inner group does the cursor offset). Reparse so Zod fills any
+  // defaults missing from the clone.
   const previewNode = useMemo(
     () =>
-      ChimneyNode.parse({
-        ...chimneyDefinition.defaults(),
-        name: 'Chimney',
+      ChimneyNodeSchema.parse({
+        ...node,
+        id: 'chimney_preview' as never,
         position: [0, 0, 0],
         rotation: 0,
       }),
-    [],
+    [node],
   )
 
   useEffect(() => {
@@ -114,16 +118,43 @@ const ChimneyTool = () => {
       if (!hit) return
       const state = useScene.getState()
 
-      const chimney = ChimneyNode.parse({
-        ...chimneyDefinition.defaults(),
-        name: 'Chimney',
-        roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
-      })
-      state.createNode(chimney, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-      setSelection({ selectedIds: [chimney.id] })
+      // Strip the `isNew` flag — only used to mark a duplicate clone
+      // that hasn't been committed yet.
+      const meta =
+        node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
+          ? (node.metadata as Record<string, unknown>)
+          : {}
+      const { isNew, ...restMeta } = meta as { isNew?: boolean }
+      const cleanedMeta = Object.keys(restMeta).length > 0 ? restMeta : undefined
+
+      // Duplicate (clone with no committed id yet) → create a fresh
+      // chimney parented to the hit segment. Plain move (existing id,
+      // no `isNew` flag) → update host + position in place. Either way
+      // every other field from the clone is preserved.
+      if (isNew || !node.id) {
+        const committed = ChimneyNodeSchema.parse({
+          ...node,
+          id: undefined as never,
+          roofSegmentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          metadata: cleanedMeta,
+        })
+        state.createNode(committed, hit.segment.id as AnyNodeId)
+        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        setSelection({ selectedIds: [committed.id] })
+      } else {
+        const prevSegmentId = node.roofSegmentId as AnyNodeId | undefined
+        state.updateNode(node.id as AnyNodeId, {
+          roofSegmentId: hit.segment.id,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          metadata: cleanedMeta,
+        })
+        if (prevSegmentId) state.dirtyNodes.add(prevSegmentId)
+        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        setSelection({ selectedIds: [node.id] })
+      }
+      setMovingNode(null)
       triggerSFX('sfx:item-place')
       event.stopPropagation()
     }
@@ -137,15 +168,10 @@ const ChimneyTool = () => {
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, node, setMovingNode, setSelection])
 
   if (!activeBuildingId || !segmentXform || !hitLocal || !previewSegment) return null
 
-  // Outer group mirrors the real renderer's `position={segment.position}
-  // rotation-y={segment.rotation}` chain by composing the segment's
-  // building-local matrix (which walks roof + level + segment). Inner
-  // group offsets by the cursor's segment-local x/z so the chimney
-  // geometry (built with `position[0,2] = 0`) lands under the cursor.
   return (
     <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
       <group position={[hitLocal[0], 0, hitLocal[2]]}>
@@ -155,4 +181,4 @@ const ChimneyTool = () => {
   )
 }
 
-export default ChimneyTool
+export default MoveChimneyTool

@@ -13,9 +13,12 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import {
+  getAnalyticalNormal,
+  surfaceQuatFromNormal,
+} from '../solar-panel/geometry'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
 import { boxVentDefinition } from './definition'
-import { computeBoxVentSlopeTilt } from './geometry'
 import BoxVentPreview from './preview'
 
 const worldPoint = new THREE.Vector3()
@@ -35,7 +38,7 @@ const BoxVentTool = () => {
   const setSelection = useViewer((s) => s.setSelection)
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewTilt, setPreviewTilt] = useState(0)
+  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
@@ -82,7 +85,8 @@ const BoxVentTool = () => {
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return
 
-      setPreviewTilt(computeBoxVentSlopeTilt(hit.segment, hit.localZ))
+      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
+      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
       event.stopPropagation()
@@ -123,12 +127,12 @@ const BoxVentTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !previewPos) return null
+  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
 
   return (
     <group position={previewPos}>
       <group rotation-y={previewYaw}>
-        <group rotation-x={previewTilt}>
+        <group quaternion={previewSurfaceQuat}>
           <BoxVentPreview node={previewNode} />
         </group>
       </group>

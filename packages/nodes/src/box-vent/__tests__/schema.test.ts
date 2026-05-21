@@ -10,17 +10,17 @@ describe('BoxVentNode schema', () => {
     expect(parsed.depth).toBe(0.4)
     expect(parsed.height).toBe(0.15)
     expect(parsed.hoodOverhang).toBe(0.04)
-    expect(parsed.style).toBe('standard')
+    expect(parsed.style).toBe('cap')
     expect(parsed.position).toEqual([0, 0, 0])
     expect(parsed.rotation).toBe(0)
     expect(parsed.material).toBeUndefined()
-    expect(parsed.materialPreset).toBeUndefined()
+    expect(parsed.materialPreset).toBe('preset-white')
     expect(parsed.roofSegmentId).toBeUndefined()
   })
 
   test('accepts each style', () => {
-    expect(BoxVentNode.parse({ style: 'standard' }).style).toBe('standard')
-    expect(BoxVentNode.parse({ style: 'low-profile' }).style).toBe('low-profile')
+    expect(BoxVentNode.parse({ style: 'box' }).style).toBe('box')
+    expect(BoxVentNode.parse({ style: 'cap' }).style).toBe('cap')
     expect(BoxVentNode.parse({ style: 'dome' }).style).toBe('dome')
   })
 
