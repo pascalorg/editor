@@ -5,6 +5,7 @@ import {
   getActiveRoofHeight,
   getPitchFromActiveRoofHeight,
   getSegmentSlopeFrame,
+  hasSegmentMaterialOverride,
   ROOF_SHAPE_DEFAULTS,
   type RoofNode,
   type RoofSegmentNode,
@@ -215,9 +216,14 @@ function updateMergedRoofGeometry(
   const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
   if (!mergedMesh) return
 
+  // Segments that carry their own material / preset (catch-all or any of
+  // the role-specific fields) are rendered as their own per-segment mesh
+  // in `RoofRenderer` so the painted material is preserved. Exclude them
+  // from the merged shell — otherwise the merged mesh would draw on top
+  // with the roof's default material.
   const children = (roofNode.children ?? [])
     .map((id) => nodes[id] as RoofSegmentNode)
-    .filter(Boolean)
+    .filter((n): n is RoofSegmentNode => Boolean(n) && !hasSegmentMaterialOverride(n))
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()
@@ -368,11 +374,10 @@ function updateMergedRoofGeometry(
         g.materialIndex = mapRoofGroupMaterialIndex(g.materialIndex, resultMaterials, matToIndex)
       }
 
-      const uvReadyGeo = createRoofUvGeometry(resultGeo)
-      uvReadyGeo.computeVertexNormals()
-      ensureUv2Attribute(uvReadyGeo)
+      resultGeo.computeVertexNormals()
+      ensureUv2Attribute(resultGeo)
       mergedMesh.geometry.dispose()
-      mergedMesh.geometry = uvReadyGeo
+      mergedMesh.geometry = resultGeo
 
       finalShinTrimmed.geometry.dispose()
       finalDeckTrimmed.geometry.dispose()
@@ -755,10 +760,9 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
   wallBrush.geometry.dispose()
   innerBrush.geometry.dispose()
 
-  const uvReadyGeo = createRoofUvGeometry(resultGeo)
-  uvReadyGeo.computeVertexNormals()
-  ensureUv2Attribute(uvReadyGeo)
-  return uvReadyGeo
+  resultGeo.computeVertexNormals()
+  ensureUv2Attribute(resultGeo)
+  return resultGeo
 }
 
 // ============================================================================
@@ -1196,73 +1200,6 @@ function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) 
   }
 
   uvs.push(_uvFaceNormal.z >= 0 ? point.x : -point.x, -point.y)
-}
-
-function createRoofUvGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-  const position = geometry.getAttribute('position')
-  if (!position) return geometry
-
-  const index = geometry.getIndex()
-  const sourceCount = index?.count ?? position.count
-  const positions: number[] = []
-  const uvs: number[] = []
-  const groups: THREE.BufferGeometry['groups'] = []
-  const sourceGroups =
-    geometry.groups.length > 0
-      ? geometry.groups
-      : [{ start: 0, count: sourceCount, materialIndex: 0 }]
-
-  for (const group of sourceGroups) {
-    const groupStart = positions.length / 3
-    let groupVertexCount = 0
-    const end = Math.min(sourceCount, group.start + group.count)
-
-    for (let offset = group.start; offset + 2 < end; offset += 3) {
-      const ia = index?.getX(offset) ?? offset
-      const ib = index?.getX(offset + 1) ?? offset + 1
-      const ic = index?.getX(offset + 2) ?? offset + 2
-
-      _surfaceV0.fromBufferAttribute(position, ia)
-      _surfaceV1.fromBufferAttribute(position, ib)
-      _surfaceV2.fromBufferAttribute(position, ic)
-      _tmpVec3A.subVectors(_surfaceV1, _surfaceV0)
-      _tmpVec3B.subVectors(_surfaceV2, _surfaceV0)
-      _surfaceFaceNormal.crossVectors(_tmpVec3A, _tmpVec3B).normalize()
-
-      positions.push(
-        _surfaceV0.x,
-        _surfaceV0.y,
-        _surfaceV0.z,
-        _surfaceV1.x,
-        _surfaceV1.y,
-        _surfaceV1.z,
-        _surfaceV2.x,
-        _surfaceV2.y,
-        _surfaceV2.z,
-      )
-      pushRoofUv(uvs, _surfaceV0, _surfaceFaceNormal)
-      pushRoofUv(uvs, _surfaceV1, _surfaceFaceNormal)
-      pushRoofUv(uvs, _surfaceV2, _surfaceFaceNormal)
-      groupVertexCount += 3
-    }
-
-    if (groupVertexCount > 0) {
-      groups.push({
-        start: groupStart,
-        count: groupVertexCount,
-        materialIndex: normalizeRoofMaterialIndex(group.materialIndex),
-      })
-    }
-  }
-
-  const nextGeometry = new THREE.BufferGeometry()
-  nextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  nextGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
-  for (const group of groups) {
-    nextGeometry.addGroup(group.start, group.count, group.materialIndex)
-  }
-  geometry.dispose()
-  return nextGeometry
 }
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {

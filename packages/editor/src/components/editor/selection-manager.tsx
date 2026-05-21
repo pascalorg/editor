@@ -11,6 +11,8 @@ import {
   type DormerSurfaceMaterialRole,
   emitter,
   type FenceNode,
+  getEffectiveRoofSurfaceMaterial,
+  getEffectiveSegmentSurfaceMaterial,
   getMaterialPresetByRef,
   getSelectableKinds,
   type ItemNode,
@@ -20,6 +22,7 @@ import {
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
+  type RoofSegmentNode,
   resolveLevelId,
   resolveMaterial,
   type RidgeVentNode,
@@ -52,6 +55,7 @@ import {
   type ActivePaintMaterial,
   buildChimneyMaterialPatch,
   buildDormerMaterialPatch,
+  buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
@@ -303,6 +307,54 @@ function applyRoofPaintPreview(
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)
+}
+
+function applyRoofSegmentPaintPreview(
+  node: RoofSegmentNode,
+  parent: RoofNode | null,
+  role: 'top' | 'edge' | 'wall',
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  const mesh = getRegisteredMesh(node.id)
+  if (!mesh) return null
+
+  // Synthesise the segment node as if the paint had committed, then build
+  // the same 4-slot array the renderer would. Mirrors getRoofMaterialArray
+  // layout (slot 0 ← edge, 1 ← wall, 2 ← wall, 3 ← top) so the preview
+  // material lands on the matching CSG groups.
+  const previewNode: RoofSegmentNode = {
+    ...node,
+    ...buildRoofSegmentSurfaceMaterialPatch(
+      node,
+      role,
+      material.material,
+      material.materialPreset,
+    ),
+  }
+  const resolveSlot = (r: 'top' | 'edge' | 'wall'): Material | null => {
+    const parentSpec = parent ? getEffectiveRoofSurfaceMaterial(parent, r) : undefined
+    const spec = getEffectiveSegmentSurfaceMaterial(previewNode, r, parentSpec)
+    if (typeof spec.materialPreset === 'string') {
+      const resolved = createMaterialFromPresetRef(spec.materialPreset)
+      if (resolved) return resolved
+    }
+    if (spec.material !== undefined) return createMaterial(spec.material)
+    return null
+  }
+  const edge = resolveSlot('edge')
+  const wall = resolveSlot('wall')
+  const top = resolveSlot('top')
+  if (!(edge || wall || top)) return null
+  const fallback = parent ? getRoofMaterialArray(parent) : null
+  const fb = (n: number) => fallback?.[n] ?? null
+  const arr: Material[] = [
+    edge ?? wall ?? top ?? fb(0)!,
+    wall ?? edge ?? top ?? fb(1)!,
+    wall ?? edge ?? top ?? fb(2)!,
+    top ?? wall ?? edge ?? fb(3)!,
+  ]
+  if (arr.some((m) => !m)) return null
+  return previewMeshMaterial(mesh, arr)
 }
 
 function applyStairPaintPreview(
@@ -988,6 +1040,7 @@ export const SelectionManager = () => {
       }
 
       if (node.type === 'roof' || node.type === 'roof-segment') {
+        const isSegmentHit = node.type === 'roof-segment'
         const roofNode =
           node.type === 'roof'
             ? node
@@ -998,9 +1051,16 @@ export const SelectionManager = () => {
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
         const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        // Painting directly on a segment (only possible in segment edit
+        // mode, where the per-segment mesh is visible) writes to the
+        // segment's own role-specific fields. Painting the merged shell
+        // — or a roof node directly — keeps fanning to the parent roof.
+        const segmentTarget = isSegmentHit ? (node as RoofSegmentNode) : null
         return {
-          key: `roof:${roofNode.id}:${role ?? 'unsupported'}`,
-          hoveredId: roofNode.id as AnyNodeId,
+          key: `${segmentTarget ? 'roof-segment' : 'roof'}:${
+            segmentTarget ? segmentTarget.id : roofNode.id
+          }:${role ?? 'unsupported'}`,
+          hoveredId: (segmentTarget ? segmentTarget.id : roofNode.id) as AnyNodeId,
           hoverMode:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
               ? 'paint-ready'
@@ -1009,20 +1069,40 @@ export const SelectionManager = () => {
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
                   const sceneState = useScene.getState()
-                  sceneState.updateNodes(
-                    buildRoofSurfaceMaterialUpdates(
-                      sceneState.nodes,
-                      roofNode as RoofNode,
-                      role!,
-                      activePaintMaterial.material,
-                      activePaintMaterial.materialPreset,
+                  if (segmentTarget) {
+                    sceneState.updateNode(
+                      segmentTarget.id as AnyNodeId,
+                      buildRoofSegmentSurfaceMaterialPatch(
+                        segmentTarget,
+                        role!,
+                        activePaintMaterial.material,
+                        activePaintMaterial.materialPreset,
+                      ),
                     )
-                  )
+                  } else {
+                    sceneState.updateNodes(
+                      buildRoofSurfaceMaterialUpdates(
+                        sceneState.nodes,
+                        roofNode as RoofNode,
+                        role!,
+                        activePaintMaterial.material,
+                        activePaintMaterial.materialPreset,
+                      ),
+                    )
+                  }
                 }
               : null,
           preview:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? () => applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
+              ? () =>
+                  segmentTarget
+                    ? applyRoofSegmentPaintPreview(
+                        segmentTarget,
+                        roofNode as RoofNode,
+                        role,
+                        activePaintMaterial,
+                      )
+                    : applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
               : () => previewCursor('not-allowed'),
         }
       }

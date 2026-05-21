@@ -2,8 +2,11 @@
 
 import {
   type AnyNodeId,
+  getEffectiveRoofSurfaceMaterial,
+  getEffectiveSegmentSurfaceMaterial,
   type RoofNode,
   type RoofSegmentNode,
+  type RoofSegmentSurfaceMaterialRole,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -39,34 +42,59 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     return geometry
   }, [])
 
-  // Segment material precedence:
-  //   1. Segment's own preset / material (set by per-segment paint, or by
-  //      whole-roof "top" paint which fans the same preset down to every
-  //      child segment via `buildRoofSurfaceMaterialUpdates`).
-  //   2. Parent roof's resolved 4-slot array (covers the case where only
-  //      the roof's top/edge/wall presets were set, not the segment's
-  //      own fields — happens for older scenes or partial paints).
-  //   3. Default `roofMaterials` (handled at the `material =` line below).
-  // Without (1), painting a single segment writes its preset but the
-  // renderer keeps reading the parent's (unset) array → mesh stays the
-  // default grey even though the segment carries the preset string.
+  // Segment material precedence, per-role:
+  //   1. Segment's role-specific override (topMaterial, edgeMaterial, wallMaterial).
+  //   2. Segment's catch-all `material` (legacy single-slot paint).
+  //   3. Parent roof's role-specific material.
+  //   4. Parent roof's catch-all material.
+  //   5. Default `roofMaterials` (handled at the `material =` line below).
+  //
+  // The 4-slot layout matches getRoofMaterialArray:
+  //   slot 0 → 'edge'  (wall/trim & rake bands)
+  //   slot 1 → 'wall'  (deck top & shingle eave bands)
+  //   slot 2 → 'wall'  (interior)
+  //   slot 3 → 'top'   (shingle / roof surface)
   const customMaterial = useMemo(() => {
-    if (typeof node.materialPreset === 'string') {
-      const resolved = createMaterialFromPresetRef(node.materialPreset)
-      if (resolved) {
-        // Splat the same shingle material across all 4 slots so every
-        // CSG-mapped group shows the painted preset.
-        return [resolved, resolved, resolved, resolved] as THREE.Material[]
+    const resolveSlot = (role: RoofSegmentSurfaceMaterialRole): THREE.Material | null => {
+      const parentSpec = parentNode ? getEffectiveRoofSurfaceMaterial(parentNode, role) : undefined
+      const spec = getEffectiveSegmentSurfaceMaterial(node, role, parentSpec)
+      if (typeof spec.materialPreset === 'string') {
+        const resolved = createMaterialFromPresetRef(spec.materialPreset)
+        if (resolved) return resolved
       }
+      if (spec.material !== undefined) {
+        return createMaterial(spec.material)
+      }
+      return null
     }
-    if (node.material !== undefined) {
-      const resolved = createMaterial(node.material)
-      return [resolved, resolved, resolved, resolved] as THREE.Material[]
+
+    const edge = resolveSlot('edge')
+    const wall = resolveSlot('wall')
+    const top = resolveSlot('top')
+
+    if (!(edge || wall || top)) {
+      // Nothing set anywhere — fall back to the parent roof's array (which
+      // applies its own per-role resolution + defaults) or to null so the
+      // renderer picks the package-level `roofMaterials` defaults.
+      return parentNode ? getRoofMaterialArray(parentNode) : null
     }
-    return parentNode ? getRoofMaterialArray(parentNode) : null
+
+    const fallback = () => new THREE.MeshStandardMaterial()
+    return [
+      edge ?? wall ?? top ?? fallback(),
+      wall ?? edge ?? top ?? fallback(),
+      wall ?? edge ?? top ?? fallback(),
+      top ?? wall ?? edge ?? fallback(),
+    ] as THREE.Material[]
   }, [
     node.material,
     node.materialPreset,
+    node.topMaterial,
+    node.topMaterialPreset,
+    node.edgeMaterial,
+    node.edgeMaterialPreset,
+    node.wallMaterial,
+    node.wallMaterialPreset,
     parentNode,
   ])
 

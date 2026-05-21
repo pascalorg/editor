@@ -20,8 +20,10 @@ import {
   type MaterialSchema,
   type MaterialTarget,
   type RidgeVentNode,
+  getEffectiveSegmentSurfaceMaterial,
   type RoofNode,
   type RoofSegmentNode,
+  type RoofSegmentSurfaceMaterialRole,
   type RoofSurfaceMaterialRole,
   type ShelfNode,
   type SlabNode,
@@ -113,6 +115,44 @@ export function buildRoofSurfaceMaterialPatch(
     targetRole === 'edge' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'edge')
   const nextWall =
     targetRole === 'wall' ? nextSurfaceMaterial : getEffectiveRoofSurfaceMaterial(node, 'wall')
+
+  return {
+    topMaterial: nextTop.material,
+    topMaterialPreset: nextTop.materialPreset,
+    edgeMaterial: nextEdge.material,
+    edgeMaterialPreset: nextEdge.materialPreset,
+    wallMaterial: nextWall.material,
+    wallMaterialPreset: nextWall.materialPreset,
+    material: undefined,
+    materialPreset: undefined,
+  }
+}
+
+/**
+ * Build a per-segment paint patch for one of the three surface roles. The
+ * segment ends up with role-specific fields set (and the legacy catch-all
+ * `material` cleared) so subsequent reads pick the role override over any
+ * parent-roof fallback.
+ */
+export function buildRoofSegmentSurfaceMaterialPatch(
+  node: RoofSegmentNode,
+  targetRole: RoofSegmentSurfaceMaterialRole,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<RoofSegmentNode> {
+  const nextSurfaceMaterial = { material, materialPreset }
+  const nextTop =
+    targetRole === 'top'
+      ? nextSurfaceMaterial
+      : getEffectiveSegmentSurfaceMaterial(node, 'top')
+  const nextEdge =
+    targetRole === 'edge'
+      ? nextSurfaceMaterial
+      : getEffectiveSegmentSurfaceMaterial(node, 'edge')
+  const nextWall =
+    targetRole === 'wall'
+      ? nextSurfaceMaterial
+      : getEffectiveSegmentSurfaceMaterial(node, 'wall')
 
   return {
     topMaterial: nextTop.material,

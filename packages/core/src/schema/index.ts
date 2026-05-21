@@ -79,11 +79,17 @@ export {
 export { LevelNode } from './nodes/level'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
-export type { SegmentSlopeFrame } from './nodes/roof-segment'
+export type {
+  RoofSegmentSurfaceMaterialRole,
+  RoofSegmentSurfaceMaterialSpec,
+  SegmentSlopeFrame,
+} from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
+  getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
   getSegmentSlopeFrame,
+  hasSegmentMaterialOverride,
   ROOF_SHAPE_DEFAULTS,
   RoofSegmentNode,
   RoofType,

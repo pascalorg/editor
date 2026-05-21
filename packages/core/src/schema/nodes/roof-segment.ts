@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 
 export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
@@ -27,8 +28,21 @@ export const ROOF_SHAPE_DEFAULTS = {
 export const RoofSegmentNode = BaseNode.extend({
   id: objectId('rseg'),
   type: nodeType('roof-segment'),
+  // Catch-all material — splatted across all 4 slots in the renderer
+  // when no role-specific override is set. Kept for back-compat with
+  // older scenes; new paint operations should prefer the role fields.
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+  // Role-specific overrides mirror the parent roof's surface roles.
+  // When set they win over the segment's catch-all `material` and over
+  // the parent roof's role / catch-all materials. Resolution order:
+  //   segment role → segment catch-all → roof role → roof catch-all.
+  topMaterial: MaterialSchema.optional(),
+  topMaterialPreset: z.string().optional(),
+  edgeMaterial: MaterialSchema.optional(),
+  edgeMaterialPreset: z.string().optional(),
+  wallMaterial: MaterialSchema.optional(),
+  wallMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
@@ -253,4 +267,86 @@ export function getPitchFromActiveRoofHeight(
   if (run <= 0) return 0
   const rise = input.roofHeight * getPrimarySlopeRiseFraction(ratios)
   return (Math.atan2(rise, run) * 180) / Math.PI
+}
+
+// ----------------------------------------------------------------------------
+// Per-segment surface materials
+// ----------------------------------------------------------------------------
+
+export type RoofSegmentSurfaceMaterialRole = 'top' | 'edge' | 'wall'
+export type RoofSegmentSurfaceMaterialSpec = {
+  material?: MaterialSchemaType
+  materialPreset?: string
+}
+
+function getLegacyRoofSegmentSurfaceMaterial(
+  node: RoofSegmentNode,
+): RoofSegmentSurfaceMaterialSpec {
+  return {
+    material: node.material,
+    materialPreset: typeof node.materialPreset === 'string' ? node.materialPreset : undefined,
+  }
+}
+
+/**
+ * Resolve the segment-level material for one of the three surface roles.
+ * Falls back through: role-specific field → catch-all `material`. Pass the
+ * parent roof to `parentFallback` when you want the roof's role material
+ * to fill in for an unset segment slot — typical from the renderer.
+ */
+export function getEffectiveSegmentSurfaceMaterial(
+  node: RoofSegmentNode,
+  role: RoofSegmentSurfaceMaterialRole,
+  parentFallback?: RoofSegmentSurfaceMaterialSpec,
+): RoofSegmentSurfaceMaterialSpec {
+  if (role === 'top') {
+    if (node.topMaterial !== undefined || typeof node.topMaterialPreset === 'string') {
+      return {
+        material: node.topMaterial,
+        materialPreset:
+          typeof node.topMaterialPreset === 'string' ? node.topMaterialPreset : undefined,
+      }
+    }
+  } else if (role === 'edge') {
+    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
+      return {
+        material: node.edgeMaterial,
+        materialPreset:
+          typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined,
+      }
+    }
+  } else if (role === 'wall') {
+    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
+      return {
+        material: node.wallMaterial,
+        materialPreset:
+          typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined,
+      }
+    }
+  }
+
+  const legacy = getLegacyRoofSegmentSurfaceMaterial(node)
+  if (legacy.material !== undefined || legacy.materialPreset !== undefined) return legacy
+
+  return parentFallback ?? { material: undefined, materialPreset: undefined }
+}
+
+/**
+ * Returns true when the segment has any segment-level material override —
+ * either the legacy catch-all or any of the three role-specific fields.
+ * Used by `RoofRenderer` and `updateMergedRoofGeometry` to decide whether
+ * the segment should be drawn as its own mesh or folded into the merged
+ * shell.
+ */
+export function hasSegmentMaterialOverride(node: RoofSegmentNode): boolean {
+  return (
+    node.material !== undefined ||
+    typeof node.materialPreset === 'string' ||
+    node.topMaterial !== undefined ||
+    typeof node.topMaterialPreset === 'string' ||
+    node.edgeMaterial !== undefined ||
+    typeof node.edgeMaterialPreset === 'string' ||
+    node.wallMaterial !== undefined ||
+    typeof node.wallMaterialPreset === 'string'
+  )
 }
