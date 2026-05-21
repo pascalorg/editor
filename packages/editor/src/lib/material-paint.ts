@@ -8,8 +8,11 @@ import {
   type ChimneyMaterialRole,
   type ChimneyNode,
   type ColumnNode,
+  type DormerNode,
+  type DormerSurfaceMaterialRole,
   type FenceNode,
   getCatalogMaterialById,
+  getEffectiveDormerSurfaceMaterial,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveStairSurfaceMaterial,
   getEffectiveWallSurfaceMaterial,
@@ -39,6 +42,7 @@ export type PaintableMaterialTarget = Extract<
   | 'ceiling'
   | 'shelf'
   | 'chimney'
+  | 'dormer'
   | 'box-vent'
   | 'ridge-vent'
 >
@@ -207,6 +211,26 @@ export function buildChimneyMaterialPatch(
   return { material, materialPreset }
 }
 
+/**
+ * Build a partial DormerNode update for a per-surface paint operation.
+ * Writes to the matching role's surface fields (`wall*` / `side*` /
+ * `top*`) and clears the legacy `material` / `materialPreset` so role-
+ * specific paint takes precedence over the catch-all material.
+ */
+export function buildDormerMaterialPatch(
+  role: DormerSurfaceMaterialRole,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): Partial<DormerNode> {
+  if (role === 'top') {
+    return { topMaterial: material, topMaterialPreset: materialPreset }
+  }
+  if (role === 'side') {
+    return { sideMaterial: material, sideMaterialPreset: materialPreset }
+  }
+  return { wallMaterial: material, wallMaterialPreset: materialPreset }
+}
+
 export function getEffectiveChimneyMaterial(
   node: ChimneyNode,
   role: ChimneyMaterialRole,
@@ -230,6 +254,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       | StairSurfaceMaterialRole
       | RoofSurfaceMaterialRole
       | ChimneyMaterialRole
+      | DormerSurfaceMaterialRole
       | SingleSurfaceMaterialRole
   } | null
 }): ActivePaintMaterial | null {
@@ -340,6 +365,29 @@ export function resolveActivePaintMaterialFromSelection(params: {
   }
 
   if (
+    selectedNode.type === 'dormer' &&
+    (selectedMaterialTarget.role === 'top' ||
+      selectedMaterialTarget.role === 'side' ||
+      selectedMaterialTarget.role === 'wall')
+  ) {
+    const surface = getEffectiveDormerSurfaceMaterial(
+      selectedNode,
+      selectedMaterialTarget.role as DormerSurfaceMaterialRole,
+    )
+    return hasActivePaintMaterial({
+      material: surface.material,
+      materialPreset: surface.materialPreset,
+      sourceTarget: 'dormer',
+    })
+      ? {
+          material: surface.material,
+          materialPreset: surface.materialPreset,
+          sourceTarget: 'dormer',
+        }
+      : null
+  }
+
+  if (
     (selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
       selectedNode.type === 'slab' ||
@@ -410,6 +458,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'chimney') {
     return 'chimney'
+  }
+
+  if (selectedNode.type === 'dormer') {
+    return 'dormer'
   }
 
   if (selectedNode.type === 'box-vent') {

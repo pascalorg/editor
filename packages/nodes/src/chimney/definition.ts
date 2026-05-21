@@ -1,17 +1,20 @@
-import {
-  type NodeDefinition,
-  ChimneyNode as ChimneyNodeSchema,
-  toLibraryMaterialRef,
-} from '@pascal-app/core'
+import { type NodeDefinition, ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
 import { chimneyParametrics } from './parametrics'
 import { ChimneyNode } from './schema'
 
-// Default material refs — body picks up a brick wall texture and the
-// top a stone-wall texture so a fresh chimney reads as masonry instead
-// of the flat fallback color (which can look washed-out / "white"
-// under bright scene lighting).
-const DEFAULT_BODY_MATERIAL_PRESET = toLibraryMaterialRef('flooring-rusticbrick')
-const DEFAULT_TOP_MATERIAL_PRESET = toLibraryMaterialRef('flooring-wallstone1')
+// Every fresh chimney starts as plain white (body + top). The paint
+// flow / material picker writes preset refs or full `MaterialSchema`
+// objects on top of this; until then both roles render `#ffffff`.
+const WHITE_MATERIAL = {
+  properties: {
+    color: '#ffffff',
+    roughness: 0.85,
+    metalness: 0,
+    opacity: 1,
+    transparent: false,
+    side: 'front' as const,
+  },
+}
 
 /**
  * Chimney — a vertical masonry stack hosted on a roof segment.
@@ -37,8 +40,8 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
     const stub = ChimneyNodeSchema.parse({
       id: 'chimney_default' as never,
       type: 'chimney',
-      materialPreset: DEFAULT_BODY_MATERIAL_PRESET,
-      topMaterialPreset: DEFAULT_TOP_MATERIAL_PRESET,
+      material: WHITE_MATERIAL,
+      topMaterial: WHITE_MATERIAL,
     })
     const { id: _id, type: _type, ...rest } = stub
     return rest

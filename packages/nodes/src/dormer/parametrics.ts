@@ -13,7 +13,7 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.5, max: 4, step: 0.05 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.5, max: 5, step: 0.05 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.1, max: 2, step: 0.05 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0, max: 5, step: 0.05 },
       ],
     },
     {
@@ -29,10 +29,16 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
       ],
     },
     {
+      label: 'Hung wall',
+      fields: [
+        { key: 'wallSkirtHeight', kind: 'number', unit: 'm', min: 0.2, max: 6, step: 0.05 },
+      ],
+    },
+    {
       label: 'Window opening',
       fields: [
         { key: 'windowWidth', kind: 'number', unit: 'm', min: 0.2, max: 3, step: 0.05 },
-        { key: 'windowHeight', kind: 'number', unit: 'm', min: 0.2, max: 2.5, step: 0.05 },
+        { key: 'windowHeight', kind: 'number', unit: 'm', min: 0.2, max: 6, step: 0.05 },
         { key: 'windowOffsetX', kind: 'number', unit: 'm', min: -1, max: 1, step: 0.05 },
         { key: 'windowOffsetY', kind: 'number', unit: 'm', min: 0, max: 2, step: 0.05 },
       ],

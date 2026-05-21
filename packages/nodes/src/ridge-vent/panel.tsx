@@ -215,6 +215,29 @@ export default function RidgeVentPanel() {
           value={Math.round((node.position[0] ?? 0) * 100) / 100}
         />
         <SliderControl
+          label="Y"
+          max={Math.max(
+            (segment?.wallHeight ?? 3) + (segment?.roofHeight ?? 3) + 2,
+            (node.position[1] ?? 0) + 0.1,
+          )}
+          min={Math.min(0, (node.position[1] ?? 0) - 0.5)}
+          onChange={(v) =>
+            handleUpdate({
+              position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
+            })
+          }
+          onCommit={(v) =>
+            handleUpdate({
+              position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
+            })
+          }
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+        />
+        <SliderControl
           label="Z"
           max={halfD}
           min={-halfD}

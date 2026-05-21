@@ -39,6 +39,14 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
     deletable: true,
   },
 
+  affordanceTools: {
+    // Drag-to-place tool for duplicate + move. Reuses the placement
+    // ghost preview but seeds it from the moving (cloned) node so the
+    // duplicate keeps the source's dimensions, materials, and window
+    // options.
+    move: () => import('./move-tool'),
+  },
+
   parametrics: dormerParametrics,
 
   renderer: {

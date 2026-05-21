@@ -6,6 +6,7 @@ import {
   emitter,
   type RoofEvent,
   type RoofNode,
+  type RoofSegmentNode,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -14,23 +15,35 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import {
-  getAnalyticalNormal,
-  getSurfaceY,
-  surfaceQuatFromNormal,
-} from '../solar-panel/geometry'
 import { dormerDefinition } from './definition'
 import DormerPreview from './preview'
 
-const worldPoint = new THREE.Vector3()
+const tmpMatrix = new THREE.Matrix4()
+const tmpInv = new THREE.Matrix4()
+const tmpPos = new THREE.Vector3()
+const tmpQuat = new THREE.Quaternion()
+const tmpScale = new THREE.Vector3()
 
+type SegmentTransform = {
+  position: [number, number, number]
+  quaternion: [number, number, number, number]
+}
+
+/**
+ * Placement tool for a fresh dormer. The dormer sits UPRIGHT on the
+ * host segment at segment-local `y = 0` (the host wall foot) — the
+ * CSG inside `generateDormerGeometry` carves the dormer against the
+ * host roof's slope, so we don't tilt or lift it here. The ghost is
+ * mounted on the hit segment's world transform (extracted via the
+ * registry) so the user sees exactly where the dormer will land.
+ */
 const DormerTool = () => {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
-  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewYaw, setPreviewYaw] = useState(0)
-  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
+  const [segmentXform, setSegmentXform] = useState<SegmentTransform | null>(null)
+  const [hitLocal, setHitLocal] = useState<[number, number, number] | null>(null)
+  const [previewSegment, setPreviewSegment] = useState<RoofSegmentNode | null>(null)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
@@ -47,16 +60,19 @@ const DormerTool = () => {
   useEffect(() => {
     if (!activeBuildingId) return
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const computeSegmentXform = (segmentId: string): SegmentTransform | null => {
       const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
-      if (!buildingObj) return [wx, wy, wz]
-      worldPoint.set(wx, wy, wz)
-      buildingObj.worldToLocal(worldPoint)
-      return [worldPoint.x, worldPoint.y, worldPoint.z]
+      const segObj = sceneRegistry.nodes.get(segmentId as AnyNodeId)
+      if (!(buildingObj && segObj)) return null
+      buildingObj.updateWorldMatrix(true, false)
+      segObj.updateWorldMatrix(true, false)
+      tmpInv.copy(buildingObj.matrixWorld).invert()
+      tmpMatrix.multiplyMatrices(tmpInv, segObj.matrixWorld)
+      tmpMatrix.decompose(tmpPos, tmpQuat, tmpScale)
+      return {
+        position: [tmpPos.x, tmpPos.y, tmpPos.z],
+        quaternion: [tmpQuat.x, tmpQuat.y, tmpQuat.z, tmpQuat.w],
+      }
     }
 
     const updatePreview = (event: RoofEvent) => {
@@ -75,10 +91,17 @@ const DormerTool = () => {
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return
 
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
-      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      const xform = computeSegmentXform(hit.segment.id)
+      if (!xform) return
+      setSegmentXform(xform)
+      // Lift the ghost to the actual roof-surface Y at the cursor so
+      // it tracks the mouse along the slope. The CSG inside
+      // `generateDormerGeometry` carves the dormer against the host
+      // roof regardless of `position[1]` — the host_solid is shifted
+      // by -position[1] into dormer-local before subtraction — so
+      // anchoring at the cursor height is purely a visual alignment.
+      setHitLocal([hit.localX, hit.localY, hit.localZ])
+      setPreviewSegment(hit.segment)
       event.stopPropagation()
     }
 
@@ -92,16 +115,16 @@ const DormerTool = () => {
       if (!hit) return
       const state = useScene.getState()
 
-      const surfaceY = getSurfaceY(hit.localX, hit.localZ, hit.segment)
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
-
       const dormer = DormerNode.parse({
         ...dormerDefinition.defaults(),
         name: 'Dormer',
         roofSegmentId: hit.segment.id,
-        position: [hit.localX, surfaceY, hit.localZ],
+        parentId: hit.segment.id,
+        // Anchor at the slope height so the renderer matches the ghost.
+        // The CSG still carves cleanly because it inverts T(position)
+        // when bringing the host into dormer-local.
+        position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
-        surfaceNormal: [normal.x, normal.y, normal.z],
       })
       state.createNode(dormer, hit.segment.id as AnyNodeId)
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
@@ -121,14 +144,12 @@ const DormerTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
+  if (!activeBuildingId || !segmentXform || !hitLocal || !previewSegment) return null
 
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <group quaternion={previewSurfaceQuat}>
-          <DormerPreview node={previewNode} />
-        </group>
+    <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
+      <group position={hitLocal}>
+        <DormerPreview node={previewNode} />
       </group>
     </group>
   )

@@ -2,42 +2,25 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
-import { buildDormerGeometry } from './geometry'
+import { buildDormerGhostGeometry } from './geometry'
 import type { DormerNode } from './schema'
 
 const ghostMaterial = new THREE.MeshStandardMaterial({
-  color: 0xff_ff_ff,
-  emissive: 0xff_ff_ff,
-  emissiveIntensity: 0.1,
-  roughness: 0.5,
+  color: 0x88_88_88,
   transparent: true,
-  opacity: 0.5,
+  opacity: 0.45,
   depthWrite: false,
 })
 
 const DormerPreview = ({ node }: { node: DormerNode }) => {
-  const geo = useMemo(() => buildDormerGeometry(node), [
-    node.width,
-    node.depth,
-    node.height,
-    node.roofHeight,
-    node.roofType,
-  ])
-
-  useEffect(
-    () => () => {
-      geo.body.dispose()
-      geo.roof.dispose()
-    },
-    [geo],
+  const geo = useMemo(
+    () => buildDormerGhostGeometry(node),
+    [node.width, node.depth, node.height, node.roofHeight, node.roofType],
   )
 
-  return (
-    <group>
-      <mesh geometry={geo.body} material={ghostMaterial} raycast={() => {}} />
-      <mesh geometry={geo.roof} material={ghostMaterial} raycast={() => {}} />
-    </group>
-  )
+  useEffect(() => () => geo.dispose(), [geo])
+
+  return <mesh geometry={geo} material={ghostMaterial} raycast={() => {}} />
 }
 
 export default DormerPreview

@@ -60,6 +60,7 @@ import { CeilingTreeNode } from './ceiling-tree-node'
 import { ChimneyTreeNode } from './chimney-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
 import { DoorTreeNode } from './door-tree-node'
+import { DormerTreeNode } from './dormer-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
 import { FenceTreeNode } from './fence-tree-node'
 import { ItemTreeNode } from './item-tree-node'
@@ -100,6 +101,7 @@ const treeNodeByType: Record<
   'box-vent': BoxVentTreeNode,
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,
+  dormer: DormerTreeNode,
   'solar-panel': SolarPanelTreeNode,
   column: ColumnTreeNode,
   elevator: ElevatorTreeNode,

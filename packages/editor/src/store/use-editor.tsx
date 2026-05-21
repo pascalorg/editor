@@ -9,6 +9,8 @@ import {
   type ChimneyNode,
   type ColumnNode,
   type DoorNode,
+  type DormerNode,
+  type DormerSurfaceMaterialRole,
   type ElevatorNode,
   type FenceNode,
   type ItemNode,
@@ -114,6 +116,7 @@ export type MaterialTargetRole =
   | StairSurfaceMaterialRole
   | RoofSurfaceMaterialRole
   | ChimneyMaterialRole
+  | DormerSurfaceMaterialRole
   | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
@@ -153,6 +156,7 @@ type EditorState = {
     | CeilingNode
     | ChimneyNode
     | ColumnNode
+    | DormerNode
     | SlabNode
     | WallNode
     | FenceNode
@@ -172,6 +176,7 @@ type EditorState = {
       | CeilingNode
       | ChimneyNode
       | ColumnNode
+      | DormerNode
       | SlabNode
       | WallNode
       | FenceNode

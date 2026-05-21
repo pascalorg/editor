@@ -1,6 +1,7 @@
 import type { RoofSegmentNode, SolarPanelNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 
 const SOLAR_CELL_SIZE_M = 0.16
 
@@ -81,13 +82,15 @@ let _defaultPanelMaterial: THREE.Material | null = null
 export function getDefaultPanelMaterial(): THREE.Material {
   if (_defaultPanelMaterial) return _defaultPanelMaterial
   const map = createSolarPanelTexture()
-  _defaultPanelMaterial = new THREE.MeshStandardMaterial({
+  // MeshStandardNodeMaterial: WebGPU-native — avoids the "writeMask not zero"
+  // MRT error that fires when MeshStandardMaterial is used in the WebGPU pass.
+  const mat = new MeshStandardNodeMaterial({
     color: new THREE.Color(map ? 0xffffff : 0x0c0c1f),
     roughness: 0.22,
     metalness: 0.35,
-    map: map ?? null,
   })
-  _defaultPanelMaterial.needsUpdate = true
+  if (map) mat.map = map
+  _defaultPanelMaterial = mat
   return _defaultPanelMaterial
 }
 

@@ -29,18 +29,21 @@ const defaultFrameMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.5,
 })
 
-// Matches the `preset-glass` entry in packages/core/src/material-library.ts
-// (color #87ceeb, roughness 0.1, metalness 0.1, opacity 0.3, double-sided).
-// MeshStandardMaterial is the right base for it — the preset has no
-// transmission / IOR / clearcoat, so the physical extensions were why
-// the old skylight glass looked unlike glass elsewhere in the app.
-const defaultGlassMaterial = new THREE.MeshStandardMaterial({
+// MeshBasicMaterial: only requires position (slot 0). Safe with DoubleSide
+// because Basic doesn't write to the additional MRT targets that
+// MeshStandardMaterial/Physical do, so the WebGPU "writeMask not zero"
+// error doesn't fire. Also avoids the "vertex buffer slot 1 not set" error
+// that MeshLambertNodeMaterial triggers when inline <boxGeometry> JSX
+// recreates geometry on resize — the node-material pipeline expects normals
+// in slot 1, but the new geometry instance isn't fully bound yet at draw time.
+// MeshBasicMaterial at 30% opacity gives visually identical glass without
+// those constraints.
+const defaultGlassMaterial = new THREE.MeshBasicMaterial({
   color: 0x87_ce_eb,
-  roughness: 0.1,
-  metalness: 0.1,
   transparent: true,
   opacity: 0.3,
   side: THREE.DoubleSide,
+  depthWrite: false,
 })
 
 function FrameBar({
@@ -618,11 +621,6 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
         ? createMaterial(node.glassMaterial)
         : (createMaterialFromPresetRef(node.glassMaterialPreset) ?? defaultGlassMaterial.clone())
     if (mat && typeof mat === 'object') {
-      // Some presets ship single-sided; force double so the underside of
-      // the pane (visible from inside the building) doesn't render black.
-      // `thickness` only exists on MeshPhysicalMaterial — set it when
-      // present so user-supplied physical glass still picks up the
-      // current pane thickness.
       ;(mat as THREE.Material).side = THREE.DoubleSide
       if (mat instanceof THREE.MeshPhysicalMaterial) {
         mat.thickness = glassThickness
@@ -634,28 +632,11 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   const surfaceFrame = useMemo(() => {
     if (!segment)
       return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }
-    const f = getRoofOuterSurfaceFrameAtPoint(
+    return getRoofOuterSurfaceFrameAtPoint(
       segment,
       node.position[0] ?? 0,
       node.position[2] ?? 0,
     )
-    // eslint-disable-next-line no-console
-    console.log('[skylight-frame]', storeNode.id, {
-      lx: node.position[0] ?? 0,
-      lz: node.position[2] ?? 0,
-      surfaceY: f.point.y,
-      surfacePointXZ: [f.point.x, f.point.z],
-      normal: f.normal.toArray(),
-      skyRotation: node.rotation ?? 0,
-      segPos: segment.position,
-      segRot: segment.rotation,
-      segRoofType: segment.roofType,
-      segWHD: [segment.width, segment.depth],
-      isLive: Boolean(liveOverrides),
-      storeNodePos: storeNode.position,
-      storeNodeRot: storeNode.rotation,
-    })
-    return f
   }, [segment, node.position[0], node.position[2], node.rotation, liveOverrides, storeNode.id])
 
   const surfaceQuat = useMemo(

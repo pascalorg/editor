@@ -1,62 +1,46 @@
 import type { DormerNode } from '@pascal-app/core'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
- * Dormer geometry — **stub port**. Produces a house silhouette:
- * a rectangular box (width × depth × height) topped by a triangular
- * gable extruded along the dormer's depth. The window opening, the
- * roof trim against the parent segment, and the gable cutout where
- * the dormer meets the host roof are all deferred — the archive
- * relied on `getDormerExposedFaces` + `generateDormerGeometry` from
- * the legacy `roof-system` for those, neither of which exists in
- * `packages/nodes`.
+ * Lightweight silhouette geometry used by the placement / move-tool
+ * ghost preview only. Renders the dormer as an extruded pentagon
+ * (rectangle body + triangular gable) dropped `DORMER_GHOST_DROP_BELOW`
+ * below the anchor so the cursor sits at the floor of the dormer the
+ * way the committed CSG geometry does.
  *
- * What this gives us:
- *   - dormer exists in the registry / palette / inspector / undo.
- *   - placement / move / paint / delete all work via the framework.
- *   - schema's full set of fields round-trips correctly.
- *
- * Follow-up commits add the window opening + frame, the gable trim
- * (CSG against parent segment), and the per-surface material split
- * already wired in `getEffectiveDormerSurfaceMaterial`.
+ * The real dormer mesh on a committed node is built by the viewer's
+ * `generateDormerGeometry` (CSG against the host roof segment). This
+ * helper is intentionally cheap so it can be rebuilt on every cursor
+ * move during placement without re-running CSG.
  */
-export type DormerGeometry = {
-  body: THREE.BufferGeometry
-  roof: THREE.BufferGeometry
-}
+const DORMER_GHOST_DROP_BELOW = 2
 
-export function buildDormerGeometry(node: DormerNode): DormerGeometry {
-  const w = node.width
-  const d = node.depth
-  const h = Math.max(0.05, node.height)
-  const rh = Math.max(0.05, node.roofHeight)
+export function buildDormerGhostGeometry(node: DormerNode): THREE.BufferGeometry {
+  const w = Math.max(0.05, node.width)
+  const wallH = Math.max(0.05, node.height)
+  const roofH = Math.max(0, node.roofHeight)
+  const d = Math.max(0.05, node.depth)
+  const hw = w / 2
 
-  // Body — vertical box from the dormer's local 0 up to the wall top.
-  const body = new THREE.BoxGeometry(w, h, d)
-  body.translate(0, h / 2, 0)
+  const shape = new THREE.Shape()
+  shape.moveTo(-hw, -DORMER_GHOST_DROP_BELOW)
+  shape.lineTo(hw, -DORMER_GHOST_DROP_BELOW)
+  shape.lineTo(hw, wallH)
+  shape.lineTo(0, wallH + roofH)
+  shape.lineTo(-hw, wallH)
+  shape.closePath()
 
-  // Roof — extruded triangle (gable only in the stub; other roofType
-  // variants will land as case-by-case geometry in follow-up).
-  const roofShape = new THREE.Shape()
-  roofShape.moveTo(-w / 2, 0)
-  roofShape.lineTo(w / 2, 0)
-  roofShape.lineTo(0, rh)
-  roofShape.lineTo(-w / 2, 0)
-  const roof = new THREE.ExtrudeGeometry(roofShape, {
+  const geo = new THREE.ExtrudeGeometry(shape, {
     depth: d,
     bevelEnabled: false,
   })
-  roof.translate(0, h, -d / 2)
-
-  return { body, roof }
+  geo.translate(0, 0, -d / 2)
+  return geo
 }
 
 /**
- * Helper for the inspector: which window-* fields the inspector should
- * surface. Centralised here so the parametric descriptor can keep its
- * `visibleIf` predicates short and so future per-shape rules (e.g.
- * radius mode for rounded only) live alongside the geometry.
+ * Inspector helper: which window-shape sub-controls to surface for the
+ * current dormer.
  */
 export function dormerSupportsArch(node: DormerNode): boolean {
   return node.windowShape === 'arch'

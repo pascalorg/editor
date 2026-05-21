@@ -76,21 +76,35 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
 
   if (!segment) return null
 
+  // `node.position` is segment-local (placement / move tools resolve the
+  // click via `segObj.worldToLocal`), but the renderer mounts in the
+  // roof's `roof-elements` group — which only carries the roof's
+  // transform, not the segment's. Replicate the segment's roof-local
+  // transform here so segment-local coords land at the correct world
+  // point on every segment. Without this wrapper, ridge vents placed on
+  // a non-origin / rotated segment (e.g. the back slope of a gable, or
+  // any face of a hip) appeared on the first segment instead — the
+  // "same segment" duplication bug.
+  const segPos = segment.position ?? [0, 0, 0]
+  const segRotY = segment.rotation ?? 0
+
   return (
-    <group
-      position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
-      ref={ref}
-      rotation-y={node.rotation ?? 0}
-      visible={node.visible}
-    >
-      <mesh
-        castShadow
-        geometry={geometry}
-        material={material}
-        name="ridge-vent-surface"
-        receiveShadow
-        {...handlers}
-      />
+    <group position={segPos} rotation-y={segRotY}>
+      <group
+        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        ref={ref}
+        rotation-y={node.rotation ?? 0}
+        visible={node.visible}
+      >
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="ridge-vent-surface"
+          receiveShadow
+          {...handlers}
+        />
+      </group>
     </group>
   )
 }

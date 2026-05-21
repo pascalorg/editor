@@ -7,6 +7,8 @@ import {
   type ChimneyMaterialRole,
   type ChimneyNode,
   type ColumnNode,
+  type DormerNode,
+  type DormerSurfaceMaterialRole,
   emitter,
   type FenceNode,
   getMaterialPresetByRef,
@@ -49,6 +51,7 @@ import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } f
 import {
   type ActivePaintMaterial,
   buildChimneyMaterialPatch,
+  buildDormerMaterialPatch,
   buildRoofSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
@@ -471,6 +474,66 @@ function resolveChimneyMaterialTarget(event: NodeEvent): ChimneyMaterialRole {
   // (cricket mesh, which uses a single material) fall back to 'body'.
   const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
   return materialIndex === 1 ? 'top' : 'body'
+}
+
+function resolveDormerMaterialTarget(event: NodeEvent): DormerSurfaceMaterialRole {
+  // Dormer body mesh has 5 material slots from `generateDormerGeometry`:
+  //   0 = wall (rectangular)
+  //   1 = side (deck along the slope)
+  //   2 = interior — paint as wall
+  //   3 = top   (roof shingle)
+  //   4 = gable triangle — paint as wall
+  // The window-frame meshes are not in the body mesh so a click on them
+  // is not exposed via this resolver — those are mapped to 'side'
+  // separately in the dispatch below.
+  const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
+  if (materialIndex === 3) return 'top'
+  if (materialIndex === 1) return 'side'
+  return 'wall'
+}
+
+function applyDormerPaintPreview(
+  node: DormerNode,
+  role: DormerSurfaceMaterialRole,
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  void node
+  const root = getRegisteredNodeObject(node.id)
+  if (!root) return null
+  const previewMaterial = getSingleSurfacePreviewMaterial(material)
+  if (!previewMaterial) return null
+
+  // Same slot layout as `resolveDormerMaterialTarget`. Painted slots:
+  //   role='wall' → 0, 2, 4
+  //   role='side' → 1
+  //   role='top'  → 3
+  const slotsToPaint = (() => {
+    if (role === 'top') return [3]
+    if (role === 'side') return [1]
+    return [0, 2, 4]
+  })()
+
+  const restores: PaintPreviewCleanup[] = []
+  root.traverse((object) => {
+    const mesh = object as Mesh
+    if (!mesh.isMesh) return
+    if (mesh.name !== 'dormer-body') return
+    const current = mesh.material as Material | Material[]
+    if (!Array.isArray(current)) return
+    const previousArray = [...current]
+    const nextArray = [...current]
+    for (const idx of slotsToPaint) {
+      if (current[idx]) nextArray[idx] = previewMaterial
+    }
+    mesh.material = nextArray
+    restores.push(() => {
+      mesh.material = previousArray
+    })
+  })
+  if (restores.length === 0) return null
+  return () => {
+    for (let i = restores.length - 1; i >= 0; i -= 1) restores[i]?.()
+  }
 }
 
 function applyChimneyPaintPreview(
@@ -1032,6 +1095,33 @@ export const SelectionManager = () => {
         }
       }
 
+      if (node.type === 'dormer') {
+        const role = resolveDormerMaterialTarget(event)
+        const compatible = hasActivePaintMaterial(activePaintMaterial)
+        return {
+          key: `dormer:${node.id}:${role}`,
+          hoveredId: node.id as AnyNodeId,
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
+          apply: compatible
+            ? () => {
+                useScene
+                  .getState()
+                  .updateNode(
+                    node.id as AnyNodeId,
+                    buildDormerMaterialPatch(
+                      role,
+                      activePaintMaterial.material,
+                      activePaintMaterial.materialPreset,
+                    ),
+                  )
+              }
+            : null,
+          preview: compatible
+            ? () => applyDormerPaintPreview(node as DormerNode, role, activePaintMaterial)
+            : () => previewCursor('not-allowed'),
+        }
+      }
+
       if (
         node.type === 'fence' ||
         node.type === 'column' ||
@@ -1323,6 +1413,11 @@ export const SelectionManager = () => {
 
         if (node.type === 'chimney' && nodeToSelect.type === 'chimney') {
           setSelectedMaterialTargetForNode(nodeToSelect, resolveChimneyMaterialTarget(event))
+          nextMaterialTargetHandled = true
+        }
+
+        if (node.type === 'dormer' && nodeToSelect.type === 'dormer') {
+          setSelectedMaterialTargetForNode(nodeToSelect, resolveDormerMaterialTarget(event))
           nextMaterialTargetHandled = true
         }
 

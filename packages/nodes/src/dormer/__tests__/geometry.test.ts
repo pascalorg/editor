@@ -1,33 +1,31 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  buildDormerGeometry,
+  buildDormerGhostGeometry,
   dormerSupportsArch,
   dormerSupportsCornerRadii,
 } from '../geometry'
 import { DormerNode } from '../schema'
 
-describe('buildDormerGeometry (stub)', () => {
-  test('returns body + roof geometries with positions', () => {
-    const geo = buildDormerGeometry(DormerNode.parse({}))
-    expect(geo.body.getAttribute('position').count).toBeGreaterThan(0)
-    expect(geo.roof.getAttribute('position').count).toBeGreaterThan(0)
+describe('buildDormerGhostGeometry (placement preview)', () => {
+  test('returns a buffer geometry with position attribute', () => {
+    const geo = buildDormerGhostGeometry(DormerNode.parse({}))
+    expect(geo.getAttribute('position').count).toBeGreaterThan(0)
   })
 
-  test('width / depth drive the body footprint', () => {
-    const geo = buildDormerGeometry(DormerNode.parse({ width: 2, depth: 4, height: 1 }))
-    geo.body.computeBoundingBox()
-    const bb = geo.body.boundingBox!
+  test('width / depth drive the silhouette footprint', () => {
+    const geo = buildDormerGhostGeometry(DormerNode.parse({ width: 2, depth: 4, height: 1 }))
+    geo.computeBoundingBox()
+    const bb = geo.boundingBox!
     expect(bb.max.x - bb.min.x).toBeCloseTo(2)
     expect(bb.max.z - bb.min.z).toBeCloseTo(4)
-    expect(bb.max.y - bb.min.y).toBeCloseTo(1)
   })
 
-  test('roofHeight drives the gable peak height', () => {
-    const a = buildDormerGeometry(DormerNode.parse({ roofHeight: 0.5 }))
-    const b = buildDormerGeometry(DormerNode.parse({ roofHeight: 1.5 }))
-    a.roof.computeBoundingBox()
-    b.roof.computeBoundingBox()
-    expect(b.roof.boundingBox!.max.y).toBeGreaterThan(a.roof.boundingBox!.max.y)
+  test('roofHeight raises the gable peak', () => {
+    const a = buildDormerGhostGeometry(DormerNode.parse({ roofHeight: 0.5 }))
+    const b = buildDormerGhostGeometry(DormerNode.parse({ roofHeight: 1.5 }))
+    a.computeBoundingBox()
+    b.computeBoundingBox()
+    expect(b.boundingBox!.max.y).toBeGreaterThan(a.boundingBox!.max.y)
   })
 })
 

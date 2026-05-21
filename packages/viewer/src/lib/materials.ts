@@ -16,11 +16,16 @@ export const baseMaterial = new MeshStandardNodeMaterial({
   metalness: 0.0,
 })
 
+// DoubleSide on any NodeMaterial inside the MRT scenePass (SSGI's output /
+// diffuseColor / normal targets) causes WebGPU to create a render pipeline
+// whose back-face shader variant doesn't declare outputs for every MRT target
+// — the validator rejects it and poisons the entire render context. FrontSide
+// avoids that code path. Same pattern as MeshStandardMaterial in renderer.tsx.
 export const glassMaterial = new MeshLambertNodeMaterial({
   color: '#e0f2fe',
   transparent: true,
   opacity: 0.35,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
 })
 
 const sideMap: Record<MaterialProperties['side'], THREE.Side> = {
@@ -384,7 +389,7 @@ export const DEFAULT_WINDOW_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0.1,
   opacity: 0.3,
   transparent: true,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
 })
 export const DEFAULT_CEILING_MATERIAL = createDefaultMaterial('#f5f5dc', 0.95)
 export const DEFAULT_ROOF_MATERIAL = createDefaultMaterial('#808080', 0.85)

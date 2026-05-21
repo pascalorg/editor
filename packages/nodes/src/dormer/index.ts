@@ -1,6 +1,6 @@
 export { dormerDefinition } from './definition'
 export {
-  buildDormerGeometry,
+  buildDormerGhostGeometry,
   dormerSupportsArch,
   dormerSupportsCornerRadii,
 } from './geometry'

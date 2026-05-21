@@ -20,9 +20,10 @@ import {
   SliderControl,
   ToggleControl,
   triggerSFX,
+  useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Trash2 } from 'lucide-react'
+import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Vector3 } from 'three'
 
@@ -30,7 +31,7 @@ type RoofType = DormerNode['roofType']
 type WindowShape = DormerNode['windowShape']
 type WindowRadiusMode = DormerNode['windowRadiusMode']
 
-type DormerSection = 'dormer' | 'window' | 'frame' | 'grid' | 'sill'
+type DormerSection = 'dormer' | 'window'
 
 const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
   { label: 'Gable', value: 'gable' },
@@ -45,9 +46,6 @@ const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
 const SECTION_OPTIONS: Array<{ label: string; value: DormerSection }> = [
   { label: 'Dormer', value: 'dormer' },
   { label: 'Window', value: 'window' },
-  { label: 'Frame', value: 'frame' },
-  { label: 'Grid', value: 'grid' },
-  { label: 'Sill', value: 'sill' },
 ]
 
 function maxSharedRadius(width: number, height: number) {
@@ -60,6 +58,7 @@ export default function DormerPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
+  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const storeNode = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DormerNode | undefined) : undefined,
@@ -111,6 +110,34 @@ export default function DormerPanel() {
       setSelection({ selectedIds: [node.roofSegmentId as AnyNode['id']] })
     }
   }, [node?.roofSegmentId, setSelection])
+
+  const handleMove = useCallback(() => {
+    if (!(node && selectedId)) return
+    triggerSFX('sfx:item-pick')
+    setMovingNode(node)
+    setSelection({ selectedIds: [] })
+  }, [node, selectedId, setMovingNode, setSelection])
+
+  const handleDuplicate = useCallback(() => {
+    if (!(node && node.roofSegmentId)) return
+    triggerSFX('sfx:item-pick')
+    // Deep clone and strip the id so the move tool's onClick branch
+    // (`isNew || !node.id`) takes the "create fresh" path. Setting
+    // `metadata.isNew = true` is what gates the move tool from
+    // updating any existing node — the dormer is only added to the
+    // scene on click, not when the Duplicate button is pressed.
+    //
+    // Pattern mirrors `panel-manager.handleDuplicate` for movables.
+    const cloned = structuredClone(node) as DormerNode & { id?: AnyNodeId }
+    delete (cloned as { id?: AnyNodeId }).id
+    const prevMeta =
+      cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
+        ? (cloned.metadata as Record<string, unknown>)
+        : {}
+    cloned.metadata = { ...prevMeta, isNew: true }
+    setMovingNode(cloned as DormerNode)
+    setSelection({ selectedIds: [] })
+  }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -400,9 +427,9 @@ export default function DormerPanel() {
               value={Math.round(node.depth * 100) / 100}
             />
             <SliderControl
-              label="Height"
-              max={2}
-              min={0.1}
+              label="Wall Height"
+              max={5}
+              min={0}
               onChange={(v) => previewProp({ height: v })}
               onCommit={(v) => commitProp({ height: v })}
               precision={2}
@@ -411,9 +438,21 @@ export default function DormerPanel() {
               unit="m"
               value={Math.round(node.height * 100) / 100}
             />
+            <SliderControl
+              label="Roof Height"
+              max={3}
+              min={0}
+              onChange={(v) => previewProp({ roofHeight: v })}
+              onCommit={(v) => commitProp({ roofHeight: v })}
+              precision={2}
+              restoreOnCommit={false}
+              step={0.05}
+              unit="m"
+              value={Math.round((node.roofHeight ?? 0.83) * 100) / 100}
+            />
           </PanelSection>
 
-          <PanelSection title="Roof">
+          <PanelSection title="Roof Type">
             <div className="grid grid-cols-3 gap-1.5 px-1 pt-1">
               {ROOF_TYPE_OPTIONS.map((option) => {
                 const isSelected = (node.roofType ?? 'gable') === option.value
@@ -434,26 +473,27 @@ export default function DormerPanel() {
                 )
               })}
             </div>
-            {(node.roofType ?? 'gable') !== 'flat' && (
-              <SliderControl
-                label="Roof Height"
-                max={2}
-                min={0}
-                onChange={(v) => previewProp({ roofHeight: v })}
-                onCommit={(v) => commitProp({ roofHeight: v })}
-                precision={2}
-                restoreOnCommit={false}
-                step={0.05}
-                unit="m"
-                value={Math.round((node.roofHeight ?? 0.83) * 100) / 100}
-              />
-            )}
           </PanelSection>
         </>
       )}
 
       {section === 'window' && (
         <>
+          <PanelSection title="Hung Wall">
+            <SliderControl
+              label="Height"
+              max={6}
+              min={0.2}
+              onChange={(v) => previewProp({ wallSkirtHeight: v })}
+              onCommit={(v) => commitProp({ wallSkirtHeight: v })}
+              precision={2}
+              restoreOnCommit={false}
+              step={0.05}
+              unit="m"
+              value={Math.round((node.wallSkirtHeight ?? 2) * 100) / 100}
+            />
+          </PanelSection>
+
           <PanelSection title="Opening">
             <SliderControl
               label="Width"
@@ -469,7 +509,7 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Height"
-              max={2.5}
+              max={Math.max(0.2, (node.wallSkirtHeight ?? 2) - 0.1)}
               min={0.2}
               onChange={(v) => previewProp({ windowHeight: v })}
               onCommit={(v) => commitProp({ windowHeight: v })}
@@ -590,117 +630,125 @@ export default function DormerPanel() {
               />
             )}
           </PanelSection>
+
+          <PanelSection title="Frame">
+            <SliderControl
+              label="Thickness"
+              max={0.15}
+              min={0.01}
+              onChange={(v) => previewProp({ windowFrameThickness: v })}
+              onCommit={(v) => commitProp({ windowFrameThickness: v })}
+              precision={3}
+              restoreOnCommit={false}
+              step={0.005}
+              unit="m"
+              value={Math.round(node.windowFrameThickness * 1000) / 1000}
+            />
+            <SliderControl
+              label="Depth"
+              max={0.15}
+              min={0.02}
+              onChange={(v) => previewProp({ windowFrameDepth: v })}
+              onCommit={(v) => commitProp({ windowFrameDepth: v })}
+              precision={3}
+              restoreOnCommit={false}
+              step={0.005}
+              unit="m"
+              value={Math.round(node.windowFrameDepth * 1000) / 1000}
+            />
+            <SliderControl
+              label="Divider"
+              max={0.06}
+              min={0}
+              onChange={(v) => previewProp({ windowDividerThickness: v })}
+              onCommit={(v) => commitProp({ windowDividerThickness: v })}
+              precision={3}
+              restoreOnCommit={false}
+              step={0.002}
+              unit="m"
+              value={Math.round(node.windowDividerThickness * 1000) / 1000}
+            />
+          </PanelSection>
+
+          <PanelSection title="Grid">
+            <SliderControl
+              label="Columns"
+              max={8}
+              min={1}
+              onChange={(v) =>
+                previewProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })
+              }
+              onCommit={(v) =>
+                commitProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })
+              }
+              precision={0}
+              restoreOnCommit={false}
+              step={1}
+              value={node.windowColumns ?? 3}
+            />
+            <SliderControl
+              label="Rows"
+              max={8}
+              min={1}
+              onChange={(v) => previewProp({ windowRows: Math.max(1, Math.min(8, Math.round(v))) })}
+              onCommit={(v) => commitProp({ windowRows: Math.max(1, Math.min(8, Math.round(v))) })}
+              precision={0}
+              restoreOnCommit={false}
+              step={1}
+              value={node.windowRows ?? 3}
+            />
+          </PanelSection>
+
+          <PanelSection title="Sill">
+            <ToggleControl
+              checked={node.windowSill ?? true}
+              label="Enable Sill"
+              onChange={(checked) => handleUpdate({ windowSill: checked })}
+            />
+            {(node.windowSill ?? true) && (
+              <div className="mt-1 flex flex-col gap-1">
+                <SliderControl
+                  label="Depth"
+                  max={0.3}
+                  min={0.02}
+                  onChange={(v) => previewProp({ windowSillDepth: v })}
+                  onCommit={(v) => commitProp({ windowSillDepth: v })}
+                  precision={3}
+                  restoreOnCommit={false}
+                  step={0.01}
+                  unit="m"
+                  value={Math.round((node.windowSillDepth ?? 0.08) * 1000) / 1000}
+                />
+                <SliderControl
+                  label="Thickness"
+                  max={0.1}
+                  min={0.01}
+                  onChange={(v) => previewProp({ windowSillThickness: v })}
+                  onCommit={(v) => commitProp({ windowSillThickness: v })}
+                  precision={3}
+                  restoreOnCommit={false}
+                  step={0.005}
+                  unit="m"
+                  value={Math.round((node.windowSillThickness ?? 0.03) * 1000) / 1000}
+                />
+              </div>
+            )}
+          </PanelSection>
         </>
-      )}
-
-      {section === 'frame' && (
-        <PanelSection title="Frame">
-          <SliderControl
-            label="Thickness"
-            max={0.15}
-            min={0.01}
-            onChange={(v) => previewProp({ windowFrameThickness: v })}
-            onCommit={(v) => commitProp({ windowFrameThickness: v })}
-            precision={3}
-            restoreOnCommit={false}
-            step={0.005}
-            unit="m"
-            value={Math.round(node.windowFrameThickness * 1000) / 1000}
-          />
-          <SliderControl
-            label="Depth"
-            max={0.15}
-            min={0.02}
-            onChange={(v) => previewProp({ windowFrameDepth: v })}
-            onCommit={(v) => commitProp({ windowFrameDepth: v })}
-            precision={3}
-            restoreOnCommit={false}
-            step={0.005}
-            unit="m"
-            value={Math.round(node.windowFrameDepth * 1000) / 1000}
-          />
-          <SliderControl
-            label="Divider"
-            max={0.06}
-            min={0}
-            onChange={(v) => previewProp({ windowDividerThickness: v })}
-            onCommit={(v) => commitProp({ windowDividerThickness: v })}
-            precision={3}
-            restoreOnCommit={false}
-            step={0.002}
-            unit="m"
-            value={Math.round(node.windowDividerThickness * 1000) / 1000}
-          />
-        </PanelSection>
-      )}
-
-      {section === 'grid' && (
-        <PanelSection title="Grid">
-          <SliderControl
-            label="Columns"
-            max={8}
-            min={1}
-            onChange={(v) => previewProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })}
-            onCommit={(v) => commitProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })}
-            precision={0}
-            restoreOnCommit={false}
-            step={1}
-            value={node.windowColumns ?? 3}
-          />
-          <SliderControl
-            label="Rows"
-            max={8}
-            min={1}
-            onChange={(v) => previewProp({ windowRows: Math.max(1, Math.min(8, Math.round(v))) })}
-            onCommit={(v) => commitProp({ windowRows: Math.max(1, Math.min(8, Math.round(v))) })}
-            precision={0}
-            restoreOnCommit={false}
-            step={1}
-            value={node.windowRows ?? 3}
-          />
-        </PanelSection>
-      )}
-
-      {section === 'sill' && (
-        <PanelSection title="Sill">
-          <ToggleControl
-            checked={node.windowSill ?? true}
-            label="Enable Sill"
-            onChange={(checked) => handleUpdate({ windowSill: checked })}
-          />
-          {(node.windowSill ?? true) && (
-            <div className="mt-1 flex flex-col gap-1">
-              <SliderControl
-                label="Depth"
-                max={0.3}
-                min={0.02}
-                onChange={(v) => previewProp({ windowSillDepth: v })}
-                onCommit={(v) => commitProp({ windowSillDepth: v })}
-                precision={3}
-                restoreOnCommit={false}
-                step={0.01}
-                unit="m"
-                value={Math.round((node.windowSillDepth ?? 0.08) * 1000) / 1000}
-              />
-              <SliderControl
-                label="Thickness"
-                max={0.1}
-                min={0.01}
-                onChange={(v) => previewProp({ windowSillThickness: v })}
-                onCommit={(v) => commitProp({ windowSillThickness: v })}
-                precision={3}
-                restoreOnCommit={false}
-                step={0.005}
-                unit="m"
-                value={Math.round((node.windowSillThickness ?? 0.03) * 1000) / 1000}
-              />
-            </div>
-          )}
-        </PanelSection>
       )}
 
       <PanelSection title="Actions">
         <ActionGroup>
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label="Move"
+            onClick={handleMove}
+          />
+          <ActionButton
+            icon={<Copy className="h-3.5 w-3.5" />}
+            label="Duplicate"
+            onClick={handleDuplicate}
+          />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}

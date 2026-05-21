@@ -7,7 +7,13 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getRoofMaterialArray, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import {
+  createMaterial,
+  createMaterialFromPresetRef,
+  getRoofMaterialArray,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { roofDebugMaterials, roofMaterials } from '../roof/roof-materials'
@@ -33,13 +39,36 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     return geometry
   }, [])
 
+  // Segment material precedence:
+  //   1. Segment's own preset / material (set by per-segment paint, or by
+  //      whole-roof "top" paint which fans the same preset down to every
+  //      child segment via `buildRoofSurfaceMaterialUpdates`).
+  //   2. Parent roof's resolved 4-slot array (covers the case where only
+  //      the roof's top/edge/wall presets were set, not the segment's
+  //      own fields — happens for older scenes or partial paints).
+  //   3. Default `roofMaterials` (handled at the `material =` line below).
+  // Without (1), painting a single segment writes its preset but the
+  // renderer keeps reading the parent's (unset) array → mesh stays the
+  // default grey even though the segment carries the preset string.
   const customMaterial = useMemo(() => {
-    if (node.material !== undefined || typeof node.materialPreset === 'string') {
-      return null
+    if (typeof node.materialPreset === 'string') {
+      const resolved = createMaterialFromPresetRef(node.materialPreset)
+      if (resolved) {
+        // Splat the same shingle material across all 4 slots so every
+        // CSG-mapped group shows the painted preset.
+        return [resolved, resolved, resolved, resolved] as THREE.Material[]
+      }
     }
-
+    if (node.material !== undefined) {
+      const resolved = createMaterial(node.material)
+      return [resolved, resolved, resolved, resolved] as THREE.Material[]
+    }
     return parentNode ? getRoofMaterialArray(parentNode) : null
-  }, [node, parentNode])
+  }, [
+    node.material,
+    node.materialPreset,
+    parentNode,
+  ])
 
   const material = debugColors ? roofDebugMaterials : customMaterial || roofMaterials
 

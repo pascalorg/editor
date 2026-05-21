@@ -11,6 +11,7 @@ import {
 import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   buildSolarPanelGeometry,
   getAnalyticalNormal,
@@ -19,7 +20,12 @@ import {
   surfaceQuatFromNormal,
 } from './geometry'
 
-const defaultFrameMaterial = new THREE.MeshStandardMaterial({
+// MeshStandardNodeMaterial: WebGPU-native so it integrates correctly with
+// the MRT pass (normal + roughness attachments). The legacy WebGL
+// MeshStandardMaterial triggers "Color target has no corresponding fragment
+// stage output / writeMask not zero" when the renderer switches pipelines
+// during a segment-reparent re-render.
+const defaultFrameMaterial = new MeshStandardNodeMaterial({
   color: new THREE.Color(0.6, 0.6, 0.65),
   roughness: 0.4,
   metalness: 0.8,

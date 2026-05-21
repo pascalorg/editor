@@ -28,20 +28,25 @@ export const DormerNode = BaseNode.extend({
   rotation: z.number().default(0),
   surfaceNormal: z.tuple([z.number(), z.number(), z.number()]).optional(),
 
-  width: z.number().default(1.4),
-  depth: z.number().default(3.0),
-  height: z.number().default(0.2),
+  width: z.number().default(1.21),
+  depth: z.number().default(1.55),
+  height: z.number().default(0),
 
   roofType: RoofType.default('gable'),
-  roofHeight: z.number().default(0.83),
+  roofHeight: z.number().default(0.49),
+
+  // Height of the hung wall (the "skirt") that extends below the eave
+  // into the host roof — this is the wall area the window opening is
+  // cut through. Larger values let the dormer host taller windows.
+  wallSkirtHeight: z.number().default(2.73),
 
   // Window is rendered as parametric geometry on the dormer's front
   // face — not a child node. The fields below mirror the legacy panel
   // controls; geometry beyond the simple opening box is deferred.
-  windowWidth: z.number().default(1.2),
-  windowHeight: z.number().default(1.01),
-  windowOffsetX: z.number().default(0),
-  windowOffsetY: z.number().default(0.5),
+  windowWidth: z.number().default(0.76),
+  windowHeight: z.number().default(0.68),
+  windowOffsetX: z.number().default(0.02),
+  windowOffsetY: z.number().default(0.99),
   windowFrameThickness: z.number().default(0.05),
   windowFrameDepth: z.number().default(0.06),
   windowColumns: z.number().int().min(1).max(8).default(3),
