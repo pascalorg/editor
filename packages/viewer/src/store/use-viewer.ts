@@ -33,6 +33,15 @@ type ViewerState = {
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
+  shading: 'solid' | 'rendered'
+  setShading: (shading: 'solid' | 'rendered') => void
+
+  textures: boolean
+  setTextures: (textures: boolean) => void
+
+  colorPreset: string
+  setColorPreset: (preset: string) => void
+
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
 
@@ -95,6 +104,15 @@ const useViewer = create<ViewerState>()(
 
       theme: 'light',
       setTheme: (theme) => set({ theme }),
+
+      shading: 'rendered',
+      setShading: (shading) => set({ shading }),
+
+      textures: true,
+      setTextures: (textures) => set({ textures }),
+
+      colorPreset: 'clay',
+      setColorPreset: (preset) => set({ colorPreset: preset }),
 
       unit: 'metric',
       setUnit: (unit) => set({ unit }),
@@ -209,6 +227,9 @@ const useViewer = create<ViewerState>()(
       partialize: (state) => ({
         cameraMode: state.cameraMode,
         theme: state.theme,
+        shading: state.shading,
+        textures: state.textures,
+        colorPreset: state.colorPreset,
         unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,

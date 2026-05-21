@@ -136,6 +136,11 @@ interface ViewerProps {
   selectionManager?: 'default' | 'custom'
   perf?: boolean
   useBvh?: boolean
+  defaultRender?: {
+    shading?: 'solid' | 'rendered'
+    textures?: boolean
+    colorPreset?: string
+  }
 }
 
 const Viewer: React.FC<ViewerProps> = ({
@@ -144,8 +149,34 @@ const Viewer: React.FC<ViewerProps> = ({
   selectionManager = 'default',
   perf = false,
   useBvh = true,
+  defaultRender,
 }) => {
   const theme = useViewer((state) => state.theme)
+  useEffect(() => {
+    if (!defaultRender || typeof window === 'undefined') return
+
+    let persistedState: Record<string, unknown> = {}
+    const rawPreferences = window.localStorage.getItem('viewer-preferences')
+    if (rawPreferences) {
+      try {
+        const parsed = JSON.parse(rawPreferences)
+        if (parsed && typeof parsed === 'object' && parsed.state && typeof parsed.state === 'object') {
+          persistedState = parsed.state as Record<string, unknown>
+        }
+      } catch {}
+    }
+
+    if (defaultRender.shading && !('shading' in persistedState)) {
+      useViewer.getState().setShading(defaultRender.shading)
+    }
+    if (defaultRender.textures !== undefined && !('textures' in persistedState)) {
+      useViewer.getState().setTextures(defaultRender.textures)
+    }
+    if (defaultRender.colorPreset && !('colorPreset' in persistedState)) {
+      useViewer.getState().setColorPreset(defaultRender.colorPreset)
+    }
+  }, [])
+
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
   // Desktops (fine pointer) keep the original 1.5 cap.

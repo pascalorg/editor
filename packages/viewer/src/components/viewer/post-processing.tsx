@@ -155,6 +155,7 @@ const PostProcessingPasses = ({
 
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
+  const shading = useViewer((s) => s.shading)
   const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
@@ -239,7 +240,7 @@ const PostProcessingPasses = ({
     }
 
     const perfDisable = readPerfDisableFlags()
-    const ssgiEnabled = SSGI_PARAMS.enabled && !perfDisable.ao
+    const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
 
@@ -251,6 +252,7 @@ const PostProcessingPasses = ({
       perfDisable,
       hoverHighlightMode,
       projectId,
+      shading,
       rendererCtor: (renderer as any).constructor?.name,
       width,
       height,
@@ -437,6 +439,7 @@ const PostProcessingPasses = ({
     projectId,
     renderer,
     scene,
+    shading,
     size.height,
     size.width,
     zoneLayers,
