@@ -27,6 +27,7 @@ import {
   PencilLine,
   Plus,
   Redo2,
+  Sparkles,
   Square,
   SquareStack,
   Sun,
@@ -294,6 +295,22 @@ export function EditorCommands() {
             const { theme, setTheme } = useViewer.getState()
             setTheme(theme === 'dark' ? 'light' : 'dark')
           }),
+      },
+      {
+        id: 'editor.viewer.shading-solid',
+        label: 'Switch to Solid',
+        group: 'Viewer Controls',
+        icon: <Box className="h-4 w-4" />,
+        keywords: ['solid', 'shading', 'render', 'mode', 'performance'],
+        execute: () => run(() => useViewer.getState().setShading('solid')),
+      },
+      {
+        id: 'editor.viewer.shading-rendered',
+        label: 'Switch to Rendered',
+        group: 'Viewer Controls',
+        icon: <Sparkles className="h-4 w-4" />,
+        keywords: ['rendered', 'shading', 'render', 'mode', 'quality'],
+        execute: () => run(() => useViewer.getState().setShading('rendered')),
       },
       {
         id: 'editor.viewer.camera-snapshot',

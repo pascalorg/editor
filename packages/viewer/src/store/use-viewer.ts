@@ -7,6 +7,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ColorPreset, RenderShading } from '../lib/materials'
 
+export type RenderContext = 'editor' | 'viewer'
+
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
@@ -34,7 +36,11 @@ type ViewerState = {
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
+  renderContext: RenderContext
+  setRenderContext: (context: RenderContext) => void
+
   shading: RenderShading
+  shadingByContext: Partial<Record<RenderContext, RenderShading>>
   setShading: (shading: RenderShading) => void
 
   textures: boolean
@@ -106,8 +112,16 @@ const useViewer = create<ViewerState>()(
       theme: 'light',
       setTheme: (theme) => set({ theme }),
 
+      renderContext: 'editor',
+      setRenderContext: (context) => set({ renderContext: context }),
+
       shading: 'rendered',
-      setShading: (shading) => set({ shading }),
+      shadingByContext: {},
+      setShading: (shading) =>
+        set((state) => ({
+          shading,
+          shadingByContext: { ...state.shadingByContext, [state.renderContext]: shading },
+        })),
 
       textures: true,
       setTextures: (textures) => set({ textures }),
@@ -228,7 +242,7 @@ const useViewer = create<ViewerState>()(
       partialize: (state) => ({
         cameraMode: state.cameraMode,
         theme: state.theme,
-        shading: state.shading,
+        shadingByContext: state.shadingByContext,
         textures: state.textures,
         colorPreset: state.colorPreset,
         unit: state.unit,

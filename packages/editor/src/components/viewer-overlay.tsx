@@ -11,7 +11,17 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Sun } from 'lucide-react'
+import {
+  ArrowLeft,
+  Box,
+  Camera,
+  ChevronRight,
+  Diamond,
+  Layers,
+  Moon,
+  Sparkles,
+  Sun,
+} from 'lucide-react'
 import { motion } from 'motion/react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
@@ -94,6 +104,7 @@ export const ViewerOverlay = ({
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
   const theme = useViewer((s) => s.theme)
+  const shading = useViewer((s) => s.shading)
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
   // node elsewhere in the scene doesn't re-render this overlay.
@@ -390,6 +401,27 @@ export const ViewerOverlay = ({
               variant="ghost"
             >
               <Camera className="h-6 w-6" />
+            </ActionButton>
+
+            <ActionButton
+              className={
+                shading === 'rendered'
+                  ? 'bg-white/10 text-foreground'
+                  : 'text-muted-foreground/80 hover:bg-white/5 hover:text-foreground'
+              }
+              label={shading === 'solid' ? 'Solid' : 'Rendered'}
+              onClick={() =>
+                useViewer.getState().setShading(shading === 'solid' ? 'rendered' : 'solid')
+              }
+              size="icon"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              {shading === 'solid' ? (
+                <Box className="h-6 w-6" />
+              ) : (
+                <Sparkles className="h-6 w-6" />
+              )}
             </ActionButton>
 
             {/* Level Mode */}

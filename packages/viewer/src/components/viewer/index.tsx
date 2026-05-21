@@ -4,9 +4,9 @@ import { StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
-import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
-import useViewer from '../../store/use-viewer'
+import type { ColorPreset, RenderShading } from '../../lib/materials'
+import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { ErrorBoundary } from '../error-boundary'
@@ -137,6 +137,7 @@ interface ViewerProps {
   selectionManager?: 'default' | 'custom'
   perf?: boolean
   useBvh?: boolean
+  renderContext?: RenderContext
   defaultRender?: {
     shading?: RenderShading
     textures?: boolean
@@ -150,10 +151,16 @@ const Viewer: React.FC<ViewerProps> = ({
   selectionManager = 'default',
   perf = false,
   useBvh = true,
+  renderContext = 'editor',
   defaultRender,
 }) => {
   const theme = useViewer((state) => state.theme)
   useEffect(() => {
+    const ctx = renderContext
+    useViewer.getState().setRenderContext(ctx)
+    const { shading, shadingByContext, setShading } = useViewer.getState()
+    setShading(shadingByContext[ctx] ?? defaultRender?.shading ?? shading)
+
     if (!defaultRender || typeof window === 'undefined') return
 
     let persistedState: Record<string, unknown> = {}
@@ -161,15 +168,17 @@ const Viewer: React.FC<ViewerProps> = ({
     if (rawPreferences) {
       try {
         const parsed = JSON.parse(rawPreferences)
-        if (parsed && typeof parsed === 'object' && parsed.state && typeof parsed.state === 'object') {
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          parsed.state &&
+          typeof parsed.state === 'object'
+        ) {
           persistedState = parsed.state as Record<string, unknown>
         }
       } catch {}
     }
 
-    if (defaultRender.shading && !('shading' in persistedState)) {
-      useViewer.getState().setShading(defaultRender.shading)
-    }
     if (defaultRender.textures !== undefined && !('textures' in persistedState)) {
       useViewer.getState().setTextures(defaultRender.textures)
     }

@@ -6,12 +6,14 @@ import { useViewer } from '@pascal-app/viewer'
 import {
   ChevronsLeft,
   ChevronsRight,
+  Box,
   Columns2,
   Eye,
   EyeOff,
   Footprints,
   Grid2X2,
   Moon,
+  Sparkles,
   Sun,
 } from 'lucide-react'
 import Image from 'next/image'
@@ -216,6 +218,34 @@ function WallModeToggle() {
   )
 }
 
+function ShadingModeToggle() {
+  const shading = useViewer((state) => state.shading)
+  const setShading = useViewer((state) => state.setShading)
+  const label = shading === 'solid' ? 'Solid' : 'Rendered'
+
+  return (
+    <ToolbarTooltip label={label}>
+      <button
+        aria-label={label}
+        className={cn(
+          TOOLBAR_BTN,
+          'w-auto gap-1.5 px-2.5',
+          shading === 'rendered' && 'bg-white/10 text-foreground/90',
+        )}
+        onClick={() => setShading(shading === 'solid' ? 'rendered' : 'solid')}
+        type="button"
+      >
+        {shading === 'solid' ? (
+          <Box className="h-3.5 w-3.5" />
+        ) : (
+          <Sparkles className="h-3.5 w-3.5" />
+        )}
+        <span className="font-medium text-xs">{label}</span>
+      </button>
+    </ToolbarTooltip>
+  )
+}
+
 function GridVisibilityToggle() {
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
@@ -349,6 +379,7 @@ export function CommunityViewerToolbarRight() {
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
       <WallModeToggle />
+      <ShadingModeToggle />
       <GridVisibilityToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
