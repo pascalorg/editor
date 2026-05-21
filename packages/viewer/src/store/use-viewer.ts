@@ -36,6 +36,9 @@ type ViewerState = {
   theme: 'light' | 'dark'
   setTheme: (theme: 'light' | 'dark') => void
 
+  sceneTheme: string
+  setSceneTheme: (id: string) => void
+
   renderContext: RenderContext
   setRenderContext: (context: RenderContext) => void
 
@@ -111,6 +114,9 @@ const useViewer = create<ViewerState>()(
 
       theme: 'light',
       setTheme: (theme) => set({ theme }),
+
+      sceneTheme: 'studio',
+      setSceneTheme: (id) => set({ sceneTheme: id }),
 
       renderContext: 'editor',
       setRenderContext: (context) => set({ renderContext: context }),
@@ -242,6 +248,7 @@ const useViewer = create<ViewerState>()(
       partialize: (state) => ({
         cameraMode: state.cameraMode,
         theme: state.theme,
+        sceneTheme: state.sceneTheme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,
         colorPreset: state.colorPreset,

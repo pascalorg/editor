@@ -10,7 +10,7 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, SCENE_THEME_IDS, useViewer } from '@pascal-app/viewer'
 import {
   ArrowLeft,
   Box,
@@ -70,6 +70,11 @@ const wallModeConfig = {
   },
 }
 
+function getNextSceneThemeId(id: string) {
+  const index = SCENE_THEME_IDS.indexOf(id)
+  return SCENE_THEME_IDS[(index + 1) % SCENE_THEME_IDS.length] ?? 'studio'
+}
+
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
   if (node.type === 'wall') return 'Wall'
@@ -105,6 +110,8 @@ export const ViewerOverlay = ({
   const wallMode = useViewer((s) => s.wallMode)
   const theme = useViewer((s) => s.theme)
   const shading = useViewer((s) => s.shading)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneThemeName = getSceneTheme(sceneTheme).name
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
   // node elsewhere in the scene doesn't re-render this overlay.
@@ -418,6 +425,17 @@ export const ViewerOverlay = ({
               variant="ghost"
             >
               {shading === 'solid' ? <Box className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+            </ActionButton>
+
+            <ActionButton
+              className="text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+              label={`Scene theme: ${sceneThemeName}`}
+              onClick={() => useViewer.getState().setSceneTheme(getNextSceneThemeId(sceneTheme))}
+              size="icon"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              <Icon color="currentColor" height={24} icon="lucide:palette" width={24} />
             </ActionButton>
 
             {/* Level Mode */}

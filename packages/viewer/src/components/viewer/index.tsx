@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
@@ -131,6 +132,19 @@ function GPUDeviceWatcher() {
   return null
 }
 
+function ToneMappingExposure() {
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const gl = useThree((state) => state.gl)
+  const invalidate = useThree((state) => state.invalidate)
+
+  useEffect(() => {
+    gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
+    invalidate()
+  }, [gl, invalidate, sceneTheme])
+
+  return null
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -207,7 +221,9 @@ const Viewer: React.FC<ViewerProps> = ({
             try {
               const renderer = new THREE.WebGPURenderer(props as any)
               renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = 0.9
+              renderer.toneMappingExposure = getSceneTheme(
+                useViewer.getState().sceneTheme,
+              ).toneMappingExposure
               await renderer.init()
               return renderer
             } catch (err) {
@@ -235,6 +251,7 @@ const Viewer: React.FC<ViewerProps> = ({
       {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
       <GPUDeviceWatcher />
+      <ToneMappingExposure />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow

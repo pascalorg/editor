@@ -53,6 +53,12 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
+export {
+  getSceneTheme,
+  SCENE_THEME_IDS,
+  SCENE_THEMES,
+  type SceneTheme,
+} from './lib/scene-themes'
 export { useItemLightPool } from './store/use-item-light-pool'
 export { default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

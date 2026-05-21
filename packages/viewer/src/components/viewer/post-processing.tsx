@@ -24,6 +24,7 @@ import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
+import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
@@ -82,9 +83,6 @@ const PERF_POST_FX_DISABLED =
 const MAX_PIPELINE_RETRIES = 3
 const RETRY_DELAY_MS = 500
 
-const DARK_BG = '#1f2433'
-const LIGHT_BG = '#ffffff'
-
 export type HoverStyle = {
   visibleColor: number
   hiddenColor: number
@@ -135,8 +133,8 @@ const PostProcessingPasses = ({
   const skippedZeroSizeRef = useRef(false)
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
-  // Initialised from the current theme so there's no flash on first render.
-  const initBg = useViewer.getState().theme === 'dark' ? DARK_BG : LIGHT_BG
+  // Initialised from the current scene theme so there's no flash on first render.
+  const initBg = getSceneTheme(useViewer.getState().sceneTheme).background
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
@@ -450,8 +448,8 @@ const PostProcessingPasses = ({
       return
     }
 
-    // Animate background colour toward the current theme target (same lerp as AnimatedBackground)
-    bgTarget.current.set(useViewer.getState().theme === 'dark' ? DARK_BG : LIGHT_BG)
+    // Animate background colour toward the current scene theme target (same lerp as AnimatedBackground)
+    bgTarget.current.set(getSceneTheme(useViewer.getState().sceneTheme).background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
 

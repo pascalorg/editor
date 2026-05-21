@@ -2,7 +2,7 @@
 
 import { Icon as IconifyIcon } from '@iconify/react'
 import { useEditor, useSidebarStore, type ViewMode } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, SCENE_THEME_IDS, useViewer } from '@pascal-app/viewer'
 import {
   Box,
   ChevronsLeft,
@@ -83,6 +83,11 @@ const wallModeConfig: Record<string, { icon: string; label: string }> = {
   up: { icon: '/icons/room.png', label: 'Full height' },
   cutaway: { icon: '/icons/wallcut.png', label: 'Cutaway' },
   down: { icon: '/icons/walllow.png', label: 'Low' },
+}
+
+function getNextSceneThemeId(id: string) {
+  const index = SCENE_THEME_IDS.indexOf(id)
+  return SCENE_THEME_IDS[(index + 1) % SCENE_THEME_IDS.length] ?? 'studio'
 }
 
 function ViewModeControl() {
@@ -246,6 +251,26 @@ function ShadingModeToggle() {
   )
 }
 
+function SceneThemeToggle() {
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const setSceneTheme = useViewer((state) => state.setSceneTheme)
+  const label = getSceneTheme(sceneTheme).name
+
+  return (
+    <ToolbarTooltip label={`Scene theme: ${label}`}>
+      <button
+        aria-label={`Scene theme: ${label}`}
+        className={cn(TOOLBAR_BTN, 'w-[8.5rem] gap-1.5 px-2.5 text-foreground/90')}
+        onClick={() => setSceneTheme(getNextSceneThemeId(sceneTheme))}
+        type="button"
+      >
+        <IconifyIcon height={14} icon="lucide:palette" width={14} />
+        <span className="truncate font-medium text-xs">{label}</span>
+      </button>
+    </ToolbarTooltip>
+  )
+}
+
 function GridVisibilityToggle() {
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
@@ -380,6 +405,7 @@ export function CommunityViewerToolbarRight() {
       <LevelModeToggle />
       <WallModeToggle />
       <ShadingModeToggle />
+      <SceneThemeToggle />
       <GridVisibilityToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
