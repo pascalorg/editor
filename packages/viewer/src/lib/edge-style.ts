@@ -1,26 +1,25 @@
-// Edge-overlay styling, ported from the `experiences/aesthetic` prototype
+// Edge-overlay styling, adapted from the `experiences/aesthetic` prototype
 // (`scene/style.ts`). `threshold` is the EdgesGeometry crease angle (degrees) —
 // only adjacent faces deviating by more than this emit a line, so a box yields
-// its 12 silhouette/crease edges and nothing else.
+// its 12 silhouette/crease edges and nothing else. `linewidth` is screen-space
+// pixels (the overlay uses Line2 / LineSegments2, so width is honored).
 
-export type EdgeMode = 'off' | 'soft' | 'strong' | 'sketchy'
+export type EdgeMode = 'off' | 'soft' | 'strong'
 
 export type EdgeStyle = {
   opacity: number
   threshold: number
-  sketchy: boolean
+  linewidth: number
 }
 
 export function edgeStyleFor(mode: EdgeMode): EdgeStyle {
   switch (mode) {
     case 'soft':
-      return { opacity: 0.35, threshold: 25, sketchy: false }
+      return { opacity: 0.4, threshold: 25, linewidth: 1.5 }
     case 'strong':
-      return { opacity: 0.9, threshold: 12, sketchy: false }
-    case 'sketchy':
-      return { opacity: 0.95, threshold: 14, sketchy: true }
+      return { opacity: 0.95, threshold: 12, linewidth: 3 }
     default:
-      return { opacity: 0, threshold: 30, sketchy: false }
+      return { opacity: 0, threshold: 30, linewidth: 1 }
   }
 }
 

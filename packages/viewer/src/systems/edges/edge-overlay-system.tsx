@@ -3,29 +3,30 @@
 import { sceneRegistry } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { Color, EdgesGeometry, LineSegments, type Mesh, type Object3D } from 'three'
-import { fract, positionLocal, sin, vec3 } from 'three/tsl'
-import { LineBasicNodeMaterial } from 'three/webgpu'
+import { Color, EdgesGeometry, type Mesh, type Object3D } from 'three'
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
+import { LineSegments2 } from 'three/examples/jsm/lines/webgpu/LineSegments2.js'
 import { type EdgeMode, edgeColorFor, edgeStyleFor } from '../../lib/edge-style'
 import { ZONE_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
 const EDGE_OVERLAY_NAME = '__edge-overlay'
-const SKETCH_AMPLITUDE = 0.025
 
-// Static per-vertex hash jitter for the 'sketchy' look. No time term: the
-// viewer renders on-demand (`frameloop="never"`), so a time-animated wobble
-// wouldn't tick — a static offset still reads as hand-drawn.
-function buildSketchyPositionNode() {
-  const seed = positionLocal
-  const h1 = fract(sin(seed.dot(vec3(127.1, 311.7, 74.7))).mul(43758.5453)).sub(0.5)
-  const h2 = fract(sin(seed.dot(vec3(269.5, 183.3, 246.1))).mul(43758.5453)).sub(0.5)
-  const h3 = fract(sin(seed.dot(vec3(113.5, 271.9, 124.6))).mul(43758.5453)).sub(0.5)
-  return positionLocal.add(vec3(h1, h2, h3).mul(SKETCH_AMPLITUDE))
+// LineSegments2 builds its own Line2NodeMaterial; that material type isn't in
+// three's webgpu .d.ts in this version, so we set its props through a minimal
+// structural type.
+type EdgeLineMaterial = {
+  color: Color
+  opacity: number
+  linewidth: number
+  transparent: boolean
+  depthWrite: boolean
+  resolution: { set: (x: number, y: number) => void }
+  dispose?: () => void
 }
 
-type EdgeData = { srcUuid: string; mode: EdgeMode; line: LineSegments }
+type EdgeData = { srcUuid: string; mode: EdgeMode; line: LineSegments2 }
 
 function getEdgeData(mesh: Mesh) {
   return (mesh.userData as { __edge?: EdgeData }).__edge
@@ -48,7 +49,7 @@ function disposeOverlay(mesh: Mesh) {
   if (!data) return
   mesh.remove(data.line)
   data.line.geometry.dispose()
-  ;(data.line.material as { dispose?: () => void }).dispose?.()
+  ;(data.line.material as unknown as EdgeLineMaterial).dispose?.()
   delete (mesh.userData as { __edge?: EdgeData }).__edge
 }
 
@@ -61,15 +62,17 @@ function disposeAllOverlays() {
 }
 
 /**
- * Draws crisp `EdgesGeometry` outlines over every node-backed building mesh
- * when an edge mode is active. Overlays are children of their source mesh (so
- * they inherit its transform) and are rebuilt only when the source geometry
- * uuid or the edge mode changes; colour/opacity track the active scene theme.
+ * Draws crisp `EdgesGeometry` outlines (as screen-space-thick `LineSegments2`)
+ * over every node-backed building mesh when an edge mode is active. Overlays
+ * are children of their source mesh (so they inherit its transform) and are
+ * rebuilt only when the source geometry uuid or the edge mode changes;
+ * colour/opacity/width track the active scene theme and viewport size.
  */
 export function EdgeOverlaySystem() {
   const edges = useViewer((state) => state.edges)
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const invalidate = useThree((state) => state.invalidate)
+  const size = useThree((state) => state.size)
 
   // Toggling edges / switching theme must run a frame even when nothing else
   // invalidates the on-demand loop.
@@ -96,14 +99,20 @@ export function EdgeOverlaySystem() {
 
         if (!data || data.srcUuid !== mesh.geometry.uuid || data.mode !== edges) {
           disposeOverlay(mesh)
-          const material = new LineBasicNodeMaterial({
-            depthWrite: false,
-            opacity: style.opacity,
-            transparent: true,
-          })
+          const edgeGeom = new EdgesGeometry(mesh.geometry, style.threshold)
+          const lineGeom = new LineSegmentsGeometry()
+          lineGeom.setPositions(edgeGeom.getAttribute('position').array as Float32Array)
+          edgeGeom.dispose()
+
+          const line = new LineSegments2(lineGeom)
+          const material = line.material as unknown as EdgeLineMaterial
           material.color.copy(color)
-          if (style.sketchy) material.positionNode = buildSketchyPositionNode()
-          const line = new LineSegments(new EdgesGeometry(mesh.geometry, style.threshold), material)
+          material.linewidth = style.linewidth
+          material.opacity = style.opacity
+          material.transparent = true
+          material.depthWrite = false
+          material.resolution.set(size.width, size.height)
+
           line.name = EDGE_OVERLAY_NAME
           line.frustumCulled = false
           line.raycast = () => {}
@@ -116,9 +125,11 @@ export function EdgeOverlaySystem() {
           return
         }
 
-        const material = data.line.material as unknown as LineBasicNodeMaterial
+        const material = data.line.material as unknown as EdgeLineMaterial
         material.color.copy(color)
         material.opacity = style.opacity
+        material.linewidth = style.linewidth
+        material.resolution.set(size.width, size.height)
       })
     }
   })

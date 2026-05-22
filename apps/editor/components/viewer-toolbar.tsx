@@ -328,7 +328,6 @@ const EDGE_OPTIONS = [
   { id: 'off', name: 'Off', detail: 'No edge lines' },
   { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
   { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
-  { id: 'sketchy', name: 'Sketchy', detail: 'Hand-drawn, jittered lines' },
 ] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
 
 function EdgesMenu() {
