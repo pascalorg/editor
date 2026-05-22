@@ -14,13 +14,22 @@ export type MaterialCatalogItem = {
   preset: MaterialPresetPayload
 }
 
-const WALL_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.wall]
+const WALL_TARGETS: MaterialTarget[] = [
+  MaterialTargetSchema.enum.wall,
+  MaterialTargetSchema.enum.chimney,
+  MaterialTargetSchema.enum.dormer,
+]
 
-const SLAB_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.slab]
+const SLAB_TARGETS: MaterialTarget[] = [
+  MaterialTargetSchema.enum.slab,
+  MaterialTargetSchema.enum.chimney,
+]
 
 const WALL_AND_SLAB_TARGETS: MaterialTarget[] = [
   MaterialTargetSchema.enum.wall,
   MaterialTargetSchema.enum.slab,
+  MaterialTargetSchema.enum.chimney,
+  MaterialTargetSchema.enum.dormer,
 ]
 
 const STAIR_TARGETS: MaterialTarget[] = [
@@ -36,6 +45,8 @@ const STAIR_AND_FENCE_TARGETS: MaterialTarget[] = [
 const ROOF_TARGETS: MaterialTarget[] = [
   MaterialTargetSchema.enum.roof,
   MaterialTargetSchema.enum['roof-segment'],
+  MaterialTargetSchema.enum.chimney,
+  MaterialTargetSchema.enum.dormer,
 ]
 
 const CEILING_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.ceiling]

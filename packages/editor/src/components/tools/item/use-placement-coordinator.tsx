@@ -19,7 +19,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BufferGeometry,
   Euler,
@@ -317,7 +317,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const { asset, draftNode } = config
   const unit = useViewer((state) => state.unit)
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
-  const updatePreviewGeometry = (bounds: PreviewBounds) => {
+  const updatePreviewGeometry = useCallback((bounds: PreviewBounds) => {
     const [width, height, depth] = bounds.dimensions
     const [centerX, centerY, centerZ] = bounds.center
     const signature = `${width.toFixed(4)}:${height.toFixed(4)}:${depth.toFixed(4)}:${centerX.toFixed(4)}:${centerY.toFixed(4)}:${centerZ.toFixed(4)}`
@@ -334,9 +334,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const oldBasePlaneGeometry = basePlaneRef.current.geometry
     basePlaneRef.current.geometry = nextBasePlaneGeometry
     oldBasePlaneGeometry.dispose()
-  }
+  }, [])
 
-  const updateDimensionGuides = (bounds: PreviewBounds) => {
+  const updateDimensionGuides = useCallback((bounds: PreviewBounds) => {
     setDimensionBounds((current) => {
       if (
         current &&
@@ -438,7 +438,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     applyPoints(measurementWidthRef, widthPoints)
     applyPoints(measurementDepthRef, depthPoints)
     applyPoints(measurementHeightRef, heightPoints)
-  }
+  }, [])
 
   useEffect(() => {
     if (!asset) return
@@ -502,7 +502,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       const c = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(c.x, c.y, c.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      if (result.cursorRotation) {
+        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+      } else {
+        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+      }
 
       const draft = draftNode.current
       if (draft) {
@@ -516,14 +520,19 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       gridPosition.current.set(...result.gridPosition)
       const c = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(c.x, c.y, c.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      if (result.cursorRotation) {
+        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+      } else {
+        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+      }
 
-      draftNode.create(
-        gridPosition.current,
-        asset,
-        [0, result.cursorRotationY, 0],
-        configRef.current.defaultScale,
-      )
+      const initRotation: [number, number, number] = result.cursorRotation ?? [
+        0,
+        result.cursorRotationY,
+        0,
+      ]
+
+      draftNode.create(gridPosition.current, asset, initRotation, configRef.current.defaultScale)
 
       const draft = draftNode.current
       if (draft) {
@@ -531,6 +540,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // One-time setup: put node in the right parent so it renders correctly
         useScene.getState().updateNode(draft.id, result.nodeUpdate)
       }
+
+      const previewBounds = expandBoundsToGrid(
+        getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),
+        asset.attachTo,
+        gridSnapStep,
+      )
+      updatePreviewGeometry(previewBounds)
+      updateDimensionGuides(previewBounds)
 
       if (!revalidate()) {
         draftNode.destroy()
@@ -548,10 +565,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         mesh.getWorldPosition(worldPos)
         const localPos = worldToBuildingLocal(worldPos.x, worldPos.y, worldPos.z)
         cursorGroupRef.current.position.copy(localPos)
-        // Extract world Y rotation (handles wall-parented items correctly)
-        const q = new Quaternion()
-        mesh.getWorldQuaternion(q)
-        cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+        if (draftNode.current.asset.attachTo) {
+          // Wall/ceiling items: extract world Y rotation (handles wall-parented items correctly)
+          const q = new Quaternion()
+          mesh.getWorldQuaternion(q)
+          cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+        } else {
+          // Floor items: the cursor group lives in building-local space, so use the
+          // node's local Y rotation — the same value onGridMove applies. The world
+          // quaternion would double-count any building rotation, leaving the initial
+          // box mis-rotated until the first cursor move.
+          cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+        }
       } else {
         cursorGroupRef.current.position.copy(gridPosition.current)
         cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
@@ -591,6 +616,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         result.cursorPosition[1],
         result.cursorPosition[2],
       )
+      // Floor items only rotate on Y; keep the preview box (and the live
+      // transform the 2D floorplan mirrors) aligned with the draft's
+      // rotation. Without this the box stays at its seed rotation until a
+      // manual R/T, so a moved already-rotated item shows an axis-aligned box.
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
@@ -621,6 +651,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftNode.commit(result.nodeUpdate)
       if (configRef.current.onCommitted()) {
         draftNode.create(gridPosition.current, asset, currentRotation)
+        const previewBounds = expandBoundsToGrid(
+          getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),
+          asset.attachTo,
+          gridSnapStep,
+        )
+        updatePreviewGeometry(previewBounds)
+        updateDimensionGuides(previewBounds)
         revalidate()
       }
     }

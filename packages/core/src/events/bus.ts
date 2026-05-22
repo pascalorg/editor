@@ -2,21 +2,27 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BoxVentNode,
   BuildingNode,
   CeilingNode,
+  ChimneyNode,
   ColumnNode,
   DoorNode,
+  DormerNode,
   ElevatorNode,
   FenceNode,
   GuideNode,
   ItemNode,
   LevelNode,
+  RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
   ScanNode,
   ShelfNode,
   SiteNode,
+  SkylightNode,
   SlabNode,
+  SolarPanelNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
@@ -80,6 +86,12 @@ export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
+export type BoxVentEvent = NodeEvent<BoxVentNode>
+export type RidgeVentEvent = NodeEvent<RidgeVentNode>
+export type ChimneyEvent = NodeEvent<ChimneyNode>
+export type SolarPanelEvent = NodeEvent<SolarPanelNode>
+export type SkylightEvent = NodeEvent<SkylightNode>
+export type DormerEvent = NodeEvent<DormerNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -213,6 +225,12 @@ type EditorEvents = GridEvents &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &
   NodeEvents<'guide', GuideEvent> &
+  NodeEvents<'box-vent', BoxVentEvent> &
+  NodeEvents<'ridge-vent', RidgeVentEvent> &
+  NodeEvents<'chimney', ChimneyEvent> &
+  NodeEvents<'solar-panel', SolarPanelEvent> &
+  NodeEvents<'skylight', SkylightEvent> &
+  NodeEvents<'dormer', DormerEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

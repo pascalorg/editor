@@ -1,4 +1,5 @@
 import { type AssetInput, isObject } from '@pascal-app/core'
+import { Euler, Matrix3, type Matrix4, Quaternion, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
 
 function getGridSnapStep(): number {
@@ -117,4 +118,29 @@ export function stripTransient(meta: any): any {
   if (!isObject(meta)) return meta
   const { isTransient, ...rest } = meta as Record<string, any>
   return rest
+}
+
+const _up = new Vector3(0, 1, 0)
+const _normal = new Vector3()
+const _quat = new Quaternion()
+const _euler = new Euler()
+
+/**
+ * Compute euler rotation that tilts an item so its local +Y aligns with a
+ * roof surface normal. The normal is in the hit mesh's local space and is
+ * transformed to world space via the mesh's matrixWorld.
+ */
+export function calculateRoofRotation(
+  normal: [number, number, number] | undefined,
+  objectMatrixWorld: Matrix4,
+): [number, number, number] {
+  if (!normal) return [0, 0, 0]
+
+  _normal.set(normal[0], normal[1], normal[2])
+  _normal.applyNormalMatrix(new Matrix3().getNormalMatrix(objectMatrixWorld)).normalize()
+
+  _quat.setFromUnitVectors(_up, _normal)
+  _euler.setFromQuaternion(_quat, 'XYZ')
+
+  return [_euler.x, _euler.y, _euler.z]
 }

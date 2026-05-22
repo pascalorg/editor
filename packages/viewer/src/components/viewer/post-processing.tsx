@@ -256,10 +256,6 @@ const PostProcessingPasses = ({
     }
 
     if (skippedZeroSizeRef.current) {
-      console.log('[viewer/post-processing] Rebuilding pipeline after zero-sized viewport.', {
-        width,
-        height,
-      })
       skippedZeroSizeRef.current = false
     }
 

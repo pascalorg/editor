@@ -23,6 +23,19 @@ export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+// CSG primitives — used by chimney's roof-trim and other kinds whose
+// geometry subtracts pieces against their host. Lives in viewer
+// because three-bvh-csg / three-mesh-bvh are viewer-only deps.
+export {
+  ADDITION,
+  Brush,
+  computeGeometryBoundsTree,
+  csgEvaluator,
+  csgGeometry,
+  csgMaterials,
+  prepareBrushForCSG,
+  SUBTRACTION,
+} from './lib/csg-utils'
 export type { EdgeMode } from './lib/edge-style'
 export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
@@ -91,7 +104,20 @@ export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { LevelSystem } from './systems/level/level-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
-export { RoofSystem } from './systems/roof/roof-system'
+// Generic roof-segment primitives. Kinds that compose CSG against
+// the roof shell (chimney's self-trim, dormer's virtual-segment cut)
+// read these through the public surface. No kind-specific helpers
+// belong here — those live in `@pascal-app/nodes/<kind>/`.
+export {
+  getRoofOuterSurfaceFrameAtPoint,
+  getRoofSegmentBrushes,
+  mapRoofGroupMaterialIndex,
+  ROOF_MATERIAL_SLOT_COUNT,
+  RoofSystem,
+  remapRoofShellFaces,
+  roofCsgDummyMats,
+  type SurfaceFrame,
+} from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
 // Slab system follows the wall + fence re-export pattern — composed into
 // the registry-driven slab definition's `def.system`. Removed in Phase 6

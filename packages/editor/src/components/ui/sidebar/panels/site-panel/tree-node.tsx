@@ -54,17 +54,22 @@ export function focusTreeNode(nodeId: AnyNodeId) {
 }
 
 import { cn } from '../../../../../lib/utils'
+import { BoxVentTreeNode } from './box-vent-tree-node'
 import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
+import { ChimneyTreeNode } from './chimney-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
 import { DoorTreeNode } from './door-tree-node'
+import { DormerTreeNode } from './dormer-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
 import { FenceTreeNode } from './fence-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
+import { RidgeVentTreeNode } from './ridge-vent-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
 import { ShelfTreeNode } from './shelf-tree-node'
 import { SlabTreeNode } from './slab-tree-node'
+import { SolarPanelTreeNode } from './solar-panel-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
 import { WallTreeNode } from './wall-tree-node'
@@ -93,7 +98,11 @@ const treeNodeByType: Record<
     isLast?: boolean
     nodeId: AnyNodeId
   }>,
+  'box-vent': BoxVentTreeNode,
   ceiling: CeilingTreeNode,
+  chimney: ChimneyTreeNode,
+  dormer: DormerTreeNode,
+  'solar-panel': SolarPanelTreeNode,
   column: ColumnTreeNode,
   elevator: ElevatorTreeNode,
   level: LevelTreeNode as React.ComponentType<{
@@ -114,6 +123,7 @@ const treeNodeByType: Record<
   }>,
   wall: WallTreeNode,
   fence: FenceTreeNode,
+  'ridge-vent': RidgeVentTreeNode,
   roof: RoofTreeNode,
   stair: StairTreeNode,
   door: DoorTreeNode,

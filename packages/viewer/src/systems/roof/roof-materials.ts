@@ -51,6 +51,7 @@ export function getRoofMaterialArray(
   const top = getEffectiveRoofSurfaceMaterial(node, 'top')
   const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
   const wall = getEffectiveRoofSurfaceMaterial(node, 'wall')
+
   const cacheKey = JSON.stringify({
     shading,
     textures,

@@ -3,9 +3,15 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type BoxVentNode,
+  type ChimneyNode,
+  type DormerNode,
+  type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  type SkylightNode,
+  type SolarPanelNode,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -14,16 +20,18 @@ import {
   duplicateRoofSubtree,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 export default function RoofPanel() {
+  const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -41,6 +49,94 @@ export default function RoofPanel() {
         .map((childId) => s.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
         .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
     }),
+  )
+
+  // Flatten roof accessories hosted by any segment of this roof. Each
+  // selector re-runs only when the relevant child list changes.
+  const segmentIdSet = useScene(
+    useShallow((s) => {
+      if (!node) return new Set<string>()
+      return new Set((node.children ?? []) as string[])
+    }),
+  )
+
+  const chimneys = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: ChimneyNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'chimney' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as ChimneyNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const skylights = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: SkylightNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'skylight' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as SkylightNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const solarPanels = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: SolarPanelNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'solar-panel' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as SolarPanelNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const dormers = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: DormerNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'dormer' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as DormerNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  // Box vents and ridge vents share the "Vents" UI group — same list,
+  // type shown as the right-side label, and an `Add Vent` button with
+  // a Box/Ridge segmented picker.
+  const vents = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: (BoxVentNode | RidgeVentNode)[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (
+          (n?.type === 'box-vent' || n?.type === 'ridge-vent') &&
+          n.roofSegmentId &&
+          segmentIdSet.has(n.roofSegmentId)
+        ) {
+          out.push(n as BoxVentNode | RidgeVentNode)
+        }
+      }
+      return out
+    }),
+  )
+
+  const handleSelectElement = useCallback(
+    (id: string) => {
+      setSelection({ selectedIds: [id as AnyNode['id']] })
+    },
+    [setSelection],
   )
 
   const handleUpdate = useCallback(
@@ -61,7 +157,7 @@ export default function RoofPanel() {
       width: 6,
       depth: 6,
       wallHeight: 0.5,
-      roofHeight: 2.5,
+      pitch: 40,
       roofType: 'gable',
       position: [2, 0, 2],
     })
@@ -104,6 +200,22 @@ export default function RoofPanel() {
     }
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
+
+  // Each "Add" button activates the kind's registered placement tool
+  // via `setTool(kind)`. The tool listens for `roof:*` events and
+  // commits a new node parented to whichever segment the user clicks.
+  // Same code path as the top palette — see `tool-manager.tsx:28`'s
+  // `nodeRegistry.get(tool)?.tool` dispatch.
+  const activateTool = useCallback(
+    (kind: 'box-vent' | 'ridge-vent' | 'chimney' | 'solar-panel' | 'skylight' | 'dormer') => {
+      triggerSFX('sfx:item-pick')
+      useEditor.getState().setTool(kind)
+      if (useEditor.getState().mode !== 'build') {
+        useEditor.getState().setMode('build')
+      }
+    },
+    [],
+  )
 
   if (!(node && node.type === 'roof' && selectedId)) return null
 
@@ -207,6 +319,128 @@ export default function RoofPanel() {
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
             }}
           />
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Elements">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            {chimneys.map((chimney, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={chimney.id}
+                onClick={() => handleSelectElement(chimney.id)}
+                type="button"
+              >
+                <span className="truncate">{chimney.name || `Chimney ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">chimney</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Chimney"
+                onClick={() => activateTool('chimney')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {dormers.map((dormer, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={dormer.id}
+                onClick={() => handleSelectElement(dormer.id)}
+                type="button"
+              >
+                <span className="truncate">{dormer.name || `Dormer ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">dormer</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Dormer"
+                onClick={() => activateTool('dormer')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {skylights.map((skylight, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={skylight.id}
+                onClick={() => handleSelectElement(skylight.id)}
+                type="button"
+              >
+                <span className="truncate">{skylight.name || `Skylight ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">skylight</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Skylight"
+                onClick={() => activateTool('skylight')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {solarPanels.map((panel, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={panel.id}
+                onClick={() => handleSelectElement(panel.id)}
+                type="button"
+              >
+                <span className="truncate">{panel.name || `Solar Panel ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">solar panel</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Solar Panel"
+                onClick={() => activateTool('solar-panel')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {vents.map((vent, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={vent.id}
+                onClick={() => handleSelectElement(vent.id)}
+                type="button"
+              >
+                <span className="truncate">
+                  {vent.name ||
+                    (vent.type === 'box-vent' ? `Box Vent ${i + 1}` : `Ridge Vent ${i + 1}`)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {vent.type === 'box-vent' ? 'box vent' : 'ridge vent'}
+                </span>
+              </button>
+            ))}
+            <SegmentedControl<'box-vent' | 'ridge-vent'>
+              onChange={setVentType}
+              options={[
+                { label: 'Box', value: 'box-vent' },
+                { label: 'Ridge', value: 'ridge-vent' },
+              ]}
+              value={ventType}
+            />
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Vent"
+                onClick={() => activateTool(ventType)}
+              />
+            </ActionGroup>
+          </div>
         </div>
       </PanelSection>
 

@@ -1,19 +1,25 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { ceilingDefinition } from './ceiling'
+import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
 import { doorDefinition } from './door'
+import { dormerDefinition } from './dormer'
 import { elevatorDefinition } from './elevator'
 import { fenceDefinition } from './fence'
 import { guideDefinition } from './guide'
 import { itemDefinition } from './item'
 import { levelDefinition } from './level'
+import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
 import { scanDefinition } from './scan'
 import { shelfDefinition } from './shelf'
 import { siteDefinition } from './site'
+import { skylightDefinition } from './skylight'
 import { slabDefinition } from './slab'
+import { solarPanelDefinition } from './solar-panel'
 import { spawnDefinition } from './spawn'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
@@ -65,24 +71,37 @@ export const builtinPlugin: Plugin = {
     levelDefinition as unknown as AnyNodeDefinition,
     guideDefinition as unknown as AnyNodeDefinition,
     scanDefinition as unknown as AnyNodeDefinition,
+    // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
+    boxVentDefinition as unknown as AnyNodeDefinition,
+    ridgeVentDefinition as unknown as AnyNodeDefinition,
+    chimneyDefinition as unknown as AnyNodeDefinition,
+    solarPanelDefinition as unknown as AnyNodeDefinition,
+    skylightDefinition as unknown as AnyNodeDefinition,
+    dormerDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
+export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export { ceilingDefinition } from './ceiling'
+export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
 export { doorDefinition } from './door'
+export { dormerDefinition } from './dormer'
 export { elevatorDefinition } from './elevator'
 export { fenceDefinition } from './fence'
 export { guideDefinition } from './guide'
 export { itemDefinition } from './item'
 export { levelDefinition } from './level'
+export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
+export { skylightDefinition } from './skylight'
 export { slabDefinition } from './slab'
+export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
