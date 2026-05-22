@@ -11,6 +11,7 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
   schemaVersion: 1,
   schema: StairSegmentNode,
   category: 'structure',
+  surfaceRole: 'joinery',
 
   defaults: () => {
     const stub = StairSegmentNodeSchema.parse({

@@ -6,16 +6,11 @@ import {
   type RoofEvent,
   type RoofNode,
   type RoofSegmentNode,
-  sceneRegistry,
   type SolarPanelNode,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import {
-  EDITOR_LAYER,
-  markToolCancelConsumed,
-  triggerSFX,
-  useEditor,
-} from '@pascal-app/editor'
+import { EDITOR_LAYER, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -91,11 +86,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
     const panelObj = sceneRegistry.nodes.get(node.id)
     if (panelObj) panelObj.visible = false
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingId = useViewer.getState().selection.buildingId
       const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
       if (buildingObj) {
@@ -180,9 +171,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       })
 
       if (original.roofSegmentId && original.roofSegmentId !== (targetSegmentId as string)) {
-        const oldSeg = st.nodes[original.roofSegmentId as AnyNodeId] as
-          | RoofSegmentNode
-          | undefined
+        const oldSeg = st.nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined
         if (oldSeg) {
           st.updateNode(original.roofSegmentId as AnyNodeId, {
             children: (oldSeg.children ?? []).filter((id) => id !== node.id),
@@ -275,11 +264,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
     <group position={previewPos} ref={previewRef} visible={hasHit}>
       <group rotation-y={previewYaw}>
         <group quaternion={previewSurfaceQuat}>
-          <mesh
-            geometry={previewGeo}
-            layers={EDITOR_LAYER}
-            material={previewMaterial}
-          />
+          <mesh geometry={previewGeo} layers={EDITOR_LAYER} material={previewMaterial} />
         </group>
       </group>
     </group>

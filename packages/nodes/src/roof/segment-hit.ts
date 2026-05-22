@@ -29,7 +29,12 @@ function analyticalSurfaceY(seg: RoofSegmentNode, lx: number, lz: number): numbe
   const peakY = seg.wallHeight + rh
   if (rh === 0) return seg.wallHeight
 
-  if (seg.roofType === 'gable' || seg.roofType === 'gambrel' || seg.roofType === 'mansard' || seg.roofType === 'dutch') {
+  if (
+    seg.roofType === 'gable' ||
+    seg.roofType === 'gambrel' ||
+    seg.roofType === 'mansard' ||
+    seg.roofType === 'dutch'
+  ) {
     const t = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
     return peakY - t * rh
   }

@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { CHIMNEY_PRESET_KEYS, chimneyPresets, detectActiveChimneyPreset } from '../presets'
 import { ChimneyNode } from '../schema'
-import {
-  CHIMNEY_PRESET_KEYS,
-  chimneyPresets,
-  detectActiveChimneyPreset,
-} from '../presets'
 
 // Build a fully-formed chimney by parsing an empty object (schema fills
 // every default) and merging the preset over the top — mirrors what the
@@ -36,9 +32,7 @@ describe('detectActiveChimneyPreset', () => {
     const node = applyPreset('brick')
     // Brick preset sets bandStyle=double; flip it to confirm the
     // detection narrows.
-    expect(
-      detectActiveChimneyPreset({ ...node, bandStyle: 'single' as const }),
-    ).toBeNull()
+    expect(detectActiveChimneyPreset({ ...node, bandStyle: 'single' as const })).toBeNull()
   })
 
   test('ignores non-preset fields (dimensions, materials, placement)', () => {

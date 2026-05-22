@@ -6,15 +6,11 @@ import {
   type RoofEvent,
   type RoofNode,
   type RoofSegmentNode,
-  sceneRegistry,
   type SkylightNode,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import {
-  markToolCancelConsumed,
-  triggerSFX,
-  useEditor,
-} from '@pascal-app/editor'
+import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -75,11 +71,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     const skylightObj = sceneRegistry.nodes.get(node.id)
     if (skylightObj) skylightObj.visible = false
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingId = useViewer.getState().selection.buildingId
       const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
       if (buildingObj) {
@@ -166,9 +158,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       })
 
       if (original.roofSegmentId && original.roofSegmentId !== (targetSegmentId as string)) {
-        const oldSeg = st.nodes[original.roofSegmentId as AnyNodeId] as
-          | RoofSegmentNode
-          | undefined
+        const oldSeg = st.nodes[original.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined
         if (oldSeg) {
           st.updateNode(original.roofSegmentId as AnyNodeId, {
             children: (oldSeg.children ?? []).filter((id) => id !== node.id),

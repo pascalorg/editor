@@ -11,10 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import {
-  DORMER_PLACEMENT_ROTATION_STEP,
-  DORMER_PLACEMENT_SNAP_M,
-} from './geometry'
+import { DORMER_PLACEMENT_ROTATION_STEP, DORMER_PLACEMENT_SNAP_M } from './geometry'
 
 const tmpMatrix = new THREE.Matrix4()
 const tmpInv = new THREE.Matrix4()
@@ -138,9 +135,7 @@ export function useDormerPlacement(opts: {
       const target = e.target as HTMLElement | null
       if (
         target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
       )
         return
       const dir = e.shiftKey ? -1 : 1

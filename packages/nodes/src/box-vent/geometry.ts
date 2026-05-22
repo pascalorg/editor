@@ -55,10 +55,7 @@ function buildBoxShape(node: BoxVentNode): THREE.BufferGeometry {
   const w = node.width
   const d = node.depth
   const h = node.height
-  const baseInset = Math.max(
-    0,
-    Math.min(node.baseInset ?? 0.06, Math.min(w, d) / 2 - 0.005),
-  )
+  const baseInset = Math.max(0, Math.min(node.baseInset ?? 0.06, Math.min(w, d) / 2 - 0.005))
   const baseH = Math.max(0.005, Math.min(node.baseHeight ?? 0.04, h - 0.005))
   const baseW = Math.max(0.01, w - 2 * baseInset)
   const baseD = Math.max(0.01, d - 2 * baseInset)
@@ -73,16 +70,10 @@ function buildBoxShape(node: BoxVentNode): THREE.BufferGeometry {
 
   // Lower (smaller) riser. Top is hidden under the cover but include
   // it anyway — overlap is invisible and the geometry stays simple.
-  buildRoundedExtrusion(
-    positions, normals, uvs,
-    baseW, baseD, 0, baseH, cornerBevel,
-  )
+  buildRoundedExtrusion(positions, normals, uvs, baseW, baseD, 0, baseH, cornerBevel)
   // Upper (larger) cover. Bottom partially shows where it overhangs the
   // riser, so it's always rendered.
-  buildRoundedExtrusion(
-    positions, normals, uvs,
-    w, d, baseH, h, cornerBevel,
-  )
+  buildRoundedExtrusion(positions, normals, uvs, w, d, baseH, h, cornerBevel)
 
   return buildBufferGeometry(positions, normals, uvs)
 }
@@ -113,10 +104,16 @@ function buildRoundedExtrusion(
     if (len < 1e-9) continue // degenerate edge (zero-bevel duplicate corner points)
     const nx = ez / len
     const nz = -ex / len
-    pushQuad(positions, normals, uvs,
-      [a.x, y0, a.z], [b.x, y0, b.z],
-      [b.x, y1, b.z], [a.x, y1, a.z],
-      [nx, 0, nz])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [a.x, y0, a.z],
+      [b.x, y0, b.z],
+      [b.x, y1, b.z],
+      [a.x, y1, a.z],
+      [nx, 0, nz],
+    )
   }
 
   // Top cap (+Y normal): wind triangles CW from above so the cross
@@ -124,18 +121,14 @@ function buildRoundedExtrusion(
   for (let i = 0; i < n; i++) {
     const a = profile[i]!
     const b = profile[(i + 1) % n]!
-    pushTri(positions, normals, uvs,
-      [0, y1, 0], [b.x, y1, b.z], [a.x, y1, a.z],
-      [0, 1, 0])
+    pushTri(positions, normals, uvs, [0, y1, 0], [b.x, y1, b.z], [a.x, y1, a.z], [0, 1, 0])
   }
 
   // Bottom cap (-Y normal): wind CCW from above.
   for (let i = 0; i < n; i++) {
     const a = profile[i]!
     const b = profile[(i + 1) % n]!
-    pushTri(positions, normals, uvs,
-      [0, y0, 0], [a.x, y0, a.z], [b.x, y0, b.z],
-      [0, -1, 0])
+    pushTri(positions, normals, uvs, [0, y0, 0], [a.x, y0, a.z], [b.x, y0, b.z], [0, -1, 0])
   }
 }
 
@@ -153,9 +146,9 @@ function roundedRectProfile(
   const r = Math.max(0, Math.min(bevel, hw, hd))
   // 4 corner centers, CCW from +X+Z (NE, NW, SW, SE).
   const corners: Array<{ cx: number; cz: number; startAngle: number }> = [
-    { cx: hw - r, cz: hd - r, startAngle: 0 },               // NE
-    { cx: -(hw - r), cz: hd - r, startAngle: Math.PI / 2 },  // NW
-    { cx: -(hw - r), cz: -(hd - r), startAngle: Math.PI },   // SW
+    { cx: hw - r, cz: hd - r, startAngle: 0 }, // NE
+    { cx: -(hw - r), cz: hd - r, startAngle: Math.PI / 2 }, // NW
+    { cx: -(hw - r), cz: -(hd - r), startAngle: Math.PI }, // SW
     { cx: hw - r, cz: -(hd - r), startAngle: Math.PI * 1.5 }, // SE
   ]
   const out: Array<{ x: number; z: number }> = []
@@ -231,27 +224,83 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
   const uvs: number[] = []
 
   // ── Body (4 walls + sealed bottom)
-  pushQuad(positions, normals, uvs,
-    [hw, 0, -hd], [hw, 0, hd], [hw, bodyH, hd], [hw, bodyH, -hd], [1, 0, 0])
-  pushQuad(positions, normals, uvs,
-    [-hw, 0, hd], [-hw, 0, -hd], [-hw, bodyH, -hd], [-hw, bodyH, hd], [-1, 0, 0])
-  pushQuad(positions, normals, uvs,
-    [hw, 0, hd], [-hw, 0, hd], [-hw, bodyH, hd], [hw, bodyH, hd], [0, 0, 1])
-  pushQuad(positions, normals, uvs,
-    [-hw, 0, -hd], [hw, 0, -hd], [hw, bodyH, -hd], [-hw, bodyH, -hd], [0, 0, -1])
-  pushQuad(positions, normals, uvs,
-    [-hw, 0, -hd], [-hw, 0, hd], [hw, 0, hd], [hw, 0, -hd], [0, -1, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [hw, 0, -hd],
+    [hw, 0, hd],
+    [hw, bodyH, hd],
+    [hw, bodyH, -hd],
+    [1, 0, 0],
+  )
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-hw, 0, hd],
+    [-hw, 0, -hd],
+    [-hw, bodyH, -hd],
+    [-hw, bodyH, hd],
+    [-1, 0, 0],
+  )
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [hw, 0, hd],
+    [-hw, 0, hd],
+    [-hw, bodyH, hd],
+    [hw, bodyH, hd],
+    [0, 0, 1],
+  )
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-hw, 0, -hd],
+    [hw, 0, -hd],
+    [hw, bodyH, -hd],
+    [-hw, bodyH, -hd],
+    [0, 0, -1],
+  )
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-hw, 0, -hd],
+    [-hw, 0, hd],
+    [hw, 0, hd],
+    [hw, 0, -hd],
+    [0, -1, 0],
+  )
 
   // ── Body top (only when there's a visible gap to look through)
   if (capGap > 0) {
-    pushQuad(positions, normals, uvs,
-      [-hw, bodyH, hd], [-hw, bodyH, -hd], [hw, bodyH, -hd], [hw, bodyH, hd], [0, 1, 0])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-hw, bodyH, hd],
+      [-hw, bodyH, -hd],
+      [hw, bodyH, -hd],
+      [hw, bodyH, hd],
+      [0, 1, 0],
+    )
   }
 
   // ── Flange underside (the bit of the cap base that overhangs the body)
   if (overhang > 0 || capGap > 0) {
-    pushQuad(positions, normals, uvs,
-      [-bw, y0, -bd], [-bw, y0, bd], [bw, y0, bd], [bw, y0, -bd], [0, -1, 0])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-bw, y0, -bd],
+      [-bw, y0, bd],
+      [bw, y0, bd],
+      [bw, y0, -bd],
+      [0, -1, 0],
+    )
   }
 
   // ── 4 chamfered cap faces (trapezoids: wider at base, narrow at top).
@@ -260,23 +309,63 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
   const dx = bw - tw // horizontal slope run on the X-facing faces
   const dz = bd - td
   // +X face
-  pushQuad(positions, normals, uvs,
-    [bw, y0, -bd], [bw, y0, bd], [tw, y1, td], [tw, y1, -td], [dx, capH, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [bw, y0, -bd],
+    [bw, y0, bd],
+    [tw, y1, td],
+    [tw, y1, -td],
+    [dx, capH, 0],
+  )
   // -X face
-  pushQuad(positions, normals, uvs,
-    [-bw, y0, bd], [-bw, y0, -bd], [-tw, y1, -td], [-tw, y1, td], [-dx, capH, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-bw, y0, bd],
+    [-bw, y0, -bd],
+    [-tw, y1, -td],
+    [-tw, y1, td],
+    [-dx, capH, 0],
+  )
   // +Z face
-  pushQuad(positions, normals, uvs,
-    [bw, y0, bd], [-bw, y0, bd], [-tw, y1, td], [tw, y1, td], [0, capH, dz])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [bw, y0, bd],
+    [-bw, y0, bd],
+    [-tw, y1, td],
+    [tw, y1, td],
+    [0, capH, dz],
+  )
   // -Z face
-  pushQuad(positions, normals, uvs,
-    [-bw, y0, -bd], [bw, y0, -bd], [tw, y1, -td], [-tw, y1, -td], [0, capH, -dz])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-bw, y0, -bd],
+    [bw, y0, -bd],
+    [tw, y1, -td],
+    [-tw, y1, -td],
+    [0, capH, -dz],
+  )
 
   // ── Flat closed top plane (no hollow opening — even if topTaper is 0,
   // this collapses to the original body cross-section; if topTaper is 1
   // it degenerates to a point and the four triangles meet, still closed).
-  pushQuad(positions, normals, uvs,
-    [-tw, y1, td], [-tw, y1, -td], [tw, y1, -td], [tw, y1, td], [0, 1, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-tw, y1, td],
+    [-tw, y1, -td],
+    [tw, y1, -td],
+    [tw, y1, td],
+    [0, 1, 0],
+  )
 
   return buildBufferGeometry(positions, normals, uvs)
 }
@@ -301,10 +390,12 @@ function buildDomeStyleShape(node: BoxVentNode): THREE.BufferGeometry {
   const bodyH = h * 0.32
   const hoodH = h - bodyH
 
-  return mergeGeometries(
-    [buildBody(w, d, bodyH), buildDomeHood(w, d, overhang, bodyH, hoodH, 'dome')],
-    false,
-  ) ?? buildBody(w, d, bodyH)
+  return (
+    mergeGeometries(
+      [buildBody(w, d, bodyH), buildDomeHood(w, d, overhang, bodyH, hoodH, 'dome')],
+      false,
+    ) ?? buildBody(w, d, bodyH)
+  )
 }
 
 // ─── Body ────────────────────────────────────────────────────────────
@@ -317,25 +408,60 @@ function buildBody(w: number, d: number, bodyH: number): THREE.BufferGeometry {
   const uvs: number[] = []
 
   // +X side
-  pushQuad(positions, normals, uvs,
-    [hw, 0, -hd], [hw, 0, hd], [hw, bodyH, hd], [hw, bodyH, -hd],
-    [1, 0, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [hw, 0, -hd],
+    [hw, 0, hd],
+    [hw, bodyH, hd],
+    [hw, bodyH, -hd],
+    [1, 0, 0],
+  )
   // -X side
-  pushQuad(positions, normals, uvs,
-    [-hw, 0, hd], [-hw, 0, -hd], [-hw, bodyH, -hd], [-hw, bodyH, hd],
-    [-1, 0, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-hw, 0, hd],
+    [-hw, 0, -hd],
+    [-hw, bodyH, -hd],
+    [-hw, bodyH, hd],
+    [-1, 0, 0],
+  )
   // +Z side
-  pushQuad(positions, normals, uvs,
-    [hw, 0, hd], [-hw, 0, hd], [-hw, bodyH, hd], [hw, bodyH, hd],
-    [0, 0, 1])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [hw, 0, hd],
+    [-hw, 0, hd],
+    [-hw, bodyH, hd],
+    [hw, bodyH, hd],
+    [0, 0, 1],
+  )
   // -Z side
-  pushQuad(positions, normals, uvs,
-    [-hw, 0, -hd], [hw, 0, -hd], [hw, bodyH, -hd], [-hw, bodyH, -hd],
-    [0, 0, -1])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-hw, 0, -hd],
+    [hw, 0, -hd],
+    [hw, bodyH, -hd],
+    [-hw, bodyH, -hd],
+    [0, 0, -1],
+  )
   // Bottom (closes the body so it reads as solid from below)
-  pushQuad(positions, normals, uvs,
-    [-hw, 0, -hd], [-hw, 0, hd], [hw, 0, hd], [hw, 0, -hd],
-    [0, -1, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-hw, 0, -hd],
+    [-hw, 0, hd],
+    [hw, 0, hd],
+    [hw, 0, -hd],
+    [0, -1, 0],
+  )
 
   return buildBufferGeometry(positions, normals, uvs)
 }
@@ -369,9 +495,16 @@ function buildDomeHood(
   const y0 = bodyH
 
   // Skirt underside
-  pushQuad(positions, normals, uvs,
-    [-bw, y0, -bd], [-bw, y0, bd], [bw, y0, bd], [bw, y0, -bd],
-    [0, -1, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-bw, y0, -bd],
+    [-bw, y0, bd],
+    [bw, y0, bd],
+    [bw, y0, -bd],
+    [0, -1, 0],
+  )
 
   // Sample a low-resolution dome on a lat × lng grid. The radial decay
   // is `cos(phi) ^ radialPower` — `radialPower < 1` keeps the dome wide
@@ -385,10 +518,10 @@ function buildDomeHood(
   for (let i = 0; i <= lat; i++) {
     const row: THREE.Vector3[] = []
     const phi = (Math.PI / 2) * (i / lat)
-    const r = Math.pow(Math.cos(phi), radialPower)
+    const r = Math.cos(phi) ** radialPower
     const y = y0 + hoodH * Math.sin(phi)
     for (let j = 0; j <= lng; j++) {
-      const theta = (Math.PI * 2) * (j / lng)
+      const theta = Math.PI * 2 * (j / lng)
       const x = bw * r * Math.cos(theta)
       const z = bd * r * Math.sin(theta)
       row.push(new THREE.Vector3(x, y, z))
@@ -410,9 +543,16 @@ function buildDomeHood(
       // winding (see note in `pushQuad`). Swapping the cross operands here
       // keeps the dome lit from the outside, not from inside.
       const n = new THREE.Vector3().crossVectors(ad, ab).normalize()
-      pushQuad(positions, normals, uvs,
-        [a.x, a.y, a.z], [b.x, b.y, b.z], [c.x, c.y, c.z], [d2.x, d2.y, d2.z],
-        [n.x, n.y, n.z])
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [a.x, a.y, a.z],
+        [b.x, b.y, b.z],
+        [c.x, c.y, c.z],
+        [d2.x, d2.y, d2.z],
+        [n.x, n.y, n.z],
+      )
     }
   }
 
@@ -514,9 +654,7 @@ function pushTri(
  * source of truth.
  */
 export function computeBoxVentSlopeTilt(
-  segment:
-    | { roofType: RoofType; pitch: number; width: number; depth: number }
-    | undefined,
+  segment: { roofType: RoofType; pitch: number; width: number; depth: number } | undefined,
   localZ: number,
 ): number {
   if (!segment || segment.roofType === 'flat' || localZ === 0) return 0

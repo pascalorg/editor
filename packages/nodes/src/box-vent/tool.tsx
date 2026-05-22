@@ -13,11 +13,8 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import {
-  getAnalyticalNormal,
-  surfaceQuatFromNormal,
-} from '../solar-panel/geometry'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
 import { boxVentDefinition } from './definition'
 import BoxVentPreview from './preview'
 
@@ -57,11 +54,7 @@ const BoxVentTool = () => {
   useEffect(() => {
     if (!activeBuildingId) return
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
       if (!buildingObj) return [wx, wy, wz]
       worldPoint.set(wx, wy, wz)

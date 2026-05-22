@@ -1,10 +1,9 @@
 'use client'
 
 import type { DormerNode, RoofSegmentNode } from '@pascal-app/core'
-import { glassMaterial } from '@pascal-app/viewer'
-import { getDormerExposedFaces, getDormerSkirtWindowDims } from './csg-geometry'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { getDormerExposedFaces, getDormerSkirtWindowDims } from './csg-geometry'
 import { buildDormerWindowGeometries, type DormerWindowShape } from './window-frame'
 
 /**
@@ -22,10 +21,12 @@ const DormerWindowAssembly = ({
   node,
   segment,
   frameMaterial,
+  glassMaterial,
 }: {
   node: DormerNode
   segment: RoofSegmentNode
   frameMaterial: THREE.Material
+  glassMaterial: THREE.Material
 }) => {
   const skirtWin = useMemo(
     () => getDormerSkirtWindowDims(node),

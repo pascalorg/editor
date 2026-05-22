@@ -27,7 +27,10 @@ const fixtureSegment = (): RoofSegmentNode =>
 
 describe('buildChimneyGeometry', () => {
   test('returns body for default chimney with a non-empty position attribute', () => {
-    const { body, cap, flues, cricket } = buildChimneyGeometry(ChimneyNode.parse({}), fixtureSegment())
+    const { body, cap, flues, cricket } = buildChimneyGeometry(
+      ChimneyNode.parse({}),
+      fixtureSegment(),
+    )
     expect(body.getAttribute('position').count).toBeGreaterThan(0)
     expect(cap?.getAttribute('position').count).toBeGreaterThan(0)
     expect(flues?.getAttribute('position').count).toBeGreaterThan(0)
@@ -43,18 +46,12 @@ describe('buildChimneyGeometry', () => {
   })
 
   test('cap omitted when cap=false', () => {
-    const { cap } = buildChimneyGeometry(
-      ChimneyNode.parse({ cap: false }),
-      fixtureSegment(),
-    )
+    const { cap } = buildChimneyGeometry(ChimneyNode.parse({ cap: false }), fixtureSegment())
     expect(cap).toBeNull()
   })
 
   test('flues omitted when flueCount=0', () => {
-    const { flues } = buildChimneyGeometry(
-      ChimneyNode.parse({ flueCount: 0 }),
-      fixtureSegment(),
-    )
+    const { flues } = buildChimneyGeometry(ChimneyNode.parse({ flueCount: 0 }), fixtureSegment())
     expect(flues).toBeNull()
   })
 

@@ -30,6 +30,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   schemaVersion: 1,
   schema: CeilingNode,
   category: 'structure',
+  surfaceRole: 'ceiling',
 
   defaults: () => ({
     object: 'node',

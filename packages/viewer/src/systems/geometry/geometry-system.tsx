@@ -5,11 +5,19 @@ import {
   type AnyNodeId,
   type GeometryContext,
   nodeRegistry,
+  type SurfaceRole,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import type { Group, Mesh } from 'three'
+import { useEffect } from 'react'
+import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import {
+  type ColorPreset,
+  createSurfaceRoleMaterial,
+  type RenderShading,
+} from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 /**
  * Generic geometry system.
@@ -45,6 +53,20 @@ import type { Group, Mesh } from 'three'
 export const GeometrySystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
   const clearDirty = useScene((s) => s.clearDirty)
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
+
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      const def = nodeRegistry.get(node.type)
+      if (def?.geometry) {
+        useScene.getState().markDirty(node.id as AnyNodeId)
+      }
+    }
+  }, [shading, textures, colorPreset, sceneTheme])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -123,10 +145,20 @@ export const GeometrySystem = () => {
       // The builder is typed against the kind's specific node — at the
       // generic system level we lose that refinement, so the cast lands
       // here. Builders are responsible for trusting their schema.
-      const built = (builder as (n: AnyNode, c: GeometryContext) => { children: unknown[] })(
-        node,
-        ctx,
-      ) as unknown as Group
+      const built = (
+        builder as (
+          n: AnyNode,
+          c: GeometryContext,
+          shading: RenderShading,
+          textures: boolean,
+          colorPreset: ColorPreset,
+          sceneTheme: string,
+        ) => { children: unknown[] }
+      )(node, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
+
+      if (!textures && def.surfaceRole) {
+        applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset, sceneTheme)
+      }
 
       disposeChildren(group)
       for (const child of [...built.children]) {
@@ -215,15 +247,69 @@ function disposeChildren(group: Group) {
       const m = (mesh as { material: unknown }).material
       if (Array.isArray(m)) {
         for (const mat of m) {
+          if (isCachedMaterial(mat)) continue
           if (mat && typeof (mat as { dispose?: () => void }).dispose === 'function') {
             ;(mat as { dispose: () => void }).dispose()
           }
         }
+      } else if (isCachedMaterial(m)) {
       } else if (m && typeof (m as { dispose?: () => void }).dispose === 'function') {
         ;(m as { dispose: () => void }).dispose()
       }
     }
   }
+}
+
+function applyDefaultSurfaceRole(
+  root: Group,
+  defaultRole: SurfaceRole,
+  colorPreset: ColorPreset,
+  sceneTheme?: string,
+) {
+  root.traverse((child) => {
+    const mesh = child as Partial<Mesh> & {
+      material?: Material | Material[]
+      userData: Record<string, unknown>
+    }
+    if (!('material' in mesh) || !mesh.material) return
+
+    const role = getMeshSurfaceRole(mesh.userData.surfaceRole, defaultRole)
+    mesh.userData.surfaceRole = role
+    mesh.material = createSurfaceRoleMaterial(
+      role,
+      colorPreset,
+      getMaterialSide(mesh.material),
+      sceneTheme,
+    )
+  })
+}
+
+function getMeshSurfaceRole(value: unknown, fallback: SurfaceRole): SurfaceRole {
+  return typeof value === 'string' && isSurfaceRole(value) ? value : fallback
+}
+
+function isSurfaceRole(value: string): value is SurfaceRole {
+  return (
+    value === 'wall' ||
+    value === 'floor' ||
+    value === 'ceiling' ||
+    value === 'roof' ||
+    value === 'joinery' ||
+    value === 'glazing' ||
+    value === 'furnishing'
+  )
+}
+
+function getMaterialSide(material: Material | Material[]): Material['side'] {
+  const source = Array.isArray(material) ? material[0] : material
+  return source?.side ?? FrontSide
+}
+
+function isCachedMaterial(value: unknown): boolean {
+  return Boolean(
+    (value as { userData?: { __pascalCachedMaterial?: boolean } } | null)?.userData
+      ?.__pascalCachedMaterial,
+  )
 }
 
 export default GeometrySystem

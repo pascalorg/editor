@@ -12,21 +12,26 @@ describe('buildRidgeVentGeometry', () => {
   })
 
   test('each style produces a different vertex count (no accidental fallthrough)', () => {
-    const standard = buildRidgeVentGeometry(RidgeVentNode.parse({ style: 'standard' }))
-      .getAttribute('position').count
-    const shingled = buildRidgeVentGeometry(RidgeVentNode.parse({ style: 'shingled' }))
-      .getAttribute('position').count
-    const metal = buildRidgeVentGeometry(RidgeVentNode.parse({ style: 'metal' }))
-      .getAttribute('position').count
+    const standard = buildRidgeVentGeometry(
+      RidgeVentNode.parse({ style: 'standard' }),
+    ).getAttribute('position').count
+    const shingled = buildRidgeVentGeometry(
+      RidgeVentNode.parse({ style: 'shingled' }),
+    ).getAttribute('position').count
+    const metal = buildRidgeVentGeometry(RidgeVentNode.parse({ style: 'metal' })).getAttribute(
+      'position',
+    ).count
     expect(new Set([standard, shingled, metal]).size).toBe(3)
   })
 
   test('endCaps adds vertices on every style', () => {
     for (const style of ['standard', 'shingled', 'metal'] as const) {
-      const without = buildRidgeVentGeometry(RidgeVentNode.parse({ style, endCaps: false }))
-        .getAttribute('position').count
-      const withCaps = buildRidgeVentGeometry(RidgeVentNode.parse({ style, endCaps: true }))
-        .getAttribute('position').count
+      const without = buildRidgeVentGeometry(
+        RidgeVentNode.parse({ style, endCaps: false }),
+      ).getAttribute('position').count
+      const withCaps = buildRidgeVentGeometry(
+        RidgeVentNode.parse({ style, endCaps: true }),
+      ).getAttribute('position').count
       expect(withCaps).toBeGreaterThan(without)
     }
   })

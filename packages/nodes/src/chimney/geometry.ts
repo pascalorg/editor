@@ -65,10 +65,7 @@ function mergeAndDispose(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return merged
 }
 
-export function buildChimneyGeometry(
-  node: ChimneyNode,
-  segment: RoofSegmentNode,
-): ChimneyGeometry {
+export function buildChimneyGeometry(node: ChimneyNode, segment: RoofSegmentNode): ChimneyGeometry {
   const peakY = segment.wallHeight + getActiveRoofHeight(segment)
   const topY = peakY + node.heightAboveRidge
   // Embed the body 0.2m below the eave so the bottom isn't visible
@@ -107,11 +104,7 @@ export function buildChimneyGeometry(
 
 // ─── Body ────────────────────────────────────────────────────────────
 
-function buildBodyGeometry(
-  node: ChimneyNode,
-  baseY: number,
-  topY: number,
-): THREE.BufferGeometry {
+function buildBodyGeometry(node: ChimneyNode, baseY: number, topY: number): THREE.BufferGeometry {
   const isRound = node.bodyShape === 'round'
   const w = node.width
   const d = isRound ? node.width : node.depth
@@ -333,10 +326,7 @@ function buildFluesGeometry(node: ChimneyNode, capTopY: number): THREE.BufferGeo
 // ─── Cricket ─────────────────────────────────────────────────────────
 // Water-shedding wedge on the up-slope side of the chimney.
 
-function buildCricketGeometry(
-  node: ChimneyNode,
-  baseY: number,
-): THREE.BufferGeometry {
+function buildCricketGeometry(node: ChimneyNode, baseY: number): THREE.BufferGeometry {
   const w = node.width
   const d = node.depth
   const cL = Math.max(0.1, node.cricketLength)
@@ -365,19 +355,32 @@ function buildCricketGeometry(
   const u0_: [number, number] = [0, 0]
   const u1_: [number, number] = [w, 0]
   const uvBottom: Record<'v0' | 'v1' | 'v2' | 'v3', [number, number]> = {
-    v0: u0_, v1: u1_, v2: [w, cL], v3: [0, cL],
+    v0: u0_,
+    v1: u1_,
+    v2: [w, cL],
+    v3: [0, cL],
   }
   const uvSlope: Record<'v3' | 'v2' | 'v5' | 'v4', [number, number]> = {
-    v3: [0, 0], v2: [w, 0], v5: [w, slopeLen], v4: [0, slopeLen],
+    v3: [0, 0],
+    v2: [w, 0],
+    v5: [w, slopeLen],
+    v4: [0, slopeLen],
   }
   const uvBack: Record<'v0' | 'v1' | 'v5' | 'v4', [number, number]> = {
-    v0: [0, 0], v1: [w, 0], v5: [w, cH], v4: [0, cH],
+    v0: [0, 0],
+    v1: [w, 0],
+    v5: [w, cH],
+    v4: [0, cH],
   }
   const uvLeft: Record<'v0' | 'v3' | 'v4', [number, number]> = {
-    v0: [0, 0], v3: [cL, 0], v4: [0, cH],
+    v0: [0, 0],
+    v3: [cL, 0],
+    v4: [0, cH],
   }
   const uvRight: Record<'v1' | 'v5' | 'v2', [number, number]> = {
-    v1: [0, 0], v5: [0, cH], v2: [cL, 0],
+    v1: [0, 0],
+    v5: [0, cH],
+    v2: [cL, 0],
   }
 
   const pushTri = (
@@ -510,9 +513,7 @@ function pushSlabFaces(
   const cB = Math.max(0, Math.min(bevel, halfWB - 0.001, halfDB - 0.001))
   const cT = Math.max(0, Math.min(bevel, halfWT - 0.001, halfDT - 0.001))
   if (cB > 0.001 || cT > 0.001) {
-    pushOctagonalSlabFaces(
-      positions, uvs, y0, y1, halfWB, halfDB, halfWT, halfDT, cB, cT,
-    )
+    pushOctagonalSlabFaces(positions, uvs, y0, y1, halfWB, halfDB, halfWT, halfDT, cB, cT)
     return
   }
 
@@ -541,11 +542,27 @@ function pushSlabFaces(
   }
 
   // Bottom
-  pushQuad(bBL, bTL, bTR, bBR,
-    [-halfWB, -halfDB], [-halfWB, halfDB], [halfWB, halfDB], [halfWB, -halfDB])
+  pushQuad(
+    bBL,
+    bTL,
+    bTR,
+    bBR,
+    [-halfWB, -halfDB],
+    [-halfWB, halfDB],
+    [halfWB, halfDB],
+    [halfWB, -halfDB],
+  )
   // Top
-  pushQuad(tBL, tBR, tTR, tTL,
-    [-halfWT, -halfDT], [halfWT, -halfDT], [halfWT, halfDT], [-halfWT, halfDT])
+  pushQuad(
+    tBL,
+    tBR,
+    tTR,
+    tTL,
+    [-halfWT, -halfDT],
+    [halfWT, -halfDT],
+    [halfWT, halfDT],
+    [-halfWT, halfDT],
+  )
   // Sides
   pushQuad(bBL, bBR, tBR, tBL, [-halfWB, 0], [halfWB, 0], [halfWT, t], [-halfWT, t])
   pushQuad(bBR, bTR, tTR, tBR, [-halfDB, 0], [halfDB, 0], [halfDT, t], [-halfDT, t])

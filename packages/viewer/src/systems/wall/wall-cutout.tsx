@@ -41,11 +41,19 @@ export const WallCutout = () => {
   const lastCameraTarget = useRef(new Vector3())
   const lastUpdateTime = useRef(0)
   const lastWallMode = useRef<string>(useViewer.getState().wallMode)
+  const lastShading = useRef(useViewer.getState().shading)
   const lastNumberOfWalls = useRef(0)
   const lastHighlightKey = useRef('')
+  const lastTextures = useRef(useViewer.getState().textures)
+  const lastColorPreset = useRef(useViewer.getState().colorPreset)
+  const lastSceneTheme = useRef(useViewer.getState().sceneTheme)
 
   useFrame(({ camera, clock }) => {
     const wallMode = useViewer.getState().wallMode
+    const shading = useViewer.getState().shading
+    const textures = useViewer.getState().textures
+    const colorPreset = useViewer.getState().colorPreset
+    const sceneTheme = useViewer.getState().sceneTheme
     const selectedIds = useViewer.getState().selection.selectedIds
     const previewSelectedIds = useViewer.getState().previewSelectedIds
     const hoveredId = useViewer.getState().hoveredId
@@ -74,6 +82,10 @@ export const WallCutout = () => {
     if (
       ((distanceMoved > 0.5 || directionChanged > 0.3) && timeSinceUpdate > 0.1) ||
       lastWallMode.current !== wallMode ||
+      lastShading.current !== shading ||
+      lastTextures.current !== textures ||
+      lastColorPreset.current !== colorPreset ||
+      lastSceneTheme.current !== sceneTheme ||
       sceneRegistry.byType.wall!.size !== lastNumberOfWalls.current ||
       lastHighlightKey.current !== highlightKey
     ) {
@@ -92,7 +104,7 @@ export const WallCutout = () => {
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
-        const materials = getMaterialsForWall(wallNode)
+        const materials = getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme)
 
         if (hideWall) {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
@@ -109,6 +121,10 @@ export const WallCutout = () => {
         }
       })
       lastWallMode.current = wallMode
+      lastShading.current = shading
+      lastTextures.current = textures
+      lastColorPreset.current = colorPreset
+      lastSceneTheme.current = sceneTheme
       lastNumberOfWalls.current = sceneRegistry.byType.wall!.size
       lastHighlightKey.current = highlightKey
     }
@@ -123,7 +139,13 @@ export const WallCutout = () => {
         if (!wallMesh) return
         const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined
         if (!wallNode || wallNode.type !== 'wall') return
-        const mats = getMaterialsForWall(wallNode)
+        const mats = getMaterialsForWall(
+          wallNode,
+          useViewer.getState().shading,
+          useViewer.getState().textures,
+          useViewer.getState().colorPreset,
+          useViewer.getState().sceneTheme,
+        )
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)
         if (current === mats.highlightedVisible || current === mats.deleteVisible) {

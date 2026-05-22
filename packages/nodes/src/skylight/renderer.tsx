@@ -12,16 +12,19 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
   getRoofOuterSurfaceFrameAtPoint,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { buildLanternGlassGeometry, clamp01, paneSize } from './geometry'
-import { buildFrameGeometry } from './frame-csg'
 import { surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { buildFrameGeometry } from './frame-csg'
+import { buildLanternGlassGeometry, clamp01, paneSize } from './geometry'
 
 const defaultFrameMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -569,6 +572,10 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   const ref = useRef<THREE.Group>(null!)
   useRegistry(storeNode.id, 'skylight', ref)
   const handlers = useNodeEvents(storeNode, 'skylight')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id))
   const node = useMemo(
@@ -599,13 +606,15 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
     }
   }, [frameGeo])
 
-  const frameMaterial = useMemo(
-    () =>
-      node.material
-        ? createMaterial(node.material)
-        : (createMaterialFromPresetRef(node.materialPreset) ?? defaultFrameMaterial),
-    [node.material, node.materialPreset],
-  )
+  const frameMaterial = useMemo(() => {
+    // Untextured frame (and everything in textures-off mode) takes the
+    // themed 'joinery' role colour; explicit paint shows when textures on.
+    if (!textures || (!node.material && !node.materialPreset)) {
+      return createSurfaceRoleMaterial('joinery', colorPreset, undefined, sceneTheme)
+    }
+    if (node.material) return createMaterial(node.material, shading)
+    return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultFrameMaterial
+  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   const activeType = node.skylightType ?? 'flat'
   const typePreset = SKYLIGHT_TYPE_PRESETS[activeType]
@@ -616,10 +625,16 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   const openAmount = runtimeOpenAmount ?? node.operationState ?? typePreset.operationState
 
   const glassMaterial = useMemo(() => {
-    const mat =
-      node.glassMaterial
-        ? createMaterial(node.glassMaterial)
-        : (createMaterialFromPresetRef(node.glassMaterialPreset) ?? defaultGlassMaterial.clone())
+    // Untextured glass (and textures-off mode) takes the themed 'glazing'
+    // role material — already DoubleSide + semi-transparent, and shared
+    // from the cache, so it must not be mutated.
+    if (!textures || (!node.glassMaterial && !node.glassMaterialPreset)) {
+      return createSurfaceRoleMaterial('glazing', colorPreset, undefined, sceneTheme)
+    }
+    const mat = node.glassMaterial
+      ? createMaterial(node.glassMaterial, shading)
+      : (createMaterialFromPresetRef(node.glassMaterialPreset, shading) ??
+        defaultGlassMaterial.clone())
     if (mat && typeof mat === 'object') {
       ;(mat as THREE.Material).side = THREE.DoubleSide
       if (mat instanceof THREE.MeshPhysicalMaterial) {
@@ -627,16 +642,19 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
       }
     }
     return mat
-  }, [glassThickness, node.glassMaterial, node.glassMaterialPreset])
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    glassThickness,
+    node.glassMaterial,
+    node.glassMaterialPreset,
+  ])
 
   const surfaceFrame = useMemo(() => {
-    if (!segment)
-      return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }
-    return getRoofOuterSurfaceFrameAtPoint(
-      segment,
-      node.position[0] ?? 0,
-      node.position[2] ?? 0,
-    )
+    if (!segment) return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }
+    return getRoofOuterSurfaceFrameAtPoint(segment, node.position[0] ?? 0, node.position[2] ?? 0)
   }, [segment, node.position[0], node.position[2], node.rotation, liveOverrides, storeNode.id])
 
   const surfaceQuat = useMemo(
@@ -662,51 +680,51 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
       <group position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}>
         <group quaternion={surfaceQuat}>
           <group rotation-y={node.rotation ?? 0}>
-          <mesh
-            castShadow
-            geometry={frameGeo}
-            material={frameMaterial}
-            name="skylight-surface"
-            receiveShadow
-          />
-          {activeType === 'lantern' && (
-            <LanternGlass
-              curbHeight={curbH}
-              frameMaterial={frameMaterial}
-              glassMaterial={glassMaterial}
-              node={node}
+            <mesh
+              castShadow
+              geometry={frameGeo}
+              material={frameMaterial}
+              name="skylight-surface"
+              receiveShadow
             />
-          )}
-          {activeType === 'sliding' && (
-            <SlidingGlass
-              curbHeight={curbH}
-              frameMaterial={frameMaterial}
-              glassMaterial={glassMaterial}
-              glassThickness={glassThickness}
-              node={node}
-              openAmount={openAmount}
-            />
-          )}
-          {activeType === 'opening' && (
-            <HingedGlass
-              curbHeight={curbH}
-              frameMaterial={frameMaterial}
-              glassMaterial={glassMaterial}
-              glassThickness={glassThickness}
-              hasMotorHousing={node.motorHousing ?? false}
-              node={node}
-              openAmount={openAmount}
-            />
-          )}
-          {(activeType === 'flat' || activeType === 'walk-on') && (
-            <GlassPane
-              glassThickness={glassThickness}
-              material={glassMaterial}
-              paneDepth={node.height + 0.004}
-              position={[0, curbH + glassThickness / 2, 0]}
-              width={node.width + 0.004}
-            />
-          )}
+            {activeType === 'lantern' && (
+              <LanternGlass
+                curbHeight={curbH}
+                frameMaterial={frameMaterial}
+                glassMaterial={glassMaterial}
+                node={node}
+              />
+            )}
+            {activeType === 'sliding' && (
+              <SlidingGlass
+                curbHeight={curbH}
+                frameMaterial={frameMaterial}
+                glassMaterial={glassMaterial}
+                glassThickness={glassThickness}
+                node={node}
+                openAmount={openAmount}
+              />
+            )}
+            {activeType === 'opening' && (
+              <HingedGlass
+                curbHeight={curbH}
+                frameMaterial={frameMaterial}
+                glassMaterial={glassMaterial}
+                glassThickness={glassThickness}
+                hasMotorHousing={node.motorHousing ?? false}
+                node={node}
+                openAmount={openAmount}
+              />
+            )}
+            {(activeType === 'flat' || activeType === 'walk-on') && (
+              <GlassPane
+                glassThickness={glassThickness}
+                material={glassMaterial}
+                paneDepth={node.height + 0.004}
+                position={[0, curbH + glassThickness / 2, 0]}
+                width={node.width + 0.004}
+              />
+            )}
           </group>
         </group>
       </group>

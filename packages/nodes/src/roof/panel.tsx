@@ -207,13 +207,7 @@ export default function RoofPanel() {
   // Same code path as the top palette — see `tool-manager.tsx:28`'s
   // `nodeRegistry.get(tool)?.tool` dispatch.
   const activateTool = useCallback(
-    (kind:
-      | 'box-vent'
-      | 'ridge-vent'
-      | 'chimney'
-      | 'solar-panel'
-      | 'skylight'
-      | 'dormer') => {
+    (kind: 'box-vent' | 'ridge-vent' | 'chimney' | 'solar-panel' | 'skylight' | 'dormer') => {
       triggerSFX('sfx:item-pick')
       useEditor.getState().setTool(kind)
       if (useEditor.getState().mode !== 'build') {

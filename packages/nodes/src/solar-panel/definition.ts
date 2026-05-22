@@ -18,6 +18,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   schemaVersion: 1,
   schema: SolarPanelNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     const stub = SolarPanelNodeSchema.parse({

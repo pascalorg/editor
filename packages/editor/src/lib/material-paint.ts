@@ -8,12 +8,11 @@ import {
   type ChimneyMaterialRole,
   type ChimneyNode,
   type ColumnNode,
-  type DormerNode,
   type DormerSurfaceMaterialRole,
   type FenceNode,
   getCatalogMaterialById,
-  getEffectiveDormerSurfaceMaterial,
   getEffectiveRoofSurfaceMaterial,
+  getEffectiveSegmentSurfaceMaterial,
   getEffectiveStairSurfaceMaterial,
   getEffectiveWallSurfaceMaterial,
   getLibraryMaterialIdFromRef,
@@ -21,7 +20,6 @@ import {
   type MaterialTarget,
   nodeRegistry,
   type RidgeVentNode,
-  getEffectiveSegmentSurfaceMaterial,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentSurfaceMaterialRole,
@@ -143,17 +141,11 @@ export function buildRoofSegmentSurfaceMaterialPatch(
 ): Partial<RoofSegmentNode> {
   const nextSurfaceMaterial = { material, materialPreset }
   const nextTop =
-    targetRole === 'top'
-      ? nextSurfaceMaterial
-      : getEffectiveSegmentSurfaceMaterial(node, 'top')
+    targetRole === 'top' ? nextSurfaceMaterial : getEffectiveSegmentSurfaceMaterial(node, 'top')
   const nextEdge =
-    targetRole === 'edge'
-      ? nextSurfaceMaterial
-      : getEffectiveSegmentSurfaceMaterial(node, 'edge')
+    targetRole === 'edge' ? nextSurfaceMaterial : getEffectiveSegmentSurfaceMaterial(node, 'edge')
   const nextWall =
-    targetRole === 'wall'
-      ? nextSurfaceMaterial
-      : getEffectiveSegmentSurfaceMaterial(node, 'wall')
+    targetRole === 'wall' ? nextSurfaceMaterial : getEffectiveSegmentSurfaceMaterial(node, 'wall')
 
   return {
     topMaterial: nextTop.material,
@@ -177,9 +169,12 @@ export function buildRoofSurfaceMaterialUpdates(
   const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [
     {
       id: node.id as AnyNodeId,
-      data: buildRoofSurfaceMaterialPatch(node, targetRole, material, materialPreset) as Partial<
-        AnyNode
-      >,
+      data: buildRoofSurfaceMaterialPatch(
+        node,
+        targetRole,
+        material,
+        materialPreset,
+      ) as Partial<AnyNode>,
     },
   ]
 

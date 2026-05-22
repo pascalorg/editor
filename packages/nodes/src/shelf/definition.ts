@@ -10,6 +10,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   schemaVersion: 2,
   schema: ShelfNode,
   category: 'furnish',
+  surfaceRole: 'joinery',
 
   defaults: () => ({
     object: 'node',

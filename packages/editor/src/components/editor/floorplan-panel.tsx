@@ -45,7 +45,7 @@ import {
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
   memo,
@@ -3896,7 +3896,7 @@ export function FloorplanPanel() {
   const previewSelectedIds = useViewer((state) => state.previewSelectedIds)
   const setSelection = useViewer((state) => state.setSelection)
   const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
-  const theme = useViewer((state) => state.theme)
+  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const unit = useViewer((state) => state.unit)
   const showGrid = useViewer((state) => state.showGrid)
   const showGuides = useViewer((state) => state.showGuides)
@@ -5234,7 +5234,7 @@ export function FloorplanPanel() {
 
   const palette = useMemo(
     () =>
-      theme === 'dark'
+      isDark
         ? {
             surface: '#0a0e1b',
             minorGrid: '#334155',
@@ -5347,9 +5347,9 @@ export function FloorplanPanel() {
             curveHandleStroke: '#0f766e',
             curveHandleHoverStroke: '#14b8a6',
           },
-    [theme],
+    [isDark],
   )
-  const wallSelectionHatchId = useMemo(() => `floorplan-wall-selection-hatch-${theme}`, [theme])
+  const wallSelectionHatchId = useMemo(() => `floorplan-wall-selection-hatch-${isDark}`, [isDark])
   // Subset of the legacy palette surfaced to registry-driven kinds via
   // <FloorplanRenderProvider>. Mirrors `FloorplanPalette` in `@pascal-app/
   // core` — keep slot names + meanings in sync.
@@ -5368,12 +5368,12 @@ export function FloorplanPanel() {
       curveHandleStroke: palette.curveHandleStroke,
       curveHandleHoverStroke: palette.curveHandleHoverStroke,
       measurementStroke: palette.measurementStroke,
-      measurementLabelBackground: theme === 'dark' ? '#0f172a' : '#ffffff',
-      measurementLabelText: theme === 'dark' ? '#e2e8f0' : '#171717',
+      measurementLabelBackground: isDark ? '#0f172a' : '#ffffff',
+      measurementLabelText: isDark ? '#e2e8f0' : '#171717',
     }),
-    [palette, theme],
+    [palette, isDark],
   )
-  const slabSelectionHatchId = useMemo(() => `floorplan-slab-selection-hatch-${theme}`, [theme])
+  const slabSelectionHatchId = useMemo(() => `floorplan-slab-selection-hatch-${isDark}`, [isDark])
   const gridSteps = useMemo(
     () => getVisibleGridSteps(viewBox.width, surfaceSize.width),
     [surfaceSize.width, viewBox.width],
@@ -7620,7 +7620,7 @@ export function FloorplanPanel() {
 
       document.body.style.userSelect = 'none'
       document.body.style.cursor = shouldRotate
-        ? getGuideRotateCursor(theme === 'dark')
+        ? getGuideRotateCursor(isDark)
         : getGuideResizeCursor(corner, rotationSvg)
 
       const nextDraft: GuideTransformDraft = {
@@ -7633,7 +7633,7 @@ export function FloorplanPanel() {
       guideTransformDraftRef.current = nextDraft
       setGuideTransformDraft(nextDraft)
     },
-    [canInteractWithGuides, guideUi, handleGuideSelect, theme],
+    [canInteractWithGuides, guideUi, handleGuideSelect, isDark],
   )
   const handleGuideTranslateStart = useCallback(
     (guide: GuideNode, event: ReactPointerEvent<SVGRectElement>) => {
@@ -8237,7 +8237,7 @@ export function FloorplanPanel() {
         {showGuides && canInteractWithGuides && selectedGuide && (
           <FloorplanGuideHandleHint
             anchor={guideHandleHintAnchor}
-            isDarkMode={theme === 'dark'}
+            isDarkMode={isDark}
             isMacPlatform={isMacPlatform}
             rotationModifierPressed={rotationModifierPressed}
           />
@@ -8605,7 +8605,7 @@ export function FloorplanPanel() {
               {selectedGuide && showGuides && (
                 <FloorplanGuideSelectionOverlay
                   guide={selectedGuide}
-                  isDarkMode={theme === 'dark'}
+                  isDarkMode={isDark}
                   onCornerHoverChange={setHoveredGuideCorner}
                   onCornerPointerDown={handleGuideCornerPointerDown}
                   rotationModifierPressed={rotationModifierPressed}

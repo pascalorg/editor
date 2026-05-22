@@ -55,8 +55,7 @@ export default function DormerPanel() {
   const overrides = useLiveNodeOverrides((s) =>
     selectedId ? (s.get(selectedId as AnyNodeId) as Partial<DormerNode> | undefined) : undefined,
   )
-  const node =
-    storeNode && overrides ? ({ ...storeNode, ...overrides } as DormerNode) : storeNode
+  const node = storeNode && overrides ? ({ ...storeNode, ...overrides } as DormerNode) : storeNode
 
   const handleUpdate = useCallback(
     (updates: Partial<DormerNode>) => {

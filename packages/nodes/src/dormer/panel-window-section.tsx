@@ -1,12 +1,7 @@
 'use client'
 
 import type { DormerNode } from '@pascal-app/core'
-import {
-  PanelSection,
-  SegmentedControl,
-  SliderControl,
-  ToggleControl,
-} from '@pascal-app/editor'
+import { PanelSection, SegmentedControl, SliderControl, ToggleControl } from '@pascal-app/editor'
 import { useState } from 'react'
 
 type WindowShape = DormerNode['windowShape']
@@ -134,9 +129,12 @@ export function DormerWindowSection({
               windowShape: v as WindowShape,
               ...(v === 'rounded'
                 ? {
-                    windowCornerRadii: windowCornerRadii.map((r) =>
-                      Math.min(r, maxRadius),
-                    ) as [number, number, number, number],
+                    windowCornerRadii: windowCornerRadii.map((r) => Math.min(r, maxRadius)) as [
+                      number,
+                      number,
+                      number,
+                      number,
+                    ],
                   }
                 : {}),
             })
@@ -257,12 +255,8 @@ export function DormerWindowSection({
           label="Columns"
           max={8}
           min={1}
-          onChange={(v) =>
-            previewProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })
-          }
-          onCommit={(v) =>
-            commitProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })
-          }
+          onChange={(v) => previewProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })}
+          onCommit={(v) => commitProp({ windowColumns: Math.max(1, Math.min(8, Math.round(v))) })}
           precision={0}
           restoreOnCommit={false}
           step={1}

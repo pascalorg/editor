@@ -2,8 +2,8 @@ import {
   type AnyNode,
   type NodeDefinition,
   type RoofSegmentNode,
-  type SkylightNode as SkylightNodeType,
   SkylightNode as SkylightNodeSchema,
+  type SkylightNode as SkylightNodeType,
 } from '@pascal-app/core'
 import {
   closeSkylightOpenState,
@@ -25,6 +25,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   schemaVersion: 1,
   schema: SkylightNode,
   category: 'structure',
+  surfaceRole: 'glazing',
 
   defaults: () => {
     const stub = SkylightNodeSchema.parse({

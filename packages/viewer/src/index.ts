@@ -3,6 +3,7 @@
 // Public so registry-driven kinds can compose children without reaching
 // into viewer's internal paths.
 
+export type { SurfaceRole } from '@pascal-app/core'
 export { ErrorBoundary } from './components/error-boundary'
 // Stage A wrap-exports for the rest of the kinds — `@pascal-app/nodes`
 // registers each via `def.renderer` (and `def.system` when present)
@@ -22,14 +23,32 @@ export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
-export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+// CSG primitives — used by chimney's roof-trim and other kinds whose
+// geometry subtracts pieces against their host. Lives in viewer
+// because three-bvh-csg / three-mesh-bvh are viewer-only deps.
+export {
+  ADDITION,
+  Brush,
+  computeGeometryBoundsTree,
+  csgEvaluator,
+  csgGeometry,
+  csgMaterials,
+  prepareBrushForCSG,
+  SUBTRACTION,
+} from './lib/csg-utils'
+export type { EdgeMode } from './lib/edge-style'
+export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
+  BLUEPRINT_PALETTE,
   baseMaterial,
+  CLAY_PALETTE,
+  type ColorPreset,
   clearMaterialCache,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
   DEFAULT_CEILING_MATERIAL,
   DEFAULT_DOOR_MATERIAL,
   DEFAULT_ROOF_MATERIAL,
@@ -40,9 +59,20 @@ export {
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
   glassMaterial,
+  MONO_PALETTE,
+  PRESET_PALETTES,
+  type RenderShading,
+  resolveSurfaceColor,
+  WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
+export {
+  getSceneTheme,
+  SCENE_THEME_IDS,
+  SCENE_THEMES,
+  type SceneTheme,
+} from './lib/scene-themes'
 export { useItemLightPool } from './store/use-item-light-pool'
 export { default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
@@ -73,19 +103,6 @@ export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { LevelSystem } from './systems/level/level-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
-// CSG primitives — used by chimney's roof-trim and other kinds whose
-// geometry subtracts pieces against their host. Lives in viewer
-// because three-bvh-csg / three-mesh-bvh are viewer-only deps.
-export {
-  ADDITION,
-  Brush,
-  csgEvaluator,
-  csgGeometry,
-  csgMaterials,
-  computeGeometryBoundsTree,
-  prepareBrushForCSG,
-  SUBTRACTION,
-} from './lib/csg-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)
@@ -95,10 +112,10 @@ export {
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
   mapRoofGroupMaterialIndex,
-  remapRoofShellFaces,
   ROOF_MATERIAL_SLOT_COUNT,
-  roofCsgDummyMats,
   RoofSystem,
+  remapRoofShellFaces,
+  roofCsgDummyMats,
   type SurfaceFrame,
 } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'

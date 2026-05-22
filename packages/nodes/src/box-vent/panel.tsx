@@ -9,7 +9,6 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import type { BoxVentNode } from './schema'
 import {
   ActionButton,
   ActionGroup,
@@ -23,6 +22,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import type { BoxVentNode } from './schema'
 
 /**
  * Inspector panel for a placed box-vent. Exposes the same parametrics
@@ -296,10 +296,7 @@ export default function BoxVentPanel() {
             />
             <SliderControl
               label="Gap Height"
-              max={Math.max(
-                0,
-                node.height - Math.max(0.01, node.capHeight ?? 0.07) - 0.005,
-              )}
+              max={Math.max(0, node.height - Math.max(0.01, node.capHeight ?? 0.07) - 0.005)}
               min={0}
               onChange={(v) => previewProp({ capGap: v })}
               onCommit={(v) => handleUpdate({ capGap: v })}

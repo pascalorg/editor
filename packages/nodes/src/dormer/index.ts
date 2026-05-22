@@ -4,8 +4,8 @@ export {
   dormerSupportsArch,
   dormerSupportsCornerRadii,
 } from './geometry'
-export { DormerNode, getEffectiveDormerSurfaceMaterial } from './schema'
 export type {
   DormerSurfaceMaterialRole,
   DormerSurfaceMaterialSpec,
 } from './schema'
+export { DormerNode, getEffectiveDormerSurfaceMaterial } from './schema'

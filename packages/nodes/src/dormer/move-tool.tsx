@@ -86,7 +86,11 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
           node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
             ? (node.metadata as Record<string, unknown>)
             : {}
-        const { isNew: _isNew, isTransient: _isTransient, ...rest } = m as {
+        const {
+          isNew: _isNew,
+          isTransient: _isTransient,
+          ...rest
+        } = m as {
           isNew?: boolean
           isTransient?: boolean
         }
@@ -125,9 +129,7 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
               children: (prevSeg.children ?? []).filter((id) => id !== node.id),
             })
           }
-          const newSeg = state.nodes[hit.segment.id as AnyNodeId] as
-            | RoofSegmentNode
-            | undefined
+          const newSeg = state.nodes[hit.segment.id as AnyNodeId] as RoofSegmentNode | undefined
           if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
             state.updateNode(hit.segment.id as AnyNodeId, {
               children: [...(newSeg.children ?? []), node.id],

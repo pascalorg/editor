@@ -23,7 +23,14 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useNodeEvents } from '@pascal-app/viewer'
+import {
+  type ColorPreset,
+  createDefaultMaterial,
+  createSurfaceRoleMaterial,
+  type RenderShading,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
@@ -31,7 +38,7 @@ import {
   CylinderGeometry,
   type Group,
   type InstancedMesh,
-  MeshStandardMaterial,
+  type Material,
   Object3D,
   TorusGeometry,
 } from 'three'
@@ -58,184 +65,343 @@ const SHAFT_TOP_FRAME_CLEARANCE = 0.006
 type ElevatorDoorPanelStyleValue = ElevatorNode['doorPanelStyle']
 type ElevatorDoorStyleValue = ElevatorNode['doorStyle']
 
-const SHAFT_WALL_MATERIAL = new MeshStandardMaterial({
-  color: SHAFT_WALL_COLOR,
-  metalness: 0.08,
-  roughness: 0.56,
-})
-const SHAFT_SIDE_MATERIAL = new MeshStandardMaterial({
-  color: SHAFT_SIDE_COLOR,
-  metalness: 0.12,
-  roughness: 0.58,
-})
-const SHAFT_TRIM_MATERIAL = new MeshStandardMaterial({
-  color: SHAFT_TRIM_COLOR,
-  metalness: 0.2,
-  roughness: 0.38,
-})
-const CAB_MATERIAL = new MeshStandardMaterial({
-  color: CAB_COLOR,
-  metalness: 0.2,
-  roughness: 0.48,
-})
-const DOOR_MATERIAL = new MeshStandardMaterial({
-  color: DOOR_COLOR,
-  metalness: 0.34,
-  roughness: 0.34,
-})
-const DOOR_GROOVE_MATERIAL = new MeshStandardMaterial({
-  color: '#5f6978',
-  metalness: 0.28,
-  roughness: 0.42,
-})
-const GLASS_MATERIAL = new MeshStandardMaterial({
-  color: GLASS_COLOR,
-  depthWrite: false,
-  metalness: 0,
-  opacity: 0.2,
-  roughness: 0.08,
-  transparent: true,
-})
-const PANEL_MATERIAL = new MeshStandardMaterial({
-  color: PANEL_COLOR,
-  metalness: 0.32,
-  roughness: 0.36,
-})
-const LANDING_PANEL_MATERIAL = new MeshStandardMaterial({
-  color: PANEL_COLOR,
-  metalness: 0.25,
-  roughness: 0.4,
-})
-const INDICATOR_SCREEN_MATERIALS = {
-  active: new MeshStandardMaterial({
-    color: '#041f2f',
-    emissive: '#0ea5e9',
-    emissiveIntensity: 0.16,
-    metalness: 0.12,
-    roughness: 0.38,
-  }),
-  idle: new MeshStandardMaterial({
-    color: '#111827',
-    metalness: 0.12,
-    roughness: 0.38,
-  }),
+type ElevatorMaterial = Material & {
+  depthWrite?: boolean
+  emissive?: { set: (color: string) => void }
+  emissiveIntensity?: number
+  metalness?: number
+  opacity?: number
+  roughness?: number
+  transparent?: boolean
 }
-const INDICATOR_GLYPH_MATERIALS = {
-  active: new MeshStandardMaterial({
-    color: '#38bdf8',
-    emissive: '#38bdf8',
-    emissiveIntensity: 0.36,
-    metalness: 0.08,
-    roughness: 0.32,
-  }),
-  idle: new MeshStandardMaterial({
-    color: '#94a3b8',
-    emissive: '#94a3b8',
-    emissiveIntensity: 0.18,
-    metalness: 0.08,
-    roughness: 0.32,
-  }),
+
+type ElevatorMaterialParams = {
+  color: string
+  depthWrite?: boolean
+  emissive?: string
+  emissiveIntensity?: number
+  metalness?: number
+  opacity?: number
+  roughness?: number
+  transparent?: boolean
 }
-const BUTTON_FACE_MATERIALS = {
-  active: new MeshStandardMaterial({
-    color: '#38bdf8',
-    emissive: '#38bdf8',
-    emissiveIntensity: 0.28,
-    metalness: 0.22,
-    roughness: 0.3,
-  }),
-  queued: new MeshStandardMaterial({
-    color: '#fbbf24',
-    emissive: '#fbbf24',
-    emissiveIntensity: 0.18,
-    metalness: 0.22,
-    roughness: 0.3,
-  }),
-  idle: new MeshStandardMaterial({
-    color: '#d6dde7',
-    metalness: 0.22,
-    roughness: 0.3,
-  }),
-  disabled: new MeshStandardMaterial({
-    color: '#475569',
-    metalness: 0.12,
-    roughness: 0.52,
-  }),
+
+function createElevatorMaterial(params: ElevatorMaterialParams, shading: RenderShading): Material {
+  const material = createDefaultMaterial(
+    params.color,
+    params.roughness ?? 0.5,
+    shading,
+  ) as ElevatorMaterial
+
+  if ('metalness' in material) material.metalness = params.metalness ?? 0
+  if ('roughness' in material && params.roughness !== undefined) {
+    material.roughness = params.roughness
+  }
+  if (params.depthWrite !== undefined) material.depthWrite = params.depthWrite
+  if (params.opacity !== undefined) material.opacity = params.opacity
+  if (params.transparent !== undefined) material.transparent = params.transparent
+  if (params.emissive && material.emissive) material.emissive.set(params.emissive)
+  if ('emissiveIntensity' in material && params.emissiveIntensity !== undefined) {
+    material.emissiveIntensity = params.emissiveIntensity
+  }
+  material.needsUpdate = true
+  return material
 }
-const BUTTON_RING_MATERIALS = {
-  active: new MeshStandardMaterial({
-    color: '#0ea5e9',
-    emissive: '#0ea5e9',
-    emissiveIntensity: 0.16,
-    metalness: 0.48,
-    roughness: 0.28,
-  }),
-  queued: new MeshStandardMaterial({
-    color: '#f59e0b',
-    emissive: '#f59e0b',
-    emissiveIntensity: 0.1,
-    metalness: 0.48,
-    roughness: 0.28,
-  }),
-  idle: new MeshStandardMaterial({
-    color: '#64748b',
-    metalness: 0.48,
-    roughness: 0.28,
-  }),
-  disabled: new MeshStandardMaterial({
-    color: '#334155',
-    metalness: 0.28,
-    roughness: 0.5,
-  }),
+
+function createElevatorMaterials(
+  shading: RenderShading,
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+) {
+  if (!textures) {
+    const material = createSurfaceRoleMaterial('joinery', colorPreset)
+    return {
+      SHAFT_WALL_MATERIAL: material,
+      SHAFT_SIDE_MATERIAL: material,
+      SHAFT_TRIM_MATERIAL: material,
+      CAB_MATERIAL: material,
+      DOOR_MATERIAL: material,
+      DOOR_GROOVE_MATERIAL: material,
+      GLASS_MATERIAL: material,
+      PANEL_MATERIAL: material,
+      LANDING_PANEL_MATERIAL: material,
+      INDICATOR_SCREEN_MATERIALS: {
+        active: material,
+        idle: material,
+      },
+      INDICATOR_GLYPH_MATERIALS: {
+        active: material,
+        idle: material,
+      },
+      BUTTON_FACE_MATERIALS: {
+        active: material,
+        queued: material,
+        idle: material,
+        disabled: material,
+      },
+      BUTTON_RING_MATERIALS: {
+        active: material,
+        queued: material,
+        idle: material,
+        disabled: material,
+      },
+      BUTTON_GLOW_MATERIALS: {
+        active: material,
+        queued: material,
+      },
+      BUTTON_LABEL_MATERIALS: {
+        lit: material,
+        idle: material,
+        disabled: material,
+      },
+      QUEUE_STRIP_MATERIALS: {
+        queued: material,
+        idle: material,
+      },
+    }
+  }
+
+  return {
+    SHAFT_WALL_MATERIAL: createElevatorMaterial(
+      { color: SHAFT_WALL_COLOR, metalness: 0.08, roughness: 0.56 },
+      shading,
+    ),
+    SHAFT_SIDE_MATERIAL: createElevatorMaterial(
+      { color: SHAFT_SIDE_COLOR, metalness: 0.12, roughness: 0.58 },
+      shading,
+    ),
+    SHAFT_TRIM_MATERIAL: createElevatorMaterial(
+      { color: SHAFT_TRIM_COLOR, metalness: 0.2, roughness: 0.38 },
+      shading,
+    ),
+    CAB_MATERIAL: createElevatorMaterial(
+      { color: CAB_COLOR, metalness: 0.2, roughness: 0.48 },
+      shading,
+    ),
+    DOOR_MATERIAL: createElevatorMaterial(
+      { color: DOOR_COLOR, metalness: 0.34, roughness: 0.34 },
+      shading,
+    ),
+    DOOR_GROOVE_MATERIAL: createElevatorMaterial(
+      { color: '#5f6978', metalness: 0.28, roughness: 0.42 },
+      shading,
+    ),
+    GLASS_MATERIAL: createElevatorMaterial(
+      {
+        color: GLASS_COLOR,
+        depthWrite: false,
+        metalness: 0,
+        opacity: 0.2,
+        roughness: 0.08,
+        transparent: true,
+      },
+      shading,
+    ),
+    PANEL_MATERIAL: createElevatorMaterial(
+      { color: PANEL_COLOR, metalness: 0.32, roughness: 0.36 },
+      shading,
+    ),
+    LANDING_PANEL_MATERIAL: createElevatorMaterial(
+      { color: PANEL_COLOR, metalness: 0.25, roughness: 0.4 },
+      shading,
+    ),
+    INDICATOR_SCREEN_MATERIALS: {
+      active: createElevatorMaterial(
+        {
+          color: '#041f2f',
+          emissive: '#0ea5e9',
+          emissiveIntensity: 0.16,
+          metalness: 0.12,
+          roughness: 0.38,
+        },
+        shading,
+      ),
+      idle: createElevatorMaterial({ color: '#111827', metalness: 0.12, roughness: 0.38 }, shading),
+    },
+    INDICATOR_GLYPH_MATERIALS: {
+      active: createElevatorMaterial(
+        {
+          color: '#38bdf8',
+          emissive: '#38bdf8',
+          emissiveIntensity: 0.36,
+          metalness: 0.08,
+          roughness: 0.32,
+        },
+        shading,
+      ),
+      idle: createElevatorMaterial(
+        {
+          color: '#94a3b8',
+          emissive: '#94a3b8',
+          emissiveIntensity: 0.18,
+          metalness: 0.08,
+          roughness: 0.32,
+        },
+        shading,
+      ),
+    },
+    BUTTON_FACE_MATERIALS: {
+      active: createElevatorMaterial(
+        {
+          color: '#38bdf8',
+          emissive: '#38bdf8',
+          emissiveIntensity: 0.28,
+          metalness: 0.22,
+          roughness: 0.3,
+        },
+        shading,
+      ),
+      queued: createElevatorMaterial(
+        {
+          color: '#fbbf24',
+          emissive: '#fbbf24',
+          emissiveIntensity: 0.18,
+          metalness: 0.22,
+          roughness: 0.3,
+        },
+        shading,
+      ),
+      idle: createElevatorMaterial({ color: '#d6dde7', metalness: 0.22, roughness: 0.3 }, shading),
+      disabled: createElevatorMaterial(
+        { color: '#475569', metalness: 0.12, roughness: 0.52 },
+        shading,
+      ),
+    },
+    BUTTON_RING_MATERIALS: {
+      active: createElevatorMaterial(
+        {
+          color: '#0ea5e9',
+          emissive: '#0ea5e9',
+          emissiveIntensity: 0.16,
+          metalness: 0.48,
+          roughness: 0.28,
+        },
+        shading,
+      ),
+      queued: createElevatorMaterial(
+        {
+          color: '#f59e0b',
+          emissive: '#f59e0b',
+          emissiveIntensity: 0.1,
+          metalness: 0.48,
+          roughness: 0.28,
+        },
+        shading,
+      ),
+      idle: createElevatorMaterial({ color: '#64748b', metalness: 0.48, roughness: 0.28 }, shading),
+      disabled: createElevatorMaterial(
+        { color: '#334155', metalness: 0.28, roughness: 0.5 },
+        shading,
+      ),
+    },
+    BUTTON_GLOW_MATERIALS: {
+      active: createElevatorMaterial(
+        {
+          color: '#38bdf8',
+          depthWrite: false,
+          emissive: '#38bdf8',
+          emissiveIntensity: 0.28,
+          opacity: 0.58,
+          transparent: true,
+        },
+        shading,
+      ),
+      queued: createElevatorMaterial(
+        {
+          color: '#fbbf24',
+          depthWrite: false,
+          emissive: '#fbbf24',
+          emissiveIntensity: 0.18,
+          opacity: 0.58,
+          transparent: true,
+        },
+        shading,
+      ),
+    },
+    BUTTON_LABEL_MATERIALS: {
+      lit: createElevatorMaterial({ color: '#111827', metalness: 0.12, roughness: 0.34 }, shading),
+      idle: createElevatorMaterial({ color: '#334155', metalness: 0.12, roughness: 0.34 }, shading),
+      disabled: createElevatorMaterial(
+        { color: '#94a3b8', metalness: 0.08, roughness: 0.5 },
+        shading,
+      ),
+    },
+    QUEUE_STRIP_MATERIALS: {
+      queued: createElevatorMaterial(
+        {
+          color: '#fbbf24',
+          emissive: '#fbbf24',
+          emissiveIntensity: 0.16,
+          metalness: 0.18,
+          roughness: 0.42,
+        },
+        shading,
+      ),
+      idle: createElevatorMaterial({ color: '#64748b', metalness: 0.18, roughness: 0.42 }, shading),
+    },
+  }
 }
-const BUTTON_GLOW_MATERIALS = {
-  active: new MeshStandardMaterial({
-    color: '#38bdf8',
-    depthWrite: false,
-    emissive: '#38bdf8',
-    emissiveIntensity: 0.28,
-    opacity: 0.58,
-    transparent: true,
-  }),
-  queued: new MeshStandardMaterial({
-    color: '#fbbf24',
-    depthWrite: false,
-    emissive: '#fbbf24',
-    emissiveIntensity: 0.18,
-    opacity: 0.58,
-    transparent: true,
-  }),
+
+type ElevatorMaterialSet = ReturnType<typeof createElevatorMaterials>
+
+const elevatorMaterialsCache = new Map<string, ElevatorMaterialSet>()
+
+function getElevatorMaterials(
+  shading: RenderShading,
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+): ElevatorMaterialSet {
+  const cacheKey = `${shading}-${textures}-${colorPreset}`
+  const cached = elevatorMaterialsCache.get(cacheKey)
+  if (cached) return cached
+
+  const materials = createElevatorMaterials(shading, textures, colorPreset)
+  elevatorMaterialsCache.set(cacheKey, materials)
+  return materials
 }
-const BUTTON_LABEL_MATERIALS = {
-  lit: new MeshStandardMaterial({
-    color: '#111827',
-    metalness: 0.12,
-    roughness: 0.34,
-  }),
-  idle: new MeshStandardMaterial({
-    color: '#334155',
-    metalness: 0.12,
-    roughness: 0.34,
-  }),
-  disabled: new MeshStandardMaterial({
-    color: '#94a3b8',
-    metalness: 0.08,
-    roughness: 0.5,
-  }),
-}
-const QUEUE_STRIP_MATERIALS = {
-  queued: new MeshStandardMaterial({
-    color: '#fbbf24',
-    emissive: '#fbbf24',
-    emissiveIntensity: 0.16,
-    metalness: 0.18,
-    roughness: 0.42,
-  }),
-  idle: new MeshStandardMaterial({
-    color: '#64748b',
-    metalness: 0.18,
-    roughness: 0.42,
-  }),
+
+let {
+  SHAFT_WALL_MATERIAL,
+  SHAFT_SIDE_MATERIAL,
+  SHAFT_TRIM_MATERIAL,
+  CAB_MATERIAL,
+  DOOR_MATERIAL,
+  DOOR_GROOVE_MATERIAL,
+  GLASS_MATERIAL,
+  PANEL_MATERIAL,
+  LANDING_PANEL_MATERIAL,
+  INDICATOR_SCREEN_MATERIALS,
+  INDICATOR_GLYPH_MATERIALS,
+  BUTTON_FACE_MATERIALS,
+  BUTTON_RING_MATERIALS,
+  BUTTON_GLOW_MATERIALS,
+  BUTTON_LABEL_MATERIALS,
+  QUEUE_STRIP_MATERIALS,
+} = getElevatorMaterials('rendered')
+
+function setElevatorMaterials(
+  shading: RenderShading,
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+) {
+  ;({
+    SHAFT_WALL_MATERIAL,
+    SHAFT_SIDE_MATERIAL,
+    SHAFT_TRIM_MATERIAL,
+    CAB_MATERIAL,
+    DOOR_MATERIAL,
+    DOOR_GROOVE_MATERIAL,
+    GLASS_MATERIAL,
+    PANEL_MATERIAL,
+    LANDING_PANEL_MATERIAL,
+    INDICATOR_SCREEN_MATERIALS,
+    INDICATOR_GLYPH_MATERIALS,
+    BUTTON_FACE_MATERIALS,
+    BUTTON_RING_MATERIALS,
+    BUTTON_GLOW_MATERIALS,
+    BUTTON_LABEL_MATERIALS,
+    QUEUE_STRIP_MATERIALS,
+  } = getElevatorMaterials(shading, textures, colorPreset))
 }
 
 type ElevatorButtonAction = 'open-door' | 'request-level'
@@ -285,7 +451,7 @@ function BoxPrimitive({
   scale,
 }: {
   castShadow?: boolean
-  material: MeshStandardMaterial
+  material: Material
   position?: Vector3Tuple
   receiveShadow?: boolean
   rotation?: Vector3Tuple
@@ -314,7 +480,7 @@ function MeshButtonLabel({
 }: {
   faceSign?: -1 | 1
   label: string
-  material: MeshStandardMaterial
+  material: Material
   position: [number, number, number]
   scale: number
 }) {
@@ -381,7 +547,7 @@ function ElevatorDirectionGlyph({
   scale,
 }: {
   direction: 'down' | 'up' | null
-  material: MeshStandardMaterial
+  material: Material
   position: [number, number, number]
   scale: number
 }) {
@@ -484,7 +650,7 @@ function DoorOpenGlyph({
   positionZ,
   scale,
 }: {
-  material: MeshStandardMaterial
+  material: Material
   positionZ: number
   scale: number
 }) {
@@ -950,6 +1116,9 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const ref = useRef<Group>(null!)
   const cabRef = useRef<Group>(null)
   const handlers = useNodeEvents(node, 'elevator')
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
   const liveOverrides = useLiveNodeOverrides((state) => state.get(node.id))
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const renderNode = useMemo(
@@ -959,6 +1128,8 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
   const levelContextNodes = useScene(
     useShallow((state) => getElevatorLevelContextNodes(renderNode, state.nodes)),
   )
+
+  setElevatorMaterials(shading, textures, colorPreset)
 
   useRegistry(node.id, 'elevator', ref)
 

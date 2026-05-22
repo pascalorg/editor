@@ -15,13 +15,13 @@ import {
   isRegistrySelectable,
   type NodeEvent,
   nodeRegistry,
+  type RidgeVentNode,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
   resolveLevelId,
   resolveMaterial,
-  type RidgeVentNode,
   type ShelfNode,
   type SlabNode,
   type StairEvent,
@@ -30,9 +30,6 @@ import {
   type StairSurfaceMaterialRole,
   sceneRegistry,
   useScene,
-  type WallEvent,
-  type WallNode,
-  type WallSurfaceSide,
 } from '@pascal-app/core'
 
 import {
@@ -42,7 +39,6 @@ import {
   getRoofMaterialArray,
   getStairBodyMaterials,
   getStairRailingMaterial,
-  getVisibleWallMaterials,
   useViewer,
 } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
@@ -50,11 +46,10 @@ import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } f
 import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
-  buildRoofSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
+  buildRoofSurfaceMaterialUpdates,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
-  buildWallSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
@@ -230,12 +225,14 @@ function previewCursor(cursor: string): PaintPreviewCleanup {
 }
 
 function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Material | null {
+  const shading = useViewer.getState().shading
+
   if (material.materialPreset) {
-    return createMaterialFromPresetRef(material.materialPreset)
+    return createMaterialFromPresetRef(material.materialPreset, shading)
   }
 
   if (material.material) {
-    return createMaterial(material.material)
+    return createMaterial(material.material, shading)
   }
 
   return null
@@ -254,7 +251,13 @@ function applyRoofPaintPreview(
     ...node,
     ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const previewMaterial = getRoofMaterialArray(previewNode)
+  const previewMaterial = getRoofMaterialArray(
+    previewNode,
+    useViewer.getState().shading,
+    useViewer.getState().textures,
+    useViewer.getState().colorPreset,
+    useViewer.getState().sceneTheme,
+  )
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)
@@ -275,12 +278,7 @@ function applyRoofSegmentPaintPreview(
   // material lands on the matching CSG groups.
   const previewNode: RoofSegmentNode = {
     ...node,
-    ...buildRoofSegmentSurfaceMaterialPatch(
-      node,
-      role,
-      material.material,
-      material.materialPreset,
-    ),
+    ...buildRoofSegmentSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
   const resolveSlot = (r: 'top' | 'edge' | 'wall'): Material | null => {
     const parentSpec = parent ? getEffectiveRoofSurfaceMaterial(parent, r) : undefined
@@ -320,8 +318,9 @@ function applyStairPaintPreview(
     ...node,
     ...buildStairSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const bodyMaterials = getStairBodyMaterials(previewNode)
-  const railingMaterial = getStairRailingMaterial(previewNode)
+  const shading = useViewer.getState().shading
+  const bodyMaterials = getStairBodyMaterials(previewNode, shading)
+  const railingMaterial = getStairRailingMaterial(previewNode, shading)
   const restores: PaintPreviewCleanup[] = []
 
   root.traverse((object) => {
@@ -354,14 +353,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node:
-    | FenceNode
-    | ColumnNode
-    | SlabNode
-    | CeilingNode
-    | ShelfNode
-    | BoxVentNode
-    | RidgeVentNode,
+  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode | BoxVentNode | RidgeVentNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -881,17 +873,15 @@ export const SelectionManager = () => {
           apply:
             compatible && role
               ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      node.id as AnyNodeId,
-                      paintCap.buildPatch({
-                        node,
-                        role,
-                        material: activePaintMaterial.material,
-                        materialPreset: activePaintMaterial.materialPreset,
-                      }) as Partial<AnyNode>,
-                    )
+                  useScene.getState().updateNode(
+                    node.id as AnyNodeId,
+                    paintCap.buildPatch({
+                      node,
+                      role,
+                      material: activePaintMaterial.material,
+                      materialPreset: activePaintMaterial.materialPreset,
+                    }) as Partial<AnyNode>,
+                  )
                 }
               : null,
           preview:

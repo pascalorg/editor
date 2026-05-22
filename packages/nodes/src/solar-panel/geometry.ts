@@ -106,8 +106,15 @@ export function getDefaultPanelMaterial(): THREE.Material {
  */
 export function buildSolarPanelGeometry(node: SolarPanelNode): THREE.BufferGeometry | null {
   const {
-    rows, columns, panelWidth, panelHeight, gapX, gapY,
-    frameThickness, frameDepth, standoffHeight,
+    rows,
+    columns,
+    panelWidth,
+    panelHeight,
+    gapX,
+    gapY,
+    frameThickness,
+    frameDepth,
+    standoffHeight,
   } = node
 
   const frameGeos: THREE.BufferGeometry[] = []
@@ -210,11 +217,7 @@ export function getSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): numbe
   return peakY - t * rh
 }
 
-export function getAnalyticalNormal(
-  lx: number,
-  lz: number,
-  seg: RoofSegmentNode,
-): THREE.Vector3 {
+export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode): THREE.Vector3 {
   const { roofType, depth, width } = seg
   const rh = getActiveRoofHeight(seg)
   if (rh === 0) return new THREE.Vector3(0, 1, 0)

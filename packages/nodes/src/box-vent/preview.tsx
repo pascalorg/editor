@@ -16,13 +16,10 @@ import type { BoxVentNode } from './schema'
  * the cursor ray and starve the placement tool of `roof:move` events.
  */
 const BoxVentPreview = ({ node }: { node: BoxVentNode }) => {
-  const geometry = useMemo(() => buildBoxVentGeometry(node), [
-    node.width,
-    node.depth,
-    node.height,
-    node.hoodOverhang,
-    node.style,
-  ])
+  const geometry = useMemo(
+    () => buildBoxVentGeometry(node),
+    [node.width, node.depth, node.height, node.hoodOverhang, node.style],
+  )
 
   const material = useMemo(
     () =>
@@ -61,12 +58,7 @@ const BoxVentPreview = ({ node }: { node: BoxVentNode }) => {
         }}
       />
       <lineSegments geometry={edgesGeometry} renderOrder={1000}>
-        <lineBasicMaterial
-          color={0x6c_a3_ff}
-          depthTest={false}
-          opacity={0.95}
-          transparent
-        />
+        <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.95} transparent />
       </lineSegments>
     </group>
   )

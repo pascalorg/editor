@@ -88,6 +88,7 @@ const EDITOR_HOVER_STYLES: HoverStyles = {
     pulse: false,
   },
 }
+const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
 
 /**
  * Wire up module-level singletons (spatial grid, space detection, SFX) for
@@ -900,7 +901,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
+            defaultRender={EDITOR_DEFAULT_RENDER}
             hoverStyles={EDITOR_HOVER_STYLES}
+            renderContext="editor"
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
@@ -1072,7 +1075,12 @@ export default function Editor({
   }, [isFirstPersonMode])
 
   const previewViewerContent = (
-    <Viewer hoverStyles={EDITOR_HOVER_STYLES} selectionManager="default">
+    <Viewer
+      defaultRender={EDITOR_DEFAULT_RENDER}
+      hoverStyles={EDITOR_HOVER_STYLES}
+      renderContext="editor"
+      selectionManager="default"
+    >
       <ExportManager />
       <ViewerZoneSystem />
       <CeilingSystem />

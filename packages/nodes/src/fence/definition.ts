@@ -23,6 +23,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   schemaVersion: 1,
   schema: FenceNode,
   category: 'structure',
+  surfaceRole: 'wall',
 
   defaults: () => ({
     object: 'node',

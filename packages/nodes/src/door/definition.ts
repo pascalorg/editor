@@ -28,6 +28,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   schemaVersion: 1,
   schema: DoorNode,
   category: 'structure',
+  surfaceRole: 'joinery',
 
   // Leverage the schema's zod `.default()` annotations to compute the
   // full default shape — door has 40+ fields, listing them inline would
