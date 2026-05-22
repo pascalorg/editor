@@ -309,7 +309,7 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
         roofType: 'gable',
         width: oldRoof.length ?? 8,
         depth: (oldRoof.leftWidth ?? 2.2) + (oldRoof.rightWidth ?? 2.2),
-        wallHeight: 0,
+        wallHeight: 0.5,
         roofHeight: oldRoof.height ?? 2.5,
         wallThickness: 0.1,
         deckThickness: 0.1,

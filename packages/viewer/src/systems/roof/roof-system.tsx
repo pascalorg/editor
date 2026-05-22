@@ -50,6 +50,7 @@ const _uvAcrossSlope = new THREE.Vector3()
 
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
+const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
 
@@ -66,6 +67,7 @@ export const RoofSystem = () => {
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
+      warnedMergedRoofNaNIds.clear()
       return
     }
 
@@ -259,6 +261,22 @@ function updateMergedRoofGeometry(
       const combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
 
       const resultGeo = csgGeometry(combined)
+      if (geometryHasNaNPositions(resultGeo)) {
+        if (!warnedMergedRoofNaNIds.has(roofNode.id)) {
+          console.warn('[RoofSystem] Skipping merged roof geometry with NaN positions', roofNode.id)
+          warnedMergedRoofNaNIds.add(roofNode.id)
+        }
+        resultGeo.dispose()
+        finalShinTrimmed.geometry.dispose()
+        finalDeckTrimmed.geometry.dispose()
+        finalWallTrimmed.geometry.dispose()
+        shinDeck.geometry.dispose()
+        totalShinSlab.geometry.dispose()
+        totalDeckSlab.geometry.dispose()
+        totalWall.geometry.dispose()
+        totalInner.geometry.dispose()
+        return
+      }
 
       const resultMaterials = csgMaterials(combined)
 
@@ -291,6 +309,17 @@ function updateMergedRoofGeometry(
     totalWall.geometry.dispose()
     totalInner.geometry.dispose()
   }
+}
+
+function geometryHasNaNPositions(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position')
+  if (!position) return false
+
+  for (let i = 0; i < position.array.length; i++) {
+    if (Number.isNaN(position.array[i])) return true
+  }
+
+  return false
 }
 
 const dummyMats: [
@@ -388,7 +417,7 @@ export function getRoofSegmentBrushes(
     const dV = Math.max(0.01, depth + 2 * wExt)
 
     const autoDrop = wExt * tanTheta
-    const whV = wallHeight - autoDrop + vOffset
+    const whV = Math.max(0.01, wallHeight - autoDrop + vOffset)
 
     let rhV = activeRh
     if (activeRh > 0) {
