@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, sceneRegistry } from '@pascal-app/core'
-import { SSGI_PARAMS, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
+import { GRID_LAYER, SSGI_PARAMS, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import type { CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -62,6 +62,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   useEffect(() => {
     const cam = new THREE.PerspectiveCamera(60, THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT, 0.1, 1000)
     cam.layers.disable(EDITOR_LAYER)
+    cam.layers.disable(GRID_LAYER)
     thumbnailCameraRef.current = cam
 
     let mounted = true
@@ -73,7 +74,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
         // pass() handles MRT internally for all material types, including custom
         // shaders — unlike renderer.setMRT() which crashes on non-NodeMaterials.
-        // pass() also respects camera.layers, so EDITOR_LAYER objects are filtered.
+        // pass() also respects camera.layers, so EDITOR_LAYER + GRID_LAYER objects are filtered.
         const scenePass = pass(scene, cam)
         scenePass.setMRT(
           mrt({

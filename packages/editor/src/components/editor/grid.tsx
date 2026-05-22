@@ -1,14 +1,13 @@
 'use client'
 
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { GRID_LAYER, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MathUtils, type Mesh, Vector2 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGridEvents } from '../../hooks/use-grid-events'
-import { EDITOR_LAYER } from '../../lib/constants'
 
 export const Grid = ({
   cellSize = 0.5,
@@ -149,7 +148,7 @@ export const Grid = ({
 
   return (
     <mesh
-      layers={EDITOR_LAYER}
+      layers={GRID_LAYER}
       material={material}
       ref={gridRef}
       rotation-x={-Math.PI / 2}

@@ -24,7 +24,7 @@ import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import { edgeColorFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
-import { OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
+import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
@@ -151,13 +151,16 @@ const PostProcessingPasses = ({
     l.disable(SCENE_LAYER)
     return l
   }, [])
-  // Scene pass renders ONLY the main geometry layer. The default camera mask
-  // also has the overlay layer enabled (custom controls enable it for picking),
-  // so without this the gizmos/handles/tool previews land in the depth+normal
-  // MRT and get inked / AO'd as if they were geometry.
+  // Scene pass renders the main geometry layer plus the grid. The default camera
+  // mask also has the overlay layer enabled (custom controls enable it for
+  // picking), so without this the gizmos/handles/tool previews land in the
+  // depth+normal MRT and get inked / AO'd as if they were geometry. The grid is
+  // kept in here (not the overlay pass) so scene geometry depth-occludes it; it's
+  // a flat, depth-non-writing plane so the ink never picks it up.
   const sceneOnlyLayers = useMemo(() => {
     const l = new Layers()
     l.set(SCENE_LAYER)
+    l.enable(GRID_LAYER)
     return l
   }, [])
   // Editor overlays render in their own pass, composited on top after the ink

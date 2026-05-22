@@ -13,3 +13,13 @@ export const OVERLAY_LAYER = 1
 
 /** Layer used for zone rendering (floor fills and wall borders). */
 export const ZONE_LAYER = 2
+
+/**
+ * Layer for the editor ground grid. Rendered *inside* the scene pass (so scene
+ * geometry depth-occludes it instead of it bleeding through walls/objects) — it
+ * is a flat, depth-non-writing plane, so the screen-space ink never picks it up.
+ * Kept off OVERLAY_LAYER because overlays composite on top with no scene-depth
+ * test, which is exactly what we don't want for a full-floor plane. Excluded
+ * from thumbnails like the other editor-only layers.
+ */
+export const GRID_LAYER = 3
