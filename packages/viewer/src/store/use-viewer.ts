@@ -142,7 +142,7 @@ const useViewer = create<ViewerState>()(
       colorPreset: 'clay',
       setColorPreset: (preset) => set({ colorPreset: preset }),
 
-      edges: 'off',
+      edges: 'soft',
       setEdges: (edges) => set({ edges }),
 
       shadows: true,
