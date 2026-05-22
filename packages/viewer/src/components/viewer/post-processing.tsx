@@ -273,7 +273,9 @@ const PostProcessingPasses = ({
     // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
     // (2px, ~2× wider detected band) + solid (100%). The edge masks saturate,
     // so radius+opacity are what actually separate the two modes — gain wouldn't.
-    const inkRadius = edges === 'strong' ? 2 : 1
+    // Same 1px line thickness for both (soft's thickness is the nice one);
+    // strong reads heavier purely by being fully solid vs soft's lighter 50%.
+    const inkRadius = 1
     const inkOpacity = edges === 'strong' ? 1 : 0.5
 
     console.log('[viewer/post-processing] Building pipeline', {
