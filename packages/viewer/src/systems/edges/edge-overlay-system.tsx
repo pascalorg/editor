@@ -22,7 +22,9 @@ type EdgeLineMaterial = {
   linewidth: number
   transparent: boolean
   depthWrite: boolean
-  resolution: { set: (x: number, y: number) => void }
+  // WebGL LineMaterial exposes a settable `resolution` Vector2; the WebGPU
+  // Line2NodeMaterial reads the viewport internally, so it's absent there.
+  resolution?: { set: (x: number, y: number) => void }
   dispose?: () => void
 }
 
@@ -111,7 +113,7 @@ export function EdgeOverlaySystem() {
           material.opacity = style.opacity
           material.transparent = true
           material.depthWrite = false
-          material.resolution.set(size.width, size.height)
+          material.resolution?.set(size.width, size.height)
 
           line.name = EDGE_OVERLAY_NAME
           line.frustumCulled = false
@@ -129,7 +131,7 @@ export function EdgeOverlaySystem() {
         material.color.copy(color)
         material.opacity = style.opacity
         material.linewidth = style.linewidth
-        material.resolution.set(size.width, size.height)
+        material.resolution?.set(size.width, size.height)
       })
     }
   })
