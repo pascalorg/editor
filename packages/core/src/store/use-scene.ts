@@ -313,7 +313,10 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
         roofType: 'gable',
         width: segWidth,
         depth: segDepth,
-        wallHeight: 0,
+        // Schema default (0.5), NOT 0: a zero-height wall builds a flat,
+        // degenerate CSG brush → "Coplanar clip not handled" + NaN geometry, so
+        // the migrated legacy roof never renders. New roofs use 0.5 too.
+        wallHeight: 0.5,
         pitch: getPitchFromActiveRoofHeight({
           roofType: 'gable',
           width: segWidth,
