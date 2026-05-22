@@ -7,7 +7,11 @@ import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
-import { getPitchFromActiveRoofHeight, type RoofType } from '../schema/nodes/roof-segment'
+import {
+  getPitchFromActiveRoofHeight,
+  type RoofSegmentNode,
+  type RoofType,
+} from '../schema/nodes/roof-segment'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
@@ -336,23 +340,28 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       }
     }
 
-    // 2b. roof-segment: legacy roofHeight → pitch.
-    // Saved scenes wrote `roofHeight` in metres; the schema now stores
-    // `pitch` in degrees. Convert once and drop the old field so future
-    // loads skip this branch.
-    if (node.type === 'roof-segment' && 'roofHeight' in node && !('pitch' in node)) {
-      const { roofHeight, ...rest } = node
-      const width = typeof node.width === 'number' ? node.width : 8
-      const depth = typeof node.depth === 'number' ? node.depth : 6
-      const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType
-      patchedNodes[id] = {
-        ...rest,
-        pitch: getPitchFromActiveRoofHeight({
-          roofType,
-          width,
-          depth,
-          roofHeight: typeof roofHeight === 'number' ? roofHeight : 2.5,
-        }),
+    // 2b. roof-segment: guarantee a valid positive pitch (degrees).
+    // Saved scenes wrote `roofHeight` in metres; the schema now stores `pitch`
+    // in degrees. Convert the legacy field when present, and — crucially — fall
+    // back to the schema default for any segment that carries no usable pitch or
+    // roofHeight (older/partial saves). Without this, the slope-frame guard
+    // resolves a missing pitch to a FLAT frame, so the roof renders as a slab.
+    // The migration result is cast, not zod-parsed, so the schema default never
+    // applies on its own — this branch is the only place it lands.
+    if (node.type === 'roof-segment') {
+      const currentPitch = (node as { pitch?: unknown }).pitch
+      const hasValidPitch = typeof currentPitch === 'number' && currentPitch > 0
+      if (!hasValidPitch) {
+        const { roofHeight, ...rest } = node as RoofSegmentNode & { roofHeight?: unknown }
+        const width = typeof node.width === 'number' ? node.width : 8
+        const depth = typeof node.depth === 'number' ? node.depth : 6
+        const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType
+        const derived =
+          typeof roofHeight === 'number' && roofHeight > 0
+            ? getPitchFromActiveRoofHeight({ roofType, width, depth, roofHeight })
+            : 0
+        // 40° matches the RoofSegmentNode schema default.
+        patchedNodes[id] = { ...rest, pitch: derived > 0 ? derived : 40 }
       }
     }
 
