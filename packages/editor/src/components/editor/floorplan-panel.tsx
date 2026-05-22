@@ -98,6 +98,12 @@ import {
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
 import {
+  formatAngleRadians,
+  getAngleArcToSegmentReference,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../tools/shared/segment-angle'
+import {
   createWallOnCurrentLevel,
   isWallLongEnough,
   snapWallDraftPoint,
@@ -2024,6 +2030,167 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     frontSide: 'unknown',
     backSide: 'unknown',
   }
+}
+
+type DraftWallMeasurement = {
+  lengthLabel: string
+  midpoint: WallPlanPoint
+  direction: WallPlanPoint
+  angleLabels: {
+    id: string
+    label: string
+    center: WallPlanPoint
+    radius: number
+    startAngle: number
+    endAngle: number
+    midAngle: number
+  }[]
+}
+
+function FloorplanDraftWallMeasurement({
+  measurement,
+  measurementStroke,
+  labelBackground,
+  labelText,
+  sceneRotationDeg,
+  unitsPerPixel,
+}: {
+  measurement: DraftWallMeasurement
+  measurementStroke: string
+  labelBackground: string
+  labelText: string
+  sceneRotationDeg: number
+  unitsPerPixel: number
+}) {
+  const stroke = measurementStroke
+  const labelBg = labelBackground
+
+  const upx = unitsPerPixel
+  const fontSize = Math.max(upx * 10, 0.08)
+  const padX = upx * 6
+  const padY = upx * 3
+
+  // Length plate: rotates to follow the wall direction, but flips 180°
+  // when its on-screen orientation would read upside-down (same trick as
+  // `floorplan-registry-layer.tsx` for dimension labels).
+  const wallAngleDeg = (Math.atan2(measurement.direction[1], measurement.direction[0]) * 180) / Math.PI
+  let labelAngleDeg = wallAngleDeg
+  let screenDeg = wallAngleDeg + sceneRotationDeg
+  screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
+  if (screenDeg > 90) labelAngleDeg -= 180
+  else if (screenDeg <= -90) labelAngleDeg += 180
+
+  // Push the plate perpendicular to the wall so the dashed footprint
+  // stays visible underneath.
+  const perpX = -measurement.direction[1]
+  const perpY = measurement.direction[0]
+  const offset = upx * 18
+  const cx = measurement.midpoint[0] + perpX * offset
+  const cy = measurement.midpoint[1] + perpY * offset
+
+  const lengthTextWidth = measurement.lengthLabel.length * upx * 6.2
+  const lengthPlateW = lengthTextWidth + padX * 2
+  const lengthPlateH = fontSize + padY * 2
+
+  const arcSampleCount = 32
+
+  return (
+    <g pointerEvents="none">
+      <g transform={`translate(${cx} ${cy}) rotate(${labelAngleDeg})`}>
+        <rect
+          fill={labelBg}
+          height={lengthPlateH}
+          opacity={0.92}
+          rx={upx * 3}
+          ry={upx * 3}
+          stroke={stroke}
+          strokeWidth={upx * 0.5}
+          vectorEffect="non-scaling-stroke"
+          width={lengthPlateW}
+          x={-lengthPlateW / 2}
+          y={-lengthPlateH / 2}
+        />
+        <text
+          dominantBaseline="middle"
+          fill={labelText}
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          fontSize={fontSize}
+          fontWeight={600}
+          textAnchor="middle"
+          x={0}
+          y={0}
+        >
+          {measurement.lengthLabel}
+        </text>
+      </g>
+
+      {measurement.angleLabels.map((arc) => {
+        // Sample the arc as a polyline — avoids the SVG arc command's
+        // sweep-flag direction quirks across negative/positive sweeps.
+        const points: string[] = []
+        for (let i = 0; i <= arcSampleCount; i += 1) {
+          const t = i / arcSampleCount
+          const a = arc.startAngle + (arc.endAngle - arc.startAngle) * t
+          const px = arc.center[0] + Math.cos(a) * arc.radius
+          const py = arc.center[1] + Math.sin(a) * arc.radius
+          points.push(`${px},${py}`)
+        }
+
+        const aFontSize = Math.max(upx * 9, 0.075)
+        const aPadX = upx * 5
+        const aPadY = upx * 2.5
+        const aTextWidth = arc.label.length * upx * 6.2
+        const aPlateW = aTextWidth + aPadX * 2
+        const aPlateH = aFontSize + aPadY * 2
+
+        const labelDist = arc.radius + upx * 16
+        const lx = arc.center[0] + Math.cos(arc.midAngle) * labelDist
+        const ly = arc.center[1] + Math.sin(arc.midAngle) * labelDist
+
+        return (
+          <g key={`draft-angle-${arc.id}`}>
+            <polyline
+              fill="none"
+              points={points.join(' ')}
+              stroke={stroke}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity={0.95}
+              strokeWidth={upx * 1.2}
+              vectorEffect="non-scaling-stroke"
+            />
+            <g transform={`translate(${lx} ${ly})`}>
+              <rect
+                fill={labelBg}
+                height={aPlateH}
+                opacity={0.92}
+                rx={upx * 3}
+                ry={upx * 3}
+                stroke={stroke}
+                strokeWidth={upx * 0.5}
+                vectorEffect="non-scaling-stroke"
+                width={aPlateW}
+                x={-aPlateW / 2}
+                y={-aPlateH / 2}
+              />
+              <text
+                dominantBaseline="middle"
+                fill={labelText}
+                fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                fontSize={aFontSize}
+                fontWeight={600}
+                textAnchor="middle"
+                x={0}
+                y={0}
+              >
+                {arc.label}
+              </text>
+            </g>
+          </g>
+        )
+      })}
+    </g>
+  )
 }
 
 function pointsEqual(a: WallPlanPoint, b: WallPlanPoint): boolean {
@@ -4846,6 +5013,74 @@ export function FloorplanPanel() {
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
   }, [draftEnd, draftStart, levelId])
+  // Live length + angle feedback for the wall draft — parity with the 3D
+  // `WallTool` (`packages/nodes/src/wall/tool.tsx`), ported to 2D plan
+  // space. Length renders at the segment midpoint; angle arcs sit at
+  // each endpoint that meets an existing wall.
+  const draftWallMeasurement = useMemo(() => {
+    if (!(isWallBuildActive && draftStart && draftEnd && isWallLongEnough(draftStart, draftEnd))) {
+      return null
+    }
+
+    const dx = draftEnd[0] - draftStart[0]
+    const dy = draftEnd[1] - draftStart[1]
+    const length = Math.hypot(dx, dy)
+
+    const draftFromStart: WallPlanPoint = [dx, dy]
+    const draftFromEnd: WallPlanPoint = [-dx, -dy]
+    const endpoints = [
+      { id: 'start', point: draftStart, draftVector: draftFromStart },
+      { id: 'end', point: draftEnd, draftVector: draftFromEnd },
+    ] as const
+
+    type AngleLabel = {
+      id: string
+      label: string
+      center: WallPlanPoint
+      radius: number
+      startAngle: number
+      endAngle: number
+      midAngle: number
+    }
+
+    const angleLabels: AngleLabel[] = []
+    for (const endpoint of endpoints) {
+      const connectedWall = walls.find((wall) =>
+        Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, wall)),
+      )
+      if (!connectedWall) continue
+      const ref = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
+      if (!ref) continue
+
+      const angle = getAngleToSegmentReference(endpoint.draftVector, ref)
+      if (angle === null) continue
+      const arc = getAngleArcToSegmentReference(endpoint.draftVector, ref)
+      if (!arc || arc.angle < 0.01) continue
+
+      const refLen = Math.hypot(ref.vector[0], ref.vector[1])
+      const radius = Math.max(0.32, Math.min(0.72, Math.min(length, refLen) * 0.28))
+
+      angleLabels.push({
+        id: endpoint.id,
+        label: formatAngleRadians(angle),
+        center: endpoint.point,
+        radius,
+        startAngle: arc.startAngle,
+        endAngle: arc.endAngle,
+        midAngle: arc.midAngle,
+      })
+    }
+
+    return {
+      lengthLabel: formatMeasurement(length, unit),
+      midpoint: [
+        (draftStart[0] + draftEnd[0]) / 2,
+        (draftStart[1] + draftEnd[1]) / 2,
+      ] as WallPlanPoint,
+      direction: [dx / length, dy / length] as WallPlanPoint,
+      angleLabels,
+    }
+  }, [draftEnd, draftStart, isWallBuildActive, unit, walls])
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
       const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
@@ -7073,19 +7308,14 @@ export function FloorplanPanel() {
         return
       }
 
-      // Wall build also needs to run before the catch-all — see the
-      // wall branch in `handleBackgroundPlacementClick` for the same
-      // restructuring. The wall branch lives further below in this
-      // handler (`if (!isWallBuildActive) ... setDraftEnd(...)`); the
-      // grid emit is inlined there.
-      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
-        setCursorPoint((previousPoint) =>
-          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
-        )
-        return
-      }
-
+      // Opening placement (door / window build, plus door / window move)
+      // must run before the registry catch-all: door & window are
+      // registered kinds, so `isRegistryToolBuildActive` is true during
+      // their build mode and the catch-all would otherwise emit
+      // `grid:move` and return — never emitting the `wall:enter` /
+      // `wall:move` events the door / window placement tools listen for.
+      // Same reason `handleBackgroundPlacementClick` runs its opening
+      // branch before its grid catch-all.
       if (isOpeningPlacementActive) {
         const closest = findClosestWallPoint(planPoint, walls, {
           canUseWall: (wall) => !isCurvedWall(wall),
@@ -7117,6 +7347,19 @@ export function FloorplanPanel() {
           emitFloorplanWallLeave(hoveredWallIdRef.current)
           hoveredWallIdRef.current = null
         }
+        return
+      }
+
+      // Registry-driven catch-all for kinds without bespoke 2D handling
+      // (shelf, etc.). Must run AFTER the opening branch above (door /
+      // window are also registered kinds, but need wall events — see
+      // comment there). Wall build skips this so its own branch below
+      // updates local `draftEnd` state alongside the registry tool.
+      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
+        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
         return
       }
 
@@ -8713,6 +8956,17 @@ export function FloorplanPanel() {
                 }
                 unitsPerPixel={floorplanUnitsPerPixel}
               />
+
+              {draftWallMeasurement && (
+                <FloorplanDraftWallMeasurement
+                  labelBackground={theme === 'dark' ? '#0f172a' : '#ffffff'}
+                  labelText={theme === 'dark' ? '#e2e8f0' : '#171717'}
+                  measurement={draftWallMeasurement}
+                  measurementStroke={palette.measurementStroke}
+                  sceneRotationDeg={floorplanSceneRotationDeg}
+                  unitsPerPixel={floorplanUnitsPerPixel}
+                />
+              )}
 
               {/* Wall / fence endpoint, wall curve, slab / ceiling /
                   zone vertex+midpoint+edge handles are all driven by the
