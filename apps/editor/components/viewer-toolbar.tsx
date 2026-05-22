@@ -22,7 +22,6 @@ import {
   Check,
   ChevronsLeft,
   ChevronsRight,
-  CloudSun,
   Columns2,
   Contrast,
   Eye,
@@ -33,6 +32,7 @@ import {
   PenLine,
   Sparkles,
   Sun,
+  SwatchBook,
 } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
@@ -298,7 +298,7 @@ function SceneThemeMenu() {
             className={cn(TOOLBAR_BTN, 'w-28 gap-1.5 px-2.5 text-foreground/90')}
             type="button"
           >
-            <CloudSun className="h-3.5 w-3.5 shrink-0" />
+            <SwatchBook className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate font-medium text-xs">{active.name}</span>
           </button>
         </DropdownMenuTrigger>
