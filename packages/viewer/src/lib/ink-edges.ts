@@ -31,17 +31,20 @@ export function inkedEdges({
   depthTex,
   normalTex,
   inkColor,
-  intensity,
+  radius,
+  opacity,
   sceneRgb,
 }: {
   depthTex: any
   normalTex: any
   inkColor: any
-  intensity: any
+  // Line thickness in px (the detected band is ~2×radius) and final line
+  // darkness — these are what distinguish soft (thin/faint) from strong
+  // (thick/solid); the edge masks themselves saturate, so a gain wouldn't.
+  radius: number
+  opacity: number
   sceneRgb: any
 }) {
-  // Sample radius in px ≈ line thickness (the detected band is ~2×radius).
-  const radius = float(1.5)
   const px = vec2(1, 1).div(screenSize).mul(radius)
   const uvN = screenUV
 
@@ -71,6 +74,6 @@ export function inkedEdges({
 
   // TSL's typed overloads are finicky across versions; the runtime is proven in
   // the aesthetic sandbox, so cast at the mask/mix boundary.
-  const edgeMask: any = min(max(depthEdge, normalEdge).mul(intensity), float(1))
+  const edgeMask: any = min(max(depthEdge, normalEdge).mul(opacity), float(1))
   return (mix as any)(sceneRgb, inkColor, edgeMask)
 }

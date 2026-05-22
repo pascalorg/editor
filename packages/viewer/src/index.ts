@@ -24,7 +24,7 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export type { EdgeMode } from './lib/edge-style'
-export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export { OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,

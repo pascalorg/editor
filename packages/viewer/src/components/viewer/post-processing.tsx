@@ -24,7 +24,7 @@ import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
 import { edgeColorFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
-import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
+import { OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
@@ -151,6 +151,22 @@ const PostProcessingPasses = ({
     l.disable(SCENE_LAYER)
     return l
   }, [])
+  // Scene pass renders ONLY the main geometry layer. The default camera mask
+  // also has the overlay layer enabled (custom controls enable it for picking),
+  // so without this the gizmos/handles/tool previews land in the depth+normal
+  // MRT and get inked / AO'd as if they were geometry.
+  const sceneOnlyLayers = useMemo(() => {
+    const l = new Layers()
+    l.set(SCENE_LAYER)
+    return l
+  }, [])
+  // Editor overlays render in their own pass, composited on top after the ink
+  // and outlines so they read as crisp UI rather than scene geometry.
+  const overlayLayers = useMemo(() => {
+    const l = new Layers()
+    l.set(OVERLAY_LAYER)
+    return l
+  }, [])
   const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
   const hoverVisibleColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.visibleColor)), [])
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
@@ -251,7 +267,11 @@ const PostProcessingPasses = ({
     const inkEnabled = edges !== 'off'
     // The depth+normal MRT feeds both SSGI and the screen-space ink pass.
     const needsNormalMRT = ssgiEnabled || inkEnabled
-    const inkIntensity = edges === 'strong' ? 2.8 : 1.6
+    // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
+    // (2px, ~2× wider detected band) + solid (100%). The edge masks saturate,
+    // so radius+opacity are what actually separate the two modes — gain wouldn't.
+    const inkRadius = edges === 'strong' ? 2 : 1
+    const inkOpacity = edges === 'strong' ? 1 : 0.5
 
     console.log('[viewer/post-processing] Building pipeline', {
       version: pipelineVersion,
@@ -294,8 +314,15 @@ const PostProcessingPasses = ({
 
     try {
       const scenePass = pass(scene, camera)
+      scenePass.setLayers(sceneOnlyLayers)
       const zonePass = pass(scene, camera)
       zonePass.setLayers(zoneLayers)
+      // Editor overlays (gizmos, move handles, tool previews, grid) on their own
+      // layer, kept out of the depth/normal MRT above so the ink + SSGI ignore
+      // them, then composited on top of the final image below.
+      const overlayPass = pass(scene, camera)
+      overlayPass.setLayers(overlayLayers)
+      const overlayColor = overlayPass.getTextureNode('output')
 
       const scenePassColor = scenePass.getTextureNode('output')
 
@@ -382,7 +409,8 @@ const PostProcessingPasses = ({
             depthTex: scenePassDepth,
             normalTex: scenePassNormal,
             inkColor: inkColorUniform.current,
-            intensity: inkIntensity,
+            radius: inkRadius,
+            opacity: inkOpacity,
           }),
           sceneColor.a,
         )
@@ -424,10 +452,11 @@ const PostProcessingPasses = ({
         )
       }
 
-      const finalOutput = vec4(
-        mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha),
-        float(1),
-      )
+      const composited = mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha)
+      // Editor overlays painted on top by their own alpha — they never get inked,
+      // AO'd, or outlined, and always read crisp regardless of scene depth.
+      const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
+      const finalOutput = vec4(withOverlay, float(1))
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       renderPipeline.outputNode = finalOutput
@@ -472,6 +501,8 @@ const PostProcessingPasses = ({
     size.height,
     size.width,
     zoneLayers,
+    sceneOnlyLayers,
+    overlayLayers,
   ])
 
   useFrame((_, delta) => {
