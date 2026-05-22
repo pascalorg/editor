@@ -10,7 +10,13 @@ import {
   useSidebarStore,
   type ViewMode,
 } from '@pascal-app/editor'
-import { type EdgeMode, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
+import {
+  CLAY_PALETTE,
+  type EdgeMode,
+  getSceneTheme,
+  SCENE_THEMES,
+  useViewer,
+} from '@pascal-app/viewer'
 import {
   Box,
   Check,
@@ -299,18 +305,17 @@ function SceneThemeMenu() {
       </ToolbarTooltip>
       <DropdownMenuContent align="center" className="min-w-48" side="bottom">
         {SCENE_THEMES.map((theme) => {
-          const swatches = [theme.background, theme.lights[0]?.color, theme.hemi?.ground].filter(
-            (color): color is string => Boolean(color),
+          const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+            (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
           )
           return (
             <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
-              <span className="flex gap-px overflow-hidden rounded-sm border border-black/10">
+              <span
+                className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                style={{ backgroundColor: theme.background }}
+              >
                 {swatches.map((color, index) => (
-                  <span
-                    className="h-4 w-2"
-                    key={`${theme.id}-${index}`}
-                    style={{ backgroundColor: color }}
-                  />
+                  <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
                 ))}
               </span>
               <span className="text-foreground">{theme.name}</span>

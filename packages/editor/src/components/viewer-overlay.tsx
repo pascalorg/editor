@@ -10,7 +10,13 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { type EdgeMode, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
+import {
+  CLAY_PALETTE,
+  type EdgeMode,
+  getSceneTheme,
+  SCENE_THEMES,
+  useViewer,
+} from '@pascal-app/viewer'
 import {
   ArrowLeft,
   Box,
@@ -140,20 +146,20 @@ function SceneThemeMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center" className="min-w-48" side="top">
         {SCENE_THEMES.map((sceneThemeOption) => {
-          const swatches = [
-            sceneThemeOption.background,
-            sceneThemeOption.lights[0]?.color,
-            sceneThemeOption.hemi?.ground,
-          ].filter((color): color is string => Boolean(color))
+          const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+            (role) => sceneThemeOption.clayTints?.[role] ?? CLAY_PALETTE[role],
+          )
           return (
             <DropdownMenuItem
               key={sceneThemeOption.id}
               onSelect={() => useViewer.getState().setSceneTheme(sceneThemeOption.id)}
             >
-              <span className="flex gap-px overflow-hidden rounded-sm border border-black/10">
+              <span
+                className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                style={{ backgroundColor: sceneThemeOption.background }}
+              >
                 {swatches.map((color, index) => (
                   <span
-                    className="h-4 w-2"
                     key={`${sceneThemeOption.id}-${index}`}
                     style={{ backgroundColor: color }}
                   />

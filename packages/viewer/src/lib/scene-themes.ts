@@ -28,6 +28,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-10, 10, -10], color: '#ffffff', intensity: 0.75 },
     ],
     toneMappingExposure: 0.9,
+    clayTints: {
+      wall: '#e9e5db',
+      floor: '#d8d2c4',
+      ceiling: '#f1ede4',
+      roof: '#c4bba6',
+      glazing: '#cdd8df',
+    },
   },
   {
     id: 'paper',
@@ -40,6 +47,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-14, 10, -6], color: '#dde5ff', intensity: 0.35 },
     ],
     toneMappingExposure: 1,
+    clayTints: {
+      wall: '#efe9da',
+      floor: '#ddd4bf',
+      ceiling: '#f5efe0',
+      roof: '#b9b09a',
+      glazing: '#cdd5d8',
+    },
   },
   {
     id: 'sunset',
@@ -52,6 +66,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-14, 16, -10], color: '#a4b8ff', intensity: 0.4 },
     ],
     toneMappingExposure: 1,
+    clayTints: {
+      wall: '#f3e3cf',
+      floor: '#e2cdab',
+      ceiling: '#f6e7d2',
+      roof: '#a6764f',
+      glazing: '#e7c9a8',
+    },
   },
   {
     id: 'overcast',
@@ -61,6 +82,13 @@ export const SCENE_THEMES: SceneTheme[] = [
     hemi: { sky: '#f4f5f3', ground: '#bcbfbb', intensity: 0.9 },
     lights: [{ position: [12, 28, 10], color: '#f4f5f3', intensity: 0.8, castShadow: true }],
     toneMappingExposure: 0.95,
+    clayTints: {
+      wall: '#dedfdc',
+      floor: '#cdcec9',
+      ceiling: '#e8e9e6',
+      roof: '#a3a49e',
+      glazing: '#c6cdd0',
+    },
   },
   {
     id: 'blueprint',
@@ -73,6 +101,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-12, 10, -8], color: '#9fb6d8', intensity: 0.4 },
     ],
     toneMappingExposure: 0.95,
+    clayTints: {
+      wall: '#9fb6d2',
+      floor: '#8ba2c2',
+      ceiling: '#aec0d8',
+      roof: '#5f789b',
+      glazing: '#b6d7ea',
+    },
   },
   {
     id: 'mediterranean',
@@ -85,6 +120,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-12, 8, -8], color: '#8fb3d8', intensity: 0.7 },
     ],
     toneMappingExposure: 0.9,
+    clayTints: {
+      wall: '#f6f1e6',
+      floor: '#e0d6c2',
+      ceiling: '#f3ede0',
+      roof: '#3e6585',
+      glazing: '#bcd3e2',
+    },
   },
   {
     id: 'twilight',
@@ -97,6 +139,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [14, 6, 8], color: '#ffb070', intensity: 0.9 },
     ],
     toneMappingExposure: 1.1,
+    clayTints: {
+      wall: '#c5b9cf',
+      floor: '#ad9fbb',
+      ceiling: '#d2c6dc',
+      roof: '#5b4f74',
+      glazing: '#c3b6d4',
+    },
   },
   {
     id: 'night',
@@ -109,6 +158,13 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-10, 10, -10], color: '#8090ff', intensity: 0.2 },
     ],
     toneMappingExposure: 0.9,
+    clayTints: {
+      wall: '#aab3c6',
+      floor: '#98a1b5',
+      ceiling: '#b7bfd0',
+      roof: '#5b6680',
+      glazing: '#aebbd0',
+    },
   },
 ]
 
