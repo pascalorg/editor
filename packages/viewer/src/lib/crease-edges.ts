@@ -49,9 +49,11 @@ export function buildCreaseEdges(geometry: BufferGeometry, thresholdDeg: number)
   const triCount = Math.floor((index ? index.count : position.count) / 3)
   const thresholdCos = Math.cos((thresholdDeg * Math.PI) / 180)
 
-  // Weld coincident positions (quantised to 0.1mm at metre scale) so adjacency
-  // is detected regardless of the soup's duplicated vertices.
-  const PRECISION = 1e4
+  // Weld coincident positions (quantised to ~1mm at metre scale) so adjacency
+  // is detected across the soup's duplicated vertices AND across small CSG /
+  // ExtrudeGeometry seam drift (e.g. the cap↔side-wall top edge), which a
+  // tighter tolerance leaves unpaired and therefore dropped.
+  const PRECISION = 1e3
   const idByKey = new Map<string, number>()
   const weldX: number[] = []
   const weldY: number[] = []
