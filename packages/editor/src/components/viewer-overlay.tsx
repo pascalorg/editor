@@ -141,7 +141,7 @@ function SceneThemeMenu() {
           tooltipSide="top"
           variant="ghost"
         >
-          <Icon color="currentColor" height={24} icon="lucide:palette" width={24} />
+          <Icon color="currentColor" height={24} icon="lucide:cloud-sun" width={24} />
         </ActionButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center" className="min-w-48" side="top">
