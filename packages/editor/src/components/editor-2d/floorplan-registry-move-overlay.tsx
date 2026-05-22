@@ -41,6 +41,7 @@ const GRID_STEP = 0.5
 export function FloorplanRegistryMoveOverlay() {
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
 
   const def = movingNode ? nodeRegistry.get(movingNode.type) : null
   const isActive = !!movingNode && !!def?.floorplan
@@ -140,6 +141,13 @@ export function FloorplanRegistryMoveOverlay() {
 
       const commitFinalStateOrRevert = () => {
         const commitValid = session.canCommit()
+
+        // Claim ownership of the drag teardown so the 3D move tool's
+        // unmount-time cleanup skips its restore-from-snapshot — see
+        // `movingNodeOrigin` in `use-editor.tsx`. Set here (before any
+        // `setMovingNode(null)`) so that by the time the 3D effect's
+        // cleanup runs the origin is observable in the store.
+        setMovingNodeOrigin('2d')
 
         // Sessions with a `commit` hook own their atomic write (e.g.
         // wall move emits creates + deletes + updates via the junction
@@ -280,6 +288,10 @@ export function FloorplanRegistryMoveOverlay() {
 
       const onKey = (event: KeyboardEvent) => {
         if (event.key !== 'Escape') return
+        // Claim teardown ownership so the 3D move tool's cleanup skips
+        // its own restore — without this, both sides would race to
+        // write the same baseline, harmless but wasteful.
+        setMovingNodeOrigin('2d')
         // Revert untracked, then resume — no history entry.
         useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
         if (historyPaused) {
@@ -305,43 +317,26 @@ export function FloorplanRegistryMoveOverlay() {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onPointerUp)
         window.removeEventListener('keydown', onKey)
-        // Unmount cleanup. Two scenarios when `historyPaused === true`:
+        // Unmount cleanup. `historyPaused === true` here means none of
+        // our terminal paths (commit, Esc) ran in this overlay — they
+        // each call `resumeSceneHistory` and flip the flag.
         //
-        //  - User did at least one 2D apply (`hasMovedSinceStart`) but
-        //    never committed — likely a mid-drag unmount. Revert the
-        //    untracked writes so we don't leak partial state.
-        //  - No 2D apply happened. The legacy `MoveItemContent` (3D
-        //    mover) may have committed via `draftNode.commit` just
-        //    before this unmount; clobbering that with a blind revert
-        //    is the bug — both the rotation and position issues. Skip
-        //    the revert and just resume history.
+        // If `movingNodeOrigin === '3d'`, a 3D move tool finalised
+        // while our overlay was still mounted (split view); the live
+        // scene IS the committed state and reverting would stomp it.
+        // Otherwise (origin is `null` or `'2d'`) we own the teardown
+        // and revert any untracked apply() writes back to baseline.
         //
-        // Additionally, in split view the user may have brushed the
-        // cursor over the floor plan (setting `hasMovedSinceStart`)
-        // and then committed via a 3D mover. The 3D commit writes the
-        // new state to `scene` directly, so by the time this cleanup
-        // runs `snapshots` no longer matches scene state. Reverting
-        // here would stomp the 3D commit. Detect the case by
-        // comparing snapshot fields to current scene state — if they
-        // already differ, an external committer has finalised, leave
-        // it alone.
-        //
-        // Normal 2D commit / Escape paths set `historyPaused = false`
-        // inside `commitFinalStateOrRevert` / `onKey`, so this branch
-        // is skipped there.
+        // The two prior scenarios this block guarded against:
+        //   - mid-drag unmount with apply() writes still present
+        //   - 3D mover committing via `draftNode.commit` just before
+        //     our unmount
+        // are now distinguished by the origin flag — no scene-state
+        // diff heuristic required.
         if (historyPaused) {
           if (hasMovedSinceStart) {
-            const currentNodes = useScene.getState().nodes
-            const externallyCommitted = snapshots.some((snap) => {
-              const current = currentNodes[snap.id]
-              if (!current) return false
-              for (const [key, before] of Object.entries(snap.data)) {
-                const after = (current as unknown as Record<string, unknown>)[key]
-                if (!deepEqual(before, after)) return true
-              }
-              return false
-            })
-            if (!externallyCommitted) {
+            const finalisedBy3D = useEditor.getState().movingNodeOrigin === '3d'
+            if (!finalisedBy3D) {
               useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
             }
           }
@@ -427,7 +422,7 @@ export function FloorplanRegistryMoveOverlay() {
       window.removeEventListener('keydown', onKey)
       entry.removeAttribute('transform')
     }
-  }, [isActive, movingNode, setMovingNode, hasMoveTarget, def])
+  }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])
 
   return null
 }

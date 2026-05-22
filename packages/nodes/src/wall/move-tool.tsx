@@ -38,7 +38,6 @@ import {
   getLinkedWallSnapshots,
   getWallsAfterUpdates,
   type LinkedWallSnapshot,
-  samePoint,
   stripWallIsNewMetadata,
 } from './move-shared'
 
@@ -486,6 +485,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       pauseSceneHistory(useScene)
 
+      // Claim teardown ownership so the 2D overlay's cleanup skips its
+      // own revert when split-view has both mounted — see
+      // `movingNodeOrigin` in `use-editor.tsx`.
+      useEditor.getState().setMovingNodeOrigin('3d')
+
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       exitMoveMode()
@@ -537,6 +541,9 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
       markToolCancelConsumed()
+      // Claim teardown ownership so the 2D overlay doesn't redundantly
+      // revert the same baseline on its own cleanup.
+      useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
     }
 
@@ -548,13 +555,14 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     return () => {
       if (shouldRestoreOnCleanup) {
-        const live = useScene.getState().nodes[nodeId] as WallNode | undefined
-        const externallyCommitted =
-          !!live &&
-          live.type === 'wall' &&
-          (!samePoint(live.start, originalStartRef.current) ||
-            !samePoint(live.end, originalEndRef.current))
-        if (!externallyCommitted) {
+        // `shouldRestoreOnCleanup` is only true if neither `onGridClick`
+        // nor `onCancel` ran in this tool — i.e., the unmount came from
+        // outside (typically the 2D overlay finalising in split view).
+        // The origin flag tells us whether the 2D side committed (skip
+        // restore — its write is the live state) or the unmount has no
+        // claimed owner (restore to baseline).
+        const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
+        if (!finalisedBy2D) {
           restoreOriginal()
         }
       }
