@@ -7,6 +7,10 @@ import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
+import {
+  getPitchFromActiveRoofHeight,
+  type RoofType,
+} from '../schema/nodes/roof-segment'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
@@ -297,6 +301,9 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       const suffix = id.includes('_') ? id.split('_')[1] : Math.random().toString(36).slice(2)
       const segmentId = `rseg_${suffix}`
 
+      const segWidth = oldRoof.length ?? 8
+      const segDepth = (oldRoof.leftWidth ?? 2.2) + (oldRoof.rightWidth ?? 2.2)
+      const legacyRoofHeight = oldRoof.height ?? 2.5
       const segment = {
         object: 'node',
         id: segmentId,
@@ -307,10 +314,15 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
         position: [0, 0, 0],
         rotation: 0,
         roofType: 'gable',
-        width: oldRoof.length ?? 8,
-        depth: (oldRoof.leftWidth ?? 2.2) + (oldRoof.rightWidth ?? 2.2),
+        width: segWidth,
+        depth: segDepth,
         wallHeight: 0,
-        roofHeight: oldRoof.height ?? 2.5,
+        pitch: getPitchFromActiveRoofHeight({
+          roofType: 'gable',
+          width: segWidth,
+          depth: segDepth,
+          roofHeight: legacyRoofHeight,
+        }),
         wallThickness: 0.1,
         deckThickness: 0.1,
         overhang: 0.3,
@@ -321,6 +333,26 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = {
         ...oldRoof,
         children: [segmentId],
+      }
+    }
+
+    // 2b. roof-segment: legacy roofHeight → pitch.
+    // Saved scenes wrote `roofHeight` in metres; the schema now stores
+    // `pitch` in degrees. Convert once and drop the old field so future
+    // loads skip this branch.
+    if (node.type === 'roof-segment' && 'roofHeight' in node && !('pitch' in node)) {
+      const { roofHeight, ...rest } = node
+      const width = typeof node.width === 'number' ? node.width : 8
+      const depth = typeof node.depth === 'number' ? node.depth : 6
+      const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType
+      patchedNodes[id] = {
+        ...rest,
+        pitch: getPitchFromActiveRoofHeight({
+          roofType,
+          width,
+          depth,
+          roofHeight: typeof roofHeight === 'number' ? roofHeight : 2.5,
+        }),
       }
     }
 
@@ -350,6 +382,18 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
     // children list, so the renderer doesn't mount it).
     if (node.type === 'shelf' && !Array.isArray(node.children)) {
       patchedNodes[id] = { ...node, children: [] }
+    }
+
+    // Roof-segment hosting was added in this migration cycle (the same
+    // pattern as shelf above). Older segments saved before the schema
+    // gained `children` need the field initialised so
+    // `createNode(chimney, segmentId)` finds an array to append to —
+    // without this every "Add Element" click on the roof panel results
+    // in an orphaned accessory (parented in scene state but never
+    // appended to `seg.children`, so the renderer's recursive
+    // `<NodeRenderer>` mount never sees it).
+    if (node.type === 'roof-segment' && !Array.isArray((node as { children?: unknown }).children)) {
+      patchedNodes[id] = { ...node, children: [] } as AnyNode
     }
 
     if (node.type === 'roof') {

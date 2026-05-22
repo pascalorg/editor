@@ -1,6 +1,9 @@
 import z from 'zod'
+import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
+import { ChimneyNode } from './nodes/chimney'
+import { DormerNode } from './nodes/dormer'
 import { ColumnNode } from './nodes/column'
 import { DoorNode } from './nodes/door'
 import { ElevatorNode } from './nodes/elevator'
@@ -8,10 +11,13 @@ import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
 import { ItemNode } from './nodes/item'
 import { LevelNode } from './nodes/level'
+import { RidgeVentNode } from './nodes/ridge-vent'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
 import { ShelfNode } from './nodes/shelf'
+import { SkylightNode } from './nodes/skylight'
+import { SolarPanelNode } from './nodes/solar-panel'
 import { SiteNode } from './nodes/site'
 import { SlabNode } from './nodes/slab'
 import { SpawnNode } from './nodes/spawn'
@@ -43,6 +49,12 @@ export const AnyNode = z.discriminatedUnion('type', [
   SpawnNode,
   WindowNode,
   DoorNode,
+  BoxVentNode,
+  RidgeVentNode,
+  ChimneyNode,
+  SolarPanelNode,
+  SkylightNode,
+  DormerNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>

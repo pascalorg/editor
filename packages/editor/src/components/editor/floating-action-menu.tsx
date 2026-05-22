@@ -352,6 +352,15 @@ export function FloatingActionMenu() {
           }
 
           // Duplicate children for stair nodes
+        } else if (duplicate.type === 'chimney' || duplicate.type === 'dormer') {
+          // Chimney & dormer use pure drag-to-place: NO node is
+          // inserted into the scene until the user clicks a roof
+          // segment. The `setMovingNode` call below hands the clone
+          // (with `metadata.isNew = true` + no id) to
+          // `MoveChimneyTool` / `MoveDormerTool`, which call
+          // `createNode` on the click that commits the placement.
+          // Skipping the auto-create avoids the "duplicate appears at
+          // +1 offset before drag" UX the other registry kinds use.
         } else if (nodeRegistry.has(duplicate.type)) {
           // Registry-driven kinds: offset the position slightly so the
           // duplicate doesn't overlap exactly, then create + hand to the

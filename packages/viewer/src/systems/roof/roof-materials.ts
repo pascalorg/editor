@@ -1,8 +1,4 @@
-import {
-  getEffectiveRoofSurfaceMaterial,
-  type RoofNode,
-  type RoofSegmentNode,
-} from '@pascal-app/core'
+import { getEffectiveRoofSurfaceMaterial, type RoofNode, type RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
 
@@ -38,6 +34,7 @@ export function getRoofMaterialArray(node: RoofNode): RoofMaterialArray | null {
   const top = getEffectiveRoofSurfaceMaterial(node, 'top')
   const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
   const wall = getEffectiveRoofSurfaceMaterial(node, 'wall')
+
   const cacheKey = JSON.stringify({
     top: getSurfaceMaterialSignature(top),
     edge: getSurfaceMaterialSignature(edge),

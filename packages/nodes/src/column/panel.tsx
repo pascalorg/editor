@@ -318,17 +318,104 @@ export default function ColumnPanel() {
           </>
         ) : (
           <>
-            <select
-              className={SELECT_CLASS}
-              onChange={(event) =>
-                handleUpdate({ crossSection: event.target.value as ColumnNode['crossSection'] })
-              }
-              value={node.crossSection}
-            >
-              <option value="round">Round</option>
-              <option value="square">Square</option>
-              <option value="rectangular">Rectangular</option>
-            </select>
+            <div className="grid grid-cols-3 gap-2 px-1 pt-1">
+              {(
+                [
+                  {
+                    value: 'round',
+                    label: 'Round',
+                    icon: (
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        height="22"
+                        viewBox="0 0 22 22"
+                        width="22"
+                      >
+                        <circle cx="11" cy="11" r="7.5" stroke="currentColor" strokeWidth="1.5" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    value: 'square',
+                    label: 'Square',
+                    icon: (
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        height="22"
+                        viewBox="0 0 22 22"
+                        width="22"
+                      >
+                        <rect
+                          height="15"
+                          rx="1.5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          width="15"
+                          x="3.5"
+                          y="3.5"
+                        />
+                      </svg>
+                    ),
+                  },
+                  {
+                    value: 'rectangular',
+                    label: 'Rectangular',
+                    icon: (
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        height="22"
+                        viewBox="0 0 22 22"
+                        width="22"
+                      >
+                        <rect
+                          height="11"
+                          rx="1.5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          width="16"
+                          x="3"
+                          y="5.5"
+                        />
+                      </svg>
+                    ),
+                  },
+                ] as {
+                  value: ColumnNode['crossSection']
+                  label: string
+                  icon: React.ReactNode
+                }[]
+              ).map((option) => {
+                const isSelected = node.crossSection === option.value
+                return (
+                  <button
+                    className={cn(
+                      'group flex flex-col items-center justify-center gap-1.5 rounded-lg border py-2.5 transition-all',
+                      isSelected
+                        ? 'border-orange-400/60 bg-orange-400/10 text-foreground shadow-[0_0_0_1px_rgba(251,146,60,0.25)_inset]'
+                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-[#3e3e3e] hover:text-foreground',
+                    )}
+                    key={option.value}
+                    onClick={() => handleUpdate({ crossSection: option.value })}
+                    type="button"
+                  >
+                    <span
+                      className={cn(
+                        'flex h-7 w-7 items-center justify-center',
+                        isSelected ? 'text-orange-300' : 'text-muted-foreground/80',
+                      )}
+                    >
+                      {option.icon}
+                    </span>
+                    <span className="font-medium text-[11px] leading-none tracking-wide">
+                      {option.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
             <SliderControl
               label="Edge Softness"
               max={0.12}

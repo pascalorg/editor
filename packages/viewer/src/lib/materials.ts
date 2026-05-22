@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import { resolveCdnUrl } from './asset-url'
 
 export const baseMaterial = new MeshStandardNodeMaterial({
   color: '#f2f0ed',
@@ -15,11 +16,16 @@ export const baseMaterial = new MeshStandardNodeMaterial({
   metalness: 0.0,
 })
 
+// DoubleSide on any NodeMaterial inside the MRT scenePass (SSGI's output /
+// diffuseColor / normal targets) causes WebGPU to create a render pipeline
+// whose back-face shader variant doesn't declare outputs for every MRT target
+// — the validator rejects it and poisons the entire render context. FrontSide
+// avoids that code path. Same pattern as MeshStandardMaterial in renderer.tsx.
 export const glassMaterial = new MeshLambertNodeMaterial({
   color: '#e0f2fe',
   transparent: true,
   opacity: 0.35,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
 })
 
 const sideMap: Record<MaterialProperties['side'], THREE.Side> = {
@@ -132,6 +138,11 @@ function applyTextureProperties(
   return texture
 }
 
+function setTextureCacheKey(texture: THREE.Texture, cacheKey: string): THREE.Texture {
+  texture.userData.pascalTextureCacheKey = cacheKey
+  return texture
+}
+
 function getPresetTextureCacheKey(
   path: string,
   props: MaterialMapProperties,
@@ -145,12 +156,14 @@ function getPresetTexture(
   props: MaterialMapProperties,
   slot?: TextureSlot,
 ): THREE.Texture {
-  const cacheKey = getPresetTextureCacheKey(path, props, slot)
+  const resolvedPath = resolveCdnUrl(path) ?? path
+  const cacheKey = getPresetTextureCacheKey(resolvedPath, props, slot)
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = textureLoader.load(path)
+  const texture = textureLoader.load(resolvedPath)
   applyTextureProperties(texture, props, slot)
+  setTextureCacheKey(texture, cacheKey)
   textureCache.set(cacheKey, texture)
   return texture
 }
@@ -161,6 +174,10 @@ function createAssignedTexture(
   slot?: TextureSlot,
 ): THREE.Texture {
   const texture = source.clone()
+  const cacheKey = source.userData.pascalTextureCacheKey
+  if (typeof cacheKey === 'string') {
+    setTextureCacheKey(texture, cacheKey)
+  }
   return applyTextureProperties(texture, props, slot)
 }
 
@@ -180,7 +197,8 @@ async function loadPresetTexture(
   props: MaterialMapProperties,
   slot?: TextureSlot,
 ): Promise<THREE.Texture | null> {
-  const cacheKey = getPresetTextureCacheKey(path, props, slot)
+  const resolvedPath = resolveCdnUrl(path) ?? path
+  const cacheKey = getPresetTextureCacheKey(resolvedPath, props, slot)
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
@@ -188,15 +206,16 @@ async function loadPresetTexture(
   if (existingPromise) return existingPromise
 
   const promise = textureLoader
-    .loadAsync(path)
+    .loadAsync(resolvedPath)
     .then((texture) => {
       applyTextureProperties(texture, props, slot)
+      setTextureCacheKey(texture, cacheKey)
       textureCache.set(cacheKey, texture)
       textureLoadPromises.delete(cacheKey)
       return texture
     })
     .catch((error) => {
-      console.warn('[viewer] Failed to load material texture', path, error)
+      console.warn('[viewer] Failed to load material texture', resolvedPath, error)
       textureLoadPromises.delete(cacheKey)
       return null
     })
@@ -216,7 +235,14 @@ function queueTextureAssignment(
     return
   }
 
-  const cacheKey = getPresetTextureCacheKey(path, props, slot)
+  const resolvedPath = resolveCdnUrl(path) ?? path
+  const cacheKey = getPresetTextureCacheKey(resolvedPath, props, slot)
+
+  if (material[slot]?.userData.pascalTextureCacheKey === cacheKey) {
+    applyTextureProperties(material[slot], props, slot)
+    return
+  }
+
   const cached = textureCache.get(cacheKey)
   if (cached) {
     material[slot] = createAssignedTexture(cached, props, slot)
@@ -363,7 +389,7 @@ export const DEFAULT_WINDOW_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0.1,
   opacity: 0.3,
   transparent: true,
-  side: THREE.DoubleSide,
+  side: THREE.FrontSide,
 })
 export const DEFAULT_CEILING_MATERIAL = createDefaultMaterial('#f5f5dc', 0.95)
 export const DEFAULT_ROOF_MATERIAL = createDefaultMaterial('#808080', 0.85)

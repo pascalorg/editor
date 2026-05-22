@@ -1,5 +1,11 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
+import { chimneyDefinition } from './chimney'
+import { dormerDefinition } from './dormer'
+import { ridgeVentDefinition } from './ridge-vent'
+import { skylightDefinition } from './skylight'
+import { solarPanelDefinition } from './solar-panel'
 import { ceilingDefinition } from './ceiling'
 import { columnDefinition } from './column'
 import { doorDefinition } from './door'
@@ -65,10 +71,23 @@ export const builtinPlugin: Plugin = {
     levelDefinition as unknown as AnyNodeDefinition,
     guideDefinition as unknown as AnyNodeDefinition,
     scanDefinition as unknown as AnyNodeDefinition,
+    // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
+    boxVentDefinition as unknown as AnyNodeDefinition,
+    ridgeVentDefinition as unknown as AnyNodeDefinition,
+    chimneyDefinition as unknown as AnyNodeDefinition,
+    solarPanelDefinition as unknown as AnyNodeDefinition,
+    skylightDefinition as unknown as AnyNodeDefinition,
+    dormerDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
+export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
+export { chimneyDefinition } from './chimney'
+export { dormerDefinition } from './dormer'
+export { ridgeVentDefinition } from './ridge-vent'
+export { skylightDefinition } from './skylight'
+export { solarPanelDefinition } from './solar-panel'
 export { ceilingDefinition } from './ceiling'
 export { columnDefinition } from './column'
 export { doorDefinition } from './door'
