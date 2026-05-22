@@ -10,11 +10,12 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { getSceneTheme, SCENE_THEME_IDS, useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
   ArrowLeft,
   Box,
   Camera,
+  Check,
   ChevronRight,
   Diamond,
   Layers,
@@ -27,6 +28,12 @@ import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/primitives/dropdown-menu'
 import { TooltipProvider } from './ui/primitives/tooltip'
 
 type ProjectOwner = {
@@ -70,9 +77,97 @@ const wallModeConfig = {
   },
 }
 
-function getNextSceneThemeId(id: string) {
-  const index = SCENE_THEME_IDS.indexOf(id)
-  return SCENE_THEME_IDS[(index + 1) % SCENE_THEME_IDS.length] ?? 'studio'
+const SHADING_OPTIONS = [
+  { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
+  { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+] as const
+
+function RenderModeMenu() {
+  const shading = useViewer((s) => s.shading)
+  const active = SHADING_OPTIONS.find((o) => o.id === shading) ?? SHADING_OPTIONS[0]
+  const ActiveIcon = active.icon
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionButton
+          className="text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+          label={`Render: ${active.name}`}
+          size="icon"
+          tooltipSide="top"
+          variant="ghost"
+        >
+          <ActiveIcon className="h-6 w-6" />
+        </ActionButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="min-w-56" side="top">
+        {SHADING_OPTIONS.map((option) => {
+          const OptionIcon = option.icon
+          return (
+            <DropdownMenuItem
+              key={option.id}
+              onSelect={() => useViewer.getState().setShading(option.id)}
+            >
+              <OptionIcon />
+              <div className="flex flex-col">
+                <span className="text-foreground">{option.name}</span>
+                <span className="text-muted-foreground text-xs">{option.detail}</span>
+              </div>
+              {shading === option.id ? <Check className="ml-auto text-foreground" /> : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function SceneThemeMenu() {
+  const sceneTheme = useViewer((s) => s.sceneTheme)
+  const active = getSceneTheme(sceneTheme)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionButton
+          className="text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+          label={`Theme: ${active.name}`}
+          size="icon"
+          tooltipSide="top"
+          variant="ghost"
+        >
+          <Icon color="currentColor" height={24} icon="lucide:palette" width={24} />
+        </ActionButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="min-w-48" side="top">
+        {SCENE_THEMES.map((sceneThemeOption) => {
+          const swatches = [
+            sceneThemeOption.background,
+            sceneThemeOption.lights[0]?.color,
+            sceneThemeOption.hemi?.ground,
+          ].filter((color): color is string => Boolean(color))
+          return (
+            <DropdownMenuItem
+              key={sceneThemeOption.id}
+              onSelect={() => useViewer.getState().setSceneTheme(sceneThemeOption.id)}
+            >
+              <span className="flex gap-px overflow-hidden rounded-sm border border-black/10">
+                {swatches.map((color, index) => (
+                  <span
+                    className="h-4 w-2"
+                    key={`${sceneThemeOption.id}-${index}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </span>
+              <span className="text-foreground">{sceneThemeOption.name}</span>
+              {sceneTheme === sceneThemeOption.id ? (
+                <Check className="ml-auto text-foreground" />
+              ) : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 const getNodeName = (node: AnyNode): string => {
@@ -109,9 +204,6 @@ export const ViewerOverlay = ({
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
   const theme = useViewer((s) => s.theme)
-  const shading = useViewer((s) => s.shading)
-  const sceneTheme = useViewer((s) => s.sceneTheme)
-  const sceneThemeName = getSceneTheme(sceneTheme).name
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
   // node elsewhere in the scene doesn't re-render this overlay.
@@ -410,33 +502,9 @@ export const ViewerOverlay = ({
               <Camera className="h-6 w-6" />
             </ActionButton>
 
-            <ActionButton
-              className={
-                shading === 'rendered'
-                  ? 'bg-white/10 text-foreground'
-                  : 'text-muted-foreground/80 hover:bg-white/5 hover:text-foreground'
-              }
-              label={shading === 'solid' ? 'Solid' : 'Rendered'}
-              onClick={() =>
-                useViewer.getState().setShading(shading === 'solid' ? 'rendered' : 'solid')
-              }
-              size="icon"
-              tooltipSide="top"
-              variant="ghost"
-            >
-              {shading === 'solid' ? <Box className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
-            </ActionButton>
+            <RenderModeMenu />
 
-            <ActionButton
-              className="text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
-              label={`Scene theme: ${sceneThemeName}`}
-              onClick={() => useViewer.getState().setSceneTheme(getNextSceneThemeId(sceneTheme))}
-              size="icon"
-              tooltipSide="top"
-              variant="ghost"
-            >
-              <Icon color="currentColor" height={24} icon="lucide:palette" width={24} />
-            </ActionButton>
+            <SceneThemeMenu />
 
             {/* Level Mode */}
             <ActionButton
