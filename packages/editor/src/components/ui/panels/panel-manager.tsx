@@ -5,8 +5,10 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type ChimneyNode,
   type ColumnNode,
   type DoorNode,
+  type DormerNode,
   type ElevatorNode,
   type FenceNode,
   type ItemNode,
@@ -37,7 +39,9 @@ type MovableNode =
   | DoorNode
   | ElevatorNode
   | CeilingNode
+  | ChimneyNode
   | ColumnNode
+  | DormerNode
   | SlabNode
   | WallNode
   | FenceNode
@@ -53,7 +57,9 @@ const MOVABLE_TYPES = new Set<string>([
   'door',
   'elevator',
   'ceiling',
+  'chimney',
   'column',
+  'dormer',
   'slab',
   'wall',
   'fence',

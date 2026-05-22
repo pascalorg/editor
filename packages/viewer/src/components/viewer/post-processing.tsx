@@ -231,10 +231,6 @@ const PostProcessingPasses = ({
     }
 
     if (skippedZeroSizeRef.current) {
-      console.log('[viewer/post-processing] Rebuilding pipeline after zero-sized viewport.', {
-        width,
-        height,
-      })
       skippedZeroSizeRef.current = false
     }
 
@@ -242,19 +238,6 @@ const PostProcessingPasses = ({
     const ssgiEnabled = SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
-
-    console.log('[viewer/post-processing] Building pipeline', {
-      version: pipelineVersion,
-      ssgi: ssgiEnabled,
-      denoise: denoiseEnabled,
-      outline: outlineEnabled,
-      perfDisable,
-      hoverHighlightMode,
-      projectId,
-      rendererCtor: (renderer as any).constructor?.name,
-      width,
-      height,
-    })
 
     hasPipelineErrorRef.current = false
 

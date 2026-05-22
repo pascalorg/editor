@@ -22,6 +22,7 @@ import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import {
   calculateCursorRotation,
   calculateItemRotation,
+  calculateRoofRotation,
   getGridAlignedDimensions,
   getSideFromNormal,
   isValidWallSideFace,
@@ -107,7 +108,7 @@ export const floorStrategy = {
     return {
       gridPosition: [x, 0, z],
       cursorPosition: [x, event.localPosition[1], z],
-      cursorRotationY: 0,
+      cursorRotationY: rotY,
       nodeUpdate: { position: [x, 0, z] },
       stopPropagation: false,
       dirtyNodeId: null,

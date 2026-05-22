@@ -35,6 +35,15 @@ const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
   { label: 'Mansard', value: 'mansard' },
 ]
 
+// Carpenter / roofer convention: rise over a 12" run, converted to degrees.
+// atan(3/12) ≈ 14.04°, atan(6/12) ≈ 26.57°, atan(9/12) ≈ 36.87°, atan(12/12) = 45°.
+const PITCH_PRESETS: { label: string; deg: number }[] = [
+  { label: '3/12', deg: 14.04 },
+  { label: '6/12', deg: 26.57 },
+  { label: '9/12', deg: 36.87 },
+  { label: '12/12', deg: 45 },
+]
+
 export default function RoofSegmentPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -154,7 +163,7 @@ export default function RoofSegmentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Heights">
+      <PanelSection title="Wall Height">
         <SliderControl
           label="Wall"
           max={5}
@@ -165,17 +174,104 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={Math.round(node.wallHeight * 100) / 100}
         />
-        <SliderControl
-          label="Roof"
-          max={15}
-          min={0}
-          onChange={(v) => handleUpdate({ roofHeight: v })}
-          precision={2}
-          step={0.1}
-          unit="m"
-          value={Math.round(node.roofHeight * 100) / 100}
-        />
       </PanelSection>
+
+      <PanelSection title="Pitch">
+        <SliderControl
+          label="Angle"
+          max={60}
+          min={0}
+          onChange={(v) => handleUpdate({ pitch: v })}
+          precision={0}
+          step={1}
+          unit="°"
+          value={Math.round(node.pitch)}
+        />
+        <div className="flex gap-1.5 px-1 pt-2 pb-1">
+          {PITCH_PRESETS.map((preset) => (
+            <ActionButton
+              key={preset.label}
+              label={preset.label}
+              onClick={() => handleUpdate({ pitch: preset.deg })}
+            />
+          ))}
+        </div>
+      </PanelSection>
+
+      {node.roofType === 'gambrel' && (
+        <PanelSection title="Shape">
+          <SliderControl
+            label="Kink Depth"
+            max={0.9}
+            min={0.1}
+            onChange={(v) => handleUpdate({ gambrelLowerWidthRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={Math.round(node.gambrelLowerWidthRatio * 100) / 100}
+          />
+          <SliderControl
+            label="Kink Height"
+            max={0.9}
+            min={0.1}
+            onChange={(v) => handleUpdate({ gambrelLowerHeightRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={Math.round(node.gambrelLowerHeightRatio * 100) / 100}
+          />
+        </PanelSection>
+      )}
+
+      {node.roofType === 'mansard' && (
+        <PanelSection title="Shape">
+          <SliderControl
+            label="Waist Width"
+            max={0.45}
+            min={0.05}
+            onChange={(v) => handleUpdate({ mansardSteepWidthRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={Math.round(node.mansardSteepWidthRatio * 100) / 100}
+          />
+          <SliderControl
+            label="Waist Height"
+            max={0.9}
+            min={0.1}
+            onChange={(v) => handleUpdate({ mansardSteepHeightRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={Math.round(node.mansardSteepHeightRatio * 100) / 100}
+          />
+        </PanelSection>
+      )}
+
+      {node.roofType === 'dutch' && (
+        <PanelSection title="Shape">
+          <SliderControl
+            label="Hip Width"
+            max={0.45}
+            min={0.05}
+            onChange={(v) => handleUpdate({ dutchHipWidthRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={Math.round(node.dutchHipWidthRatio * 100) / 100}
+          />
+          <SliderControl
+            label="Hip Height"
+            max={0.9}
+            min={0.1}
+            onChange={(v) => handleUpdate({ dutchHipHeightRatio: v })}
+            precision={2}
+            step={0.01}
+            unit=""
+            value={Math.round(node.dutchHipHeightRatio * 100) / 100}
+          />
+        </PanelSection>
+      )}
 
       <PanelSection title="Structure">
         <SliderControl

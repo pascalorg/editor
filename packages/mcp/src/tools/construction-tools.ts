@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   CeilingNode,
+  getActiveRoofHeight,
   LevelNode,
   RoofNode,
   RoofSegmentNode,
@@ -52,7 +53,7 @@ export const createRoofInput = {
   width: z.number().positive(),
   depth: z.number().positive(),
   roofType: z.enum(ROOF_TYPES).default('hip'),
-  roofHeight: z.number().positive().default(1.8),
+  pitch: z.number().min(0).max(85).default(35),
   wallHeight: z.number().min(0).default(0.35),
   wallThickness: z.number().positive().default(0.16),
   overhang: z.number().min(0).default(0.45),
@@ -313,13 +314,16 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       width,
       depth,
       roofType,
-      roofHeight,
+      pitch,
       wallHeight,
       wallThickness,
       overhang,
       materialPreset,
       name,
     }) => {
+      // Peak height is derived from pitch + footprint + type; we still
+      // need it to size the auto-generated roof level container below.
+      const peakHeight = getActiveRoofHeight({ roofType, pitch, width, depth })
       const referenceLevel = assertNode(bridge, levelId, 'level')
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
       let targetRoofLevelId = levelId as AnyNodeId
@@ -343,7 +347,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
             role: 'roof',
             label: roofLevelLabel,
             referenceLevelId: levelId,
-            height: roofLevelHeight ?? Math.max(wallHeight + roofHeight, 0.2),
+            height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           },
         })
         targetRoofLevelId = roofLevel.id as AnyNodeId
@@ -356,7 +360,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         width,
         depth,
         wallHeight,
-        roofHeight,
+        pitch,
         wallThickness,
         overhang,
         ...(materialPreset ? { materialPreset } : {}),

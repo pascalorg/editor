@@ -65,6 +65,7 @@ export interface PlacementResult {
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
+  cursorRotation?: [number, number, number]
   nodeUpdate: Partial<ItemNode> | null
   stopPropagation: boolean
   dirtyNodeId: AnyNode['id'] | null
@@ -79,6 +80,7 @@ export interface TransitionResult {
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
+  cursorRotation?: [number, number, number]
   stopPropagation: boolean
 }
 

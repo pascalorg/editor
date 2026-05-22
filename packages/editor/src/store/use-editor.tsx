@@ -5,8 +5,12 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type ChimneyMaterialRole,
+  type ChimneyNode,
   type ColumnNode,
   type DoorNode,
+  type DormerNode,
+  type DormerSurfaceMaterialRole,
   type ElevatorNode,
   type FenceNode,
   type ItemNode,
@@ -66,6 +70,12 @@ export type StructureTool =
   | 'window'
   | 'door'
   | 'shelf'
+  | 'box-vent'
+  | 'ridge-vent'
+  | 'chimney'
+  | 'solar-panel'
+  | 'skylight'
+  | 'dormer'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -105,6 +115,8 @@ export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
   | RoofSurfaceMaterialRole
+  | ChimneyMaterialRole
+  | DormerSurfaceMaterialRole
   | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
@@ -142,7 +154,9 @@ type EditorState = {
     | DoorNode
     | ElevatorNode
     | CeilingNode
+    | ChimneyNode
     | ColumnNode
+    | DormerNode
     | SlabNode
     | WallNode
     | FenceNode
@@ -160,7 +174,9 @@ type EditorState = {
       | DoorNode
       | ElevatorNode
       | CeilingNode
+      | ChimneyNode
       | ColumnNode
+      | DormerNode
       | SlabNode
       | WallNode
       | FenceNode

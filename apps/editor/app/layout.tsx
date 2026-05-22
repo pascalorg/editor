@@ -2,7 +2,6 @@ import { Agentation } from 'agentation'
 import { GeistPixelSquare } from 'geist/font/pixel'
 import { Barlow } from 'next/font/google'
 import localFont from 'next/font/local'
-import Script from 'next/script'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
 
@@ -34,10 +33,10 @@ export default function RootLayout({
     >
       <head>
         {process.env.NODE_ENV === 'development' && (
-          <Script
+          <script
+            async
             crossOrigin="anonymous"
             src="//unpkg.com/react-scan/dist/auto.global.js"
-            strategy="beforeInteractive"
           />
         )}
       </head>
