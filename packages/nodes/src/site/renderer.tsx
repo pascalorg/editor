@@ -50,8 +50,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
-  const bgColor = isDark ? '#1f2433' : '#fafafa'
+  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
 
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset

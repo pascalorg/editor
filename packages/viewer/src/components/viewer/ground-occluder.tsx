@@ -6,8 +6,7 @@ import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
 export const GroundOccluder = () => {
-  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
-  const bgColor = isDark ? '#1f2433' : '#fafafa'
+  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
 
   const nodes = useScene((state) => state.nodes)
 
