@@ -355,6 +355,30 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
     if (node.type === 'roof') {
       patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }
+
+    // Legacy: site.children used to hold nested BuildingNode / ItemNode
+    // objects (see the SiteNode schema before the children-as-ids fix).
+    // Flatten any leftover nested children into ids, and absorb the
+    // embedded nodes into the flat map so the rest of the loader can
+    // treat the site like every other parent.
+    if (node.type === 'site' && Array.isArray(node.children)) {
+      let needsFlatten = false
+      const flattened: string[] = []
+      for (const child of node.children) {
+        if (typeof child === 'string') {
+          flattened.push(child)
+        } else if (child && typeof child === 'object' && typeof child.id === 'string') {
+          needsFlatten = true
+          flattened.push(child.id)
+          if (!patchedNodes[child.id]) {
+            patchedNodes[child.id] = { ...child, parentId: id }
+          }
+        }
+      }
+      if (needsFlatten) {
+        patchedNodes[id] = { ...node, children: flattened }
+      }
+    }
   }
   return patchedNodes as Record<string, AnyNode>
 }
@@ -575,7 +599,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         })
 
         const site = SiteNode.parse({
-          children: [building],
+          children: [building.id],
         })
 
         // Define all nodes flat
