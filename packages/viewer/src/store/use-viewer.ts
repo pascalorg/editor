@@ -5,6 +5,7 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
 
 export type RenderContext = 'editor' | 'viewer'
@@ -51,6 +52,9 @@ type ViewerState = {
 
   colorPreset: ColorPreset
   setColorPreset: (preset: ColorPreset) => void
+
+  edges: EdgeMode
+  setEdges: (edges: EdgeMode) => void
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
@@ -134,6 +138,9 @@ const useViewer = create<ViewerState>()(
 
       colorPreset: 'clay',
       setColorPreset: (preset) => set({ colorPreset: preset }),
+
+      edges: 'off',
+      setEdges: (edges) => set({ edges }),
 
       unit: 'metric',
       setUnit: (unit) => set({ unit }),
@@ -252,6 +259,7 @@ const useViewer = create<ViewerState>()(
         shadingByContext: state.shadingByContext,
         textures: state.textures,
         colorPreset: state.colorPreset,
+        edges: state.edges,
         unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,

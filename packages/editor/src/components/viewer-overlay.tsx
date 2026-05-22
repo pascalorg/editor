@@ -10,7 +10,7 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
+import { type EdgeMode, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
   ArrowLeft,
   Box,
@@ -20,6 +20,7 @@ import {
   Diamond,
   Layers,
   Moon,
+  PenLine,
   Sparkles,
   Sun,
 } from 'lucide-react'
@@ -165,6 +166,51 @@ function SceneThemeMenu() {
             </DropdownMenuItem>
           )
         })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+const EDGE_OPTIONS = [
+  { id: 'off', name: 'Off', detail: 'No edge lines' },
+  { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
+  { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
+  { id: 'sketchy', name: 'Sketchy', detail: 'Hand-drawn, jittered lines' },
+] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
+
+function EdgesMenu() {
+  const edges = useViewer((s) => s.edges)
+  const active = EDGE_OPTIONS.find((o) => o.id === edges) ?? EDGE_OPTIONS[0]
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionButton
+          className={
+            edges === 'off'
+              ? 'text-muted-foreground/80 hover:bg-white/5 hover:text-foreground'
+              : 'bg-white/10 text-foreground'
+          }
+          label={`Edges: ${active.name}`}
+          size="icon"
+          tooltipSide="top"
+          variant="ghost"
+        >
+          <PenLine className="h-6 w-6" />
+        </ActionButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="min-w-56" side="top">
+        {EDGE_OPTIONS.map((option) => (
+          <DropdownMenuItem
+            key={option.id}
+            onSelect={() => useViewer.getState().setEdges(option.id)}
+          >
+            <div className="flex flex-col">
+              <span className="text-foreground">{option.name}</span>
+              <span className="text-muted-foreground text-xs">{option.detail}</span>
+            </div>
+            {edges === option.id ? <Check className="ml-auto text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -505,6 +551,8 @@ export const ViewerOverlay = ({
             <RenderModeMenu />
 
             <SceneThemeMenu />
+
+            <EdgesMenu />
 
             {/* Level Mode */}
             <ActionButton

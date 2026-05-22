@@ -10,7 +10,7 @@ import {
   useSidebarStore,
   type ViewMode,
 } from '@pascal-app/editor'
-import { getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
+import { type EdgeMode, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
   Box,
   Check,
@@ -23,6 +23,7 @@ import {
   Grid2X2,
   Moon,
   Palette,
+  PenLine,
   Sparkles,
   Sun,
 } from 'lucide-react'
@@ -297,11 +298,9 @@ function SceneThemeMenu() {
       </ToolbarTooltip>
       <DropdownMenuContent align="center" className="min-w-48" side="bottom">
         {SCENE_THEMES.map((theme) => {
-          const swatches = [
-            theme.background,
-            theme.lights[0]?.color,
-            theme.hemi?.ground,
-          ].filter((color): color is string => Boolean(color))
+          const swatches = [theme.background, theme.lights[0]?.color, theme.hemi?.ground].filter(
+            (color): color is string => Boolean(color),
+          )
           return (
             <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
               <span className="flex gap-px overflow-hidden rounded-sm border border-black/10">
@@ -314,10 +313,52 @@ function SceneThemeMenu() {
                 ))}
               </span>
               <span className="text-foreground">{theme.name}</span>
-              {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+              {sceneTheme === theme.id ? (
+                <Check className="ml-auto h-4 w-4 text-foreground" />
+              ) : null}
             </DropdownMenuItem>
           )
         })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+const EDGE_OPTIONS = [
+  { id: 'off', name: 'Off', detail: 'No edge lines' },
+  { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
+  { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
+  { id: 'sketchy', name: 'Sketchy', detail: 'Hand-drawn, jittered lines' },
+] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
+
+function EdgesMenu() {
+  const edges = useViewer((state) => state.edges)
+  const setEdges = useViewer((state) => state.setEdges)
+  const active = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
+
+  return (
+    <DropdownMenu>
+      <ToolbarTooltip label={`Edges: ${active.name}`}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label={`Edges: ${active.name}`}
+            className={cn(TOOLBAR_BTN, edges !== 'off' && 'bg-white/10 text-foreground/90')}
+            type="button"
+          >
+            <PenLine className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent align="center" className="min-w-56" side="bottom">
+        {EDGE_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
+            <div className="flex flex-col">
+              <span className="text-foreground">{option.name}</span>
+              <span className="text-muted-foreground text-xs">{option.detail}</span>
+            </div>
+            {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -458,6 +499,7 @@ export function CommunityViewerToolbarRight() {
       <WallModeToggle />
       <RenderModeMenu />
       <SceneThemeMenu />
+      <EdgesMenu />
       <GridVisibilityToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
