@@ -229,7 +229,11 @@ export function getSegmentSlopeFrame(
 ): SegmentSlopeFrame {
   const ratios = withRatioDefaults(node)
   const run = getPrimarySlopeRun(ratios)
-  if (node.roofType === 'flat' || node.pitch <= 0) {
+  // `!(pitch > 0)` (not `pitch <= 0`) so a missing/NaN pitch — e.g. a segment
+  // from an older migration that only set `roofHeight`, or stale persisted data —
+  // resolves to a flat frame instead of computing `Math.tan(NaN)` → NaN geometry,
+  // which poisons the merged-roof CSG ("Coplanar clip not handled" + NaN positions).
+  if (node.roofType === 'flat' || !(node.pitch > 0)) {
     return { run, rise: 0, tanTheta: 0, cosTheta: 1, sinTheta: 0, activeRh: 0 }
   }
   const pitchRad = (node.pitch * Math.PI) / 180
