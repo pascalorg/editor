@@ -21,7 +21,9 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
+import { edgeColorFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
+import { inkedEdges } from '../../lib/ink-edges'
 import { SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
@@ -139,6 +141,10 @@ const PostProcessingPasses = ({
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
 
+  // Ink-line colour follows the scene-theme background luminance (dark lines on
+  // light scenes, light on dark), refreshed each frame like the background.
+  const inkColorUniform = useRef(uniform(new Color(edgeColorFor(initBg))))
+
   const zoneLayers = useMemo(() => {
     const l = new Layers()
     l.enable(ZONE_LAYER)
@@ -154,6 +160,7 @@ const PostProcessingPasses = ({
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
   const shading = useViewer((s) => s.shading)
+  const edges = useViewer((s) => s.edges)
   const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
@@ -241,6 +248,10 @@ const PostProcessingPasses = ({
     const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
+    const inkEnabled = edges !== 'off'
+    // The depth+normal MRT feeds both SSGI and the screen-space ink pass.
+    const needsNormalMRT = ssgiEnabled || inkEnabled
+    const inkIntensity = edges === 'strong' ? 2.8 : 1.6
 
     console.log('[viewer/post-processing] Building pipeline', {
       version: pipelineVersion,
@@ -297,8 +308,12 @@ const PostProcessingPasses = ({
 
       let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
 
-      if (ssgiEnabled) {
-        // MRT only needed for SSGI (diffuse for GI, normal for SSGI sampling)
+      // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
+      // (depth/normal). Built whenever either is active.
+      let scenePassDepth: any = null
+      let scenePassNormal: any = null
+      let sceneNormal: any = null
+      if (needsNormalMRT) {
         scenePass.setMRT(
           mrt({
             output,
@@ -306,19 +321,18 @@ const PostProcessingPasses = ({
             normal: directionToColor(normalView),
           }),
         )
-
-        const scenePassDiffuse = scenePass.getTextureNode('diffuseColor')
-        const scenePassDepth = scenePass.getTextureNode('depth')
-        const scenePassNormal = scenePass.getTextureNode('normal')
-
-        // Optimize texture bandwidth
-        const diffuseTexture = scenePass.getTexture('diffuseColor')
-        diffuseTexture.type = UnsignedByteType
+        scenePassDepth = scenePass.getTextureNode('depth')
+        scenePassNormal = scenePass.getTextureNode('normal')
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
+        // Extract normal from color-encoded texture (SSGI consumes the node form)
+        sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
+      }
 
-        // Extract normal from color-encoded texture
-        const sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
+      if (ssgiEnabled) {
+        const scenePassDiffuse = scenePass.getTextureNode('diffuseColor')
+        const diffuseTexture = scenePass.getTexture('diffuseColor')
+        diffuseTexture.type = UnsignedByteType
 
         const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
         giPass.sliceCount.value = SSGI_PARAMS.sliceCount
@@ -355,6 +369,22 @@ const PostProcessingPasses = ({
         sceneColor = vec4(
           add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
           contentAlpha,
+        )
+      }
+
+      // Screen-space ink outline (SketchUp look) — depth/normal edge detection
+      // over the composited scene. Topology-agnostic, so it handles CSG-cut
+      // walls cleanly. Applied before the selection outline + background mix.
+      if (inkEnabled) {
+        sceneColor = vec4(
+          inkedEdges({
+            sceneRgb: sceneColor.rgb,
+            depthTex: scenePassDepth,
+            normalTex: scenePassNormal,
+            inkColor: inkColorUniform.current,
+            intensity: inkIntensity,
+          }),
+          sceneColor.a,
         )
       }
 
@@ -433,6 +463,7 @@ const PostProcessingPasses = ({
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,
+    edges,
     pipelineVersion,
     projectId,
     renderer,
@@ -452,6 +483,8 @@ const PostProcessingPasses = ({
     bgTarget.current.set(getSceneTheme(useViewer.getState().sceneTheme).background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
+    // Ink colour follows the (lerping) background luminance — snaps dark↔light.
+    inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
 
     const outliner = useViewer.getState().outliner
     sanitizeOutlineObjects(outliner.selectedObjects)
