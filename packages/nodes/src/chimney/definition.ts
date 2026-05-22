@@ -36,6 +36,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   schemaVersion: 1,
   schema: ChimneyNode,
   category: 'structure',
+  surfaceRole: 'wall',
 
   defaults: () => {
     const stub = ChimneyNodeSchema.parse({

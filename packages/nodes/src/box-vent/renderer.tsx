@@ -8,7 +8,14 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import {
+  type ColorPreset,
+  createMaterial,
+  createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
@@ -45,6 +52,10 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   const ref = useRef<THREE.Group>(null!)
   useRegistry(storeNode.id, 'box-vent', ref)
   const handlers = useNodeEvents(storeNode, 'box-vent')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   // Merge live overrides (panel slider drags) on top of the store node.
   // Sliders write here on every `onChange` and only flush to the scene
@@ -102,14 +113,20 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   // DoubleSide locally so back faces of the vent body / hood don't drop
   // out when the camera looks up at the eaves.
   const material = useMemo(() => {
+    // Untextured box vent (and textures-off mode) takes the themed 'roof'
+    // role colour. Request DoubleSide directly so the cached role material
+    // is the right side — no clone/mutation of a shared material.
+    if (!textures || (!node.material && !node.materialPreset)) {
+      return createSurfaceRoleMaterial('roof', colorPreset, THREE.DoubleSide, sceneTheme)
+    }
     const base = node.material
-      ? createMaterial(node.material)
-      : (createMaterialFromPresetRef(node.materialPreset) ?? defaultMaterial)
+      ? createMaterial(node.material, shading)
+      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
     if (base.side === THREE.DoubleSide) return base
     const cloned = base.clone()
     cloned.side = THREE.DoubleSide
     return cloned
-  }, [node.material, node.materialPreset])
+  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   if (!segment) return null
 

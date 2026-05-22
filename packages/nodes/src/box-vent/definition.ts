@@ -33,6 +33,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   schemaVersion: 1,
   schema: BoxVentNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     const stub = BoxVentNodeSchema.parse({ id: 'bvent_default' as never, type: 'box-vent' })

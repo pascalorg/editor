@@ -7,7 +7,14 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import {
+  type ColorPreset,
+  createMaterial,
+  createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { buildRidgeVentGeometry } from './geometry'
@@ -42,6 +49,10 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
   const ref = useRef<THREE.Group>(null!)
   useRegistry(node.id, 'ridge-vent', ref)
   const handlers = useNodeEvents(node, 'ridge-vent')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   const segment = useScene((state) =>
     node.roofSegmentId
@@ -62,14 +73,20 @@ const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
   // — so clone the resolved material and force `DoubleSide` locally
   // without mutating the shared cache entry.
   const material = useMemo(() => {
+    // Untextured ridge vent (and textures-off mode) takes the themed
+    // 'roof' role colour. Request DoubleSide directly so the cached role
+    // material is the right side — no clone/mutation of a shared material.
+    if (!textures || (!node.material && !node.materialPreset)) {
+      return createSurfaceRoleMaterial('roof', colorPreset, THREE.DoubleSide, sceneTheme)
+    }
     const base = node.material
-      ? createMaterial(node.material)
-      : (createMaterialFromPresetRef(node.materialPreset) ?? defaultMaterial)
+      ? createMaterial(node.material, shading)
+      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
     if (base.side === THREE.DoubleSide) return base
     const cloned = base.clone()
     cloned.side = THREE.DoubleSide
     return cloned
-  }, [node.material, node.materialPreset])
+  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   if (!segment) return null
 

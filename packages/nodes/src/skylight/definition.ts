@@ -25,6 +25,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   schemaVersion: 1,
   schema: SkylightNode,
   category: 'structure',
+  surfaceRole: 'glazing',
 
   defaults: () => {
     const stub = SkylightNodeSchema.parse({

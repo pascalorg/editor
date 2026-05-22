@@ -8,7 +8,14 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import {
+  type ColorPreset,
+  createMaterial,
+  createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -47,6 +54,10 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
   const ref = useRef<THREE.Group>(null!)
   useRegistry(storeNode.id, 'solar-panel', ref)
   const handlers = useNodeEvents(storeNode, 'solar-panel')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   // Merge live overrides written by slider drags so the mesh updates in
   // real time before the value is committed to the scene store.
@@ -78,15 +89,23 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
+  // Only the structural frame/mount surface is themed (→ 'roof'). The
+  // panel/cell face below is intentionally dark + product-specific and is
+  // left untouched in both texture modes.
   const frameMaterial = useMemo(() => {
-    if (node.material) return createMaterial(node.material)
-    return createMaterialFromPresetRef(node.materialPreset) ?? defaultFrameMaterial
-  }, [node.material, node.materialPreset])
+    if (!textures || (!node.material && !node.materialPreset)) {
+      return createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+    }
+    if (node.material) return createMaterial(node.material, shading)
+    return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultFrameMaterial
+  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   const panelMaterial = useMemo(() => {
-    if (node.panelMaterial) return createMaterial(node.panelMaterial)
-    return createMaterialFromPresetRef(node.panelMaterialPreset) ?? getDefaultPanelMaterial()
-  }, [node.panelMaterial, node.panelMaterialPreset])
+    if (node.panelMaterial) return createMaterial(node.panelMaterial, shading)
+    return (
+      createMaterialFromPresetRef(node.panelMaterialPreset, shading) ?? getDefaultPanelMaterial()
+    )
+  }, [shading, node.panelMaterial, node.panelMaterialPreset])
 
   const surfaceQuat = useMemo(() => {
     if (!segment) return new THREE.Quaternion()

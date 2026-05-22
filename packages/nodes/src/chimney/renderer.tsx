@@ -9,10 +9,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
   getRoofSegmentBrushes,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -35,6 +38,10 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
   const ref = useRef<THREE.Group>(null!)
   useRegistry(storeNode.id, 'chimney', ref)
   const handlers = useNodeEvents(storeNode, 'chimney')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   // Merge in-flight slider drags from `useLiveNodeOverrides` so the mesh
   // updates while the user is still holding the slider. On release the
@@ -157,19 +164,44 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
   )
 
   const surfaceMaterial = useMemo(() => {
-    if (node.material) return createMaterial(node.material)
-    const preset = createMaterialFromPresetRef(node.materialPreset)
-    return preset ?? fallbackBodyMaterial
-  }, [node.material, node.materialPreset, fallbackBodyMaterial])
+    // Untextured chimney body (and everything in textures-off mode) takes
+    // the themed 'wall' role colour; only an explicit preset/material keeps
+    // its texture when textures are on.
+    if (!textures || (!node.material && !node.materialPreset)) {
+      return createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
+    }
+    if (node.material) return createMaterial(node.material, shading)
+    return createMaterialFromPresetRef(node.materialPreset, shading) ?? fallbackBodyMaterial
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    node.material,
+    node.materialPreset,
+    fallbackBodyMaterial,
+  ])
 
   const capSurfaceMaterial = useMemo(() => {
-    if (node.topMaterial) return createMaterial(node.topMaterial)
-    const preset = createMaterialFromPresetRef(node.topMaterialPreset)
+    // Cap/crown is the chimney's roof-facing surface → 'roof' role when
+    // untextured (or textures off). Otherwise resolve the explicit cap
+    // material, then fall back to the body material.
+    if (
+      !textures ||
+      (!node.topMaterial && !node.topMaterialPreset && !node.material && !node.materialPreset)
+    ) {
+      return createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+    }
+    if (node.topMaterial) return createMaterial(node.topMaterial, shading)
+    const preset = createMaterialFromPresetRef(node.topMaterialPreset, shading)
     if (preset) return preset
-    if (node.material) return createMaterial(node.material)
-    const bodyPreset = createMaterialFromPresetRef(node.materialPreset)
-    return bodyPreset ?? fallbackTopMaterial
+    if (node.material) return createMaterial(node.material, shading)
+    return createMaterialFromPresetRef(node.materialPreset, shading) ?? fallbackTopMaterial
   }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
     node.topMaterial,
     node.topMaterialPreset,
     node.material,
