@@ -1,4 +1,4 @@
-import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { closeDoorOpenState, toggleDoorOpenState } from '../lib/door-interaction'
@@ -8,11 +8,6 @@ import {
   pasteEditorClipboardToLevel,
 } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
-import {
-  closeSkylightOpenState,
-  isOperableSkylightType,
-  toggleSkylightOpenState,
-} from '../lib/skylight-interaction'
 import { closeWindowOpenState, toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
 
@@ -202,9 +197,14 @@ export const useKeyboard = ({
             e.preventDefault()
             toggleWindowOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node?.type === 'skylight' && isOperableSkylightType(node.skylightType)) {
+          } else if (node && nodeRegistry.get(node.type)?.keyboardActions?.r?.appliesTo(node)) {
+            // Registry-driven R action. Skylight uses this for open/
+            // close toggling; future kinds with custom R behaviour
+            // declare it on their `def.keyboardActions` without
+            // touching this hook. Door / window still use the legacy
+            // direct calls above (follow-up to migrate).
             e.preventDefault()
-            toggleSkylightOpenState(node.id)
+            nodeRegistry.get(node.type)!.keyboardActions!.r!.run(node)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
@@ -246,9 +246,10 @@ export const useKeyboard = ({
             e.preventDefault()
             closeWindowOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node?.type === 'skylight' && isOperableSkylightType(node.skylightType)) {
+          } else if (node && nodeRegistry.get(node.type)?.keyboardActions?.t?.appliesTo(node)) {
+            // Registry-driven T action. Same shape as the R arm above.
             e.preventDefault()
-            closeSkylightOpenState(node.id)
+            nodeRegistry.get(node.type)!.keyboardActions!.t!.run(node)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()

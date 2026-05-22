@@ -33,6 +33,10 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
+    // ridge — no `buildCut`, just the dirty cascade so the parent
+    // roof's merged shell rebuilds when the vent moves / resizes.
+    roofAccessory: {},
   },
 
   parametrics: ridgeVentParametrics,

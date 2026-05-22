@@ -44,6 +44,10 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
+    // slope — no `buildCut`, just the dirty cascade so the parent
+    // roof's merged shell rebuilds when the vent moves / resizes.
+    roofAccessory: {},
   },
 
   parametrics: boxVentParametrics,

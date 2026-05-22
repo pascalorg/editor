@@ -32,6 +32,10 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
+    // shell — no `buildCut`, just the dirty cascade so the parent
+    // roof's merged shell rebuilds when the array moves / resizes.
+    roofAccessory: {},
   },
 
   parametrics: solarPanelParametrics,

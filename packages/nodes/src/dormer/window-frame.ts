@@ -1,5 +1,5 @@
-import { createDormerArchShape, createDormerRoundedShape } from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { createDormerArchShape, createDormerRoundedShape } from './csg-geometry'
 
 /**
  * Frame + glass geometry for the window opening on a dormer's gable

@@ -77,6 +77,7 @@ export { snapLevelsToTruePositions } from './systems/level/level-utils'
 // geometry subtracts pieces against their host. Lives in viewer
 // because three-bvh-csg / three-mesh-bvh are viewer-only deps.
 export {
+  ADDITION,
   Brush,
   csgEvaluator,
   csgGeometry,
@@ -86,17 +87,17 @@ export {
   SUBTRACTION,
 } from './lib/csg-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
+// Generic roof-segment primitives. Kinds that compose CSG against
+// the roof shell (chimney's self-trim, dormer's virtual-segment cut)
+// read these through the public surface. No kind-specific helpers
+// belong here — those live in `@pascal-app/nodes/<kind>/`.
 export {
-  buildDormerFallbackGeometry,
-  createDormerArchShape,
-  createDormerRoundedShape,
-  DORMER_GABLE_MATERIAL_INDEX,
-  generateDormerGeometry,
-  getDormerExposedFaces,
-  getDormerSkirtWindowDims,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
-  normalizeDormerCornerRadii,
+  mapRoofGroupMaterialIndex,
+  remapRoofShellFaces,
+  ROOF_MATERIAL_SLOT_COUNT,
+  roofCsgDummyMats,
   RoofSystem,
   type SurfaceFrame,
 } from './systems/roof/roof-system'

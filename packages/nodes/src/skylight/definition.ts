@@ -1,5 +1,17 @@
-import { type NodeDefinition, SkylightNode as SkylightNodeSchema } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type NodeDefinition,
+  type RoofSegmentNode,
+  type SkylightNode as SkylightNodeType,
+  SkylightNode as SkylightNodeSchema,
+} from '@pascal-app/core'
+import {
+  closeSkylightOpenState,
+  isOperableSkylightNode,
+  toggleSkylightOpenState,
+} from './interaction'
 import { skylightParametrics } from './parametrics'
+import { buildSkylightRoofCut } from './roof-cut'
 import { SkylightNode } from './schema'
 
 /**
@@ -27,6 +39,14 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Mounts on a roof segment via `roofSegmentId`. Dirty marks
+    // cascade to the host segment's parent roof so its merged shell
+    // re-CSGs with the new cut. `buildCut` returns the segment-local
+    // box that's subtracted from shin / deck / wall.
+    roofAccessory: {
+      buildCut: (node: AnyNode, hostSegment: AnyNode) =>
+        buildSkylightRoofCut(node as SkylightNodeType, hostSegment as RoofSegmentNode),
+    },
   },
 
   parametrics: skylightParametrics,
@@ -60,5 +80,21 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   mcp: {
     description:
       'A skylight on a roof segment. Five type variants (flat / walk-on / lantern / opening / sliding) — geometry beyond box stub coming later.',
+  },
+
+  // R toggles open ↔ closed on operable types (opening / sliding); T
+  // forces close. The animation runs through `useInteractive` and the
+  // skylight system; see `./interaction.ts`.
+  keyboardActions: {
+    r: {
+      appliesTo: (node: AnyNode) =>
+        node.type === 'skylight' && isOperableSkylightNode(node as SkylightNodeType),
+      run: (node: AnyNode) => toggleSkylightOpenState(node.id),
+    },
+    t: {
+      appliesTo: (node: AnyNode) =>
+        node.type === 'skylight' && isOperableSkylightNode(node as SkylightNodeType),
+      run: (node: AnyNode) => closeSkylightOpenState(node.id),
+    },
   },
 }

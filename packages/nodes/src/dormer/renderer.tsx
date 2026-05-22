@@ -10,13 +10,15 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  buildDormerFallbackGeometry,
   createMaterial,
   createMaterialFromPresetRef,
-  DORMER_GABLE_MATERIAL_INDEX,
-  generateDormerGeometry,
   useNodeEvents,
 } from '@pascal-app/viewer'
+import {
+  buildDormerFallbackGeometry,
+  DORMER_GABLE_MATERIAL_INDEX,
+  generateDormerGeometry,
+} from './csg-geometry'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import DormerWindowAssembly from './window-assembly'

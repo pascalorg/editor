@@ -1,4 +1,5 @@
 import { type NodeDefinition, ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
+import { chimneyPaint } from './paint'
 import { chimneyParametrics } from './parametrics'
 import { ChimneyNode } from './schema'
 
@@ -51,6 +52,16 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Mounts on a roof segment via `roofSegmentId`. Dirty marks
+    // cascade to the host segment's parent roof so its merged shell
+    // re-renders. No `buildCut` — the chimney does its own self-trim
+    // via `trimChimneyBodyAgainstRoof`; the host roof shell stays solid
+    // underneath.
+    roofAccessory: {},
+    // Paint dispatch for the body / top surface split. The editor's
+    // selection-manager routes paint hover / click / preview through
+    // this entry rather than carrying a kind-name arm.
+    paint: chimneyPaint,
   },
 
   affordanceTools: {

@@ -1,11 +1,8 @@
 'use client'
 
 import type { DormerNode, RoofSegmentNode } from '@pascal-app/core'
-import {
-  getDormerExposedFaces,
-  getDormerSkirtWindowDims,
-  glassMaterial,
-} from '@pascal-app/viewer'
+import { glassMaterial } from '@pascal-app/viewer'
+import { getDormerExposedFaces, getDormerSkirtWindowDims } from './csg-geometry'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { buildDormerWindowGeometries, type DormerWindowShape } from './window-frame'

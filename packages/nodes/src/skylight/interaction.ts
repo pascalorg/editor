@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   type SkylightInteractiveState,
+  type SkylightNode,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
@@ -13,6 +14,10 @@ type SkylightOpenAnimationOptions = {
 
 export function isOperableSkylightType(skylightType: string | undefined) {
   return skylightType === 'opening' || skylightType === 'sliding'
+}
+
+export function isOperableSkylightNode(node: SkylightNode): boolean {
+  return isOperableSkylightType(node.skylightType)
 }
 
 function getDisplayedSkylightValue(skylightId: AnyNodeId, nodeValue: number | undefined) {

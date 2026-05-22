@@ -1,4 +1,11 @@
-import { type NodeDefinition, DormerNode as DormerNodeSchema } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type DormerNode as DormerNodeType,
+  type NodeDefinition,
+  DormerNode as DormerNodeSchema,
+} from '@pascal-app/core'
+import { buildDormerRoofCut } from './csg-geometry'
+import { dormerPaint } from './paint'
 import { dormerParametrics } from './parametrics'
 import { DormerNode } from './schema'
 
@@ -37,6 +44,19 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Mounts on a roof segment via `roofSegmentId`. Dirty marks
+    // cascade to the host segment's parent roof so its merged shell
+    // re-CSGs with the new cut. `buildCut` returns the segment-local
+    // geometry the merge loop subtracts from shin / deck / wall.
+    roofAccessory: {
+      buildCut: (node: AnyNode, _hostSegment: AnyNode) =>
+        buildDormerRoofCut(node as DormerNodeType),
+    },
+    // Paint dispatch for the wall / side / top surface split. The
+    // editor's selection-manager routes paint hover / click /
+    // preview through this entry rather than carrying a kind-name
+    // arm.
+    paint: dormerPaint,
   },
 
   affordanceTools: {

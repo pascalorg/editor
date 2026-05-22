@@ -4,11 +4,7 @@ import {
   type BoxVentNode,
   type BuildingNode,
   type CeilingNode,
-  type ChimneyMaterialRole,
-  type ChimneyNode,
   type ColumnNode,
-  type DormerNode,
-  type DormerSurfaceMaterialRole,
   emitter,
   type FenceNode,
   getEffectiveRoofSurfaceMaterial,
@@ -53,8 +49,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ActivePaintMaterial,
-  buildChimneyMaterialPatch,
-  buildDormerMaterialPatch,
   buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -136,33 +130,6 @@ export const resolveBuildingId = (
     return level.parentId
   }
   return null
-}
-
-function resolveWallMaterialTarget(event: WallEvent): WallSurfaceSide | null {
-  const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
-  if (materialIndex === 1) return 'interior'
-  if (materialIndex === 2) return 'exterior'
-
-  const normalZ = event.normal?.[2]
-  const localZ = event.localPosition[2]
-  const thickness = event.node.thickness ?? 0.1
-
-  if (
-    normalZ === undefined ||
-    Math.abs(normalZ) < 0.65 ||
-    Math.abs(localZ) < Math.max(thickness * 0.2, 0.01)
-  ) {
-    return null
-  }
-
-  const hitFace = localZ >= 0 ? 'front' : 'back'
-  const semantic = hitFace === 'front' ? event.node.frontSide : event.node.backSide
-
-  if (semantic === 'interior' || semantic === 'exterior') {
-    return semantic
-  }
-
-  return hitFace === 'front' ? 'interior' : 'exterior'
 }
 
 function resolveStairMaterialTarget(
@@ -272,22 +239,6 @@ function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Materia
   }
 
   return null
-}
-
-function applyWallPaintPreview(
-  node: WallNode,
-  role: WallSurfaceSide,
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const mesh = getRegisteredMesh(node.id)
-  if (!mesh) return null
-
-  const previewNode = {
-    ...node,
-    ...buildWallSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
-  }
-
-  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode))
 }
 
 function applyRoofPaintPreview(
@@ -520,109 +471,10 @@ function applySingleSurfacePaintPreview(
   return previewMeshMaterial(mesh, previewMaterial)
 }
 
-function resolveChimneyMaterialTarget(event: NodeEvent): ChimneyMaterialRole {
-  // Chimney surfaces are partitioned by `holes.ts:partitionTopFaceGroups`
-  // so material index 0 = body, 1 = top. Faces outside any group
-  // (cricket mesh, which uses a single material) fall back to 'body'.
-  const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
-  return materialIndex === 1 ? 'top' : 'body'
-}
-
-function resolveDormerMaterialTarget(event: NodeEvent): DormerSurfaceMaterialRole {
-  // Dormer body mesh has 5 material slots from `generateDormerGeometry`:
-  //   0 = wall (rectangular)
-  //   1 = side (deck along the slope)
-  //   2 = interior — paint as wall
-  //   3 = top   (roof shingle)
-  //   4 = gable triangle — paint as wall
-  // The window-frame meshes are not in the body mesh so a click on them
-  // is not exposed via this resolver — those are mapped to 'side'
-  // separately in the dispatch below.
-  const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
-  if (materialIndex === 3) return 'top'
-  if (materialIndex === 1) return 'side'
-  return 'wall'
-}
-
-function applyDormerPaintPreview(
-  node: DormerNode,
-  role: DormerSurfaceMaterialRole,
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  void node
-  const root = getRegisteredNodeObject(node.id)
-  if (!root) return null
-  const previewMaterial = getSingleSurfacePreviewMaterial(material)
-  if (!previewMaterial) return null
-
-  // Same slot layout as `resolveDormerMaterialTarget`. Painted slots:
-  //   role='wall' → 0, 2, 4
-  //   role='side' → 1
-  //   role='top'  → 3
-  const slotsToPaint = (() => {
-    if (role === 'top') return [3]
-    if (role === 'side') return [1]
-    return [0, 2, 4]
-  })()
-
-  const restores: PaintPreviewCleanup[] = []
-  root.traverse((object) => {
-    const mesh = object as Mesh
-    if (!mesh.isMesh) return
-    if (mesh.name !== 'dormer-body') return
-    const current = mesh.material as Material | Material[]
-    if (!Array.isArray(current)) return
-    const previousArray = [...current]
-    const nextArray = [...current]
-    for (const idx of slotsToPaint) {
-      if (current[idx]) nextArray[idx] = previewMaterial
-    }
-    mesh.material = nextArray
-    restores.push(() => {
-      mesh.material = previousArray
-    })
-  })
-  if (restores.length === 0) return null
-  return () => {
-    for (let i = restores.length - 1; i >= 0; i -= 1) restores[i]?.()
-  }
-}
-
-function applyChimneyPaintPreview(
-  node: ChimneyNode,
-  role: ChimneyMaterialRole,
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const root = getRegisteredNodeObject(node.id)
-  if (!root) return null
-  const previewMaterial = getSingleSurfacePreviewMaterial(material)
-  if (!previewMaterial) return null
-
-  const restores: PaintPreviewCleanup[] = []
-  root.traverse((object) => {
-    const mesh = object as Mesh
-    if (!mesh.isMesh) return
-    const current = mesh.material as Material | Material[]
-    if (Array.isArray(current)) {
-      const idx = role === 'top' ? 1 : 0
-      const previousAtIdx = current[idx]
-      if (!previousAtIdx) return
-      const previousArray = [...current]
-      const nextArray = [...current]
-      nextArray[idx] = previewMaterial
-      mesh.material = nextArray
-      restores.push(() => {
-        mesh.material = previousArray
-      })
-    } else if (role === 'body') {
-      restores.push(previewMeshMaterial(mesh, previewMaterial))
-    }
-  })
-  if (restores.length === 0) return null
-  return () => {
-    for (let i = restores.length - 1; i >= 0; i -= 1) restores[i]?.()
-  }
-}
+// Chimney + dormer paint dispatch lives on their NodeDefinition's
+// `capabilities.paint` (see packages/nodes/src/{chimney,dormer}/
+// paint.ts). The generic registry-driven arm in this file consults
+// those entries — no per-kind helpers needed here.
 
 function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRole | null) {
   if (!role) {
@@ -1006,35 +858,55 @@ export const SelectionManager = () => {
 
       if (!isNodeInCurrentLevel(node)) return null
 
-      if (node.type === 'wall') {
-        const role = resolveWallMaterialTarget(event as WallEvent)
+      // Registry-driven paint dispatch — kinds that declare
+      // `capabilities.paint` route hover / click / preview through
+      // their definition. Wall, chimney, and dormer use this; legacy
+      // roof / stair / single-surface arms below stay until they
+      // migrate too.
+      const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
+      if (paintCap) {
+        const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
+        const role = paintCap.resolveRole({
+          node,
+          materialIndex: materialIndex ?? null,
+          normal: event.normal,
+          localPosition: event.localPosition as readonly [number, number, number] | undefined,
+          hitObjectName: event.nativeEvent.object?.name,
+        })
         const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
         return {
-          key: `wall:${node.id}:${role ?? 'unsupported'}`,
+          key: `${node.type}:${node.id}:${role ?? 'unsupported'}`,
           hoveredId: node.id as AnyNodeId,
-          hoverMode:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
-            compatible && hasActivePaintMaterial(activePaintMaterial)
+            compatible && role
               ? () => {
                   useScene
                     .getState()
                     .updateNode(
                       node.id as AnyNodeId,
-                      buildWallSurfaceMaterialPatch(
-                        node as WallNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
-                      ),
+                      paintCap.buildPatch({
+                        node,
+                        role,
+                        material: activePaintMaterial.material,
+                        materialPreset: activePaintMaterial.materialPreset,
+                      }) as Partial<AnyNode>,
                     )
                 }
               : null,
           preview:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? () => applyWallPaintPreview(node as WallNode, role, activePaintMaterial)
+            compatible && role
+              ? () => {
+                  const root = getRegisteredNodeObject(node.id)
+                  if (!root) return null
+                  return paintCap.applyPreview({
+                    node,
+                    role,
+                    material: activePaintMaterial.material,
+                    materialPreset: activePaintMaterial.materialPreset,
+                    root,
+                  })
+                }
               : () => previewCursor('not-allowed'),
         }
       }
@@ -1148,59 +1020,10 @@ export const SelectionManager = () => {
         }
       }
 
-      if (node.type === 'chimney') {
-        const role = resolveChimneyMaterialTarget(event)
-        const compatible = hasActivePaintMaterial(activePaintMaterial)
-        return {
-          key: `chimney:${node.id}:${role}`,
-          hoveredId: node.id as AnyNodeId,
-          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
-          apply: compatible
-            ? () => {
-                useScene
-                  .getState()
-                  .updateNode(
-                    node.id as AnyNodeId,
-                    buildChimneyMaterialPatch(
-                      role,
-                      activePaintMaterial.material,
-                      activePaintMaterial.materialPreset,
-                    ),
-                  )
-              }
-            : null,
-          preview: compatible
-            ? () => applyChimneyPaintPreview(node as ChimneyNode, role, activePaintMaterial)
-            : () => previewCursor('not-allowed'),
-        }
-      }
-
-      if (node.type === 'dormer') {
-        const role = resolveDormerMaterialTarget(event)
-        const compatible = hasActivePaintMaterial(activePaintMaterial)
-        return {
-          key: `dormer:${node.id}:${role}`,
-          hoveredId: node.id as AnyNodeId,
-          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
-          apply: compatible
-            ? () => {
-                useScene
-                  .getState()
-                  .updateNode(
-                    node.id as AnyNodeId,
-                    buildDormerMaterialPatch(
-                      role,
-                      activePaintMaterial.material,
-                      activePaintMaterial.materialPreset,
-                    ),
-                  )
-              }
-            : null,
-          preview: compatible
-            ? () => applyDormerPaintPreview(node as DormerNode, role, activePaintMaterial)
-            : () => previewCursor('not-allowed'),
-        }
-      }
+      // Registry-driven paint dispatch handled at the top of this
+      // function — kinds declaring `capabilities.paint` return there
+      // before any of the legacy roof / stair / single-surface arms
+      // below run.
 
       if (
         node.type === 'fence' ||
@@ -1450,15 +1273,33 @@ export const SelectionManager = () => {
 
         let nextMaterialTargetHandled = false
 
-        if (node.type === 'wall' && nodeToSelect.type === 'wall') {
-          setSelectedMaterialTargetForNode(
-            nodeToSelect,
-            resolveWallMaterialTarget(event as WallEvent),
-          )
-          nextMaterialTargetHandled = true
+        // Registry-driven paint-target resolve on click. Kinds with
+        // `capabilities.paint` route through this entry — wall,
+        // chimney, dormer use it today. The legacy stair / roof /
+        // single-surface arms below stay until they migrate too.
+        if (nodeToSelect.type === node.type) {
+          const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
+          if (paintCap) {
+            const materialIndex = getIntersectionMaterialIndex(
+              getEventObject(event),
+              event.faceIndex,
+            )
+            const role = paintCap.resolveRole({
+              node,
+              materialIndex: materialIndex ?? null,
+              normal: event.normal,
+              localPosition: event.localPosition as readonly [number, number, number] | undefined,
+              hitObjectName: event.nativeEvent.object?.name,
+            })
+            if (role) {
+              setSelectedMaterialTargetForNode(nodeToSelect, role as MaterialTargetRole)
+              nextMaterialTargetHandled = true
+            }
+          }
         }
 
         if (
+          !nextMaterialTargetHandled &&
           (node.type === 'stair' || node.type === 'stair-segment') &&
           nodeToSelect.type === 'stair'
         ) {
@@ -1470,6 +1311,7 @@ export const SelectionManager = () => {
         }
 
         if (
+          !nextMaterialTargetHandled &&
           (node.type === 'roof' || node.type === 'roof-segment') &&
           nodeToSelect.type === 'roof'
         ) {
@@ -1481,6 +1323,7 @@ export const SelectionManager = () => {
         }
 
         if (
+          !nextMaterialTargetHandled &&
           (node.type === 'fence' ||
             node.type === 'slab' ||
             node.type === 'ceiling' ||
@@ -1488,16 +1331,6 @@ export const SelectionManager = () => {
           nodeToSelect.type === node.type
         ) {
           setSelectedMaterialTargetForNode(nodeToSelect, 'surface')
-          nextMaterialTargetHandled = true
-        }
-
-        if (node.type === 'chimney' && nodeToSelect.type === 'chimney') {
-          setSelectedMaterialTargetForNode(nodeToSelect, resolveChimneyMaterialTarget(event))
-          nextMaterialTargetHandled = true
-        }
-
-        if (node.type === 'dormer' && nodeToSelect.type === 'dormer') {
-          setSelectedMaterialTargetForNode(nodeToSelect, resolveDormerMaterialTarget(event))
           nextMaterialTargetHandled = true
         }
 

@@ -19,6 +19,7 @@ import {
   getLibraryMaterialIdFromRef,
   type MaterialSchema,
   type MaterialTarget,
+  nodeRegistry,
   type RidgeVentNode,
   getEffectiveSegmentSurfaceMaterial,
   type RoofNode,
@@ -240,36 +241,15 @@ export function buildSingleSurfaceMaterialPatch<
   } as Partial<TNode>
 }
 
-export function buildChimneyMaterialPatch(
-  role: ChimneyMaterialRole,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<ChimneyNode> {
-  if (role === 'top') {
-    return { topMaterial: material, topMaterialPreset: materialPreset }
-  }
-  return { material, materialPreset }
-}
-
-/**
- * Build a partial DormerNode update for a per-surface paint operation.
- * Writes to the matching role's surface fields (`wall*` / `side*` /
- * `top*`) and clears the legacy `material` / `materialPreset` so role-
- * specific paint takes precedence over the catch-all material.
- */
-export function buildDormerMaterialPatch(
-  role: DormerSurfaceMaterialRole,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<DormerNode> {
-  if (role === 'top') {
-    return { topMaterial: material, topMaterialPreset: materialPreset }
-  }
-  if (role === 'side') {
-    return { sideMaterial: material, sideMaterialPreset: materialPreset }
-  }
-  return { wallMaterial: material, wallMaterialPreset: materialPreset }
-}
+// Chimney / dormer patch builders moved to
+// `@pascal-app/nodes/<kind>/paint.ts` and are wired into the kind's
+// `capabilities.paint.buildPatch`. The selection-manager invokes them
+// through the registry; no editor-side helper needed here.
+//
+// `getEffectiveChimneyMaterial` below stays because
+// `resolveActivePaintMaterialFromSelection` (also in this file) still
+// has wall / roof / stair arms that follow the same shape — they all
+// migrate together in a follow-up.
 
 export function getEffectiveChimneyMaterial(
   node: ChimneyNode,
@@ -305,22 +285,31 @@ export function resolveActivePaintMaterialFromSelection(params: {
   const selectedNode = nodes[selectedId]
   if (!selectedNode) return null
 
-  if (
-    selectedNode.type === 'wall' &&
-    (selectedMaterialTarget.role === 'interior' || selectedMaterialTarget.role === 'exterior')
-  ) {
-    const surface = getEffectiveWallSurfaceMaterial(selectedNode, selectedMaterialTarget.role)
-    return hasActivePaintMaterial({
-      material: surface.material,
-      materialPreset: surface.materialPreset,
-      sourceTarget: 'wall',
+  // Registry-driven path. Kinds that declare
+  // `capabilities.paint.getEffectiveMaterial` resolve their effective
+  // material here without an editor-side per-kind arm. Wall,
+  // chimney, dormer use this; roof / stair stay legacy below.
+  const paintCap = nodeRegistry.get(selectedNode.type)?.capabilities?.paint
+  if (paintCap?.getEffectiveMaterial) {
+    const surface = paintCap.getEffectiveMaterial({
+      node: selectedNode,
+      role: selectedMaterialTarget.role as string,
+      nodes,
     })
-      ? {
-          material: surface.material,
-          materialPreset: surface.materialPreset,
-          sourceTarget: 'wall',
-        }
-      : null
+    if (surface) {
+      const sourceTarget = selectedNode.type as PaintableMaterialTarget
+      return hasActivePaintMaterial({
+        material: surface.material,
+        materialPreset: surface.materialPreset,
+        sourceTarget,
+      })
+        ? {
+            material: surface.material,
+            materialPreset: surface.materialPreset,
+            sourceTarget,
+          }
+        : null
+    }
   }
 
   if (
@@ -383,49 +372,8 @@ export function resolveActivePaintMaterialFromSelection(params: {
       : null
   }
 
-  if (
-    selectedNode.type === 'chimney' &&
-    (selectedMaterialTarget.role === 'body' || selectedMaterialTarget.role === 'top')
-  ) {
-    const surface = getEffectiveChimneyMaterial(
-      selectedNode,
-      selectedMaterialTarget.role as ChimneyMaterialRole,
-    )
-    return hasActivePaintMaterial({
-      material: surface.material,
-      materialPreset: surface.materialPreset,
-      sourceTarget: 'chimney',
-    })
-      ? {
-          material: surface.material,
-          materialPreset: surface.materialPreset,
-          sourceTarget: 'chimney',
-        }
-      : null
-  }
-
-  if (
-    selectedNode.type === 'dormer' &&
-    (selectedMaterialTarget.role === 'top' ||
-      selectedMaterialTarget.role === 'side' ||
-      selectedMaterialTarget.role === 'wall')
-  ) {
-    const surface = getEffectiveDormerSurfaceMaterial(
-      selectedNode,
-      selectedMaterialTarget.role as DormerSurfaceMaterialRole,
-    )
-    return hasActivePaintMaterial({
-      material: surface.material,
-      materialPreset: surface.materialPreset,
-      sourceTarget: 'dormer',
-    })
-      ? {
-          material: surface.material,
-          materialPreset: surface.materialPreset,
-          sourceTarget: 'dormer',
-        }
-      : null
-  }
+  // Wall / chimney / dormer flow through the registry-driven path
+  // at the top of this function.
 
   if (
     (selectedNode.type === 'fence' ||
