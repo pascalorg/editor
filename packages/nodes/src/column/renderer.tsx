@@ -131,7 +131,7 @@ function MappedBox({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -239,7 +239,7 @@ function FlatEndedBeam({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null}>
+    <mesh castShadow dispose={null} receiveShadow>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -773,7 +773,7 @@ function MappedCylinder({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -810,7 +810,7 @@ function MappedCone({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -836,7 +836,7 @@ function MappedSphere({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position}>
+    <mesh castShadow dispose={null} position={position} receiveShadow>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -877,7 +877,7 @@ function MappedTorus({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
