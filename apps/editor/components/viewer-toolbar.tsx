@@ -1,10 +1,19 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
-import { useEditor, useSidebarStore, type ViewMode } from '@pascal-app/editor'
-import { getSceneTheme, SCENE_THEME_IDS, useViewer } from '@pascal-app/viewer'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  useEditor,
+  useSidebarStore,
+  type ViewMode,
+} from '@pascal-app/editor'
+import { getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
   Box,
+  Check,
   ChevronsLeft,
   ChevronsRight,
   Columns2,
@@ -13,6 +22,7 @@ import {
   Footprints,
   Grid2X2,
   Moon,
+  Palette,
   Sparkles,
   Sun,
 } from 'lucide-react'
@@ -85,10 +95,10 @@ const wallModeConfig: Record<string, { icon: string; label: string }> = {
   down: { icon: '/icons/walllow.png', label: 'Low' },
 }
 
-function getNextSceneThemeId(id: string) {
-  const index = SCENE_THEME_IDS.indexOf(id)
-  return SCENE_THEME_IDS[(index + 1) % SCENE_THEME_IDS.length] ?? 'studio'
-}
+const SHADING_OPTIONS = [
+  { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
+  { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+] as const
 
 function ViewModeControl() {
   const viewMode = useEditor((state) => state.viewMode)
@@ -223,51 +233,93 @@ function WallModeToggle() {
   )
 }
 
-function ShadingModeToggle() {
+function RenderModeMenu() {
   const shading = useViewer((state) => state.shading)
   const setShading = useViewer((state) => state.setShading)
-  const label = shading === 'solid' ? 'Solid' : 'Rendered'
+  const active = SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
+  const ActiveIcon = active.icon
 
   return (
-    <ToolbarTooltip label={label}>
-      <button
-        aria-label={label}
-        className={cn(
-          TOOLBAR_BTN,
-          'w-auto gap-1.5 px-2.5',
-          shading === 'rendered' && 'bg-white/10 text-foreground/90',
-        )}
-        onClick={() => setShading(shading === 'solid' ? 'rendered' : 'solid')}
-        type="button"
-      >
-        {shading === 'solid' ? (
-          <Box className="h-3.5 w-3.5" />
-        ) : (
-          <Sparkles className="h-3.5 w-3.5" />
-        )}
-        <span className="font-medium text-xs">{label}</span>
-      </button>
-    </ToolbarTooltip>
+    <DropdownMenu>
+      <ToolbarTooltip label={`Render: ${active.name}`}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label={`Render: ${active.name}`}
+            className={cn(
+              TOOLBAR_BTN,
+              'w-auto gap-1.5 px-2.5',
+              shading === 'rendered' && 'bg-white/10 text-foreground/90',
+            )}
+            type="button"
+          >
+            <ActiveIcon className="h-3.5 w-3.5" />
+            <span className="font-medium text-xs">{active.name}</span>
+          </button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent align="center" className="min-w-56" side="bottom">
+        {SHADING_OPTIONS.map((option) => {
+          const OptionIcon = option.icon
+          return (
+            <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
+              <OptionIcon className="h-4 w-4" />
+              <div className="flex flex-col">
+                <span className="text-foreground">{option.name}</span>
+                <span className="text-muted-foreground text-xs">{option.detail}</span>
+              </div>
+              {shading === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
-function SceneThemeToggle() {
+function SceneThemeMenu() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const setSceneTheme = useViewer((state) => state.setSceneTheme)
-  const label = getSceneTheme(sceneTheme).name
+  const active = getSceneTheme(sceneTheme)
 
   return (
-    <ToolbarTooltip label={`Scene theme: ${label}`}>
-      <button
-        aria-label={`Scene theme: ${label}`}
-        className={cn(TOOLBAR_BTN, 'w-[8.5rem] gap-1.5 px-2.5 text-foreground/90')}
-        onClick={() => setSceneTheme(getNextSceneThemeId(sceneTheme))}
-        type="button"
-      >
-        <IconifyIcon height={14} icon="lucide:palette" width={14} />
-        <span className="truncate font-medium text-xs">{label}</span>
-      </button>
-    </ToolbarTooltip>
+    <DropdownMenu>
+      <ToolbarTooltip label={`Scene theme: ${active.name}`}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label={`Scene theme: ${active.name}`}
+            className={cn(TOOLBAR_BTN, 'w-[8.5rem] gap-1.5 px-2.5 text-foreground/90')}
+            type="button"
+          >
+            <Palette className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate font-medium text-xs">{active.name}</span>
+          </button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent align="center" className="min-w-48" side="bottom">
+        {SCENE_THEMES.map((theme) => {
+          const swatches = [
+            theme.background,
+            theme.lights[0]?.color,
+            theme.hemi?.ground,
+          ].filter((color): color is string => Boolean(color))
+          return (
+            <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
+              <span className="flex gap-px overflow-hidden rounded-sm border border-black/10">
+                {swatches.map((color, index) => (
+                  <span
+                    className="h-4 w-2"
+                    key={`${theme.id}-${index}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </span>
+              <span className="text-foreground">{theme.name}</span>
+              {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -404,8 +456,8 @@ export function CommunityViewerToolbarRight() {
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
       <WallModeToggle />
-      <ShadingModeToggle />
-      <SceneThemeToggle />
+      <RenderModeMenu />
+      <SceneThemeMenu />
       <GridVisibilityToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />

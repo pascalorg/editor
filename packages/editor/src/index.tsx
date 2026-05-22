@@ -110,6 +110,12 @@ export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 // hardware / type / opening presets.
 export { PresetsPopover } from './components/ui/panels/presets/presets-popover'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './components/ui/primitives/dropdown-menu'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
 export { SceneLoader } from './components/ui/scene-loader'
