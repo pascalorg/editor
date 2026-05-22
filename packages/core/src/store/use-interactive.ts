@@ -39,6 +39,19 @@ export type WindowAnimationState = {
   persist: boolean
 }
 
+export type SkylightInteractiveState = {
+  operationState?: number
+}
+
+export type SkylightAnimationState = {
+  field: keyof SkylightInteractiveState
+  from: number
+  to: number
+  startedAt: number | null
+  durationMs: number
+  persist: boolean
+}
+
 export type ElevatorPhase = 'idle' | 'closing' | 'moving' | 'opening' | 'open'
 
 export type ElevatorInteractiveState = {
@@ -58,6 +71,8 @@ type InteractiveStore = {
   doorAnimations: Record<AnyNodeId, DoorAnimationState>
   windows: Record<AnyNodeId, WindowInteractiveState>
   windowAnimations: Record<AnyNodeId, WindowAnimationState>
+  skylights: Record<AnyNodeId, SkylightInteractiveState>
+  skylightAnimations: Record<AnyNodeId, SkylightAnimationState>
   elevators: Record<AnyNodeId, ElevatorInteractiveState>
 
   /** Initialize a node's interactive state from its asset definition (idempotent) */
@@ -93,6 +108,18 @@ type InteractiveStore = {
   /** Cancel a queued window animation */
   cancelWindowAnimation: (windowId: AnyNodeId) => void
 
+  /** Set transient skylight open state without committing it to the scene node */
+  setSkylightOpenState: (skylightId: AnyNodeId, value: SkylightInteractiveState) => void
+
+  /** Clear transient skylight open state */
+  removeSkylightOpenState: (skylightId: AnyNodeId) => void
+
+  /** Queue a skylight animation for the viewer frame loop */
+  startSkylightAnimation: (skylightId: AnyNodeId, value: SkylightAnimationState) => void
+
+  /** Cancel a queued skylight animation */
+  cancelSkylightAnimation: (skylightId: AnyNodeId) => void
+
   /** Initialize an elevator's runtime state from its default served level. */
   initElevator: (elevatorId: AnyNodeId, levelId: AnyNodeId, carY: number) => void
 
@@ -122,6 +149,8 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   doorAnimations: {},
   windows: {},
   windowAnimations: {},
+  skylights: {},
+  skylightAnimations: {},
   elevators: {},
 
   initItem: (itemId, interactive) => {
@@ -225,6 +254,41 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
     set((state) => {
       const { [windowId]: _, ...rest } = state.windowAnimations
       return { windowAnimations: rest }
+    })
+  },
+
+  setSkylightOpenState: (skylightId, value) => {
+    set((state) => ({
+      skylights: {
+        ...state.skylights,
+        [skylightId]: {
+          ...state.skylights[skylightId],
+          ...value,
+        },
+      },
+    }))
+  },
+
+  removeSkylightOpenState: (skylightId) => {
+    set((state) => {
+      const { [skylightId]: _, ...rest } = state.skylights
+      return { skylights: rest }
+    })
+  },
+
+  startSkylightAnimation: (skylightId, value) => {
+    set((state) => ({
+      skylightAnimations: {
+        ...state.skylightAnimations,
+        [skylightId]: value,
+      },
+    }))
+  },
+
+  cancelSkylightAnimation: (skylightId) => {
+    set((state) => {
+      const { [skylightId]: _, ...rest } = state.skylightAnimations
+      return { skylightAnimations: rest }
     })
   },
 

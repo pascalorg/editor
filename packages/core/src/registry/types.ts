@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
-import type { Object3D } from 'three'
+import type { BufferGeometry, Object3D } from 'three'
 import type { ZodObject, z } from 'zod'
+import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
@@ -682,9 +683,50 @@ export type NodeDefinition<S extends ZodObject<any>> = {
 
   presentation?: Presentation
   mcp?: McpOverrides
+
+  /**
+   * Optional keyboard shortcut handlers contributed by the kind. The
+   * editor's keyboard hook looks these up by event name (`r` for R /
+   * Shift+R, `t` for T / Shift+T) and runs the matching handler when
+   * the user presses that key with a single node of this kind
+   * selected. The fallback rotation behaviour kicks in only when the
+   * action's `appliesTo` returns false.
+   *
+   * Replaces editor-side per-kind switches in `use-keyboard.ts` — a
+   * kind that wants to override R / T just sets this field instead of
+   * extending a hand-written `if/else` chain. Door / window are
+   * legacy direct calls today (follow-up: migrate them under this
+   * capability too).
+   */
+  keyboardActions?: KeyboardActions
 }
 
 export type NodeCategory = 'site' | 'structure' | 'furnish' | 'analysis' | 'utility'
+
+// ─── Keyboard actions ────────────────────────────────────────────────
+
+export type KeyboardActions = {
+  /** R / Shift+R primary action. */
+  r?: KeyboardAction
+  /** T / Shift+T secondary action. */
+  t?: KeyboardAction
+}
+
+export type KeyboardAction = {
+  /**
+   * Predicate that gates the action. Return `false` when the
+   * keystroke should fall through to the editor's default behaviour
+   * for this kind (typically rotation). Skylight uses this to short-
+   * circuit the action for non-operable type variants.
+   */
+  appliesTo: (node: AnyNode) => boolean
+  /**
+   * Run the action. The editor handles `preventDefault` and the
+   * shared sfx — the handler should only touch scene / interactive
+   * state.
+   */
+  run: (node: AnyNode) => void
+}
 
 // ─── Presentation (tool palette + UI surface) ────────────────────────
 
@@ -766,6 +808,131 @@ export type Capabilities = {
   selectable?: SelectableConfig
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
+  roofAccessory?: RoofAccessoryConfig
+  paint?: PaintCapability
+}
+
+/**
+ * Per-kind paint behaviour. Lets the editor's selection-manager
+ * route paint hover / click / preview through a generic dispatcher
+ * instead of adding an `if (node.type === '<kind>')` arm for every
+ * paintable kind.
+ *
+ * The capability owns the four kind-specific decisions:
+ *   1. Which logical surface (`role`) the click landed on.
+ *   2. The patch to commit on click.
+ *   3. How to apply a preview material to the registered mesh
+ *      subtree for that role (which mesh, which slot).
+ *   4. How to read the currently-effective material for a role —
+ *      drives the color picker's "current value" indicator.
+ *
+ * The editor still owns the visual chrome — hover/cursor styling,
+ * the `selectedMaterialTarget` round-trip, the paint-mode toolbar.
+ * Kinds with no paint behaviour omit `paint`.
+ */
+export type PaintCapability = {
+  /**
+   * Resolve which logical surface the user clicked. Returns `null`
+   * when the face shouldn't be painted (e.g. interior slot exposed
+   * by accident, normal too oblique for an unambiguous side).
+   */
+  resolveRole: (args: PaintResolveArgs) => string | null
+  /**
+   * Build the node-update patch that applies the new material at
+   * `role`. Returned partial is merged into the node by the editor.
+   */
+  buildPatch: (args: PaintPatchArgs) => Partial<AnyNode>
+  /**
+   * Apply a preview to the kind's registered mesh subtree at
+   * `role`. The kind builds whatever preview material(s) it needs
+   * (single material, full material array, multi-slot patch — all
+   * up to the kind) and swaps them in. Returns a cleanup callback
+   * that restores the original assignments; the editor calls it
+   * when the preview ends (hover changes, paint commits, paint
+   * cancels).
+   *
+   * Returning `null` means the kind couldn't preview at this role
+   * (typically because the registered mesh isn't mounted yet); the
+   * editor falls back to the "not-allowed" cursor.
+   */
+  applyPreview: (args: PaintPreviewArgs) => (() => void) | null
+  /**
+   * Read the currently-effective material for `role` on `node`,
+   * after walking any parent-fallback chain (segment → parent roof,
+   * etc.). Powers `resolveActivePaintMaterialFromSelection` — when
+   * the user has a paint target selected, the editor uses this to
+   * show the role's current value in the picker.
+   *
+   * Returns `null` when the role doesn't apply to this kind.
+   */
+  getEffectiveMaterial?: (args: PaintEffectiveMaterialArgs) => {
+    material: MaterialSchema | undefined
+    materialPreset: string | undefined
+  } | null
+}
+
+export type PaintResolveArgs = {
+  node: AnyNode
+  /**
+   * The geometry's material-slot index resolved from the pointer
+   * hit (via three.js groups). `null` when no group covers the
+   * face.
+   */
+  materialIndex: number | null
+  /** Optional: hit surface normal. Wall uses this for its interior/exterior split. */
+  normal?: readonly [number, number, number]
+  /** Optional: hit local position. Wall uses this to confirm the side. */
+  localPosition?: readonly [number, number, number]
+  /** Optional: name of the three.js object that received the hit. Stair uses this. */
+  hitObjectName?: string
+}
+
+export type PaintPatchArgs = {
+  node: AnyNode
+  role: string
+  material: MaterialSchema | undefined
+  materialPreset: string | undefined
+}
+
+export type PaintPreviewArgs = {
+  node: AnyNode
+  role: string
+  material: MaterialSchema | undefined
+  materialPreset: string | undefined
+  root: Object3D
+}
+
+export type PaintEffectiveMaterialArgs = {
+  node: AnyNode
+  role: string
+  /** Snapshot of the scene `nodes` map — kinds whose effective material walks the parent chain (roof-segment → roof) read parents through it. */
+  nodes: Record<AnyNodeId, AnyNode>
+}
+
+/**
+ * Kinds mounted on a roof segment via `roofSegmentId`. Presence of this
+ * capability tells the viewer's roof-merge loop two things:
+ *
+ *   1. **Dirty cascade.** When the accessory is dirtied (move / resize /
+ *      reparent), the host segment's parent roof needs a re-merge —
+ *      otherwise the merged shell shows the previous cut shape. The
+ *      generic loop clears the accessory's dirty bit and queues the
+ *      parent roof.
+ *   2. **Optional CSG cut.** When `buildCut` is set, the merge loop
+ *      subtracts the returned geometry from the host segment's shin /
+ *      deck / wall brushes so the accessory has a clean hole to poke
+ *      through. Returned geometry is SEGMENT-LOCAL; the viewer welds
+ *      vertices, attaches a single material group, and wraps it in a
+ *      `three-bvh-csg` Brush — core stays free of three-bvh-csg deps
+ *      and kinds don't need to import it.
+ *
+ * Use `buildCut` when the kind pokes THROUGH the roof (skylight,
+ * dormer). Kinds that sit ON TOP (vents, solar panels) declare the
+ * capability without `buildCut` — the cascade still fires but no CSG
+ * cut runs.
+ */
+export type RoofAccessoryConfig = {
+  buildCut?: (node: AnyNode, hostSegment: AnyNode) => BufferGeometry | null
 }
 
 export type CapabilityCtx = { node: AnyNode }

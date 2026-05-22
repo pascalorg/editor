@@ -24,8 +24,16 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export { BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
+export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
+export {
+  DormerNode,
+  type DormerSurfaceMaterialRole,
+  type DormerSurfaceMaterialSpec,
+  getEffectiveDormerSurfaceMaterial,
+} from './nodes/dormer'
 export {
   COLUMN_PRESETS,
   ColumnBaseStyle,
@@ -71,10 +79,45 @@ export {
 export { LevelNode } from './nodes/level'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
-export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
+export type {
+  RoofSegmentSurfaceMaterialRole,
+  RoofSegmentSurfaceMaterialSpec,
+  SegmentSlopeFrame,
+} from './nodes/roof-segment'
+export {
+  getActiveRoofHeight,
+  getEffectiveSegmentSurfaceMaterial,
+  getPitchFromActiveRoofHeight,
+  getSegmentSlopeFrame,
+  hasSegmentMaterialOverride,
+  ROOF_SHAPE_DEFAULTS,
+  RoofSegmentNode,
+  RoofType,
+} from './nodes/roof-segment'
 export { ScanNode } from './nodes/scan'
 // Nodes
+export { RidgeVentNode } from './nodes/ridge-vent'
 export { ShelfNode } from './nodes/shelf'
+export {
+  SKYLIGHT_TYPE_ORDER,
+  SKYLIGHT_TYPE_PRESETS,
+  SkylightMaterialRole,
+  SkylightNode,
+  SkylightOpeningSide,
+  SkylightSlideDirection,
+  type SkylightTypePreset,
+  SkylightType,
+} from './nodes/skylight'
+export {
+  SolarPanelMaterialRole,
+  SolarPanelNode,
+} from './nodes/solar-panel'
+export {
+  SOLAR_PANEL_PRESET_LABELS,
+  SOLAR_PANEL_PRESETS,
+  type SolarPanelPresetDims,
+  SolarPanelPresetKey,
+} from '../solar-panel-presets'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
 export { SpawnNode } from './nodes/spawn'

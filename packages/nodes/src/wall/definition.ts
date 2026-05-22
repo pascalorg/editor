@@ -2,6 +2,7 @@ import type { NodeDefinition } from '@pascal-app/core'
 import { buildWallFloorplan } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
+import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
 
@@ -48,6 +49,11 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     },
     duplicable: true,
     deletable: true,
+    // Paint dispatch for the interior / exterior side split. The
+    // editor's selection-manager routes paint hover / click /
+    // preview through this entry rather than carrying a kind-name
+    // arm.
+    paint: wallPaint,
   },
 
   relations: {

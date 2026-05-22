@@ -35,9 +35,10 @@ function loadBuiltinsSync(): void {
   if (builtinsLoaded) return
   builtinsLoaded = true
   for (const def of builtinPlugin.nodes ?? []) {
-    // HMR can re-enter with a fresh module closure while the registry
-    // (in @pascal-app/core) persists — skip kinds already registered.
-    if (nodeRegistry.has(def.kind)) continue
+    // Skip kinds the registry already has. The module-closure flag
+    // above resets on HMR, but the registry singleton (in @pascal-app/core)
+    // persists — without this guard we'd throw on the first duplicate.
+    if (nodeRegistry.has((def as AnyNodeDefinition).kind)) continue
     registerNode(def as AnyNodeDefinition)
   }
 

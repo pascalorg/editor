@@ -31,6 +31,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${barlow.variable}`}
       lang="en"
     >
+      <head>
+        {process.env.NODE_ENV === 'development' && (
+          <script
+            async
+            crossOrigin="anonymous"
+            src="//unpkg.com/react-scan/dist/auto.global.js"
+          />
+        )}
+      </head>
       <body className="font-sans">
         <ClientBootstrap>{children}</ClientBootstrap>
         {process.env.NODE_ENV === 'development' && <Agentation />}
