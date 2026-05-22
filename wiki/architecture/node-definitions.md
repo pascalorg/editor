@@ -12,7 +12,7 @@ This page covers those three fields. For the broader registry contract (schemas,
 
 | Field | Purpose | Pick it when |
 |---|---|---|
-| `geometry?: (node, ctx) => Object3D` | Pure builder. Returns the meshes for this node. | The kind has parametric meshes that should rebuild when `updateNode` runs. |
+| `geometry?: (node, ctx, shading, textures, colorPreset, sceneTheme) => Object3D` | Pure builder. Returns the meshes for this node. The appearance args (after `ctx`) are optional — take them only if the builder picks its own materials. | The kind has parametric meshes that should rebuild when `updateNode` runs. |
 | `renderer?: () => Promise<{ default: ComponentType<{ node }> }>` | Optional custom React component. Owns mesh creation. | The kind needs JSX-only features: `<Html>`, `useGLTF`, drei helpers, instancing, TSL shader materials, R3F portals. |
 | `system?: () => Promise<{ default: ComponentType }>` | Optional per-frame component (`useFrame` returning `null`). | The kind needs imperative work per frame: animations, opacity transitions, named-mesh material poking, cross-kind dirty cascades. |
 
@@ -49,8 +49,13 @@ Two framework components live in `packages/viewer/src/components/viewer/`:
   2. Otherwise → mount `<ParametricNodeRenderer>` — a thin empty `<group>` that registers with `sceneRegistry`, attaches pointer handlers via `useNodeEvents`, reads `useLiveTransforms` for drag overrides, and calls `useScene.getState().markDirty(node.id)` on mount.
 - **`<GeometrySystem>`** runs every frame:
   1. Read `dirtyNodes` from `useScene`.
-  2. For each dirty node whose kind has `def.geometry`, look up the registered `Group` from `sceneRegistry`, build a `GeometryContext`, call `def.geometry(node, ctx)`, dispose old children, attach the new ones, call `clearDirty(id)`.
-  3. Kinds with no `def.geometry` are skipped — their custom `def.renderer` handles geometry on its own.
+  2. For each dirty node whose kind has `def.geometry`, look up the registered `Group` from `sceneRegistry`, build a `GeometryContext`, call `def.geometry(node, ctx, shading, textures, colorPreset, sceneTheme)`, dispose old children, attach the new ones, call `clearDirty(id)`. It re-runs whenever any of those appearance values change.
+  3. After building, if `textures` is off and the kind declares `def.surfaceRole`, `GeometrySystem` overrides the built meshes' materials with the themed role colour (`applyDefaultSurfaceRole`).
+  4. Kinds with no `def.geometry` are skipped — their custom `def.renderer` handles geometry on its own.
+
+### `surfaceRole`
+
+A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour token only (`core` stores no material), used to resolve the per-role clay/theme colour for untextured surfaces. See [materials-and-themes](materials-and-themes.md).
 
 Per-kind `def.system` components mount alongside via `<RegisteredSystems>`. They run their own `useFrame` and can mark nodes dirty, address meshes by `getObjectByName`, advance animation state, etc. They run **in addition** to `GeometrySystem`, not instead of it.
 
