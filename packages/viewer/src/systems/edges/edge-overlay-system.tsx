@@ -3,10 +3,10 @@
 import { sceneRegistry } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { BufferGeometry, Color, EdgesGeometry, type Mesh, type Object3D } from 'three'
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { Color, type Mesh, type Object3D } from 'three'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/webgpu/LineSegments2.js'
+import { buildCreaseEdges } from '../../lib/crease-edges'
 import { type EdgeMode, edgeColorFor, edgeStyleFor } from '../../lib/edge-style'
 import { ZONE_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
@@ -56,17 +56,6 @@ function disposeOverlay(mesh: Mesh) {
   delete (mesh.userData as { __edge?: EdgeData }).__edge
 }
 
-// Position-only weld so coincident CSG vertices merge regardless of split
-// normals/uvs — EdgesGeometry then detects adjacency and drops interior edges.
-function weldForEdges(source: BufferGeometry): BufferGeometry {
-  const positionOnly = new BufferGeometry()
-  positionOnly.setAttribute('position', source.getAttribute('position').clone())
-  if (source.index) positionOnly.setIndex(source.index.clone())
-  const merged = mergeVertices(positionOnly)
-  positionOnly.dispose()
-  return merged
-}
-
 function disposeAllOverlays() {
   for (const obj of sceneRegistry.nodes.values()) {
     obj.traverse((child) => {
@@ -76,7 +65,7 @@ function disposeAllOverlays() {
 }
 
 /**
- * Draws crisp `EdgesGeometry` outlines (as screen-space-thick `LineSegments2`)
+ * Draws crisp crease-edge outlines (as screen-space-thick `LineSegments2`)
  * over every node-backed building mesh when an edge mode is active. Overlays
  * are children of their source mesh (so they inherit its transform) and are
  * rebuilt only when the source geometry uuid or the edge mode changes;
@@ -113,16 +102,10 @@ export function EdgeOverlaySystem() {
 
         if (!data || data.srcUuid !== mesh.geometry.uuid || data.mode !== edges) {
           disposeOverlay(mesh)
-          // CSG-cut walls come out non-welded, so EdgesGeometry would draw
-          // every interior triangulation edge ("spiderweb"). Welding by
-          // position first lets it see coplanar adjacency and keep only real
-          // opening outlines + silhouettes.
-          const welded = weldForEdges(mesh.geometry)
-          const edgeGeom = new EdgesGeometry(welded, style.threshold)
-          welded.dispose()
+          // Crease-only extraction (drops boundary/T-junction edges) so CSG-cut
+          // walls don't draw their interior triangulation "spiderweb".
           const lineGeom = new LineSegmentsGeometry()
-          lineGeom.setPositions(edgeGeom.getAttribute('position').array as Float32Array)
-          edgeGeom.dispose()
+          lineGeom.setPositions(buildCreaseEdges(mesh.geometry, style.threshold))
 
           const line = new LineSegments2(lineGeom)
           const material = line.material as unknown as EdgeLineMaterial
