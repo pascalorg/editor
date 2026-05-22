@@ -89,6 +89,8 @@ export function buildSlabGeometry(
   const mesh = new Mesh(geometry, material)
   mesh.castShadow = true
   mesh.receiveShadow = true
+  const elevation = node.elevation ?? 0.05
+  if (elevation < 0) mesh.position.y = elevation
   group.add(mesh)
   return group
 }
