@@ -21,6 +21,11 @@ const SHADOWS_DISABLED =
       .map((s) => s.trim()),
   ).has('shadows')
 
+// Shadow darkness for the bright key lights (themes drive most lights past
+// intensity 1). The aesthetic prototype runs these near-black (≈1.0); this is a
+// deliberate middle ground — present, but not the heavy contact shadow there.
+const MAX_SHADOW_INTENSITY = 0.55
+
 export function Lights() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const theme = getSceneTheme(sceneTheme)
@@ -87,7 +92,7 @@ export function Lights() {
         light.color.set(config.color)
 
         if (config.castShadow && light.shadow) {
-          light.shadow.intensity = config.intensity <= 1 ? config.intensity : 0.4
+          light.shadow.intensity = config.intensity <= 1 ? config.intensity : MAX_SHADOW_INTENSITY
         }
       }
       if (hemiRef.current && theme.hemi) {
@@ -121,7 +126,7 @@ export function Lights() {
         if (light.shadow.intensity !== undefined) {
           light.shadow.intensity = THREE.MathUtils.lerp(
             light.shadow.intensity,
-            config.intensity <= 1 ? config.intensity : 0.4,
+            config.intensity <= 1 ? config.intensity : MAX_SHADOW_INTENSITY,
             dt,
           )
         }
@@ -164,7 +169,7 @@ export function Lights() {
           shadow-bias={-0.002}
           shadow-mapSize={[1024, 1024]}
           shadow-normalBias={0.3}
-          shadow-radius={2}
+          shadow-radius={1.5}
         >
           {light.castShadow && !SHADOWS_DISABLED && shadows ? (
             <orthographicCamera

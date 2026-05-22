@@ -17,6 +17,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Columns2,
+  Contrast,
   Eye,
   EyeOff,
   Footprints,
@@ -389,6 +390,30 @@ function GridVisibilityToggle() {
   )
 }
 
+function ShadowsToggle() {
+  const shadows = useViewer((state) => state.shadows)
+  const setShadows = useViewer((state) => state.setShadows)
+
+  return (
+    <ToolbarTooltip label={`Shadows: ${shadows ? 'On' : 'Off'}`}>
+      <button
+        aria-label={`Shadows: ${shadows ? 'On' : 'Off'}`}
+        aria-pressed={shadows}
+        className={cn(
+          TOOLBAR_BTN,
+          shadows
+            ? 'bg-white/10 text-foreground/90'
+            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
+        )}
+        onClick={() => setShadows(!shadows)}
+        type="button"
+      >
+        <Contrast className="h-3.5 w-3.5" />
+      </button>
+    </ToolbarTooltip>
+  )
+}
+
 function UnitToggle() {
   const unit = useViewer((state) => state.unit)
   const setUnit = useViewer((state) => state.setUnit)
@@ -500,6 +525,7 @@ export function CommunityViewerToolbarRight() {
       <SceneThemeMenu />
       <EdgesMenu />
       <GridVisibilityToggle />
+      <ShadowsToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
       <ThemeToggle />
