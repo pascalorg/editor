@@ -162,8 +162,22 @@ const WindowTool: React.FC = () => {
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
       if (draftRef.current) {
-        if (event.node.id !== draftRef.current.parentId) {
-          // Wall changed without enter/leave: must updateNode to reparent
+        // Update the scene store on every move so the 2D floor plan
+        // stays in sync (it re-renders from `node.position`). Only
+        // forward `parentId` / `wallId` when the wall actually changed
+        // — otherwise the reparent path churns the host wall's
+        // `children` array every tick, which re-renders the wall and
+        // briefly draws its 0-vertex placeholder geometry (WebGPU then
+        // flags "Vertex buffer slot 0 ... was not set").
+        const isSameWall = event.node.id === draftRef.current.parentId
+        if (isSameWall) {
+          useScene.getState().updateNode(draftRef.current.id, {
+            position: [clampedX, clampedY, 0],
+            rotation: [0, itemRotation, 0],
+            side,
+          })
+          markWallDirty(event.node.id)
+        } else {
           useScene.getState().updateNode(draftRef.current.id, {
             position: [clampedX, clampedY, 0],
             rotation: [0, itemRotation, 0],
@@ -171,15 +185,6 @@ const WindowTool: React.FC = () => {
             parentId: event.node.id,
             wallId: event.node.id,
           })
-        } else {
-          // Same wall: update Three.js mesh directly to avoid store churn
-          const draftMesh = sceneRegistry.nodes.get(draftRef.current.id as AnyNodeId)
-          if (draftMesh) {
-            draftMesh.position.set(clampedX, clampedY, 0)
-            draftMesh.rotation.set(0, itemRotation, 0)
-            draftMesh.updateMatrixWorld(true)
-          }
-          markWallDirty(event.node.id)
         }
       }
 
