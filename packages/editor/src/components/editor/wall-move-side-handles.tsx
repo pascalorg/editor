@@ -215,7 +215,13 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   return (
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
+        // Pass geometry as a prop (not `<primitive attach="geometry">`)
+        // so the mesh is never rendered with R3F's default empty
+        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
+        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
+        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
         frustumCulled={false}
+        geometry={arrowGeometry}
         material={arrowMaterial}
         onPointerDown={activateWallMove}
         onPointerEnter={(event) => {
@@ -231,9 +237,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
           }
         }}
         renderOrder={1002}
-      >
-        <primitive attach="geometry" object={arrowGeometry} />
-      </mesh>
+      />
     </group>
   )
 }
@@ -289,7 +293,10 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   return (
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
+        // Pass geometry as a prop — see WallMoveArrowHandle for the
+        // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
         frustumCulled={false}
+        geometry={arrowGeometry}
         material={arrowMaterial}
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
@@ -305,9 +312,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
           }
         }}
         renderOrder={1002}
-      >
-        <primitive attach="geometry" object={arrowGeometry} />
-      </mesh>
+      />
     </group>
   )
 }
