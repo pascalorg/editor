@@ -152,6 +152,7 @@ export {
   type FloorplanStairArrowEntry,
   type FloorplanStairEntry,
   type FloorplanStairSegmentEntry,
+  getFloorplanWallThickness,
 } from './lib/floorplan'
 export {
   buildRoofSurfaceMaterialPatch,
@@ -186,3 +187,4 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { useUploadStore } from './store/use-upload'
+export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'

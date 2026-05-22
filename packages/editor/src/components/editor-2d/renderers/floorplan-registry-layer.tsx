@@ -247,7 +247,29 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             }
           }
         }
-        const ctx = buildContext(effectiveNode, nodes, {
+        // Wall live-overrides: the 2D drag handlers publish
+        // `{ start, end, curveOffset }` to `useLiveNodeOverrides` so
+        // the visual preview tracks the cursor without writing to
+        // zustand. The wall builder reads `ctx.siblings` for miter
+        // joins, so we also merge overrides into other walls in the
+        // same level via a per-builder `nodes` view below.
+        if (node.type === 'wall') {
+          const wallOverride = liveOverrides.get(id)
+          if (wallOverride && Object.keys(wallOverride).length > 0) {
+            effectiveNode = { ...node, ...wallOverride } as AnyNode
+          }
+        }
+        // For walls, expose an override-merged copy of `nodes` so
+        // `buildContext`'s sibling list (and the linked-wall miter
+        // calculation it feeds) reflects the live cursor positions.
+        // For every other kind we hand the raw `nodes` through —
+        // override-merging an entire scene per tick would be wasteful
+        // when only walls care about sibling state.
+        const contextNodes =
+          node.type === 'wall' && liveOverrides.size > 0
+            ? mergeWallOverridesIntoNodes(nodes, liveOverrides)
+            : nodes
+        const ctx = buildContext(effectiveNode, contextNodes, {
           selected,
           highlighted,
           hovered,
@@ -284,6 +306,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     levelId,
     nodes,
     liveTransforms,
+    liveOverrides,
     selectedIdSet,
     highlightedIdSet,
     hoveredId,
@@ -377,6 +400,25 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       const commitValid = drag.session.canCommit()
 
+      // Sessions with a `commit` hook own their atomic write (e.g.
+      // affordances that publish to `useLiveNodeOverrides` during
+      // `apply()` and never touch scene mid-drag). Mirrors the move
+      // overlay's `session.commit` path — revert untracked (no-op when
+      // the session never wrote to scene), resume history, then let
+      // the session do the tracked write.
+      if (commitValid && drag.session.commit) {
+        useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
+        if (drag.historyPaused) {
+          resumeSceneHistory(useScene)
+          drag.historyPaused = false
+        }
+        drag.session.commit()
+        sfxEmitter.emit('sfx:structure-build')
+        dragRef.current = null
+        setActiveDragId(null)
+        return
+      }
+
       // Capture the final state BEFORE the revert so we know what to
       // re-apply post-resume.
       const sceneNodes = useScene.getState().nodes
@@ -410,12 +452,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         sfxEmitter.emit('sfx:structure-build')
       } else {
         // Either no net change or canCommit() rejected — revert and
-        // resume without committing.
+        // resume without committing. Also clear any live overrides
+        // the session published (no-op when the session writes to
+        // scene directly).
         useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
         if (drag.historyPaused) {
           resumeSceneHistory(useScene)
           drag.historyPaused = false
         }
+        const overrides = useLiveNodeOverrides.getState()
+        for (const id of drag.session.affectedIds) overrides.clear(id)
       }
 
       dragRef.current = null
@@ -432,6 +478,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         resumeSceneHistory(useScene)
         drag.historyPaused = false
       }
+      // Drop any live overrides the session may have published. No-op
+      // for affordances whose `apply()` writes straight to scene; the
+      // override-routed sessions (wall endpoint, wall curve) rely on
+      // this to revert cleanly.
+      const overrides = useLiveNodeOverrides.getState()
+      for (const id of drag.session.affectedIds) overrides.clear(id)
 
       dragRef.current = null
       setActiveDragId(null)
@@ -445,13 +497,17 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
       // Component unmounted mid-drag — restore the baseline and unpause
-      // history so we don't leak a paused store across mounts.
+      // history so we don't leak a paused store across mounts. Also
+      // drop any live overrides the session published so the next
+      // mount doesn't render at the cancelled position.
       const drag = dragRef.current
       if (drag) {
         useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
         if (drag.historyPaused) {
           resumeSceneHistory(useScene)
         }
+        const overrides = useLiveNodeOverrides.getState()
+        for (const id of drag.session.affectedIds) overrides.clear(id)
         dragRef.current = null
       }
     }
@@ -609,7 +665,7 @@ function InteractiveGeometry({
         return (
           <line
             key={keyHint}
-            pointerEvents="stroke"
+            pointerEvents={g.pointerEvents ?? 'stroke'}
             stroke="transparent"
             strokeLinecap="round"
             strokeWidth={g.strokeWidthPx * unitsPerPixel}
@@ -836,9 +892,7 @@ function InteractiveGeometry({
             <path
               d={arrowD}
               fill="transparent"
-              onPointerDown={(e) =>
-                onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)
-              }
+              onPointerDown={(e) => onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)}
               pointerEvents="all"
               style={{ cursor: 'move' }}
             />
@@ -1199,6 +1253,33 @@ function InteractiveGeometry({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Returns a copy of `nodes` where any wall with a live override has
+ * `{ start, end, curveOffset, ... }` merged in. Used by the wall
+ * branch of the registry builder so `ctx.siblings` (which feeds
+ * `calculateLevelMiters`) reflects the live cursor positions during a
+ * 2D drag, not the pre-drag scene state.
+ *
+ * Only wall entries are touched; every other node is shared by
+ * reference. The allocation cost is one shallow object per overridden
+ * wall — the override map is small (the moved wall + its linked
+ * neighbours), so this is cheap.
+ */
+function mergeWallOverridesIntoNodes(
+  nodes: Record<string, AnyNode>,
+  overrides: Map<string, Record<string, unknown>>,
+): Record<string, AnyNode> {
+  if (overrides.size === 0) return nodes
+  const out: Record<string, AnyNode> = { ...nodes }
+  for (const [id, override] of overrides) {
+    const existing = out[id]
+    if (!existing || existing.type !== 'wall') continue
+    if (Object.keys(override).length === 0) continue
+    out[id] = { ...existing, ...override } as AnyNode
+  }
+  return out
+}
 
 function buildContext(
   node: AnyNode,

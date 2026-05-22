@@ -4,7 +4,7 @@ import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MathUtils, type Mesh, Vector2 } from 'three'
+import { MathUtils, type Mesh, PlaneGeometry, Vector2 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGridEvents } from '../../hooks/use-grid-events'
@@ -147,15 +147,26 @@ export const Grid = ({
 
   const showGrid = useViewer((state) => state.showGrid)
 
+  // Pass the geometry as a prop instead of a JSX child so the mesh
+  // is never reconciled with R3F's empty placeholder `BufferGeometry`.
+  // Combined with the grid's `MeshBasicNodeMaterial`, the child-attach
+  // path can submit a `Draw(0, 1, 0, 0)` on the first frame before
+  // `<planeGeometry>` attaches — which WebGPU flags as "Vertex buffer
+  // slot 0 ... was not set" (see `wall-move-side-handles.tsx`).
+  const geometry = useMemo(
+    () => new PlaneGeometry(fadeDistance * 2, fadeDistance * 2),
+    [fadeDistance],
+  )
+  useEffect(() => () => geometry.dispose(), [geometry])
+
   return (
     <mesh
+      geometry={geometry}
       layers={EDITOR_LAYER}
       material={material}
       ref={gridRef}
       rotation-x={-Math.PI / 2}
       visible={showGrid}
-    >
-      <planeGeometry args={[fadeDistance * 2, fadeDistance * 2]} />
-    </mesh>
+    />
   )
 }

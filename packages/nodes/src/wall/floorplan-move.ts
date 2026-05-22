@@ -5,14 +5,22 @@ import {
   type FloorplanMoveTargetSession,
   getPlannedLinkedWallUpdates,
   planWallMoveJunctions,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
   type WallPlanPoint,
 } from '@pascal-app/core'
-import { isWallLongEnough, snapPointToGrid } from '@pascal-app/editor'
+import {
+  getFloorplanWallThickness,
+  isWallLongEnough,
+  snapPointToGrid,
+  useWallMoveGhosts,
+  type WallMoveGhostBridge,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
   buildBridgeWallCreates,
+  buildBridgeWallPreviews,
   getLinkedWallSnapshots,
   getWallsAfterUpdates,
   type LinkedWallSnapshot,
@@ -30,16 +38,20 @@ const GRID_STEP = 0.5
  * delete, off-axis branches stay rectilinear with a new bridge wall
  * inserted between the original and new corner.
  *
- * Tick (`apply`) — writes only updates while history is paused. Bridge
- * creates and wall deletes are deferred to commit so the live preview
- * doesn't churn the scene graph with create / delete on every cursor
- * move.
+ * Tick (`apply`) — publishes per-frame `{ start, end }` overrides to
+ * `useLiveNodeOverrides` for the moved wall + every linked wall.
+ * `useScene` stays at the pre-drag values throughout the drag; the
+ * `WallSystem` and the 2D floor-plan layer fold the overrides in when
+ * reading endpoints, so the visual preview updates without churning
+ * zustand. Bridge creates and wall deletes are still deferred to
+ * commit so the live preview doesn't churn the scene graph either.
  *
- * Commit (`commit`) — runs after the overlay reverts to baseline and
- * resumes history. Recomputes the plan at the final cursor position
+ * Commit (`commit`) — recomputes the plan at the final cursor position
  * and emits one atomic `applyNodeChanges` covering the moved walls,
  * the bridge wall creates, and the collapsed wall deletes — so a
- * single Ctrl-Z rolls the entire operation back.
+ * single Ctrl-Z rolls the entire operation back. Clears the live
+ * overrides after the write lands so the system reads from the new
+ * committed scene state.
  *
  * Auto-slab live preview and ghost bridge SVG previews — visible in
  * the 3D tool — are deliberately deferred. Slab polygons re-derive on
@@ -118,20 +130,57 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
 
       const linkedUpdates = linkedOriginals.map((wall) => {
         if (collapsedIds.has(wall.id)) {
-          return { id: wall.id as AnyNodeId, data: { start: wall.start, end: wall.end } }
+          return { id: wall.id as AnyNodeId, start: wall.start, end: wall.end }
         }
         const planned = plannedById.get(wall.id)
         if (planned) {
-          return { id: wall.id as AnyNodeId, data: { start: planned.start, end: planned.end } }
+          return { id: wall.id as AnyNodeId, start: planned.start, end: planned.end }
         }
-        return { id: wall.id as AnyNodeId, data: { start: wall.start, end: wall.end } }
+        return { id: wall.id as AnyNodeId, start: wall.start, end: wall.end }
       })
 
-      const sceneState = useScene.getState()
-      sceneState.updateNodes([
+      // Publish endpoint overrides instead of writing to `useScene`.
+      // `WallSystem` + the 2D layer + the sidebar panel all consult
+      // `useLiveNodeOverrides` first, so the visual + numeric preview
+      // updates each frame while zustand stays at the pre-drag values
+      // until the user commits.
+      const overrides = useLiveNodeOverrides.getState()
+      overrides.set(wallId, { start: nextStart, end: nextEnd })
+      for (const upd of linkedUpdates) {
+        overrides.set(upd.id, { start: upd.start, end: upd.end })
+      }
+
+      // Surface bridge-wall previews so the floor-plan SVG layer can
+      // render dashed outlines of what `commit()` will insert. Mirrors
+      // the 3D `MoveWallTool`'s `ghostWallPreviews` mesh layer. The
+      // `existingWalls` snapshot needs the post-drag layout so duplicate
+      // detection works; we synthesise it from scene state + the
+      // overrides we just published (zustand is still on baseline).
+      const previewSceneWalls = getWallsAfterUpdates(useScene.getState().nodes, [
         { id: wallId, data: { start: nextStart, end: nextEnd } },
-        ...linkedUpdates,
-      ])
+        ...linkedUpdates.map((u) => ({ id: u.id, data: { start: u.start, end: u.end } })),
+      ]).filter((wall) => !collapsedIds.has(wall.id))
+      const bridgePreviews = buildBridgeWallPreviews({
+        bridgePlans: plan.bridgePlans,
+        nextStart,
+        nextEnd,
+        existingWalls: previewSceneWalls,
+      })
+      const ghostBridges: WallMoveGhostBridge[] = bridgePreviews.map(({ ghost, wall }) => ({
+        id: ghost.id,
+        start: ghost.start,
+        end: ghost.end,
+        color: ghost.color,
+        thickness: getFloorplanWallThickness(wall),
+      }))
+      useWallMoveGhosts.getState().setBridges(ghostBridges)
+
+      // `WallSystem` only runs its rebuild pass when `dirtyNodes` is
+      // non-empty. We're not writing to scene any more, but we still
+      // need the system to pick up the live override changes — so
+      // mark dirty here. The rebuild reads the effective endpoints
+      // (override-merged) so the mesh follows the cursor.
+      const sceneState = useScene.getState()
       sceneState.markDirty(wallId)
       for (const upd of linkedUpdates) {
         sceneState.markDirty(upd.id)
@@ -148,7 +197,13 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
     commit() {
       const sceneState = useScene.getState()
       const liveWall = sceneState.nodes[wallId] as WallNode | undefined
-      if (!liveWall || liveWall.type !== 'wall') return
+      if (!liveWall || liveWall.type !== 'wall') {
+        // Bail without leaving stale overrides behind.
+        const overrides = useLiveNodeOverrides.getState()
+        overrides.clear(wallId)
+        for (const wall of linkedOriginals) overrides.clear(wall.id as AnyNodeId)
+        return
+      }
 
       const plan = planWallMoveJunctions(
         linkedOriginals,
@@ -208,6 +263,22 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         create: bridgeCreates,
         delete: Array.from(collapsedLinkedWallIds),
       })
+
+      // Drop the live overrides now that the committed scene state
+      // matches them — leaving them around would keep the system
+      // double-merging the same values and would shadow any genuine
+      // post-commit edits to start/end. Cleared synchronously so the
+      // next frame reads the new scene state directly.
+      const overrides = useLiveNodeOverrides.getState()
+      overrides.clear(wallId)
+      for (const wall of linkedOriginals) overrides.clear(wall.id as AnyNodeId)
+
+      // Swap ghosts → real walls: the bridges we just created render
+      // through the registry layer, so the dashed previews aren't
+      // needed any more. Clearing here (instead of waiting for the
+      // overlay's unmount cleanup) avoids a one-frame flash where
+      // both ghosts and real bridges paint at the new position.
+      useWallMoveGhosts.getState().clear()
 
       useViewer.getState().setSelection({ selectedIds: [wallId] })
     },

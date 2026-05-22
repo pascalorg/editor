@@ -29,6 +29,8 @@ import { NodeActionMenu } from '../editor/node-action-menu'
  *    `capabilities.movable`, `def.floorplanMoveTarget`, OR
  *    `def.affordanceTools.move` (slab / ceiling). The
  *    `<FloorplanRegistryMoveOverlay>` / dispatcher picks the right path.
+ *    Walls are excluded — their move is reached via the side-arrow
+ *    handles emitted from `def.floorplan`, not via a menu button.
  *  - Add hole (slab + ceiling only): inserts a small default-square
  *    hole at the polygon centroid via `updateNode`. Mirrors the legacy
  *    `handleAddHole` in `floating-action-menu.tsx`.
@@ -87,8 +89,14 @@ export function FloorplanRegistryActionMenu() {
   //   - `def.affordanceTools.move` (kind-owned 3D mover — slab / ceiling)
   // From the menu's perspective all three are "this kind can move from
   // the floor plan." The `MoveTool` dispatcher resolves the right path.
+  //
+  // Walls opt out: they expose move via the side-arrow handles emitted
+  // from `def.floorplan` (see `buildWallFloorplan`), so a menu button
+  // would be a redundant second entry point — and lets the user start a
+  // body-follow drag from anywhere, which we don't want for walls.
   const canMove =
-    !!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move
+    node.type !== 'wall' &&
+    (!!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move)
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'

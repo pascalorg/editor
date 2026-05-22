@@ -146,6 +146,16 @@ export type FloorplanStyle = {
   strokeLinejoin?: 'miter' | 'round' | 'bevel'
   strokeOpacity?: number
   fillOpacity?: number
+  /**
+   * SVG `pointer-events`. Default (undefined) lets the renderer pick its
+   * normal behaviour — `visiblePainted` for filled shapes, `stroke` for
+   * line / hit-line. Set `'none'` to make a primitive completely
+   * passthrough — useful for chrome that should be visible but never
+   * trigger selection or drag (e.g. a wall's body once it's already
+   * selected, where only the side-arrows / corner handles should grab
+   * the pointer).
+   */
+  pointerEvents?: 'none' | 'auto' | 'all' | 'stroke' | 'fill' | 'visible' | 'visiblePainted'
 }
 
 // ─── ToolHint ────────────────────────────────────────────────────────
@@ -272,6 +282,12 @@ export type FloorplanGeometry =
       /** Stroke width in screen pixels — converted to plan units by the dispatcher. */
       strokeWidthPx: number
       cursor?: string
+      /**
+       * Override the default `pointer-events="stroke"`. Use `'none'` when
+       * a kind wants to keep the line painted (for hit-debugging or layout
+       * stability) but route grabs through other affordances instead.
+       */
+      pointerEvents?: 'none' | 'stroke' | 'auto'
     }
   /**
    * Endpoint manipulation handle — the 5-circle stack from the legacy
@@ -431,20 +447,40 @@ export type FloorplanAffordanceSession = {
   /** Node IDs the drag may mutate. Used by the dispatcher for the snapshot. */
   affectedIds: AnyNodeId[]
   /**
-   * Run a single drag tick. Implementations call `scene.updateNodes` to
-   * preview the next position. Snap logic, linked-node cascade, and
-   * angle locking live here.
+   * Run a single drag tick. Two patterns are supported:
+   *  - **Scene-write preview**: implementation calls `scene.updateNodes`
+   *    each tick; the dispatcher captures a pre-drag snapshot and runs
+   *    a single-undo dance on commit (revert → resume → re-apply diff).
+   *    Suitable for affordances whose commit is a pure diff of the
+   *    affected fields.
+   *  - **Live-override preview**: implementation publishes per-frame
+   *    overrides to `useLiveNodeOverrides` (or another preview store);
+   *    `useScene` stays untouched during the drag. The session must
+   *    also expose `commit()` below, since there's no scene diff for
+   *    the dispatcher to write back.
+   *
+   * Snap logic, linked-node cascade, and angle locking live here.
    */
   apply(args: {
     planPoint: FloorplanAffordancePoint
     modifiers: FloorplanAffordanceModifiers
   }): void
   /**
-   * Called on pointer-up. Return `true` if the scene's current state
-   * should be committed; `false` reverts to the snapshot (e.g. wall too
-   * short, vertex collapsed onto neighbour).
+   * Called on pointer-up. Return `true` if the drag should commit;
+   * `false` reverts to the snapshot (e.g. wall too short, vertex
+   * collapsed onto neighbour).
    */
   canCommit(): boolean
+  /**
+   * Optional atomic-commit hook — mirror of the same field on
+   * `FloorplanMoveTargetSession`. When present, the dispatcher
+   * reverts to the pre-drag baseline (no-op if `apply()` never wrote
+   * to scene), resumes history, then calls `commit()` instead of
+   * re-applying a diff. The session owns the full final write
+   * (typically `applyNodeChanges` or `updateNodes`) plus clearing any
+   * live overrides it published in `apply()`.
+   */
+  commit?(): void
 }
 
 export type FloorplanAffordance<N> = {

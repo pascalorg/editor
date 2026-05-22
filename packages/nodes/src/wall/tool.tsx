@@ -459,7 +459,13 @@ export const WallTool: React.FC = () => {
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
-        wallPreviewRef.current.visible = true
+        // Visibility is owned by `updateWallPreview` — it flips
+        // `mesh.visible` based on segment length. Setting it here
+        // (before any geometry data has been written) draws the
+        // mesh's empty `<shapeGeometry/>` placeholder, which WebGPU
+        // flags as "Vertex buffer slot 0 ... was not set" on the
+        // first frame after click. Leaving it false until the next
+        // `onGridMove` writes a real BoxGeometry skips that frame.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const snappedEnd = snapWallDraftPoint({
@@ -483,6 +489,12 @@ export const WallTool: React.FC = () => {
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
+        // Hide the preview until the next `onGridMove` writes the
+        // new segment's geometry. Without this the prior segment's
+        // BoxGeometry stays visible for a frame on top of the
+        // freshly-committed real wall, producing a brief
+        // double-paint at the new wall's position.
+        wallPreviewRef.current.visible = false
         setDraftMeasurement(null)
       }
     }

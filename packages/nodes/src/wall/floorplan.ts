@@ -95,6 +95,11 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
+      // Once the wall is selected, the body itself stops grabbing the
+      // pointer — only the side-arrows and endpoint handles should
+      // start a drag. The polygon stays painted so the selected wall is
+      // still visible; it just doesn't catch clicks any more.
+      pointerEvents: isSelected ? 'none' : undefined,
     },
   ]
 
@@ -110,16 +115,20 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   }
 
   // Hit-line on the centerline. Stroke width is in screen pixels so it
-  // stays clickable at any zoom.
-  children.push({
-    kind: 'hit-line',
-    x1: node.start[0],
-    y1: node.start[1],
-    x2: node.end[0],
-    y2: node.end[1],
-    strokeWidthPx: 18,
-    cursor: 'pointer',
-  })
+  // stays clickable at any zoom. Skipped while selected — the user has
+  // the side-arrows / endpoint handles by then, and leaving the hit-line
+  // live would re-introduce a "click-and-drag the wall body" path.
+  if (!isSelected) {
+    children.push({
+      kind: 'hit-line',
+      x1: node.start[0],
+      y1: node.start[1],
+      x2: node.end[0],
+      y2: node.end[1],
+      strokeWidthPx: 18,
+      cursor: 'pointer',
+    })
+  }
 
   // Endpoint handles only when the user has actively selected this wall.
   if (isSelected) {

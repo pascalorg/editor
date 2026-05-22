@@ -8,6 +8,7 @@ import {
   pauseSceneHistory,
   resumeSceneHistory,
   snapPointToGrid,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -15,6 +16,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
 const GRID_STEP = 0.5
 
@@ -298,12 +300,17 @@ export function FloorplanRegistryMoveOverlay() {
           resumeSceneHistory(useScene)
           historyPaused = false
         }
-        // Clear any live-transform previews the session wrote (slab /
-        // ceiling 2D move stages a translation delta in
-        // `useLiveTransforms`; without this clear, escape leaves the
-        // 2D layer rendering the polygon at the cancelled delta).
+        // Clear any live previews the session wrote. Slab / ceiling
+        // 2D move stages a translation delta in `useLiveTransforms`;
+        // wall move publishes `{ start, end, ... }` to
+        // `useLiveNodeOverrides`. Either way, leaving them in place
+        // after Esc would freeze the 2D / 3D view at the cancelled
+        // position.
+        const liveTransforms = useLiveTransforms.getState()
+        const liveOverrides = useLiveNodeOverrides.getState()
         for (const id of session.affectedIds) {
-          useLiveTransforms.getState().clear(id)
+          liveTransforms.clear(id)
+          liveOverrides.clear(id)
         }
         // Restore selection cleared by the action menu's Move click.
         useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
@@ -342,14 +349,23 @@ export function FloorplanRegistryMoveOverlay() {
           }
           resumeSceneHistory(useScene)
         }
-        // Belt-and-suspenders: clear any live-transform previews on
-        // abnormal unmount paths too. Slab / ceiling sessions write
-        // `useLiveTransforms` to drive the smooth drag visual; in pure
-        // 2D view the 3D `MoveSlabTool` cleanup isn't there to clear
-        // it for us.
+        // Belt-and-suspenders: clear any live previews on abnormal
+        // unmount paths too. Slab / ceiling sessions write to
+        // `useLiveTransforms`; wall sessions write to
+        // `useLiveNodeOverrides`. In pure 2D view the corresponding 3D
+        // tool's cleanup isn't there to clear them for us.
+        const liveTransforms = useLiveTransforms.getState()
+        const liveOverrides = useLiveNodeOverrides.getState()
         for (const id of session.affectedIds) {
-          useLiveTransforms.getState().clear(id)
+          liveTransforms.clear(id)
+          liveOverrides.clear(id)
         }
+        // Same belt-and-suspenders pattern for the wall bridge ghost
+        // previews — clear unconditionally so Esc / mid-drag unmount /
+        // 3D-takeover paths all end up with no stale ghosts left over.
+        // The wall session's `commit()` already clears them on the
+        // happy path; this just covers the rest.
+        useWallMoveGhosts.getState().clear()
       }
     }
 

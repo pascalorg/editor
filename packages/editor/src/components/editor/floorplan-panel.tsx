@@ -81,6 +81,7 @@ import {
   type FloorplanRenderContextValue,
   FloorplanRenderProvider,
 } from '../editor-2d/floorplan-render-context'
+import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
@@ -88,6 +89,12 @@ import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-laye
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
+import {
+  formatAngleRadians,
+  getAngleArcToSegmentReference,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../tools/shared/segment-angle'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
@@ -97,12 +104,6 @@ import {
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
-import {
-  formatAngleRadians,
-  getAngleArcToSegmentReference,
-  getAngleToSegmentReference,
-  getSegmentAngleReferenceAtPoint,
-} from '../tools/shared/segment-angle'
 import {
   createWallOnCurrentLevel,
   isWallLongEnough,
@@ -2073,7 +2074,8 @@ function FloorplanDraftWallMeasurement({
   // Length plate: rotates to follow the wall direction, but flips 180°
   // when its on-screen orientation would read upside-down (same trick as
   // `floorplan-registry-layer.tsx` for dimension labels).
-  const wallAngleDeg = (Math.atan2(measurement.direction[1], measurement.direction[0]) * 180) / Math.PI
+  const wallAngleDeg =
+    (Math.atan2(measurement.direction[1], measurement.direction[0]) * 180) / Math.PI
   let labelAngleDeg = wallAngleDeg
   let screenDeg = wallAngleDeg + sceneRotationDeg
   screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
@@ -7588,21 +7590,30 @@ export function FloorplanPanel() {
         return
       }
 
+      // The 3D wall tool's `grid:click` listener
+      // (`packages/nodes/src/wall/tool.tsx`) owns the wall-create
+      // call. `emitFloorplanGridEvent('click', …)` in
+      // `useFloorplanBackgroundPlacement` fires it synchronously
+      // just before this callback runs, so by the time we get here
+      // the wall already exists in the scene.
+      //
+      // We still attempt the create as a fallback in case the 3D
+      // tool isn't mounted (unusual — both views are always
+      // mounted today, but defensive). When the wall already
+      // exists `createWallOnCurrentLevel` returns null via its
+      // duplicate-detection branch; we treat that as "the 3D side
+      // committed" and chain the draft state forward instead of
+      // clearing it (the previous behaviour caused the 2nd-segment
+      // draft to silently break after click 2).
       const createdWall = createWallOnCurrentLevel(draftStart, point)
-      if (!createdWall) {
-        clearDraft()
-        return
-      }
-      // Continuous drafting: next wall starts where this one ended,
-      // matching the 3D wall tool (`packages/nodes/src/wall/tool.tsx`).
-      // Escape / double-click / tool switch still exits via the
-      // existing handlers.
-      const nextStart: WallPlanPoint = [createdWall.end[0], createdWall.end[1]]
+      const nextStart: WallPlanPoint = createdWall
+        ? [createdWall.end[0], createdWall.end[1]]
+        : point
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
     },
-    [clearDraft, draftStart],
+    [draftStart],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     ceilingPolygons: displayCeilingPolygons,
@@ -8906,6 +8917,12 @@ export function FloorplanPanel() {
                     would create a measure→fit→measure loop. */}
                 <g ref={floorplanContentRef}>
                   <FloorplanRegistryLayer />
+                  {/* Bridge-wall ghost previews painted on top of the
+                      registry layer (drag-time only); cleared by the
+                      wall move's `commit()` so real bridges replace
+                      them without a frame of overlap. See
+                      `floorplan-wall-move-ghost-layer.tsx`. */}
+                  <FloorplanWallMoveGhostLayer />
                 </g>
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
