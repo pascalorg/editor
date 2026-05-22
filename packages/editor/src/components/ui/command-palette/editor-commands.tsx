@@ -282,21 +282,6 @@ export function EditorCommands() {
           }),
       },
       {
-        id: 'editor.viewer.theme',
-        label: () => {
-          const theme = useViewer.getState().theme
-          return theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'
-        },
-        group: 'Viewer Controls',
-        icon: <Sun className="h-4 w-4" />, // icon is static; label conveys the action
-        keywords: ['theme', 'dark', 'light', 'appearance', 'color'],
-        execute: () =>
-          run(() => {
-            const { theme, setTheme } = useViewer.getState()
-            setTheme(theme === 'dark' ? 'light' : 'dark')
-          }),
-      },
-      {
         id: 'editor.viewer.shading-solid',
         label: 'Switch to Solid',
         group: 'Viewer Controls',

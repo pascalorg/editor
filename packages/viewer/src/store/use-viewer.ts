@@ -34,9 +34,6 @@ type ViewerState = {
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
-  theme: 'light' | 'dark'
-  setTheme: (theme: 'light' | 'dark') => void
-
   sceneTheme: string
   setSceneTheme: (id: string) => void
 
@@ -118,9 +115,6 @@ const useViewer = create<ViewerState>()(
 
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),
-
-      theme: 'light',
-      setTheme: (theme) => set({ theme }),
 
       sceneTheme: 'studio',
       setSceneTheme: (id) => set({ sceneTheme: id }),
@@ -260,7 +254,6 @@ const useViewer = create<ViewerState>()(
       name: 'viewer-preferences',
       partialize: (state) => ({
         cameraMode: state.cameraMode,
-        theme: state.theme,
         sceneTheme: state.sceneTheme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,

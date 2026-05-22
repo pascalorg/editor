@@ -7,7 +7,13 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { NodeRenderer, unionPolygons, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import {
+  getSceneTheme,
+  NodeRenderer,
+  unionPolygons,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
@@ -44,8 +50,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const theme = useViewer((state) => state.theme)
-  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
+  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const bgColor = isDark ? '#1f2433' : '#fafafa'
 
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset

@@ -25,12 +25,9 @@ import {
   ChevronRight,
   Diamond,
   Layers,
-  Moon,
   PenLine,
   Sparkles,
-  Sun,
 } from 'lucide-react'
-import { motion } from 'motion/react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../lib/utils'
@@ -254,7 +251,6 @@ export const ViewerOverlay = ({
   const cameraMode = useViewer((s) => s.cameraMode)
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
-  const theme = useViewer((s) => s.theme)
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
   // node elsewhere in the scene doesn't re-render this overlay.
@@ -441,53 +437,6 @@ export const ViewerOverlay = ({
       <div className="dark absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-foreground">
         <TooltipProvider delayDuration={0}>
           <div className="pointer-events-auto flex h-14 flex-row items-center justify-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out">
-            {/* Theme Toggle */}
-            <button
-              aria-label="Toggle theme"
-              className="flex h-[36px] shrink-0 cursor-pointer items-center rounded-full border border-border/50 bg-accent/50 p-1"
-              onClick={() => useViewer.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}
-              type="button"
-            >
-              <div className="relative flex">
-                {/* Sliding Background */}
-                <motion.div
-                  animate={{
-                    x: theme === 'light' ? '100%' : '0%',
-                  }}
-                  className="absolute inset-0 rounded-full bg-white shadow-sm dark:bg-white/20"
-                  initial={false}
-                  style={{ width: '50%' }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 500,
-                    damping: 35,
-                  }}
-                />
-
-                {/* Dark Mode Icon */}
-                <div
-                  className={cn(
-                    'pointer-events-none relative z-10 flex h-7 w-9 items-center justify-center rounded-full transition-colors duration-200',
-                    theme === 'dark' ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  <Moon className="h-4 w-4" />
-                </div>
-
-                {/* Light Mode Icon */}
-                <div
-                  className={cn(
-                    'pointer-events-none relative z-10 flex h-7 w-9 items-center justify-center rounded-full transition-colors duration-200',
-                    theme === 'light' ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  <Sun className="h-4 w-4" />
-                </div>
-              </div>
-            </button>
-
-            <div className="mx-1 h-5 w-px bg-border/40" />
-
             {/* Scans and Guides Visibility */}
             {canShowScans && (
               <ActionButton

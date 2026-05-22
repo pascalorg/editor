@@ -28,10 +28,8 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
-  Moon,
   PenLine,
   Sparkles,
-  Sun,
   SwatchBook,
 } from 'lucide-react'
 import Image from 'next/image'
@@ -436,23 +434,6 @@ function UnitToggle() {
   )
 }
 
-function ThemeToggle() {
-  const theme = useViewer((state) => state.theme)
-  const setTheme = useViewer((state) => state.setTheme)
-
-  return (
-    <ToolbarTooltip label={theme === 'dark' ? 'Dark' : 'Light'}>
-      <button
-        className={cn(TOOLBAR_BTN, theme === 'dark' ? 'text-indigo-400/70' : 'text-amber-400/70')}
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        type="button"
-      >
-        {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
 function CameraModeToggle() {
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
@@ -533,7 +514,6 @@ export function CommunityViewerToolbarRight() {
       <ShadowsToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <UnitToggle />
-      <ThemeToggle />
       <CameraModeToggle />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />

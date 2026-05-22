@@ -2,7 +2,7 @@
 
 import { StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
@@ -20,33 +20,6 @@ import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
-
-function AnimatedBackground({ isDark }: { isDark: boolean }) {
-  const targetColor = useMemo(() => new THREE.Color(), [])
-  const initialized = useRef(false)
-
-  useFrame(({ scene }, delta) => {
-    const dt = Math.min(delta, 0.1) * 4
-    const targetHex = isDark ? '#1f2433' : '#ffffff'
-
-    if (!(scene.background && scene.background instanceof THREE.Color)) {
-      scene.background = new THREE.Color(targetHex)
-      initialized.current = true
-      return
-    }
-
-    if (!initialized.current) {
-      scene.background.set(targetHex)
-      initialized.current = true
-      return
-    }
-
-    targetColor.set(targetHex)
-    scene.background.lerp(targetColor, dt)
-  })
-
-  return null
-}
 
 declare module '@react-three/fiber' {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
@@ -168,7 +141,7 @@ const Viewer: React.FC<ViewerProps> = ({
   renderContext = 'editor',
   defaultRender,
 }) => {
-  const theme = useViewer((state) => state.theme)
+  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   useEffect(() => {
     const ctx = renderContext
     useViewer.getState().setRenderContext(ctx)
@@ -209,7 +182,7 @@ const Viewer: React.FC<ViewerProps> = ({
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
       dpr={[1, maxDpr]}
       frameloop="never"
       gl={
@@ -248,7 +221,6 @@ const Viewer: React.FC<ViewerProps> = ({
       }}
     >
       <FrameLimiter fps={50} />
-      {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />

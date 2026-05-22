@@ -3,6 +3,10 @@ import type { SurfaceRole } from '@pascal-app/core'
 export type SceneTheme = {
   id: string
   name: string
+  // Drives the 2D scene chrome that used to follow the removed light/dark toggle:
+  // canvas backdrop, grid line colours, measurement-label/cursor contrast, and
+  // the site ground fill. The 3D background + lights come from the fields below.
+  appearance: 'light' | 'dark'
   background: string
   ambient: { color: string; intensity: number }
   hemi?: { sky: string; ground: string; intensity: number }
@@ -20,6 +24,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'studio',
     name: 'Studio',
+    appearance: 'light',
     background: '#ffffff',
     ambient: { color: '#ffffff', intensity: 0.15 },
     hemi: { sky: '#ffffff', ground: '#aaa49a', intensity: 0.6 },
@@ -39,6 +44,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'paper',
     name: 'Paper',
+    appearance: 'light',
     background: '#ede9df',
     ambient: { color: '#fff9eb', intensity: 0.55 },
     hemi: { sky: '#fff5d9', ground: '#c2b89c', intensity: 0.35 },
@@ -58,6 +64,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'sunset',
     name: 'Sunset',
+    appearance: 'light',
     background: '#f6e8d4',
     ambient: { color: '#ffd9a8', intensity: 0.45 },
     hemi: { sky: '#ffd9a8', ground: '#5b4634', intensity: 0.4 },
@@ -77,6 +84,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'overcast',
     name: 'Overcast',
+    appearance: 'light',
     background: '#e6e7e6',
     ambient: { color: '#eef0ef', intensity: 1.1 },
     hemi: { sky: '#f4f5f3', ground: '#bcbfbb', intensity: 0.9 },
@@ -93,6 +101,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'blueprint',
     name: 'Blueprint',
+    appearance: 'light',
     background: '#dde6ef',
     ambient: { color: '#cfdcec', intensity: 0.7 },
     hemi: { sky: '#dfeaf6', ground: '#5b6b80', intensity: 0.55 },
@@ -112,6 +121,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'mediterranean',
     name: 'Mediterranean',
+    appearance: 'light',
     background: '#bdd6e8',
     ambient: { color: '#d6e6f3', intensity: 0.5 },
     hemi: { sky: '#a8c8e2', ground: '#d8c9a4', intensity: 0.6 },
@@ -131,6 +141,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'twilight',
     name: 'Twilight',
+    appearance: 'dark',
     background: '#3a3550',
     ambient: { color: '#a89cc8', intensity: 0.35 },
     hemi: { sky: '#d8a8c0', ground: '#1c1830', intensity: 0.5 },
@@ -150,6 +161,7 @@ export const SCENE_THEMES: SceneTheme[] = [
   {
     id: 'night',
     name: 'Night',
+    appearance: 'dark',
     background: '#1f2433',
     ambient: { color: '#a0b0ff', intensity: 0.07 },
     hemi: { sky: '#3a4666', ground: '#0e111c', intensity: 0.4 },
