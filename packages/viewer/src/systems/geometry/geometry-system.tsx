@@ -56,6 +56,7 @@ export const GeometrySystem = () => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
@@ -65,7 +66,7 @@ export const GeometrySystem = () => {
         useScene.getState().markDirty(node.id as AnyNodeId)
       }
     }
-  }, [shading, textures, colorPreset])
+  }, [shading, textures, colorPreset, sceneTheme])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -151,11 +152,12 @@ export const GeometrySystem = () => {
           shading: RenderShading,
           textures: boolean,
           colorPreset: ColorPreset,
+          sceneTheme: string,
         ) => { children: unknown[] }
-      )(node, ctx, shading, textures, colorPreset) as unknown as Group
+      )(node, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
 
       if (!textures && def.surfaceRole) {
-        applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset)
+        applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset, sceneTheme)
       }
 
       disposeChildren(group)
@@ -258,7 +260,12 @@ function disposeChildren(group: Group) {
   }
 }
 
-function applyDefaultSurfaceRole(root: Group, defaultRole: SurfaceRole, colorPreset: ColorPreset) {
+function applyDefaultSurfaceRole(
+  root: Group,
+  defaultRole: SurfaceRole,
+  colorPreset: ColorPreset,
+  sceneTheme?: string,
+) {
   root.traverse((child) => {
     const mesh = child as Partial<Mesh> & {
       material?: Material | Material[]
@@ -268,7 +275,12 @@ function applyDefaultSurfaceRole(root: Group, defaultRole: SurfaceRole, colorPre
 
     const role = getMeshSurfaceRole(mesh.userData.surfaceRole, defaultRole)
     mesh.userData.surfaceRole = role
-    mesh.material = createSurfaceRoleMaterial(role, colorPreset, getMaterialSide(mesh.material))
+    mesh.material = createSurfaceRoleMaterial(
+      role,
+      colorPreset,
+      getMaterialSide(mesh.material),
+      sceneTheme,
+    )
   })
 }
 

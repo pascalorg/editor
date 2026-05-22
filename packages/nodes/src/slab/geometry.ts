@@ -1,8 +1,10 @@
 import { getMaterialPresetByRef, type SlabNode } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
+  type ColorPreset,
   createDefaultMaterial,
   createMaterial,
+  createSurfaceRoleMaterial,
   DEFAULT_SLAB_MATERIAL,
   generateSlabGeometry,
   type RenderShading,
@@ -28,7 +30,20 @@ type SlabMaterial = Material & {
 
 const slabMaterialCache = new Map<string, Material>()
 
-function getSlabMaterial(node: SlabNode, shading: RenderShading): Material {
+function getSlabMaterial(
+  node: SlabNode,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  sceneTheme?: string,
+): Material {
+  // Untextured slabs (and everything in textures-off mode) take the themed
+  // 'floor' role colour. createSurfaceRoleMaterial returns a shared cached
+  // material, so it is returned as-is without the mutation below.
+  if (!textures || (!node.materialPreset && !node.material)) {
+    return createSurfaceRoleMaterial('floor', colorPreset, DoubleSide, sceneTheme)
+  }
+
   const cacheKey = JSON.stringify({
     shading,
     material: node.material ?? null,
@@ -64,10 +79,13 @@ export function buildSlabGeometry(
   node: SlabNode,
   _ctx?: unknown,
   shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
 ): Group {
   const group = new Group()
   const geometry = generateSlabGeometry(node)
-  const material = getSlabMaterial(node, shading)
+  const material = getSlabMaterial(node, shading, textures, colorPreset, sceneTheme)
   const mesh = new Mesh(geometry, material)
   mesh.castShadow = true
   mesh.receiveShadow = true

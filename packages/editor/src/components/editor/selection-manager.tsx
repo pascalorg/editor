@@ -278,7 +278,13 @@ function applyWallPaintPreview(
 
   return previewMeshMaterial(
     mesh,
-    getVisibleWallMaterials(previewNode, useViewer.getState().shading),
+    getVisibleWallMaterials(
+      previewNode,
+      useViewer.getState().shading,
+      useViewer.getState().textures,
+      useViewer.getState().colorPreset,
+      useViewer.getState().sceneTheme,
+    ),
   )
 }
 
@@ -295,7 +301,13 @@ function applyRoofPaintPreview(
     ...node,
     ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const previewMaterial = getRoofMaterialArray(previewNode, useViewer.getState().shading)
+  const previewMaterial = getRoofMaterialArray(
+    previewNode,
+    useViewer.getState().shading,
+    useViewer.getState().textures,
+    useViewer.getState().colorPreset,
+    useViewer.getState().sceneTheme,
+  )
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)

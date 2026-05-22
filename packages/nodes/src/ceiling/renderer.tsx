@@ -71,6 +71,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const handlers = useNodeEvents(node, 'ceiling')
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
 
   useEffect(
     () => () => {
@@ -81,10 +82,13 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   )
 
   const materials = useMemo(() => {
-    if (!textures) {
+    // Untextured ceilings (and everything in textures-off mode) take the themed
+    // 'ceiling' role colour; only an explicit preset/material keeps a texture.
+    const hasExplicit = Boolean(node.materialPreset || node.material)
+    if (!textures || !hasExplicit) {
       return {
-        topMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide),
-        bottomMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, BackSide),
+        topMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide, sceneTheme),
+        bottomMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, BackSide, sceneTheme),
       }
     }
 
@@ -95,6 +99,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   }, [
     textures,
     colorPreset,
+    sceneTheme,
     node.materialPreset,
     node.material,
     node.material?.preset,

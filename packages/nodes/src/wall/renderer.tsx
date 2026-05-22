@@ -57,7 +57,10 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
 
   const handlers = useNodeEvents(node, 'wall')
   const shading = useViewer((s) => s.shading)
-  const material = getVisibleWallMaterials(node, shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
+  const material = getVisibleWallMaterials(node, shading, textures, colorPreset, sceneTheme)
 
   return (
     <mesh

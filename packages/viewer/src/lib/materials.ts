@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import * as THREE from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import { getSceneTheme } from './scene-themes'
 
 export type RenderShading = 'solid' | 'rendered'
 export type ColorPreset = 'clay' | 'white' | 'mono' | 'blueprint'
@@ -60,8 +61,15 @@ export const PRESET_PALETTES: Record<ColorPreset, Record<SurfaceRole, string>> =
   blueprint: BLUEPRINT_PALETTE,
 }
 
-export function resolveSurfaceColor(role: SurfaceRole, preset: ColorPreset): string {
-  return PRESET_PALETTES[preset][role]
+export function resolveSurfaceColor(
+  role: SurfaceRole,
+  preset: ColorPreset,
+  sceneThemeId?: string,
+): string {
+  // The active scene theme may tint individual roles (e.g. Mediterranean's blue
+  // roof); fall back to the chosen colour preset's palette when it doesn't.
+  const tints = sceneThemeId ? getSceneTheme(sceneThemeId).clayTints : undefined
+  return tints?.[role] ?? PRESET_PALETTES[preset][role]
 }
 
 export const glassMaterial = new MeshLambertNodeMaterial({
@@ -487,23 +495,24 @@ export function createSurfaceRoleMaterial(
   role: SurfaceRole,
   preset: ColorPreset,
   side: THREE.Side = THREE.FrontSide,
+  sceneThemeId?: string,
 ): THREE.Material {
   const resolvedSide = role === 'glazing' ? THREE.DoubleSide : side
-  const cacheKey = `${role}-${preset}-${resolvedSide}`
+  const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}`
   const cached = surfaceRoleMaterialCache.get(cacheKey)
   if (cached) return cached
 
   const material =
     role === 'glazing'
       ? new MeshLambertNodeMaterial({
-          color: resolveSurfaceColor(role, preset),
+          color: resolveSurfaceColor(role, preset, sceneThemeId),
           depthWrite: false,
           opacity: 0.25,
           side: resolvedSide,
           transparent: true,
         })
       : new MeshLambertNodeMaterial({
-          color: resolveSurfaceColor(role, preset),
+          color: resolveSurfaceColor(role, preset, sceneThemeId),
           side: resolvedSide,
         })
 

@@ -23,6 +23,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
@@ -41,8 +42,10 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
       return null
     }
 
-    return parentNode ? getRoofMaterialArray(parentNode, shading, textures, colorPreset) : null
-  }, [node, parentNode, shading, textures, colorPreset])
+    return parentNode
+      ? getRoofMaterialArray(parentNode, shading, textures, colorPreset, sceneTheme)
+      : null
+  }, [node, parentNode, shading, textures, colorPreset, sceneTheme])
 
   const material = debugColors
     ? getRoofDebugMaterials(shading)

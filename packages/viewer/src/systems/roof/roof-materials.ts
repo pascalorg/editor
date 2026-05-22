@@ -6,7 +6,6 @@ import {
 import type * as THREE from 'three'
 import {
   type ColorPreset,
-  createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
@@ -47,6 +46,7 @@ export function getRoofMaterialArray(
   shading: RenderShading = 'rendered',
   textures = true,
   colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
 ): RoofMaterialArray | null {
   const top = getEffectiveRoofSurfaceMaterial(node, 'top')
   const edge = getEffectiveRoofSurfaceMaterial(node, 'edge')
@@ -55,6 +55,7 @@ export function getRoofMaterialArray(
     shading,
     textures,
     colorPreset,
+    sceneTheme,
     top: getSurfaceMaterialSignature(top),
     edge: getSurfaceMaterialSignature(edge),
     wall: getSurfaceMaterialSignature(wall),
@@ -63,17 +64,21 @@ export function getRoofMaterialArray(
   const cached = roofMaterialArrayCache.get(cacheKey)
   if (cached) return cached
 
+  // Themed role colours: roof top/edge use the 'roof' role, the soffit/underside
+  // uses 'ceiling'. These also fill any untextured slot so an untextured roof is
+  // theme-coloured regardless of the textures toggle (no more white default).
+  const roofMaterial = createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+  const ceilingMaterial = createSurfaceRoleMaterial('ceiling', colorPreset, undefined, sceneTheme)
+  const roleArray: RoofMaterialArray = [
+    roofMaterial,
+    ceilingMaterial,
+    ceilingMaterial,
+    roofMaterial,
+  ]
+
   if (!textures) {
-    const roofMaterial = createSurfaceRoleMaterial('roof', colorPreset)
-    const ceilingMaterial = createSurfaceRoleMaterial('ceiling', colorPreset)
-    const materialArray: RoofMaterialArray = [
-      roofMaterial,
-      ceilingMaterial,
-      ceilingMaterial,
-      roofMaterial,
-    ]
-    roofMaterialArrayCache.set(cacheKey, materialArray)
-    return materialArray
+    roofMaterialArrayCache.set(cacheKey, roleArray)
+    return roleArray
   }
 
   const topMaterial = createResolvedMaterial(top.material, top.materialPreset, shading)
@@ -81,14 +86,15 @@ export function getRoofMaterialArray(
   const wallMaterial = createResolvedMaterial(wall.material, wall.materialPreset, shading)
 
   if (!(topMaterial || edgeMaterial || wallMaterial)) {
-    return null
+    roofMaterialArrayCache.set(cacheKey, roleArray)
+    return roleArray
   }
 
   const materialArray: RoofMaterialArray = [
-    edgeMaterial ?? wallMaterial ?? topMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
-    wallMaterial ?? edgeMaterial ?? topMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
-    wallMaterial ?? edgeMaterial ?? topMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
-    topMaterial ?? wallMaterial ?? edgeMaterial ?? createDefaultMaterial('#ffffff', 0.9, shading),
+    edgeMaterial ?? wallMaterial ?? topMaterial ?? roofMaterial,
+    wallMaterial ?? edgeMaterial ?? topMaterial ?? ceilingMaterial,
+    wallMaterial ?? edgeMaterial ?? topMaterial ?? ceilingMaterial,
+    topMaterial ?? wallMaterial ?? edgeMaterial ?? roofMaterial,
   ]
 
   roofMaterialArrayCache.set(cacheKey, materialArray)
