@@ -161,11 +161,14 @@ export {
 } from './systems/wall/wall-mitering'
 export {
   constrainWallMoveDeltaToAxis,
+  getLinkedWallUpdates,
   getPerpendicularWallMoveAxis,
+  getPlannedLinkedWallUpdates,
   planWallMoveJunctions,
   type WallMoveAxis,
   type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
+  type WallMoveLinkedWallTargetPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
 export type { SceneGraph } from './utils/clone-scene-graph'

@@ -3,24 +3,20 @@
 import {
   type AnyNodeId,
   constrainWallMoveDeltaToAxis,
-  DEFAULT_WALL_HEIGHT,
   detectSpacesForLevel,
   emitter,
   type GridEvent,
-  getMaterialPresetByRef,
   getPerpendicularWallMoveAxis,
+  getPlannedLinkedWallUpdates,
   pauseSceneHistory,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
-  resolveMaterial,
   resumeSceneHistory,
   type SlabNode,
   useScene,
   type WallMoveAxis,
-  type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
   type WallNode,
-  WallNode as WallSchema,
 } from '@pascal-app/core'
 import {
   CursorSphere,
@@ -35,6 +31,16 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, Float32BufferAttribute } from 'three'
+import {
+  buildBridgeWallCreates,
+  buildBridgeWallPreviews,
+  type GhostWallPreview,
+  getLinkedWallSnapshots,
+  getWallsAfterUpdates,
+  type LinkedWallSnapshot,
+  samePoint,
+  stripWallIsNewMetadata,
+} from './move-shared'
 
 /**
  * Phase 5 Stage D — wall whole-move tool (kind-owned).
@@ -65,195 +71,6 @@ function rotateVector([x, z]: [number, number], angle: number): [number, number]
   return [x * cos - z * sin, x * sin + z * cos]
 }
 
-function samePoint(a: [number, number], b: [number, number]) {
-  return a[0] === b[0] && a[1] === b[1]
-}
-
-function pointKey(point: [number, number]) {
-  return `${point[0]}:${point[1]}`
-}
-
-function stripWallIsNewMetadata(meta: WallNode['metadata']): WallNode['metadata'] {
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
-    return meta
-  }
-
-  const nextMeta = { ...(meta as Record<string, unknown>) } as Record<string, unknown>
-  delete nextMeta.isNew
-  return nextMeta as WallNode['metadata']
-}
-
-type LinkedWallSnapshot = WallNode
-
-type GhostWallPreview = {
-  id: string
-  start: [number, number]
-  end: [number, number]
-  color: string
-  height: number
-}
-
-function getLinkedWallSnapshots(args: {
-  wallId: WallNode['id']
-  wallParentId: string | null
-  originalStart: [number, number]
-  originalEnd: [number, number]
-}) {
-  const { wallId, wallParentId, originalStart, originalEnd } = args
-  const { nodes } = useScene.getState()
-  const walls = Object.values(nodes).filter(
-    (node): node is WallNode =>
-      node?.type === 'wall' && node.id !== wallId && (node.parentId ?? null) === wallParentId,
-  )
-  const directlyLinkedWalls = walls.filter(
-    (wall) =>
-      samePoint(wall.start, originalStart) ||
-      samePoint(wall.start, originalEnd) ||
-      samePoint(wall.end, originalStart) ||
-      samePoint(wall.end, originalEnd),
-  )
-  const contextPoints = new Set([pointKey(originalStart), pointKey(originalEnd)])
-
-  for (const wall of directlyLinkedWalls) {
-    contextPoints.add(pointKey(wall.start))
-    contextPoints.add(pointKey(wall.end))
-  }
-
-  const snapshots: LinkedWallSnapshot[] = []
-  const seenWallIds = new Set<WallNode['id']>()
-
-  for (const node of walls) {
-    if (!contextPoints.has(pointKey(node.start)) && !contextPoints.has(pointKey(node.end))) {
-      continue
-    }
-
-    if (seenWallIds.has(node.id)) {
-      continue
-    }
-    seenWallIds.add(node.id)
-
-    snapshots.push({
-      ...node,
-      start: [...node.start] as [number, number],
-      end: [...node.end] as [number, number],
-      children: [...(node.children ?? [])],
-    })
-  }
-
-  return snapshots
-}
-
-function getLinkedWallUpdates(
-  linkedWalls: Array<{
-    wall: LinkedWallSnapshot
-    matchPoint?: [number, number]
-    targetPoint?: [number, number]
-  }>,
-  originalStart: [number, number],
-  originalEnd: [number, number],
-  nextStart: [number, number],
-  nextEnd: [number, number],
-) {
-  return linkedWalls.map(({ wall, matchPoint, targetPoint }) => {
-    if (matchPoint && targetPoint) {
-      return {
-        id: wall.id,
-        start: samePoint(wall.start, matchPoint) ? targetPoint : wall.start,
-        end: samePoint(wall.end, matchPoint) ? targetPoint : wall.end,
-      }
-    }
-
-    const targetStart = targetPoint ?? nextStart
-    const targetEnd = targetPoint ?? nextEnd
-
-    return {
-      id: wall.id,
-      start: samePoint(wall.start, originalStart)
-        ? targetStart
-        : samePoint(wall.start, originalEnd)
-          ? targetEnd
-          : wall.start,
-      end: samePoint(wall.end, originalStart)
-        ? targetStart
-        : samePoint(wall.end, originalEnd)
-          ? targetEnd
-          : wall.end,
-    }
-  })
-}
-
-function getPlannedLinkedWallUpdates(
-  plan: WallMoveJunctionPlan<LinkedWallSnapshot>,
-  originalStart: [number, number],
-  originalEnd: [number, number],
-  nextStart: [number, number],
-  nextEnd: [number, number],
-) {
-  const movePlans = new Map<
-    WallNode['id'],
-    { wall: LinkedWallSnapshot; matchPoint?: [number, number]; targetPoint?: [number, number] }
-  >()
-
-  for (const wall of plan.linkedWallsToMove) {
-    movePlans.set(wall.id, { wall })
-  }
-
-  for (const targetPlan of plan.linkedWallTargetPlans) {
-    movePlans.set(targetPlan.wall.id, {
-      wall: targetPlan.wall,
-      matchPoint: targetPlan.originalPoint,
-      targetPoint: targetPlan.targetPoint,
-    })
-  }
-
-  return getLinkedWallUpdates(
-    Array.from(movePlans.values()),
-    originalStart,
-    originalEnd,
-    nextStart,
-    nextEnd,
-  )
-}
-
-function wallSegmentExists(
-  walls: Array<Pick<WallNode, 'start' | 'end'>>,
-  start: [number, number],
-  end: [number, number],
-) {
-  return walls.some(
-    (wall) =>
-      (samePoint(wall.start, start) && samePoint(wall.end, end)) ||
-      (samePoint(wall.start, end) && samePoint(wall.end, start)),
-  )
-}
-
-function getWallGhostColor(wall: WallNode) {
-  const presetColor =
-    getMaterialPresetByRef(wall.materialPreset)?.mapProperties.color ??
-    getMaterialPresetByRef(wall.interiorMaterialPreset)?.mapProperties.color ??
-    getMaterialPresetByRef(wall.exteriorMaterialPreset)?.mapProperties.color
-
-  if (presetColor) {
-    return presetColor
-  }
-
-  return resolveMaterial(wall.material ?? wall.interiorMaterial ?? wall.exteriorMaterial).color
-}
-
-function getWallsAfterUpdates(
-  nodes: ReturnType<typeof useScene.getState>['nodes'],
-  updates: Array<{ id: AnyNodeId; data: Partial<WallNode> }>,
-) {
-  const updateById = new Map(updates.map((update) => [update.id, update.data]))
-
-  return Object.values(nodes)
-    .filter((node): node is WallNode => node?.type === 'wall')
-    .map((wall) => {
-      const update = updateById.get(wall.id as AnyNodeId)
-      return update ? ({ ...wall, ...update } as WallNode) : wall
-    })
-}
-
 function cloneSlabSnapshot(slab: SlabNode): SlabNode {
   return {
     ...slab,
@@ -275,92 +92,6 @@ function getLevelAutoSlabs(levelId: string, nodes: ReturnType<typeof useScene.ge
 
 function getLevelAutoSlabSnapshots(levelId: string) {
   return getLevelAutoSlabs(levelId, useScene.getState().nodes).map(cloneSlabSnapshot)
-}
-
-function buildBridgeWallCreates(args: {
-  bridgePlans: Array<WallMoveBridgePlan<LinkedWallSnapshot>>
-  nextStart: [number, number]
-  nextEnd: [number, number]
-  existingWalls: WallNode[]
-  wallCount: number
-}): Array<{ node: WallNode; parentId?: AnyNodeId }> {
-  const { bridgePlans, nextStart, nextEnd, existingWalls, wallCount } = args
-  const wallsForDuplicateCheck = [...existingWalls]
-  const creates: Array<{ node: WallNode; parentId?: AnyNodeId }> = []
-
-  for (const plan of bridgePlans) {
-    const nextPoint = plan.movedEndpoint === 'start' ? nextStart : nextEnd
-
-    if (!isWallLongEnough(plan.originalPoint, nextPoint)) {
-      continue
-    }
-
-    if (wallSegmentExists(wallsForDuplicateCheck, plan.originalPoint, nextPoint)) {
-      continue
-    }
-
-    const { id: _id, parentId: _parentId, children: _children, ...sourceWall } = plan.wall
-    const bridgeWall = WallSchema.parse({
-      ...sourceWall,
-      name: `Wall ${wallCount + creates.length + 1}`,
-      start: plan.originalPoint,
-      end: nextPoint,
-      children: [],
-      metadata: stripWallIsNewMetadata(plan.wall.metadata),
-    })
-
-    creates.push({
-      node: bridgeWall,
-      parentId: (plan.wall.parentId ?? undefined) as AnyNodeId | undefined,
-    })
-    wallsForDuplicateCheck.push(bridgeWall)
-  }
-
-  return creates
-}
-
-function buildBridgeWallPreviews(args: {
-  bridgePlans: Array<WallMoveBridgePlan<LinkedWallSnapshot>>
-  nextStart: [number, number]
-  nextEnd: [number, number]
-  existingWalls: WallNode[]
-}): Array<{ ghost: GhostWallPreview; wall: WallNode }> {
-  const { bridgePlans, nextStart, nextEnd, existingWalls } = args
-  const wallsForDuplicateCheck: Array<Pick<WallNode, 'start' | 'end'>> = [...existingWalls]
-  const previews: Array<{ ghost: GhostWallPreview; wall: WallNode }> = []
-
-  for (const plan of bridgePlans) {
-    const nextPoint = plan.movedEndpoint === 'start' ? nextStart : nextEnd
-
-    if (!isWallLongEnough(plan.originalPoint, nextPoint)) {
-      continue
-    }
-
-    if (wallSegmentExists(wallsForDuplicateCheck, plan.originalPoint, nextPoint)) {
-      continue
-    }
-
-    const { id: _id, children: _children, ...sourceWall } = plan.wall
-    const wall = WallSchema.parse({
-      ...sourceWall,
-      name: 'Wall Preview',
-      start: plan.originalPoint,
-      end: nextPoint,
-      children: [],
-      metadata: stripWallIsNewMetadata(plan.wall.metadata),
-    })
-    const ghost = {
-      id: `${plan.wall.id}:${plan.movedEndpoint}:${previews.length}`,
-      start: [...plan.originalPoint] as [number, number],
-      end: [...nextPoint] as [number, number],
-      color: getWallGhostColor(plan.wall),
-      height: plan.wall.height ?? DEFAULT_WALL_HEIGHT,
-    }
-    previews.push({ ghost, wall })
-    wallsForDuplicateCheck.push(wall)
-  }
-
-  return previews
 }
 
 function setPreviewGeometryAttributes(
@@ -405,8 +136,17 @@ function GhostWallPreviewMesh({ preview }: { preview: GhostWallPreview }) {
 
   return (
     <group position={[preview.start[0], 0.02, preview.start[1]]} rotation={[0, angle, 0]}>
-      <mesh frustumCulled={false} layers={EDITOR_LAYER} renderOrder={2}>
-        <primitive attach="geometry" object={geometry} />
+      <mesh
+        // Pass geometry as a prop so the mesh never renders with R3F's
+        // default empty `BufferGeometry`. With `frustumCulled={false}`,
+        // the `<primitive attach="geometry">` path emits one frame of
+        // `Draw(0, 1, 0, 0)` against an empty buffer and WebGPU flags it
+        // (see wall-move-side-handles.tsx).
+        frustumCulled={false}
+        geometry={geometry}
+        layers={EDITOR_LAYER}
+        renderOrder={2}
+      >
         <meshBasicMaterial
           color={preview.color}
           depthTest={false}
@@ -814,17 +554,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           live.type === 'wall' &&
           (!samePoint(live.start, originalStartRef.current) ||
             !samePoint(live.end, originalEndRef.current))
-        // biome-ignore lint/suspicious/noConsole: temp diagnostic
-        console.log('[wall-move-3d] cleanup', {
-          nodeId,
-          originalStart: originalStartRef.current,
-          originalEnd: originalEndRef.current,
-          liveStart: live?.start,
-          liveEnd: live?.end,
-          externallyCommitted,
-          willRestore: !externallyCommitted,
-          linkedCount: linkedOriginalsRef.current.length,
-        })
         if (!externallyCommitted) {
           restoreOriginal()
         }

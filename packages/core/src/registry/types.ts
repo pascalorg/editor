@@ -505,6 +505,23 @@ export type FloorplanMoveTargetSession = {
    * area, overlap detected, ...).
    */
   canCommit(): boolean
+  /**
+   * Optional atomic-commit hook. The default overlay path snapshots
+   * each affected node before drag and writes a diff back on commit —
+   * fine for kinds whose commit is a pure position update, but
+   * insufficient when commit needs to also create or delete nodes
+   * (e.g. wall move emits bridge wall creates + collapsed wall deletes
+   * via `planWallMoveJunctions`).
+   *
+   * When present, the overlay reverts to the pre-drag baseline,
+   * resumes history, and calls `commit()` instead of the default
+   * `updateNodes(finalUpdates)`. The session is responsible for the
+   * full final write (typically `applyNodeChanges`) plus any
+   * post-commit selection / metadata. The overlay still emits the
+   * standard place SFX and clears `movingNode` after `commit()`
+   * returns.
+   */
+  commit?(): void
 }
 
 export type FloorplanMoveTarget<N> = (args: {

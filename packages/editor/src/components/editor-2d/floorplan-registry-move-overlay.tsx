@@ -140,6 +140,23 @@ export function FloorplanRegistryMoveOverlay() {
 
       const commitFinalStateOrRevert = () => {
         const commitValid = session.canCommit()
+
+        // Sessions with a `commit` hook own their atomic write (e.g.
+        // wall move emits creates + deletes + updates via the junction
+        // planner). For those we still do Phase 1 (revert to baseline)
+        // and Phase 2's resume — but Phase 2's write is delegated, and
+        // we skip the snapshot-diff finalUpdates path.
+        if (commitValid && session.commit) {
+          useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
+          if (historyPaused) {
+            resumeSceneHistory(useScene)
+            historyPaused = false
+          }
+          session.commit()
+          sfxEmitter.emit('sfx:item-place')
+          return
+        }
+
         const sceneState = useScene.getState().nodes
         const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
         for (const snap of snapshots) {
