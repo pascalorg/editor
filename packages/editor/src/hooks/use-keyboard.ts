@@ -1,14 +1,14 @@
 import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import { closeDoorOpenState, toggleDoorOpenState } from '../lib/door-interaction'
+import { toggleDoorOpenState } from '../lib/door-interaction'
 import { runRedo, runUndo } from '../lib/history'
 import {
   copySelectedNodesToEditorClipboard,
   pasteEditorClipboardToLevel,
 } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
-import { closeWindowOpenState, toggleWindowOpenState } from '../lib/window-interaction'
+import { toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
@@ -173,29 +173,33 @@ export const useKeyboard = ({
         }
       } else if ((e.key === 'r' || e.key === 'R') && !isVersionPreviewMode) {
         // Rotate selected node clockwise if it supports rotation (items, roofs, etc.)
-        // Operable doors/windows use R to toggle their open/closed state.
+        // Doors use R to flip side (front ↔ back, rotation += π); their
+        // open/close toggle lives on E. Windows still use R to toggle
+        // their open/closed state.
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
           if (node?.type === 'door') {
             e.preventDefault()
-            if (node.openingKind !== 'opening') {
-              toggleDoorOpenState(node.id)
-              sfxEmitter.emit('sfx:item-rotate')
+            useScene.getState().updateNode(node.id, {
+              side: node.side === 'front' ? 'back' : 'front',
+              rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
+            })
+            if (node.parentId) {
+              useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
             }
-          } else if (
-            node?.type === 'window' &&
-            node.openingKind !== 'opening' &&
-            (node.windowType === 'sliding' ||
-              node.windowType === 'casement' ||
-              node.windowType === 'awning' ||
-              node.windowType === 'hopper' ||
-              node.windowType === 'single-hung' ||
-              node.windowType === 'double-hung' ||
-              node.windowType === 'louvered')
-          ) {
+            sfxEmitter.emit('sfx:item-rotate')
+          } else if (node?.type === 'window') {
+            // Windows: R flips side (front ↔ back, rotation += π). Open/
+            // close toggle for operable windows lives on E.
             e.preventDefault()
-            toggleWindowOpenState(node.id)
+            useScene.getState().updateNode(node.id, {
+              side: node.side === 'front' ? 'back' : 'front',
+              rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
+            })
+            if (node.parentId) {
+              useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
+            }
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
@@ -218,11 +222,37 @@ export const useKeyboard = ({
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
           if (node?.type === 'door') {
+            // Door's open/close moved to E; T is a no-op for doors so
+            // it doesn't free-rotate a wall-bound node by π/4.
             e.preventDefault()
-            if (node.openingKind !== 'opening') {
-              closeDoorOpenState(node.id)
-              sfxEmitter.emit('sfx:item-rotate')
+          } else if (node?.type === 'window') {
+            // Window's open/close moved to E; T is a no-op so it doesn't
+            // free-rotate a wall-bound node by π/4.
+            e.preventDefault()
+          } else if (node && 'rotation' in node) {
+            e.preventDefault()
+            const ROTATION_STEP = Math.PI / 4
+
+            if (typeof node.rotation === 'number') {
+              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
+            } else if (Array.isArray(node.rotation)) {
+              useScene.getState().updateNode(node.id, {
+                rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],
+              })
             }
+            sfxEmitter.emit('sfx:item-rotate')
+          }
+        }
+      } else if ((e.key === 'e' || e.key === 'E') && !isVersionPreviewMode) {
+        // Toggle door / operable-window open/closed state. Moved off R,
+        // which now flips the opening (side + π rotation).
+        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+        if (selectedNodeIds.length === 1) {
+          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          if (node?.type === 'door' && node.openingKind !== 'opening') {
+            e.preventDefault()
+            toggleDoorOpenState(node.id)
+            sfxEmitter.emit('sfx:item-rotate')
           } else if (
             node?.type === 'window' &&
             node.openingKind !== 'opening' &&
@@ -235,19 +265,7 @@ export const useKeyboard = ({
               node.windowType === 'louvered')
           ) {
             e.preventDefault()
-            closeWindowOpenState(node.id)
-            sfxEmitter.emit('sfx:item-rotate')
-          } else if (node && 'rotation' in node) {
-            e.preventDefault()
-            const ROTATION_STEP = Math.PI / 4
-
-            if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
-            } else if (Array.isArray(node.rotation)) {
-              useScene.getState().updateNode(node.id, {
-                rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],
-              })
-            }
+            toggleWindowOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
           }
         }
