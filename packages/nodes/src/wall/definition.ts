@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildWallFloorplan } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
+import { wallFloorplanMoveTarget } from './floorplan-move'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
 
@@ -91,6 +92,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     'move-endpoint': wallMoveEndpointAffordance,
     curve: wallCurveAffordance,
   },
+  floorplanMoveTarget: wallFloorplanMoveTarget,
 
   toolHints: [
     { key: 'Left click', label: 'Set wall start / end' },

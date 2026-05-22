@@ -53,6 +53,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -3875,6 +3876,7 @@ export function FloorplanPanel() {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const floorplanSceneRef = useRef<SVGGElement>(null)
+  const floorplanContentRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
@@ -3904,6 +3906,11 @@ export function FloorplanPanel() {
   const selectedItem = useEditor((state) => state.selectedItem)
 
   const setFloorplanHovered = useEditor((state) => state.setFloorplanHovered)
+  // Panel is permanently mounted and toggled via `display: none` in
+  // editor/index.tsx — subscribing here lets us re-fit the viewport when
+  // the user closes and re-opens the 2D editor instead of restoring the
+  // stale viewport from before they closed it.
+  const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
   const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
   const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const setMode = useEditor((state) => state.setMode)
@@ -4080,6 +4087,17 @@ export function FloorplanPanel() {
   const [isPanelReady, setIsPanelReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState({ width: 1, height: 1 })
   const [viewport, setViewport] = useState<FloorplanViewport | null>(null)
+  // Tight bbox of the painted floor-plan scene (the rotation `<g>`'s
+  // children), read via SVG `getBBox()` after each render. The legacy
+  // polygon arrays (`wallPolygons`, `displaySlabPolygons`, etc.) are now
+  // empty stubs because rendering moved to the registry layer, so
+  // measuring the DOM is how `fittedViewport` learns where content lives.
+  const [measuredSceneBBox, setMeasuredSceneBBox] = useState<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
 
   useEffect(() => {
     if (structureLayer === 'zones' && floorplanSelectionTool === 'marquee') {
@@ -4920,7 +4938,11 @@ export function FloorplanPanel() {
   const svgAspectRatio = surfaceSize.width / surfaceSize.height || 1
 
   const fittedViewport = useMemo(() => {
-    const allPoints = [
+    // Collect bounds from the legacy polygon arrays first. Most are empty
+    // stubs (rendering moved to the registry layer), but we still honor
+    // anything that does emit points so the fit is correct during the
+    // brief window before `measuredSceneBBox` is populated.
+    const legacyPoints = [
       ...(visibleSitePolygon ? visibleSitePolygon.polygon : []),
       ...displayCeilingPolygons.flatMap((entry) => entry.polygon),
       ...displaySlabPolygons.flatMap((entry) => entry.polygon),
@@ -4935,25 +4957,44 @@ export function FloorplanPanel() {
       ...wallPolygons.flatMap((entry) => entry.polygon),
     ]
 
-    if (allPoints.length === 0) {
-      return {
-        centerX: 0,
-        centerY: 0,
-        width: Math.max(FALLBACK_VIEW_SIZE, FALLBACK_VIEW_SIZE * svgAspectRatio),
-      }
-    }
-
     let minX = Number.POSITIVE_INFINITY
     let maxX = Number.NEGATIVE_INFINITY
     let minY = Number.POSITIVE_INFINITY
     let maxY = Number.NEGATIVE_INFINITY
 
-    for (const point of allPoints) {
-      const svgPoint = toSvgPoint(point)
+    for (const point of legacyPoints) {
+      const svgPoint = rotateSvgPoint(toSvgPoint(point), floorplanSceneRotationDeg)
       minX = Math.min(minX, svgPoint.x)
       maxX = Math.max(maxX, svgPoint.x)
       minY = Math.min(minY, svgPoint.y)
       maxY = Math.max(maxY, svgPoint.y)
+    }
+
+    // Fold in the DOM-measured bbox of the registry-driven scene. `getBBox`
+    // returns coords in the rotation group's pre-transform space, so we
+    // rotate the four corners to land in viewBox coords before bbox'ing.
+    if (measuredSceneBBox && measuredSceneBBox.width >= 0 && measuredSceneBBox.height >= 0) {
+      const { x, y, width: w, height: h } = measuredSceneBBox
+      const corners = [
+        rotateSvgPoint({ x, y }, floorplanSceneRotationDeg),
+        rotateSvgPoint({ x: x + w, y }, floorplanSceneRotationDeg),
+        rotateSvgPoint({ x, y: y + h }, floorplanSceneRotationDeg),
+        rotateSvgPoint({ x: x + w, y: y + h }, floorplanSceneRotationDeg),
+      ]
+      for (const corner of corners) {
+        minX = Math.min(minX, corner.x)
+        maxX = Math.max(maxX, corner.x)
+        minY = Math.min(minY, corner.y)
+        maxY = Math.max(maxY, corner.y)
+      }
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      return {
+        centerX: 0,
+        centerY: 0,
+        width: Math.max(FALLBACK_VIEW_SIZE, FALLBACK_VIEW_SIZE * svgAspectRatio),
+      }
     }
 
     const rawWidth = maxX - minX
@@ -4976,12 +5017,51 @@ export function FloorplanPanel() {
     floorplanFenceEntries,
     floorplanItemEntries,
     floorplanRoofEntries,
+    floorplanSceneRotationDeg,
     floorplanStairEntries,
+    measuredSceneBBox,
     svgAspectRatio,
     visibleSitePolygon,
     visibleZonePolygons,
     wallPolygons,
   ])
+
+  // Measure the painted floor-plan scene after each render. `getBBox()`
+  // gives us the tight bounds of whatever the registry layer emitted,
+  // even for kinds whose legacy entry arrays are empty stubs. Bail out
+  // when nothing has painted (empty group throws in some browsers).
+  // We measure the content-only sub-group (not the full scene group) to
+  // exclude the grid layer, whose extent tracks the viewBox and would
+  // otherwise create a measure→fit→measure update loop.
+  useLayoutEffect(() => {
+    const el = floorplanContentRef.current
+    if (!el) return
+    let bbox: { x: number; y: number; width: number; height: number }
+    try {
+      const measured = el.getBBox()
+      bbox = {
+        x: measured.x,
+        y: measured.y,
+        width: measured.width,
+        height: measured.height,
+      }
+    } catch {
+      return
+    }
+    if (bbox.width <= 0 && bbox.height <= 0) return
+    setMeasuredSceneBBox((prev) => {
+      if (
+        prev &&
+        prev.x === bbox.x &&
+        prev.y === bbox.y &&
+        prev.width === bbox.width &&
+        prev.height === bbox.height
+      ) {
+        return prev
+      }
+      return bbox
+    })
+  })
 
   useEffect(() => {
     const host = viewportHostRef.current
@@ -5029,6 +5109,19 @@ export function FloorplanPanel() {
       window.removeEventListener('resize', update)
     }
   }, [])
+
+  // Reset to auto-fit each time the 2D editor re-opens. The panel stays
+  // mounted across close/open (hidden via `display: none`), so without
+  // this the user's last pan/zoom — and any stale `measuredSceneBBox`
+  // captured before they closed it — would survive and the reopened
+  // editor would show the same off-screen viewport instead of fitting
+  // to the current scene.
+  useEffect(() => {
+    if (!isFloorplanOpen) return
+    hasUserAdjustedViewportRef.current = false
+    setViewport(null)
+    setMeasuredSceneBBox(null)
+  }, [isFloorplanOpen])
 
   useEffect(() => {
     const levelChanged = previousLevelIdRef.current !== (levelId ?? null)
@@ -5864,10 +5957,16 @@ export function FloorplanPanel() {
         return
       }
 
-      const svgPoint = getSvgPointFromClientPoint(clientX, clientY)
-      if (!svgPoint) {
+      // `getSvgPointFromClientPoint` resolves to the rotation group's
+      // local coords (pre-rotation). The viewBox lives in the outer
+      // SVG space (post-rotation), so apply the scene rotation here
+      // before using the point as a zoom anchor — otherwise a rotated
+      // scene zooms around the wrong location instead of the cursor.
+      const localPoint = getSvgPointFromClientPoint(clientX, clientY)
+      if (!localPoint) {
         return
       }
+      const svgPoint = rotateSvgPoint(localPoint, floorplanSceneRotationDeg)
 
       const currentViewport = viewport ?? fittedViewport
       const currentViewBox = viewBox
@@ -5889,6 +5988,7 @@ export function FloorplanPanel() {
     },
     [
       fittedViewport,
+      floorplanSceneRotationDeg,
       getSvgPointFromClientPoint,
       maxViewportWidth,
       minViewportWidth,
@@ -7245,8 +7345,19 @@ export function FloorplanPanel() {
         return
       }
 
-      createWallOnCurrentLevel(draftStart, point)
-      clearDraft()
+      const createdWall = createWallOnCurrentLevel(draftStart, point)
+      if (!createdWall) {
+        clearDraft()
+        return
+      }
+      // Continuous drafting: next wall starts where this one ended,
+      // matching the 3D wall tool (`packages/nodes/src/wall/tool.tsx`).
+      // Escape / double-click / tool switch still exits via the
+      // existing handlers.
+      const nextStart: WallPlanPoint = [createdWall.end[0], createdWall.end[1]]
+      setDraftStart(nextStart)
+      setDraftEnd(nextStart)
+      setCursorPoint(nextStart)
     },
     [clearDraft, draftStart],
   )
@@ -8542,9 +8653,17 @@ export function FloorplanPanel() {
               <FloorplanRenderProvider
                 hatchPatternId={wallSelectionHatchId}
                 palette={floorplanRegistryPalette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
                 unitsPerPixel={floorplanUnitsPerPixel}
               >
-                <FloorplanRegistryLayer />
+                {/* Wrapped in a measured `<g>` so `fittedViewport` can
+                    fit to just the painted node geometry — measuring the
+                    whole rotation group would include the grid layer,
+                    whose extent is derived from the current viewBox and
+                    would create a measure→fit→measure loop. */}
+                <g ref={floorplanContentRef}>
+                  <FloorplanRegistryLayer />
+                </g>
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal

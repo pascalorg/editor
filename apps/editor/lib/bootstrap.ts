@@ -35,6 +35,9 @@ function loadBuiltinsSync(): void {
   if (builtinsLoaded) return
   builtinsLoaded = true
   for (const def of builtinPlugin.nodes ?? []) {
+    // HMR can re-enter with a fresh module closure while the registry
+    // (in @pascal-app/core) persists — skip kinds already registered.
+    if (nodeRegistry.has(def.kind)) continue
     registerNode(def as AnyNodeDefinition)
   }
 

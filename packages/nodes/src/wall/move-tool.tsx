@@ -808,7 +808,26 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     return () => {
       if (shouldRestoreOnCleanup) {
-        restoreOriginal()
+        const live = useScene.getState().nodes[nodeId] as WallNode | undefined
+        const externallyCommitted =
+          !!live &&
+          live.type === 'wall' &&
+          (!samePoint(live.start, originalStartRef.current) ||
+            !samePoint(live.end, originalEndRef.current))
+        // biome-ignore lint/suspicious/noConsole: temp diagnostic
+        console.log('[wall-move-3d] cleanup', {
+          nodeId,
+          originalStart: originalStartRef.current,
+          originalEnd: originalEndRef.current,
+          liveStart: live?.start,
+          liveEnd: live?.end,
+          externallyCommitted,
+          willRestore: !externallyCommitted,
+          linkedCount: linkedOriginalsRef.current.length,
+        })
+        if (!externallyCommitted) {
+          restoreOriginal()
+        }
       }
       shiftPressedRef.current = false
       resumeSceneHistory(useScene)

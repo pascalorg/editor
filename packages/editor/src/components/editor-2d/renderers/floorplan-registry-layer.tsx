@@ -140,6 +140,21 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (event.button !== 0) return
       event.stopPropagation()
       setSelection({ selectedIds: [id] })
+      // Setting selection re-renders the entry — the overlay pass mounts
+      // (endpoint handles, etc.), reshuffling DOM under the cursor between
+      // pointerdown and click. If the click target ends up on the SVG
+      // background, `<g floorplan-registry-layer onClick=handleClickStop>`
+      // never sees it, and the SVG's `handleBackgroundClick` clears the
+      // selection we just set. Swallow the next click globally to break
+      // that race; the listener removes itself after firing (or after a
+      // safety timeout if no click follows).
+      const swallowClick = (ev: Event) => {
+        ev.stopPropagation()
+        ev.preventDefault()
+        window.removeEventListener('click', swallowClick, true)
+      }
+      window.addEventListener('click', swallowClick, true)
+      setTimeout(() => window.removeEventListener('click', swallowClick, true), 200)
     },
     [setSelection],
   )
@@ -490,6 +505,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           setMovingNode(node as never)
         }}
         palette={palette}
+        sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
         unitsPerPixel={unitsPerPixel}
       />
     </g>
@@ -544,6 +560,7 @@ function InteractiveGeometry({
   hoveredHandleId,
   activeDragId,
   nodeId,
+  sceneRotationDeg,
   onHandleHoverChange,
   onHandlePointerDown,
   onMoveHandlePointerDown,
@@ -555,6 +572,7 @@ function InteractiveGeometry({
   hoveredHandleId: string | null
   activeDragId: string | null
   nodeId: AnyNodeId
+  sceneRotationDeg: number
   onHandleHoverChange: (id: string | null) => void
   onHandlePointerDown: (
     affordance: string,
@@ -784,6 +802,49 @@ function InteractiveGeometry({
           </g>
         )
       }
+      case 'move-arrow': {
+        if (!palette) return <></>
+        const moveHandleId = `${nodeId}:move`
+        const isHovered = hoveredHandleId === moveHandleId
+        // Arrow geometry in plan units (meters) — scales with the scene
+        // so it shrinks on zoom-out and grows on zoom-in, matching the
+        // wall it accompanies. Composed of a rectangular shaft + triangular
+        // head, drawn as a single path for a clean fill + stroke outline.
+        const sl = 0.1 // shaft length (shortened body)
+        const hl = 0.12 // head length
+        const sh = 0.04 // shaft half-height
+        const hh = 0.1 // head half-height
+        // Inset the shaft start so the arrow sits a little off the wall
+        // body (matches the 3D `HANDLE_OFFSET`).
+        const bi = 0.03 // base inset
+        const arrowD = `M ${bi},${-sh} L ${bi + sl},${-sh} L ${bi + sl},${-hh} L ${bi + sl + hl},0 L ${bi + sl},${hh} L ${bi + sl},${sh} L ${bi},${sh} Z`
+        // Indigo palette to match the 3D `WallMoveSideHandles` arrows
+        // (`ARROW_COLOR` / `ARROW_HOVER_COLOR`) and the corner-sphere
+        // accent in `floating-action-menu.tsx`.
+        const fill = isHovered ? '#a5b4fc' : '#8381ed'
+        const angleDeg = (g.angle * 180) / Math.PI
+        const scale = isHovered ? 1.12 : 1
+        return (
+          <g
+            key={keyHint}
+            onClick={(e) => e.stopPropagation()}
+            onPointerEnter={() => onHandleHoverChange(moveHandleId)}
+            onPointerLeave={() => onHandleHoverChange(null)}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg}) scale(${scale})`}
+          >
+            <path d={arrowD} fill={fill} pointerEvents="none" />
+            <path
+              d={arrowD}
+              fill="transparent"
+              onPointerDown={(e) =>
+                onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)
+              }
+              pointerEvents="all"
+              style={{ cursor: 'move' }}
+            />
+          </g>
+        )
+      }
       case 'edge-handle': {
         if (!palette) return <></>
         const handleId = makeHandleId(nodeId, g.payload)
@@ -937,11 +998,19 @@ function InteractiveGeometry({
       }
       case 'dimension-label': {
         if (!palette) return <></>
-        // Flip the label upright if it would otherwise be upside-down
-        // (legacy floorplan-panel.tsx does the same — see line ~2548).
+        // Flip the label upright relative to the SCREEN, not the local
+        // coord system. The registry layer's parent `<g>` is rotated by
+        // `sceneRotationDeg` (default 90° in the floor plan), so a label
+        // we draw "upright" in local coords ends up sideways on screen.
+        // Combine local angle + scene rotation, normalise to (-180, 180],
+        // and flip by 180° if it falls outside (-90, 90] — that keeps
+        // text reading left-to-right, top-to-bottom regardless of the
+        // building's orientation.
         let degrees = (g.angle * 180) / Math.PI
-        if (degrees > 90) degrees -= 180
-        else if (degrees <= -90) degrees += 180
+        let screenDegrees = degrees + sceneRotationDeg
+        screenDegrees = ((((screenDegrees + 180) % 360) + 360) % 360) - 180
+        if (screenDegrees > 90) degrees -= 180
+        else if (screenDegrees <= -90) degrees += 180
 
         const padX = unitsPerPixel * 6
         const padY = unitsPerPixel * 3
@@ -1220,6 +1289,7 @@ const OVERLAY_KINDS = new Set<FloorplanGeometry['kind']>([
   'midpoint-handle',
   'edge-handle',
   'move-handle',
+  'move-arrow',
   'dimension',
   'dimension-label',
 ])

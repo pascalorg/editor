@@ -138,6 +138,34 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       payload: { wallId: node.id, endpoint: 'end' as const },
     })
 
+    // Side move arrows — two directional arrows at the wall midpoint,
+    // pointing outward perpendicular to the wall. Mirrors the 3D
+    // `WallMoveSideHandles` arrows so users can grab the wall body
+    // from the floor plan. PointerDown on either arrow activates
+    // `wallFloorplanMoveTarget` via the registry-layer dispatcher.
+    {
+      const dx = node.end[0] - node.start[0]
+      const dz = node.end[1] - node.start[1]
+      const wallLength = Math.hypot(dx, dz)
+      if (wallLength > 1e-6) {
+        const midX = (node.start[0] + node.end[0]) / 2
+        const midZ = (node.start[1] + node.end[1]) / 2
+        const nx = -dz / wallLength
+        const nz = dx / wallLength
+        const offset = floorplanWallThickness(node) / 2 + 0.05
+        children.push({
+          kind: 'move-arrow',
+          point: [midX + nx * offset, midZ + nz * offset],
+          angle: Math.atan2(nz, nx),
+        })
+        children.push({
+          kind: 'move-arrow',
+          point: [midX - nx * offset, midZ - nz * offset],
+          angle: Math.atan2(-nz, -nx),
+        })
+      }
+    }
+
     // Curve sagitta handle — teal dot at the wall midpoint that
     // controls `curveOffset`. Hidden when the wall hosts a door /
     // window / wall-attached item: bending the wall would tear those
@@ -191,7 +219,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
           start: [node.start[0], node.start[1]],
           end: [node.end[0], node.end[1]],
           offsetNormal: [nx * facingAway, nz * facingAway],
-          offsetDistance: 0.42,
+          offsetDistance: 0.75,
           extensionOvershoot: 0.12,
           text: formatLengthMetric(length),
         })

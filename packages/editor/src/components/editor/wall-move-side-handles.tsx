@@ -16,6 +16,7 @@ import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
 import {
   BufferGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -23,6 +24,7 @@ import {
   type Object3D,
   OrthographicCamera,
 } from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
@@ -164,11 +166,27 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
 function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        depthTest: true,
+        depthWrite: true,
+        transparent: false,
+        opacity: 1,
+      }),
+    [],
+  )
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
   const scale = (isHovered ? 1.12 : 1) * zoom
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
 
   useEffect(() => {
     return () => {
@@ -179,10 +197,10 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
-    event.nativeEvent.preventDefault()
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
@@ -198,6 +216,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
         frustumCulled={false}
+        material={arrowMaterial}
         onPointerDown={activateWallMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -214,14 +233,6 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
         renderOrder={1002}
       >
         <primitive attach="geometry" object={arrowGeometry} />
-        <meshBasicMaterial
-          color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
-          depthTest
-          depthWrite
-          opacity={1}
-          side={DoubleSide}
-          transparent={false}
-        />
       </mesh>
     </group>
   )
@@ -230,10 +241,26 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        depthTest: true,
+        depthWrite: true,
+        transparent: false,
+        opacity: 1,
+      }),
+    [],
+  )
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   const scale = (isHovered ? 1.12 : 1) * zoom
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
 
   useEffect(() => {
     return () => {
@@ -244,10 +271,10 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
-    event.nativeEvent.preventDefault()
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
@@ -263,6 +290,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
         frustumCulled={false}
+        material={arrowMaterial}
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -279,14 +307,6 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
         renderOrder={1002}
       >
         <primitive attach="geometry" object={arrowGeometry} />
-        <meshBasicMaterial
-          color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
-          depthTest
-          depthWrite
-          opacity={1}
-          side={DoubleSide}
-          transparent={false}
-        />
       </mesh>
     </group>
   )

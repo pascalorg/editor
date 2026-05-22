@@ -341,6 +341,19 @@ export type FloorplanGeometry =
       point: FloorplanPoint
     }
   /**
+   * Directional move handle drawn as an arrow pointing AWAY from the
+   * owning node, rotated by `angle` (radians; 0 = +x). Used by wall to
+   * place two arrows on perpendicular sides at the wall midpoint —
+   * mirrors the 3D `WallMoveSideHandles`. Routes through the same
+   * `onMoveHandlePointerDown` → `setMovingNode` path as `move-handle`.
+   */
+  | {
+      kind: 'move-arrow'
+      point: FloorplanPoint
+      /** Rotation in radians; 0 points along +x in plan coords. */
+      angle: number
+    }
+  /**
    * Centered length / distance label. Renders as a small rounded
    * background plate with text, oriented along `angle` (radians). The
    * 2D layer flips the label upright when it would otherwise be upside

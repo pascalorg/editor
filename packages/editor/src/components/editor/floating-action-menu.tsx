@@ -26,8 +26,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '../../lib/constants'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -72,7 +74,40 @@ export function FloatingActionMenu() {
   const groupRef = useRef<THREE.Group>(null)
   const startEndpointGroupRef = useRef<THREE.Group>(null)
   const endEndpointGroupRef = useRef<THREE.Group>(null)
+  const startCornerSphereRef = useRef<THREE.Group>(null)
+  const endCornerSphereRef = useRef<THREE.Group>(null)
+  const startVerticalRef = useRef<THREE.Mesh>(null)
+  const endVerticalRef = useRef<THREE.Mesh>(null)
   const [altPressed, setAltPressed] = useState(false)
+
+  const cornerSphereMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: '#818cf8',
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const cornerVerticalMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: '#818cf8',
+        transparent: true,
+        opacity: 0.7,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  useEffect(() => {
+    return () => {
+      cornerSphereMaterial.dispose()
+      cornerVerticalMaterial.dispose()
+    }
+  }, [cornerSphereMaterial, cornerVerticalMaterial])
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -179,6 +214,28 @@ export function FloatingActionMenu() {
             endWorld.z,
           )
         }
+
+        if (node.type === 'wall' && !box.isEmpty()) {
+          // Wall mesh origin sits at the top; the floor is the bbox minimum.
+          const wallFloorY = box.min.y
+          // Vertical guide spans the wall height (floor → wall top).
+          const verticalHeight = box.max.y - wallFloorY
+
+          if (startCornerSphereRef.current) {
+            startCornerSphereRef.current.position.set(startWorld.x, wallFloorY, startWorld.z)
+          }
+          if (endCornerSphereRef.current) {
+            endCornerSphereRef.current.position.set(endWorld.x, wallFloorY, endWorld.z)
+          }
+          if (startVerticalRef.current && verticalHeight > 0) {
+            startVerticalRef.current.scale.y = verticalHeight
+            startVerticalRef.current.position.y = verticalHeight / 2
+          }
+          if (endVerticalRef.current && verticalHeight > 0) {
+            endVerticalRef.current.scale.y = verticalHeight
+            endVerticalRef.current.position.y = verticalHeight / 2
+          }
+        }
       }
     }
   })
@@ -232,18 +289,20 @@ export function FloatingActionMenu() {
     [canCurveSelectedWall, node, setCurvingFence, setCurvingWall, setSelection],
   )
   const handleEndpointMove = useCallback(
-    (endpoint: 'start' | 'end', e: React.MouseEvent) => {
+    (endpoint: 'start' | 'end', e: { stopPropagation: () => void }) => {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
       if (node.type === 'wall') {
+        // Keep the wall selected throughout the drag — the floating menu
+        // already hides via the `movingWallEndpoint` guard.
         setMovingWallEndpoint({ wall: node, endpoint })
-      } else if (node.type === 'fence') {
-        setMovingFenceEndpoint({ fence: node, endpoint })
-      } else {
         return
       }
-      setSelection({ selectedIds: [] })
+      if (node.type === 'fence') {
+        setMovingFenceEndpoint({ fence: node, endpoint })
+        setSelection({ selectedIds: [] })
+      }
     },
     [node, setMovingFenceEndpoint, setMovingWallEndpoint, setSelection],
   )
@@ -494,6 +553,52 @@ export function FloatingActionMenu() {
           />
         </Html>
       </group>
+      {node?.type === 'wall' && (
+        <>
+          <group ref={startCornerSphereRef}>
+            <mesh
+              layers={EDITOR_LAYER}
+              material={cornerSphereMaterial}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                handleEndpointMove('start', e)
+              }}
+              renderOrder={2}
+            >
+              <sphereGeometry args={[0.14, 20, 16]} />
+            </mesh>
+            <mesh
+              layers={EDITOR_LAYER}
+              material={cornerVerticalMaterial}
+              ref={startVerticalRef}
+              renderOrder={2}
+            >
+              <cylinderGeometry args={[0.008, 0.008, 1, 8]} />
+            </mesh>
+          </group>
+          <group ref={endCornerSphereRef}>
+            <mesh
+              layers={EDITOR_LAYER}
+              material={cornerSphereMaterial}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                handleEndpointMove('end', e)
+              }}
+              renderOrder={2}
+            >
+              <sphereGeometry args={[0.14, 20, 16]} />
+            </mesh>
+            <mesh
+              layers={EDITOR_LAYER}
+              material={cornerVerticalMaterial}
+              ref={endVerticalRef}
+              renderOrder={2}
+            >
+              <cylinderGeometry args={[0.008, 0.008, 1, 8]} />
+            </mesh>
+          </group>
+        </>
+      )}
       {(node?.type === 'wall' || node?.type === 'fence') && (
         <>
           <group ref={startEndpointGroupRef}>
@@ -509,8 +614,13 @@ export function FloatingActionMenu() {
                     ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
                     : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
-                onClick={(e) => handleEndpointMove('start', e)}
-                onPointerDown={(e) => e.stopPropagation()}
+                onClick={
+                  node.type === 'fence' ? (e) => handleEndpointMove('start', e) : undefined
+                }
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  if (node.type === 'wall') handleEndpointMove('start', e)
+                }}
                 title={
                   node.type === 'wall'
                     ? 'Move wall start (Alt to detach)'
@@ -535,8 +645,13 @@ export function FloatingActionMenu() {
                     ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
                     : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
-                onClick={(e) => handleEndpointMove('end', e)}
-                onPointerDown={(e) => e.stopPropagation()}
+                onClick={
+                  node.type === 'fence' ? (e) => handleEndpointMove('end', e) : undefined
+                }
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  if (node.type === 'wall') handleEndpointMove('end', e)
+                }}
                 title={
                   node.type === 'wall'
                     ? 'Move wall end (Alt to detach)'
