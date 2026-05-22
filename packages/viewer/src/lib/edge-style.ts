@@ -17,7 +17,7 @@ export function edgeStyleFor(mode: EdgeMode): EdgeStyle {
     case 'soft':
       return { opacity: 0.4, threshold: 25, linewidth: 1.5 }
     case 'strong':
-      return { opacity: 0.95, threshold: 12, linewidth: 3 }
+      return { opacity: 0.95, threshold: 12, linewidth: 2 }
     default:
       return { opacity: 0, threshold: 30, linewidth: 1 }
   }

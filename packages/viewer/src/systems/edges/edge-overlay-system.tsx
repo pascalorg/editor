@@ -3,7 +3,8 @@
 import { sceneRegistry } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { Color, EdgesGeometry, type Mesh, type Object3D } from 'three'
+import { BufferGeometry, Color, EdgesGeometry, type Mesh, type Object3D } from 'three'
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/webgpu/LineSegments2.js'
 import { type EdgeMode, edgeColorFor, edgeStyleFor } from '../../lib/edge-style'
@@ -55,6 +56,17 @@ function disposeOverlay(mesh: Mesh) {
   delete (mesh.userData as { __edge?: EdgeData }).__edge
 }
 
+// Position-only weld so coincident CSG vertices merge regardless of split
+// normals/uvs — EdgesGeometry then detects adjacency and drops interior edges.
+function weldForEdges(source: BufferGeometry): BufferGeometry {
+  const positionOnly = new BufferGeometry()
+  positionOnly.setAttribute('position', source.getAttribute('position').clone())
+  if (source.index) positionOnly.setIndex(source.index.clone())
+  const merged = mergeVertices(positionOnly)
+  positionOnly.dispose()
+  return merged
+}
+
 function disposeAllOverlays() {
   for (const obj of sceneRegistry.nodes.values()) {
     obj.traverse((child) => {
@@ -101,7 +113,13 @@ export function EdgeOverlaySystem() {
 
         if (!data || data.srcUuid !== mesh.geometry.uuid || data.mode !== edges) {
           disposeOverlay(mesh)
-          const edgeGeom = new EdgesGeometry(mesh.geometry, style.threshold)
+          // CSG-cut walls come out non-welded, so EdgesGeometry would draw
+          // every interior triangulation edge ("spiderweb"). Welding by
+          // position first lets it see coplanar adjacency and keep only real
+          // opening outlines + silhouettes.
+          const welded = weldForEdges(mesh.geometry)
+          const edgeGeom = new EdgesGeometry(welded, style.threshold)
+          welded.dispose()
           const lineGeom = new LineSegmentsGeometry()
           lineGeom.setPositions(edgeGeom.getAttribute('position').array as Float32Array)
           edgeGeom.dispose()
