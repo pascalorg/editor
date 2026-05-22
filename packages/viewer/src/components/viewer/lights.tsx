@@ -24,10 +24,16 @@ const SHADOWS_DISABLED =
 export function Lights() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const theme = getSceneTheme(sceneTheme)
+  const shadows = useViewer((state) => state.shadows)
 
   const lightRefs = useRef<Array<DirectionalLight | null>>([])
   const shadowCamera = useRef<OrthographicCamera>(null)
   const shadowCameraSize = 50 // The "area" around the camera to shadow
+
+  // Where the shadow frustum is centred each frame. The directional light's
+  // ortho shadow camera only covers ±shadowCameraSize around the light target,
+  // so it has to track the view or anything far from origin gets no shadows.
+  const shadowFocus = useRef(new THREE.Vector3())
 
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
@@ -44,9 +50,33 @@ export function Lights() {
     [],
   )
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     // clamp delta to avoid huge jumps on tab switch
     const dt = Math.min(delta, 0.1) * 4
+
+    // Recentre each shadow-casting light's frustum on what the viewer is looking
+    // at (orbit target if available, else the camera's ground projection), moving
+    // the light and its target together so the light DIRECTION is preserved and
+    // only the shadow camera slides. Without this the frustum stays at the origin
+    // and zones far from it never receive shadows.
+    if (shadows) {
+      const focus = shadowFocus.current
+      const controls = state.controls as { getTarget?: (out: THREE.Vector3) => void } | null
+      if (controls?.getTarget) {
+        controls.getTarget(focus)
+      } else {
+        focus.set(state.camera.position.x, 0, state.camera.position.z)
+      }
+      for (let index = 0; index < theme.lights.length; index++) {
+        const config = theme.lights[index]
+        const light = lightRefs.current[index]
+        if (!(config?.castShadow && light)) continue
+        const [ox, oy, oz] = config.position
+        light.position.set(focus.x + ox, focus.y + oy, focus.z + oz)
+        light.target.position.copy(focus)
+        light.target.updateMatrixWorld()
+      }
+    }
 
     if (!initialized.current) {
       for (let index = 0; index < theme.lights.length; index++) {
@@ -125,7 +155,7 @@ export function Lights() {
     <>
       {theme.lights.map((light, index) => (
         <directionalLight
-          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED}
+          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED && shadows}
           key={`${index}-${light.position.join(',')}`}
           position={light.position}
           ref={(ref) => {
@@ -136,7 +166,7 @@ export function Lights() {
           shadow-normalBias={0.3}
           shadow-radius={2}
         >
-          {light.castShadow && !SHADOWS_DISABLED ? (
+          {light.castShadow && !SHADOWS_DISABLED && shadows ? (
             <orthographicCamera
               attach="shadow-camera"
               bottom={-shadowCameraSize}

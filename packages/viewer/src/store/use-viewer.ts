@@ -56,6 +56,9 @@ type ViewerState = {
   edges: EdgeMode
   setEdges: (edges: EdgeMode) => void
 
+  shadows: boolean
+  setShadows: (shadows: boolean) => void
+
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
 
@@ -141,6 +144,9 @@ const useViewer = create<ViewerState>()(
 
       edges: 'off',
       setEdges: (edges) => set({ edges }),
+
+      shadows: true,
+      setShadows: (shadows) => set({ shadows }),
 
       unit: 'metric',
       setUnit: (unit) => set({ unit }),
@@ -260,6 +266,7 @@ const useViewer = create<ViewerState>()(
         textures: state.textures,
         colorPreset: state.colorPreset,
         edges: state.edges,
+        shadows: state.shadows,
         unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,

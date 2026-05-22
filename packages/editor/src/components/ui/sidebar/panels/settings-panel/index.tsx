@@ -184,6 +184,7 @@ export function SettingsPanel({
   const resetSelection = useViewer((state) => state.resetSelection)
   const exportScene = useViewer((state) => state.exportScene)
   const showGrid = useViewer((state) => state.showGrid)
+  const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -338,6 +339,16 @@ export function SettingsPanel({
             <Switch
               checked={showGrid}
               onCheckedChange={(checked) => useViewer.getState().setShowGrid(checked)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-sm">Shadows</div>
+              <div className="text-muted-foreground text-xs">Cast shadows from lights</div>
+            </div>
+            <Switch
+              checked={shadows}
+              onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
             />
           </div>
         </div>
