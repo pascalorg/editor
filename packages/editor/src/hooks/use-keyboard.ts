@@ -204,7 +204,7 @@ export const useKeyboard = ({
             // touching this hook. Door / window still use the legacy
             // direct calls above (follow-up to migrate).
             e.preventDefault()
-            nodeRegistry.get(node.type)!.keyboardActions!.r!.run(node)
+            nodeRegistry.get(node.type)?.keyboardActions?.r?.run(node)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()
@@ -249,7 +249,7 @@ export const useKeyboard = ({
           } else if (node && nodeRegistry.get(node.type)?.keyboardActions?.t?.appliesTo(node)) {
             // Registry-driven T action. Same shape as the R arm above.
             e.preventDefault()
-            nodeRegistry.get(node.type)!.keyboardActions!.t!.run(node)
+            nodeRegistry.get(node.type)?.keyboardActions?.t?.run(node)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node && 'rotation' in node) {
             e.preventDefault()

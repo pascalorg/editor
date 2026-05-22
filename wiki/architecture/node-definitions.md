@@ -205,6 +205,115 @@ If your kind declares `relations.hosts: [...]`, add `children: z.array(...).defa
 
 Migrations matter: if your kind shipped before hosting was added, patch existing nodes in `migrateNodes` so `Array.isArray(node.children)` holds for every loaded scene before the renderer reads it.
 
+## Capability reference
+
+### `capabilities.roofAccessory`
+
+Marks a kind as a roof-segment-mounted accessory (chimney, dormer, skylight, solar-panel, ridge-vent, box-vent). Presence tells the viewer's roof-merge loop two things:
+
+1. **Dirty cascade.** When the accessory is dirtied (move / resize / reparent), the host segment's parent roof queues a re-merge so its merged shell re-CSGs with the updated cut. The merge loop clears the accessory's dirty bit and queues the parent roof.
+2. **Optional CSG cut.** When `buildCut` is set, the merge loop subtracts the returned geometry from the host segment's shin / deck / wall brushes. Returned geometry must be **segment-local**; the viewer handles vertex welding, material group attachment, and `three-bvh-csg` brush wrapping so core stays free of three-bvh-csg deps.
+
+```ts
+type RoofAccessoryConfig = {
+  buildCut?: (node: AnyNode, hostSegment: AnyNode) => BufferGeometry | null
+}
+```
+
+Set `buildCut` for kinds that cut **through** the roof (skylight, dormer). Kinds that sit **on top** (vents, solar panels) declare the capability without `buildCut` — the cascade still fires but no CSG cut runs.
+
+```ts
+// skylight — cuts through the roof
+capabilities: {
+  roofAccessory: {
+    buildCut: (node, hostSegment) => buildSkylightRoofCut(node, hostSegment),
+  },
+},
+
+// box-vent — sits on top, no cut needed
+capabilities: {
+  roofAccessory: {},
+},
+```
+
+---
+
+### `capabilities.paint`
+
+Per-kind paint dispatch. Lets the editor's `selection-manager` route paint hover / click / preview through a generic dispatcher instead of adding an `if (node.type === '<kind>')` arm for every paintable kind.
+
+The capability owns four decisions:
+
+1. **`resolveRole`** — which logical surface the pointer clicked. Returns `null` when the face shouldn't be painted (interior slot, oblique normal, etc.).
+2. **`buildPatch`** — the node-update partial to commit on click.
+3. **`applyPreview`** — applies a preview material to the mesh subtree and returns a cleanup callback. Returns `null` when the mesh isn't mounted yet; the editor falls back to the not-allowed cursor.
+4. **`getEffectiveMaterial`** *(optional)* — reads the currently-effective material for a role, walking any parent-fallback chain. Drives the color picker's current-value indicator.
+
+```ts
+type PaintCapability = {
+  resolveRole: (args: PaintResolveArgs) => string | null
+  buildPatch: (args: PaintPatchArgs) => Partial<AnyNode>
+  applyPreview: (args: PaintPreviewArgs) => (() => void) | null
+  getEffectiveMaterial?: (args: PaintEffectiveMaterialArgs) => {
+    material: MaterialSchema | undefined
+    materialPreset: string | undefined
+  } | null
+}
+```
+
+Implement the capability in a `paint.ts` file next to `definition.ts`. Keep it pure — no `useScene`, no store mutation. Reference implementations: `packages/nodes/src/chimney/paint.ts` (body/top split), `packages/nodes/src/wall/paint.ts` (interior/exterior + normal-based disambiguation).
+
+```ts
+capabilities: {
+  paint: chimneyPaint,  // imported from ./paint.ts
+},
+```
+
+---
+
+### `keyboardActions`
+
+Registry-driven R / T key handlers. A kind that wants to override the R (`rotate clockwise`) or T (`rotate counter-clockwise`) keystroke sets this field on its `NodeDefinition` instead of extending the hand-written `if/else` chain in `use-keyboard.ts`.
+
+```ts
+type KeyboardActions = {
+  r?: KeyboardAction  // R / Shift+R primary action
+  t?: KeyboardAction  // T / Shift+T secondary action
+}
+
+type KeyboardAction = {
+  /**
+   * Return false to fall through to the editor's default rotation
+   * behaviour. Use this to short-circuit the action for non-operable
+   * type variants (e.g. a fixed skylight should rotate, not toggle).
+   */
+  appliesTo: (node: AnyNode) => boolean
+  /**
+   * Execute the action. The editor handles preventDefault and the
+   * shared sfx; only touch scene / interactive state here.
+   */
+  run: (node: AnyNode) => void
+}
+```
+
+```ts
+// skylight — R toggles open/closed on operable types; T forces close
+keyboardActions: {
+  r: {
+    appliesTo: (node) => node.type === 'skylight' && isOperableSkylightNode(node),
+    run: (node) => toggleSkylightOpenState(node.id),
+  },
+  t: {
+    appliesTo: (node) => node.type === 'skylight' && isOperableSkylightNode(node),
+    run: (node) => closeSkylightOpenState(node.id),
+  },
+},
+```
+
+Door and window still use legacy direct calls in `use-keyboard.ts`; migrating them under this capability is a follow-up.
+
+---
+
 ## See also
 
 - [renderers.md](renderers.md) — the legacy renderer pattern (still authoritative for kinds with custom `def.renderer`).
