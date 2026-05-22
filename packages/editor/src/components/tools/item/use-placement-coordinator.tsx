@@ -542,6 +542,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useScene.getState().updateNode(draft.id, result.nodeUpdate)
       }
 
+      const previewBounds = expandBoundsToGrid(
+        getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),
+        asset.attachTo,
+        gridSnapStep,
+      )
+      updatePreviewGeometry(previewBounds)
+      updateDimensionGuides(previewBounds)
+
       if (!revalidate()) {
         draftNode.destroy()
       }
@@ -558,10 +566,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         mesh.getWorldPosition(worldPos)
         const localPos = worldToBuildingLocal(worldPos.x, worldPos.y, worldPos.z)
         cursorGroupRef.current.position.copy(localPos)
-        // Extract world Y rotation (handles wall-parented items correctly)
-        const q = new Quaternion()
-        mesh.getWorldQuaternion(q)
-        cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+        if (draftNode.current.asset.attachTo) {
+          // Wall/ceiling items: extract world Y rotation (handles wall-parented items correctly)
+          const q = new Quaternion()
+          mesh.getWorldQuaternion(q)
+          cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+        } else {
+          // Floor items: the cursor group lives in building-local space, so use the
+          // node's local Y rotation — the same value onGridMove applies. The world
+          // quaternion would double-count any building rotation, leaving the initial
+          // box mis-rotated until the first cursor move.
+          cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+        }
       } else {
         cursorGroupRef.current.position.copy(gridPosition.current)
         cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
@@ -601,6 +617,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         result.cursorPosition[1],
         result.cursorPosition[2],
       )
+      // Floor items only rotate on Y; keep the preview box (and the live
+      // transform the 2D floorplan mirrors) aligned with the draft's
+      // rotation. Without this the box stays at its seed rotation until a
+      // manual R/T, so a moved already-rotated item shows an axis-aligned box.
+      cursorGroupRef.current.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
@@ -631,6 +652,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftNode.commit(result.nodeUpdate)
       if (configRef.current.onCommitted()) {
         draftNode.create(gridPosition.current, asset, currentRotation)
+        const previewBounds = expandBoundsToGrid(
+          getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),
+          asset.attachTo,
+          gridSnapStep,
+        )
+        updatePreviewGeometry(previewBounds)
+        updateDimensionGuides(previewBounds)
         revalidate()
       }
     }
