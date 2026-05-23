@@ -221,6 +221,12 @@ type EditorState = {
   setResizingWindowHeight: (window: WindowNode | null) => void
   resizingWindowWidth: WindowNode | null
   setResizingWindowWidth: (window: WindowNode | null) => void
+  resizingStairSegmentWidth: StairSegmentNode | null
+  setResizingStairSegmentWidth: (segment: StairSegmentNode | null) => void
+  resizingStairSegmentLength: StairSegmentNode | null
+  setResizingStairSegmentLength: (segment: StairSegmentNode | null) => void
+  resizingStairSegmentHeight: StairSegmentNode | null
+  setResizingStairSegmentHeight: (segment: StairSegmentNode | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -652,6 +658,12 @@ const useEditor = create<EditorState>()(
       setResizingWindowHeight: (windowNode) => set({ resizingWindowHeight: windowNode }),
       resizingWindowWidth: null,
       setResizingWindowWidth: (windowNode) => set({ resizingWindowWidth: windowNode }),
+      resizingStairSegmentWidth: null,
+      setResizingStairSegmentWidth: (segment) => set({ resizingStairSegmentWidth: segment }),
+      resizingStairSegmentLength: null,
+      setResizingStairSegmentLength: (segment) => set({ resizingStairSegmentLength: segment }),
+      resizingStairSegmentHeight: null,
+      setResizingStairSegmentHeight: (segment) => set({ resizingStairSegmentHeight: segment }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,

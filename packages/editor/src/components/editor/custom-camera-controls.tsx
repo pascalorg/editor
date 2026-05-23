@@ -141,6 +141,9 @@ export const CustomCameraControls = () => {
   const resizingWallHeight = useEditor((s) => s.resizingWallHeight)
   const resizingDoorHeight = useEditor((s) => s.resizingDoorHeight)
   const resizingDoorWidth = useEditor((s) => s.resizingDoorWidth)
+  const resizingStairSegmentWidth = useEditor((s) => s.resizingStairSegmentWidth)
+  const resizingStairSegmentLength = useEditor((s) => s.resizingStairSegmentLength)
+  const resizingStairSegmentHeight = useEditor((s) => s.resizingStairSegmentHeight)
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
   const isInteracting = Boolean(
     tool ||
@@ -150,6 +153,9 @@ export const CustomCameraControls = () => {
       resizingWallHeight ||
       resizingDoorHeight ||
       resizingDoorWidth ||
+      resizingStairSegmentWidth ||
+      resizingStairSegmentLength ||
+      resizingStairSegmentHeight ||
       isBoxSelectActive,
   )
   const touches = useMemo(() => {
