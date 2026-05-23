@@ -6,6 +6,8 @@ Applies to: `packages/viewer/**`.
 
 Renderers live in `packages/viewer/src/components/renderers/`. Each renderer is responsible for one node type's Three.js geometry and materials — nothing else.
 
+> **For registry-driven kinds, the default is no custom renderer.** Set `def.geometry` instead and the framework mounts a generic renderer + geometry system for you. See [node-definitions.md](node-definitions.md). The pattern below applies to kinds that *do* need a custom renderer (GLB, `<Html>`, drei, instancing, shader materials).
+
 ## Dispatch Chain
 
 ```
@@ -53,6 +55,8 @@ export function MyNodeRenderer({ node }: { node: MyNode }) {
 ```
 
 ## Adding a New Node Type
+
+For new kinds, prefer the registry-driven model in [node-definitions.md](node-definitions.md). The legacy steps below apply only when a kind needs a custom React renderer (GLB loaders, `<Html>` portals, etc.) **and** lives in `packages/viewer` rather than `packages/nodes/<kind>`:
 
 1. Create `packages/viewer/src/components/renderers/<type>/index.tsx`
 2. Add a case to `NodeRenderer` in `node-renderer.tsx`

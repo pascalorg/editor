@@ -1,0 +1,425 @@
+import {
+  type AnyNodeId,
+  DoorNode,
+  emitter,
+  isCurvedWall,
+  sceneRegistry,
+  spatialGridManager,
+  useLiveTransforms,
+  useScene,
+  type WallEvent,
+} from '@pascal-app/core'
+import {
+  calculateCursorRotation,
+  calculateItemRotation,
+  EDITOR_LAYER,
+  getSideFromNormal,
+  isValidWallSideFace,
+  snapToHalf,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { BoxGeometry, EdgesGeometry, type Group } from 'three'
+import { LineBasicNodeMaterial } from 'three/webgpu'
+import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
+
+const edgeMaterial = new LineBasicNodeMaterial({
+  color: 0xef_44_44,
+  linewidth: 3,
+  depthTest: false,
+  depthWrite: false,
+})
+
+const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) => {
+  const cursorGroupRef = useRef<Group>(null!)
+
+  const exitMoveMode = useCallback(() => {
+    useEditor.getState().setMovingNode(null)
+  }, [])
+
+  useEffect(() => {
+    useScene.temporal.getState().pause()
+
+    const meta =
+      typeof movingDoorNode.metadata === 'object' && movingDoorNode.metadata !== null
+        ? (movingDoorNode.metadata as Record<string, unknown>)
+        : {}
+    const isNew = !!meta.isNew
+
+    const original = {
+      position: [...movingDoorNode.position] as [number, number, number],
+      rotation: [...movingDoorNode.rotation] as [number, number, number],
+      side: movingDoorNode.side,
+      parentId: movingDoorNode.parentId,
+      wallId: movingDoorNode.wallId,
+      metadata: movingDoorNode.metadata,
+    }
+
+    if (!isNew) {
+      useScene.getState().updateNode(movingDoorNode.id, {
+        metadata: { ...meta, isTransient: true },
+      })
+    }
+
+    let currentWallId: string | null = movingDoorNode.parentId
+
+    const markWallDirty = (wallId: string | null) => {
+      if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
+    }
+    const lastWallDirtyAt = new Map<string, number>()
+    const markWallDirtyThrottled = (wallId: string | null) => {
+      if (!wallId) return
+      const now = globalThis.performance?.now?.() ?? Date.now()
+      const last = lastWallDirtyAt.get(wallId) ?? 0
+      // Wall rebuilds can trigger expensive CSG; throttle live previews to avoid FPS collapse.
+      if (now - last > 120) {
+        lastWallDirtyAt.set(wallId, now)
+        markWallDirty(wallId)
+      }
+    }
+
+    const getLevelId = () => useViewer.getState().selection.levelId
+    const getLevelYOffset = () => {
+      const id = getLevelId()
+      return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
+    }
+    const getSlabElevation = (wallEvent: WallEvent) =>
+      spatialGridManager.getSlabElevationForWall(
+        wallEvent.node.parentId ?? '',
+        wallEvent.node.start,
+        wallEvent.node.end,
+      )
+
+    const hideCursor = () => {
+      if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+    }
+
+    const updateCursor = (
+      worldPosition: [number, number, number],
+      cursorRotationY: number,
+      valid: boolean,
+    ) => {
+      const group = cursorGroupRef.current
+      if (!group) return
+      group.visible = true
+      group.position.set(...worldPosition)
+      group.rotation.y = cursorRotationY
+      edgeMaterial.color.setHex(valid ? 0x22_c5_5e : 0xef_44_44)
+    }
+
+    const getPlacementOrientation = (event: WallEvent) => {
+      const faceSide = getSideFromNormal(event.normal)
+      const side = movingDoorNode.side ?? faceSide
+      const rotationOffset = side !== faceSide ? Math.PI : 0
+      return {
+        side,
+        itemRotation: calculateItemRotation(event.normal) + rotationOffset,
+        cursorRotation:
+          calculateCursorRotation(event.normal, event.node.start, event.node.end) + rotationOffset,
+      }
+    }
+
+    const onWallEnter = (event: WallEvent) => {
+      if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) {
+        hideCursor()
+        return
+      }
+      if (event.node.parentId !== getLevelId()) return
+
+      const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
+
+      const localX = snapToHalf(event.localPosition[0])
+      const { clampedX, clampedY } = clampToWall(
+        event.node,
+        localX,
+        movingDoorNode.width,
+        movingDoorNode.height,
+      )
+
+      const prevWallId = currentWallId
+      currentWallId = event.node.id
+
+      useScene.getState().updateNode(movingDoorNode.id, {
+        position: [clampedX, clampedY, 0],
+        rotation: [0, itemRotation, 0],
+        side,
+        parentId: event.node.id,
+        wallId: event.node.id,
+      })
+      useLiveTransforms.getState().set(movingDoorNode.id, {
+        position: [clampedX, clampedY, 0],
+        rotation: itemRotation,
+      })
+
+      if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
+      markWallDirtyThrottled(event.node.id)
+
+      const valid = !hasWallChildOverlap(
+        event.node.id,
+        clampedX,
+        clampedY,
+        movingDoorNode.width,
+        movingDoorNode.height,
+        movingDoorNode.id,
+      )
+
+      updateCursor(
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
+        cursorRotation,
+        valid,
+      )
+      event.stopPropagation()
+    }
+
+    const onWallMove = (event: WallEvent) => {
+      if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) {
+        hideCursor()
+        return
+      }
+      if (event.node.parentId !== getLevelId()) return
+
+      const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
+
+      const localX = snapToHalf(event.localPosition[0])
+      const { clampedX, clampedY } = clampToWall(
+        event.node,
+        localX,
+        movingDoorNode.width,
+        movingDoorNode.height,
+      )
+
+      if (currentWallId !== event.node.id) {
+        // Wall changed mid-move: must updateNode to reparent
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          wallId: event.node.id,
+        })
+        markWallDirty(currentWallId)
+        currentWallId = event.node.id
+      } else {
+        // Same wall: update Three.js mesh directly to avoid store churn
+        // collectCutoutBrushes reads cutoutMesh.matrixWorld, not scene store positions
+        const doorMesh = sceneRegistry.nodes.get(movingDoorNode.id as AnyNodeId)
+        if (doorMesh) {
+          doorMesh.position.set(clampedX, clampedY, 0)
+          doorMesh.rotation.set(0, itemRotation, 0)
+          doorMesh.updateMatrixWorld(true)
+        }
+      }
+      useLiveTransforms.getState().set(movingDoorNode.id, {
+        position: [clampedX, clampedY, 0],
+        rotation: itemRotation,
+      })
+      markWallDirtyThrottled(event.node.id)
+
+      const valid = !hasWallChildOverlap(
+        event.node.id,
+        clampedX,
+        clampedY,
+        movingDoorNode.width,
+        movingDoorNode.height,
+        movingDoorNode.id,
+      )
+
+      updateCursor(
+        wallLocalToWorld(
+          event.node,
+          clampedX,
+          clampedY,
+          getLevelYOffset(),
+          getSlabElevation(event),
+        ),
+        cursorRotation,
+        valid,
+      )
+      event.stopPropagation()
+    }
+
+    const onWallClick = (event: WallEvent) => {
+      if (!isValidWallSideFace(event.normal)) return
+      if (isCurvedWall(event.node)) return
+      if (event.node.parentId !== getLevelId()) return
+
+      const { side, itemRotation } = getPlacementOrientation(event)
+
+      const localX = snapToHalf(event.localPosition[0])
+      const { clampedX, clampedY } = clampToWall(
+        event.node,
+        localX,
+        movingDoorNode.width,
+        movingDoorNode.height,
+      )
+
+      const valid = !hasWallChildOverlap(
+        event.node.id,
+        clampedX,
+        clampedY,
+        movingDoorNode.width,
+        movingDoorNode.height,
+        movingDoorNode.id,
+      )
+      if (!valid) return
+
+      let placedId: string
+
+      if (isNew) {
+        useScene.getState().deleteNode(movingDoorNode.id)
+        useScene.temporal.getState().resume()
+
+        const cloned = structuredClone(movingDoorNode) as any
+        delete cloned.id
+        const node = DoorNode.parse({
+          ...cloned,
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          wallId: event.node.id,
+          parentId: event.node.id,
+        })
+        useScene.getState().createNode(node, event.node.id as AnyNodeId)
+        placedId = node.id
+      } else {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: original.position,
+          rotation: original.rotation,
+          side: original.side,
+          parentId: original.parentId,
+          wallId: original.wallId,
+          metadata: original.metadata,
+        })
+        useScene.temporal.getState().resume()
+
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: [clampedX, clampedY, 0],
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          wallId: event.node.id,
+          metadata: {},
+        })
+
+        if (original.parentId && original.parentId !== event.node.id) {
+          markWallDirty(original.parentId)
+        }
+        placedId = movingDoorNode.id
+      }
+
+      markWallDirty(event.node.id)
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      useScene.temporal.getState().pause()
+
+      triggerSFX('sfx:item-place')
+      hideCursor()
+      useViewer.getState().setSelection({ selectedIds: [placedId] })
+      exitMoveMode()
+      event.stopPropagation()
+    }
+
+    const onWallLeave = () => {
+      hideCursor()
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      if (isNew) return
+      if (currentWallId && currentWallId !== original.parentId) {
+        markWallDirty(currentWallId)
+      }
+      currentWallId = original.parentId
+      useScene.getState().updateNode(movingDoorNode.id, {
+        position: original.position,
+        rotation: original.rotation,
+        side: original.side,
+        parentId: original.parentId,
+        wallId: original.wallId,
+      })
+      if (original.parentId) markWallDirty(original.parentId)
+    }
+
+    const onCancel = () => {
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      if (isNew) {
+        useScene.getState().deleteNode(movingDoorNode.id)
+        if (currentWallId) markWallDirty(currentWallId)
+      } else {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: original.position,
+          rotation: original.rotation,
+          side: original.side,
+          parentId: original.parentId,
+          wallId: original.wallId,
+          metadata: original.metadata,
+        })
+        if (original.parentId) markWallDirty(original.parentId)
+      }
+      useScene.temporal.getState().resume()
+      hideCursor()
+      exitMoveMode()
+    }
+
+    emitter.on('wall:enter', onWallEnter)
+    emitter.on('wall:move', onWallMove)
+    emitter.on('wall:click', onWallClick)
+    emitter.on('wall:leave', onWallLeave)
+    emitter.on('tool:cancel', onCancel)
+
+    return () => {
+      const current = useScene.getState().nodes[movingDoorNode.id as AnyNodeId] as
+        | DoorNode
+        | undefined
+      const currentMeta = current?.metadata as Record<string, unknown> | undefined
+      if (currentMeta?.isTransient) {
+        if (isNew) {
+          useScene.getState().deleteNode(movingDoorNode.id)
+          if (currentWallId) markWallDirty(currentWallId)
+        } else {
+          useScene.getState().updateNode(movingDoorNode.id, {
+            position: original.position,
+            rotation: original.rotation,
+            side: original.side,
+            parentId: original.parentId,
+            wallId: original.wallId,
+            metadata: original.metadata,
+          })
+          if (original.parentId) markWallDirty(original.parentId)
+        }
+      }
+      useLiveTransforms.getState().clear(movingDoorNode.id)
+      useScene.temporal.getState().resume()
+      emitter.off('wall:enter', onWallEnter)
+      emitter.off('wall:move', onWallMove)
+      emitter.off('wall:click', onWallClick)
+      emitter.off('wall:leave', onWallLeave)
+      emitter.off('tool:cancel', onCancel)
+    }
+  }, [movingDoorNode, exitMoveMode])
+
+  const edgesGeo = useMemo(() => {
+    const boxGeo = new BoxGeometry(
+      movingDoorNode.width,
+      movingDoorNode.height,
+      movingDoorNode.frameDepth ?? 0.07,
+    )
+    const geo = new EdgesGeometry(boxGeo)
+    boxGeo.dispose()
+    return geo
+  }, [movingDoorNode])
+
+  return (
+    <group ref={cursorGroupRef} visible={false}>
+      <lineSegments geometry={edgesGeo} layers={EDITOR_LAYER} material={edgeMaterial} />
+    </group>
+  )
+}
+
+export default MoveDoorTool

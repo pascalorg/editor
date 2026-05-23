@@ -1,0 +1,44 @@
+{
+  "name": "ifc-converter-app",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "predev": "node scripts/copy-web-ifc-wasm.mjs",
+    "prebuild": "node scripts/copy-web-ifc-wasm.mjs",
+    "postinstall": "node scripts/copy-web-ifc-wasm.mjs",
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome lint",
+    "check-types": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@pascal-app/core": "*",
+    "@pascal-app/ifc-converter": "*",
+    "@pascal-app/nodes": "*",
+    "@pascal-app/viewer": "*",
+    "lucide-react": "^1.7.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@tailwindcss/postcss": "^4.2.1",
+    "clsx": "^2.1.1",
+    "next": "16.2.1",
+    "postcss": "^8.5.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.1",
+    "three": "^0.184.0",
+    "web-ifc": "^0.0.77",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/node": "^22.19.12",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.0",
+    "typescript": "6.0.2"
+  }
+}

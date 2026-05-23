@@ -1,11 +1,5 @@
-import {
-  type AnyNode,
-  type AnyNodeId,
-  getScaledDimensions,
-  type ItemNode,
-  type SlabNode,
-  type WallNode,
-} from '../../schema'
+import { nodeRegistry } from '../../registry'
+import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import {
   itemOverlapsPolygon,
@@ -135,30 +129,34 @@ function markNodesOverlappingSlab(
   const slabLevelId = resolveLevelId(slab, nodes)
 
   for (const node of Object.values(nodes)) {
-    if (node.type === 'item') {
-      const item = node as ItemNode
-      // Only floor items are affected by slabs
-      if (item.asset.attachTo) continue
-      if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      if (
-        itemOverlapsPolygon(
-          item.position,
-          getScaledDimensions(item),
-          item.rotation,
-          slab.polygon,
-          0.01,
-        )
-      ) {
-        markDirty(node.id)
-      }
-    } else if (node.type === 'wall') {
+    if (node.type === 'wall') {
       const wall = node as WallNode
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
       if (wallOverlapsPolygon(wall.start, wall.end, slab.polygon)) {
         markDirty(node.id)
       }
-    } else if (node.type === 'stair') {
+      continue
+    }
+    if (node.type === 'stair') {
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
+      markDirty(node.id)
+      continue
+    }
+
+    // Generic floor-placed sweep: any registry kind that opts in via
+    // `capabilities.floorPlaced` (item / shelf / column / spawn / …)
+    // re-elevates through `<FloorElevationSystem>` when a slab below
+    // changes. We dirty-mark when the kind's footprint overlaps the
+    // changed slab so the system picks it up next frame.
+    const def = nodeRegistry.get(node.type)
+    const floorPlaced = def?.capabilities?.floorPlaced
+    if (!floorPlaced) continue
+    if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    if (resolveLevelId(node, nodes) !== slabLevelId) continue
+    const position = (node as { position?: [number, number, number] }).position
+    if (!position) continue
+    const { dimensions, rotation } = floorPlaced.footprint(node)
+    if (itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
       markDirty(node.id)
     }
   }

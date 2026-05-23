@@ -1,11 +1,10 @@
 'use client'
 
-import '../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
-  type ElevatorNode,
   type ElevatorDoorSide,
+  type ElevatorNode,
   emitter,
   getElevatorCabCenterZ,
   getElevatorCabDepth,
@@ -18,10 +17,10 @@ import {
   getElevatorShaftWidth,
   getResolvedElevatorDoorStyle,
   openElevatorDoor,
+  requestElevatorLevel,
   resolveElevatorBuildingLevels,
   resolveElevatorDispatchTarget,
   resolveElevatorServiceLevels,
-  requestElevatorLevel,
   sceneRegistry,
   useInteractive,
   useScene,
@@ -45,6 +44,7 @@ import {
   Vector3,
 } from 'three'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
+import '../../three-types'
 import {
   closeDoorOpenState,
   DOOR_SWING_OPEN_ANGLE,
@@ -352,7 +352,7 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
   const nodes = useScene.getState().nodes
   const meshes: ElevatorColliderMesh[] = []
 
-  for (const elevatorId of sceneRegistry.byType.elevator) {
+  for (const elevatorId of sceneRegistry.byType.elevator!) {
     const typedElevatorId = elevatorId as AnyNodeId
     const node = nodes[typedElevatorId]
     if (node?.type !== 'elevator' || node.visible === false) continue
@@ -585,7 +585,7 @@ export const FirstPersonControls = () => {
     let closestDoorId: AnyNodeId | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
 
-    for (const doorId of sceneRegistry.byType.door) {
+    for (const doorId of sceneRegistry.byType.door!) {
       const node = nodes[doorId as AnyNodeId]
       if (node?.type !== 'door') continue
       if (node.openingKind === 'opening') continue
@@ -683,7 +683,7 @@ export const FirstPersonControls = () => {
     let closestWindowId: AnyNodeId | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
 
-    for (const windowId of sceneRegistry.byType.window) {
+    for (const windowId of sceneRegistry.byType.window!) {
       const node = nodes[windowId as AnyNodeId]
       if (node?.type !== 'window') continue
       if (node.openingKind === 'opening') continue
@@ -713,7 +713,7 @@ export const FirstPersonControls = () => {
       let closestTarget: FirstPersonInteractableTarget | null = null
       let closestDistance = DOOR_INTERACTION_DISTANCE
 
-      for (const elevatorId of sceneRegistry.byType.elevator) {
+      for (const elevatorId of sceneRegistry.byType.elevator!) {
         const typedElevatorId = elevatorId as AnyNodeId
         const node = nodes[typedElevatorId]
         if (node?.type !== 'elevator') continue
@@ -1088,11 +1088,11 @@ export const FirstPersonControls = () => {
       const elevatorIds = activeRide
         ? [
             activeRide.elevatorId,
-            ...Array.from(sceneRegistry.byType.elevator).filter(
+            ...Array.from(sceneRegistry.byType.elevator!).filter(
               (elevatorId) => elevatorId !== activeRide.elevatorId,
             ),
           ]
-        : Array.from(sceneRegistry.byType.elevator)
+        : Array.from(sceneRegistry.byType.elevator!)
 
       for (const elevatorId of elevatorIds) {
         const typedElevatorId = elevatorId as AnyNodeId
@@ -1324,7 +1324,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   return (
     <>
       {isLocked && (
-        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
           <div className="relative h-7 w-7">
             <div className="absolute top-1/2 left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-white/60" />
             <div className="absolute top-1/2 left-1/2 h-7 w-px -translate-x-1/2 -translate-y-1/2 bg-white/60" />
@@ -1332,7 +1332,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
         </div>
       )}
 
-      <div className="fixed top-4 right-4 z-50">
+      <div className="absolute top-4 right-4 z-50">
         <button
           className="pointer-events-auto flex items-center gap-2 rounded-xl border border-border/40 bg-background/90 px-4 py-2 font-medium text-foreground text-sm shadow-lg backdrop-blur-xl transition-colors hover:bg-background"
           onClick={handleExit}
@@ -1346,7 +1346,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
       </div>
 
       {!hasPlacedSpawn && (
-        <div className="fixed top-4 left-1/2 z-50 -translate-x-1/2">
+        <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2">
           <div className="rounded-2xl border border-sky-300/35 bg-slate-950/88 px-4 py-2 text-center text-slate-100 text-sm shadow-lg backdrop-blur-xl">
             Place a Spawn Point from the Build tab to control where walkthrough starts.
           </div>
@@ -1354,7 +1354,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
       )}
 
       {isLocked && (
-        <div className="pointer-events-none fixed top-1/2 right-6 z-40 -translate-y-1/2">
+        <div className="pointer-events-none absolute top-1/2 right-6 z-40 -translate-y-1/2">
           <div className="flex min-w-[148px] flex-col gap-3 rounded-2xl border border-border/35 bg-background/80 px-4 py-4 shadow-lg backdrop-blur-xl">
             <ControlHint keys={['W', 'A', 'S', 'D']} label="Move" />
             <div className="h-px w-full bg-border/30" />

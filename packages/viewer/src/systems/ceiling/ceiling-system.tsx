@@ -54,7 +54,13 @@ function updateCeilingGeometry(node: CeilingNode, mesh: THREE.Mesh) {
     gridMesh.geometry = newGeo.clone()
   }
 
-  // Position at the ceiling height
+  // Position at the ceiling height and reset X/Z so live-drag mesh
+  // offsets (set by move tools during the drag) don't leak into the
+  // canonical position after the rebuild. Matches the pattern used by
+  // FenceSystem.updateFenceGeometry / GeometrySystem (both fully reset
+  // position+rotation after rebuild).
+  mesh.position.x = 0
+  mesh.position.z = 0
   mesh.position.y = (node.height ?? 2.5) - 0.01 // Slight offset to avoid z-fighting with upper-level slabs
 }
 

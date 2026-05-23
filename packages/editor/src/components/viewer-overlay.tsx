@@ -10,13 +10,34 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { ArrowLeft, Camera, ChevronRight, Diamond, Layers, Moon, Sun } from 'lucide-react'
-import { motion } from 'motion/react'
+import {
+  CLAY_PALETTE,
+  type EdgeMode,
+  getSceneTheme,
+  SCENE_THEMES,
+  useViewer,
+} from '@pascal-app/viewer'
+import {
+  ArrowLeft,
+  Box,
+  Camera,
+  Check,
+  ChevronRight,
+  Diamond,
+  Layers,
+  PenLine,
+  Sparkles,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/primitives/dropdown-menu'
 import { TooltipProvider } from './ui/primitives/tooltip'
 
 type ProjectOwner = {
@@ -60,6 +81,143 @@ const wallModeConfig = {
   },
 }
 
+const SHADING_OPTIONS = [
+  { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
+  { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+] as const
+
+function RenderModeMenu() {
+  const shading = useViewer((s) => s.shading)
+  const active = SHADING_OPTIONS.find((o) => o.id === shading) ?? SHADING_OPTIONS[0]
+  const ActiveIcon = active.icon
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionButton
+          className="text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+          label={`Render: ${active.name}`}
+          size="icon"
+          tooltipSide="top"
+          variant="ghost"
+        >
+          <ActiveIcon className="h-6 w-6" />
+        </ActionButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="min-w-56" side="top">
+        {SHADING_OPTIONS.map((option) => {
+          const OptionIcon = option.icon
+          return (
+            <DropdownMenuItem
+              key={option.id}
+              onSelect={() => useViewer.getState().setShading(option.id)}
+            >
+              <OptionIcon />
+              <div className="flex flex-col">
+                <span className="text-foreground">{option.name}</span>
+                <span className="text-muted-foreground text-xs">{option.detail}</span>
+              </div>
+              {shading === option.id ? <Check className="ml-auto text-foreground" /> : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function SceneThemeMenu() {
+  const sceneTheme = useViewer((s) => s.sceneTheme)
+  const active = getSceneTheme(sceneTheme)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionButton
+          className="text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+          label={`Theme: ${active.name}`}
+          size="icon"
+          tooltipSide="top"
+          variant="ghost"
+        >
+          <Icon color="currentColor" height={24} icon="lucide:swatch-book" width={24} />
+        </ActionButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="min-w-48" side="top">
+        {SCENE_THEMES.map((sceneThemeOption) => {
+          const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+            (role) => sceneThemeOption.clayTints?.[role] ?? CLAY_PALETTE[role],
+          )
+          return (
+            <DropdownMenuItem
+              key={sceneThemeOption.id}
+              onSelect={() => useViewer.getState().setSceneTheme(sceneThemeOption.id)}
+            >
+              <span
+                className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                style={{ backgroundColor: sceneThemeOption.background }}
+              >
+                {swatches.map((color, index) => (
+                  <span
+                    key={`${sceneThemeOption.id}-${index}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </span>
+              <span className="text-foreground">{sceneThemeOption.name}</span>
+              {sceneTheme === sceneThemeOption.id ? (
+                <Check className="ml-auto text-foreground" />
+              ) : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+const EDGE_OPTIONS = [
+  { id: 'off', name: 'Off', detail: 'No edge lines' },
+  { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
+  { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
+] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
+
+function EdgesMenu() {
+  const edges = useViewer((s) => s.edges)
+  const active = EDGE_OPTIONS.find((o) => o.id === edges) ?? EDGE_OPTIONS[0]
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <ActionButton
+          className={
+            edges === 'off'
+              ? 'text-muted-foreground/80 hover:bg-white/5 hover:text-foreground'
+              : 'bg-white/10 text-foreground'
+          }
+          label={`Edges: ${active.name}`}
+          size="icon"
+          tooltipSide="top"
+          variant="ghost"
+        >
+          <PenLine className="h-6 w-6" />
+        </ActionButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="min-w-56" side="top">
+        {EDGE_OPTIONS.map((option) => (
+          <DropdownMenuItem
+            key={option.id}
+            onSelect={() => useViewer.getState().setEdges(option.id)}
+          >
+            <div className="flex flex-col">
+              <span className="text-foreground">{option.name}</span>
+              <span className="text-muted-foreground text-xs">{option.detail}</span>
+            </div>
+            {edges === option.id ? <Check className="ml-auto text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
   if (node.type === 'wall') return 'Wall'
@@ -93,7 +251,6 @@ export const ViewerOverlay = ({
   const cameraMode = useViewer((s) => s.cameraMode)
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
-  const theme = useViewer((s) => s.theme)
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
   // node elsewhere in the scene doesn't re-render this overlay.
@@ -280,53 +437,6 @@ export const ViewerOverlay = ({
       <div className="dark absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-foreground">
         <TooltipProvider delayDuration={0}>
           <div className="pointer-events-auto flex h-14 flex-row items-center justify-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out">
-            {/* Theme Toggle */}
-            <button
-              aria-label="Toggle theme"
-              className="flex h-[36px] shrink-0 cursor-pointer items-center rounded-full border border-border/50 bg-accent/50 p-1"
-              onClick={() => useViewer.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}
-              type="button"
-            >
-              <div className="relative flex">
-                {/* Sliding Background */}
-                <motion.div
-                  animate={{
-                    x: theme === 'light' ? '100%' : '0%',
-                  }}
-                  className="absolute inset-0 rounded-full bg-white shadow-sm dark:bg-white/20"
-                  initial={false}
-                  style={{ width: '50%' }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 500,
-                    damping: 35,
-                  }}
-                />
-
-                {/* Dark Mode Icon */}
-                <div
-                  className={cn(
-                    'pointer-events-none relative z-10 flex h-7 w-9 items-center justify-center rounded-full transition-colors duration-200',
-                    theme === 'dark' ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  <Moon className="h-4 w-4" />
-                </div>
-
-                {/* Light Mode Icon */}
-                <div
-                  className={cn(
-                    'pointer-events-none relative z-10 flex h-7 w-9 items-center justify-center rounded-full transition-colors duration-200',
-                    theme === 'light' ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  <Sun className="h-4 w-4" />
-                </div>
-              </div>
-            </button>
-
-            <div className="mx-1 h-5 w-px bg-border/40" />
-
             {/* Scans and Guides Visibility */}
             {canShowScans && (
               <ActionButton
@@ -391,6 +501,12 @@ export const ViewerOverlay = ({
             >
               <Camera className="h-6 w-6" />
             </ActionButton>
+
+            <RenderModeMenu />
+
+            <SceneThemeMenu />
+
+            <EdgesMenu />
 
             {/* Level Mode */}
             <ActionButton

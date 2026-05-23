@@ -20,7 +20,7 @@ import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const DEFAULT_WALL_HEIGHT = 0.5
-const DEFAULT_ROOF_HEIGHT = 2.5
+const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
 
 /**
@@ -77,7 +77,7 @@ const commitRoofPlacement = (
       width,
       depth,
       wallHeight: DEFAULT_WALL_HEIGHT,
-      roofHeight: DEFAULT_ROOF_HEIGHT,
+      pitch: DEFAULT_PITCH_DEG,
       roofType: 'gable',
       position: [localX, 0, localZ],
     })
@@ -96,7 +96,7 @@ const commitRoofPlacement = (
     width,
     depth,
     wallHeight: DEFAULT_WALL_HEIGHT,
-    roofHeight: DEFAULT_ROOF_HEIGHT,
+    pitch: DEFAULT_PITCH_DEG,
     roofType: 'gable',
     position: [0, 0, 0],
   })

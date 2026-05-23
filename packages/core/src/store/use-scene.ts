@@ -7,6 +7,11 @@ import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { LevelNode } from '../schema/nodes/level'
+import {
+  getPitchFromActiveRoofHeight,
+  type RoofSegmentNode,
+  type RoofType,
+} from '../schema/nodes/roof-segment'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
@@ -297,6 +302,9 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       const suffix = id.includes('_') ? id.split('_')[1] : Math.random().toString(36).slice(2)
       const segmentId = `rseg_${suffix}`
 
+      const segWidth = oldRoof.length ?? 8
+      const segDepth = (oldRoof.leftWidth ?? 2.2) + (oldRoof.rightWidth ?? 2.2)
+      const legacyRoofHeight = oldRoof.height ?? 2.5
       const segment = {
         object: 'node',
         id: segmentId,
@@ -307,10 +315,18 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
         position: [0, 0, 0],
         rotation: 0,
         roofType: 'gable',
-        width: oldRoof.length ?? 8,
-        depth: (oldRoof.leftWidth ?? 2.2) + (oldRoof.rightWidth ?? 2.2),
-        wallHeight: 0,
-        roofHeight: oldRoof.height ?? 2.5,
+        width: segWidth,
+        depth: segDepth,
+        // Schema default (0.5), NOT 0: a zero-height wall builds a flat,
+        // degenerate CSG brush → "Coplanar clip not handled" + NaN geometry, so
+        // the migrated legacy roof never renders. New roofs use 0.5 too.
+        wallHeight: 0.5,
+        pitch: getPitchFromActiveRoofHeight({
+          roofType: 'gable',
+          width: segWidth,
+          depth: segDepth,
+          roofHeight: legacyRoofHeight,
+        }),
         wallThickness: 0.1,
         deckThickness: 0.1,
         overhang: 0.3,
@@ -321,6 +337,31 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = {
         ...oldRoof,
         children: [segmentId],
+      }
+    }
+
+    // 2b. roof-segment: guarantee a valid positive pitch (degrees).
+    // Saved scenes wrote `roofHeight` in metres; the schema now stores `pitch`
+    // in degrees. Convert the legacy field when present, and — crucially — fall
+    // back to the schema default for any segment that carries no usable pitch or
+    // roofHeight (older/partial saves). Without this, the slope-frame guard
+    // resolves a missing pitch to a FLAT frame, so the roof renders as a slab.
+    // The migration result is cast, not zod-parsed, so the schema default never
+    // applies on its own — this branch is the only place it lands.
+    if (node.type === 'roof-segment') {
+      const currentPitch = (node as { pitch?: unknown }).pitch
+      const hasValidPitch = typeof currentPitch === 'number' && currentPitch > 0
+      if (!hasValidPitch) {
+        const { roofHeight, ...rest } = node as RoofSegmentNode & { roofHeight?: unknown }
+        const width = typeof node.width === 'number' ? node.width : 8
+        const depth = typeof node.depth === 'number' ? node.depth : 6
+        const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType
+        const derived =
+          typeof roofHeight === 'number' && roofHeight > 0
+            ? getPitchFromActiveRoofHeight({ roofType, width, depth, roofHeight })
+            : 0
+        // 40° matches the RoofSegmentNode schema default.
+        patchedNodes[id] = { ...rest, pitch: derived > 0 ? derived : 40 }
       }
     }
 
@@ -342,8 +383,54 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
     }
 
+    // Shelf v2: hosting was added in this migration cycle. Older shelves
+    // (saved before the schema gained `children`) need the field
+    // initialised so `createNode(item, shelfId)` finds an array to
+    // append the child id to — without this the host item ends up
+    // orphaned (parented in scene state but not in the shelf's
+    // children list, so the renderer doesn't mount it).
+    if (node.type === 'shelf' && !Array.isArray(node.children)) {
+      patchedNodes[id] = { ...node, children: [] }
+    }
+
+    // Roof-segment hosting was added in this migration cycle (the same
+    // pattern as shelf above). Older segments saved before the schema
+    // gained `children` need the field initialised so
+    // `createNode(chimney, segmentId)` finds an array to append to —
+    // without this every "Add Element" click on the roof panel results
+    // in an orphaned accessory (parented in scene state but never
+    // appended to `seg.children`, so the renderer's recursive
+    // `<NodeRenderer>` mount never sees it).
+    if (node.type === 'roof-segment' && !Array.isArray((node as { children?: unknown }).children)) {
+      patchedNodes[id] = { ...node, children: [] } as AnyNode
+    }
+
     if (node.type === 'roof') {
       patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
+    }
+
+    // Legacy: site.children used to hold nested BuildingNode / ItemNode
+    // objects (see the SiteNode schema before the children-as-ids fix).
+    // Flatten any leftover nested children into ids, and absorb the
+    // embedded nodes into the flat map so the rest of the loader can
+    // treat the site like every other parent.
+    if (node.type === 'site' && Array.isArray(node.children)) {
+      let needsFlatten = false
+      const flattened: string[] = []
+      for (const child of node.children) {
+        if (typeof child === 'string') {
+          flattened.push(child)
+        } else if (child && typeof child === 'object' && typeof child.id === 'string') {
+          needsFlatten = true
+          flattened.push(child.id)
+          if (!patchedNodes[child.id]) {
+            patchedNodes[child.id] = { ...child, parentId: id }
+          }
+        }
+      }
+      if (needsFlatten) {
+        patchedNodes[id] = { ...node, children: flattened }
+      }
     }
   }
   return patchedNodes as Record<string, AnyNode>
@@ -565,7 +652,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         })
 
         const site = SiteNode.parse({
-          children: [building],
+          children: [building.id],
         })
 
         // Define all nodes flat

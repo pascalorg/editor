@@ -122,6 +122,30 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "packages/core/**/*.ts",
+        "packages/core/**/*.tsx",
+        "packages/viewer/**/*.ts",
+        "packages/viewer/**/*.tsx",
+        "packages/editor/**/*.ts",
+        "packages/editor/**/*.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@pascal-app/nodes": "Framework packages must not import from @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See plans/editor-node-registry.md."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

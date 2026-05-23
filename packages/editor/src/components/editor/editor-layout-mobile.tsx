@@ -1,6 +1,6 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import useEditor from '../../store/use-editor'
 import { MobileTabBar } from '../ui/sidebar/mobile-tab-bar'
@@ -56,8 +56,8 @@ export function EditorLayoutMobile({
   const activePanel = useEditor((s) => s.activeSidebarPanel)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
   const panelSheetHeight = useEditor((s) => s.mobilePanelSheetHeight)
-  const theme = useViewer((s) => s.theme)
-  const viewerBg = theme === 'light' ? VIEWER_BG_LIGHT : VIEWER_BG_DARK
+  const isDark = useViewer((s) => getSceneTheme(s.sceneTheme).appearance === 'dark')
+  const viewerBg = isDark ? VIEWER_BG_DARK : VIEWER_BG_LIGHT
 
   const middleRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<BottomSheetHandle>(null)

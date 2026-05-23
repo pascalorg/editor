@@ -1541,10 +1541,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
     useShallow((s) => {
       if (!siteNode) return []
       return siteNode.children
-        .map((child) => {
-          const id = typeof child === 'string' ? child : child.id
-          return s.nodes[id] as BuildingNode | undefined
-        })
+        .map((childId) => s.nodes[childId as AnyNodeId] as BuildingNode | undefined)
         .filter((node): node is BuildingNode => node?.type === 'building')
     }),
   )

@@ -12,7 +12,7 @@ export const ViewerZoneSystem = () => {
     const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
 
-    sceneRegistry.byType.zone.forEach((id) => {
+    sceneRegistry.byType.zone!.forEach((id) => {
       const obj = sceneRegistry.nodes.get(id)
       if (!obj) return
 

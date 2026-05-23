@@ -1,0 +1,86 @@
+'use client'
+
+import {
+  type AnyNode,
+  type AnyNodeId,
+  useLiveTransforms,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { useLayoutEffect, useRef } from 'react'
+import type { Group } from 'three'
+import { useNodeEvents } from '../../hooks/use-node-events'
+import { NodeRenderer } from './node-renderer'
+
+/**
+ * Generic renderer for any kind that ships `def.geometry` but no custom
+ * `def.renderer`.
+ *
+ * The renderer is intentionally featureless:
+ *  - Mounts an empty `<group>`.
+ *  - Registers the group with `sceneRegistry` so `<GeometrySystem>` can find
+ *    it and inject children built by `def.geometry(node, ctx)`.
+ *  - Wires `useNodeEvents(node, node.type)` on the group so pointer events
+ *    bubble through to the editor's selection / hover bus.
+ *  - Marks the node dirty on mount so the geometry system runs once on
+ *    first render (and on every subsequent identity change).
+ *  - Reads `useLiveTransforms` so drag tools that imperatively override
+ *    position / rotation (the shelf-style smooth move) still work.
+ *  - Renders hosted children recursively via `<NodeRenderer>`.
+ *
+ * This is what lets shelf — and every future registry-driven parametric
+ * kind — ship without a per-kind `renderer.tsx`. See
+ * `wiki/architecture/node-definitions.md` for the three-checkbox model.
+ *
+ * Typing note: `useNodeEvents` is keyed by a literal kind, but at this
+ * dispatch level we have a union. The cast is contained here so callers
+ * stay clean. Selection/hover events still fire on the kind-specific
+ * event key (`shelf:click`, `item:enter`, etc.) — that's the runtime
+ * behavior the bus consumers care about.
+ */
+type RenderableNode = AnyNode & {
+  id: AnyNodeId
+  position?: [number, number, number]
+  rotation?: [number, number, number] | number
+  visible?: boolean
+  children?: AnyNodeId[]
+}
+
+export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
+  const ref = useRef<Group>(null!)
+  const n = node as RenderableNode
+  // biome-ignore lint/suspicious/noExplicitAny: useNodeEvents is keyed by
+  // literal kind; the registry path passes a runtime kind union. Routing
+  // through the type cast is safer than widening the hook signature.
+  const handlers = useNodeEvents(node as any, node.type as any)
+  const liveTransform = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
+
+  useRegistry(node.id, node.type, ref)
+
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id as AnyNodeId)
+  }, [node.id])
+
+  const position = liveTransform?.position ?? n.position ?? [0, 0, 0]
+  const rotation: [number, number, number] =
+    liveTransform?.rotation !== undefined
+      ? [0, liveTransform.rotation, 0]
+      : typeof n.rotation === 'number'
+        ? [0, n.rotation, 0]
+        : (n.rotation ?? [0, 0, 0])
+
+  return (
+    <group
+      position={position}
+      ref={ref}
+      rotation={rotation}
+      visible={n.visible !== false}
+      {...handlers}
+    >
+      {Array.isArray(n.children) &&
+        n.children.map((childId) => (
+          <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+        ))}
+    </group>
+  )
+}

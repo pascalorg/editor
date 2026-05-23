@@ -209,6 +209,14 @@ function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
   return baseSweepAngle
 }
 
+function clampFloorplanCircularSweepAngle(sweepAngle: number) {
+  if (Math.abs(sweepAngle) >= Math.PI * 2) {
+    return Math.sign(sweepAngle || 1) * (Math.PI * 2 - 0.001)
+  }
+
+  return sweepAngle
+}
+
 function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
   if (
     (stair.stairType ?? 'straight') !== 'spiral' ||
@@ -230,8 +238,11 @@ function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
 function getFloorplanCurvedStairHitPolygon(stair: StairNode): Point2D[] {
   const stairType = stair.stairType ?? 'straight'
   const sweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
+  const visualSweepAngle = clampFloorplanCircularSweepAngle(
+    sweepAngle + getFloorplanSpiralLandingSweep(stair, sweepAngle),
+  )
   const startAngle = -stair.rotation - sweepAngle / 2
-  const endAngle = startAngle + sweepAngle + getFloorplanSpiralLandingSweep(stair, sweepAngle)
+  const endAngle = startAngle + visualSweepAngle
   const center = {
     x: stair.position[0],
     y: stair.position[2],
