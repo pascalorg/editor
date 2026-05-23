@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { forkSceneGraph, type SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { type AnyNode, AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
+import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { ErrorCode, throwMcpError } from '../errors'
@@ -41,43 +41,6 @@ export const generateVariantsOutput = {
       graph: z.any().optional(),
     }),
   ),
-}
-
-/**
- * `forkSceneGraph` normalises `SiteNode.children` to string IDs, but the
- * `SiteNode` schema declares that field as an array of full `BuildingNode` /
- * `ItemNode` objects (see CROSS_CUTTING §2). To keep variants validating
- * against `AnyNode`, re-embed the site children from the flat dict.
- *
- * Pure: returns a new graph without mutating the input.
- */
-function rehydrateSiteChildren(graph: SceneGraph): SceneGraph {
-  const out: SceneGraph = {
-    nodes: { ...graph.nodes },
-    rootNodeIds: [...graph.rootNodeIds],
-    ...(graph.collections ? { collections: graph.collections } : {}),
-  }
-  for (const [id, node] of Object.entries(out.nodes)) {
-    if (node.type !== 'site') continue
-    const childrenField = (node as { children?: unknown[] }).children
-    if (!Array.isArray(childrenField)) continue
-    const rehydrated: AnyNode[] = []
-    for (const child of childrenField) {
-      if (typeof child === 'string') {
-        const target = out.nodes[child as keyof typeof out.nodes]
-        if (target && (target.type === 'building' || target.type === 'item')) {
-          rehydrated.push(target)
-        }
-      } else if (child && typeof child === 'object' && 'id' in (child as Record<string, unknown>)) {
-        rehydrated.push(child as AnyNode)
-      }
-    }
-    out.nodes[id as keyof typeof out.nodes] = {
-      ...(node as AnyNode),
-      children: rehydrated,
-    } as AnyNode
-  }
-  return out
 }
 
 /**
@@ -140,8 +103,6 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
         for (const kind of mutations) {
           forked = applyMutation(forked, rng, kind)
         }
-        // Re-embed site children so variants match the SiteNode schema.
-        forked = rehydrateSiteChildren(forked)
 
         const invalidCount = countInvalidNodes(forked)
         if (invalidCount > 0) {

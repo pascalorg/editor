@@ -22,6 +22,11 @@ type MaterialPickerProps = {
   hideSideControl?: boolean
 }
 
+function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
+  if (category === 'roof') return 'Roofing'
+  return category.charAt(0).toUpperCase() + category.slice(1)
+}
+
 export function MaterialPicker({
   value,
   selectedMaterialPreset,
@@ -156,7 +161,7 @@ export function MaterialPicker({
                   }}
                   type="button"
                 >
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                  {getCategoryLabel(category)}
                 </button>
               ))}
             </div>

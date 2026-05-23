@@ -83,6 +83,14 @@ function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
   return baseSweepAngle
 }
 
+function clampFloorplanCircularSweepAngle(sweepAngle: number) {
+  if (Math.abs(sweepAngle) >= Math.PI * 2) {
+    return Math.sign(sweepAngle || 1) * (Math.PI * 2 - 0.001)
+  }
+
+  return sweepAngle
+}
+
 function getFloorplanStairStepCount(stair: StairNode, minimum: number) {
   return Math.max(minimum, Math.round(stair.stepCount ?? 10))
 }
@@ -139,7 +147,10 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
         const sectorStartAngle = -stair.rotation - normalizedSweepAngle / 2
         const sectorEndAngle = sectorStartAngle + normalizedSweepAngle
         const spiralLandingSweep = getFloorplanSpiralLandingSweep(stair, normalizedSweepAngle)
-        const visualSectorEndAngle = sectorEndAngle + spiralLandingSweep
+        const visualSweepAngle = clampFloorplanCircularSweepAngle(
+          normalizedSweepAngle + spiralLandingSweep,
+        )
+        const visualSectorEndAngle = sectorStartAngle + visualSweepAngle
         const stairCenter = {
           x: stair.position[0],
           y: stair.position[2],
@@ -273,10 +284,12 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                     fill={curvedAccent}
                     key={`${stair.id}:spiral-arrow`}
                     pointerEvents="none"
-                    points={buildSvgArrowHeadPoints(
-                      arrowPoint,
-                      tangentAngle,
-                      clamp(stair.width * 0.18, 0.12, 0.18),
+                    points={formatSvgPolygonPoints(
+                      buildSvgArrowHeadPoints(
+                        arrowPoint,
+                        tangentAngle,
+                        clamp(stair.width * 0.18, 0.12, 0.18),
+                      ),
                     )}
                   />
                 )
@@ -361,10 +374,12 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                     fill={curvedAccent}
                     key={`${stair.id}:curved-arrow`}
                     pointerEvents="none"
-                    points={buildSvgArrowHeadPoints(
-                      arrowPoint,
-                      tangentAngle,
-                      clamp(stair.width * 0.16, 0.1, 0.16),
+                    points={formatSvgPolygonPoints(
+                      buildSvgArrowHeadPoints(
+                        arrowPoint,
+                        tangentAngle,
+                        clamp(stair.width * 0.16, 0.1, 0.16),
+                      ),
                     )}
                   />
                 )

@@ -8,19 +8,49 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
-import { baseMaterial, glassMaterial } from '../../lib/materials'
+import {
+  createSurfaceRoleMaterial,
+  glassMaterial as defaultGlassMaterial,
+  baseMaterial as getBaseMaterial,
+} from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
-const revealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+let baseMaterial = getBaseMaterial()
+let revealMaterial: THREE.Material = defaultRevealMaterial
+let glassMaterial: THREE.Material = defaultGlassMaterial
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+
+  const joineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+  baseMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
+  revealMaterial = textures ? defaultRevealMaterial : joineryMaterial
+  glassMaterial = textures ? defaultGlassMaterial : joineryMaterial
+
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type === 'door') {
+        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+      }
+    }
+  }, [shading, textures, colorPreset])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+    const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+    baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
+    revealMaterial = textures ? defaultRevealMaterial : frameJoineryMaterial
+    glassMaterial = textures ? defaultGlassMaterial : frameJoineryMaterial
 
     const nodes = useScene.getState().nodes
 
@@ -35,7 +65,10 @@ export const DoorSystem = () => {
       clearDirty(id as AnyNodeId)
 
       // Rebuild the parent wall so its cutout reflects the updated door geometry
-      if ((node as DoorNode).parentId) {
+      // Avoid triggering expensive wall CSG rebuilds while the door is being interactively moved/duplicated.
+      // The editor tools will request a final wall rebuild on commit.
+      const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
+      if (!isTransient && (node as DoorNode).parentId) {
         useScene.getState().dirtyNodes.add((node as DoorNode).parentId as AnyNodeId)
       }
     })
@@ -109,6 +142,25 @@ function addShape(
   parent.add(mesh)
 }
 
+function addShapeAt(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  shape: THREE.Shape,
+  depth: number,
+  x: number,
+  y: number,
+  z: number,
+) {
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: false,
+    curveSegments: 24,
+  })
+  geometry.translate(x, y, z - depth / 2)
+  const mesh = new THREE.Mesh(geometry, material)
+  parent.add(mesh)
+}
+
 function getClampedArchHeight(width: number, height: number, archHeight: number | undefined) {
   return Math.min(Math.max(archHeight ?? width / 2, 0.01), Math.max(height, 0.01))
 }
@@ -143,6 +195,51 @@ function getArchBoundaryY(x: number, halfWidth: number, springY: number, archHei
   if (halfWidth <= 1e-6) return springY
   const t = Math.min(Math.abs(x) / halfWidth, 1)
   return springY + archHeight * Math.sqrt(Math.max(1 - t * t, 0))
+}
+
+function getOneSidedArchBoundaryYAtX(
+  x: number,
+  left: number,
+  right: number,
+  top: number,
+  archHeight: number,
+  curvedSide: 'left' | 'right',
+) {
+  const width = right - left
+  if (width <= 1e-6) return top
+  const clampedArchHeight = getClampedArchHeight(width, Number.MAX_SAFE_INTEGER, archHeight)
+  const springY = top - clampedArchHeight
+  const distanceFromApex =
+    curvedSide === 'left'
+      ? Math.max(0, Math.min((right - x) / width, 1))
+      : Math.max(0, Math.min((x - left) / width, 1))
+  return (
+    springY + clampedArchHeight * Math.sqrt(Math.max(1 - distanceFromApex * distanceFromApex, 0))
+  )
+}
+
+function getRoundedBoundaryYAtX(
+  x: number,
+  left: number,
+  right: number,
+  top: number,
+  radii: TopCornerRadii,
+) {
+  if (radii.topLeft > 1e-6 && x < left + radii.topLeft) {
+    const centerX = left + radii.topLeft
+    const centerY = top - radii.topLeft
+    const dx = x - centerX
+    return centerY + Math.sqrt(Math.max(radii.topLeft * radii.topLeft - dx * dx, 0))
+  }
+
+  if (radii.topRight > 1e-6 && x > right - radii.topRight) {
+    const centerX = right - radii.topRight
+    const centerY = top - radii.topRight
+    const dx = x - centerX
+    return centerY + Math.sqrt(Math.max(radii.topRight * radii.topRight - dx * dx, 0))
+  }
+
+  return top
 }
 
 function createArchBandShape(
@@ -358,6 +455,170 @@ function createRoundedLeafFrameShape(
   return outer
 }
 
+function createRoundedClippedLeafFrameShape(
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  fullLeft: number,
+  fullRight: number,
+  radii: TopCornerRadii,
+  insetX: number,
+  insetY: number,
+) {
+  const outerRadii = normalizeTopCornerRadii(radii, fullRight - fullLeft, top - bottom)
+  const outer = createTopClippedRectShape(left, right, bottom, top, (x) =>
+    getRoundedBoundaryYAtX(x, fullLeft, fullRight, top, {
+      topLeft: outerRadii.topLeft,
+      topRight: outerRadii.topRight,
+    }),
+  )
+
+  if (!outer) return null
+
+  const innerLeft = left + insetX
+  const innerRight = right - insetX
+  const innerBottom = bottom + insetY
+  const innerTop = top - insetY
+
+  if (innerRight <= innerLeft + 0.01 || innerTop <= innerBottom + 0.01) return outer
+
+  const innerFullLeft = fullLeft + insetX
+  const innerFullRight = fullRight - insetX
+  const innerRadii = normalizeTopCornerRadii(
+    {
+      topLeft: Math.max(outerRadii.topLeft - Math.max(insetX, insetY), 0),
+      topRight: Math.max(outerRadii.topRight - Math.max(insetX, insetY), 0),
+    },
+    innerFullRight - innerFullLeft,
+    innerTop - innerBottom,
+  )
+  const holeShape = createTopClippedRectShape(innerLeft, innerRight, innerBottom, innerTop, (x) =>
+    getRoundedBoundaryYAtX(x, innerFullLeft, innerFullRight, innerTop, {
+      topLeft: innerRadii.topLeft,
+      topRight: innerRadii.topRight,
+    }),
+  )
+
+  if (holeShape) outer.holes.push(shapeToReversedPath(holeShape))
+
+  return outer
+}
+
+function createArchedLeafFrameShape(
+  width: number,
+  bottom: number,
+  top: number,
+  archHeight: number,
+  insetX: number,
+  insetY: number,
+) {
+  const halfWidth = width / 2
+  const outer = createArchShape(-halfWidth, halfWidth, bottom, top, archHeight)
+  const innerLeft = -halfWidth + insetX
+  const innerRight = halfWidth - insetX
+  const innerBottom = bottom + insetY
+  const innerTop = top - insetY
+
+  if (innerRight <= innerLeft + 0.01 || innerTop <= innerBottom + 0.01) return outer
+
+  const innerArchHeight = getClampedArchHeight(
+    innerRight - innerLeft,
+    innerTop - innerBottom,
+    Math.max(archHeight - insetY, 0.01),
+  )
+  outer.holes.push(
+    shapeToReversedPath(
+      createArchShape(innerLeft, innerRight, innerBottom, innerTop, innerArchHeight),
+    ),
+  )
+
+  return outer
+}
+
+function createArchedClippedLeafFrameShape(
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  fullLeft: number,
+  fullRight: number,
+  archHeight: number,
+  insetX: number,
+  insetY: number,
+) {
+  const fullCenterX = (fullLeft + fullRight) / 2
+  const fullHalfWidth = (fullRight - fullLeft) / 2
+  const springY = top - archHeight
+  const outer = createTopClippedRectShape(left, right, bottom, top, (x) =>
+    getArchBoundaryY(x - fullCenterX, fullHalfWidth, springY, archHeight),
+  )
+
+  if (!outer) return null
+
+  const innerLeft = left + insetX
+  const innerRight = right - insetX
+  const innerBottom = bottom + insetY
+  const innerTop = top - insetY
+
+  if (innerRight <= innerLeft + 0.01 || innerTop <= innerBottom + 0.01) return outer
+
+  const innerFullLeft = fullLeft + insetX
+  const innerFullRight = fullRight - insetX
+  const innerArchHeight = getClampedArchHeight(
+    innerFullRight - innerFullLeft,
+    innerTop - innerBottom,
+    Math.max(archHeight - insetY, 0.01),
+  )
+  const innerFullCenterX = (innerFullLeft + innerFullRight) / 2
+  const innerFullHalfWidth = (innerFullRight - innerFullLeft) / 2
+  const innerSpringY = innerTop - innerArchHeight
+  const holeShape = createTopClippedRectShape(innerLeft, innerRight, innerBottom, innerTop, (x) =>
+    getArchBoundaryY(x - innerFullCenterX, innerFullHalfWidth, innerSpringY, innerArchHeight),
+  )
+
+  if (holeShape) outer.holes.push(shapeToReversedPath(holeShape))
+
+  return outer
+}
+
+function createOneSidedArchLeafFrameShape(
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  archHeight: number,
+  insetX: number,
+  insetY: number,
+  curvedSide: 'left' | 'right',
+) {
+  const outer = createTopClippedRectShape(left, right, bottom, top, (x) =>
+    getOneSidedArchBoundaryYAtX(x, left, right, top, archHeight, curvedSide),
+  )
+
+  if (!outer) return null
+
+  const innerLeft = left + insetX
+  const innerRight = right - insetX
+  const innerBottom = bottom + insetY
+  const innerTop = top - insetY
+
+  if (innerRight <= innerLeft + 0.01 || innerTop <= innerBottom + 0.01) return outer
+
+  const innerArchHeight = getClampedArchHeight(
+    innerRight - innerLeft,
+    innerTop - innerBottom,
+    Math.max(archHeight - insetY, 0.01),
+  )
+  const holeShape = createTopClippedRectShape(innerLeft, innerRight, innerBottom, innerTop, (x) =>
+    getOneSidedArchBoundaryYAtX(x, innerLeft, innerRight, innerTop, innerArchHeight, curvedSide),
+  )
+
+  if (holeShape) outer.holes.push(shapeToReversedPath(holeShape))
+
+  return outer
+}
+
 function createTopClippedRectShape(
   left: number,
   right: number,
@@ -395,6 +656,7 @@ function disposeObject(object: THREE.Object3D) {
 
 function addLeafSegmentContent({
   addLeafBox,
+  addLeafShape,
   leafWidth,
   leafHeight,
   leafCenterX,
@@ -403,6 +665,11 @@ function addLeafSegmentContent({
   segments,
   contentPadding,
   keepFrameWhenEmpty = false,
+  renderPerimeterFrame = true,
+  openingShape = 'rectangle',
+  openingTopRadii,
+  archHeight,
+  archOuterSide,
 }: {
   addLeafBox: (
     material: THREE.Material,
@@ -413,6 +680,7 @@ function addLeafSegmentContent({
     y: number,
     z: number,
   ) => void
+  addLeafShape?: (material: THREE.Material, shape: THREE.Shape, depth: number) => void
   leafWidth: number
   leafHeight: number
   leafCenterX: number
@@ -421,12 +689,17 @@ function addLeafSegmentContent({
   segments: DoorNode['segments']
   contentPadding: DoorNode['contentPadding']
   keepFrameWhenEmpty?: boolean
+  renderPerimeterFrame?: boolean
+  openingShape?: DoorNode['openingShape']
+  openingTopRadii?: TopCornerRadii
+  archHeight?: number
+  archOuterSide?: 'left' | 'right'
 }) {
   const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
   const shouldRenderFrame = hasLeafContent || keepFrameWhenEmpty
   const cpX = contentPadding[0]
   const cpY = contentPadding[1]
-  if (shouldRenderFrame && cpY > 0) {
+  if (renderPerimeterFrame && shouldRenderFrame && cpY > 0) {
     addLeafBox(
       baseMaterial,
       leafWidth,
@@ -446,7 +719,7 @@ function addLeafSegmentContent({
       0,
     )
   }
-  if (shouldRenderFrame && cpX > 0) {
+  if (renderPerimeterFrame && shouldRenderFrame && cpX > 0) {
     const innerH = leafHeight - 2 * cpY
     addLeafBox(
       baseMaterial,
@@ -474,9 +747,44 @@ function addLeafSegmentContent({
   const contentTop = leafCenterY + contentH / 2
 
   let segY = contentTop
+  const leafLeft = leafCenterX - leafWidth / 2
+  const leafRight = leafCenterX + leafWidth / 2
+  const leafTop = leafCenterY + leafHeight / 2
+  const hasShapedTop = openingShape === 'rounded' || openingShape === 'arch'
+  const clampedLeafArchHeight =
+    openingShape === 'arch' ? getClampedArchHeight(leafWidth, leafHeight, archHeight) : 0
+  const leafSpringY = leafTop - clampedLeafArchHeight
+  const topBoundaryAtX = (x: number) => {
+    if (openingShape === 'rounded' && openingTopRadii) {
+      return getRoundedBoundaryYAtX(x, leafLeft, leafRight, leafTop, {
+        topLeft: openingTopRadii.topLeft,
+        topRight: openingTopRadii.topRight,
+      })
+    }
+
+    if (openingShape === 'arch') {
+      if (archOuterSide) {
+        return getOneSidedArchBoundaryYAtX(
+          x,
+          leafLeft,
+          leafRight,
+          leafTop,
+          clampedLeafArchHeight,
+          archOuterSide,
+        )
+      }
+
+      return getArchBoundaryY(x - leafCenterX, leafWidth / 2, leafSpringY, clampedLeafArchHeight)
+    }
+
+    return leafTop
+  }
+
   for (const seg of segments) {
     const segH = (seg.heightRatio / totalRatio) * contentH
     const segCenterY = segY - segH / 2
+    const segTop = segY
+    const segBottom = segY - segH
     const numCols = seg.columnRatios.length
     const colSum = seg.columnRatios.reduce((a, b) => a + b, 0)
     const usableW = contentW - (numCols - 1) * seg.dividerThickness
@@ -494,15 +802,32 @@ function addLeafSegmentContent({
       cx = leafCenterX - contentW / 2
       for (let c = 0; c < numCols - 1; c++) {
         cx += colWidths[c]!
-        addLeafBox(
-          baseMaterial,
-          seg.dividerThickness,
-          segH,
-          leafDepth + 0.001,
-          cx + seg.dividerThickness / 2,
-          segCenterY,
-          0,
-        )
+        const dividerLeft = cx
+        const dividerRight = cx + seg.dividerThickness
+        const dividerShape =
+          hasShapedTop && addLeafShape
+            ? createTopClippedRectShape(
+                dividerLeft,
+                dividerRight,
+                segBottom,
+                segTop,
+                topBoundaryAtX,
+              )
+            : null
+
+        if (dividerShape && addLeafShape) {
+          addLeafShape(baseMaterial, dividerShape, leafDepth + 0.001)
+        } else {
+          addLeafBox(
+            baseMaterial,
+            seg.dividerThickness,
+            segH,
+            leafDepth + 0.001,
+            cx + seg.dividerThickness / 2,
+            segCenterY,
+            0,
+          )
+        }
         cx += seg.dividerThickness
       }
     }
@@ -513,15 +838,68 @@ function addLeafSegmentContent({
 
       if (seg.type === 'glass') {
         const glassDepth = Math.max(0.004, leafDepth * 0.15)
-        addLeafBox(glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
+        const segmentLeft = colX - colW / 2
+        const segmentRight = colX + colW / 2
+        const glassShape =
+          hasShapedTop && addLeafShape
+            ? createTopClippedRectShape(
+                segmentLeft,
+                segmentRight,
+                segBottom,
+                segTop,
+                topBoundaryAtX,
+              )
+            : null
+
+        if (glassShape && addLeafShape) {
+          addLeafShape(glassMaterial, glassShape, glassDepth)
+        } else {
+          addLeafBox(glassMaterial, colW, segH, glassDepth, colX, segCenterY, 0)
+        }
       } else if (seg.type === 'panel') {
-        addLeafBox(baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        const segmentLeft = colX - colW / 2
+        const segmentRight = colX + colW / 2
+        const outerPanelShape =
+          hasShapedTop && addLeafShape
+            ? createTopClippedRectShape(
+                segmentLeft,
+                segmentRight,
+                segBottom,
+                segTop,
+                topBoundaryAtX,
+              )
+            : null
+
+        if (outerPanelShape && addLeafShape) {
+          addLeafShape(baseMaterial, outerPanelShape, leafDepth)
+        } else {
+          addLeafBox(baseMaterial, colW, segH, leafDepth, colX, segCenterY, 0)
+        }
         const panelW = colW - 2 * seg.panelInset
         const panelH = segH - 2 * seg.panelInset
         if (panelW > 0.01 && panelH > 0.01) {
           const effectiveDepth = Math.abs(seg.panelDepth) < 0.002 ? 0.005 : Math.abs(seg.panelDepth)
           const panelZ = leafDepth / 2 + effectiveDepth / 2
-          addLeafBox(baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
+          const insetLeft = colX - panelW / 2
+          const insetRight = colX + panelW / 2
+          const insetTop = segTop - seg.panelInset
+          const insetBottom = segBottom + seg.panelInset
+          const innerPanelShape =
+            hasShapedTop && addLeafShape
+              ? createTopClippedRectShape(
+                  insetLeft,
+                  insetRight,
+                  insetBottom,
+                  insetTop,
+                  topBoundaryAtX,
+                )
+              : null
+
+          if (innerPanelShape && addLeafShape) {
+            addLeafShape(baseMaterial, innerPanelShape, effectiveDepth)
+          } else {
+            addLeafBox(baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
+          }
         }
       }
     }
@@ -551,6 +929,12 @@ function addDoorLeaf(
     panicBar,
     panicBarHeight,
     doorHeight,
+    openingShape,
+    openingTopRadii,
+    archHeight,
+    roundedBoundary,
+    archedBoundary,
+    archOuterSide,
   }: {
     leafWidth: number
     leafHeight: number
@@ -570,6 +954,20 @@ function addDoorLeaf(
     panicBar: boolean
     panicBarHeight: number
     doorHeight: number
+    openingShape: DoorNode['openingShape']
+    openingTopRadii: TopCornerRadii
+    archHeight: number
+    roundedBoundary?: {
+      fullLeft: number
+      fullRight: number
+      radii: TopCornerRadii
+    }
+    archedBoundary?: {
+      fullLeft: number
+      fullRight: number
+      archHeight: number
+    }
+    archOuterSide?: 'left' | 'right'
   },
 ) {
   const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
@@ -587,9 +985,90 @@ function addDoorLeaf(
     y: number,
     z: number,
   ) => addBox(leafGroup, material, w, h, d, x - hingeX, y, z)
+  const addLeafShape = (material: THREE.Material, shape: THREE.Shape, depth: number) =>
+    addShapeAt(leafGroup, material, shape, depth, -hingeX, 0, 0)
+
+  const localLeafCenterX = leafCenterX - hingeX
+  const leafBottom = leafCenterY - leafHeight / 2
+  const leafTop = leafCenterY + leafHeight / 2
+  const usesShapedLeafFrame = openingShape === 'rounded' || openingShape === 'arch'
+
+  if (usesShapedLeafFrame && hasLeafContent) {
+    if (openingShape === 'rounded') {
+      const roundedLeafShape = roundedBoundary
+        ? createRoundedClippedLeafFrameShape(
+            leafCenterX - leafWidth / 2,
+            leafCenterX + leafWidth / 2,
+            leafBottom,
+            leafTop,
+            roundedBoundary.fullLeft,
+            roundedBoundary.fullRight,
+            roundedBoundary.radii,
+            contentPadding[0],
+            contentPadding[1],
+          )
+        : createRoundedLeafFrameShape(
+            leafWidth,
+            leafBottom,
+            leafTop,
+            openingTopRadii,
+            contentPadding[0],
+            contentPadding[1],
+          )
+
+      if (roundedLeafShape) {
+        if (roundedBoundary) {
+          addLeafShape(baseMaterial, roundedLeafShape, leafDepth)
+        } else {
+          addShapeAt(leafGroup, baseMaterial, roundedLeafShape, leafDepth, localLeafCenterX, 0, 0)
+        }
+      }
+    } else if (openingShape === 'arch') {
+      const archedLeafShape = archOuterSide
+        ? createOneSidedArchLeafFrameShape(
+            leafCenterX - leafWidth / 2,
+            leafCenterX + leafWidth / 2,
+            leafBottom,
+            leafTop,
+            archHeight,
+            contentPadding[0],
+            contentPadding[1],
+            archOuterSide,
+          )
+        : archedBoundary
+          ? createArchedClippedLeafFrameShape(
+              leafCenterX - leafWidth / 2,
+              leafCenterX + leafWidth / 2,
+              leafBottom,
+              leafTop,
+              archedBoundary.fullLeft,
+              archedBoundary.fullRight,
+              archedBoundary.archHeight,
+              contentPadding[0],
+              contentPadding[1],
+            )
+          : createArchedLeafFrameShape(
+              leafWidth,
+              leafBottom,
+              leafTop,
+              getClampedArchHeight(leafWidth, leafHeight, archHeight),
+              contentPadding[0],
+              contentPadding[1],
+            )
+
+      if (archedLeafShape) {
+        if (archOuterSide || archedBoundary) {
+          addLeafShape(baseMaterial, archedLeafShape, leafDepth)
+        } else {
+          addShapeAt(leafGroup, baseMaterial, archedLeafShape, leafDepth, localLeafCenterX, 0, 0)
+        }
+      }
+    }
+  }
 
   addLeafSegmentContent({
     addLeafBox,
+    addLeafShape,
     leafWidth,
     leafHeight,
     leafCenterX,
@@ -597,6 +1076,11 @@ function addDoorLeaf(
     leafDepth,
     segments,
     contentPadding,
+    renderPerimeterFrame: !usesShapedLeafFrame,
+    openingShape,
+    openingTopRadii,
+    archHeight,
+    archOuterSide,
   })
 
   if (hasLeafContent && handle) {
@@ -640,8 +1124,6 @@ function addDoorLeaf(
     const hingeH = 0.1
     const hingeW = 0.024
     const hingeD = leafDepth + 0.016
-    const leafBottom = leafCenterY - leafHeight / 2
-    const leafTop = leafCenterY + leafHeight / 2
     addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafBottom + 0.25, 0)
     addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeMarkerX, (leafBottom + leafTop) / 2, 0)
     addBox(mesh, baseMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafTop - 0.25, 0)
@@ -1401,6 +1883,15 @@ function addGarageTiltupDoor(
   addBox(mesh, revealMaterial, insideWidth, 0.026, Math.max(frameDepth * 0.4, 0.035), 0, hingeY, 0)
 }
 
+function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
+  return node.doorType === 'folding' ||
+    node.doorType === 'pocket' ||
+    node.doorType === 'barn' ||
+    node.doorType === 'sliding'
+    ? 'rectangle'
+    : (node.openingShape ?? 'rectangle')
+}
+
 function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
@@ -1422,7 +1913,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     width,
     height,
     openingKind,
-    openingShape,
+    openingShape: rawOpeningShape,
     frameThickness,
     frameDepth,
     threshold,
@@ -1444,6 +1935,7 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     slideDirection = 'left',
     garagePanelCount = 4,
   } = node
+  const openingShape = getEffectiveOpeningShape(node) ?? rawOpeningShape
   const runtimeDoorState = useInteractive.getState().doors[node.id]
   const swingAngle = runtimeDoorState?.swingAngle ?? nodeSwingAngle
   const operationState = runtimeDoorState?.operationState ?? nodeOperationState
@@ -1662,6 +2154,15 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
     })
   } else if (doorType === 'double' || doorType === 'french') {
     const doubleLeafW = insideWidth / 2
+    const fullLeafTopRadii = getDoorTopRadii(node, insideWidth, leafH)
+    const roundedBoundary =
+      openingShape === 'rounded'
+        ? {
+            fullLeft: -insideWidth / 2,
+            fullRight: insideWidth / 2,
+            radii: fullLeafTopRadii,
+          }
+        : undefined
     addDoorLeaf(mesh, {
       leafWidth: doubleLeafW,
       leafHeight: leafH,
@@ -1681,6 +2182,14 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
       panicBar,
       panicBarHeight,
       doorHeight: height,
+      openingShape,
+      openingTopRadii:
+        openingShape === 'rounded'
+          ? { topLeft: fullLeafTopRadii.topLeft, topRight: 0 }
+          : fullLeafTopRadii,
+      archHeight: node.archHeight ?? 0.45,
+      roundedBoundary,
+      archOuterSide: openingShape === 'arch' ? 'left' : undefined,
     })
     addDoorLeaf(mesh, {
       leafWidth: doubleLeafW,
@@ -1701,6 +2210,14 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
       panicBar,
       panicBarHeight,
       doorHeight: height,
+      openingShape,
+      openingTopRadii:
+        openingShape === 'rounded'
+          ? { topLeft: 0, topRight: fullLeafTopRadii.topRight }
+          : fullLeafTopRadii,
+      archHeight: node.archHeight ?? 0.45,
+      roundedBoundary,
+      archOuterSide: openingShape === 'arch' ? 'right' : undefined,
     })
   } else {
     const hingeX = hingesSide === 'right' ? insideWidth / 2 : -insideWidth / 2
@@ -1724,6 +2241,9 @@ function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
       panicBar,
       panicBarHeight,
       doorHeight: height,
+      openingShape,
+      openingTopRadii: getDoorTopRadii(node, insideWidth, leafH),
+      archHeight: node.archHeight ?? 0.45,
     })
   }
 
@@ -1739,7 +2259,8 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
     mesh.add(cutout)
   }
   cutout.geometry.dispose()
-  if (node.openingShape === 'arch') {
+  const openingShape = getEffectiveOpeningShape(node)
+  if (openingShape === 'arch') {
     cutout.geometry = new THREE.ExtrudeGeometry(
       createArchShape(
         -node.width / 2,
@@ -1755,7 +2276,7 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
       },
     )
     cutout.geometry.translate(0, 0, -0.5)
-  } else if (node.openingShape === 'rounded') {
+  } else if (openingShape === 'rounded') {
     cutout.geometry = new THREE.ExtrudeGeometry(
       createRoundedTopShape(
         -node.width / 2,

@@ -20,7 +20,6 @@ import {
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type PresetsAdapter, PresetsProvider } from '../../contexts/presets-context'
-import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import {
@@ -89,6 +88,7 @@ const EDITOR_HOVER_STYLES: HoverStyles = {
     pulse: false,
   },
 }
+const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
 
 /**
  * Wire up module-level singletons (spatial grid, space detection, SFX) for
@@ -841,7 +841,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [])
+  }, [setFloorplanPaneRatio])
 
   useEffect(() => {
     setIsCameraControlsHintVisible(!readCameraControlsHintDismissed())
@@ -901,7 +901,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
+            defaultRender={EDITOR_DEFAULT_RENDER}
             hoverStyles={EDITOR_HOVER_STYLES}
+            renderContext="editor"
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
@@ -1073,7 +1075,12 @@ export default function Editor({
   }, [isFirstPersonMode])
 
   const previewViewerContent = (
-    <Viewer hoverStyles={EDITOR_HOVER_STYLES} selectionManager="default">
+    <Viewer
+      defaultRender={EDITOR_DEFAULT_RENDER}
+      hoverStyles={EDITOR_HOVER_STYLES}
+      renderContext="editor"
+      selectionManager="default"
+    >
       <ExportManager />
       <ViewerZoneSystem />
       <CeilingSystem />
@@ -1159,6 +1166,11 @@ export default function Editor({
                       <HelperManager />
                     </div>
                   )}
+                  {isFirstPersonMode && (
+                    <FirstPersonOverlay
+                      onExit={() => useEditor.getState().setFirstPersonMode(false)}
+                    />
+                  )}
                   {viewerBanner}
                   {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
                 </>
@@ -1172,12 +1184,6 @@ export default function Editor({
             />
             <EditorCommands />
             <CommandPalette emptyAction={commandPaletteEmptyAction} />
-            {/* First-person overlay — rendered on top of normal layout */}
-            {isFirstPersonMode && (
-              <div className="pointer-events-none fixed inset-0 z-50">
-                <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-              </div>
-            )}
           </>
         )}
       </PresetsProvider>
@@ -1232,13 +1238,10 @@ export default function Editor({
               <div className="pointer-events-auto">
                 <HelperManager />
               </div>
-            </ViewerOverlays>
-            {/* First-person overlay — rendered on top of normal layout */}
-            {isFirstPersonMode && (
-              <div className="pointer-events-none fixed inset-0 z-50">
+              {isFirstPersonMode && (
                 <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-              </div>
-            )}
+              )}
+            </ViewerOverlays>
           </>
         )}
       </div>

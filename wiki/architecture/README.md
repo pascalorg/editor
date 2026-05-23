@@ -9,6 +9,9 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [layers](layers.md) | Three.js layer constants, ownership, and rendering separation |
 | [systems](systems.md) | Core and viewer systems architecture |
 | [renderers](renderers.md) | Node renderer pattern in `packages/viewer` |
+| [node-definitions](node-definitions.md) | Three-checkbox composition model for registry-driven kinds (`geometry` / `renderer` / `system`) |
+| [materials-and-themes](materials-and-themes.md) | Surface colour: surface roles, colour presets, the textures axis, and scene themes (appearance / ground / clay tints) |
+| [plugin-authoring](plugin-authoring.md) | Public contract for external plugins — `Plugin` shape, `setPluginDiscovery`, lifecycle, what's in and out of v1 |
 | [tools](tools.md) | Editor tools structure in `apps/editor` |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |
 | [selection-managers](selection-managers.md) | Two-layer selection (viewer + editor), events, outliner |

@@ -1,0 +1,1 @@
+export { siteDefinition } from './definition'

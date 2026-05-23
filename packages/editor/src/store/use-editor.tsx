@@ -5,8 +5,12 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type ChimneyMaterialRole,
+  type ChimneyNode,
   type ColumnNode,
   type DoorNode,
+  type DormerNode,
+  type DormerSurfaceMaterialRole,
   type ElevatorNode,
   type FenceNode,
   type ItemNode,
@@ -65,6 +69,13 @@ export type StructureTool =
   | 'spawn'
   | 'window'
   | 'door'
+  | 'shelf'
+  | 'box-vent'
+  | 'ridge-vent'
+  | 'chimney'
+  | 'solar-panel'
+  | 'skylight'
+  | 'dormer'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
@@ -104,6 +115,8 @@ export type MaterialTargetRole =
   | WallSurfaceSide
   | StairSurfaceMaterialRole
   | RoofSurfaceMaterialRole
+  | ChimneyMaterialRole
+  | DormerSurfaceMaterialRole
   | SingleSurfaceMaterialRole
 
 export type SelectedMaterialTarget = {
@@ -141,7 +154,9 @@ type EditorState = {
     | DoorNode
     | ElevatorNode
     | CeilingNode
+    | ChimneyNode
     | ColumnNode
+    | DormerNode
     | SlabNode
     | WallNode
     | FenceNode
@@ -159,7 +174,9 @@ type EditorState = {
       | DoorNode
       | ElevatorNode
       | CeilingNode
+      | ChimneyNode
       | ColumnNode
+      | DormerNode
       | SlabNode
       | WallNode
       | FenceNode
@@ -438,7 +455,7 @@ export function selectDefaultBuildingAndLevel() {
     const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
     if (siteNode?.type === 'site') {
       const firstBuilding = siteNode.children
-        .map((child) => (typeof child === 'string' ? scene.nodes[child] : child))
+        .map((childId) => scene.nodes[childId as AnyNodeId])
         .find((node) => node?.type === 'building')
       if (firstBuilding) {
         buildingId = firstBuilding.id as BuildingNode['id']

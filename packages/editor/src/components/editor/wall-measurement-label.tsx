@@ -18,7 +18,7 @@ import {
   type WallMiterData,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useState } from 'react'
@@ -515,9 +515,8 @@ function SelectedMeasurementAnnotation({ node }: { node: WallNode | ItemNode }) 
 
 function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
   const nodes = useScene((state) => state.nodes)
-  const theme = useViewer((state) => state.theme)
   const unit = useViewer((state) => state.unit)
-  const isNight = theme === 'dark'
+  const isNight = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const color = isNight ? '#ffffff' : '#111111'
   const shadowColor = isNight ? '#111111' : '#ffffff'
 

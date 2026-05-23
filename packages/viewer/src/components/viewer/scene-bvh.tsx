@@ -1,17 +1,11 @@
 import { useThree } from '@react-three/fiber'
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef } from 'react'
+import { type BufferGeometry, type Group, Mesh } from 'three'
 import {
-  type ReactNode,
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from 'react'
-import { Group, Mesh, type BufferGeometry } from 'three'
-import {
-  SAH,
   acceleratedRaycast,
   computeBoundsTree,
   disposeBoundsTree,
+  SAH,
   type SplitStrategy,
 } from 'three-mesh-bvh'
 
@@ -91,8 +85,15 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
         if (geometry.boundsTree || !hasBvhCompatibleGeometry(geometry)) return
 
         try {
-          geometry.computeBoundsTree = computeBoundsTree
-          geometry.disposeBoundsTree = disposeBoundsTree
+          // The three-mesh-bvh + @types/three combo doesn't agree on
+          // BVH option / class identity (ComputeBVHOptions vs
+          // MeshBVHOptions, GeometryBVH vs MeshBVH) — cast through
+          // `unknown` to bypass the structural mismatch. Runtime is
+          // fine; we're just calling the library's own helpers.
+          ;(geometry as { computeBoundsTree?: unknown }).computeBoundsTree =
+            computeBoundsTree as unknown as typeof geometry.computeBoundsTree
+          ;(geometry as { disposeBoundsTree?: unknown }).disposeBoundsTree =
+            disposeBoundsTree as unknown as typeof geometry.disposeBoundsTree
           geometry.computeBoundsTree(options)
           computedGeometries.add(geometry)
         } catch (error) {

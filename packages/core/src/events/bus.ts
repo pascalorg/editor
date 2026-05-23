@@ -2,19 +2,27 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BoxVentNode,
   BuildingNode,
   CeilingNode,
+  ChimneyNode,
   ColumnNode,
   DoorNode,
+  DormerNode,
   ElevatorNode,
   FenceNode,
   GuideNode,
   ItemNode,
   LevelNode,
+  RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
+  ScanNode,
+  ShelfNode,
   SiteNode,
+  SkylightNode,
   SlabNode,
+  SolarPanelNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
@@ -35,7 +43,14 @@ export interface GridEvent {
    */
   localPosition: [number, number, number]
   faceIndex?: number
-  object: Object3D
+  /**
+   * Optional: the hit Three.js object. Present when the grid event was
+   * synthesized from a R3F mesh hit (the legacy grid-plane mesh path);
+   * absent when emitted by the canvas-level raycaster in
+   * `use-grid-events.ts`, where there is no specific mesh to attribute
+   * the intersection to.
+   */
+  object?: Object3D
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
@@ -57,6 +72,7 @@ export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type LevelEvent = NodeEvent<LevelNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
+export type ShelfEvent = NodeEvent<ShelfNode>
 export type SlabEvent = NodeEvent<SlabNode>
 export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
@@ -68,6 +84,14 @@ export type StairSegmentEvent = NodeEvent<StairSegmentNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
+export type ScanEvent = NodeEvent<ScanNode>
+export type GuideEvent = NodeEvent<GuideNode>
+export type BoxVentEvent = NodeEvent<BoxVentNode>
+export type RidgeVentEvent = NodeEvent<RidgeVentNode>
+export type ChimneyEvent = NodeEvent<ChimneyNode>
+export type SolarPanelEvent = NodeEvent<SolarPanelNode>
+export type SkylightEvent = NodeEvent<SkylightNode>
+export type DormerEvent = NodeEvent<DormerNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -189,6 +213,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'level', LevelEvent> &
   NodeEvents<'zone', ZoneEvent> &
   NodeEvents<'slab', SlabEvent> &
+  NodeEvents<'shelf', ShelfEvent> &
   NodeEvents<'spawn', SpawnEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
@@ -198,6 +223,14 @@ type EditorEvents = GridEvents &
   NodeEvents<'stair-segment', StairSegmentEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
+  NodeEvents<'scan', ScanEvent> &
+  NodeEvents<'guide', GuideEvent> &
+  NodeEvents<'box-vent', BoxVentEvent> &
+  NodeEvents<'ridge-vent', RidgeVentEvent> &
+  NodeEvents<'chimney', ChimneyEvent> &
+  NodeEvents<'solar-panel', SolarPanelEvent> &
+  NodeEvents<'skylight', SkylightEvent> &
+  NodeEvents<'dormer', DormerEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

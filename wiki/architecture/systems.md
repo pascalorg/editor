@@ -6,6 +6,8 @@ Applies to: `packages/core/src/systems/**`, `packages/viewer/src/systems/**`.
 
 Systems own business logic, geometry generation, and constraints. They run in the Three.js frame loop and are never rendered directly.
 
+> **For registry-driven kinds, prefer no per-kind system.** If your kind's only job is "rebuild geometry on dirty", set `def.geometry` and let the framework's `<GeometrySystem>` handle the rebuild loop. Per-kind systems remain for *extra* responsibilities — animations, cross-kind dirty cascades, named-mesh material poking. See [node-definitions.md](node-definitions.md).
+
 ## Two Kinds of Systems
 
 ### Core Systems — `packages/core/src/systems/`
