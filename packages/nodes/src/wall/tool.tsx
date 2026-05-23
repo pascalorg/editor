@@ -14,10 +14,12 @@ import {
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
+  formatMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   markToolCancelConsumed,
+  parseMeasurement,
   type SegmentAngleReference,
   snapWallDraftPoint,
   triggerSFX,
@@ -85,17 +87,6 @@ type AngleSource = {
   arcCenter: WallPlanPoint
   connectedVector: WallPlanPoint
   draftVector: WallPlanPoint
-}
-
-function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
-  if (unit === 'imperial') {
-    const feet = value * 3.280_84
-    const wholeFeet = Math.floor(feet)
-    const inches = Math.round((feet - wholeFeet) * 12)
-    if (inches === 12) return `${wholeFeet + 1}'0"`
-    return `${wholeFeet}'${inches}"`
-  }
-  return `${Number.parseFloat(value.toFixed(2))}m`
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -388,6 +379,8 @@ export const WallTool: React.FC = () => {
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
+  const draftInputRef = useRef<string | null>(null)
+  const [draftInput, setDraftInput] = useState<string | null>(null)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
@@ -489,6 +482,43 @@ export const WallTool: React.FC = () => {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') shiftPressed.current = true
+
+      if (buildingState.current === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (/^[\d.'"-]$/.test(e.key)) {
+          const next = (draftInputRef.current || '') + e.key
+          draftInputRef.current = next
+          setDraftInput(next)
+        } else if (e.key === 'Backspace') {
+          if (draftInputRef.current) {
+            const next = draftInputRef.current.slice(0, -1)
+            draftInputRef.current = next || null
+            setDraftInput(draftInputRef.current)
+          }
+        } else if (e.key === 'Enter' && draftInputRef.current) {
+          const parsed = parseMeasurement(
+            draftInputRef.current,
+            unit === 'imperial' ? 'imperial' : 'metric',
+          )
+          if (parsed !== null && parsed > 0.01) {
+            const start = startingPoint.current
+            const end = endingPoint.current
+            const dx = end.x - start.x
+            const dz = end.z - start.z
+            const currentLength = Math.hypot(dx, dz)
+
+            if (currentLength > 0.001) {
+              const newEnd: WallPlanPoint = [
+                start.x + (dx / currentLength) * parsed,
+                start.z + (dz / currentLength) * parsed,
+              ]
+              createWallOnCurrentLevel([start.x, start.z], newEnd)
+              draftInputRef.current = null
+              setDraftInput(null)
+              stopDrafting()
+            }
+          }
+        }
+      }
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -496,7 +526,11 @@ export const WallTool: React.FC = () => {
     }
 
     const onCancel = () => {
-      if (buildingState.current === 1) {
+      if (draftInputRef.current !== null) {
+        markToolCancelConsumed()
+        draftInputRef.current = null
+        setDraftInput(null)
+      } else if (buildingState.current === 1) {
         markToolCancelConsumed()
         stopDrafting()
       }
@@ -535,9 +569,10 @@ export const WallTool: React.FC = () => {
         <>
           <DraftMeasurementLabel
             color={measurementColor}
-            label={draftMeasurement.lengthLabel}
+            label={draftInput !== null ? draftInput : draftMeasurement.lengthLabel}
             position={draftMeasurement.lengthPosition}
             shadowColor={measurementShadowColor}
+            isTyping={draftInput !== null}
           />
           {draftMeasurement.angleLabels.map((angleLabel) => (
             <group key={angleLabel.id}>
@@ -597,11 +632,13 @@ function DraftMeasurementLabel({
   label,
   position,
   shadowColor,
+  isTyping,
 }: {
   color: string
   label: string
   position: [number, number, number]
   shadowColor: string
+  isTyping?: boolean
 }) {
   return (
     <Html
@@ -611,13 +648,22 @@ function DraftMeasurementLabel({
       zIndexRange={[100, 0]}
     >
       <div
-        className="whitespace-nowrap font-bold font-mono text-[15px]"
-        style={{
-          color,
-          textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
-        }}
+        className={
+          isTyping
+            ? 'whitespace-nowrap rounded-full border border-border px-2 py-1 font-mono font-bold text-[15px] shadow-lg backdrop-blur-md bg-primary text-primary-foreground'
+            : 'whitespace-nowrap font-bold font-mono text-[15px]'
+        }
+        style={
+          isTyping
+            ? {}
+            : {
+                color,
+                textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
+              }
+        }
       >
         {label}
+        {isTyping && <span className="animate-pulse">_</span>}
       </div>
     </Html>
   )

@@ -138,7 +138,6 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { EDITOR_LAYER } from './lib/constants'
-// Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
   resolveCurrentBuildingId,
   resolveElevatorNodeSupportY,
@@ -167,6 +166,8 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
+// Helper libs used by the kind-owned roof / stair / elevator panels.
+export { formatMeasurement, parseMeasurement } from './lib/measurements'
 export { duplicateRoofSubtree } from './lib/roof-duplication'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
