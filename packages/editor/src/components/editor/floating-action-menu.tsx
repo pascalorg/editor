@@ -455,6 +455,8 @@ export function FloatingActionMenu() {
   if (node?.type === 'wall') return null
   // Doors use the in-world `DoorGroundActionMenu` for the same reason.
   if (node?.type === 'door') return null
+  // Windows use the in-world `WindowGroundActionMenu`.
+  if (node?.type === 'window') return null
 
   return (
     <group>

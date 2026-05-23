@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildWindowFloorplan } from './floorplan'
+import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
@@ -56,6 +57,14 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
   // 2D move-on-floorplan handler — same shape as door.
   floorplanMoveTarget: windowFloorplanMoveTarget,
+
+  // 2D drag affordances. `resize-width` drives the window's two side
+  // arrows — pointer-down on either arrow starts an anchored width drag
+  // (opposite edge stays fixed, clamped to wall bounds). Mirrors the
+  // door wiring.
+  floorplanAffordances: {
+    'resize-width': windowWidthAffordance,
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },

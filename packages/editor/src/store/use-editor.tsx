@@ -217,6 +217,10 @@ type EditorState = {
   setResizingDoorHeight: (door: DoorNode | null) => void
   resizingDoorWidth: DoorNode | null
   setResizingDoorWidth: (door: DoorNode | null) => void
+  resizingWindowHeight: WindowNode | null
+  setResizingWindowHeight: (window: WindowNode | null) => void
+  resizingWindowWidth: WindowNode | null
+  setResizingWindowWidth: (window: WindowNode | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -644,6 +648,10 @@ const useEditor = create<EditorState>()(
       setResizingDoorHeight: (door) => set({ resizingDoorHeight: door }),
       resizingDoorWidth: null,
       setResizingDoorWidth: (door) => set({ resizingDoorWidth: door }),
+      resizingWindowHeight: null,
+      setResizingWindowHeight: (windowNode) => set({ resizingWindowHeight: windowNode }),
+      resizingWindowWidth: null,
+      setResizingWindowWidth: (windowNode) => set({ resizingWindowWidth: windowNode }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
