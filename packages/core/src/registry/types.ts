@@ -377,6 +377,16 @@ export type FloorplanGeometry =
       point: FloorplanPoint
       /** Rotation in radians; 0 points along +x in plan coords. */
       angle: number
+      /**
+       * Optional affordance routing. When set, pointer-down on the arrow
+       * starts a `def.floorplanAffordances?.[affordance]` session with the
+       * given `payload` (same dispatch path as `edge-handle`) instead of
+       * the default `setMovingNode` flow. Used by doors for the in-plane
+       * width-resize handles that visually mirror the move arrow shape but
+       * drive a different mutation.
+       */
+      affordance?: string
+      payload?: unknown
     }
   /**
    * Centered length / distance label. Renders as a small rounded

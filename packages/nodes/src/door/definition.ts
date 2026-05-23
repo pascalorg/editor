@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { doorWidthAffordance } from './floorplan-affordances'
 import { buildDoorFloorplan } from './floorplan'
 import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorParametrics } from './parametrics'
@@ -76,6 +77,13 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // snaps to the nearest wall, projects onto the wall axis, snaps
   // local-X to 0.5m, clamps inside wall bounds.
   floorplanMoveTarget: doorFloorplanMoveTarget,
+
+  // 2D drag affordances. `resize-width` drives the door's two side
+  // arrows — pointer-down on either arrow starts an anchored width drag
+  // (opposite edge stays fixed, clamped to wall bounds).
+  floorplanAffordances: {
+    'resize-width': doorWidthAffordance,
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },

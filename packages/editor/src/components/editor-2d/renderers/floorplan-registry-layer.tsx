@@ -779,15 +779,19 @@ function InteractiveGeometry({
         if (!palette) return <></>
         const moveHandleId = `${nodeId}:move`
         const isHovered = hoveredHandleId === moveHandleId
-        // Move dots are visually bigger than endpoint handles — the
-        // legacy prod render uses ~13px outer / ~6px dot. Endpoint
-        // handles top out at 8/9px because there are usually two per
-        // wall + linked walls + curve handle nearby; the move dot is
-        // a singleton centerpiece so it can afford the extra weight.
-        const baseRadiusPx = 13
-        const hoverRadiusPx = 15
-        const outerRadius = (isHovered ? hoverRadiusPx : baseRadiusPx) * unitsPerPixel
-        const dotRadius = 6 * unitsPerPixel
+        // World-relative sizing: the move dot is anchored to the door,
+        // not to the screen, so it grows when the user zooms in and
+        // shrinks when they zoom out — same scaling rule as the door
+        // footprint itself. Sizes are tuned for a ~0.9 m door at default
+        // zoom; the ratios match the legacy 13/15/6/16/7/18 px stack.
+        const baseRadius = 0.1
+        const hoverRadius = 0.115
+        const outerRadius = isHovered ? hoverRadius : baseRadius
+        const dotRadius = 0.045
+        const fillStroke = 0.005
+        const glowStroke = 0.12
+        const ringStroke = 0.055
+        const hitStroke = 0.14
         // Same 5-circle stack as the orange endpoint dot — hover glow +
         // hover ring + filled outer + inner dot + transparent hit. On
         // pointer-down, the layer calls `setMovingNode(node)`, which
@@ -808,9 +812,8 @@ function InteractiveGeometry({
               r={outerRadius}
               stroke={palette.endpointHandleHoverStroke}
               strokeOpacity={0.16}
-              strokeWidth={ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={glowStroke}
               style={{ opacity: isHovered ? 1 : 0, transition: HOVER_TRANSITION }}
-              vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={g.point[0]}
@@ -820,9 +823,8 @@ function InteractiveGeometry({
               r={outerRadius}
               stroke={palette.endpointHandleHoverStroke}
               strokeOpacity={0.52}
-              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={ringStroke}
               style={{ opacity: isHovered ? 1 : 0, transition: HOVER_TRANSITION }}
-              vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={g.point[0]}
@@ -832,8 +834,7 @@ function InteractiveGeometry({
               pointerEvents="none"
               r={outerRadius}
               stroke={palette.endpointHandleStroke}
-              strokeWidth="0.05"
-              vectorEffect="non-scaling-stroke"
+              strokeWidth={fillStroke}
             />
             <circle
               cx={g.point[0]}
@@ -841,7 +842,6 @@ function InteractiveGeometry({
               fill={palette.endpointHandleStroke}
               pointerEvents="none"
               r={dotRadius}
-              vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={g.point[0]}
@@ -851,17 +851,19 @@ function InteractiveGeometry({
               pointerEvents="all"
               r={outerRadius}
               stroke="transparent"
-              strokeWidth={ENDPOINT_HIT_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={hitStroke}
               style={{ cursor: 'move' }}
-              vectorEffect="non-scaling-stroke"
             />
           </g>
         )
       }
       case 'move-arrow': {
         if (!palette) return <></>
-        const moveHandleId = `${nodeId}:move`
-        const isHovered = hoveredHandleId === moveHandleId
+        // Affordance-routed arrows (door width-resize) get a per-payload
+        // handle id so each side can hover independently; default
+        // (move-flow) arrows share the node's :move id like the dot.
+        const handleId = g.affordance ? makeHandleId(nodeId, g.payload) : `${nodeId}:move`
+        const isHovered = hoveredHandleId === handleId
         // Arrow geometry in plan units (meters) — scales with the scene
         // so it shrinks on zoom-out and grows on zoom-in, matching the
         // wall it accompanies. Composed of a rectangular shaft + triangular
@@ -879,6 +881,9 @@ function InteractiveGeometry({
         // accent in `floating-action-menu.tsx`.
         const fill = isHovered ? '#a5b4fc' : '#8381ed'
         const angleDeg = (g.angle * 180) / Math.PI
+        const cursor = g.affordance ? 'ew-resize' : 'move'
+        const affordance = g.affordance
+        const payload = g.payload
         // No hover-grow: a scaling transform would enlarge the hit area
         // too, letting clicks just outside the visible arrow still start
         // a drag. Hover feedback is colour-only so the click region
@@ -893,11 +898,21 @@ function InteractiveGeometry({
             <path
               d={arrowD}
               fill="transparent"
-              onPointerDown={(e) => onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)}
-              onPointerEnter={() => onHandleHoverChange(moveHandleId)}
+              onPointerDown={(e) => {
+                if (affordance) {
+                  onHandlePointerDown(
+                    affordance,
+                    payload,
+                    e as ReactPointerEvent<SVGGElement>,
+                  )
+                } else {
+                  onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)
+                }
+              }}
+              onPointerEnter={() => onHandleHoverChange(handleId)}
               onPointerLeave={() => onHandleHoverChange(null)}
               pointerEvents="fill"
-              style={{ cursor: 'move' }}
+              style={{ cursor }}
             />
           </g>
         )
