@@ -51,6 +51,16 @@ const CORNER_FLOOR_OFFSET = 0.01
 const GROUND_MENU_FACE_CLEARANCE = 0.85
 const GROUND_MENU_SPACING = 0.6
 const GROUND_ICON_LIFT = 0.015
+// Dead-zone width (world units) around the wall plane before the menu
+// commits to the opposite face. Prevents per-frame flicker when the
+// camera orbits along the wall plane and floating-point jitter pushes
+// the camera-to-wall projection across zero.
+const GROUND_MENU_SIDE_HYSTERESIS = 0.1
+// Per-second lerp factor for position + rotation. Picked so a side-flip
+// finishes in ~250 ms — fast enough to feel responsive, slow enough that
+// the eye reads it as the three icons swinging around the wall together
+// instead of three separate teleports.
+const GROUND_MENU_LERP_RATE = 14
 
 type WallMoveHandle = {
   key: string
@@ -195,61 +205,107 @@ function WallGroundActionMenuV2({ wall }: { wall: WallNode }) {
   })
 
   const menuGroupRef = useRef<Group>(null)
+  const sideRef = useRef<number>(1)
+  const initializedForWallIdRef = useRef<string | null>(null)
 
-  // For curved walls the chord midpoint is off the centerline, so using
-  // it would make the two faces unequal distances from the wall surface.
-  // Sampling the curve frame at t=0.5 gives a midpoint on the centerline
-  // plus a true perpendicular normal — flipping along that normal keeps
-  // the menu the same distance from the wall on either side.
-  const frame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
-  const segLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  // Per-frame transform update — geometry, side decision, and target pose
+  // are all (re)computed inside useFrame instead of being captured from
+  // render closures, so the menu tracks the wall through edit paths that
+  // bypass React (e.g. mid-drag `useLiveNodeOverrides` writes), and the
+  // side decision can carry frame-to-frame hysteresis.
+  useFrame((state, dt) => {
+    const menu = menuGroupRef.current
+    if (!menu) return
 
-  let midX: number
-  let midZ: number
-  let dirX: number
-  let dirZ: number
-  let normalX: number
-  let normalZ: number
+    // Curved walls: chord midpoint is off the centerline, so we sample
+    // the curve frame at t=0.5 to get a true centerline midpoint + a
+    // perpendicular normal — keeps the menu equidistant on either face.
+    const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+    let midX: number
+    let midZ: number
+    let dirX: number
+    let dirZ: number
+    let normalX: number
+    let normalZ: number
 
-  if (frame) {
-    midX = frame.point.x
-    midZ = frame.point.y
-    normalX = frame.normal.x
-    normalZ = frame.normal.y
-    dirX = frame.normal.y
-    dirZ = -frame.normal.x
-  } else {
-    midX = (wall.start[0] + wall.end[0]) / 2
-    midZ = (wall.start[1] + wall.end[1]) / 2
-    const dx = wall.end[0] - wall.start[0]
-    const dz = wall.end[1] - wall.start[1]
-    dirX = segLength < 1e-6 ? 1 : dx / segLength
-    dirZ = segLength < 1e-6 ? 0 : dz / segLength
-    normalX = -dirZ
-    normalZ = dirX
-  }
+    if (curveFrame) {
+      midX = curveFrame.point.x
+      midZ = curveFrame.point.y
+      normalX = curveFrame.normal.x
+      normalZ = curveFrame.normal.y
+      dirX = curveFrame.normal.y
+      dirZ = -curveFrame.normal.x
+    } else {
+      const dx = wall.end[0] - wall.start[0]
+      const dz = wall.end[1] - wall.start[1]
+      const len = Math.hypot(dx, dz)
+      if (len < 1e-6) return
+      midX = (wall.start[0] + wall.end[0]) / 2
+      midZ = (wall.start[1] + wall.end[1]) / 2
+      dirX = dx / len
+      dirZ = dz / len
+      normalX = -dirZ
+      normalZ = dirX
+    }
 
-  // Offset from the wall *face* (centerline + half-thickness), so the menu
-  // always sits clearly outside the wall mesh — matches the side handle
-  // pattern.
-  const offset = getWallThickness(wall) / 2 + GROUND_MENU_FACE_CLEARANCE
+    // Offset from the wall *face* (centerline + half-thickness), so the
+    // menu always sits clearly outside the wall mesh.
+    const offset = getWallThickness(wall) / 2 + GROUND_MENU_FACE_CLEARANCE
 
-  // One per-frame update for the whole menu — sets the position + rotation
-  // of the container group only. Every icon is a static child inside the
-  // group, so the entire menu moves as a single unit.
-  useFrame((state) => {
-    if (!menuGroupRef.current) return
-    const dot =
-      (state.camera.position.x - midX) * normalX + (state.camera.position.z - midZ) * normalZ
-    const side = dot >= 0 ? 1 : -1
-    menuGroupRef.current.position.set(
-      midX + normalX * offset * side,
-      GROUND_ICON_LIFT,
-      midZ + normalZ * offset * side,
-    )
-    menuGroupRef.current.rotation.y = Math.atan2(-side * dirZ, side * dirX)
+    const projection =
+      (state.camera.position.x - midX) * normalX +
+      (state.camera.position.z - midZ) * normalZ
+
+    const isFreshWall = initializedForWallIdRef.current !== wall.id
+
+    // Hysteresis: only flip when the camera is clearly past the wall
+    // plane. The previous binary `projection >= 0 ? 1 : -1` flickered
+    // on grazing orbits and the resulting per-frame 180° flip is what
+    // visually fanned the three icons across each other — the outer
+    // two (curve, delete) crossed while the centre one (duplicate,
+    // offsetIndex 0) barely moved, reading as "icons move one at a time."
+    const currentSide = sideRef.current
+    let nextSide: number
+    if (isFreshWall) {
+      nextSide = projection >= 0 ? 1 : -1
+    } else if (currentSide >= 0 && projection < -GROUND_MENU_SIDE_HYSTERESIS) {
+      nextSide = -1
+    } else if (currentSide < 0 && projection > GROUND_MENU_SIDE_HYSTERESIS) {
+      nextSide = 1
+    } else {
+      nextSide = currentSide
+    }
+    sideRef.current = nextSide
+
+    const targetX = midX + normalX * offset * nextSide
+    const targetZ = midZ + normalZ * offset * nextSide
+    const targetRot = Math.atan2(-nextSide * dirZ, nextSide * dirX)
+
+    if (isFreshWall) {
+      // First frame for this wall — snap so the menu doesn't slide in
+      // from the previous wall's pose (or the default origin).
+      menu.position.set(targetX, GROUND_ICON_LIFT, targetZ)
+      menu.rotation.y = targetRot
+      initializedForWallIdRef.current = wall.id
+      return
+    }
+
+    const t = 1 - Math.exp(-dt * GROUND_MENU_LERP_RATE)
+    menu.position.x += (targetX - menu.position.x) * t
+    menu.position.z += (targetZ - menu.position.z) * t
+    menu.position.y = GROUND_ICON_LIFT
+
+    // Shortest angular path — a ~180° side-flip target must rotate the
+    // short way around, otherwise the menu unwinds the long way and the
+    // icons trace an even more dramatic arc.
+    let rotDelta = targetRot - menu.rotation.y
+    while (rotDelta > Math.PI) rotDelta -= 2 * Math.PI
+    while (rotDelta < -Math.PI) rotDelta += 2 * Math.PI
+    menu.rotation.y += rotDelta * t
   })
 
+  // Don't render an empty menu shell for degenerate walls.
+  const segLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
   if (segLength < 1e-6) return null
 
   const items: Array<'curve' | 'duplicate' | 'delete'> = []
