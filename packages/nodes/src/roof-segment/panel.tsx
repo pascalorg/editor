@@ -21,19 +21,10 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { getRoofTypeOptions, L, N, S } from '../i18n/panel-labels'
 
-const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
-  { label: 'Hip', value: 'hip' },
-  { label: 'Gable', value: 'gable' },
-  { label: 'Shed', value: 'shed' },
-  { label: 'Flat', value: 'flat' },
-]
-
-const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
-  { label: 'Gambrel', value: 'gambrel' },
-  { label: 'Dutch', value: 'dutch' },
-  { label: 'Mansard', value: 'mansard' },
-]
+const ROOF_TYPE_VALUES = ['hip', 'gable', 'shed', 'flat'] as const
+const ROOF_TYPE_VALUES_2 = ['gambrel', 'dutch', 'mansard'] as const
 
 export default function RoofSegmentPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -110,30 +101,39 @@ export default function RoofSegmentPanel() {
 
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
+  const roofTypeOptions = getRoofTypeOptions([...ROOF_TYPE_VALUES]) as {
+    label: string
+    value: RoofType
+  }[]
+  const roofTypeOptions2 = getRoofTypeOptions([...ROOF_TYPE_VALUES_2]) as {
+    label: string
+    value: RoofType
+  }[]
+
   return (
     <PanelWrapper
       icon="/icons/roof.png"
       onBack={handleBack}
       onClose={handleClose}
-      title={node.name || 'Roof Segment'}
+      title={node.name || N.roofSegment()}
       width={300}
     >
-      <PanelSection title="Roof Type">
+      <PanelSection title={S.roofType()}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ roofType: v })}
-          options={ROOF_TYPE_OPTIONS}
+          options={roofTypeOptions}
           value={node.roofType}
         />
         <SegmentedControl
           onChange={(v) => handleUpdate({ roofType: v })}
-          options={ROOF_TYPE_OPTIONS_2}
+          options={roofTypeOptions2}
           value={node.roofType}
         />
       </PanelSection>
 
-      <PanelSection title="Footprint">
+      <PanelSection title={S.footprint()}>
         <SliderControl
-          label="Width"
+          label={L.width()}
           max={25}
           min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
@@ -143,7 +143,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
-          label="Depth"
+          label={L.depth()}
           max={25}
           min={0.5}
           onChange={(v) => handleUpdate({ depth: v })}
@@ -154,9 +154,9 @@ export default function RoofSegmentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Heights">
+      <PanelSection title={S.heights()}>
         <SliderControl
-          label="Wall"
+          label={L.wall()}
           max={5}
           min={0}
           onChange={(v) => handleUpdate({ wallHeight: v })}
@@ -166,7 +166,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.wallHeight * 100) / 100}
         />
         <SliderControl
-          label="Roof"
+          label={L.roof()}
           max={15}
           min={0}
           onChange={(v) => handleUpdate({ roofHeight: v })}
@@ -177,9 +177,9 @@ export default function RoofSegmentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Structure">
+      <PanelSection title={S.structure()}>
         <SliderControl
-          label="Wall Thick."
+          label={L.wallThick()}
           max={1}
           min={0.05}
           onChange={(v) => handleUpdate({ wallThickness: v })}
@@ -189,7 +189,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.wallThickness * 100) / 100}
         />
         <SliderControl
-          label="Deck Thick."
+          label={L.deckThick()}
           max={0.3}
           min={0.04}
           onChange={(v) => handleUpdate({ deckThickness: v })}
@@ -199,7 +199,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.deckThickness * 100) / 100}
         />
         <SliderControl
-          label="Overhang"
+          label={L.overhang()}
           max={1}
           min={0}
           onChange={(v) => handleUpdate({ overhang: v })}
@@ -209,7 +209,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.overhang * 100) / 100}
         />
         <SliderControl
-          label="Shingle Thick."
+          label={L.shingleThick()}
           max={0.3}
           min={0.02}
           onChange={(v) => handleUpdate({ shingleThickness: v })}
@@ -220,9 +220,9 @@ export default function RoofSegmentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={S.position()}>
         <SliderControl
-          label="X"
+          label={L.x()}
           max={50}
           min={-50}
           onChange={(v) => {
@@ -236,7 +236,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label="Y"
+          label={L.y()}
           max={50}
           min={-50}
           onChange={(v) => {
@@ -250,7 +250,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label="Z"
+          label={L.z()}
           max={50}
           min={-50}
           onChange={(v) => {
@@ -264,7 +264,7 @@ export default function RoofSegmentPanel() {
           value={Math.round(node.position[2] * 100) / 100}
         />
         <SliderControl
-          label="Rotation"
+          label={L.rotation()}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -277,14 +277,14 @@ export default function RoofSegmentPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label="-45°"
+            label={L.rotateMinus45()}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
-            label="+45°"
+            label={L.rotatePlus45()}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
@@ -293,18 +293,18 @@ export default function RoofSegmentPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={L.duplicate()}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            label={L.delete()}
             onClick={handleDelete}
           />
         </ActionGroup>

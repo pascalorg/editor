@@ -11,6 +11,7 @@ import type {
   GuideNode,
   ItemNode,
   LevelNode,
+  PipeNode,
   RoofNode,
   RoofSegmentNode,
   ScanNode,
@@ -61,6 +62,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
+export type PipeEvent = NodeEvent<PipeNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
@@ -194,6 +196,7 @@ type AIChatEvents = {
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'pipe', PipeEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &

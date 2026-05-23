@@ -12,6 +12,7 @@ import { useShallow } from 'zustand/shallow'
 import { Dialog, DialogContent, DialogTitle } from './../../../components/ui/primitives/dialog'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import { usePaletteViewRegistry } from '../../../store/use-palette-view-registry'
+import { t } from '../../../i18n'
 
 // ---------------------------------------------------------------------------
 // Open + navigation state store
@@ -146,11 +147,14 @@ function OptionItem({
 // ---------------------------------------------------------------------------
 // Sub-page label map
 // ---------------------------------------------------------------------------
-const PAGE_LABEL: Record<string, string> = {
-  'wall-mode': 'Wall Mode',
-  'level-mode': 'Level Mode',
-  'rename-level': 'Rename Level',
-  'goto-level': 'Go to Level',
+function getPageLabel(page: string, viewLabel?: string): string {
+  const labels: Record<string, string> = {
+    'wall-mode': t('command.pages.wallMode', 'Wall Mode'),
+    'level-mode': t('command.pages.levelMode', 'Level Mode'),
+    'rename-level': t('command.pages.renameLevel', 'Rename Level'),
+    'goto-level': t('command.pages.gotoLevel', 'Go to Level'),
+  }
+  return labels[page] ?? viewLabel ?? page
 }
 
 // ---------------------------------------------------------------------------
@@ -244,15 +248,15 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
   }
 
   const wallModeLabel: Record<'cutaway' | 'up' | 'down', string> = {
-    cutaway: 'Cutaway',
-    up: 'Up',
-    down: 'Down',
+    cutaway: t('command.badge.wallMode.cutaway', 'Cutaway'),
+    up: t('command.badge.wallMode.up', 'Up'),
+    down: t('command.badge.wallMode.down', 'Down'),
   }
   const levelModeLabel: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
-    manual: 'Manual',
-    stacked: 'Stacked',
-    exploded: 'Exploded',
-    solo: 'Solo',
+    manual: t('command.badge.levelMode.manual', 'Manual'),
+    stacked: t('command.badge.levelMode.stacked', 'Stacked'),
+    exploded: t('command.badge.levelMode.exploded', 'Exploded'),
+    solo: t('command.badge.levelMode.solo', 'Solo'),
   }
 
   const confirmRename = () => {
@@ -291,7 +295,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <DialogContent className="max-w-lg gap-0 overflow-hidden p-0" showCloseButton={false}>
-        <DialogTitle className="sr-only">Command Palette</DialogTitle>
+        <DialogTitle className="sr-only">{t('command.title', 'Command Palette')}</DialogTitle>
 
         {modeView && <modeView.Component onBack={onBack} onClose={onClose} />}
 
@@ -315,7 +319,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                   onClick={goBack}
                   type="button"
                 >
-                  {PAGE_LABEL[page] ?? views.get(page)?.label ?? page}
+                  {getPageLabel(page, views.get(page)?.label)}
                 </button>
               )}
               <Command.Input
@@ -324,10 +328,10 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                 onValueChange={setInputValue}
                 placeholder={
                   page === 'rename-level'
-                    ? 'Type a new name…'
+                    ? t('command.typeNewName', 'Type a new name…')
                     : page
-                      ? 'Filter options…'
-                      : 'Search actions…'
+                      ? t('command.filterOptions', 'Filter options…')
+                      : t('command.searchActions', 'Search actions…')
                 }
                 value={inputValue}
               />
@@ -336,7 +340,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
             <Command.List className="max-h-100 overflow-y-auto p-1.5">
               {(!emptyAction || page) && (
                 <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
-                  No commands found.
+                  {t('command.noCommandsFound', 'No commands found.')}
                 </Command.Empty>
               )}
               {emptyAction && !page && <EmptyActionItem action={emptyAction} />}
@@ -371,7 +375,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
               {/* ── Wall Mode sub-page ────────────────────────────────────── */}
               {page === 'wall-mode' && (
-                <Command.Group heading="Wall Mode">
+                <Command.Group heading={t('command.pages.wallMode', 'Wall Mode')}>
                   {(['cutaway', 'up', 'down'] as const).map((mode) => (
                     <OptionItem
                       isActive={wallMode === mode}
@@ -385,7 +389,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
               {/* ── Level Mode sub-page ───────────────────────────────────── */}
               {page === 'level-mode' && (
-                <Command.Group heading="Level Mode">
+                <Command.Group heading={t('command.pages.levelMode', 'Level Mode')}>
                   {(['stacked', 'exploded', 'solo'] as const).map((mode) => (
                     <OptionItem
                       isActive={levelMode === mode}
@@ -399,12 +403,18 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
               {/* ── Go to Level sub-page ──────────────────────────────────── */}
               {page === 'goto-level' && (
-                <Command.Group heading="Go to Level">
+                <Command.Group heading={t('command.pages.gotoLevel', 'Go to Level')}>
                   {allLevels.map((level) => (
                     <OptionItem
                       isActive={level.id === activeLevelId}
                       key={level.id}
-                      label={level.name ?? `Level ${level.level}`}
+                      label={
+                        level.name ??
+                        t('command.levelFallback', {
+                          fallback: 'Level {level}',
+                          params: { level: level.level },
+                        })
+                      }
                       onSelect={() =>
                         run(() => useViewer.getState().setSelection({ levelId: level.id }))
                       }
@@ -415,7 +425,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
               {/* ── Rename Level sub-page ─────────────────────────────────── */}
               {page === 'rename-level' && (
-                <Command.Group heading="Rename Level">
+                <Command.Group heading={t('command.pages.renameLevel', 'Rename Level')}>
                   <Command.Item
                     className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-foreground text-sm transition-colors data-[disabled=true]:cursor-not-allowed data-[selected=true]:bg-accent data-[disabled=true]:opacity-40"
                     disabled={!inputValue.trim()}
@@ -441,10 +451,15 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                     <span className="flex-1 truncate">
                       {inputValue.trim() ? (
                         <>
-                          Rename to <span className="font-medium">"{inputValue.trim()}"</span>
+                          {t('command.renameTo', {
+                            fallback: 'Rename to "{name}"',
+                            params: { name: inputValue.trim() },
+                          })}
                         </>
                       ) : (
-                        <span className="text-muted-foreground">Type a new name above…</span>
+                        <span className="text-muted-foreground">
+                          {t('command.typeNewNameAbove', 'Type a new name above…')}
+                        </span>
                       )}
                     </span>
                   </Command.Item>
@@ -455,18 +470,18 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
             {/* Footer hint */}
             <div className="flex items-center justify-between border-border/50 border-t px-3 py-2">
               <span className="text-[11px] text-muted-foreground">
-                <Shortcut keys={['↑', '↓']} /> navigate
+                <Shortcut keys={['↑', '↓']} /> {t('command.footer.navigate', 'navigate')}
               </span>
               <span className="text-[11px] text-muted-foreground">
-                <Shortcut keys={['↵']} /> select
+                <Shortcut keys={['↵']} /> {t('command.footer.select', 'select')}
               </span>
               {page ? (
                 <span className="text-[11px] text-muted-foreground">
-                  <Shortcut keys={['⌫']} /> back
+                  <Shortcut keys={['⌫']} /> {t('command.footer.back', 'back')}
                 </span>
               ) : (
                 <span className="text-[11px] text-muted-foreground">
-                  <Shortcut keys={['Esc']} /> close
+                  <Shortcut keys={['Esc']} /> {t('command.footer.close', 'close')}
                 </span>
               )}
             </div>

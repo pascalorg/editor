@@ -260,16 +260,6 @@ export function buildStairFloorplan(
     }
   }
 
-  // Move handle — orange dot at the stair root position. Same UX as
-  // every other kind's `move-handle`: click to enter cursor-follow
-  // mode, click again to commit.
-  if (isSelected) {
-    children.push({
-      kind: 'move-handle',
-      point: [stair.position[0], stair.position[2]],
-    })
-  }
-
   return { kind: 'group', children }
 }
 

@@ -22,6 +22,11 @@ export {
   type FencePlanPoint,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
+export {
+  createPipeOnCurrentLevel,
+  type PipePlanPoint,
+  snapPipeDraftPoint,
+} from './components/tools/pipe/pipe-drafting'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
 // item drop) so kinds don't reach into editor internals.
@@ -131,6 +136,24 @@ export type { SaveStatus } from './hooks/use-auto-save'
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { floorItemDragSuppressClickRef } from './lib/floor-item-drag'
+export { lastGridMoveRef } from './hooks/use-grid-events'
+export { usePlanGridDrag, type UsePlanGridDragOptions } from './hooks/use-plan-grid-drag'
+export {
+  applySegmentEndpointPreview,
+  computeSegmentDragEndpoints,
+  getLinkedSegmentSnapshots,
+  getLinkedSegmentUpdates,
+  getSegmentPlanMidpoint,
+  type SegmentEndpointSnapshot,
+} from './lib/segment-plan-move'
+export {
+  applyPipeEndpointPreview,
+  computePipeDragEndpoints,
+  getLinkedPipeSnapshots,
+  getPipePlanMidpoint,
+  type LinkedPipeSnapshot,
+} from './lib/pipe-plan-move'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
@@ -170,11 +193,14 @@ export { duplicateStairSubtree } from './lib/stair-duplication'
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export { setMessages, t } from './i18n'
+export type { TOptions, TParams } from './i18n'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
   FloorplanSelectionTool,
   MovingFenceEndpoint,
+  MovingPipeEndpoint,
   MovingWallEndpoint,
   SplitOrientation,
   ViewMode,

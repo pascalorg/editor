@@ -69,6 +69,7 @@ export function EditorLayoutMobile({
   const [committedSheetH, setCommittedSheetH] = useState(0)
 
   const currentTab = sidebarTabs.find((t) => t.id === activePanel)
+  const prevPanelRef = useRef(activePanel)
 
   // Keep active panel valid
   useEffect(() => {
@@ -83,17 +84,21 @@ export function EditorLayoutMobile({
   //   desktop "Furnish" action which itself opens the Items panel).
   // - Leaving Items while still furnishing exits the build mode.
   useEffect(() => {
-    const { phase, mode, setMode, setPhase } = useEditor.getState()
+    const prev = prevPanelRef.current
+    prevPanelRef.current = activePanel
+    const { phase, mode, setMode, enterFurnishBuildMode } = useEditor.getState()
+
     if (activePanel === 'ai' && mode === 'build') {
       setMode('select')
       return
     }
     if (activePanel === 'items') {
-      if (phase !== 'furnish') setPhase('furnish')
-      if (mode !== 'build') setMode('build')
+      if (phase !== 'furnish' || mode !== 'build') {
+        enterFurnishBuildMode({ openItemsPanel: false })
+      }
       return
     }
-    if (phase === 'furnish' && mode === 'build') {
+    if (prev === 'items' && activePanel !== 'items' && phase === 'furnish' && mode === 'build') {
       setMode('select')
     }
   }, [activePanel])

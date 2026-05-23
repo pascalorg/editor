@@ -49,6 +49,7 @@ export {
   ElevatorShaftStyle,
 } from './nodes/elevator'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
+export { PipeMedium, PipeNode } from './nodes/pipe'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export type {
   AnimationEffect,
@@ -65,7 +66,10 @@ export type {
 export {
   getScaledDimensions,
   ItemNode,
+  isDirectFloorPlacedItem,
+  isFloorAttachedItem,
   isLowProfileItemSurface,
+  isPlanDragMovableItem,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
 export { LevelNode } from './nodes/level'

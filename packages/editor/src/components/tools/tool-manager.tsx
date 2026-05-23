@@ -56,8 +56,10 @@ export const ToolManager: React.FC = () => {
   const movingNode = useEditor((state) => state.movingNode)
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
+  const movingPipeEndpoint = useEditor((state) => state.movingPipeEndpoint)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
+  const curvingPipe = useEditor((state) => state.curvingPipe)
   const editingHole = useEditor((state) => state.editingHole)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -221,6 +223,18 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
+        {movingPipeEndpoint &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              movingPipeEndpoint.pipe.type,
+              'move-endpoint',
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance target={movingPipeEndpoint} />
+              </Suspense>
+            ) : null
+          })()}
         {curvingWall &&
           (() => {
             const Registry = getRegistryAffordanceTool(curvingWall.type, 'curve')
@@ -236,6 +250,15 @@ export const ToolManager: React.FC = () => {
             return RegistryAffordance ? (
               <Suspense fallback={null}>
                 <RegistryAffordance node={curvingFence} />
+              </Suspense>
+            ) : null
+          })()}
+        {curvingPipe &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(curvingPipe.type, 'curve')
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance node={curvingPipe} />
               </Suspense>
             ) : null
           })()}

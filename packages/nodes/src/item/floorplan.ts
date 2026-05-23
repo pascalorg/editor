@@ -153,7 +153,6 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
     return [cx + rx, cy + ry] as FloorplanPoint
   })
 
-  const isSelected = ctx.viewState?.selected ?? false
   const floorPlanUrl = node.asset.floorPlanUrl
   const children: FloorplanGeometry[] = [
     {
@@ -184,13 +183,6 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       width,
       height: depth,
       rotation: transform.rotation,
-    })
-  }
-  // Move handle — orange dot at the item center. Only when selected.
-  if (isSelected) {
-    children.push({
-      kind: 'move-handle',
-      point: [cx, cy],
     })
   }
   return { kind: 'group', children }

@@ -10,6 +10,7 @@ import {
   type ElevatorNode,
   type FenceNode,
   type ItemNode,
+  type PipeNode,
   type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -52,6 +53,7 @@ export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
 export type StructureTool =
   | 'wall'
   | 'fence'
+  | 'pipe'
   | 'room'
   | 'custom-room'
   | 'slab'
@@ -83,6 +85,23 @@ export type CatalogCategory =
   | 'window'
   | 'door'
 
+const FURNISH_CATALOG_CATEGORIES: CatalogCategory[] = [
+  'furniture',
+  'appliance',
+  'bathroom',
+  'kitchen',
+  'outdoor',
+]
+
+function normalizeFurnishCatalogCategory(
+  category: CatalogCategory | null | undefined,
+): CatalogCategory {
+  if (category && FURNISH_CATALOG_CATEGORIES.includes(category)) {
+    return category
+  }
+  return 'furniture'
+}
+
 export type StructureLayer = 'zones' | 'elements'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
@@ -98,6 +117,11 @@ export type MovingWallEndpoint = {
 
 export type MovingFenceEndpoint = {
   fence: FenceNode
+  endpoint: 'start' | 'end'
+}
+
+export type MovingPipeEndpoint = {
+  pipe: PipeNode
   endpoint: 'start' | 'end'
 }
 
@@ -146,6 +170,7 @@ type EditorState = {
     | SlabNode
     | WallNode
     | FenceNode
+    | PipeNode
     | RoofNode
     | RoofSegmentNode
     | SpawnNode
@@ -164,6 +189,7 @@ type EditorState = {
       | SlabNode
       | WallNode
       | FenceNode
+      | PipeNode
       | RoofNode
       | RoofSegmentNode
       | SpawnNode
@@ -176,10 +202,14 @@ type EditorState = {
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   movingFenceEndpoint: MovingFenceEndpoint | null
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
+  movingPipeEndpoint: MovingPipeEndpoint | null
+  setMovingPipeEndpoint: (value: MovingPipeEndpoint | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
   setCurvingFence: (fence: FenceNode | null) => void
+  curvingPipe: PipeNode | null
+  setCurvingPipe: (pipe: PipeNode | null) => void
   selectedMaterialTarget: SelectedMaterialTarget | null
   setSelectedMaterialTarget: (target: SelectedMaterialTarget | null) => void
   activePaintMaterial: ActivePaintMaterial | null
@@ -240,6 +270,13 @@ type EditorState = {
   setFirstPersonMode: (enabled: boolean) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
+  /** Atomically enter furnish + build + item tool (optionally open Items tab). */
+  enterFurnishBuildMode: (options?: { openItemsPanel?: boolean }) => void
+  /** Atomically enter structure + build (optionally open Scene tab). */
+  enterStructureBuildMode: (options?: {
+    layer?: StructureLayer
+    openSitePanel?: boolean
+  }) => void
   setIsCaptureMode: (enabled: boolean) => void
   floorplanPaneRatio: number
   setFloorplanPaneRatio: (ratio: number) => void
@@ -586,10 +623,14 @@ const useEditor = create<EditorState>()(
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       movingFenceEndpoint: null,
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
+      movingPipeEndpoint: null,
+      setMovingPipeEndpoint: (value) => set({ movingPipeEndpoint: value }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
       setCurvingFence: (fence) => set({ curvingFence: fence }),
+      curvingPipe: null,
+      setCurvingPipe: (pipe) => set({ curvingPipe: pipe }),
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,
@@ -735,6 +776,32 @@ const useEditor = create<EditorState>()(
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
+      enterFurnishBuildMode: (options) => {
+        const openItemsPanel = options?.openItemsPanel !== false
+        selectDefaultBuildingAndLevel()
+        set({
+          phase: 'furnish',
+          mode: 'build',
+          tool: 'item',
+          catalogCategory: normalizeFurnishCatalogCategory(get().catalogCategory),
+          structureLayer: 'elements',
+          ...(openItemsPanel ? { activeSidebarPanel: 'items' } : {}),
+        })
+      },
+      enterStructureBuildMode: (options) => {
+        const layer = options?.layer ?? 'elements'
+        const openSitePanel = options?.openSitePanel !== false
+        selectDefaultBuildingAndLevel()
+        useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        set({
+          phase: 'structure',
+          mode: 'build',
+          structureLayer: layer,
+          tool: layer === 'zones' ? 'zone' : 'wall',
+          catalogCategory: null,
+          ...(openSitePanel ? { activeSidebarPanel: 'site' } : {}),
+        })
+      },
       setIsCaptureMode: (enabled) => set({ isCaptureMode: enabled }),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
       setFloorplanPaneRatio: (ratio) =>

@@ -4,6 +4,7 @@ import type { AnyNode } from '@pascal-app/core'
 import { Copy, Move, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import type { MouseEventHandler } from 'react'
+import { t } from '../../../i18n'
 import { cn } from '../../../lib/utils'
 import { getNodeDisplay } from './node-display'
 
@@ -32,7 +33,7 @@ export function MobileSelectionBar({
   return (
     <div className="pointer-events-auto absolute right-3 bottom-6 left-3 z-50 flex h-12 items-stretch gap-1 rounded-2xl border border-border/50 bg-background/95 px-2 shadow-2xl backdrop-blur-xl">
       <button
-        aria-label={`Edit ${label}`}
+        aria-label={t('sidebar.editNode', { fallback: 'Edit {name}', params: { name: label } })}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-white/8',
         )}
@@ -51,7 +52,7 @@ export function MobileSelectionBar({
 
       <div className="flex items-center gap-0.5 border-border/40 border-l pl-1">
         <button
-          aria-label="Move"
+          aria-label={t('sidebar.move', 'Move')}
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)
@@ -62,7 +63,7 @@ export function MobileSelectionBar({
           <Move className="h-4 w-4" />
         </button>
         <button
-          aria-label="Duplicate"
+          aria-label={t('sidebar.duplicate', 'Duplicate')}
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)
@@ -73,7 +74,7 @@ export function MobileSelectionBar({
           <Copy className="h-4 w-4" />
         </button>
         <button
-          aria-label="Delete"
+          aria-label={t('sidebar.delete', 'Delete')}
           className={cn(ACTION_BTN, 'hover:bg-red-500/15 hover:text-red-400')}
           onClick={(e) => {
             stop(e)
@@ -84,7 +85,7 @@ export function MobileSelectionBar({
           <Trash2 className="h-4 w-4" />
         </button>
         <button
-          aria-label="Edit properties"
+          aria-label={t('sidebar.editProperties', 'Edit properties')}
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)

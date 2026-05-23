@@ -22,6 +22,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Spline } from 'lucide-react'
 import { useCallback, useRef } from 'react'
+import { L, N, S } from '../i18n/panel-labels'
 
 export default function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -123,12 +124,12 @@ export default function WallPanel() {
     <PanelWrapper
       icon="/icons/wall.png"
       onClose={handleClose}
-      title={node.name || 'Wall'}
+      title={node.name || N.wall()}
       width={280}
     >
-      <PanelSection title="Dimensions">
+      <PanelSection title={S.dimensions()}>
         <SliderControl
-          label="Length"
+          label={L.length()}
           max={20}
           min={0.1}
           onChange={handleUpdateLength}
@@ -138,7 +139,7 @@ export default function WallPanel() {
           value={length}
         />
         <SliderControl
-          label="Height"
+          label={L.height()}
           max={6}
           min={0.1}
           onChange={(v) => handleUpdate({ height: Math.max(0.1, v) })}
@@ -148,7 +149,7 @@ export default function WallPanel() {
           value={Math.round(height * 100) / 100}
         />
         <SliderControl
-          label="Thickness"
+          label={L.thickness()}
           max={1}
           min={0.05}
           onChange={(v) => handleUpdate({ thickness: Math.max(0.05, v) })}
@@ -159,7 +160,7 @@ export default function WallPanel() {
         />
         {!hasWallChildrenBlockingCurve && (
           <SliderControl
-            label="Curve"
+            label={L.curve()}
             max={Math.max(0.01, maxCurveOffset)}
             min={-Math.max(0.01, maxCurveOffset)}
             onChange={(v) => handleUpdate({ curveOffset: normalizeWallCurveOffset(node, v) })}
@@ -171,13 +172,13 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
           {!hasWallChildrenBlockingCurve && (
             <ActionButton
               icon={<Spline className="h-3.5 w-3.5" />}
-              label="Curve"
+              label={L.curve()}
               onClick={handleCurve}
             />
           )}

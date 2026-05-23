@@ -5,6 +5,7 @@ import { columnDefinition } from './column'
 import { doorDefinition } from './door'
 import { elevatorDefinition } from './elevator'
 import { fenceDefinition } from './fence'
+import { pipeDefinition } from './pipe'
 import { guideDefinition } from './guide'
 import { itemDefinition } from './item'
 import { levelDefinition } from './level'
@@ -46,6 +47,7 @@ export const builtinPlugin: Plugin = {
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
+    pipeDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
@@ -74,6 +76,7 @@ export { columnDefinition } from './column'
 export { doorDefinition } from './door'
 export { elevatorDefinition } from './elevator'
 export { fenceDefinition } from './fence'
+export { pipeDefinition } from './pipe'
 export { guideDefinition } from './guide'
 export { itemDefinition } from './item'
 export { levelDefinition } from './level'

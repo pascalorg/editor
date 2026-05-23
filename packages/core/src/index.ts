@@ -145,6 +145,16 @@ export {
   sampleWallCenterline,
 } from './systems/wall/wall-curve'
 export {
+  clampPipeRotateDegrees,
+  getPipeEndpoint3D,
+  getPipeMidpoint3D,
+  getPipeRotateRadians,
+  isPipeNearlyVertical,
+  samplePipeCenterline3D,
+  type PipeCenterlineLike,
+  type PipeCenterlinePoint3D,
+} from './systems/pipe/pipe-centerline'
+export {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
   getWallPlanFootprint,

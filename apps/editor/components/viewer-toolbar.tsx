@@ -15,7 +15,8 @@ import {
   Sun,
 } from 'lucide-react'
 import Image from 'next/image'
-import { type ReactNode, useCallback } from 'react'
+import { type ReactNode, useCallback, useMemo } from 'react'
+import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
@@ -34,62 +35,92 @@ function ToolbarTooltip({ children, label }: { children: ReactNode; label: strin
   )
 }
 
-const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
-  {
-    id: '3d',
-    label: '3D',
-    icon: (
-      <Image
-        alt=""
-        className="h-3.5 w-3.5 object-contain"
-        height={14}
-        src="/icons/building.png"
-        width={14}
-      />
-    ),
-  },
-  {
-    id: '2d',
-    label: '2D',
-    icon: (
-      <Image
-        alt=""
-        className="h-3.5 w-3.5 object-contain"
-        height={14}
-        src="/icons/blueprint.png"
-        width={14}
-      />
-    ),
-  },
-  {
-    id: 'split',
-    label: 'Split',
-    icon: <Columns2 className="h-3 w-3" />,
-  },
-]
+const VIEW_MODE_IDS: { id: ViewMode; labelKey?: string; fallback: string; icon: React.ReactNode }[] =
+  [
+    {
+      id: '3d',
+      fallback: '3D',
+      icon: (
+        <Image
+          alt=""
+          className="h-3.5 w-3.5 object-contain"
+          height={14}
+          src="/icons/building.png"
+          width={14}
+        />
+      ),
+    },
+    {
+      id: '2d',
+      fallback: '2D',
+      icon: (
+        <Image
+          alt=""
+          className="h-3.5 w-3.5 object-contain"
+          height={14}
+          src="/icons/blueprint.png"
+          width={14}
+        />
+      ),
+    },
+    {
+      id: 'split',
+      labelKey: 'toolbar.split',
+      fallback: 'Split',
+      icon: <Columns2 className="h-3 w-3" />,
+    },
+  ]
 
 const levelModeOrder = ['stacked', 'exploded', 'solo'] as const
-const levelModeLabels: Record<string, string> = {
-  manual: 'Stack',
-  stacked: 'Stack',
-  exploded: 'Exploded',
-  solo: 'Solo',
+
+function levelModeLabel(mode: string): string {
+  const fallbacks: Record<string, string> = {
+    manual: 'Manual',
+    stacked: 'Stack',
+    exploded: 'Exploded',
+    solo: 'Solo',
+  }
+  return t(`toolbar.levelMode.${mode}`, fallbacks[mode] ?? 'Stack')
 }
 
 const wallModeOrder = ['cutaway', 'up', 'down'] as const
-const wallModeConfig: Record<string, { icon: string; label: string }> = {
-  up: { icon: '/icons/room.png', label: 'Full height' },
-  cutaway: { icon: '/icons/wallcut.png', label: 'Cutaway' },
-  down: { icon: '/icons/walllow.png', label: 'Low' },
+
+function wallModeLabel(mode: string): string {
+  const fallbacks: Record<string, string> = {
+    up: 'Full height',
+    cutaway: 'Cutaway',
+    down: 'Low',
+  }
+  return t(`toolbar.wallMode.${mode}`, fallbacks[mode] ?? 'Cutaway')
+}
+
+const wallModeIcons: Record<string, string> = {
+  up: '/icons/room.png',
+  cutaway: '/icons/wallcut.png',
+  down: '/icons/walllow.png',
+}
+
+function wallModeConfigKey(wallMode: string): string {
+  if (wallMode in wallModeIcons) return wallMode
+  return 'cutaway'
 }
 
 function ViewModeControl() {
   const viewMode = useEditor((state) => state.viewMode)
   const setViewMode = useEditor((state) => state.setViewMode)
 
+  const viewModes = useMemo(
+    () =>
+      VIEW_MODE_IDS.map((mode) => ({
+        ...mode,
+        label: mode.labelKey ? t(mode.labelKey, mode.fallback) : mode.fallback,
+      })),
+    [],
+  )
+
   return (
     <div className={TOOLBAR_CONTAINER}>
-      {VIEW_MODES.map((mode) => {
+      {viewModes.map((mode) => {
         const isActive = viewMode === mode.id
         return (
           <ToolbarTooltip key={mode.id} label={mode.label}>
@@ -123,15 +154,14 @@ function CollapseSidebarButton() {
     setIsCollapsed(!isCollapsed)
   }, [isCollapsed, setIsCollapsed])
 
+  const label = isCollapsed
+    ? t('toolbar.expandSidebar', 'Expand sidebar')
+    : t('toolbar.collapseSidebar', 'Collapse sidebar')
+
   return (
     <div className={TOOLBAR_CONTAINER}>
-      <ToolbarTooltip label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-        <button
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={TOOLBAR_BTN}
-          onClick={toggle}
-          type="button"
-        >
+      <ToolbarTooltip label={label}>
+        <button aria-label={label} className={TOOLBAR_BTN} onClick={toggle} type="button">
           {isCollapsed ? (
             <ChevronsRight className="h-4 w-4" />
           ) : (
@@ -159,7 +189,8 @@ function LevelModeToggle() {
     if (next) setLevelMode(next)
   }
 
-  const label = `Levels: ${levelMode === 'manual' ? 'Manual' : (levelModeLabels[levelMode] ?? 'Stack')}`
+  const modeLabel = levelModeLabel(levelMode)
+  const label = t('toolbar.levels', { fallback: 'Levels: {mode}', params: { mode: modeLabel } })
 
   return (
     <ToolbarTooltip label={label}>
@@ -179,7 +210,7 @@ function LevelModeToggle() {
         ) : (
           <IconifyIcon height={14} icon="charm:stack-push" width={14} />
         )}
-        <span className="font-medium text-xs">{levelModeLabels[levelMode] ?? 'Stack'}</span>
+        <span className="font-medium text-xs">{modeLabel}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -188,7 +219,9 @@ function LevelModeToggle() {
 function WallModeToggle() {
   const wallMode = useViewer((state) => state.wallMode)
   const setWallMode = useViewer((state) => state.setWallMode)
-  const config = wallModeConfig[wallMode] ?? wallModeConfig.cutaway!
+  const mode = wallModeConfigKey(wallMode)
+  const label = wallModeLabel(mode)
+  const icon = wallModeIcons[mode] ?? wallModeIcons.cutaway!
 
   const cycle = () => {
     const index = wallModeOrder.indexOf(wallMode as (typeof wallModeOrder)[number])
@@ -196,8 +229,10 @@ function WallModeToggle() {
     if (next) setWallMode(next)
   }
 
+  const tooltipLabel = t('toolbar.walls', { fallback: 'Walls: {mode}', params: { mode: label } })
+
   return (
-    <ToolbarTooltip label={`Walls: ${config.label}`}>
+    <ToolbarTooltip label={tooltipLabel}>
       <button
         className={cn(
           TOOLBAR_BTN,
@@ -209,8 +244,8 @@ function WallModeToggle() {
         onClick={cycle}
         type="button"
       >
-        <Image alt="" className="h-4 w-4 object-contain" height={16} src={config.icon} width={16} />
-        <span className="font-medium text-xs">{config.label}</span>
+        <Image alt="" className="h-4 w-4 object-contain" height={16} src={icon} width={16} />
+        <span className="font-medium text-xs">{label}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -220,10 +255,13 @@ function GridVisibilityToggle() {
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
 
+  const stateLabel = showGrid ? t('common.visible', 'Visible') : t('common.hidden', 'Hidden')
+  const label = t('toolbar.grid', { fallback: 'Grid: {state}', params: { state: stateLabel } })
+
   return (
-    <ToolbarTooltip label={`Grid: ${showGrid ? 'Visible' : 'Hidden'}`}>
+    <ToolbarTooltip label={label}>
       <button
-        aria-label={`Grid: ${showGrid ? 'Visible' : 'Hidden'}`}
+        aria-label={label}
         aria-pressed={showGrid}
         className={cn(
           TOOLBAR_BTN,
@@ -246,8 +284,11 @@ function UnitToggle() {
   const unit = useViewer((state) => state.unit)
   const setUnit = useViewer((state) => state.setUnit)
 
+  const label =
+    unit === 'metric' ? t('toolbar.metric', 'Metric (m)') : t('toolbar.imperial', 'Imperial (ft)')
+
   return (
-    <ToolbarTooltip label={unit === 'metric' ? 'Metric (m)' : 'Imperial (ft)'}>
+    <ToolbarTooltip label={label}>
       <button
         className={TOOLBAR_BTN}
         onClick={() => setUnit(unit === 'metric' ? 'imperial' : 'metric')}
@@ -263,8 +304,10 @@ function ThemeToggle() {
   const theme = useViewer((state) => state.theme)
   const setTheme = useViewer((state) => state.setTheme)
 
+  const label = theme === 'dark' ? t('toolbar.dark', 'Dark') : t('toolbar.light', 'Light')
+
   return (
-    <ToolbarTooltip label={theme === 'dark' ? 'Dark' : 'Light'}>
+    <ToolbarTooltip label={label}>
       <button
         className={cn(TOOLBAR_BTN, theme === 'dark' ? 'text-indigo-400/70' : 'text-amber-400/70')}
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -280,8 +323,13 @@ function CameraModeToggle() {
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
 
+  const label =
+    cameraMode === 'perspective'
+      ? t('toolbar.perspective', 'Perspective')
+      : t('toolbar.orthographic', 'Orthographic')
+
   return (
-    <ToolbarTooltip label={cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}>
+    <ToolbarTooltip label={label}>
       <button
         className={cn(
           TOOLBAR_BTN,
@@ -304,8 +352,10 @@ function WalkthroughButton() {
   const isFirstPersonMode = useEditor((state) => state.isFirstPersonMode)
   const setFirstPersonMode = useEditor((state) => state.setFirstPersonMode)
 
+  const label = t('toolbar.walkthrough', 'Walkthrough')
+
   return (
-    <ToolbarTooltip label="Walkthrough">
+    <ToolbarTooltip label={label}>
       <button
         className={cn(
           TOOLBAR_BTN,
@@ -321,15 +371,18 @@ function WalkthroughButton() {
 }
 
 function PreviewButton() {
+  const tooltipLabel = t('toolbar.previewMode', 'Preview mode')
+  const buttonLabel = t('toolbar.preview', 'Preview')
+
   return (
-    <ToolbarTooltip label="Preview mode">
+    <ToolbarTooltip label={tooltipLabel}>
       <button
         className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
         <Eye className="h-3.5 w-3.5 shrink-0" />
-        <span>Preview</span>
+        <span>{buttonLabel}</span>
       </button>
     </ToolbarTooltip>
   )

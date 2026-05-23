@@ -79,9 +79,7 @@ export const useKeyboard = ({
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setPhase('furnish')
-        useEditor.getState().setMode('build')
-        useEditor.getState().setActiveSidebarPanel('items')
+        useEditor.getState().enterFurnishBuildMode()
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()

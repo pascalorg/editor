@@ -6,6 +6,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from './../../../lib/utils'
+import { t } from '../../../i18n'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
@@ -31,11 +32,10 @@ type ControlConfig = {
 }
 
 // Fixed set of controls — always visible, never morphs
-const controls: ControlConfig[] = [
+const controls: Omit<ControlConfig, 'label'>[] = [
   {
     id: 'select',
     imageSrc: '/icons/select.png',
-    label: 'Select',
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-400',
@@ -43,21 +43,18 @@ const controls: ControlConfig[] = [
   {
     id: 'box-select',
     iconifyIcon: 'mdi:select-drag',
-    label: 'Box select',
     color: 'hover:bg-white/5',
     activeColor: 'bg-white/10 hover:bg-white/10',
   },
   {
     id: 'site-edit',
     imageSrc: '/icons/site.png',
-    label: 'Edit site',
     color: 'hover:bg-white/5',
     activeColor: 'bg-white/10 hover:bg-white/10',
   },
   {
     id: 'build',
     imageSrc: '/icons/build.png',
-    label: 'Build',
     shortcut: 'B',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
@@ -65,7 +62,6 @@ const controls: ControlConfig[] = [
   {
     id: 'material-paint',
     imageSrc: '/icons/paint.png',
-    label: 'Material Paint',
     shortcut: 'P',
     color: 'hover:bg-amber-500/20 hover:text-amber-400',
     activeColor: 'bg-amber-500/20 text-amber-400',
@@ -73,7 +69,6 @@ const controls: ControlConfig[] = [
   {
     id: 'furnish',
     imageSrc: '/icons/couch.png',
-    label: 'Furnish',
     shortcut: 'F',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
@@ -81,7 +76,6 @@ const controls: ControlConfig[] = [
   {
     id: 'zone',
     imageSrc: '/icons/zone.png',
-    label: 'Zone',
     shortcut: 'Z',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
@@ -89,12 +83,25 @@ const controls: ControlConfig[] = [
   {
     id: 'delete',
     icon: Trash2,
-    label: 'Delete',
     shortcut: 'D',
     color: 'hover:bg-red-500/20 hover:text-red-400',
     activeColor: 'bg-red-500/20 text-red-400',
   },
 ]
+
+function getControlLabel(id: ControlId): string {
+  const fallbacks: Record<ControlId, string> = {
+    select: 'Select',
+    'box-select': 'Box select',
+    'site-edit': 'Edit site',
+    build: 'Build',
+    'material-paint': 'Material Paint',
+    furnish: 'Furnish',
+    zone: 'Zone',
+    delete: 'Delete',
+  }
+  return t(`actionMenu.${id === 'box-select' ? 'boxSelect' : id === 'site-edit' ? 'editSite' : id === 'material-paint' ? 'materialPaint' : id}`, fallbacks[id])
+}
 
 export function ControlModes() {
   const mode = useEditor((state) => state.mode)
@@ -190,10 +197,7 @@ export function ControlModes() {
       if (getIsActive('furnish')) {
         setMode('select')
       } else {
-        setPhase('furnish')
-        setMode('build')
-        // Auto-switch sidebar to the items panel so the user can pick furniture
-        useEditor.getState().setActiveSidebarPanel('items')
+        useEditor.getState().enterFurnishBuildMode()
       }
     } else if (id === 'zone') {
       if (getIsActive('zone')) {
@@ -216,6 +220,7 @@ export function ControlModes() {
         const isSiteButton = c.id === 'site-edit'
         const isActive = getIsActive(c.id)
         const isDisabled = isSiteButton && !canEnterSiteEdit
+        const label = getControlLabel(c.id)
 
         return (
           <ActionButton
@@ -237,11 +242,11 @@ export function ControlModes() {
             label={
               isSiteButton
                 ? isActive
-                  ? 'Exit site editing'
+                  ? t('actionMenu.exitSiteEditing', 'Exit site editing')
                   : canEnterSiteEdit
-                    ? 'Edit site'
-                    : 'Site editing (ground level only)'
-                : c.label
+                    ? label
+                    : t('actionMenu.siteEditingGroundOnly', 'Site editing (ground level only)')
+                : label
             }
             onClick={() => handleClick(c.id)}
             shortcut={c.shortcut}
@@ -250,7 +255,7 @@ export function ControlModes() {
           >
             {c.imageSrc ? (
               <Image
-                alt={c.label}
+                alt={label}
                 className={cn(
                   'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
                   isSiteButton

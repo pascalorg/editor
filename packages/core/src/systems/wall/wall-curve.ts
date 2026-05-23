@@ -1,10 +1,10 @@
-import type { FenceNode, WallNode } from '../../schema'
+import type { FenceNode, PipeNode, WallNode } from '../../schema'
 import type { Point2D } from './wall-mitering'
 
 const CURVE_EPSILON = 1e-6
 const DEFAULT_SAMPLE_SEGMENTS = 24
 
-type WallCurveLike = Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset'>
+type WallCurveLike = Pick<WallNode | FenceNode | PipeNode, 'start' | 'end' | 'curveOffset'>
 
 type CurveFrame = {
   point: Point2D

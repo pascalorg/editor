@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/viewer',
     '@pascal-app/core',
     '@pascal-app/editor',
+    '@pascal-app/nodes',
     '@pascal-app/mcp',
   ],
   turbopack: {

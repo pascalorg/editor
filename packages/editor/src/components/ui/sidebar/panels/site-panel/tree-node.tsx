@@ -60,6 +60,7 @@ import { ColumnTreeNode } from './column-tree-node'
 import { DoorTreeNode } from './door-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
 import { FenceTreeNode } from './fence-tree-node'
+import { PipeTreeNode } from './pipe-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
@@ -114,6 +115,7 @@ const treeNodeByType: Record<
   }>,
   wall: WallTreeNode,
   fence: FenceTreeNode,
+  pipe: PipeTreeNode,
   roof: RoofTreeNode,
   stair: StairTreeNode,
   door: DoorTreeNode,

@@ -27,6 +27,7 @@ import {
   useState,
 } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { isPlanDragMovableNode, PLAN_DRAG_THRESHOLD_PX } from '../../../lib/plan-drag'
 import useEditor from '../../../store/use-editor'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -132,6 +133,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // Interactive state lives in refs; only the visible feedback bits go
   // into React state to keep re-renders cheap during drag.
   const dragRef = useRef<ActiveDrag | null>(null)
+  const pendingItemDragRef = useRef<{
+    nodeId: AnyNodeId
+    startX: number
+    startY: number
+  } | null>(null)
   const [hoveredHandleId, setHoveredHandleId] = useState<string | null>(null)
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
@@ -140,9 +146,54 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (event.button !== 0) return
       event.stopPropagation()
       setSelection({ selectedIds: [id] })
+
+      const node = useScene.getState().nodes[id]
+      if (node && isPlanDragMovableNode(node) && !movingNode) {
+        pendingItemDragRef.current = {
+          nodeId: id,
+          startX: event.clientX,
+          startY: event.clientY,
+        }
+      }
     },
-    [setSelection],
+    [movingNode, setSelection],
   )
+
+  useEffect(() => {
+    const tryStartItemDrag = (clientX: number, clientY: number) => {
+      const pending = pendingItemDragRef.current
+      if (!pending || movingNode) return
+      const dx = clientX - pending.startX
+      const dy = clientY - pending.startY
+      if (Math.hypot(dx, dy) < PLAN_DRAG_THRESHOLD_PX) return
+
+      const node = useScene.getState().nodes[pending.nodeId]
+      if (!node || !isPlanDragMovableNode(node)) return
+
+      pendingItemDragRef.current = null
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(node as never)
+    }
+
+    const clearPendingItemDrag = () => {
+      pendingItemDragRef.current = null
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      tryStartItemDrag(event.clientX, event.clientY)
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', clearPendingItemDrag)
+    window.addEventListener('pointercancel', clearPendingItemDrag)
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', clearPendingItemDrag)
+      window.removeEventListener('pointercancel', clearPendingItemDrag)
+      pendingItemDragRef.current = null
+    }
+  }, [movingNode, setMovingNode])
 
   const handleClickStop = useCallback((event: React.MouseEvent<SVGGElement>) => {
     event.stopPropagation()
@@ -213,6 +264,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
               position: live.position,
               rotation: [0, live.rotation, 0] as [number, number, number],
               parentId: null,
+            } as AnyNode
+          } else if (node.type === 'stair') {
+            effectiveNode = {
+              ...node,
+              position: live.position,
             } as AnyNode
           } else if (node.type === 'slab' || node.type === 'ceiling') {
             const dx = live.position[0]

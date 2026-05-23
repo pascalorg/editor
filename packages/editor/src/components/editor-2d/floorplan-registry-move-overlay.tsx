@@ -4,15 +4,30 @@ import {
   type AnyNode,
   type AnyNodeId,
   type FloorplanMoveTargetSession,
+  type FenceNode,
+  type LevelNode,
+  type PipeNode,
   nodeRegistry,
   pauseSceneHistory,
   resumeSceneHistory,
   snapPointToGrid,
+  type WallNode,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { snapPipeDraftPoint } from '../../components/tools/pipe/pipe-drafting'
+import { snapFenceDraftPoint } from '../../components/tools/fence/fence-drafting'
+import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
+import { getLinkedPipeSnapshots } from '../../lib/pipe-plan-move'
+import {
+  applySegmentEndpointPreview,
+  computeSegmentDragEndpoints,
+  getLinkedSegmentSnapshots,
+  getSegmentPlanMidpoint,
+} from '../../lib/segment-plan-move'
+import { getWallGridStep, snapScalarToGrid } from '../../components/tools/wall/wall-drafting'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
@@ -337,6 +352,171 @@ export function FloorplanRegistryMoveOverlay() {
         // it for us.
         for (const id of session.affectedIds) {
           useLiveTransforms.getState().clear(id)
+        }
+      }
+    }
+
+    // ── Path 1b — whole-segment translate (pipe / wall / fence) ─────
+    if (
+      movingNode.type === 'pipe' ||
+      movingNode.type === 'wall' ||
+      movingNode.type === 'fence'
+    ) {
+      type SegmentNode = PipeNode | WallNode | FenceNode
+      const segment = movingNode as SegmentNode
+      const originalStart = [...segment.start] as [number, number]
+      const originalEnd = [...segment.end] as [number, number]
+      const linkedSegments =
+        segment.type === 'pipe'
+          ? getLinkedPipeSnapshots({
+              pipeId: segment.id,
+              pipeParentId: segment.parentId ?? null,
+              originalStart,
+              originalEnd,
+            })
+          : getLinkedSegmentSnapshots({
+              segmentId: segment.id,
+              segmentParentId: segment.parentId ?? null,
+              segmentType: segment.type,
+              originalStart,
+              originalEnd,
+            })
+      let dragAnchor: [number, number] | null = null
+      let preview: { start: [number, number]; end: [number, number] } | null = null
+
+      const levelNode =
+        segment.parentId &&
+        useScene.getState().nodes[segment.parentId as AnyNodeId]?.type === 'level'
+          ? (useScene.getState().nodes[segment.parentId as AnyNodeId] as LevelNode)
+          : null
+      const levelChildren = levelNode?.children ?? []
+      const levelWalls = levelChildren
+        .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+        .filter((child): child is WallNode => child?.type === 'wall')
+      const levelPipes = levelChildren
+        .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+        .filter((child): child is PipeNode => child?.type === 'pipe')
+      const levelFences = levelChildren
+        .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+        .filter((child): child is FenceNode => child?.type === 'fence')
+
+      pauseSceneHistory(useScene)
+      let historyPaused = true
+
+      const restoreOriginal = () => {
+        applySegmentEndpointPreview(
+          segment.id,
+          linkedSegments,
+          originalStart,
+          originalEnd,
+          originalStart,
+          originalEnd,
+        )
+      }
+
+      const snapCursor = (planPoint: [number, number]): [number, number] => {
+        if (segment.type === 'pipe') {
+          return snapPipeDraftPoint({
+            point: planPoint,
+            walls: levelWalls,
+            pipes: levelPipes,
+            ignorePipeIds: [segment.id],
+          })
+        }
+        if (segment.type === 'fence') {
+          return snapFenceDraftPoint({
+            point: planPoint,
+            walls: levelWalls,
+            fences: levelFences,
+            ignoreFenceIds: [segment.id],
+          })
+        }
+        const step = getWallGridStep()
+        return [snapScalarToGrid(planPoint[0], step), snapScalarToGrid(planPoint[1], step)]
+      }
+
+      const isPointerOverFloorplanScene = (clientX: number, clientY: number): boolean => {
+        const svg = scene.ownerSVGElement
+        if (!svg) return false
+        const rect = svg.getBoundingClientRect()
+        return (
+          clientX >= rect.left &&
+          clientX <= rect.right &&
+          clientY >= rect.top &&
+          clientY <= rect.bottom
+        )
+      }
+
+      const onMove = (event: PointerEvent) => {
+        if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+        const m = toMeters(event.clientX, event.clientY)
+        if (!m) return
+        const [localX, localZ] = snapCursor(m)
+        const anchor = dragAnchor ?? getSegmentPlanMidpoint(segment)
+        dragAnchor = anchor
+        const { start, end } = computeSegmentDragEndpoints({
+          originalStart,
+          originalEnd,
+          dragAnchor: anchor,
+          cursorPlan: [localX, localZ],
+        })
+        preview = { start, end }
+        applySegmentEndpointPreview(
+          segment.id,
+          linkedSegments,
+          originalStart,
+          originalEnd,
+          start,
+          end,
+        )
+      }
+
+      const onPointerUp = (event: PointerEvent) => {
+        if (event.button !== 0) return
+        if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+        if (!preview) {
+          setMovingNode(null)
+          return
+        }
+
+        restoreOriginal()
+        resumeSceneHistory(useScene)
+        historyPaused = false
+        applySegmentEndpointPreview(
+          segment.id,
+          linkedSegments,
+          originalStart,
+          originalEnd,
+          preview.start,
+          preview.end,
+        )
+        floorItemDragSuppressClickRef.current = true
+        sfxEmitter.emit('sfx:item-place')
+        useViewer.getState().setSelection({ selectedIds: [segment.id] })
+        setMovingNode(null)
+      }
+
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key !== 'Escape') return
+        restoreOriginal()
+        if (historyPaused) {
+          resumeSceneHistory(useScene)
+          historyPaused = false
+        }
+        useViewer.getState().setSelection({ selectedIds: [segment.id] })
+        setMovingNode(null)
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onPointerUp)
+      window.addEventListener('keydown', onKey)
+      return () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onPointerUp)
+        window.removeEventListener('keydown', onKey)
+        if (historyPaused) {
+          restoreOriginal()
+          resumeSceneHistory(useScene)
         }
       }
     }

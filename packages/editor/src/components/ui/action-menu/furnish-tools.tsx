@@ -1,4 +1,5 @@
 import type { CatalogCategory } from './../../../store/use-editor'
+import { t } from '../../../i18n'
 
 export type FurnishToolConfig = {
   id: 'item'
@@ -14,3 +15,14 @@ export const furnishTools: FurnishToolConfig[] = [
   { id: 'item', iconSrc: '/icons/bathroom.png', label: 'Bathroom', catalogCategory: 'bathroom' },
   { id: 'item', iconSrc: '/icons/tree.png', label: 'Outdoor', catalogCategory: 'outdoor' },
 ]
+
+export function getFurnishToolLabel(category: CatalogCategory): string {
+  const fallbacks: Partial<Record<CatalogCategory, string>> = {
+    furniture: 'Furniture',
+    appliance: 'Appliance',
+    kitchen: 'Kitchen',
+    bathroom: 'Bathroom',
+    outdoor: 'Outdoor',
+  }
+  return t(`sidebar.furnishCategories.${category}`, fallbacks[category] ?? category)
+}

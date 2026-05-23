@@ -2,6 +2,7 @@
 
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
+import { t } from '../../../i18n'
 import { ActionButton } from './action-button'
 
 export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
@@ -17,20 +18,23 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
     emitter.emit('camera-controls:orbit-ccw')
   }
 
+  const orbitLeft = t('actionMenu.orbitLeft', 'Orbit Left')
+  const orbitRight = t('actionMenu.orbitRight', 'Orbit Right')
+  const topView = t('actionMenu.topView', 'Top View')
+
   return (
     <div className="flex items-center gap-1">
       {!hideOrbit && (
         <>
-          {/* Orbit CCW */}
           <ActionButton
             className="group hover:bg-white/5"
-            label="Orbit Left"
+            label={orbitLeft}
             onClick={orbitCCW}
             size="icon"
             variant="ghost"
           >
             <Image
-              alt="Orbit Left"
+              alt={orbitLeft}
               className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
               src="/icons/rotate.png"
@@ -38,16 +42,15 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
             />
           </ActionButton>
 
-          {/* Orbit CW */}
           <ActionButton
             className="group hover:bg-white/5"
-            label="Orbit Right"
+            label={orbitRight}
             onClick={orbitCW}
             size="icon"
             variant="ghost"
           >
             <Image
-              alt="Orbit Right"
+              alt={orbitRight}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
               src="/icons/rotate.png"
@@ -57,16 +60,15 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
         </>
       )}
 
-      {/* Top View */}
       <ActionButton
         className="group hover:bg-white/5"
-        label="Top View"
+        label={topView}
         onClick={goToTopView}
         size="icon"
         variant="ghost"
       >
         <Image
-          alt="Top View"
+          alt={topView}
           className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
           height={28}
           src="/icons/topview.png"

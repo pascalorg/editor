@@ -4,6 +4,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
 import { FenceNode } from './fence'
+import { PipeNode } from './pipe'
 import { GuideNode } from './guide'
 import { ItemNode } from './item'
 import { RoofNode } from './roof'
@@ -23,6 +24,7 @@ export const LevelNode = BaseNode.extend({
       z.union([
         WallNode.shape.id,
         FenceNode.shape.id,
+        PipeNode.shape.id,
         ColumnNode.shape.id,
         ItemNode.shape.id,
         ZoneNode.shape.id,

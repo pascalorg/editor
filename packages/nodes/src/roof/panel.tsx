@@ -22,6 +22,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { L, N, S, roofTypeLabel } from '../i18n/panel-labels'
 
 export default function RoofPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -111,10 +112,10 @@ export default function RoofPanel() {
     <PanelWrapper
       icon="/icons/roof.png"
       onClose={handleClose}
-      title={node.name || 'Roof'}
+      title={node.name || N.roof()}
       width={300}
     >
-      <PanelSection title="Segments">
+      <PanelSection title={S.segments()}>
         <div className="flex flex-col gap-1">
           {segments.map((seg, i) => (
             <button
@@ -123,23 +124,23 @@ export default function RoofPanel() {
               onClick={() => handleSelectSegment(seg.id)}
               type="button"
             >
-              <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
-              <span className="text-muted-foreground text-xs capitalize">{seg.roofType}</span>
+              <span className="truncate">{seg.name || L.segmentNamed(i + 1)}</span>
+              <span className="text-muted-foreground text-xs capitalize">{roofTypeLabel(seg.roofType)}</span>
             </button>
           ))}
         </div>
         <ActionGroup>
           <ActionButton
             icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add Segment"
+            label={L.addSegment()}
             onClick={handleAddSegment}
           />
         </ActionGroup>
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={S.position()}>
         <SliderControl
-          label="X"
+          label={L.x()}
           max={50}
           min={-50}
           onChange={(v) => {
@@ -153,7 +154,7 @@ export default function RoofPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label="Y"
+          label={L.y()}
           max={50}
           min={-50}
           onChange={(v) => {
@@ -167,7 +168,7 @@ export default function RoofPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label="Z"
+          label={L.z()}
           max={50}
           min={-50}
           onChange={(v) => {
@@ -181,7 +182,7 @@ export default function RoofPanel() {
           value={Math.round(node.position[2] * 100) / 100}
         />
         <SliderControl
-          label="Rotation"
+          label={L.rotation()}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -194,14 +195,14 @@ export default function RoofPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label="-45°"
+            label={L.rotateMinus45()}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
-            label="+45°"
+            label={L.rotatePlus45()}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
@@ -210,18 +211,18 @@ export default function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={L.duplicate()}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            label={L.delete()}
             onClick={handleDelete}
           />
         </ActionGroup>

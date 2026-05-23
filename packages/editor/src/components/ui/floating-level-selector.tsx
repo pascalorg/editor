@@ -49,6 +49,8 @@ import {
 } from '../../lib/scene-clipboard'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
+import { t } from '../../i18n'
+import { lblLevelFallback } from '../../i18n/sidebar-labels'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
 import {
   Dialog,
@@ -61,7 +63,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from './primitives/popover'
 
 function getLevelDisplayLabel(level: LevelNode) {
-  return level.name || `Level ${level.level}`
+  return level.name || lblLevelFallback(level.level)
 }
 
 // ── Inline rename input for a level row ─────────────────────────────────────
@@ -76,7 +78,7 @@ function LevelInlineRename({
   onStopEditing: () => void
 }) {
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = `Level ${level.level}`
+  const defaultName = lblLevelFallback(level.level)
   const [value, setValue] = useState(level.name || '')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -169,7 +171,10 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayLabel(level)}`}
+            aria-label={t('sidebar.reorderLevel', {
+              fallback: 'Reorder {name}',
+              params: { name: getLevelDisplayLabel(level) },
+            })}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -179,7 +184,7 @@ function LevelRow({
               dragHandleProps?.onClick?.(e)
             }}
             ref={dragHandleRef}
-            title="Drag to reorder"
+            title={t('sidebar.dragToReorder', 'Drag to reorder')}
             type="button"
           >
             <GripVertical className="h-3.5 w-3.5" />
@@ -219,7 +224,7 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate level
+                {t('sidebar.duplicateLevel', 'Duplicate level')}
               </button>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
@@ -230,7 +235,7 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate with options...
+                {t('sidebar.duplicateLevelWithOptions', 'Duplicate with options...')}
               </button>
               {onPaste && (
                 <button
@@ -242,7 +247,7 @@ function LevelRow({
                   type="button"
                 >
                   <ClipboardPaste className="h-3 w-3" />
-                  Paste copied selection
+                  {t('sidebar.pasteCopiedSelection', 'Paste copied selection')}
                 </button>
               )}
               <button
@@ -254,7 +259,7 @@ function LevelRow({
                 type="button"
               >
                 <Trash2 className="h-3 w-3" />
-                Delete level
+                {t('sidebar.deleteLevel', 'Delete level')}
               </button>
             </PopoverContent>
           </Popover>
@@ -520,7 +525,7 @@ export function FloatingLevelSelector() {
             <button
               className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
               onClick={handleAddAbove}
-              title="Add level above"
+              title={t('sidebar.addLevelAbove', 'Add level above')}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -532,7 +537,7 @@ export function FloatingLevelSelector() {
             <button
               className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
               onClick={handleAddBelow}
-              title="Add level below"
+              title={t('sidebar.addLevelBelow', 'Add level below')}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -577,7 +582,7 @@ export function FloatingLevelSelector() {
                         <button
                           className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
                           onClick={() => handleInsertBetween(sortedIndex - 1)}
-                          title="Insert level here"
+                          title={t('sidebar.insertLevelHere', 'Insert level here')}
                           type="button"
                         >
                           <Plus className="h-2.5 w-2.5" />
@@ -596,11 +601,13 @@ export function FloatingLevelSelector() {
       <Dialog onOpenChange={(open) => !open && setDeletingLevel(null)} open={!!deletingLevel}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Delete level</DialogTitle>
+            <DialogTitle>{t('sidebar.deleteLevelConfirmTitle', 'Delete level')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{deletingLevel ? getLevelDisplayLabel(deletingLevel) : ''}</strong>? All
-              walls, floors, and objects on this level will be permanently removed.
+              {t('sidebar.deleteLevelConfirm', {
+                fallback:
+                  'Are you sure you want to delete {name}? All walls, floors, and objects on this level will be permanently removed.',
+                params: { name: deletingLevel ? getLevelDisplayLabel(deletingLevel) : '' },
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -609,14 +616,14 @@ export function FloatingLevelSelector() {
               onClick={() => setDeletingLevel(null)}
               type="button"
             >
-              Cancel
+              {t('sidebar.cancel', 'Cancel')}
             </button>
             <button
               className="rounded-full bg-red-600 px-4 py-2 text-sm text-white transition-colors hover:bg-red-700"
               onClick={handleConfirmDelete}
               type="button"
             >
-              Delete
+              {t('sidebar.delete', 'Delete')}
             </button>
           </DialogFooter>
         </DialogContent>

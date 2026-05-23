@@ -1,13 +1,11 @@
 'use client'
 
 import NextImage from 'next/image'
-import { useContextualTools } from '../../../hooks/use-contextual-tools'
-
+import { t } from '../../../i18n'
 import { cn } from '../../../lib/utils'
 import useEditor, {
   type CatalogCategory,
   type StructureTool,
-  type Tool,
 } from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 
@@ -25,16 +23,37 @@ export const tools: ToolConfig[] = [
   { id: 'stair', iconSrc: '/icons/stairs.png', label: 'Stairs' },
   { id: 'roof', iconSrc: '/icons/roof.png', label: 'Gable Roof' },
   { id: 'fence', iconSrc: '/icons/fence.png', label: 'Fence' },
+  { id: 'pipe', iconSrc: '/icons/custom-room.png', label: 'Pipe' },
   { id: 'column', iconSrc: '/icons/column.png', label: 'Column' },
   { id: 'elevator', iconSrc: '/icons/elevator.png', label: 'Elevator' },
-  // { id: 'room', iconSrc: '/icons/room.png', label: 'Room' },
-  // { id: 'custom-room', iconSrc: '/icons/custom-room.png', label: 'Custom Room' },
   { id: 'slab', iconSrc: '/icons/floor.png', label: 'Slab' },
   { id: 'ceiling', iconSrc: '/icons/ceiling.png', label: 'Ceiling' },
   { id: 'zone', iconSrc: '/icons/zone.png', label: 'Zone' },
   { id: 'spawn', iconSrc: '/icons/site.png', label: 'Spawn Point' },
   { id: 'shelf', iconSrc: '/icons/shelf.png', label: 'Shelf' },
 ]
+
+const STRUCTURE_TOOL_KEYS: Partial<Record<StructureTool, string>> = {
+  wall: 'wall',
+  door: 'door',
+  window: 'window',
+  stair: 'stair',
+  roof: 'roof',
+  fence: 'fence',
+  pipe: 'pipe',
+  column: 'column',
+  elevator: 'elevator',
+  slab: 'slab',
+  ceiling: 'ceiling',
+  zone: 'zone',
+  spawn: 'spawn',
+  shelf: 'shelf',
+}
+
+export function getStructureToolLabel(id: StructureTool, fallback: string): string {
+  const key = STRUCTURE_TOOL_KEYS[id]
+  return key ? t(`actionMenu.structureTools.${key}`, fallback) : fallback
+}
 
 export function StructureTools() {
   const activeTool = useEditor((state) => state.tool)
@@ -43,28 +62,19 @@ export function StructureTools() {
   const setTool = useEditor((state) => state.setTool)
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
 
-  const contextualTools = useContextualTools()
-
-  // Filter tools based on structureLayer
   const visibleTools =
     structureLayer === 'zones'
-      ? tools.filter((t) => t.id === 'zone')
-      : tools.filter((t) => t.id !== 'zone')
-
-  const hasActiveTool = visibleTools.some(
-    (t) =>
-      activeTool === t.id && (t.catalogCategory ? catalogCategory === t.catalogCategory : true),
-  )
+      ? tools.filter((tool) => tool.id === 'zone')
+      : tools.filter((tool) => tool.id !== 'zone')
 
   return (
     <div className="flex items-center gap-1.5 px-1">
       {visibleTools.map((tool, index) => {
-        // For item tools with catalog category, check both tool and category match
         const isActive =
           activeTool === tool.id &&
           (tool.catalogCategory ? catalogCategory === tool.catalogCategory : true)
 
-        const isContextual = contextualTools.includes(tool.id)
+        const label = getStructureToolLabel(tool.id, tool.label)
 
         return (
           <ActionButton
@@ -75,13 +85,12 @@ export function StructureTools() {
                 : 'scale-95 bg-transparent opacity-60 grayscale hover:bg-black/20 hover:opacity-100 hover:grayscale-0',
             )}
             key={`${tool.id}-${tool.catalogCategory ?? index}`}
-            label={tool.label}
+            label={label}
             onClick={() => {
               if (!isActive) {
                 setTool(tool.id)
                 setCatalogCategory(tool.catalogCategory ?? null)
 
-                // Automatically switch to build mode if we select a tool
                 if (useEditor.getState().mode !== 'build') {
                   useEditor.getState().setMode('build')
                 }
@@ -90,13 +99,7 @@ export function StructureTools() {
             size="icon"
             variant="ghost"
           >
-            <NextImage
-              alt={tool.label}
-              className="size-full object-contain"
-              height={28}
-              src={tool.iconSrc}
-              width={28}
-            />
+            <NextImage alt={label} className="size-full object-contain" height={28} src={tool.iconSrc} width={28} />
           </ActionButton>
         )
       })}

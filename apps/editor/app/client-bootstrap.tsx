@@ -1,5 +1,6 @@
 'use client'
 
+import '@/i18n/init'
 // Loads `@pascal-app/nodes`' built-in plugin into the node registry on the
 // client. Mounted from `layout.tsx` so every page in the standalone
 // editor gets the registry populated before its first `<Viewer>` /
@@ -10,7 +11,8 @@
 // idempotent under HMR.
 import '../lib/bootstrap'
 import type { ReactNode } from 'react'
+import { I18nProvider } from '@/i18n/provider'
 
 export function ClientBootstrap({ children }: { children: ReactNode }) {
-  return children
+  return <I18nProvider>{children}</I18nProvider>
 }

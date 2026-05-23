@@ -2,6 +2,13 @@ import { emitter, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Camera, Hexagon, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { t } from '../../../../../i18n'
+import {
+  lblCameraSnapshot,
+  lblClearSnapshot,
+  lblTakeOrUpdateSnapshot,
+  lblViewSnapshot,
+} from '../../../../../i18n/sidebar-labels'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
@@ -51,13 +58,12 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       </span>
       <Hexagon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
       <span className="flex-1 truncate">{zone.name}</span>
-      {/* Camera snapshot button */}
       <Popover onOpenChange={setCameraPopoverOpen} open={cameraPopoverOpen}>
         <PopoverTrigger asChild>
           <button
             className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
             onClick={(e) => e.stopPropagation()}
-            title="Camera snapshot"
+            title={lblCameraSnapshot()}
           >
             <Camera className="h-3 w-3" />
             {zone.camera && (
@@ -82,7 +88,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                View snapshot
+                {lblViewSnapshot()}
               </button>
             )}
             <button
@@ -94,7 +100,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
               }}
             >
               <Camera className="h-3.5 w-3.5" />
-              {zone.camera ? 'Update snapshot' : 'Take snapshot'}
+              {lblTakeOrUpdateSnapshot(!!zone.camera)}
             </button>
             {zone.camera && (
               <button
@@ -106,7 +112,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Clear snapshot
+                {lblClearSnapshot()}
               </button>
             )}
           </div>
@@ -129,7 +135,6 @@ export function ZonePanel() {
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
 
-  // Filter nodes to get zones for the current level
   const levelZones = Object.values(nodes).filter(
     (node): node is ZoneNode => node.type === 'zone' && node.parentId === currentLevelId,
   )
@@ -145,7 +150,7 @@ export function ZonePanel() {
   if (!currentLevelId) {
     return (
       <div className="px-3 py-4 text-muted-foreground text-sm">
-        Select a level to view and create zones
+        {t('sidebar.selectLevelForZones', 'Select a level to view and create zones')}
       </div>
     )
   }
@@ -154,9 +159,9 @@ export function ZonePanel() {
     <div className="py-1">
       {levelZones.length === 0 ? (
         <div className="px-3 py-4 text-muted-foreground text-sm">
-          No zones on this level.{' '}
+          {t('sidebar.noZonesOnLevel', 'No zones on this level.')}{' '}
           <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            Add one
+            {t('sidebar.addOne', 'Add one')}
           </button>
         </div>
       ) : (

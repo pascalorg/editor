@@ -4,9 +4,10 @@ import type { AssetInput } from '@pascal-app/core'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
 import { cn } from '../../../../../lib/utils'
+import { t } from '../../../../../i18n'
 import type { CatalogCategory } from '../../../../../store/use-editor'
 import useEditor from '../../../../../store/use-editor'
-import { furnishTools } from '../../../action-menu/furnish-tools'
+import { furnishTools, getFurnishToolLabel } from '../../../action-menu/furnish-tools'
 import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 
@@ -101,9 +102,9 @@ export function ItemsPanel({
   // filter even before they own any items. Selecting "Mine" with no
   // matching items falls through to the empty/no-results state.
   const sourceChips: Array<{ id: AssetInput['source']; label: string }> = [
-    { id: 'library', label: 'Library' },
-    { id: 'community', label: 'Community' },
-    { id: 'mine', label: 'Mine' },
+    { id: 'library', label: t('sidebar.library', 'Library') },
+    { id: 'community', label: t('sidebar.community', 'Community') },
+    { id: 'mine', label: t('sidebar.mine', 'Mine') },
   ]
   const allTags = Array.from(new Set(categoryItems.flatMap((item) => item.tags ?? [])))
   const placementTags = allTags.filter((t) => PLACEMENT_TAGS.has(t))
@@ -145,13 +146,15 @@ export function ItemsPanel({
               type="button"
             >
               <NextImage
-                alt={cat.label}
+                alt={getFurnishToolLabel(cat.catalogCategory)}
                 className={cn('size-7 object-contain', !isActive && 'opacity-60 grayscale')}
                 height={28}
                 src={cat.iconSrc}
                 width={28}
               />
-              <span className="font-medium text-[10px] leading-none">{cat.label}</span>
+              <span className="font-medium text-[10px] leading-none">
+                {getFurnishToolLabel(cat.catalogCategory)}
+              </span>
             </button>
           )
         })}
@@ -168,7 +171,7 @@ export function ItemsPanel({
               setSearch(e.target.value)
               onSearchChange?.(e.target.value)
             }}
-            placeholder="Search..."
+            placeholder={t('sidebar.search', 'Search...')}
             type="text"
             value={search}
           />
@@ -210,7 +213,7 @@ export function ItemsPanel({
                   onClick={() => setActivePlacementTag(null)}
                   type="button"
                 >
-                  All
+                  {t('sidebar.all', 'All')}
                 </button>
                 {placementTags.map((tag) => {
                   const count = placementCount(tag)
@@ -302,7 +305,10 @@ export function ItemsPanel({
         ) : isServerSearch && search && searchResults?.length === 0 ? (
           (emptyState ?? (
             <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
-              No results for &ldquo;{search}&rdquo;
+              {t('sidebar.noResultsFor', {
+                fallback: 'No results for "{query}"',
+                params: { query: search },
+              })}
             </div>
           ))
         ) : (

@@ -52,6 +52,8 @@ import {
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
+import { isPlanDragMovableNode, PLAN_DRAG_3D_KINDS, PLAN_DRAG_THRESHOLD_PX } from '../../lib/plan-drag'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
@@ -1123,6 +1125,84 @@ export const SelectionManager = () => {
     }
   }, [])
 
+  const pendingPlanDragRef = useRef<{
+    nodeId: AnyNodeId
+    startX: number
+    startY: number
+  } | null>(null)
+
+  useEffect(() => {
+    if (mode !== 'select') return
+    if (movingNode || curvingWall || curvingFence) return
+
+    const startPlanDrag = (nodeId: AnyNodeId) => {
+      const liveNode = useScene.getState().nodes[nodeId]
+      if (!liveNode || !isPlanDragMovableNode(liveNode)) return
+      pendingPlanDragRef.current = null
+      floorItemDragSuppressClickRef.current = true
+      sfxEmitter.emit('sfx:item-pick')
+      useEditor.getState().setMovingNode(liveNode as never)
+    }
+
+    const onPointerDown = (event: NodeEvent) => {
+      const node = event.node
+      if (!isPlanDragMovableNode(node)) return
+      if (event.nativeEvent.shiftKey || event.nativeEvent.metaKey || event.nativeEvent.ctrlKey) {
+        return
+      }
+
+      pendingPlanDragRef.current = {
+        nodeId: node.id as AnyNodeId,
+        startX: event.nativeEvent.clientX,
+        startY: event.nativeEvent.clientY,
+      }
+
+      useViewer.getState().setSelection({ selectedIds: [node.id as AnyNodeId] })
+    }
+
+    const tryStartDragFromPointer = (clientX: number, clientY: number) => {
+      const pending = pendingPlanDragRef.current
+      if (!pending) return
+      const dx = clientX - pending.startX
+      const dy = clientY - pending.startY
+      if (Math.hypot(dx, dy) < PLAN_DRAG_THRESHOLD_PX) return
+      startPlanDrag(pending.nodeId)
+    }
+
+    const onNodeMove = (event: NodeEvent) => {
+      if (!pendingPlanDragRef.current) return
+      if (event.node.id !== pendingPlanDragRef.current.nodeId) return
+      tryStartDragFromPointer(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    }
+
+    const onWindowPointerMove = (event: PointerEvent) => {
+      tryStartDragFromPointer(event.clientX, event.clientY)
+    }
+
+    const clearPendingDrag = () => {
+      pendingPlanDragRef.current = null
+    }
+
+    for (const kind of PLAN_DRAG_3D_KINDS) {
+      emitter.on(`${kind}:pointerdown`, onPointerDown as never)
+      emitter.on(`${kind}:move`, onNodeMove as never)
+      emitter.on(`${kind}:pointerup`, clearPendingDrag as never)
+    }
+    window.addEventListener('pointermove', onWindowPointerMove)
+    window.addEventListener('pointerup', clearPendingDrag)
+
+    return () => {
+      for (const kind of PLAN_DRAG_3D_KINDS) {
+        emitter.off(`${kind}:pointerdown`, onPointerDown as never)
+        emitter.off(`${kind}:move`, onNodeMove as never)
+        emitter.off(`${kind}:pointerup`, clearPendingDrag as never)
+      }
+      window.removeEventListener('pointermove', onWindowPointerMove)
+      window.removeEventListener('pointerup', clearPendingDrag)
+      pendingPlanDragRef.current = null
+    }
+  }, [curvingFence, curvingWall, mode, movingNode])
+
   useEffect(() => {
     if (mode !== 'select') return
     if (movingNode || curvingWall || curvingFence) return
@@ -1130,6 +1210,10 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       // Skip if box-select just completed (drag ended over a node)
       if (boxSelectHandled) return
+      if (floorItemDragSuppressClickRef.current) {
+        floorItemDragSuppressClickRef.current = false
+        return
+      }
 
       const node = event.node
       let currentPhase = useEditor.getState().phase

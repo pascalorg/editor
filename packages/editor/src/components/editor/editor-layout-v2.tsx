@@ -34,6 +34,7 @@ function LeftColumn({
 
   const isResizing = useRef(false)
   const isExpanding = useRef(false)
+  const prevPanelRef = useRef(activePanel)
 
   // Ensure active panel is a valid tab
   useEffect(() => {
@@ -42,12 +43,17 @@ function LeftColumn({
     }
   }, [tabs, activePanel, setActivePanel])
 
-  // Leaving the items tab while furnishing should drop back to select mode
+  // Leaving the items tab while furnishing should drop back to select mode.
+  // Only react to explicit tab transitions — not mount/rehydrate while still
+  // on another tab, which used to race with enterFurnishBuildMode().
   useEffect(() => {
-    if (activePanel === 'items') return
-    const { phase, mode, setMode } = useEditor.getState()
-    if (phase === 'furnish' && mode === 'build') {
-      setMode('select')
+    const prev = prevPanelRef.current
+    prevPanelRef.current = activePanel
+    if (prev === 'items' && activePanel !== 'items') {
+      const { phase, mode, setMode } = useEditor.getState()
+      if (phase === 'furnish' && mode === 'build') {
+        setMode('select')
+      }
     }
   }, [activePanel])
 

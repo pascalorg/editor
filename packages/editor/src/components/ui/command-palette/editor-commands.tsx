@@ -35,12 +35,28 @@ import {
   Video,
 } from 'lucide-react'
 import { useEffect } from 'react'
+import { t } from '../../../i18n'
 import { runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
 import { useCommandPalette } from './index'
+
+function wallModeBadge(mode: string): string {
+  const fallbacks: Record<string, string> = { cutaway: 'Cutaway', up: 'Up', down: 'Down' }
+  return t(`command.badge.wallMode.${mode}`, fallbacks[mode] ?? mode)
+}
+
+function levelModeBadge(mode: string): string {
+  const fallbacks: Record<string, string> = {
+    manual: 'Manual',
+    stacked: 'Stacked',
+    exploded: 'Exploded',
+    solo: 'Solo',
+  }
+  return t(`command.badge.levelMode.${mode}`, fallbacks[mode] ?? mode)
+}
 
 export function EditorCommands() {
   const register = useCommandRegistry((s) => s.register)
@@ -56,7 +72,6 @@ export function EditorCommands() {
 
   const exportScene = useViewer((s) => s.exportScene)
 
-  // Re-register when exportScene availability changes (it's a conditional action)
   useEffect(() => {
     const run = (fn: () => void) => {
       fn()
@@ -72,76 +87,82 @@ export function EditorCommands() {
       })
     }
 
+    const groupScene = t('command.groups.scene', 'Scene')
+    const groupLevels = t('command.groups.levels', 'Levels')
+    const groupViewerControls = t('command.groups.viewerControls', 'Viewer Controls')
+    const groupView = t('command.groups.view', 'View')
+    const groupHistory = t('command.groups.history', 'History')
+    const groupExportShare = t('command.groups.exportShare', 'Export & Share')
+
     return register([
-      // ── Scene ────────────────────────────────────────────────────────────
       {
         id: 'editor.tool.wall',
-        label: 'Wall Tool',
-        group: 'Scene',
+        label: t('command.tools.wall', 'Wall Tool'),
+        group: groupScene,
         icon: <Square className="h-4 w-4" />,
         keywords: ['draw', 'build', 'structure'],
         execute: () => activateTool('wall'),
       },
       {
         id: 'editor.tool.slab',
-        label: 'Slab Tool',
-        group: 'Scene',
+        label: t('command.tools.slab', 'Slab Tool'),
+        group: groupScene,
         icon: <Layers className="h-4 w-4" />,
         keywords: ['floor', 'build'],
         execute: () => activateTool('slab'),
       },
       {
         id: 'editor.tool.ceiling',
-        label: 'Ceiling Tool',
-        group: 'Scene',
+        label: t('command.tools.ceiling', 'Ceiling Tool'),
+        group: groupScene,
         icon: <Grid3X3 className="h-4 w-4" />,
         keywords: ['top', 'build'],
         execute: () => activateTool('ceiling'),
       },
       {
         id: 'editor.tool.door',
-        label: 'Door Tool',
-        group: 'Scene',
+        label: t('command.tools.door', 'Door Tool'),
+        group: groupScene,
         icon: <DoorOpen className="h-4 w-4" />,
         keywords: ['opening', 'entrance'],
         execute: () => activateTool('door'),
       },
       {
         id: 'editor.tool.window',
-        label: 'Window Tool',
-        group: 'Scene',
+        label: t('command.tools.window', 'Window Tool'),
+        group: groupScene,
         icon: <AppWindow className="h-4 w-4" />,
         keywords: ['opening', 'glass'],
         execute: () => activateTool('window'),
       },
       {
         id: 'editor.tool.item',
-        label: 'Item Tool',
-        group: 'Scene',
+        label: t('command.tools.item', 'Item Tool'),
+        group: groupScene,
         icon: <Package className="h-4 w-4" />,
         keywords: ['furniture', 'object', 'asset', 'furnish'],
         execute: () => activateTool('item'),
       },
       {
         id: 'editor.tool.stair',
-        label: 'Stair Tool',
-        group: 'Scene',
+        label: t('command.tools.stair', 'Stair Tool'),
+        group: groupScene,
         icon: <ArrowRight className="h-4 w-4" />,
         keywords: ['stairs', 'staircase', 'flight', 'landing', 'steps'],
         execute: () => activateTool('stair'),
       },
       {
         id: 'editor.tool.zone',
-        label: 'Zone Tool',
-        group: 'Scene',
+        label: t('command.tools.zone', 'Zone Tool'),
+        group: groupScene,
         icon: <Hexagon className="h-4 w-4" />,
         keywords: ['area', 'room', 'space'],
         execute: () => activateTool('zone'),
       },
       {
         id: 'editor.delete-selection',
-        label: 'Delete Selection',
-        group: 'Scene',
+        label: t('command.tools.deleteSelection', 'Delete Selection'),
+        group: groupScene,
         icon: <Trash2 className="h-4 w-4" />,
         keywords: ['remove', 'erase'],
         shortcut: ['⌫'],
@@ -154,8 +175,8 @@ export function EditorCommands() {
       },
       {
         id: 'editor.mode.material-paint',
-        label: 'Material Paint',
-        group: 'Scene',
+        label: t('command.tools.materialPaint', 'Material Paint'),
+        group: groupScene,
         icon: <PaintBucket className="h-4 w-4" />,
         keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
         shortcut: ['P'],
@@ -168,11 +189,10 @@ export function EditorCommands() {
           }),
       },
 
-      // ── Levels ───────────────────────────────────────────────────────────
       {
         id: 'editor.level.goto',
-        label: 'Go to Level',
-        group: 'Levels',
+        label: t('command.levels.goto', 'Go to Level'),
+        group: groupLevels,
         icon: <ArrowRight className="h-4 w-4" />,
         keywords: ['level', 'floor', 'go', 'navigate', 'switch', 'select'],
         navigate: true,
@@ -181,8 +201,8 @@ export function EditorCommands() {
       },
       {
         id: 'editor.level.add',
-        label: 'Add Level',
-        group: 'Levels',
+        label: t('command.levels.add', 'Add Level'),
+        group: groupLevels,
         icon: <Plus className="h-4 w-4" />,
         keywords: ['level', 'floor', 'add', 'create', 'new'],
         execute: () =>
@@ -204,8 +224,8 @@ export function EditorCommands() {
       },
       {
         id: 'editor.level.rename',
-        label: 'Rename Level',
-        group: 'Levels',
+        label: t('command.levels.rename', 'Rename Level'),
+        group: groupLevels,
         icon: <PencilLine className="h-4 w-4" />,
         keywords: ['level', 'floor', 'rename', 'name'],
         navigate: true,
@@ -220,8 +240,8 @@ export function EditorCommands() {
       },
       {
         id: 'editor.level.delete',
-        label: 'Delete Level',
-        group: 'Levels',
+        label: t('command.levels.delete', 'Delete Level'),
+        group: groupLevels,
         icon: <Trash2 className="h-4 w-4" />,
         keywords: ['level', 'floor', 'delete', 'remove'],
         when: () => {
@@ -238,30 +258,23 @@ export function EditorCommands() {
           }),
       },
 
-      // ── Viewer Controls ──────────────────────────────────────────────────
       {
         id: 'editor.viewer.wall-mode',
-        label: 'Wall Mode',
-        group: 'Viewer Controls',
+        label: t('command.viewer.wallMode', 'Wall Mode'),
+        group: groupViewerControls,
         icon: <Layers className="h-4 w-4" />,
         keywords: ['wall', 'cutaway', 'up', 'down', 'view'],
-        badge: () => {
-          const mode = useViewer.getState().wallMode
-          return { cutaway: 'Cutaway', up: 'Up', down: 'Down' }[mode]
-        },
+        badge: () => wallModeBadge(useViewer.getState().wallMode),
         navigate: true,
         execute: () => navigateTo('wall-mode'),
       },
       {
         id: 'editor.viewer.level-mode',
-        label: 'Level Mode',
-        group: 'Viewer Controls',
+        label: t('command.viewer.levelMode', 'Level Mode'),
+        group: groupViewerControls,
         icon: <SquareStack className="h-4 w-4" />,
         keywords: ['level', 'floor', 'exploded', 'stacked', 'solo'],
-        badge: () => {
-          const mode = useViewer.getState().levelMode
-          return { manual: 'Manual', stacked: 'Stacked', exploded: 'Exploded', solo: 'Solo' }[mode]
-        },
+        badge: () => levelModeBadge(useViewer.getState().levelMode),
         navigate: true,
         execute: () => navigateTo('level-mode'),
       },
@@ -269,9 +282,16 @@ export function EditorCommands() {
         id: 'editor.viewer.camera-mode',
         label: () => {
           const mode = useViewer.getState().cameraMode
-          return `Camera: Switch to ${mode === 'perspective' ? 'Orthographic' : 'Perspective'}`
+          const targetMode =
+            mode === 'perspective'
+              ? t('command.cameraMode.orthographic', 'Orthographic')
+              : t('command.cameraMode.perspective', 'Perspective')
+          return t('command.viewer.cameraSwitch', {
+            fallback: 'Camera: Switch to {mode}',
+            params: { mode: targetMode },
+          })
         },
-        group: 'Viewer Controls',
+        group: groupViewerControls,
         icon: <Video className="h-4 w-4" />,
         keywords: ['camera', 'ortho', 'perspective', '2d', '3d', 'view'],
         execute: () =>
@@ -284,10 +304,12 @@ export function EditorCommands() {
         id: 'editor.viewer.theme',
         label: () => {
           const theme = useViewer.getState().theme
-          return theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'
+          return theme === 'dark'
+            ? t('command.viewer.themeSwitchLight', 'Switch to Light Theme')
+            : t('command.viewer.themeSwitchDark', 'Switch to Dark Theme')
         },
-        group: 'Viewer Controls',
-        icon: <Sun className="h-4 w-4" />, // icon is static; label conveys the action
+        group: groupViewerControls,
+        icon: <Sun className="h-4 w-4" />,
         keywords: ['theme', 'dark', 'light', 'appearance', 'color'],
         execute: () =>
           run(() => {
@@ -297,8 +319,8 @@ export function EditorCommands() {
       },
       {
         id: 'editor.viewer.camera-snapshot',
-        label: 'Take Snapshot',
-        group: 'Viewer Controls',
+        label: t('command.viewer.takeSnapshot', 'Take Snapshot'),
+        group: groupViewerControls,
         icon: <Camera className="h-4 w-4" />,
         keywords: ['camera', 'snapshot', 'capture', 'save', 'view', 'bookmark'],
         execute: () => {
@@ -307,19 +329,21 @@ export function EditorCommands() {
         },
       },
 
-      // ── View ─────────────────────────────────────────────────────────────
       {
         id: 'editor.view.preview',
-        label: () => (isPreviewMode ? 'Exit Preview' : 'Enter Preview'),
-        group: 'View',
+        label: () =>
+          isPreviewMode
+            ? t('command.view.exitPreview', 'Exit Preview')
+            : t('command.view.enterPreview', 'Enter Preview'),
+        group: groupView,
         icon: isPreviewMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />,
         keywords: ['preview', 'view', 'read-only', 'present'],
         execute: () => run(() => setPreviewMode(!isPreviewMode)),
       },
       {
         id: 'editor.view.fullscreen',
-        label: 'Toggle Fullscreen',
-        group: 'View',
+        label: t('command.view.toggleFullscreen', 'Toggle Fullscreen'),
+        group: groupView,
         icon: <Maximize2 className="h-4 w-4" />,
         keywords: ['fullscreen', 'maximize', 'expand', 'window'],
         execute: () =>
@@ -329,29 +353,27 @@ export function EditorCommands() {
           }),
       },
 
-      // ── History ──────────────────────────────────────────────────────────
       {
         id: 'editor.history.undo',
-        label: 'Undo',
-        group: 'History',
+        label: t('command.history.undo', 'Undo'),
+        group: groupHistory,
         icon: <Undo2 className="h-4 w-4" />,
         keywords: ['undo', 'revert', 'back'],
         execute: () => run(() => runUndo()),
       },
       {
         id: 'editor.history.redo',
-        label: 'Redo',
-        group: 'History',
+        label: t('command.history.redo', 'Redo'),
+        group: groupHistory,
         icon: <Redo2 className="h-4 w-4" />,
         keywords: ['redo', 'forward', 'repeat'],
         execute: () => run(() => runRedo()),
       },
 
-      // ── Export & Share ───────────────────────────────────────────────────
       {
         id: 'editor.export.json',
-        label: 'Export Scene (JSON)',
-        group: 'Export & Share',
+        label: t('command.export.json', 'Export Scene (JSON)'),
+        group: groupExportShare,
         icon: <FileJson className="h-4 w-4" />,
         keywords: ['export', 'download', 'json', 'save', 'data'],
         execute: () =>
@@ -372,8 +394,8 @@ export function EditorCommands() {
         ? [
             {
               id: 'editor.export.glb',
-              label: 'Export 3D Model (GLB)',
-              group: 'Export & Share',
+              label: t('command.export.glb', 'Export 3D Model (GLB)'),
+              group: groupExportShare,
               icon: <Box className="h-4 w-4" />,
               keywords: ['export', 'glb', 'gltf', '3d', 'model', 'download'],
               execute: () => run(() => exportScene()),
@@ -382,16 +404,16 @@ export function EditorCommands() {
         : []),
       {
         id: 'editor.export.share-link',
-        label: 'Copy Share Link',
-        group: 'Export & Share',
+        label: t('command.export.shareLink', 'Copy Share Link'),
+        group: groupExportShare,
         icon: <Copy className="h-4 w-4" />,
         keywords: ['share', 'copy', 'url', 'link'],
         execute: () => run(() => navigator.clipboard.writeText(window.location.href)),
       },
       {
         id: 'editor.export.screenshot',
-        label: 'Take Screenshot',
-        group: 'Export & Share',
+        label: t('command.export.screenshot', 'Take Screenshot'),
+        group: groupExportShare,
         icon: <Camera className="h-4 w-4" />,
         keywords: ['screenshot', 'capture', 'image', 'photo', 'png'],
         execute: () =>
@@ -417,6 +439,7 @@ export function EditorCommands() {
     isPreviewMode,
     setPreviewMode,
     exportScene,
+    primeMaterialPaintFromSelection,
   ])
 
   return null

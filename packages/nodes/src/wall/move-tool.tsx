@@ -2,21 +2,19 @@
 
 import {
   type AnyNodeId,
-  constrainWallMoveDeltaToAxis,
   DEFAULT_WALL_HEIGHT,
   detectSpacesForLevel,
   emitter,
   type GridEvent,
   getMaterialPresetByRef,
-  getPerpendicularWallMoveAxis,
   pauseSceneHistory,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
   resolveMaterial,
   resumeSceneHistory,
+  sceneRegistry,
   type SlabNode,
   useScene,
-  type WallMoveAxis,
   type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
   type WallNode,
@@ -25,16 +23,18 @@ import {
 import {
   CursorSphere,
   EDITOR_LAYER,
+  floorItemDragSuppressClickRef,
   getWallGridStep,
   isWallLongEnough,
+  lastGridMoveRef,
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, DoubleSide, Float32BufferAttribute } from 'three'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { DoubleSide } from 'three'
 
 /**
  * Phase 5 Stage D — wall whole-move tool (kind-owned).
@@ -363,50 +363,20 @@ function buildBridgeWallPreviews(args: {
   return previews
 }
 
-function setPreviewGeometryAttributes(
-  geometry: BufferGeometry,
-  positions: number[],
-  normals: number[],
-  uvs: number[],
-) {
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
-  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
-  geometry.setAttribute('uv2', new Float32BufferAttribute([...uvs], 2))
-}
-
-function createWallPreviewGeometry(length: number, height: number) {
-  const geometry = new BufferGeometry()
-  setPreviewGeometryAttributes(
-    geometry,
-    [0, 0, 0, length, 0, 0, length, height, 0, 0, height, 0],
-    [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-    [0, 0, 1, 0, 1, 1, 0, 1],
-  )
-  geometry.setIndex([0, 1, 2, 0, 2, 3])
-  geometry.computeBoundingSphere()
-  return geometry
-}
-
 function GhostWallPreviewMesh({ preview }: { preview: GhostWallPreview }) {
   const dx = preview.end[0] - preview.start[0]
   const dz = preview.end[1] - preview.start[1]
   const length = Math.hypot(dx, dz)
   const angle = -Math.atan2(dz, dx)
-  const geometry = useMemo(() => {
-    return length < 0.01 ? null : createWallPreviewGeometry(length, preview.height)
-  }, [length, preview.height])
 
-  useEffect(() => () => geometry?.dispose(), [geometry])
-
-  if (!geometry) {
+  if (length < 0.01) {
     return null
   }
 
   return (
     <group position={[preview.start[0], 0.02, preview.start[1]]} rotation={[0, angle, 0]}>
       <mesh frustumCulled={false} layers={EDITOR_LAYER} renderOrder={2}>
-        <primitive attach="geometry" object={geometry} />
+        <planeGeometry args={[length, preview.height]} />
         <meshBasicMaterial
           color={preview.color}
           depthTest={false}
@@ -426,7 +396,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       ? (node.metadata as Record<string, unknown>)
       : {}
   const isNew = !!meta.isNew
-  const activatedAtRef = useRef<number>(Date.now())
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
@@ -438,9 +407,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     (node.end[0] - node.start[0]) / 2,
     (node.end[1] - node.start[1]) / 2,
   ])
-  const moveAxisRef = useRef<WallMoveAxis | null>(
-    getPerpendicularWallMoveAxis(node.start, node.end),
-  )
   const linkedOriginalsRef = useRef<LinkedWallSnapshot[]>(
     isNew
       ? []
@@ -472,6 +438,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
   }, [])
 
   useEffect(() => {
+    if (useEditor.getState().isFloorplanHovered) return
+
     const nodeId = nodeIdRef.current
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
@@ -482,6 +450,20 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     pauseSceneHistory(useScene)
     let shouldRestoreOnCleanup = true
+    let hasMoved = false
+    let committed = false
+
+    const mesh = sceneRegistry.nodes.get(nodeId)
+    const restoreRaycasts: Array<() => void> = []
+    if (mesh) {
+      mesh.traverse((child) => {
+        const original = child.raycast
+        child.raycast = () => {}
+        restoreRaycasts.push(() => {
+          child.raycast = original
+        })
+      })
+    }
 
     const applyNodePreview = (
       updates: Array<{ id: WallNode['id']; start: [number, number]; end: [number, number] }>,
@@ -644,6 +626,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      hasMoved = true
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
       const snapStep = getWallGridStep()
@@ -653,36 +636,34 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      const [deltaX, deltaZ] = constrainWallMoveDeltaToAxis(
-        localX - anchor[0],
-        localZ - anchor[1],
-        moveAxisRef.current,
-      )
-      const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
+      const deltaX = localX - anchor[0]
+      const deltaZ = localZ - anchor[1]
+      const gridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
 
       if (
         previousGridPosRef.current &&
-        (constrainedGridPos[0] !== previousGridPosRef.current[0] ||
-          constrainedGridPos[1] !== previousGridPosRef.current[1])
+        (gridPos[0] !== previousGridPosRef.current[0] ||
+          gridPos[1] !== previousGridPosRef.current[1])
       ) {
         triggerSFX('sfx:grid-snap')
       }
-      previousGridPosRef.current = constrainedGridPos
+      previousGridPosRef.current = gridPos
 
       const nextCenter: [number, number] = [originalCenter[0] + deltaX, originalCenter[1] + deltaZ]
       const nextWall = buildWallFromCenter(nextCenter)
       applyPreview(nextWall.start, nextWall.end)
     }
 
-    const onGridClick = (event: GridEvent) => {
-      if (Date.now() - activatedAtRef.current < 150) {
-        event.nativeEvent?.stopPropagation?.()
-        return
-      }
+    if (lastGridMoveRef.localPosition) {
+      onGridMove({ localPosition: lastGridMoveRef.localPosition } as GridEvent)
+    }
+
+    const commitAtCursor = () => {
+      if (committed || !hasMoved) return
+      committed = true
+      shouldRestoreOnCleanup = false
 
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
-
-      shouldRestoreOnCleanup = false
 
       // Restore original baseline while paused so the next resume+update
       // registers as a single tracked change (undo reverts to original).
@@ -746,10 +727,15 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       pauseSceneHistory(useScene)
 
+      floorItemDragSuppressClickRef.current = true
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitAtCursor()
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -781,7 +767,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         (preview.start[1] + preview.end[1]) / 2,
       ]
       const nextWall = buildWallFromCenter(currentCenter)
-      moveAxisRef.current = getPerpendicularWallMoveAxis(nextWall.start, nextWall.end)
       applyPreview(nextWall.start, nextWall.end)
     }
 
@@ -801,7 +786,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
+    window.addEventListener('pointerup', onPointerUp)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
@@ -813,10 +798,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       shiftPressedRef.current = false
       resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
+      window.removeEventListener('pointerup', onPointerUp)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      for (const restore of restoreRaycasts) restore()
     }
   }, [exitMoveMode, isNew, node.metadata, node.parentId])
 

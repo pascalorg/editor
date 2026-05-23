@@ -25,6 +25,7 @@ export function useContextualTools() {
     const defaultTools: StructureTool[] = [
       'wall',
       'fence',
+      'pipe',
       'slab',
       'ceiling',
       'roof',
@@ -39,7 +40,7 @@ export function useContextualTools() {
 
     // If a wall is selected, prioritize wall-hosted elements
     if (selectedTypes.includes('wall')) {
-      return ['window', 'door', 'wall', 'fence'] as StructureTool[]
+      return ['window', 'door', 'wall', 'fence', 'pipe'] as StructureTool[]
     }
 
     // If a slab is selected, prioritize slab editing

@@ -1,6 +1,7 @@
 'use client'
 
 import type { ComponentType, ReactNode } from 'react'
+import { t } from '../../../i18n'
 import {
   Tooltip,
   TooltipContent,
@@ -20,19 +21,21 @@ interface IconRailProps {
   className?: string
 }
 
-const sitePanel: { id: PanelId; iconSrc: string; label: string } = {
-  id: 'site',
-  iconSrc: '/icons/level.png',
-  label: 'Site',
+function getSitePanel() {
+  return {
+    id: 'site' as PanelId,
+    iconSrc: '/icons/level.png',
+    label: t('sidebar.site', 'Site'),
+  }
 }
 
-const settingsPanel: { id: PanelId; iconSrc: string; label: string } = {
-  id: 'settings',
-  iconSrc: '/icons/settings.png',
-  label: 'Settings',
+function getSettingsPanel() {
+  return {
+    id: 'settings' as PanelId,
+    iconSrc: '/icons/settings.png',
+    label: t('sidebar.settings', 'Settings'),
+  }
 }
-
-const panels: { id: PanelId; iconSrc: string; label: string }[] = [sitePanel, settingsPanel]
 
 export function IconRail({
   activePanel,
@@ -41,6 +44,9 @@ export function IconRail({
   extraPanels,
   className,
 }: IconRailProps) {
+  const sitePanel = getSitePanel()
+  const settingsPanel = getSettingsPanel()
+
   return (
     <div
       className={cn(
@@ -48,13 +54,10 @@ export function IconRail({
         className,
       )}
     >
-      {/* App menu slot */}
       {appMenuButton}
 
-      {/* Divider */}
       <div className="mb-1 h-px w-8 bg-border/50" />
 
-      {/* Site panel */}
       {[sitePanel].map((panel) => {
         const isActive = activePanel === panel.id
         return (
@@ -83,7 +86,6 @@ export function IconRail({
         )
       })}
 
-      {/* Extra panels (injected between site and settings) */}
       {extraPanels?.map((panel) => {
         const isActive = activePanel === panel.id
         return (
@@ -112,7 +114,6 @@ export function IconRail({
         )
       })}
 
-      {/* Settings panel */}
       {[settingsPanel].map((panel) => {
         const isActive = activePanel === panel.id
         return (
@@ -144,4 +145,4 @@ export function IconRail({
   )
 }
 
-export { panels }
+export const panels = [getSitePanel(), getSettingsPanel()]

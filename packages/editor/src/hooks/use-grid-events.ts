@@ -10,6 +10,11 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 
+/** Latest building-local cursor position from grid pointermove (for drag tool warm-start). */
+export const lastGridMoveRef: {
+  localPosition: [number, number, number] | null
+} = { localPosition: null }
+
 /**
  * Custom grid events hook that uses manual raycasting instead of mesh events.
  * This ensures grid events work even when other meshes block pointer events with stopPropagation.
@@ -63,6 +68,9 @@ export function useGridEvents(gridY: number) {
       }
 
       emitter.emit(eventKey, payload)
+      if (suffix === 'move') {
+        lastGridMoveRef.localPosition = payload.localPosition
+      }
     }
 
     const handlePointerDown = (e: PointerEvent) => {

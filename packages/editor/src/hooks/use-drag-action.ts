@@ -43,13 +43,14 @@ export type UseDragActionArgs<Ctx, Draft> = {
   /** Fires once after `action.cancel` (Esc, unmount, or commit-returns-false). */
   onCancel?: () => void
   /**
-   * Milliseconds after activation during which `grid:click` is swallowed.
-   * Stops the very click that mounted this tool (a DOM button or 3D
-   * handle elsewhere) from cascading into the grid and immediately
-   * committing the drag. Defaults to 150ms — matches the legacy guard
-   * used by every kind-owned tool entered via a click.
+   * Milliseconds after activation during which the mounting click is ignored.
+   * Defaults to 150ms.
    */
   activationGraceMs?: number
+  /** Fires on each grid:move after preview + apply. */
+  onMove?: (event: GridEvent) => void
+  /** Commit on pointerup (default). Set false to use grid:click instead. */
+  commitOnPointerUp?: boolean
 }
 
 /**
@@ -58,7 +59,7 @@ export type UseDragActionArgs<Ctx, Draft> = {
  *
  * - Pauses scene history when active → resumes on commit/cancel/unmount
  * - Per `grid:move` runs preview + snap + apply and cascades dirty marks
- * - `grid:click` triggers commit; Escape triggers cancel
+ * - Pointer-up (default) or grid:click triggers commit; Escape triggers cancel
  *
  * For tests of the underlying behavior, drive `createDragSession` directly
  * (no React needed). This hook is the thin glue.
@@ -82,15 +83,23 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
 
     const activatedAt = Date.now()
     const graceMs = argsRef.current.activationGraceMs ?? 150
+    let hasMovedSinceStart = false
 
     const onMove = (event: GridEvent) => {
+      hasMovedSinceStart = true
       const point: readonly [number, number] = [event.localPosition[0], event.localPosition[2]]
       session.move(point, modifiersFromGridEvent(event))
+      argsRef.current.onMove?.(event)
+    }
+
+    const commitFromPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      if (Date.now() - activatedAt < graceMs && !hasMovedSinceStart) return
+      session.commit()
     }
 
     const onClick = (event: GridEvent) => {
-      // Swallow the click that mounted this tool — otherwise the very
-      // first grid:click cascades into commit() before any move().
+      if (argsRef.current.commitOnPointerUp !== false) return
       if (Date.now() - activatedAt < graceMs) {
         event.nativeEvent?.stopPropagation?.()
         return
@@ -106,6 +115,9 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
     emitter.on('grid:click', onClick)
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', onKeyDown)
+      if (argsRef.current.commitOnPointerUp !== false) {
+        window.addEventListener('pointerup', commitFromPointerUp)
+      }
     }
 
     return () => {
@@ -113,6 +125,7 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
       emitter.off('grid:click', onClick)
       if (typeof window !== 'undefined') {
         window.removeEventListener('keydown', onKeyDown)
+        window.removeEventListener('pointerup', commitFromPointerUp)
       }
       // If the parent flipped `active` to false (or unmounted) while we were
       // still mid-drag, treat it as a cancel — no dangling history pause.

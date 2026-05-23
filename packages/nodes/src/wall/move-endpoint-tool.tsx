@@ -1,53 +1,25 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  emitter,
-  type GridEvent,
-  pauseSceneHistory,
-  resumeSceneHistory,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type GridEvent, type WallNode, useScene } from '@pascal-app/core'
 import {
   CursorSphere,
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
-  isWallLongEnough,
   type MovingWallEndpoint,
-  markToolCancelConsumed,
-  snapWallDraftPoint,
   triggerSFX,
+  useDragAction,
   useEditor,
-  type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useCallback, useEffect, useRef, useState } from 'react'
-
-/**
- * Phase 5 Stage D — wall endpoint move tool (kind-owned).
- *
- * 1:1 port of the legacy `MoveWallEndpointTool` (426 LoC, the largest
- * single tool in wall/). Same drag pipeline (snap → preview → apply
- * with linked-wall corner cascade), same Alt-detach modifier, same
- * angle label between the dragged segment and any neighbour sharing
- * the endpoint, same single-undo dance on commit, same activation
- * grace window.
- *
- * Mounted via `def.affordanceTools['move-endpoint']` from
- * `wall/definition.ts`. Editor state trigger is
- * `useEditor.movingWallEndpoint`.
- */
-function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
-  return a[0] === b[0] && a[1] === b[1]
-}
+import { useCallback, useEffect, useState } from 'react'
+import { moveWallEndpointDragAction } from './actions/move-endpoint'
 
 type WallSegmentLike = {
   id: WallNode['id']
-  start: WallPlanPoint
-  end: WallPlanPoint
+  start: [number, number]
+  end: [number, number]
   curveOffset?: number
 }
 
@@ -57,7 +29,7 @@ type AngleLabelState = {
 } | null
 
 function getEndpointAngleLabel(args: {
-  preview: { start: WallPlanPoint; end: WallPlanPoint; curveOffset?: number }
+  preview: { start: [number, number]; end: [number, number]; curveOffset?: number }
   walls: WallSegmentLike[]
   nodeId: WallNode['id']
 }): AngleLabelState {
@@ -95,297 +67,99 @@ function getEndpointAngleLabel(args: {
   return null
 }
 
-type LinkedWallSnapshot = {
-  id: WallNode['id']
-  start: WallPlanPoint
-  end: WallPlanPoint
-  curveOffset?: number
-}
-
-function getLinkedWallSnapshots(args: {
-  wallId: WallNode['id']
-  wallParentId: string | null
-  originalStart: WallPlanPoint
-  originalEnd: WallPlanPoint
-}) {
-  const { wallId, wallParentId, originalStart, originalEnd } = args
-  const { nodes } = useScene.getState()
-  const snapshots: LinkedWallSnapshot[] = []
-
-  for (const node of Object.values(nodes)) {
-    if (!(node?.type === 'wall' && node.id !== wallId)) continue
-    if ((node.parentId ?? null) !== wallParentId) continue
-    if (
-      !(
-        samePoint(node.start, originalStart) ||
-        samePoint(node.start, originalEnd) ||
-        samePoint(node.end, originalStart) ||
-        samePoint(node.end, originalEnd)
-      )
-    )
-      continue
-
-    snapshots.push({
-      id: node.id,
-      start: [...node.start] as WallPlanPoint,
-      end: [...node.end] as WallPlanPoint,
-      curveOffset: node.curveOffset,
-    })
-  }
-
-  return snapshots
-}
-
-function getLinkedWallUpdates(
-  linkedWalls: LinkedWallSnapshot[],
-  originalStart: WallPlanPoint,
-  originalEnd: WallPlanPoint,
-  nextStart: WallPlanPoint,
-  nextEnd: WallPlanPoint,
-) {
-  return linkedWalls.map((wall) => ({
-    id: wall.id,
-    curveOffset: wall.curveOffset,
-    start: samePoint(wall.start, originalStart)
-      ? nextStart
-      : samePoint(wall.start, originalEnd)
-        ? nextEnd
-        : wall.start,
-    end: samePoint(wall.end, originalStart)
-      ? nextStart
-      : samePoint(wall.end, originalEnd)
-        ? nextEnd
-        : wall.end,
-  }))
-}
-
 export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
-  const activatedAtRef = useRef<number>(Date.now())
-  const previousGridPosRef = useRef<WallPlanPoint | null>(null)
-  const shiftPressedRef = useRef(false)
-  const altPressedRef = useRef(false)
-  const nodeIdRef = useRef(target.wall.id)
-  const originalStartRef = useRef<WallPlanPoint>([...target.wall.start] as WallPlanPoint)
-  const originalEndRef = useRef<WallPlanPoint>([...target.wall.end] as WallPlanPoint)
-  const fixedPointRef = useRef<WallPlanPoint>(
-    target.endpoint === 'start'
-      ? ([...target.wall.end] as WallPlanPoint)
-      : ([...target.wall.start] as WallPlanPoint),
-  )
-  const linkedOriginalsRef = useRef(
-    getLinkedWallSnapshots({
-      wallId: target.wall.id,
-      wallParentId: target.wall.parentId ?? null,
-      originalStart: target.wall.start,
-      originalEnd: target.wall.end,
-    }),
-  )
-  const previewRef = useRef<{ start: WallPlanPoint; end: WallPlanPoint } | null>(null)
-  const [angleLabel, setAngleLabel] = useState<AngleLabelState>(null)
+  const wallId = target.wall.id
+  const endpoint = target.endpoint
+  const initialPoint: [number, number] =
+    endpoint === 'start'
+      ? [target.wall.start[0], target.wall.start[1]]
+      : [target.wall.end[0], target.wall.end[1]]
 
-  const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
-    const point = target.endpoint === 'start' ? target.wall.start : target.wall.end
-    return [point[0], 0, point[1]]
-  })
   const [altPressed, setAltPressed] = useState(false)
+  const [angleLabel, setAngleLabel] = useState<AngleLabelState>(null)
+  const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>([
+    initialPoint[0],
+    0,
+    initialPoint[1],
+  ])
 
-  const exitMoveMode = useCallback(() => {
-    useEditor.getState().setMovingWallEndpoint(null)
-  }, [])
+  const exitMoveMode = useCallback(
+    (committed: boolean) => {
+      if (committed) triggerSFX('sfx:item-place')
+      useViewer.getState().setSelection({ selectedIds: [wallId] })
+      useEditor.getState().setMovingWallEndpoint(null)
+      setAngleLabel(null)
+    },
+    [wallId],
+  )
 
-  useEffect(() => {
-    const nodeId = nodeIdRef.current
-    const originalStart = originalStartRef.current
-    const originalEnd = originalEndRef.current
-    const fixedPoint = fixedPointRef.current
-    const levelWalls = Object.values(useScene.getState().nodes).filter(
-      (node): node is WallNode =>
-        node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
-    )
-
-    pauseSceneHistory(useScene)
-    let wasCommitted = false
-
-    const applyNodePreview = (
-      updates: Array<{ id: WallNode['id']; start: WallPlanPoint; end: WallPlanPoint }>,
-    ) => {
-      useScene.getState().updateNodes(
-        updates.map((entry) => ({
-          id: entry.id as AnyNodeId,
-          data: { start: entry.start, end: entry.end },
-        })),
-      )
-      for (const entry of updates) {
-        useScene.getState().markDirty(entry.id as AnyNodeId)
-      }
-    }
-
-    const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
-      const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
-      const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
-      const linkedUpdates = detachLinkedWalls
-        ? []
-        : getLinkedWallUpdates(
-            linkedOriginalsRef.current,
-            originalStart,
-            originalEnd,
-            nextStart,
-            nextEnd,
-          )
-      previewRef.current = { start: nextStart, end: nextEnd }
+  const handleMove = useCallback(
+    (event: GridEvent) => {
+      const wall = useScene.getState().nodes[wallId]
+      if (wall?.type !== 'wall') return
+      const live = wall as WallNode
+      const movingPoint = endpoint === 'start' ? live.start : live.end
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
+
+      const levelWalls = Object.values(useScene.getState().nodes).filter(
+        (node): node is WallNode =>
+          node?.type === 'wall' && (node.parentId ?? null) === (live.parentId ?? null),
+      )
       setAngleLabel(
         getEndpointAngleLabel({
-          preview: { start: nextStart, end: nextEnd, curveOffset: target.wall.curveOffset },
-          walls: [
-            ...levelWalls.map((wall) => ({
-              id: wall.id,
-              start: wall.start,
-              end: wall.end,
-              curveOffset: wall.curveOffset,
-            })),
-            ...linkedUpdates,
-          ],
-          nodeId,
+          preview: {
+            start: live.start,
+            end: live.end,
+            curveOffset: live.curveOffset,
+          },
+          walls: levelWalls.map((entry) => ({
+            id: entry.id,
+            start: entry.start,
+            end: entry.end,
+            curveOffset: entry.curveOffset,
+          })),
+          nodeId: wallId,
         }),
       )
-      applyNodePreview([{ id: nodeId, start: nextStart, end: nextEnd }, ...linkedUpdates])
+
+      if (event.nativeEvent?.altKey !== undefined) {
+        setAltPressed(event.nativeEvent.altKey)
+      }
+    },
+    [endpoint, wallId],
+  )
+
+  useDragAction({
+    active: true,
+    action: moveWallEndpointDragAction,
+    initial: {
+      node: target.wall,
+      handleId: endpoint,
+      point: initialPoint,
+    },
+    onMove: handleMove,
+    onCommit: () => exitMoveMode(true),
+    onCancel: () => exitMoveMode(false),
+  })
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'Alt') setAltPressed(true)
     }
-
-    const restoreOriginal = (clearAngleLabel = true) => {
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
-      if (clearAngleLabel) {
-        setAngleLabel(null)
-      }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltPressed(false)
     }
-
-    const onGridMove = (event: GridEvent) => {
-      const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const snappedPoint = snapWallDraftPoint({
-        point: planPoint,
-        walls: levelWalls,
-        start: fixedPoint,
-        angleSnap: !shiftPressedRef.current,
-        ignoreWallIds: [nodeId],
-      })
-
-      if (
-        previousGridPosRef.current &&
-        (snappedPoint[0] !== previousGridPosRef.current[0] ||
-          snappedPoint[1] !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
-      previousGridPosRef.current = snappedPoint
-
-      applyPreview(snappedPoint, event.nativeEvent.altKey)
-    }
-
-    const onGridClick = (event: GridEvent) => {
-      if (Date.now() - activatedAtRef.current < 150) {
-        event.nativeEvent?.stopPropagation?.()
-        return
-      }
-
-      const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
-      const hasChanged = !(
-        samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
-      )
-
-      if (hasChanged && isWallLongEnough(preview.start, preview.end)) {
-        wasCommitted = true
-
-        // Restore original baseline while paused so the next resume+update
-        // registers as a single tracked change (undo reverts to original).
-        applyNodePreview([
-          { id: nodeId, start: originalStart, end: originalEnd },
-          ...linkedOriginalsRef.current,
-        ])
-
-        resumeSceneHistory(useScene)
-        applyNodePreview([
-          { id: nodeId, start: preview.start, end: preview.end },
-          ...(altPressedRef.current
-            ? []
-            : getLinkedWallUpdates(
-                linkedOriginalsRef.current,
-                originalStart,
-                originalEnd,
-                preview.start,
-                preview.end,
-              )),
-        ])
-        pauseSceneHistory(useScene)
-        triggerSFX('sfx:item-place')
-      }
-
-      useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      setAngleLabel(null)
-      exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
-    }
-
-    const onCancel = () => {
-      restoreOriginal()
-      useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      resumeSceneHistory(useScene)
-      setAngleLabel(null)
-      markToolCancelConsumed()
-      exitMoveMode()
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = true
-      }
-      if (event.key === 'Alt') {
-        altPressedRef.current = true
-        setAltPressed(true)
-      }
-    }
-
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = false
-      }
-      if (event.key === 'Alt') {
-        altPressedRef.current = false
-        setAltPressed(false)
-      }
-    }
-
-    const onWindowBlur = () => {
-      shiftPressedRef.current = false
-      altPressedRef.current = false
-      setAltPressed(false)
-    }
-
-    emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
-    emitter.on('tool:cancel', onCancel)
+    const onBlur = () => setAltPressed(false)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onWindowBlur)
-
+    window.addEventListener('blur', onBlur)
     return () => {
-      if (!wasCommitted) {
-        restoreOriginal(false)
-      }
-      resumeSceneHistory(useScene)
-      emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
-      emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onWindowBlur)
+      window.removeEventListener('blur', onBlur)
     }
-  }, [exitMoveMode, target])
+  }, [])
 
   return (
     <group>

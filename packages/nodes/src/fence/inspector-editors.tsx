@@ -8,6 +8,7 @@ import {
   normalizeWallCurveOffset,
 } from '@pascal-app/core'
 import { SliderControl } from '@pascal-app/editor'
+import { L } from '../i18n/panel-labels'
 
 /**
  * Custom inspector editors for fence fields that don't map to a single
@@ -49,7 +50,7 @@ export function FenceLengthEditor({
 
   return (
     <SliderControl
-      label="Length"
+      label={L.length()}
       max={50}
       min={0.1}
       onChange={handleChange}
@@ -73,7 +74,7 @@ export function FenceCurveEditor({
 
   return (
     <SliderControl
-      label="Curve"
+      label={L.curve()}
       max={Math.max(0.01, maxCurveOffset)}
       min={-Math.max(0.01, maxCurveOffset)}
       onChange={(value) => onUpdate({ curveOffset: normalizeWallCurveOffset(node, value) })}

@@ -178,7 +178,12 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
     }
   }, [])
 
-  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(
+    () => () => {
+      arrowGeometry.dispose()
+    },
+    [arrowGeometry],
+  )
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
@@ -213,7 +218,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
         }}
         renderOrder={1002}
       >
-        <primitive attach="geometry" object={arrowGeometry} />
+        <primitive attach="geometry" dispose={null} object={arrowGeometry} />
         <meshBasicMaterial
           color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
           depthTest
@@ -243,7 +248,12 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
     }
   }, [])
 
-  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(
+    () => () => {
+      arrowGeometry.dispose()
+    },
+    [arrowGeometry],
+  )
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
@@ -278,7 +288,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
         }}
         renderOrder={1002}
       >
-        <primitive attach="geometry" object={arrowGeometry} />
+        <primitive attach="geometry" dispose={null} object={arrowGeometry} />
         <meshBasicMaterial
           color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
           depthTest

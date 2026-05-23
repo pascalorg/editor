@@ -147,6 +147,32 @@ export const ItemNode = BaseNode.extend({
 
 export type ItemNode = z.infer<typeof ItemNode>
 
+/** Catalog floor item — no wall / ceiling attachTo. */
+export function isFloorAttachedItem(item: Pick<ItemNode, 'asset'>): boolean {
+  return !item.asset.attachTo
+}
+
+/** Floor item placed directly on a level (not on a table / shelf parent). */
+export function isDirectFloorPlacedItem(
+  item: Pick<ItemNode, 'asset' | 'parentId'>,
+  nodes: Record<string, { type?: string } | undefined>,
+): boolean {
+  if (!isFloorAttachedItem(item)) return false
+  if (!item.parentId) return true
+  const parent = nodes[item.parentId]
+  return parent?.type === 'level'
+}
+
+/** Existing scene item that supports unified plan (XZ) drag-move. */
+export function isPlanDragMovableItem(item: ItemNode): boolean {
+  if (item.asset.category === 'door' || item.asset.category === 'window') return false
+  const meta =
+    typeof item.metadata === 'object' && item.metadata !== null
+      ? (item.metadata as Record<string, unknown>)
+      : {}
+  return !meta.isNew
+}
+
 export const LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT = 0.1
 
 /**
