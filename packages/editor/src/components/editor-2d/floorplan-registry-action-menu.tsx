@@ -4,9 +4,12 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  getWallMidpointHandlePoint,
   nodeRegistry,
   type SlabNode,
+  useLiveNodeOverrides,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
@@ -54,6 +57,7 @@ export function FloorplanRegistryActionMenu() {
   const def = selectedKind ? nodeRegistry.get(selectedKind) : null
   const isRegistryKind = !!def
   const isVisible = isRegistryKind && !movingNode
+  const isWall = selectedKind === 'wall'
 
   useEffect(() => {
     if (!(isVisible && selectedId)) {
@@ -62,21 +66,53 @@ export function FloorplanRegistryActionMenu() {
     }
     let raf = 0
     const tick = () => {
-      const el = document.querySelector(
-        `[data-floorplan-scene] [data-node-id="${selectedId}"]`,
+      raf = requestAnimationFrame(tick)
+      const sceneEl = document.querySelector('[data-floorplan-scene]') as SVGGElement | null
+      const svgEl = sceneEl?.ownerSVGElement ?? null
+      const ctm = sceneEl?.getScreenCTM() ?? null
+      if (!(sceneEl && svgEl && ctm)) {
+        setPosition(null)
+        return
+      }
+
+      // Walls: anchor at the wall midpoint in screen space so the menu
+      // sits over the centre of the wall (not the top of its screen-axis
+      // bounding box). Menu itself stays horizontal. Read live overrides
+      // too so the anchor tracks the wall during side-arrow / endpoint
+      // drags. For curved walls `getWallMidpointHandlePoint` returns the
+      // apex point on the arc at t=0.5, matching what the renderer draws.
+      if (isWall) {
+        const sceneNode = useScene.getState().nodes[selectedId] as WallNode | undefined
+        if (!sceneNode) {
+          setPosition(null)
+          return
+        }
+        const overrides = useLiveNodeOverrides.getState().get(selectedId) as
+          | Partial<WallNode>
+          | undefined
+        const wall = (overrides ? { ...sceneNode, ...overrides } : sceneNode) as WallNode
+        const planMid = getWallMidpointHandlePoint(wall)
+        const midPt = svgEl.createSVGPoint()
+        midPt.x = planMid.x
+        midPt.y = planMid.y
+        const midScreen = midPt.matrixTransform(ctm)
+        setPosition({ left: midScreen.x, top: midScreen.y })
+        return
+      }
+
+      const el = sceneEl.querySelector(
+        `[data-node-id="${selectedId}"]`,
       ) as SVGGElement | null
       if (el) {
         const rect = el.getBoundingClientRect()
-        // Position centered horizontally, ~12px above the bounding box.
-        setPosition({ left: rect.left + rect.width / 2, top: rect.top - 12 })
+        setPosition({ left: rect.left + rect.width / 2, top: rect.top })
       } else {
         setPosition(null)
       }
-      raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [isVisible, selectedId])
+  }, [isVisible, selectedId, isWall])
 
   if (!(isVisible && selectedId && position && def)) return null
 
@@ -180,7 +216,7 @@ export function FloorplanRegistryActionMenu() {
       style={{
         left: position.left,
         top: position.top,
-        transform: 'translate(-50%, -100%)',
+        transform: 'translate(-50%, calc(-100% - 32px))',
       }}
     >
       <NodeActionMenu

@@ -653,11 +653,16 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
-  const midX = (wall.start[0] + wall.end[0]) / 2
-  const midZ = (wall.start[1] + wall.end[1]) / 2
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const wallAngle = Math.atan2(-dz, dx)
+  // Sit on the visual centre of the wall — for curved walls that's the
+  // arc apex at t=0.5, not the chord midpoint. Use the curve tangent for
+  // the yaw so the arrow's local frame matches the wall direction at the
+  // apex, consistent with `getWallMoveHandles`.
+  const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const midX = curveFrame ? curveFrame.point.x : (wall.start[0] + wall.end[0]) / 2
+  const midZ = curveFrame ? curveFrame.point.y : (wall.start[1] + wall.end[1]) / 2
+  const dirX = curveFrame ? curveFrame.tangent.x : wall.end[0] - wall.start[0]
+  const dirZ = curveFrame ? curveFrame.tangent.y : wall.end[1] - wall.start[1]
+  const wallAngle = Math.atan2(-dirZ, dirX)
   const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
