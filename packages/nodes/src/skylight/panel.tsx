@@ -265,13 +265,13 @@ export default function SkylightPanel() {
       width={300}
     >
       <PanelSection title="Type">
-        <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+        <div className="grid grid-cols-2 gap-2 px-1 pt-1">
           {SKYLIGHT_TYPE_ORDER.map((skylightType) => {
             const isSelected = activeSkylightType === skylightType
             return (
               <button
                 className={cn(
-                  'flex min-h-12 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors',
+                  'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                   isSelected
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
                     : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',

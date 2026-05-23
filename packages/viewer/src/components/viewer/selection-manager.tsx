@@ -398,7 +398,8 @@ const PointerMissedHandler = ({
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       // Only handle left clicks
-      if (useViewer.getState().cameraDragging) return
+      const viewerState = useViewer.getState()
+      if (viewerState.cameraDragging || viewerState.handleDragging) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers

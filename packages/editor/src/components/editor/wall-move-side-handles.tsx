@@ -35,21 +35,25 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
-const HANDLE_OFFSET = 0.42
-const HANDLE_MIN_OFFSET = 0.5
-const HANDLE_MIN_HEIGHT = 0.62
+const HANDLE_OFFSET = 0.27
+const HANDLE_MIN_OFFSET = 0.33
+const HANDLE_MIN_HEIGHT = 0.4
 const HANDLE_TOP_INSET = 0.08
-const HEIGHT_HANDLE_OFFSET = 0.4
+const HEIGHT_HANDLE_OFFSET = 0.26
 const MIN_WALL_HEIGHT = 0.5
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
+// Match the door arrows: scale the rendered chevron down to ~two-thirds
+// so the in-world handles read as a single UI family.
+const ARROW_SCALE = 0.65
 const CORNER_HEX_RADIUS = 0.16
 const CORNER_DASH_SIZE = 0.1
 const CORNER_GAP_SIZE = 0.07
 const CORNER_DASH_THICKNESS = 0.006
 const CORNER_FLOOR_OFFSET = 0.01
 const GROUND_MENU_FACE_CLEARANCE = 0.85
-const GROUND_MENU_SPACING = 0.6
+const GROUND_MENU_SPACING = 0.32
+const GROUND_ICON_SIZE = 0.22
 const GROUND_ICON_LIFT = 0.1
 // Dead-zone width (world units) around the wall plane before the menu
 // commits to the opposite face. Prevents per-frame flicker when the
@@ -66,6 +70,20 @@ type WallMoveHandle = {
   key: string
   position: [number, number, number]
   rotationY: number
+}
+
+// Pre-empt the synthetic `click` the browser fires immediately after a
+// drag's pointerup. Without this, PointerMissedHandler treats the click
+// as "missed" and deselects the wall when the height arrow drag commits.
+function swallowNextClick() {
+  const swallow = (clickEvent: Event) => {
+    clickEvent.stopPropagation()
+    clickEvent.preventDefault()
+  }
+  window.addEventListener('click', swallow, { capture: true, once: true })
+  setTimeout(() => {
+    window.removeEventListener('click', swallow, { capture: true })
+  }, 300)
 }
 
 function createArrowHandleGeometry() {
@@ -432,7 +450,7 @@ function WallGroundActionIconV2({
       scale={scale}
     >
       <mesh material={material} renderOrder={1004} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.36, 0.36]} />
+        <planeGeometry args={[GROUND_ICON_SIZE, GROUND_ICON_SIZE]} />
       </mesh>
     </group>
   )
@@ -634,7 +652,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   )
   const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
   const dragCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -701,6 +719,10 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     document.body.style.cursor = 'ns-resize'
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setResizingWallHeight(wall)
+    // Suppress R3F node pointer events until pointerup completes so the
+    // synthesized click doesn't reroute selection to whatever mesh sits
+    // under the cursor at release.
+    useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
 
     const onMove = (e: PointerEvent) => {
@@ -721,9 +743,11 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       }
       useScene.temporal.getState().resume()
       useEditor.getState().setResizingWallHeight(null)
+      useViewer.getState().setHandleDragging(false)
       dragCleanupRef.current = null
     }
     const onUp = () => {
+      swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
       cleanup()
     }
@@ -782,7 +806,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
-  const scale = (isHovered ? 1.12 : 1) * zoom
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -809,7 +833,8 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
     useEditor.getState().setMovingFenceEndpoint(null)
     useEditor.getState().setCurvingWall(null)
     useEditor.getState().setCurvingFence(null)
-    useViewer.getState().setSelection({ selectedIds: [] })
+    // Keep the wall selected so it stays the active item once the move
+    // commits; the `!movingNode` guard on the handles hides them mid-drag.
   }
 
   return (
@@ -860,7 +885,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -887,7 +912,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
     useEditor.getState().setMovingFenceEndpoint(null)
     useEditor.getState().setCurvingWall(null)
     useEditor.getState().setCurvingFence(null)
-    useViewer.getState().setSelection({ selectedIds: [] })
+    // Keep the fence selected so it stays active once the move commits.
   }
 
   return (

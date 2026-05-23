@@ -650,13 +650,13 @@ export default function DoorPanel() {
           />
         </div>
         {!isOpening && (
-          <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+          <div className="grid grid-cols-2 gap-2 px-1 pt-1">
             {(isGarageDoor ? garageDoorTypeOptions : doorTypeOptions).map((option) => {
               const isSelected = doorType === option.value
               return (
                 <button
                   className={cn(
-                    'flex min-h-12 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors',
+                    'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                     isSelected
                       ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
                       : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
@@ -668,7 +668,7 @@ export default function DoorPanel() {
                   onClick={() => handleUpdate(getDoorTypeUpdates(option.value))}
                   type="button"
                 >
-                  <DoorOpen className="h-3.5 w-3.5 shrink-0" />
+                  <DoorOpen className="h-4 w-4 shrink-0" />
                   <span className="truncate font-medium">{option.label}</span>
                 </button>
               )

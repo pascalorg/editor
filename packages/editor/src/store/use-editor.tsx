@@ -213,6 +213,10 @@ type EditorState = {
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
   resizingWallHeight: WallNode | null
   setResizingWallHeight: (wall: WallNode | null) => void
+  resizingDoorHeight: DoorNode | null
+  setResizingDoorHeight: (door: DoorNode | null) => void
+  resizingDoorWidth: DoorNode | null
+  setResizingDoorWidth: (door: DoorNode | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -636,6 +640,10 @@ const useEditor = create<EditorState>()(
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
       resizingWallHeight: null,
       setResizingWallHeight: (wall) => set({ resizingWallHeight: wall }),
+      resizingDoorHeight: null,
+      setResizingDoorHeight: (door) => set({ resizingDoorHeight: door }),
+      resizingDoorWidth: null,
+      setResizingDoorWidth: (door) => set({ resizingDoorWidth: door }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,

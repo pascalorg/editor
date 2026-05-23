@@ -76,6 +76,17 @@ type ViewerState = {
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
+
+  /**
+   * True while an in-world handle drag is in progress (height arrow,
+   * width arrow, etc.). Suppresses node pointer event routing so the
+   * synthetic click on pointerup doesn't reroute selection to whatever
+   * mesh the cursor lands on at release. Conceptually a sibling of
+   * `cameraDragging` — both mean "user is dragging; don't treat the next
+   * pointerup as a click on the scene."
+   */
+  handleDragging: boolean
+  setHandleDragging: (dragging: boolean) => void
 }
 
 const useViewer = create<ViewerState>()(
@@ -203,6 +214,8 @@ const useViewer = create<ViewerState>()(
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
+      handleDragging: false,
+      setHandleDragging: (dragging) => set({ handleDragging: dragging }),
     }),
     {
       name: 'viewer-preferences',

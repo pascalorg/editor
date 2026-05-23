@@ -36,14 +36,24 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
     emitter.emit(eventKey, payload as never)
   }
 
+  // Suppress node pointer events while an interaction drag is in
+  // progress. `cameraDragging` covers orbit/pan/dolly; `handleDragging`
+  // covers in-world handle drags (height arrow, width arrow, etc.).
+  // Without this, the synthesized click on pointerup would reroute
+  // selection to whatever mesh the cursor lands on at release.
+  const isInteractionActive = () => {
+    const s = useViewer.getState()
+    return s.cameraDragging || s.handleDragging
+  }
+
   return {
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       if (e.button !== 0) return
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       if (e.button !== 0) return
       emit('pointerup', e)
       // Synthesize a click event on pointer up to be more forgiving than R3F's default onClick
@@ -55,23 +65,23 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
       // This prevents double-clicks from firing twice.
     },
     onPointerEnter: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       emit('enter', e)
     },
     onPointerLeave: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       emit('leave', e)
     },
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       emit('move', e)
     },
     onDoubleClick: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       emit('double-click', e)
     },
     onContextMenu: (e: ThreeEvent<PointerEvent>) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isInteractionActive()) return
       emit('context-menu', e)
     },
   }

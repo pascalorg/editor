@@ -54,6 +54,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { CustomCameraControls } from './custom-camera-controls'
+import { DoorSideHandles } from './door-side-handles'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
 import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
@@ -588,6 +589,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isFirstPersonMode && <SelectionManager />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <DoorSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}

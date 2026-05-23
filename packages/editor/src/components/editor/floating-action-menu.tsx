@@ -453,6 +453,8 @@ export function FloatingActionMenu() {
   // (`WallGroundActionMenu` in `wall-move-side-handles.tsx`). Skip the
   // HTML floating menu for them so we don't render duplicate UI.
   if (node?.type === 'wall') return null
+  // Doors use the in-world `DoorGroundActionMenu` for the same reason.
+  if (node?.type === 'door') return null
 
   return (
     <group>
