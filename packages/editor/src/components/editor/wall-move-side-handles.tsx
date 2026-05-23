@@ -50,7 +50,7 @@ const CORNER_DASH_THICKNESS = 0.006
 const CORNER_FLOOR_OFFSET = 0.01
 const GROUND_MENU_FACE_CLEARANCE = 0.85
 const GROUND_MENU_SPACING = 0.6
-const GROUND_ICON_LIFT = 0.015
+const GROUND_ICON_LIFT = 0.1
 // Dead-zone width (world units) around the wall plane before the menu
 // commits to the opposite face. Prevents per-frame flicker when the
 // camera orbits along the wall plane and floating-point jitter pushes
