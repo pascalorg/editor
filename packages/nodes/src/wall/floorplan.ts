@@ -95,11 +95,12 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
-      // Once the wall is selected, the body itself stops grabbing the
-      // pointer — only the side-arrows and endpoint handles should
-      // start a drag. The polygon stays painted so the selected wall is
-      // still visible; it just doesn't catch clicks any more.
-      pointerEvents: isSelected ? 'none' : undefined,
+      // Once the wall is selected, the body keeps catching the pointer
+      // so the cursor stays neutral (no drag/pointer affordance from
+      // the slab below leaking through), but only the side-arrows and
+      // endpoint handles should start a drag — the wrapper g's click
+      // handler is a no-op re-select for the already-selected wall.
+      cursor: isSelected ? 'default' : undefined,
     },
   ]
 

@@ -138,9 +138,15 @@ export const CustomCameraControls = () => {
   const movingNode = useEditor((s) => s.movingNode)
   const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
+  const resizingWallHeight = useEditor((s) => s.resizingWallHeight)
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
   const isInteracting = Boolean(
-    tool || movingNode || movingWallEndpoint || movingFenceEndpoint || isBoxSelectActive,
+    tool ||
+      movingNode ||
+      movingWallEndpoint ||
+      movingFenceEndpoint ||
+      resizingWallHeight ||
+      isBoxSelectActive,
   )
   const touches = useMemo(() => {
     const twoFingerAction =

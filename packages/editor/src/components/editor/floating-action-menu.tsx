@@ -26,10 +26,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { EDITOR_LAYER } from '../../lib/constants'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -64,7 +62,6 @@ export function FloatingActionMenu() {
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const curvingFence = useEditor((s) => s.curvingFence)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const setMovingWallEndpoint = useEditor((s) => s.setMovingWallEndpoint)
   const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
@@ -74,40 +71,7 @@ export function FloatingActionMenu() {
   const groupRef = useRef<THREE.Group>(null)
   const startEndpointGroupRef = useRef<THREE.Group>(null)
   const endEndpointGroupRef = useRef<THREE.Group>(null)
-  const startCornerSphereRef = useRef<THREE.Group>(null)
-  const endCornerSphereRef = useRef<THREE.Group>(null)
-  const startVerticalRef = useRef<THREE.Mesh>(null)
-  const endVerticalRef = useRef<THREE.Mesh>(null)
   const [altPressed, setAltPressed] = useState(false)
-
-  const cornerSphereMaterial = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: '#818cf8',
-        transparent: true,
-        opacity: 0.95,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [],
-  )
-  const cornerVerticalMaterial = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: '#818cf8',
-        transparent: true,
-        opacity: 0.7,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [],
-  )
-  useEffect(() => {
-    return () => {
-      cornerSphereMaterial.dispose()
-      cornerVerticalMaterial.dispose()
-    }
-  }, [cornerSphereMaterial, cornerVerticalMaterial])
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -176,29 +140,22 @@ export function FloatingActionMenu() {
       const box = new THREE.Box3().setFromObject(obj)
       if (!box.isEmpty()) {
         const center = box.getCenter(new THREE.Vector3())
-        // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
+        // Position above the object. Walls get extra clearance so the menu
+        // sits above the height-resize arrow; slabs/ceilings clear their
+        // measurement labels.
         const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
-        const yOffset = isStructural ? 0.8 : 0.3
+        const isWall = node?.type === 'wall'
+        const yOffset = isWall ? 1 : isStructural ? 0.8 : 0.3
         groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
       }
 
-      if (node?.type === 'wall' || node?.type === 'fence') {
-        const segment = node as WallNode | FenceNode
+      if (node?.type === 'fence') {
+        const segment = node as FenceNode
         const endpointYOffset = 0.35
-        const startWorld =
-          node.type === 'wall'
-            ? obj.localToWorld(new THREE.Vector3(0, 0, 0))
-            : obj.localToWorld(new THREE.Vector3(segment.start[0], 0, segment.start[1]))
-        const endWorld =
-          node.type === 'wall'
-            ? obj.localToWorld(
-                new THREE.Vector3(
-                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
-                  0,
-                  0,
-                ),
-              )
-            : obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
+        const startWorld = obj.localToWorld(
+          new THREE.Vector3(segment.start[0], 0, segment.start[1]),
+        )
+        const endWorld = obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
 
         if (startEndpointGroupRef.current) {
           startEndpointGroupRef.current.position.set(
@@ -213,28 +170,6 @@ export function FloatingActionMenu() {
             endWorld.y + endpointYOffset,
             endWorld.z,
           )
-        }
-
-        if (node.type === 'wall' && !box.isEmpty()) {
-          // Wall mesh origin sits at the top; the floor is the bbox minimum.
-          const wallFloorY = box.min.y
-          // Vertical guide spans the wall height (floor → wall top).
-          const verticalHeight = box.max.y - wallFloorY
-
-          if (startCornerSphereRef.current) {
-            startCornerSphereRef.current.position.set(startWorld.x, wallFloorY, startWorld.z)
-          }
-          if (endCornerSphereRef.current) {
-            endCornerSphereRef.current.position.set(endWorld.x, wallFloorY, endWorld.z)
-          }
-          if (startVerticalRef.current && verticalHeight > 0) {
-            startVerticalRef.current.scale.y = verticalHeight
-            startVerticalRef.current.position.y = verticalHeight / 2
-          }
-          if (endVerticalRef.current && verticalHeight > 0) {
-            endVerticalRef.current.scale.y = verticalHeight
-            endVerticalRef.current.position.y = verticalHeight / 2
-          }
         }
       }
     }
@@ -291,20 +226,12 @@ export function FloatingActionMenu() {
   const handleEndpointMove = useCallback(
     (endpoint: 'start' | 'end', e: { stopPropagation: () => void }) => {
       e.stopPropagation()
-      if (!node) return
+      if (!node || node.type !== 'fence') return
       sfxEmitter.emit('sfx:item-pick')
-      if (node.type === 'wall') {
-        // Keep the wall selected throughout the drag — the floating menu
-        // already hides via the `movingWallEndpoint` guard.
-        setMovingWallEndpoint({ wall: node, endpoint })
-        return
-      }
-      if (node.type === 'fence') {
-        setMovingFenceEndpoint({ fence: node, endpoint })
-        setSelection({ selectedIds: [] })
-      }
+      setMovingFenceEndpoint({ fence: node, endpoint })
+      setSelection({ selectedIds: [] })
     },
-    [node, setMovingFenceEndpoint, setMovingWallEndpoint, setSelection],
+    [node, setMovingFenceEndpoint, setSelection],
   )
 
   const handleDuplicate = useCallback(
@@ -522,6 +449,11 @@ export function FloatingActionMenu() {
   )
     return null
 
+  // Walls now expose their actions through the in-world ground menu
+  // (`WallGroundActionMenu` in `wall-move-side-handles.tsx`). Skip the
+  // HTML floating menu for them so we don't render duplicate UI.
+  if (node?.type === 'wall') return null
+
   return (
     <group>
       <group ref={groupRef}>
@@ -535,11 +467,7 @@ export function FloatingActionMenu() {
         >
           <NodeActionMenu
             onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-            onCurve={
-              node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
-                ? handleCurve
-                : undefined
-            }
+            onCurve={node?.type === 'fence' ? handleCurve : undefined}
             onDelete={handleDelete}
             onDuplicate={
               node &&
@@ -550,10 +478,7 @@ export function FloatingActionMenu() {
                 : undefined
             }
             onMove={
-              node &&
-              node.type !== 'wall' &&
-              node.type !== 'fence' &&
-              !DELETE_ONLY_TYPES.includes(node.type)
+              node && node.type !== 'fence' && !DELETE_ONLY_TYPES.includes(node.type)
                 ? handleMove
                 : undefined
             }
@@ -562,53 +487,7 @@ export function FloatingActionMenu() {
           />
         </Html>
       </group>
-      {node?.type === 'wall' && (
-        <>
-          <group ref={startCornerSphereRef}>
-            <mesh
-              layers={EDITOR_LAYER}
-              material={cornerSphereMaterial}
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                handleEndpointMove('start', e)
-              }}
-              renderOrder={2}
-            >
-              <sphereGeometry args={[0.14, 20, 16]} />
-            </mesh>
-            <mesh
-              layers={EDITOR_LAYER}
-              material={cornerVerticalMaterial}
-              ref={startVerticalRef}
-              renderOrder={2}
-            >
-              <cylinderGeometry args={[0.008, 0.008, 1, 8]} />
-            </mesh>
-          </group>
-          <group ref={endCornerSphereRef}>
-            <mesh
-              layers={EDITOR_LAYER}
-              material={cornerSphereMaterial}
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                handleEndpointMove('end', e)
-              }}
-              renderOrder={2}
-            >
-              <sphereGeometry args={[0.14, 20, 16]} />
-            </mesh>
-            <mesh
-              layers={EDITOR_LAYER}
-              material={cornerVerticalMaterial}
-              ref={endVerticalRef}
-              renderOrder={2}
-            >
-              <cylinderGeometry args={[0.008, 0.008, 1, 8]} />
-            </mesh>
-          </group>
-        </>
-      )}
-      {(node?.type === 'wall' || node?.type === 'fence') && (
+      {node?.type === 'fence' && (
         <>
           <group ref={startEndpointGroupRef}>
             <Html
@@ -617,24 +496,15 @@ export function FloatingActionMenu() {
               zIndexRange={[100, 0]}
             >
               <button
-                aria-label={node.type === 'wall' ? 'Move wall start' : 'Move fence start'}
+                aria-label="Move fence start"
                 className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
                   altPressed
                     ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
                     : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
-                onClick={
-                  node.type === 'fence' ? (e) => handleEndpointMove('start', e) : undefined
-                }
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                  if (node.type === 'wall') handleEndpointMove('start', e)
-                }}
-                title={
-                  node.type === 'wall'
-                    ? 'Move wall start (Alt to detach)'
-                    : 'Move fence start (Alt to detach)'
-                }
+                onClick={(e) => handleEndpointMove('start', e)}
+                onPointerDown={(e) => e.stopPropagation()}
+                title="Move fence start (Alt to detach)"
                 type="button"
               >
                 <Move className="h-4 w-4" />
@@ -648,24 +518,15 @@ export function FloatingActionMenu() {
               zIndexRange={[100, 0]}
             >
               <button
-                aria-label={node.type === 'wall' ? 'Move wall end' : 'Move fence end'}
+                aria-label="Move fence end"
                 className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
                   altPressed
                     ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
                     : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
-                onClick={
-                  node.type === 'fence' ? (e) => handleEndpointMove('end', e) : undefined
-                }
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                  if (node.type === 'wall') handleEndpointMove('end', e)
-                }}
-                title={
-                  node.type === 'wall'
-                    ? 'Move wall end (Alt to detach)'
-                    : 'Move fence end (Alt to detach)'
-                }
+                onClick={(e) => handleEndpointMove('end', e)}
+                onPointerDown={(e) => e.stopPropagation()}
+                title="Move fence end (Alt to detach)"
                 type="button"
               >
                 <Move className="h-4 w-4" />

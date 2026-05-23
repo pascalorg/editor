@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import {
   getFloorplanWallThickness,
+  getWallGridStep,
   isWallLongEnough,
   snapPointToGrid,
   useWallMoveGhosts,
@@ -26,8 +27,6 @@ import {
   type LinkedWallSnapshot,
   stripWallIsNewMetadata,
 } from './move-shared'
-
-const GRID_STEP = 0.5
 
 /**
  * 2D floor-plan move handler for wall.
@@ -73,7 +72,13 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         originalEnd,
       })
 
-  let anchor: WallPlanPoint | null = null
+  // Raw (un-snapped) cursor at drag start. Using the raw anchor lets the
+  // wall start respond to every sub-step cursor movement: the resulting
+  // wall position is rounded to absolute grid each tick, so the wall
+  // lands on grid lines (instead of the previous "delta from snapped
+  // anchor" path, which kept the wall at its original off-grid offset
+  // and introduced a half-step dead-zone before the first jump).
+  let rawAnchor: WallPlanPoint | null = null
   let lastDelta: WallPlanPoint = [0, 0]
   let lastNextStart: WallPlanPoint = originalStart
   let lastNextEnd: WallPlanPoint = originalEnd
@@ -82,21 +87,32 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
     affectedIds: [wallId, ...linkedOriginals.map((w) => w.id as AnyNodeId)],
 
     apply({ planPoint, modifiers }) {
-      const snapped: WallPlanPoint = modifiers.shiftKey
-        ? [planPoint[0], planPoint[1]]
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
-
-      if (!anchor) {
-        anchor = [snapped[0], snapped[1]]
+      if (!rawAnchor) {
+        rawAnchor = [planPoint[0], planPoint[1]]
         return
       }
 
-      const dx = snapped[0] - anchor[0]
-      const dz = snapped[1] - anchor[1]
+      const rawDx = planPoint[0] - rawAnchor[0]
+      const rawDz = planPoint[1] - rawAnchor[1]
+
+      // Snap the wall's start to the absolute grid (not the cursor
+      // delta) so the wall actually lines up with grid lines, and the
+      // wall jumps to a new grid position the moment the cursor crosses
+      // the midpoint between two grid lines — no "half-step before
+      // anything happens" lag.
+      const step = getWallGridStep()
+      const nextStart: WallPlanPoint = modifiers.shiftKey
+        ? [originalStart[0] + rawDx, originalStart[1] + rawDz]
+        : snapPointToGrid(
+            [originalStart[0] + rawDx, originalStart[1] + rawDz] as WallPlanPoint,
+            step,
+          )
+
+      const dx = nextStart[0] - originalStart[0]
+      const dz = nextStart[1] - originalStart[1]
       if (dx === lastDelta[0] && dz === lastDelta[1]) return
       lastDelta = [dx, dz]
 
-      const nextStart: WallPlanPoint = [originalStart[0] + dx, originalStart[1] + dz]
       const nextEnd: WallPlanPoint = [originalEnd[0] + dx, originalEnd[1] + dz]
       lastNextStart = nextStart
       lastNextEnd = nextEnd
@@ -143,12 +159,16 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // `WallSystem` + the 2D layer + the sidebar panel all consult
       // `useLiveNodeOverrides` first, so the visual + numeric preview
       // updates each frame while zustand stays at the pre-drag values
-      // until the user commits.
-      const overrides = useLiveNodeOverrides.getState()
-      overrides.set(wallId, { start: nextStart, end: nextEnd })
-      for (const upd of linkedUpdates) {
-        overrides.set(upd.id, { start: upd.start, end: upd.end })
-      }
+      // until the user commits. Batched into a single zustand
+      // notification — otherwise each per-wall `.set` would re-render
+      // every override subscriber once per linked wall per tick.
+      useLiveNodeOverrides.getState().setMany([
+        [wallId, { start: nextStart, end: nextEnd }],
+        ...linkedUpdates.map(
+          (upd) =>
+            [upd.id, { start: upd.start, end: upd.end }] as [string, Record<string, unknown>],
+        ),
+      ])
 
       // Surface bridge-wall previews so the floor-plan SVG layer can
       // render dashed outlines of what `commit()` will insert. Mirrors

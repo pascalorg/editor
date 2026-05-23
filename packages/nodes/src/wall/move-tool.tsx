@@ -165,7 +165,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       ? (node.metadata as Record<string, unknown>)
       : {}
   const isNew = !!meta.isNew
-  const activatedAtRef = useRef<number>(Date.now())
+  const hasDraggedRef = useRef(false)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
@@ -410,15 +410,11 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       const nextCenter: [number, number] = [originalCenter[0] + deltaX, originalCenter[1] + deltaZ]
       const nextWall = buildWallFromCenter(nextCenter)
+      hasDraggedRef.current = true
       applyPreview(nextWall.start, nextWall.end)
     }
 
-    const onGridClick = (event: GridEvent) => {
-      if (Date.now() - activatedAtRef.current < 150) {
-        event.nativeEvent?.stopPropagation?.()
-        return
-      }
-
+    const commitPreview = () => {
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
 
       shouldRestoreOnCleanup = false
@@ -493,7 +489,19 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+    }
+
+    const onPointerUp = () => {
+      // Press-release without drag: dismiss the tool without committing.
+      // This is the same UX as MoveWallEndpointTool / WallHeightArrowHandle
+      // — pointer-down on the affordance starts the move, drag updates the
+      // preview, release commits if the cursor actually moved.
+      if (!hasDraggedRef.current) {
+        useViewer.getState().setSelection({ selectedIds: [nodeId] })
+        exitMoveMode()
+        return
+      }
+      commitPreview()
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -548,19 +556,19 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
 
     return () => {
       if (shouldRestoreOnCleanup) {
-        // `shouldRestoreOnCleanup` is only true if neither `onGridClick`
-        // nor `onCancel` ran in this tool — i.e., the unmount came from
-        // outside (typically the 2D overlay finalising in split view).
-        // The origin flag tells us whether the 2D side committed (skip
-        // restore — its write is the live state) or the unmount has no
-        // claimed owner (restore to baseline).
+        // `shouldRestoreOnCleanup` is only true if neither `onPointerUp`
+        // (commit branch) nor `onCancel` ran — i.e., the unmount came
+        // from outside (typically the 2D overlay finalising in split
+        // view). The origin flag tells us whether the 2D side committed
+        // (skip restore — its write is the live state) or the unmount
+        // has no claimed owner (restore to baseline).
         const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
         if (!finalisedBy2D) {
           restoreOriginal()
@@ -569,8 +577,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       shiftPressedRef.current = false
       resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }

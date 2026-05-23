@@ -879,21 +879,24 @@ function InteractiveGeometry({
         // accent in `floating-action-menu.tsx`.
         const fill = isHovered ? '#a5b4fc' : '#8381ed'
         const angleDeg = (g.angle * 180) / Math.PI
-        const scale = isHovered ? 1.12 : 1
+        // No hover-grow: a scaling transform would enlarge the hit area
+        // too, letting clicks just outside the visible arrow still start
+        // a drag. Hover feedback is colour-only so the click region
+        // always matches the painted arrow shape exactly.
         return (
           <g
             key={keyHint}
             onClick={(e) => e.stopPropagation()}
-            onPointerEnter={() => onHandleHoverChange(moveHandleId)}
-            onPointerLeave={() => onHandleHoverChange(null)}
-            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg}) scale(${scale})`}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
           >
             <path d={arrowD} fill={fill} pointerEvents="none" />
             <path
               d={arrowD}
               fill="transparent"
               onPointerDown={(e) => onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)}
-              pointerEvents="all"
+              onPointerEnter={() => onHandleHoverChange(moveHandleId)}
+              onPointerLeave={() => onHandleHoverChange(null)}
+              pointerEvents="fill"
               style={{ cursor: 'move' }}
             />
           </g>

@@ -9,21 +9,28 @@ import {
   isCurvedWall,
   sceneRegistry,
   useScene,
-  type WallNode,
+  WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useState } from 'react'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BufferGeometry,
+  CanvasTexture,
   Color,
-  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
-  Float32BufferAttribute,
+  ExtrudeGeometry,
+  type Group,
   type Object3D,
   OrthographicCamera,
+  Plane,
+  Shape,
+  SRGBColorSpace,
+  Vector2,
+  Vector3,
 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -32,8 +39,18 @@ const HANDLE_OFFSET = 0.42
 const HANDLE_MIN_OFFSET = 0.5
 const HANDLE_MIN_HEIGHT = 0.62
 const HANDLE_TOP_INSET = 0.08
+const HEIGHT_HANDLE_OFFSET = 0.4
+const MIN_WALL_HEIGHT = 0.5
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
+const CORNER_HEX_RADIUS = 0.16
+const CORNER_DASH_SIZE = 0.1
+const CORNER_GAP_SIZE = 0.07
+const CORNER_DASH_THICKNESS = 0.006
+const CORNER_FLOOR_OFFSET = 0.01
+const GROUND_MENU_FACE_CLEARANCE = 0.85
+const GROUND_MENU_SPACING = 0.6
+const GROUND_ICON_LIFT = 0.015
 
 type WallMoveHandle = {
   key: string
@@ -42,40 +59,34 @@ type WallMoveHandle = {
 }
 
 function createArrowHandleGeometry() {
-  const shaft = new CylinderGeometry(0.04, 0.064, 0.25, 36)
-  const head = new ConeGeometry(0.13, 0.3, 48)
-  shaft.rotateZ(-Math.PI / 2)
-  shaft.translate(-0.085, 0, 0)
-  head.rotateZ(-Math.PI / 2)
-  head.translate(0.17, 0, 0)
+  // Classic arrow silhouette — chevron head + rectangular shaft — extruded
+  // slightly so the handle reads as a 3D plate but stays visually light.
+  const shape = new Shape()
+  shape.moveTo(0.22, 0)
+  shape.lineTo(-0.04, 0.12)
+  shape.lineTo(-0.04, 0.035)
+  shape.lineTo(-0.2, 0.035)
+  shape.lineTo(-0.2, -0.035)
+  shape.lineTo(-0.04, -0.035)
+  shape.lineTo(-0.04, -0.12)
+  shape.lineTo(0.22, 0)
 
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: 0.08,
+    bevelEnabled: true,
+    bevelThickness: 0.035,
+    bevelSize: 0.03,
+    bevelOffset: 0,
+    bevelSegments: 10,
+    curveSegments: 16,
+    steps: 1,
+  })
 
-  for (const sourceGeometry of [shaft, head]) {
-    const geometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry
-    const position = geometry.getAttribute('position')
-    const normal = geometry.getAttribute('normal')
-    const uv = geometry.getAttribute('uv')
-
-    for (let index = 0; index < position.count; index += 1) {
-      positions.push(position.getX(index), position.getY(index), position.getZ(index))
-      normals.push(normal.getX(index), normal.getY(index), normal.getZ(index))
-      uvs.push(uv?.getX(index) ?? 0, uv?.getY(index) ?? 0)
-    }
-
-    if (geometry !== sourceGeometry) {
-      geometry.dispose()
-    }
-    sourceGeometry.dispose()
-  }
-
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
-  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
-  geometry.setAttribute('uv2', new Float32BufferAttribute([...uvs], 2))
+  // Centre the extruded plate around y=0 and re-orient it so the depth
+  // axis points up: the chevron lies flat in the XZ plane, tip along +X,
+  // wings spread across ±Z.
+  geometry.translate(0, 0, -0.04)
+  geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
   return geometry
@@ -158,8 +169,536 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
       {handles.map((handle) => (
         <WallMoveArrowHandle handle={handle} key={handle.key} wall={wall} />
       ))}
+      <WallHeightArrowHandle wall={wall} />
+      <WallCornerLeaderHandle endpoint="start" wall={wall} />
+      <WallCornerLeaderHandle endpoint="end" wall={wall} />
+      <WallGroundActionMenuV2 wall={wall} />
     </group>,
     levelObject,
+  )
+}
+
+function WallGroundActionMenuV2({ wall }: { wall: WallNode }) {
+  // Subscribe to children so the curve icon hides/shows reactively when
+  // doors / windows / wall-attached items get added or removed.
+  const canCurve = useScene((state) => {
+    return !(wall.children ?? []).some((childId) => {
+      const child = state.nodes[childId as AnyNodeId]
+      if (!child) return false
+      if (child.type === 'door' || child.type === 'window') return true
+      if (child.type === 'item') {
+        const attachTo = (child as { asset?: { attachTo?: string } }).asset?.attachTo
+        return attachTo === 'wall' || attachTo === 'wall-side'
+      }
+      return false
+    })
+  })
+
+  const menuGroupRef = useRef<Group>(null)
+
+  // For curved walls the chord midpoint is off the centerline, so using
+  // it would make the two faces unequal distances from the wall surface.
+  // Sampling the curve frame at t=0.5 gives a midpoint on the centerline
+  // plus a true perpendicular normal — flipping along that normal keeps
+  // the menu the same distance from the wall on either side.
+  const frame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const segLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+
+  let midX: number
+  let midZ: number
+  let dirX: number
+  let dirZ: number
+  let normalX: number
+  let normalZ: number
+
+  if (frame) {
+    midX = frame.point.x
+    midZ = frame.point.y
+    normalX = frame.normal.x
+    normalZ = frame.normal.y
+    dirX = frame.normal.y
+    dirZ = -frame.normal.x
+  } else {
+    midX = (wall.start[0] + wall.end[0]) / 2
+    midZ = (wall.start[1] + wall.end[1]) / 2
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    dirX = segLength < 1e-6 ? 1 : dx / segLength
+    dirZ = segLength < 1e-6 ? 0 : dz / segLength
+    normalX = -dirZ
+    normalZ = dirX
+  }
+
+  // Offset from the wall *face* (centerline + half-thickness), so the menu
+  // always sits clearly outside the wall mesh — matches the side handle
+  // pattern.
+  const offset = getWallThickness(wall) / 2 + GROUND_MENU_FACE_CLEARANCE
+
+  // One per-frame update for the whole menu — sets the position + rotation
+  // of the container group only. Every icon is a static child inside the
+  // group, so the entire menu moves as a single unit.
+  useFrame((state) => {
+    if (!menuGroupRef.current) return
+    const dot =
+      (state.camera.position.x - midX) * normalX + (state.camera.position.z - midZ) * normalZ
+    const side = dot >= 0 ? 1 : -1
+    menuGroupRef.current.position.set(
+      midX + normalX * offset * side,
+      GROUND_ICON_LIFT,
+      midZ + normalZ * offset * side,
+    )
+    menuGroupRef.current.rotation.y = Math.atan2(-side * dirZ, side * dirX)
+  })
+
+  if (segLength < 1e-6) return null
+
+  const items: Array<'curve' | 'duplicate' | 'delete'> = []
+  if (canCurve) items.push('curve')
+  items.push('duplicate')
+  items.push('delete')
+  const centerIndex = (items.length - 1) / 2
+
+  return (
+    <group ref={menuGroupRef}>
+      {items.map((kind, index) => (
+        <WallGroundActionIconV2
+          key={kind}
+          kind={kind}
+          offsetIndex={index - centerIndex}
+          wall={wall}
+        />
+      ))}
+    </group>
+  )
+}
+
+function WallGroundActionIconV2({
+  wall,
+  kind,
+  offsetIndex,
+}: {
+  wall: WallNode
+  kind: 'curve' | 'duplicate' | 'delete'
+  offsetIndex: number
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.2 : 1) * zoom
+
+  const texture = useMemo(() => getIconTexture(kind), [kind])
+  const material = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        map: texture,
+        side: DoubleSide,
+        // `alphaTest` discards the transparent background pixels of the
+        // SVG icon outright. Without it the WebGPU node-material pipeline
+        // alpha-blends the plane as a translucent square, which is what
+        // shows up when the wall sits between the camera and the icon
+        // (because `depthTest: false` keeps the plane drawing over the
+        // wall).
+        alphaTest: 0.4,
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [texture],
+  )
+  useEffect(() => {
+    material.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [material, isHovered])
+  useEffect(() => () => material.dispose(), [material])
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === 'pointer') {
+        document.body.style.cursor = ''
+      }
+    }
+  }, [])
+
+  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    sfxEmitter.emit('sfx:item-pick')
+    document.body.style.cursor = ''
+    setIsHovered(false)
+
+    if (kind === 'curve') {
+      useViewer.getState().setSelection({ selectedIds: [] })
+      useEditor.getState().setCurvingWall(wall)
+      return
+    }
+    if (kind === 'delete') {
+      sfxEmitter.emit('sfx:structure-delete')
+      useViewer.getState().setSelection({ selectedIds: [] })
+      useScene.getState().deleteNode(wall.id as AnyNodeId)
+      return
+    }
+    // duplicate
+    useScene.temporal.getState().pause()
+    const input = structuredClone(wall) as Record<string, unknown>
+    delete input.id
+    const existingMetadata =
+      input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
+        ? (input.metadata as Record<string, unknown>)
+        : {}
+    input.metadata = { ...existingMetadata, isNew: true }
+    try {
+      const dup = WallNode.parse(input)
+      useScene.getState().createNode(dup, dup.parentId as AnyNodeId)
+      useEditor.getState().setMovingNode(dup)
+    } catch (err) {
+      console.error('Failed to duplicate wall', err)
+      useScene.temporal.getState().resume()
+    }
+    useViewer.getState().setSelection({ selectedIds: [] })
+  }
+
+  return (
+    <group
+      onPointerDown={onPointerDown}
+      onPointerEnter={(event) => {
+        event.stopPropagation()
+        setIsHovered(true)
+        document.body.style.cursor = 'pointer'
+      }}
+      onPointerLeave={(event) => {
+        event.stopPropagation()
+        setIsHovered(false)
+        if (document.body.style.cursor === 'pointer') {
+          document.body.style.cursor = ''
+        }
+      }}
+      position={[offsetIndex * GROUND_MENU_SPACING, 0, 0]}
+      scale={scale}
+    >
+      <mesh material={material} renderOrder={1004} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.36, 0.36]} />
+      </mesh>
+    </group>
+  )
+}
+
+// Lucide icon paths — match the Spline / Copy / Trash2 icons the HTML
+// floating menu uses. Stroke is white so material.color can tint them.
+const ICON_SVGS: Record<'curve' | 'duplicate' | 'delete', string> = {
+  curve: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M5 17A12 12 0 0 1 17 5"/></svg>`,
+  duplicate: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
+  delete: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`,
+}
+
+const ICON_TEXTURE_CACHE = new Map<string, CanvasTexture>()
+const ICON_TEXTURE_SIZE = 128
+
+function getIconTexture(kind: 'curve' | 'duplicate' | 'delete'): CanvasTexture {
+  const cached = ICON_TEXTURE_CACHE.get(kind)
+  if (cached) return cached
+
+  const canvas = document.createElement('canvas')
+  canvas.width = ICON_TEXTURE_SIZE
+  canvas.height = ICON_TEXTURE_SIZE
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  ICON_TEXTURE_CACHE.set(kind, texture)
+
+  const img = new Image()
+  img.onload = () => {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
+    ctx.drawImage(img, 0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
+    texture.needsUpdate = true
+  }
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ICON_SVGS[kind])}`
+
+  return texture
+}
+
+function buildDashedVerticalGeometry(height: number) {
+  // Build each dash as a thin cylinder section so thickness is
+  // controllable — native `lineSegments` lock to 1px on WebGL/WebGPU.
+  const dashes: BufferGeometry[] = []
+  let y = 0
+  while (y < height) {
+    const end = Math.min(y + CORNER_DASH_SIZE, height)
+    const length = end - y
+    const cylinder = new CylinderGeometry(CORNER_DASH_THICKNESS, CORNER_DASH_THICKNESS, length, 8)
+    cylinder.translate(0, y + length / 2, 0)
+    dashes.push(cylinder)
+    y = end + CORNER_GAP_SIZE
+  }
+  const merged = mergeGeometries(dashes, false) ?? new BufferGeometry()
+  for (const dash of dashes) dash.dispose()
+  return merged
+}
+
+function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 'start' | 'end' }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const { camera } = useThree()
+  const billboardRef = useRef<Group>(null)
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.25 : 1) * zoom
+
+  const corner = endpoint === 'start' ? wall.start : wall.end
+  const x = corner[0]
+  const z = corner[1]
+  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+
+  const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
+  useEffect(() => () => dashedGeometry.dispose(), [dashedGeometry])
+
+  // Node materials matched to the rest of the file — mixing plain
+  // `meshBasicMaterial` with WebGPU node materials trips
+  // "Color target has no corresponding fragment stage output".
+  const dashMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const hexMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const ringMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+
+  useEffect(() => {
+    const next = isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR
+    dashMaterial.color.set(next)
+    hexMaterial.color.set(next)
+    ringMaterial.color.set(next)
+  }, [dashMaterial, hexMaterial, ringMaterial, isHovered])
+
+  useEffect(() => () => dashMaterial.dispose(), [dashMaterial])
+  useEffect(() => () => hexMaterial.dispose(), [hexMaterial])
+  useEffect(() => () => ringMaterial.dispose(), [ringMaterial])
+
+  // Billboard the hex disc to the camera so the picker is always
+  // recognisable regardless of viewing angle. Assumes the parent level
+  // has no rotation, which is the standard case.
+  useFrame(() => {
+    if (billboardRef.current) {
+      billboardRef.current.quaternion.copy(camera.quaternion)
+    }
+  })
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
+        document.body.style.cursor = ''
+      }
+    }
+  }, [])
+
+  const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    sfxEmitter.emit('sfx:item-pick')
+    document.body.style.cursor = 'grabbing'
+    useEditor.getState().setMovingWallEndpoint({ wall, endpoint })
+  }
+
+  return (
+    <>
+      <mesh
+        frustumCulled={false}
+        geometry={dashedGeometry}
+        material={dashMaterial}
+        position={[x, 0, z]}
+        renderOrder={1001}
+      />
+      <group position={[x, CORNER_FLOOR_OFFSET, z]} ref={billboardRef} scale={scale}>
+        <mesh
+          material={hexMaterial}
+          onPointerDown={activateEndpointMove}
+          onPointerEnter={(event) => {
+            event.stopPropagation()
+            setIsHovered(true)
+            document.body.style.cursor = 'grab'
+          }}
+          onPointerLeave={(event) => {
+            event.stopPropagation()
+            setIsHovered(false)
+            if (document.body.style.cursor === 'grab') {
+              document.body.style.cursor = ''
+            }
+          }}
+          renderOrder={1003}
+        >
+          <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
+        </mesh>
+        <mesh material={ringMaterial} renderOrder={1002}>
+          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
+        </mesh>
+      </group>
+    </>
+  )
+}
+
+function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        depthTest: true,
+        depthWrite: true,
+        transparent: false,
+        opacity: 1,
+      }),
+    [],
+  )
+  const { camera, raycaster, gl } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.12 : 1) * zoom
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === 'ns-resize') {
+        document.body.style.cursor = ''
+      }
+      dragCleanupRef.current?.()
+    }
+  }, [])
+
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
+
+  const midX = (wall.start[0] + wall.end[0]) / 2
+  const midZ = (wall.start[1] + wall.end[1]) / 2
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const wallAngle = Math.atan2(-dz, dx)
+  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
+
+  const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
+    if (!levelObject) return
+
+    // Vertical plane through the wall midpoint whose normal points toward
+    // the camera (projected to horizontal). Raycasting against it converts
+    // pointer movement into a world-space Y value.
+    const midpointWorld = new Vector3(midX, 0, midZ).applyMatrix4(levelObject.matrixWorld)
+    const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
+    if (planeNormal.lengthSq() === 0) return
+    planeNormal.normalize()
+    const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
+
+    const ndc = new Vector2()
+    const setNDC = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      )
+    }
+
+    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    raycaster.setFromCamera(ndc, camera)
+    const hit = new Vector3()
+    if (!raycaster.ray.intersectPlane(plane, hit)) return
+
+    const initialHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+    const initialY = hit.y
+    const wallId = wall.id as AnyNodeId
+
+    document.body.style.cursor = 'ns-resize'
+    sfxEmitter.emit('sfx:item-pick')
+    useEditor.getState().setResizingWallHeight(wall)
+    useScene.temporal.getState().pause()
+
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      const intersection = new Vector3()
+      if (!raycaster.ray.intersectPlane(plane, intersection)) return
+      const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (intersection.y - initialY))
+      useScene.getState().updateNode(wallId, { height: newHeight })
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      if (document.body.style.cursor === 'ns-resize') {
+        document.body.style.cursor = ''
+      }
+      useScene.temporal.getState().resume()
+      useEditor.getState().setResizingWallHeight(null)
+      dragCleanupRef.current = null
+    }
+    const onUp = () => {
+      sfxEmitter.emit('sfx:item-place')
+      cleanup()
+    }
+    const onCancel = () => cleanup()
+
+    dragCleanupRef.current = cleanup
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
+
+  return (
+    <group position={[midX, handleY, midZ]} rotation={[0, wallAngle, 0]}>
+      <group rotation={[0, Math.PI / 2, Math.PI / 2]} scale={scale}>
+        <mesh
+          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
+          frustumCulled={false}
+          geometry={arrowGeometry}
+          material={arrowMaterial}
+          onPointerDown={activateHeightResize}
+          onPointerEnter={(event) => {
+            event.stopPropagation()
+            setIsHovered(true)
+            document.body.style.cursor = 'ns-resize'
+          }}
+          onPointerLeave={(event) => {
+            event.stopPropagation()
+            setIsHovered(false)
+            if (document.body.style.cursor === 'ns-resize') {
+              document.body.style.cursor = ''
+            }
+          }}
+          renderOrder={1002}
+        />
+      </group>
+    </group>
   )
 }
 

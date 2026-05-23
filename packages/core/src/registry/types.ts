@@ -156,6 +156,14 @@ export type FloorplanStyle = {
    * the pointer).
    */
   pointerEvents?: 'none' | 'auto' | 'all' | 'stroke' | 'fill' | 'visible' | 'visiblePainted'
+  /**
+   * CSS `cursor` for the rendered primitive. Defaults to inheriting the
+   * registry entry wrapper's `cursor: 'pointer'`. Override to neutralise
+   * a hover affordance — e.g. a selected wall body that catches the
+   * pointer (to block fall-through to the slab below) but should not
+   * advertise itself as a drag target.
+   */
+  cursor?: string
 }
 
 // ─── ToolHint ────────────────────────────────────────────────────────

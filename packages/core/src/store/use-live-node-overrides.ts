@@ -5,6 +5,7 @@ export type LiveNodeOverrides = Record<string, unknown>
 type LiveNodeOverrideState = {
   overrides: Map<string, LiveNodeOverrides>
   set(nodeId: string, values: LiveNodeOverrides): void
+  setMany(entries: ReadonlyArray<readonly [string, LiveNodeOverrides]>): void
   get(nodeId: string): LiveNodeOverrides | undefined
   clear(nodeId: string): void
   clearAll(): void
@@ -16,6 +17,19 @@ const useLiveNodeOverrides = create<LiveNodeOverrideState>((set, get) => ({
     set((state) => {
       const next = new Map(state.overrides)
       next.set(nodeId, { ...(next.get(nodeId) ?? {}), ...values })
+      return { overrides: next }
+    }),
+  // Batch update — one Map clone + one zustand notification regardless
+  // of entry count, so a drag publishing to N linked walls re-renders
+  // subscribers (WallSystem, FloorplanRegistryLayer) once per tick
+  // instead of N+1 times.
+  setMany: (entries) =>
+    set((state) => {
+      if (entries.length === 0) return state
+      const next = new Map(state.overrides)
+      for (const [nodeId, values] of entries) {
+        next.set(nodeId, { ...(next.get(nodeId) ?? {}), ...values })
+      }
       return { overrides: next }
     }),
   get: (nodeId) => get().overrides.get(nodeId),
