@@ -1,19 +1,28 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type BoxVentNode,
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
   emitter,
   type FenceNode,
+  getEffectiveRoofSurfaceMaterial,
+  getEffectiveSegmentSurfaceMaterial,
   getMaterialPresetByRef,
+  getSelectableKinds,
   type ItemNode,
+  isRegistrySelectable,
   type NodeEvent,
+  nodeRegistry,
+  type RidgeVentNode,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
+  type RoofSegmentNode,
   resolveLevelId,
   resolveMaterial,
+  type ShelfNode,
   type SlabNode,
   type StairEvent,
   type StairNode,
@@ -21,9 +30,6 @@ import {
   type StairSurfaceMaterialRole,
   sceneRegistry,
   useScene,
-  type WallEvent,
-  type WallNode,
-  type WallSurfaceSide,
 } from '@pascal-app/core'
 
 import {
@@ -33,17 +39,17 @@ import {
   getRoofMaterialArray,
   getStairBodyMaterials,
   getStairRailingMaterial,
-  getVisibleWallMaterials,
   useViewer,
 } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ActivePaintMaterial,
+  buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
+  buildRoofSurfaceMaterialUpdates,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
-  buildWallSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
@@ -119,33 +125,6 @@ export const resolveBuildingId = (
     return level.parentId
   }
   return null
-}
-
-function resolveWallMaterialTarget(event: WallEvent): WallSurfaceSide | null {
-  const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
-  if (materialIndex === 1) return 'interior'
-  if (materialIndex === 2) return 'exterior'
-
-  const normalZ = event.normal?.[2]
-  const localZ = event.localPosition[2]
-  const thickness = event.node.thickness ?? 0.1
-
-  if (
-    normalZ === undefined ||
-    Math.abs(normalZ) < 0.65 ||
-    Math.abs(localZ) < Math.max(thickness * 0.2, 0.01)
-  ) {
-    return null
-  }
-
-  const hitFace = localZ >= 0 ? 'front' : 'back'
-  const semantic = hitFace === 'front' ? event.node.frontSide : event.node.backSide
-
-  if (semantic === 'interior' || semantic === 'exterior') {
-    return semantic
-  }
-
-  return hitFace === 'front' ? 'interior' : 'exterior'
 }
 
 function resolveStairMaterialTarget(
@@ -246,31 +225,17 @@ function previewCursor(cursor: string): PaintPreviewCleanup {
 }
 
 function getSingleSurfacePreviewMaterial(material: ActivePaintMaterial): Material | null {
+  const shading = useViewer.getState().shading
+
   if (material.materialPreset) {
-    return createMaterialFromPresetRef(material.materialPreset)
+    return createMaterialFromPresetRef(material.materialPreset, shading)
   }
 
   if (material.material) {
-    return createMaterial(material.material)
+    return createMaterial(material.material, shading)
   }
 
   return null
-}
-
-function applyWallPaintPreview(
-  node: WallNode,
-  role: WallSurfaceSide,
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const mesh = getRegisteredMesh(node.id)
-  if (!mesh) return null
-
-  const previewNode = {
-    ...node,
-    ...buildWallSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
-  }
-
-  return previewMeshMaterial(mesh, getVisibleWallMaterials(previewNode))
 }
 
 function applyRoofPaintPreview(
@@ -286,10 +251,59 @@ function applyRoofPaintPreview(
     ...node,
     ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const previewMaterial = getRoofMaterialArray(previewNode)
+  const previewMaterial = getRoofMaterialArray(
+    previewNode,
+    useViewer.getState().shading,
+    useViewer.getState().textures,
+    useViewer.getState().colorPreset,
+    useViewer.getState().sceneTheme,
+  )
   if (!previewMaterial) return null
 
   return previewMeshMaterial(mesh, previewMaterial)
+}
+
+function applyRoofSegmentPaintPreview(
+  node: RoofSegmentNode,
+  parent: RoofNode | null,
+  role: 'top' | 'edge' | 'wall',
+  material: ActivePaintMaterial,
+): PaintPreviewCleanup | null {
+  const mesh = getRegisteredMesh(node.id)
+  if (!mesh) return null
+
+  // Synthesise the segment node as if the paint had committed, then build
+  // the same 4-slot array the renderer would. Mirrors getRoofMaterialArray
+  // layout (slot 0 ← edge, 1 ← wall, 2 ← wall, 3 ← top) so the preview
+  // material lands on the matching CSG groups.
+  const previewNode: RoofSegmentNode = {
+    ...node,
+    ...buildRoofSegmentSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
+  }
+  const resolveSlot = (r: 'top' | 'edge' | 'wall'): Material | null => {
+    const parentSpec = parent ? getEffectiveRoofSurfaceMaterial(parent, r) : undefined
+    const spec = getEffectiveSegmentSurfaceMaterial(previewNode, r, parentSpec)
+    if (typeof spec.materialPreset === 'string') {
+      const resolved = createMaterialFromPresetRef(spec.materialPreset)
+      if (resolved) return resolved
+    }
+    if (spec.material !== undefined) return createMaterial(spec.material)
+    return null
+  }
+  const edge = resolveSlot('edge')
+  const wall = resolveSlot('wall')
+  const top = resolveSlot('top')
+  if (!(edge || wall || top)) return null
+  const fallback = parent ? getRoofMaterialArray(parent) : null
+  const fb = (n: number) => fallback?.[n] ?? null
+  const arr: Material[] = [
+    edge ?? wall ?? top ?? fb(0)!,
+    wall ?? edge ?? top ?? fb(1)!,
+    wall ?? edge ?? top ?? fb(2)!,
+    top ?? wall ?? edge ?? fb(3)!,
+  ]
+  if (arr.some((m) => !m)) return null
+  return previewMeshMaterial(mesh, arr)
 }
 
 function applyStairPaintPreview(
@@ -304,8 +318,9 @@ function applyStairPaintPreview(
     ...node,
     ...buildStairSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
-  const bodyMaterials = getStairBodyMaterials(previewNode)
-  const railingMaterial = getStairRailingMaterial(previewNode)
+  const shading = useViewer.getState().shading
+  const bodyMaterials = getStairBodyMaterials(previewNode, shading)
+  const railingMaterial = getStairRailingMaterial(previewNode, shading)
   const restores: PaintPreviewCleanup[] = []
 
   root.traverse((object) => {
@@ -338,7 +353,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode,
+  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode | BoxVentNode | RidgeVentNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -406,6 +421,24 @@ function applySingleSurfacePaintPreview(
     }
   }
 
+  if (node.type === 'shelf' || node.type === 'box-vent' || node.type === 'ridge-vent') {
+    // These kinds register a `<group>` (not a Mesh) with `useRegistry`,
+    // so we walk the subtree and preview-swap every child mesh — same
+    // approach `column` uses.
+    if (!registeredObject) return null
+    const restores: PaintPreviewCleanup[] = []
+    registeredObject.traverse((object) => {
+      if (!(object as Mesh).isMesh) return
+      restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
+    })
+    if (restores.length === 0) return null
+    return () => {
+      for (let index = restores.length - 1; index >= 0; index -= 1) {
+        restores[index]?.()
+      }
+    }
+  }
+
   if (!mesh) return null
 
   if (node.type === 'slab') {
@@ -429,6 +462,11 @@ function applySingleSurfacePaintPreview(
 
   return previewMeshMaterial(mesh, previewMaterial)
 }
+
+// Chimney + dormer paint dispatch lives on their NodeDefinition's
+// `capabilities.paint` (see packages/nodes/src/{chimney,dormer}/
+// paint.ts). The generic registry-driven arm in this file consults
+// those entries — no per-kind helpers needed here.
 
 function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRole | null) {
   if (!role) {
@@ -648,6 +686,11 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       }
       if (node.type === 'window' || node.type === 'door') return true
 
+      // Registry-driven: any kind whose NodeDefinition declares the
+      // `selectable` capability is also selectable in structure phase. Phase 4
+      // makes this the only path and deletes the hardcoded chain above.
+      if (isRegistrySelectable(node.type)) return true
+
       return false
     },
   },
@@ -676,14 +719,43 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
     },
     isValid: (node) => {
       if (!isNodeInCurrentLevel(node)) return false
-      if (node.type !== 'item') return false
-      const item = node as ItemNode
-      return item.asset.category !== 'door' && item.asset.category !== 'window'
+      // Item: door/window-category items belong to structure phase, not furnish.
+      if (node.type === 'item') {
+        const item = node as ItemNode
+        return item.asset.category !== 'door' && item.asset.category !== 'window'
+      }
+      // Registry-driven kinds with `category: 'furnish'` (shelf today,
+      // future furniture kinds): selectable in furnish phase if their
+      // definition declares the `selectable` capability. Without this
+      // branch, shelf clicks routed to furnish phase via getSelectionTarget
+      // would be rejected here — single-click selection broken.
+      const def = nodeRegistry.get(node.type)
+      if (def && def.category === 'furnish' && def.capabilities.selectable) return true
+      return false
     },
   },
 }
 
 const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
+  // Item is checked FIRST so its asset.category-driven routing (door/
+  // window items land in structure phase, everything else in furnish)
+  // beats the generic registry fallback below. Without this, registering
+  // `item` (Phase 5) made isRegistrySelectable('item') match the
+  // structure branch first, breaking single-click selection: first click
+  // switched the editor to structure phase, second click selected.
+  if (node.type === 'item') {
+    const item = node as ItemNode
+    if (item.asset.category === 'door' || item.asset.category === 'window') {
+      return {
+        phase: 'structure',
+        structureLayer: 'elements',
+      }
+    }
+    return {
+      phase: 'furnish',
+    }
+  }
+
   if (node.type === 'zone') {
     return {
       phase: 'structure',
@@ -712,18 +784,16 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     }
   }
 
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    if (item.asset.category === 'door' || item.asset.category === 'window') {
-      return {
-        phase: 'structure',
-        structureLayer: 'elements',
-      }
+  // Registry-driven kinds (Phase 5+): route by `def.category`. Built-ins
+  // above match before this fallback. Furnish-category kinds (shelf,
+  // item — already handled above) land on the furnish phase; structure-
+  // category kinds (everything else) on structure/elements.
+  const def = nodeRegistry.get(node.type)
+  if (def) {
+    if (def.category === 'furnish') {
+      return { phase: 'furnish' }
     }
-
-    return {
-      phase: 'furnish',
-    }
+    return { phase: 'structure', structureLayer: 'elements' }
   }
 
   return null
@@ -780,40 +850,59 @@ export const SelectionManager = () => {
 
       if (!isNodeInCurrentLevel(node)) return null
 
-      if (node.type === 'wall') {
-        const role = resolveWallMaterialTarget(event as WallEvent)
+      // Registry-driven paint dispatch — kinds that declare
+      // `capabilities.paint` route hover / click / preview through
+      // their definition. Wall, chimney, and dormer use this; legacy
+      // roof / stair / single-surface arms below stay until they
+      // migrate too.
+      const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
+      if (paintCap) {
+        const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
+        const role = paintCap.resolveRole({
+          node,
+          materialIndex: materialIndex ?? null,
+          normal: event.normal,
+          localPosition: event.localPosition as readonly [number, number, number] | undefined,
+          hitObjectName: event.nativeEvent.object?.name,
+        })
         const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
         return {
-          key: `wall:${node.id}:${role ?? 'unsupported'}`,
+          key: `${node.type}:${node.id}:${role ?? 'unsupported'}`,
           hoveredId: node.id as AnyNodeId,
-          hoverMode:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
-            compatible && hasActivePaintMaterial(activePaintMaterial)
+            compatible && role
               ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      node.id as AnyNodeId,
-                      buildWallSurfaceMaterialPatch(
-                        node as WallNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
-                      ),
-                    )
+                  useScene.getState().updateNode(
+                    node.id as AnyNodeId,
+                    paintCap.buildPatch({
+                      node,
+                      role,
+                      material: activePaintMaterial.material,
+                      materialPreset: activePaintMaterial.materialPreset,
+                    }) as Partial<AnyNode>,
+                  )
                 }
               : null,
           preview:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? () => applyWallPaintPreview(node as WallNode, role, activePaintMaterial)
+            compatible && role
+              ? () => {
+                  const root = getRegisteredNodeObject(node.id)
+                  if (!root) return null
+                  return paintCap.applyPreview({
+                    node,
+                    role,
+                    material: activePaintMaterial.material,
+                    materialPreset: activePaintMaterial.materialPreset,
+                    root,
+                  })
+                }
               : () => previewCursor('not-allowed'),
         }
       }
 
       if (node.type === 'roof' || node.type === 'roof-segment') {
+        const isSegmentHit = node.type === 'roof-segment'
         const roofNode =
           node.type === 'roof'
             ? node
@@ -824,9 +913,16 @@ export const SelectionManager = () => {
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
         const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        // Painting directly on a segment (only possible in segment edit
+        // mode, where the per-segment mesh is visible) writes to the
+        // segment's own role-specific fields. Painting the merged shell
+        // — or a roof node directly — keeps fanning to the parent roof.
+        const segmentTarget = isSegmentHit ? (node as RoofSegmentNode) : null
         return {
-          key: `roof:${roofNode.id}:${role ?? 'unsupported'}`,
-          hoveredId: roofNode.id as AnyNodeId,
+          key: `${segmentTarget ? 'roof-segment' : 'roof'}:${
+            segmentTarget ? segmentTarget.id : roofNode.id
+          }:${role ?? 'unsupported'}`,
+          hoveredId: (segmentTarget ? segmentTarget.id : roofNode.id) as AnyNodeId,
           hoverMode:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
               ? 'paint-ready'
@@ -834,22 +930,41 @@ export const SelectionManager = () => {
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      roofNode.id as AnyNodeId,
-                      buildRoofSurfaceMaterialPatch(
+                  const sceneState = useScene.getState()
+                  if (segmentTarget) {
+                    sceneState.updateNode(
+                      segmentTarget.id as AnyNodeId,
+                      buildRoofSegmentSurfaceMaterialPatch(
+                        segmentTarget,
+                        role!,
+                        activePaintMaterial.material,
+                        activePaintMaterial.materialPreset,
+                      ),
+                    )
+                  } else {
+                    sceneState.updateNodes(
+                      buildRoofSurfaceMaterialUpdates(
+                        sceneState.nodes,
                         roofNode as RoofNode,
                         role!,
                         activePaintMaterial.material,
                         activePaintMaterial.materialPreset,
                       ),
                     )
+                  }
                 }
               : null,
           preview:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? () => applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
+              ? () =>
+                  segmentTarget
+                    ? applyRoofSegmentPaintPreview(
+                        segmentTarget,
+                        roofNode as RoofNode,
+                        role,
+                        activePaintMaterial,
+                      )
+                    : applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
               : () => previewCursor('not-allowed'),
         }
       }
@@ -895,11 +1010,19 @@ export const SelectionManager = () => {
         }
       }
 
+      // Registry-driven paint dispatch handled at the top of this
+      // function — kinds declaring `capabilities.paint` return there
+      // before any of the legacy roof / stair / single-surface arms
+      // below run.
+
       if (
         node.type === 'fence' ||
         node.type === 'column' ||
         node.type === 'slab' ||
-        node.type === 'ceiling'
+        node.type === 'ceiling' ||
+        node.type === 'shelf' ||
+        node.type === 'box-vent' ||
+        node.type === 'ridge-vent'
       ) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
@@ -914,7 +1037,13 @@ export const SelectionManager = () => {
                   .updateNode(
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
-                      FenceNode | ColumnNode | SlabNode | CeilingNode
+                      | FenceNode
+                      | ColumnNode
+                      | SlabNode
+                      | CeilingNode
+                      | ShelfNode
+                      | BoxVentNode
+                      | RidgeVentNode
                     >(activePaintMaterial.material, activePaintMaterial.materialPreset),
                   )
               }
@@ -922,7 +1051,14 @@ export const SelectionManager = () => {
           preview: compatible
             ? () =>
                 applySingleSurfacePaintPreview(
-                  node as FenceNode | ColumnNode | SlabNode | CeilingNode,
+                  node as
+                    | FenceNode
+                    | ColumnNode
+                    | SlabNode
+                    | CeilingNode
+                    | ShelfNode
+                    | BoxVentNode
+                    | RidgeVentNode,
                   activePaintMaterial,
                 )
             : () => previewCursor('not-allowed'),
@@ -1017,14 +1153,21 @@ export const SelectionManager = () => {
       'zone',
     ] as const
 
-    for (const type of allTypes) {
+    // Registry-driven kinds get the same subscriptions as the hardcoded list,
+    // so future built-in nodes don't need to edit allTypes per migration.
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    for (const type of subscribedKinds) {
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:click` as any, onClick as any)
     }
 
     return () => {
-      for (const type of allTypes) {
+      for (const type of subscribedKinds) {
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:click` as any, onClick as any)
@@ -1120,15 +1263,33 @@ export const SelectionManager = () => {
 
         let nextMaterialTargetHandled = false
 
-        if (node.type === 'wall' && nodeToSelect.type === 'wall') {
-          setSelectedMaterialTargetForNode(
-            nodeToSelect,
-            resolveWallMaterialTarget(event as WallEvent),
-          )
-          nextMaterialTargetHandled = true
+        // Registry-driven paint-target resolve on click. Kinds with
+        // `capabilities.paint` route through this entry — wall,
+        // chimney, dormer use it today. The legacy stair / roof /
+        // single-surface arms below stay until they migrate too.
+        if (nodeToSelect.type === node.type) {
+          const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
+          if (paintCap) {
+            const materialIndex = getIntersectionMaterialIndex(
+              getEventObject(event),
+              event.faceIndex,
+            )
+            const role = paintCap.resolveRole({
+              node,
+              materialIndex: materialIndex ?? null,
+              normal: event.normal,
+              localPosition: event.localPosition as readonly [number, number, number] | undefined,
+              hitObjectName: event.nativeEvent.object?.name,
+            })
+            if (role) {
+              setSelectedMaterialTargetForNode(nodeToSelect, role as MaterialTargetRole)
+              nextMaterialTargetHandled = true
+            }
+          }
         }
 
         if (
+          !nextMaterialTargetHandled &&
           (node.type === 'stair' || node.type === 'stair-segment') &&
           nodeToSelect.type === 'stair'
         ) {
@@ -1140,6 +1301,7 @@ export const SelectionManager = () => {
         }
 
         if (
+          !nextMaterialTargetHandled &&
           (node.type === 'roof' || node.type === 'roof-segment') &&
           nodeToSelect.type === 'roof'
         ) {
@@ -1151,7 +1313,11 @@ export const SelectionManager = () => {
         }
 
         if (
-          (node.type === 'fence' || node.type === 'slab' || node.type === 'ceiling') &&
+          !nextMaterialTargetHandled &&
+          (node.type === 'fence' ||
+            node.type === 'slab' ||
+            node.type === 'ceiling' ||
+            node.type === 'shelf') &&
           nodeToSelect.type === node.type
         ) {
           setSelectedMaterialTargetForNode(nodeToSelect, 'surface')
@@ -1187,7 +1353,14 @@ export const SelectionManager = () => {
       'window',
       'door',
     ]
-    allTypes.forEach((type) => {
+    // Registry-driven kinds get the same subscriptions as the hardcoded list,
+    // so future built-in nodes don't need to edit allTypes per migration.
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    subscribedKinds.forEach((type) => {
       emitter.on(`${type}:click` as any, onClick as any)
     })
 
@@ -1208,7 +1381,7 @@ export const SelectionManager = () => {
     emitter.on('grid:click', onGridClick)
 
     return () => {
-      allTypes.forEach((type) => {
+      subscribedKinds.forEach((type) => {
         emitter.off(`${type}:click` as any, onClick as any)
       })
       emitter.off('grid:click', onGridClick)
@@ -1340,14 +1513,19 @@ export const SelectionManager = () => {
       'zone',
       'site',
     ]
-    allTypes.forEach((type) => {
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    subscribedKinds.forEach((type) => {
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:double-click` as any, onDoubleClick as any)
     })
 
     return () => {
-      allTypes.forEach((type) => {
+      subscribedKinds.forEach((type) => {
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
@@ -1414,14 +1592,19 @@ export const SelectionManager = () => {
       'zone',
     ] as const
 
-    for (const type of allTypes) {
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    )
+    const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
+
+    for (const type of subscribedKinds) {
       emitter.on(`${type}:click` as any, onClick as any)
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
     }
 
     return () => {
-      for (const type of allTypes) {
+      for (const type of subscribedKinds) {
         emitter.off(`${type}:click` as any, onClick as any)
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)

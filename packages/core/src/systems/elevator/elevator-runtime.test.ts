@@ -30,7 +30,9 @@ describe('elevator runtime helpers', () => {
     const duplicated = queueElevatorRequest(queued, upperLevelId)
 
     expect(queued.queue).toEqual([upperLevelId])
+    expect(queued.requestedStops).toEqual([upperLevelId])
     expect(duplicated.queue).toEqual([upperLevelId])
+    expect(duplicated.requestedStops).toEqual([upperLevelId])
   })
 
   test('opens doors only when the elevator is not moving', () => {
@@ -42,7 +44,10 @@ describe('elevator runtime helpers', () => {
   })
 
   test('moves to a queued level and clears the served request on arrival', () => {
-    const queued = queueElevatorRequest(createElevatorInteractiveState(groundLevelId, 0), upperLevelId)
+    const queued = queueElevatorRequest(
+      createElevatorInteractiveState(groundLevelId, 0),
+      upperLevelId,
+    )
     const moving = stepElevatorRuntimeState({
       defaultEntry: entries[0]!,
       delta: 0.016,
@@ -75,5 +80,6 @@ describe('elevator runtime helpers', () => {
     expect(arrived.phase).toBe('opening')
     expect(open.phase).toBe('open')
     expect(open.queue).toEqual([])
+    expect(open.requestedStops).toEqual([upperLevelId])
   })
 })

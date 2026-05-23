@@ -1,65 +1,25 @@
 'use client'
 
-import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
+import { StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
-import useViewer from '../../store/use-viewer'
-import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
-import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
-import { DoorSystem } from '../../systems/door/door-system'
-import { ElevatorInteractionSystem } from '../../systems/elevator/elevator-interaction-system'
-import { FenceSystem } from '../../systems/fence/fence-system'
-import { GuideSystem } from '../../systems/guide/guide-system'
-import { ItemLightSystem } from '../../systems/item-light/item-light-system'
-import { ItemSystem } from '../../systems/item/item-system'
-import { LevelSystem } from '../../systems/level/level-system'
-import { RoofSystem } from '../../systems/roof/roof-system'
-import { ScanSystem } from '../../systems/scan/scan-system'
-import { SlabSystem } from '../../systems/slab/slab-system'
-import { StairSystem } from '../../systems/stair/stair-system'
-import { WallCutout } from '../../systems/wall/wall-cutout'
-import { WallSystem } from '../../systems/wall/wall-system'
-import { WindowAnimationSystem } from '../../systems/window/window-animation-system'
-import { WindowSystem } from '../../systems/window/window-system'
-import { ZoneSystem } from '../../systems/zone/zone-system'
+import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { getSceneTheme } from '../../lib/scene-themes'
+import useViewer, { type RenderContext } from '../../store/use-viewer'
+import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
+import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
+import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { ViewerCamera } from './viewer-camera'
-
-function AnimatedBackground({ isDark }: { isDark: boolean }) {
-  const targetColor = useMemo(() => new THREE.Color(), [])
-  const initialized = useRef(false)
-
-  useFrame(({ scene }, delta) => {
-    const dt = Math.min(delta, 0.1) * 4
-    const targetHex = isDark ? '#1f2433' : '#ffffff'
-
-    if (!(scene.background && scene.background instanceof THREE.Color)) {
-      scene.background = new THREE.Color(targetHex)
-      initialized.current = true
-      return
-    }
-
-    if (!initialized.current) {
-      scene.background.set(targetHex)
-      initialized.current = true
-      return
-    }
-
-    targetColor.set(targetHex)
-    scene.background.lerp(targetColor, dt)
-  })
-
-  return null
-}
 
 declare module '@react-three/fiber' {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
@@ -145,12 +105,31 @@ function GPUDeviceWatcher() {
   return null
 }
 
+function ToneMappingExposure() {
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const gl = useThree((state) => state.gl)
+  const invalidate = useThree((state) => state.invalidate)
+
+  useEffect(() => {
+    gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
+    invalidate()
+  }, [gl, invalidate, sceneTheme])
+
+  return null
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
   selectionManager?: 'default' | 'custom'
   perf?: boolean
   useBvh?: boolean
+  renderContext?: RenderContext
+  defaultRender?: {
+    shading?: RenderShading
+    textures?: boolean
+    colorPreset?: ColorPreset
+  }
 }
 
 const Viewer: React.FC<ViewerProps> = ({
@@ -159,8 +138,42 @@ const Viewer: React.FC<ViewerProps> = ({
   selectionManager = 'default',
   perf = false,
   useBvh = true,
+  renderContext = 'editor',
+  defaultRender,
 }) => {
-  const theme = useViewer((state) => state.theme)
+  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  useEffect(() => {
+    const ctx = renderContext
+    useViewer.getState().setRenderContext(ctx)
+    const { shading, shadingByContext, setShading } = useViewer.getState()
+    setShading(shadingByContext[ctx] ?? defaultRender?.shading ?? shading)
+
+    if (!defaultRender || typeof window === 'undefined') return
+
+    let persistedState: Record<string, unknown> = {}
+    const rawPreferences = window.localStorage.getItem('viewer-preferences')
+    if (rawPreferences) {
+      try {
+        const parsed = JSON.parse(rawPreferences)
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          parsed.state &&
+          typeof parsed.state === 'object'
+        ) {
+          persistedState = parsed.state as Record<string, unknown>
+        }
+      } catch {}
+    }
+
+    if (defaultRender.textures !== undefined && !('textures' in persistedState)) {
+      useViewer.getState().setTextures(defaultRender.textures)
+    }
+    if (defaultRender.colorPreset && !('colorPreset' in persistedState)) {
+      useViewer.getState().setColorPreset(defaultRender.colorPreset)
+    }
+  }, [])
+
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
   // Desktops (fine pointer) keep the original 1.5 cap.
@@ -169,7 +182,7 @@ const Viewer: React.FC<ViewerProps> = ({
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${theme === 'dark' ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
       dpr={[1, maxDpr]}
       frameloop="never"
       gl={
@@ -181,7 +194,9 @@ const Viewer: React.FC<ViewerProps> = ({
             try {
               const renderer = new THREE.WebGPURenderer(props as any)
               renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = 0.9
+              renderer.toneMappingExposure = getSceneTheme(
+                useViewer.getState().sceneTheme,
+              ).toneMappingExposure
               await renderer.init()
               return renderer
             } catch (err) {
@@ -206,9 +221,9 @@ const Viewer: React.FC<ViewerProps> = ({
       }}
     >
       <FrameLimiter fps={50} />
-      {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
       <GPUDeviceWatcher />
+      <ToneMappingExposure />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
@@ -222,31 +237,24 @@ const Viewer: React.FC<ViewerProps> = ({
           <SceneRenderer />
         )}
 
-        {/* Default Systems */}
-        <LevelSystem />
-        <GuideSystem />
-        <ScanSystem />
-        <WallCutout />
-        {/* Core systems */}
-        <CeilingSystem />
-        <DoorAnimationSystem />
-        <ElevatorRuntimeSystem />
-        <ElevatorInteractionSystem />
-        <ElevatorOpeningSystem />
-        <WindowAnimationSystem />
-        <DoorSystem />
-        <FenceSystem />
-        <ItemSystem />
-        <RoofSystem />
-        <SlabSystem />
-        <StairSystem />
-        <WallSystem />
-        <WindowSystem />
-        <ZoneSystem />
+        {/* Generic slab-elevation lift for any kind that declares
+            `capabilities.floorPlaced`. Runs at frame priority 1 so it
+            lands its mesh.position.y override before the priority-2
+            systems below clear the dirty mark. */}
+        <FloorElevationSystem />
+        {/* Generic geometry rebuild loop for any registered kind that
+            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
+            builder, swaps the registered group's children. See
+            wiki/architecture/node-definitions.md. */}
+        <GeometrySystem />
+        {/* Automated stair opening sync — updates slab/ceiling cutouts
+            whenever stairs, slabs, or levels change. */}
+        <StairOpeningSystem />
+        {/* Mounts systems contributed by registry-backed kinds. Each
+            kind's `def.system` is loaded via lazy() and rendered here,
+            ordered by `system.priority`. */}
+        <RegisteredSystems />
         <PostProcessing hoverStyles={hoverStyles} />
-        {/* <DebugRenderer /> */}
-
-        <ItemLightSystem />
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}

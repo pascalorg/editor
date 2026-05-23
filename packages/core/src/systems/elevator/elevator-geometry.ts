@@ -73,17 +73,11 @@ export function getElevatorShaftWallThickness(node: ElevatorNode) {
   return Math.max(node.shaftWallThickness ?? DEFAULT_ELEVATOR_SHAFT_WALL_THICKNESS, 0.04)
 }
 
-export function getElevatorShaftWidth(
-  node: ElevatorNode,
-  cabWidth = getElevatorCabWidth(node),
-) {
+export function getElevatorShaftWidth(node: ElevatorNode, cabWidth = getElevatorCabWidth(node)) {
   return Math.max(node.shaftWidth ?? cabWidth, cabWidth, 0.8)
 }
 
-export function getElevatorShaftDepth(
-  node: ElevatorNode,
-  cabDepth = getElevatorCabDepth(node),
-) {
+export function getElevatorShaftDepth(node: ElevatorNode, cabDepth = getElevatorCabDepth(node)) {
   return Math.max(node.shaftDepth ?? cabDepth, cabDepth, 0.8)
 }
 

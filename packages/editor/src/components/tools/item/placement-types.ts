@@ -12,7 +12,7 @@ import type { Vector3 } from 'three'
 // PLACEMENT STATE
 // ============================================================================
 
-export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface'
+export type SurfaceType = 'floor' | 'wall' | 'ceiling' | 'item-surface' | 'shelf-surface'
 
 /**
  * Tracks which surface the draft item is currently on.
@@ -23,6 +23,13 @@ export interface PlacementState {
   wallId: string | null
   ceilingId: string | null
   surfaceItemId: string | null
+  /**
+   * Active shelf when `surface === 'shelf-surface'`. Items host on the
+   * shelf board closest to the cursor's local Y; the row index isn't
+   * stored separately because every move re-derives it from cursor
+   * position via `shelfRowSurfaceYs`.
+   */
+  shelfId: string | null
 }
 
 // ============================================================================
@@ -58,6 +65,7 @@ export interface PlacementResult {
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
+  cursorRotation?: [number, number, number]
   nodeUpdate: Partial<ItemNode> | null
   stopPropagation: boolean
   dirtyNodeId: AnyNode['id'] | null
@@ -72,6 +80,7 @@ export interface TransitionResult {
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
+  cursorRotation?: [number, number, number]
   stopPropagation: boolean
 }
 

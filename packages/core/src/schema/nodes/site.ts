@@ -3,8 +3,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { BuildingNode } from './building'
-import { ItemNode } from './item'
 
 // 2D Polygon
 const PropertyLineData = z.object({
@@ -33,14 +31,12 @@ export const SiteNode = BaseNode.extend({
     ],
   }),
   // terrain: TerrainData,
-  children: z
-    .array(z.discriminatedUnion('type', [BuildingNode, ItemNode]))
-    .default([BuildingNode.parse({})]),
+  children: z.array(z.string()).default([]),
 }).describe(
   dedent`
   Site node - used to represent a site
   - polygon: polygon data
-  - children: array of building and item nodes
+  - children: array of child node ids (buildings, items)
   `,
 )
 

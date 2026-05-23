@@ -7,7 +7,11 @@ import { cn } from '../../../lib/utils'
 
 interface PanelWrapperProps {
   title: string
-  icon?: string
+  /** Either a URL path (legacy panels pass `/icons/floor.png` etc.,
+   *  rendered via next/image) OR a React node (registry-driven
+   *  inspector renders `<Icon icon="lucide:fence" />` from
+   *  `def.presentation.icon`). */
+  icon?: string | React.ReactNode
   onClose?: () => void
   onReset?: () => void
   onBack?: () => void
@@ -58,9 +62,18 @@ export function PanelWrapper({
                 <ChevronLeft className="h-4 w-4" />
               </button>
             )}
-            {icon && (
-              <Image alt="" className="shrink-0 object-contain" height={16} src={icon} width={16} />
-            )}
+            {icon &&
+              (typeof icon === 'string' ? (
+                <Image
+                  alt=""
+                  className="shrink-0 object-contain"
+                  height={16}
+                  src={icon}
+                  width={16}
+                />
+              ) : (
+                <span className="flex shrink-0 items-center justify-center">{icon}</span>
+              ))}
             <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
               {title}
             </h2>

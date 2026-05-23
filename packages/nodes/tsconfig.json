@@ -1,0 +1,16 @@
+{
+  "extends": "@pascal/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": false,
+    "composite": true,
+    "incremental": true,
+    "jsx": "react-jsx",
+    "lib": ["DOM", "ES2022"],
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"],
+  "references": [{ "path": "../core" }, { "path": "../viewer" }]
+}

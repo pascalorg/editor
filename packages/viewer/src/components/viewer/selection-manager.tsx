@@ -6,6 +6,7 @@ import {
   type BuildingNode,
   type ColumnNode,
   emitter,
+  getSelectableKinds,
   type ItemNode,
   type LevelNode,
   type NodeEvent,
@@ -25,6 +26,10 @@ const tempWorldPos = new Vector3()
 // Tolerance for edge detection (in meters)
 const EDGE_TOLERANCE = 0.5
 
+// Hardcoded kinds the viewer's selection manager knows about. Registry kinds
+// (any NodeDefinition with `capabilities.selectable`) are merged in at
+// runtime via getSelectableKinds() — Phase 6 collapses this into a single
+// registry-driven list.
 type SelectableNodeType =
   | 'building'
   | 'level'
@@ -39,6 +44,7 @@ type SelectableNodeType =
   | 'ceiling'
   | 'roof'
   | 'roof-segment'
+  | (string & {})
 
 // Expand polygon outward by a small amount to include items on edges
 const expandPolygon = (polygon: [number, number][], tolerance: number): [number, number][] => {
@@ -298,6 +304,11 @@ export const SelectionManager = () => {
     const onEnter = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
+      // Ceilings are selected via their floor-plan helper and the
+      // boundary-editor vertex handles, never via a direct 3D click on
+      // the polygon. Skipping selection routing here means a click on a
+      // ceiling falls through to the item / wall / floor below it.
+      if (event.node.type === 'ceiling') return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
         if (event.node.type === 'slab') {
@@ -311,6 +322,7 @@ export const SelectionManager = () => {
     const onLeave = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
+      if (event.node.type === 'ceiling') return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
         useViewer.setState({ hoveredId: null })
@@ -320,6 +332,7 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
+      if (event.node.type === 'ceiling') return
       if (!strategy.isValid(event.node)) return
 
       event.stopPropagation()
@@ -329,7 +342,9 @@ export const SelectionManager = () => {
       useViewer.setState({ hoveredId: null })
     }
 
-    // Subscribe to all node types
+    // Subscribe to all node types. Hardcoded kinds + registry-supplied kinds
+    // (any NodeDefinition declaring `capabilities.selectable`). Phase 6
+    // collapses these into a single registry-driven list.
     const allTypes: SelectableNodeType[] = [
       'building',
       'level',
@@ -345,17 +360,22 @@ export const SelectionManager = () => {
       'window',
       'door',
     ]
-    for (const type of allTypes) {
-      emitter.on(`${type}:enter`, onEnter)
-      emitter.on(`${type}:leave`, onLeave)
-      emitter.on(`${type}:click`, onClick)
+    const registryKinds = getSelectableKinds().filter(
+      (k) => !(allTypes as readonly string[]).includes(k),
+    ) as SelectableNodeType[]
+    const subscribedKinds = [...allTypes, ...registryKinds]
+
+    for (const type of subscribedKinds) {
+      emitter.on(`${type}:enter` as any, onEnter as any)
+      emitter.on(`${type}:leave` as any, onLeave as any)
+      emitter.on(`${type}:click` as any, onClick as any)
     }
 
     return () => {
-      for (const type of allTypes) {
-        emitter.off(`${type}:enter`, onEnter)
-        emitter.off(`${type}:leave`, onLeave)
-        emitter.off(`${type}:click`, onClick)
+      for (const type of subscribedKinds) {
+        emitter.off(`${type}:enter` as any, onEnter as any)
+        emitter.off(`${type}:leave` as any, onLeave as any)
+        emitter.off(`${type}:click` as any, onClick as any)
       }
     }
   }, [])

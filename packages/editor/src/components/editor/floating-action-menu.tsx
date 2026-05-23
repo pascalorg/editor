@@ -10,6 +10,8 @@ import {
   FenceNode,
   generateId,
   ItemNode,
+  isRegistrySelectable,
+  nodeRegistry,
   RoofSegmentNode,
   type SlabNode,
   SpawnNode,
@@ -78,7 +80,12 @@ export function FloatingActionMenu() {
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
-  const isValidType = node ? ALLOWED_TYPES.includes(node.type) : false
+  // ALLOWED_TYPES is the hardcoded set; registry-driven kinds (any
+  // NodeDefinition with `capabilities.selectable`) get the floating menu
+  // by default too. Phase 4 collapses these into a single registry check.
+  const isValidType = node
+    ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
+    : false
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {
@@ -195,7 +202,11 @@ export function FloatingActionMenu() {
         node.type === 'roof' ||
         node.type === 'roof-segment' ||
         node.type === 'stair' ||
-        node.type === 'stair-segment'
+        node.type === 'stair-segment' ||
+        // Registry-driven kinds default to movable; MoveTool dispatches them
+        // to MoveRegistryNodeTool. Phase 4 reads `capabilities.movable` to
+        // gate this instead of the unconditional OR.
+        isRegistrySelectable(node.type)
       ) {
         setMovingNode(node as any)
       }
@@ -289,6 +300,16 @@ export function FloatingActionMenu() {
         } else if (node.type === 'spawn') {
           duplicate = SpawnNode.parse(duplicateInfo)
         }
+
+        // Registry-driven fallback: any kind with a NodeDefinition can be
+        // duplicated through its schema's parse(). Future built-in kinds
+        // get duplicate for free.
+        if (!duplicate) {
+          const def = nodeRegistry.get(node.type)
+          if (def) {
+            duplicate = def.schema.parse(duplicateInfo) as AnyNode
+          }
+        }
       } catch (error) {
         console.error('Failed to parse duplicate', error)
         useScene.temporal.getState().resume()
@@ -331,6 +352,28 @@ export function FloatingActionMenu() {
           }
 
           // Duplicate children for stair nodes
+        } else if (duplicate.type === 'chimney' || duplicate.type === 'dormer') {
+          // Chimney & dormer use pure drag-to-place: NO node is
+          // inserted into the scene until the user clicks a roof
+          // segment. The `setMovingNode` call below hands the clone
+          // (with `metadata.isNew = true` + no id) to
+          // `MoveChimneyTool` / `MoveDormerTool`, which call
+          // `createNode` on the click that commits the placement.
+          // Skipping the auto-create avoids the "duplicate appears at
+          // +1 offset before drag" UX the other registry kinds use.
+        } else if (nodeRegistry.has(duplicate.type)) {
+          // Registry-driven kinds: offset the position slightly so the
+          // duplicate doesn't overlap exactly, then create + hand to the
+          // move tool. Mirrors the roof-segment / stair-segment behavior.
+          if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
+            const pos = (duplicate as { position: [number, number, number] }).position
+            ;(duplicate as { position: [number, number, number] }).position = [
+              pos[0] + 1,
+              pos[1],
+              pos[2] + 1,
+            ]
+          }
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         }
         if (
           duplicate.type === 'item' ||
@@ -342,7 +385,10 @@ export function FloatingActionMenu() {
           duplicate.type === 'door' ||
           duplicate.type === 'roof-segment' ||
           duplicate.type === 'spawn' ||
-          duplicate.type === 'stair-segment'
+          duplicate.type === 'stair-segment' ||
+          // Registry-driven kinds get picked up by MoveTool's generic
+          // fallback (MoveRegistryNodeTool) so the user can reposition.
+          nodeRegistry.has(duplicate.type)
         ) {
           setMovingNode(duplicate as any)
         } else if (duplicate.type === 'stair') {
@@ -445,7 +491,10 @@ export function FloatingActionMenu() {
                 : undefined
             }
             onMove={
-              node && node.type !== 'wall' && !DELETE_ONLY_TYPES.includes(node.type)
+              node &&
+              node.type !== 'wall' &&
+              node.type !== 'fence' &&
+              !DELETE_ONLY_TYPES.includes(node.type)
                 ? handleMove
                 : undefined
             }

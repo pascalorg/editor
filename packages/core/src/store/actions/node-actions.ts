@@ -253,16 +253,23 @@ export const createNodesAction = (
 
       nextNodes[newNode.id] = newNode
 
-      // 2. Update the Parent's children list
+      // 2. Update the Parent's children list. We append to ANY container
+      // parent (kind has `children` in its schema) — if the field is
+      // present but undefined (e.g. an old saved scene from before the
+      // kind gained children), we initialise to `[]` first so the
+      // reparenting goes through. Without this, hosting items on an
+      // old shelf (v1, before `children` was added) silently no-ops:
+      // the item is reparented to the shelf but the shelf's children
+      // array is never updated, so `ParametricNodeRenderer` doesn't
+      // mount it and the item "disappears".
       if (effectiveParentId && nextNodes[effectiveParentId]) {
         const parent = nextNodes[effectiveParentId]
-
-        // Type Guard: Check if the parent node is a container that supports children
-        if ('children' in parent && Array.isArray(parent.children)) {
+        if ('children' in parent) {
+          const existing = (parent as { children?: unknown }).children
+          const children = Array.isArray(existing) ? (existing as AnyNodeId[]) : []
           nextNodes[effectiveParentId] = {
             ...parent,
-            // Use Set to prevent duplicate IDs if createNode is called twice
-            children: Array.from(new Set([...parent.children, newNode.id])) as any, // We don't verify child types here
+            children: Array.from(new Set([...children, newNode.id])) as any,
           }
         }
       } else if (!effectiveParentId) {
@@ -442,20 +449,31 @@ export const updateNodesAction = (
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
           const oldParent = nextNodes[oldParentId] as AnyContainerNode
+          const oldChildren = Array.isArray((oldParent as { children?: unknown }).children)
+            ? (oldParent as { children: AnyNodeId[] }).children
+            : []
           nextNodes[oldParent.id] = {
             ...oldParent,
-            children: oldParent.children.filter((childId) => childId !== id),
+            children: oldChildren.filter((childId) => childId !== id),
           } as AnyNode
           parentsToUpdate.add(oldParent.id)
         }
 
-        // 2. Add to new parent
+        // 2. Add to new parent. Defensive against parents that don't yet
+        // carry a `children` array — older saved scenes can predate the
+        // schema field on a particular kind (shelf v1 → v2 added one),
+        // and a spread of `undefined` here throws and aborts the entire
+        // `set` callback. Initialising to `[]` matches what the schema's
+        // default would have produced.
         const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
+          const newChildren = Array.isArray((newParent as { children?: unknown }).children)
+            ? (newParent as { children: AnyNodeId[] }).children
+            : []
           nextNodes[newParent.id] = {
             ...newParent,
-            children: Array.from(new Set([...newParent.children, id])),
+            children: Array.from(new Set([...newChildren, id])),
           } as AnyNode
           parentsToUpdate.add(newParent.id)
         }

@@ -103,7 +103,15 @@ export function formatSvgPolygonPoints(points: Point2D[]) {
   return points.map((point) => `${toSvgX(point.x)},${toSvgY(point.y)}`).join(' ')
 }
 
-export function buildSvgArrowHeadPoints(point: Point2D, angle: number, size: number) {
+/**
+ * Three points defining an arrow head — tip + two trailing barbs.
+ * Returned as plain `Point2D` objects so consumers can either feed them
+ * straight into `formatSvgPolygonPoints` (for SVG `points=""`) or push
+ * them onto a `FloorplanGeometry.polygon.points` array. Mixing both
+ * downstream paths through a string-returning helper was awkward — see
+ * `nodes/src/stair/floorplan.ts` which needs the points as objects.
+ */
+export function buildSvgArrowHeadPoints(point: Point2D, angle: number, size: number): Point2D[] {
   const left = {
     x: point.x - size * Math.cos(angle - Math.PI / 6),
     y: point.y - size * Math.sin(angle - Math.PI / 6),
@@ -113,7 +121,7 @@ export function buildSvgArrowHeadPoints(point: Point2D, angle: number, size: num
     y: point.y - size * Math.sin(angle + Math.PI / 6),
   }
 
-  return formatSvgPolygonPoints([point, left, right])
+  return [point, left, right]
 }
 
 export { toSvgPoint, toSvgX, toSvgY }

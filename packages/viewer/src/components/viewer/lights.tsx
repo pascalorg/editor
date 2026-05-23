@@ -1,7 +1,13 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import type { AmbientLight, DirectionalLight, OrthographicCamera } from 'three/webgpu'
+import type {
+  AmbientLight,
+  DirectionalLight,
+  HemisphereLight,
+  OrthographicCamera,
+} from 'three/webgpu'
 import * as THREE from 'three/webgpu'
+import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
 // Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
@@ -15,136 +21,172 @@ const SHADOWS_DISABLED =
       .map((s) => s.trim()),
   ).has('shadows')
 
-export function Lights() {
-  const theme = useViewer((state) => state.theme)
-  const isDark = theme === 'dark'
+// Shadow darkness for the bright key lights (themes drive most lights past
+// intensity 1). The aesthetic prototype runs these near-black (≈1.0); this is a
+// deliberate middle ground — present, but not the heavy contact shadow there.
+const MAX_SHADOW_INTENSITY = 0.55
 
-  const light1Ref = useRef<DirectionalLight>(null)
+export function Lights() {
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const theme = getSceneTheme(sceneTheme)
+  const shadows = useViewer((state) => state.shadows)
+
+  const lightRefs = useRef<Array<DirectionalLight | null>>([])
   const shadowCamera = useRef<OrthographicCamera>(null)
   const shadowCameraSize = 50 // The "area" around the camera to shadow
 
-  const light2Ref = useRef<DirectionalLight>(null)
-  const light3Ref = useRef<DirectionalLight>(null)
+  // Where the shadow frustum is centred each frame. The directional light's
+  // ortho shadow camera only covers ±shadowCameraSize around the light target,
+  // so it has to track the view or anything far from origin gets no shadows.
+  const shadowFocus = useRef(new THREE.Vector3())
+
+  const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
 
   const initialized = useRef(false)
+  const lightTargets = useRef<THREE.Color[]>([])
 
   const targets = useMemo(
     () => ({
-      l1Color: new THREE.Color(),
-      l2Color: new THREE.Color(),
-      l3Color: new THREE.Color(),
+      hemiSky: new THREE.Color(),
+      hemiGround: new THREE.Color(),
       ambColor: new THREE.Color(),
     }),
     [],
   )
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     // clamp delta to avoid huge jumps on tab switch
     const dt = Math.min(delta, 0.1) * 4
 
-    if (!initialized.current) {
-      if (light1Ref.current) {
-        light1Ref.current.intensity = isDark ? 0.8 : 4
-        light1Ref.current.color.set(isDark ? '#e0e5ff' : '#ffffff')
+    // Recentre each shadow-casting light's frustum on what the viewer is looking
+    // at (orbit target if available, else the camera's ground projection), moving
+    // the light and its target together so the light DIRECTION is preserved and
+    // only the shadow camera slides. Without this the frustum stays at the origin
+    // and zones far from it never receive shadows.
+    if (shadows) {
+      const focus = shadowFocus.current
+      const controls = state.controls as { getTarget?: (out: THREE.Vector3) => void } | null
+      if (controls?.getTarget) {
+        controls.getTarget(focus)
+      } else {
+        focus.set(state.camera.position.x, 0, state.camera.position.z)
+      }
+      for (let index = 0; index < theme.lights.length; index++) {
+        const config = theme.lights[index]
+        const light = lightRefs.current[index]
+        if (!(config?.castShadow && light)) continue
+        const [ox, oy, oz] = config.position
+        light.position.set(focus.x + ox, focus.y + oy, focus.z + oz)
+        light.target.position.copy(focus)
+        light.target.updateMatrixWorld()
+      }
+    }
 
-        if (light1Ref.current.shadow) light1Ref.current.shadow.intensity = isDark ? 0.8 : 0.4
+    if (!initialized.current) {
+      for (let index = 0; index < theme.lights.length; index++) {
+        const config = theme.lights[index]
+        const light = lightRefs.current[index]
+        if (!(config && light)) continue
+        light.intensity = config.intensity
+        light.color.set(config.color)
+
+        if (config.castShadow && light.shadow) {
+          light.shadow.intensity = config.intensity <= 1 ? config.intensity : MAX_SHADOW_INTENSITY
+        }
       }
-      if (light2Ref.current) {
-        light2Ref.current.intensity = isDark ? 0.2 : 0.75
-        light2Ref.current.color.set(isDark ? '#8090ff' : '#ffffff')
-      }
-      if (light3Ref.current) {
-        light3Ref.current.intensity = isDark ? 0.3 : 1
-        light3Ref.current.color.set(isDark ? '#a0b0ff' : '#ffffff')
+      if (hemiRef.current && theme.hemi) {
+        hemiRef.current.intensity = theme.hemi.intensity
+        hemiRef.current.color.set(theme.hemi.sky)
+        hemiRef.current.groundColor.set(theme.hemi.ground)
       }
       if (ambientRef.current) {
-        ambientRef.current.intensity = isDark ? 0.15 : 0.5
-        ambientRef.current.color.set(isDark ? '#a0b0ff' : '#ffffff')
+        ambientRef.current.intensity = theme.ambient.intensity
+        ambientRef.current.color.set(theme.ambient.color)
       }
       initialized.current = true
       return
     }
 
-    if (light1Ref.current) {
-      light1Ref.current.intensity = THREE.MathUtils.lerp(
-        light1Ref.current.intensity,
-        isDark ? 0.8 : 4,
-        dt,
-      )
-      targets.l1Color.set(isDark ? '#e0e5ff' : '#ffffff')
-      light1Ref.current.color.lerp(targets.l1Color, dt)
+    for (let index = 0; index < theme.lights.length; index++) {
+      const config = theme.lights[index]
+      const light = lightRefs.current[index]
+      if (!(config && light)) continue
 
-      if (light1Ref.current.shadow) {
-        if (light1Ref.current.shadow.intensity !== undefined) {
-          light1Ref.current.shadow.intensity = THREE.MathUtils.lerp(
-            light1Ref.current.shadow.intensity,
-            isDark ? 0.8 : 0.4,
+      light.intensity = THREE.MathUtils.lerp(light.intensity, config.intensity, dt)
+      let target = lightTargets.current[index]
+      if (!target) {
+        target = new THREE.Color()
+        lightTargets.current[index] = target
+      }
+      target.set(config.color)
+      light.color.lerp(target, dt)
+
+      if (config.castShadow && light.shadow) {
+        if (light.shadow.intensity !== undefined) {
+          light.shadow.intensity = THREE.MathUtils.lerp(
+            light.shadow.intensity,
+            config.intensity <= 1 ? config.intensity : MAX_SHADOW_INTENSITY,
             dt,
           )
         }
       }
     }
 
-    if (light2Ref.current) {
-      light2Ref.current.intensity = THREE.MathUtils.lerp(
-        light2Ref.current.intensity,
-        isDark ? 0.2 : 0.75,
+    if (hemiRef.current && theme.hemi) {
+      hemiRef.current.intensity = THREE.MathUtils.lerp(
+        hemiRef.current.intensity,
+        theme.hemi.intensity,
         dt,
       )
-      targets.l2Color.set(isDark ? '#8090ff' : '#ffffff')
-      light2Ref.current.color.lerp(targets.l2Color, dt)
-    }
-
-    if (light3Ref.current) {
-      light3Ref.current.intensity = THREE.MathUtils.lerp(
-        light3Ref.current.intensity,
-        isDark ? 0.3 : 1,
-        dt,
-      )
-      targets.l3Color.set(isDark ? '#a0b0ff' : '#ffffff')
-      light3Ref.current.color.lerp(targets.l3Color, dt)
+      targets.hemiSky.set(theme.hemi.sky)
+      hemiRef.current.color.lerp(targets.hemiSky, dt)
+      targets.hemiGround.set(theme.hemi.ground)
+      hemiRef.current.groundColor.lerp(targets.hemiGround, dt)
     }
 
     if (ambientRef.current) {
       ambientRef.current.intensity = THREE.MathUtils.lerp(
         ambientRef.current.intensity,
-        isDark ? 0.15 : 0.5,
+        theme.ambient.intensity,
         dt,
       )
-      targets.ambColor.set(isDark ? '#a0b0ff' : '#ffffff')
+      targets.ambColor.set(theme.ambient.color)
       ambientRef.current.color.lerp(targets.ambColor, dt)
     }
   })
 
   return (
     <>
-      <directionalLight
-        castShadow={!SHADOWS_DISABLED}
-        position={[10, 10, 10]}
-        ref={light1Ref}
-        shadow-bias={-0.002}
-        shadow-mapSize={[1024, 1024]}
-        shadow-normalBias={0.3}
-        shadow-radius={2}
-      >
-        {SHADOWS_DISABLED ? null : (
-          <orthographicCamera
-            attach="shadow-camera"
-            bottom={-shadowCameraSize}
-            far={100}
-            left={-shadowCameraSize}
-            near={1}
-            ref={shadowCamera}
-            right={shadowCameraSize}
-            top={shadowCameraSize}
-          />
-        )}
-      </directionalLight>
+      {theme.lights.map((light, index) => (
+        <directionalLight
+          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED && shadows}
+          key={`${index}-${light.position.join(',')}`}
+          position={light.position}
+          ref={(ref) => {
+            lightRefs.current[index] = ref
+          }}
+          shadow-bias={-0.002}
+          shadow-mapSize={[1024, 1024]}
+          shadow-normalBias={0.3}
+          shadow-radius={1.5}
+        >
+          {light.castShadow && !SHADOWS_DISABLED && shadows ? (
+            <orthographicCamera
+              attach="shadow-camera"
+              bottom={-shadowCameraSize}
+              far={100}
+              left={-shadowCameraSize}
+              near={1}
+              ref={shadowCamera}
+              right={shadowCameraSize}
+              top={shadowCameraSize}
+            />
+          ) : null}
+        </directionalLight>
+      ))}
 
-      <directionalLight position={[-10, 10, -10]} ref={light2Ref} />
-
-      <directionalLight position={[-10, 10, 10]} ref={light3Ref} />
+      {theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
 
       <ambientLight ref={ambientRef} />
     </>

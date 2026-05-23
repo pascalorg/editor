@@ -1,21 +1,30 @@
 export type {
+  BoxVentEvent,
   BuildingEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
   CeilingEvent,
+  ChimneyEvent,
   ColumnEvent,
   DoorEvent,
+  DormerEvent,
   ElevatorEvent,
   EventSuffix,
   FenceEvent,
   GridEvent,
+  GuideEvent,
   ItemEvent,
   LevelEvent,
   NodeEvent,
+  RidgeVentEvent,
   RoofEvent,
   RoofSegmentEvent,
+  ScanEvent,
+  ShelfEvent,
   SiteEvent,
+  SkylightEvent,
   SlabEvent,
+  SolarPanelEvent,
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,
@@ -44,10 +53,10 @@ export {
 } from './lib/door-operation'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
+  type AutoSlabSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   planAutoSlabsForLevel,
-  type AutoSlabSyncPlan,
   type Space,
   wallTouchesOthers,
 } from './lib/space-detection'
@@ -63,7 +72,9 @@ export {
   type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
+export * from './registry'
 export * from './schema'
+export * from './services'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
@@ -77,6 +88,8 @@ export {
   type ElevatorInteractiveState,
   type ElevatorPhase,
   type ItemInteractiveState,
+  type SkylightAnimationState,
+  type SkylightInteractiveState,
   useInteractive,
   type WindowAnimationState,
   type WindowInteractiveState,
@@ -89,6 +102,7 @@ export { default as useLiveTransforms, type LiveTransform } from './store/use-li
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
+  type ElevatorDoorSide,
   getElevatorCabCenterZ,
   getElevatorCabDepth,
   getElevatorCabWidth,
@@ -101,7 +115,6 @@ export {
   getResolvedElevatorDoorPanelStyle,
   getResolvedElevatorDoorStyle,
   getResolvedElevatorShaftStyle,
-  type ElevatorDoorSide,
 } from './systems/elevator/elevator-geometry'
 export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
 export { ElevatorOpeningSystem } from './systems/elevator/elevator-opening-system'
@@ -125,6 +138,7 @@ export {
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
+export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
@@ -157,11 +171,20 @@ export {
   constrainWallMoveDeltaToAxis,
   getPerpendicularWallMoveAxis,
   planWallMoveJunctions,
-  type WallMoveBridgePlan,
   type WallMoveAxis,
+  type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'
+export {
+  type BuildStats,
+  type ParsedBuildJson,
+  type SchemaIssue,
+  type ValidateBuildJsonResult,
+  type ValidationIssue,
+  type ValidationSeverity,
+  validateBuildJson,
+} from './validation/validate-build-json'
