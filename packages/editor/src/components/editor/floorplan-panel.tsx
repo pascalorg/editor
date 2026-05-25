@@ -8976,8 +8976,8 @@ export function FloorplanPanel() {
 
               {draftWallMeasurement && (
                 <FloorplanDraftWallMeasurement
-                  labelBackground={theme === 'dark' ? '#0f172a' : '#ffffff'}
-                  labelText={theme === 'dark' ? '#e2e8f0' : '#171717'}
+                  labelBackground={isDark ? '#0f172a' : '#ffffff'}
+                  labelText={isDark ? '#e2e8f0' : '#171717'}
                   measurement={draftWallMeasurement}
                   measurementStroke={palette.measurementStroke}
                   sceneRotationDeg={floorplanSceneRotationDeg}

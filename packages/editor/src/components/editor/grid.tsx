@@ -161,7 +161,7 @@ export const Grid = ({
   return (
     <mesh
       geometry={geometry}
-      layers={EDITOR_LAYER}
+      layers={GRID_LAYER}
       material={material}
       ref={gridRef}
       rotation-x={-Math.PI / 2}
