@@ -15,6 +15,19 @@ export {
   collectDescendants,
   type SpatialQuery,
 } from './relations-resolver'
+export type {
+  ArcResizeHandle,
+  Cursor,
+  EndpointMoveHandle,
+  HandleAnchor,
+  HandleAxis,
+  HandleDescriptor,
+  HandleList,
+  HandlePlacement,
+  HandlePortal,
+  LinearResizeHandle,
+  RadialResizeHandle,
+} from './handles'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
 export type {
   Affordance,

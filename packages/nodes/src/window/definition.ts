@@ -1,9 +1,114 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type HandleDescriptor,
+  type NodeDefinition,
+  type WallNode,
+  type WindowNode as WindowNodeType,
+} from '@pascal-app/core'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
+
+const SIDE_HANDLE_OFFSET = 0.24
+const HEIGHT_HANDLE_OFFSET = 0.24
+const MIN_WINDOW_HEIGHT = 0.3
+const MIN_WINDOW_WIDTH = 0.3
+
+function readWallLength(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
+  if (!w.wallId) return Number.POSITIVE_INFINITY
+  const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
+  if (!wall) return Number.POSITIVE_INFINITY
+  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+}
+
+function readWallHeight(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
+  if (!w.wallId) return Number.POSITIVE_INFINITY
+  const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
+  return wall?.height ?? Number.POSITIVE_INFINITY
+}
+
+function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeType> {
+  const sign = side === 'right' ? 1 : -1
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: side === 'right' ? 'min' : 'max',
+    min: MIN_WINDOW_WIDTH,
+    max: (n, scene) => readWallLength(n, scene),
+    currentValue: (n) => n.width,
+    apply: (initial, newWidth) => {
+      const rotY = initial.rotation[1]
+      const armX = Math.cos(rotY)
+      const armZ = -Math.sin(rotY)
+      const anchorX = initial.position[0] - sign * (initial.width / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
+      return {
+        width: newWidth,
+        position: [
+          anchorX + sign * (newWidth / 2) * armX,
+          initial.position[1],
+          anchorZ + sign * (newWidth / 2) * armZ,
+        ],
+      }
+    },
+    placement: {
+      position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), 0, 0],
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
+    },
+    portal: 'grandparent',
+  }
+}
+
+// Window height has two arrows (top + bottom edge) — each anchors at the
+// opposite edge so dragging the top grows the window upward and dragging
+// the bottom grows it downward without the opposite edge moving.
+function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNodeType> {
+  const sign = edge === 'top' ? 1 : -1
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    // top arrow anchors at -Y (bottom stays fixed); bottom at +Y (top stays).
+    anchor: edge === 'top' ? 'min' : 'max',
+    min: MIN_WINDOW_HEIGHT,
+    max: (n, scene) => {
+      // Maximum: distance from the anchored edge to the wall's allowed Y
+      // bounds. Top arrow caps at wall.height - bottom; bottom arrow caps
+      // at top (positive Y room above the floor).
+      const wallH = readWallHeight(n, scene)
+      const anchored =
+        edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
+      return edge === 'top'
+        ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)
+        : Math.max(MIN_WINDOW_HEIGHT, anchored)
+    },
+    currentValue: (n) => n.height,
+    apply: (initial, newHeight) => {
+      // Anchored edge stays in wall-local Y; opposite edge moves.
+      const anchorY =
+        edge === 'top'
+          ? initial.position[1] - initial.height / 2 // bottom anchored
+          : initial.position[1] + initial.height / 2 // top anchored
+      const newCenterY = anchorY + sign * (newHeight / 2)
+      return {
+        height: newHeight,
+        position: [initial.position[0], newCenterY, initial.position[2]],
+      }
+    },
+    placement: {
+      position: (n) => [0, sign * (n.height / 2 + HEIGHT_HANDLE_OFFSET), 0],
+    },
+    portal: 'grandparent',
+  }
+}
+
+const windowHandles: HandleDescriptor<WindowNodeType>[] = [
+  windowWidthHandle('left'),
+  windowWidthHandle('right'),
+  windowHeightHandle('top'),
+  windowHeightHandle('bottom'),
+]
 
 /**
  * Window — Phase 5 batch kind. Mirrors door's shape: hosted on walls,
@@ -37,6 +142,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   parametrics: windowParametrics,
+  handles: windowHandles,
 
   renderer: {
     kind: 'parametric',

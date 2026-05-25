@@ -64,6 +64,30 @@ const MAX_MENU_SCALE = 1
 const REF_ORTHO_ZOOM = 20
 const REF_CAMERA_DISTANCE = 12
 
+// World-space Y distance from a node's bbox top to the floating menu anchor.
+// Per-type because in-world chrome above the node (height-resize arrows,
+// measurement labels) varies in vertical reach.
+const MENU_Y_OFFSET_DEFAULT = 0.3
+const MENU_Y_OFFSETS: Record<string, number> = {
+  wall: 0.5,
+  door: 0.6,
+  window: 0.6,
+  column: 0.6,
+  stair: 0.2,
+  'stair-flight': 0.75,
+  'stair-landing': 0.5,
+  slab: 0.4,
+  ceiling: 0.4,
+}
+
+function getMenuYOffset(node: AnyNode | null): number {
+  if (!node) return MENU_Y_OFFSET_DEFAULT
+  if (node.type === 'stair-segment') {
+    return MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT
+  }
+  return MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT
+}
+
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
@@ -166,31 +190,9 @@ export function FloatingActionMenu() {
       const box = new THREE.Box3().setFromObject(obj)
       if (!box.isEmpty()) {
         const center = box.getCenter(new THREE.Vector3())
-        // Position above the object. Walls get extra clearance so the menu
-        // sits above the height-resize arrow; slabs/ceilings clear their
-        // measurement labels.
-        const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
-        const isWall = node?.type === 'wall'
-        const isOpening = node?.type === 'door' || node?.type === 'window'
-        const isLandingSegment =
-          node?.type === 'stair-segment' && node.segmentType === 'landing'
-        const isFlightSegment =
-          node?.type === 'stair-segment' && node.segmentType === 'stair'
-        const isParentStair = node?.type === 'stair'
-        const yOffset = isWall
-          ? 0.5
-          : isOpening
-            ? 0.6
-            : isLandingSegment
-              ? 0.5
-              : isFlightSegment
-                ? 0.75
-                : isParentStair
-                  ? 0.2
-                  : isStructural
-                    ? 0.4
-                    : 0.05
-        groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
+        // Position above the object. Per-type offsets clear each kind's
+        // in-world chrome (height-resize arrows, measurement labels).
+        groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
       }
 
       if (node?.type === 'fence') {
@@ -235,6 +237,16 @@ export function FloatingActionMenu() {
       setSelection({ selectedIds: [] })
     },
     [canCurveSelectedWall, node, setCurvingFence, setCurvingWall, setSelection],
+  )
+  const handleMove = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!node) return
+      sfxEmitter.emit('sfx:item-pick')
+      setMovingNode(node as any)
+      setSelection({ selectedIds: [] })
+    },
+    [node, setMovingNode, setSelection],
   )
   const handleEndpointMove = useCallback(
     (endpoint: 'start' | 'end', e: { stopPropagation: () => void }) => {
@@ -481,6 +493,7 @@ export function FloatingActionMenu() {
                   ? handleCurve
                   : undefined
               }
+              onMove={node?.type === 'column' ? handleMove : undefined}
               onDelete={handleDelete}
               onDuplicate={
                 node &&

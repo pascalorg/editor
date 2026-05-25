@@ -3,6 +3,7 @@ import type { BufferGeometry, Object3D } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { HandleList } from './handles'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -763,6 +764,24 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * capability too).
    */
   keyboardActions?: KeyboardActions
+
+  /**
+   * In-world resize / move arrows shown when this kind is selected.
+   *
+   * Pure descriptors — no React, no Three.js. The editor's generic
+   * `<NodeArrowHandles>` reads this list and mounts the matching arrow
+   * components with shared drag plumbing, replacing per-kind
+   * `<XxxSideHandles>` files for the common cases.
+   *
+   * Static array, or a function for shape-dependent affordances
+   * (column `crossSection` / `supportStyle`, stair-segment `segmentType`,
+   * curved-vs-straight stairs). See `./handles.ts` for the variant union.
+   *
+   * Bespoke chrome that doesn't fit the descriptor model (wall corner
+   * leader dashes, fence curving, items with `attachTo`) stays as a
+   * custom React component mounted alongside.
+   */
+  handles?: HandleList<z.infer<S>>
 }
 
 export type NodeCategory = 'site' | 'structure' | 'furnish' | 'analysis' | 'utility'
