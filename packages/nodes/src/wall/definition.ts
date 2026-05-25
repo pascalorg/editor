@@ -1,10 +1,57 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import {
+  DEFAULT_WALL_HEIGHT,
+  getWallCurveFrameAt,
+  type HandleDescriptor,
+  isCurvedWall,
+  type NodeDefinition,
+  type WallNode as WallNodeType,
+} from '@pascal-app/core'
 import { buildWallFloorplan } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
+
+const HEIGHT_HANDLE_OFFSET = 0.26
+const MIN_WALL_HEIGHT = 0.5
+
+// Wall's height arrow sits at the wall's visual centerline — apex for
+// curved walls, chord midpoint for straight. Migrated to the registry;
+// side-move arrows + corner pickers stay on `wall-move-side-handles.tsx`
+// because they're click-to-engage-mode affordances (move whole wall /
+// move endpoint) rather than drag-resize, and tap-action descriptors
+// would need editor-state plumbing the descriptor union doesn't have yet.
+function wallHeightHandle(): HandleDescriptor<WallNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_WALL_HEIGHT,
+    currentValue: (n) => n.height ?? DEFAULT_WALL_HEIGHT,
+    apply: (_n, newHeight) => ({ height: newHeight }),
+    placement: {
+      position: (n) => {
+        // Curved walls: apex at t=0.5. Straight: chord midpoint.
+        const curve = isCurvedWall(n) ? getWallCurveFrameAt(n, 0.5) : null
+        const midX = curve ? curve.point.x : (n.start[0] + n.end[0]) / 2
+        const midZ = curve ? curve.point.y : (n.start[1] + n.end[1]) / 2
+        const h = n.height ?? DEFAULT_WALL_HEIGHT
+        return [midX, h + HEIGHT_HANDLE_OFFSET, midZ]
+      },
+      // Align the arrow with the wall's tangent at the apex so the chevron
+      // points along the wall, matching the legacy WallHeightArrowHandle.
+      rotationY: (n) => {
+        const curve = isCurvedWall(n) ? getWallCurveFrameAt(n, 0.5) : null
+        const dirX = curve ? curve.tangent.x : n.end[0] - n.start[0]
+        const dirZ = curve ? curve.tangent.y : n.end[1] - n.start[1]
+        return Math.atan2(-dirZ, dirX)
+      },
+    },
+  }
+}
+
+const wallHandles: HandleDescriptor<WallNodeType>[] = [wallHeightHandle()]
 
 /**
  * Wall — the Phase 3 stress test of the registry-driven node model.
@@ -65,6 +112,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   parametrics: wallParametrics,
+  handles: wallHandles,
 
   // Stage D — all four wall drag affordances live in this folder.
   // curve / move-endpoint / move are 1:1 ports of the legacy tools

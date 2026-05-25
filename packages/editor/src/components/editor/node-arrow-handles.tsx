@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type ArcResizeHandle,
   type Cursor,
   createSceneApi,
   type HandleDescriptor,
@@ -240,7 +241,10 @@ function ArrowHandle({
   if (descriptor.kind === 'linear-resize' || descriptor.kind === 'radial-resize') {
     return <LinearArrow descriptor={descriptor} node={node} rideObject={rideObject} />
   }
-  // arc-resize / endpoint-move land here once their renderers are written.
+  if (descriptor.kind === 'arc-resize') {
+    return <ArcArrow descriptor={descriptor} node={node} rideObject={rideObject} />
+  }
+  // endpoint-move not yet implemented.
   return null
 }
 
@@ -443,6 +447,140 @@ function LinearArrow({
           renderOrder={1010}
         />
       </group>
+    </group>
+  )
+}
+
+// Angular drag: project pointer to a horizontal plane at the arrow's Y
+// and measure the signed angle around the node's local origin (in world
+// XZ). Pass the normalised delta to `apply` — the descriptor owns the
+// per-field math (sweep handles write `sweepAngle` AND `rotation` from
+// the same delta to keep the opposite edge world-fixed).
+function ArcArrow({
+  descriptor,
+  node,
+  rideObject,
+}: {
+  descriptor: ArcResizeHandle<AnyNode>
+  node: AnyNode
+  rideObject: Object3D
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useArrowMaterial()
+  const { camera, raycaster, gl } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
+  useEffect(() => () => dragCleanupRef.current?.(), [])
+
+  const position = descriptor.placement.position(node)
+  const rotationY = descriptor.placement.rotationY?.(node) ?? 0
+  const cursor: Cursor = 'ew-resize'
+
+  const activate = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+
+    // Horizontal drag plane at the arrow's world Y. Atan2 around the
+    // node's local origin (= rideObject world center) gives the cursor's
+    // bearing — delta between samples is the angular drag.
+    rideObject.updateMatrixWorld()
+    const centerWorld = new Vector3()
+    rideObject.getWorldPosition(centerWorld)
+    const arrowWorld = new Vector3(...position).applyMatrix4(rideObject.matrixWorld)
+    const planeY = arrowWorld.y
+    const plane = new Plane(new Vector3(0, 1, 0), -planeY)
+
+    const ndc = new Vector2()
+    const setNDC = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      )
+    }
+
+    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    raycaster.setFromCamera(ndc, camera)
+    const hitWorld = new Vector3()
+    if (!raycaster.ray.intersectPlane(plane, hitWorld)) return
+
+    const initialAngle = Math.atan2(hitWorld.z - centerWorld.z, hitWorld.x - centerWorld.x)
+    const nodeId = node.id as AnyNodeId
+    const sceneApi = createSceneApi(useScene)
+    const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
+
+    document.body.style.cursor = cursor
+    sfxEmitter.emit('sfx:item-pick')
+    useViewer.getState().setHandleDragging(true)
+    useScene.temporal.getState().pause()
+
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      const hit = new Vector3()
+      if (!raycaster.ray.intersectPlane(plane, hit)) return
+      const currentAngle = Math.atan2(hit.z - centerWorld.z, hit.x - centerWorld.x)
+      // Normalise so a drag that crosses ±π doesn't flip sign mid-gesture.
+      let delta = currentAngle - initialAngle
+      while (delta > Math.PI) delta -= 2 * Math.PI
+      while (delta < -Math.PI) delta += 2 * Math.PI
+
+      const patch = descriptor.apply(initialNode as never, delta, sceneApi)
+      sceneApi.update(nodeId, patch as Partial<AnyNode>)
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      if (document.body.style.cursor === cursor) {
+        document.body.style.cursor = ''
+      }
+      useScene.temporal.getState().resume()
+      useViewer.getState().setHandleDragging(false)
+      dragCleanupRef.current = null
+    }
+    const onUp = () => {
+      swallowNextClick()
+      sfxEmitter.emit('sfx:item-place')
+      cleanup()
+    }
+    const onCancel = () => cleanup()
+    dragCleanupRef.current = cleanup
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
+
+  return (
+    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      <mesh
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        onPointerDown={activate}
+        onPointerEnter={(event) => {
+          event.stopPropagation()
+          setIsHovered(true)
+          document.body.style.cursor = cursor
+        }}
+        onPointerLeave={(event) => {
+          event.stopPropagation()
+          setIsHovered(false)
+          if (document.body.style.cursor === cursor) {
+            document.body.style.cursor = ''
+          }
+        }}
+        renderOrder={1010}
+      />
     </group>
   )
 }

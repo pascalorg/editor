@@ -91,23 +91,28 @@ export type RadialResizeHandle<N> = {
 }
 
 /**
- * Curved / spiral stair arrows. The drag plane is computed in polar
- * coordinates around the node's local origin so the descriptor only
- * needs to declare which polar component changes:
- *   - 'angular' : sweep — pointer arc-length maps to angle delta
- *   - 'radial'  : inner radius / width — radial distance maps 1:1
- *   - 'vertical': rise — pointer Y maps 1:1 to height delta
+ * Curved / spiral stair sweep arrows. The renderer raycasts a horizontal
+ * plane through the arrow's Y and emits the angular delta (radians,
+ * signed, normalised to [-π, π]) around the node's local origin.
  *
- * `end` distinguishes the start / end sweep handles on curved stairs.
+ * Unlike the linear variants, `apply` receives the raw cursor delta
+ * (not a `newValue`) because sweep handles typically write multiple
+ * fields off the delta (`sweepAngle` AND `rotation` — re-orienting the
+ * arc so the opposite edge stays world-fixed). Descriptor-internal
+ * math handles the per-end sign and any clamping; the renderer stays
+ * out of it.
  */
-export type ArcResizeHandle<N> = {
+export type ArcResizeHandle<N = any> = {
   kind: 'arc-resize'
-  axis: 'angular' | 'radial' | 'vertical'
+  /**
+   * Marks the drag mode. Only 'angular' uses the polar plane renderer;
+   * 'radial' and 'vertical' degenerate to `linear-resize` (axis 'x' /
+   * 'y') so descriptors should prefer that for those cases.
+   */
+  axis: 'angular'
+  /** Optional metadata for descriptors that bundle two handles per kind. */
   end?: 'start' | 'end'
-  currentValue: (node: N) => number
-  apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
-  min?: number | ((node: N, sceneApi: SceneApi) => number)
-  max?: number | ((node: N, sceneApi: SceneApi) => number)
+  apply: (initialNode: N, delta: number, sceneApi: SceneApi) => Partial<N>
   placement: HandlePlacement<N>
   portal?: HandlePortal
 }

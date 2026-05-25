@@ -66,7 +66,6 @@ import { NodeArrowHandles } from './node-arrow-handles'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
-import { StairHandles } from './stair-segment-handles'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
@@ -602,7 +601,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <StairHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
