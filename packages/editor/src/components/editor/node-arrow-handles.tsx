@@ -13,6 +13,7 @@ import {
   type RadialResizeHandle,
   sceneRegistry,
   type TapActionHandle,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -380,6 +381,13 @@ function LinearArrow({
     useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
 
+    let lastPatch: Partial<AnyNode> | null = null
+
+    // Drag publishes the patch (e.g. door `{ width, position }`, wall
+    // `{ height }`) to `useLiveNodeOverrides` + markDirty. The node's
+    // system reads via `getEffectiveNode` and rebuilds the mesh
+    // imperatively, so zustand stays at the pre-drag values until
+    // commit — no per-frame React tree re-renders, no history churn.
     const onMove = (e: PointerEvent) => {
       setNDC(e.clientX, e.clientY)
       raycaster.setFromCamera(ndc, camera)
@@ -400,7 +408,9 @@ function LinearArrow({
       // apply sees the node-at-drag-start so it can compute anchors from
       // pre-drag geometry (door-width re-centers on the opposite edge).
       const patch = descriptor.apply(initialNode as never, next, sceneApi)
-      sceneApi.update(nodeId, patch as Partial<AnyNode>)
+      lastPatch = patch as Partial<AnyNode>
+      useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
+      useScene.getState().markDirty(nodeId)
     }
 
     const cleanup = () => {
@@ -417,9 +427,22 @@ function LinearArrow({
     const onUp = () => {
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
+      // Commit: one tracked write to the scene store, then drop the
+      // override so subscribers read from scene again.
+      if (lastPatch) {
+        sceneApi.update(nodeId, lastPatch)
+      }
+      useLiveNodeOverrides.getState().clear(nodeId)
+      useScene.getState().markDirty(nodeId)
       cleanup()
     }
-    const onCancel = () => cleanup()
+    const onCancel = () => {
+      // Revert: drop the override + mark dirty so the system rebuilds
+      // against the original scene values.
+      useLiveNodeOverrides.getState().clear(nodeId)
+      useScene.getState().markDirty(nodeId)
+      cleanup()
+    }
     dragCleanupRef.current = cleanup
 
     window.addEventListener('pointermove', onMove)

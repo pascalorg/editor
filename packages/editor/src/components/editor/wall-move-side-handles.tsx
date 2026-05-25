@@ -8,6 +8,7 @@ import {
   getWallThickness,
   isCurvedWall,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -413,6 +414,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const initialHeight = wall.height ?? DEFAULT_WALL_HEIGHT
     const initialY = hit.y
     const wallId = wall.id as AnyNodeId
+    let pendingHeight = initialHeight
 
     document.body.style.cursor = 'ns-resize'
     sfxEmitter.emit('sfx:item-pick')
@@ -423,13 +425,19 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
 
+    // Drag publishes `{ height }` to `useLiveNodeOverrides` and marks
+    // the wall dirty so `WallSystem.updateWallGeometry` rebuilds against
+    // the override-merged value (via `getEffectiveWall`). Zustand stays
+    // at the pre-drag height until pointerup commits one tracked write.
     const onMove = (e: PointerEvent) => {
       setNDC(e.clientX, e.clientY)
       raycaster.setFromCamera(ndc, camera)
       const intersection = new Vector3()
       if (!raycaster.ray.intersectPlane(plane, intersection)) return
       const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (intersection.y - initialY))
-      useScene.getState().updateNode(wallId, { height: newHeight })
+      pendingHeight = newHeight
+      useLiveNodeOverrides.getState().set(wallId, { height: newHeight })
+      useScene.getState().markDirty(wallId)
     }
 
     const cleanup = () => {
@@ -447,9 +455,23 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const onUp = () => {
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
+      // Commit: write the final override-merged value to zustand once
+      // (tracked, undoable), then drop the override so the renderer
+      // falls back to the scene store.
+      if (pendingHeight !== initialHeight) {
+        useScene.getState().updateNode(wallId, { height: pendingHeight })
+      }
+      useLiveNodeOverrides.getState().clear(wallId)
+      useScene.getState().markDirty(wallId)
       cleanup()
     }
-    const onCancel = () => cleanup()
+    const onCancel = () => {
+      // Revert: drop the override, mark dirty so the geometry rebuilds
+      // against the original scene height.
+      useLiveNodeOverrides.getState().clear(wallId)
+      useScene.getState().markDirty(wallId)
+      cleanup()
+    }
 
     dragCleanupRef.current = cleanup
     window.addEventListener('pointermove', onMove)

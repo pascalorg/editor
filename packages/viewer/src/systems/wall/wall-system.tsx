@@ -7,6 +7,7 @@ import {
   getAdjacentWallIds,
   getWallCurveFrameAt,
   getWallMiterBoundaryPoints,
+  getEffectiveNode,
   getWallPlanFootprint,
   getWallSurfacePolygon,
   getWallThickness,
@@ -478,9 +479,16 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
 
   const childrenIds = node.children || []
+  // Merge live overrides into door / window children so cutouts track an
+  // in-flight resize drag (door width arrow, window height arrow, etc.)
+  // without waiting on the scene store. Non-cutout children pass through
+  // unchanged.
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
+    .map((child) =>
+      child.type === 'door' || child.type === 'window' ? getEffectiveNode(child) : child,
+    )
 
   const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
 

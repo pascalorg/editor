@@ -42,4 +42,16 @@ const useLiveNodeOverrides = create<LiveNodeOverrideState>((set, get) => ({
   clearAll: () => set({ overrides: new Map() }),
 }))
 
+/**
+ * Merge any live override for `node` into a fresh copy. Spread semantics —
+ * override fields win, untouched fields stay. Returns the input unchanged
+ * when no override exists, so the caller can use the result directly
+ * without an extra "did anything change" check.
+ */
+export function getEffectiveNode<T extends { id: string }>(node: T): T {
+  const override = useLiveNodeOverrides.getState().overrides.get(node.id)
+  if (!override || Object.keys(override).length === 0) return node
+  return { ...node, ...override } as T
+}
+
 export default useLiveNodeOverrides

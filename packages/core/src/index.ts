@@ -97,6 +97,7 @@ export {
 export {
   default as useLiveNodeOverrides,
   type LiveNodeOverrides,
+  getEffectiveNode,
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
