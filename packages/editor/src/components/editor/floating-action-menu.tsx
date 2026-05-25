@@ -493,7 +493,14 @@ export function FloatingActionMenu() {
                   ? handleCurve
                   : undefined
               }
-              onMove={node?.type === 'column' ? handleMove : undefined}
+              onMove={
+                node?.type === 'column' ||
+                node?.type === 'wall' ||
+                node?.type === 'door' ||
+                node?.type === 'window'
+                  ? handleMove
+                  : undefined
+              }
               onDelete={handleDelete}
               onDuplicate={
                 node &&
