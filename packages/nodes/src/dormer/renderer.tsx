@@ -10,55 +10,21 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
+import { useEffect, useMemo, useRef } from 'react'
+import type * as THREE from 'three'
 import {
   buildDormerFallbackGeometry,
   DORMER_GABLE_MATERIAL_INDEX,
   generateDormerGeometry,
 } from './csg-geometry'
-import { useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
 import DormerWindowAssembly from './window-assembly'
-
-// Three distinct default materials: wall, side, roof top.
-// All three use FrontSide — chimney / skylight do the same, and
-// DoubleSide on a MeshStandardMaterial inside the MRT scene pass
-// generates a WebGPU pipeline whose fragment stage doesn't always
-// declare an output for every MRT target, which the validator rejects
-// with "target has no corresponding fragment stage output but
-// writeMask is not zero".
-const defaultWallMat = new THREE.MeshStandardMaterial({
-  color: 0xff_ff_ff,
-  roughness: 0.9,
-  side: THREE.FrontSide,
-})
-const defaultSideMat = new THREE.MeshStandardMaterial({
-  color: 0xff_ff_ff,
-  roughness: 0.9,
-  side: THREE.FrontSide,
-})
-const defaultRoofMat = new THREE.MeshStandardMaterial({
-  color: 0xff_ff_ff,
-  roughness: 0.85,
-  side: THREE.FrontSide,
-})
-
-// Geometry slots produced by `generateDormerGeometry`:
-//   0 = Wall          → wall material
-//   1 = Deck (side)   → side material
-//   2 = Interior      → wall material
-//   3 = Roof shingle  → roof material
-//   4 = Gable wall    → wall material  (DORMER_GABLE_MATERIAL_INDEX)
-const defaultDormerMaterials: THREE.Material[] = [
-  defaultWallMat,
-  defaultSideMat,
-  defaultWallMat,
-  defaultRoofMat,
-  defaultWallMat,
-]
 
 const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -74,8 +40,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id as AnyNodeId))
   const isLiveDrag = !!liveOverrides && Object.keys(liveOverrides).length > 0
   const node = useMemo(
-    () =>
-      liveOverrides ? ({ ...storeNode, ...liveOverrides } as DormerNode) : storeNode,
+    () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as DormerNode) : storeNode),
     [storeNode, liveOverrides],
   )
 
@@ -85,28 +50,43 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
       : undefined,
   )
 
-  const resolvedMaterials = useMemo(() => {
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
+  const sceneTheme = useViewer((s) => s.sceneTheme)
+
+  // Geometry material slots: 0=Wall, 1=Deck/side, 2=Interior, 3=Roof
+  // shingle, 4=Gable wall. Walls take the 'wall' role, the deck side and
+  // shingle take 'roof'. When textures are off, every slot snaps to its
+  // role colour regardless of explicit paint (the render-modes invariant).
+  const material = useMemo(() => {
+    const wallRole = () => createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
+    const roofRole = () => createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
+
     const top = getEffectiveDormerSurfaceMaterial(node, 'top')
     const side = getEffectiveDormerSurfaceMaterial(node, 'side')
     const wall = getEffectiveDormerSurfaceMaterial(node, 'wall')
 
-    const resolve = (spec: { material?: DormerNode['material']; materialPreset?: string }) => {
-      if (spec.materialPreset) return createMaterialFromPresetRef(spec.materialPreset)
-      if (spec.material) return createMaterial(spec.material)
-      return null
+    const resolve = (
+      spec: { material?: DormerNode['material']; materialPreset?: string },
+      role: () => THREE.Material,
+    ) => {
+      if (!textures) return role()
+      if (spec.materialPreset)
+        return createMaterialFromPresetRef(spec.materialPreset, shading) ?? role()
+      if (spec.material) return createMaterial(spec.material, shading)
+      return role()
     }
 
-    const topMat = resolve(top)
-    const sideMat = resolve(side)
-    const wallMat = resolve(wall)
-
-    if (!(topMat || sideMat || wallMat)) return null
-
-    const w = wallMat ?? defaultWallMat
-    const s = sideMat ?? defaultSideMat
-    const t = topMat ?? defaultRoofMat
+    const w = resolve(wall, wallRole)
+    const s = resolve(side, roofRole)
+    const t = resolve(top, roofRole)
     return [w, s, w, t, w] as THREE.Material[]
   }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
     node.material,
     node.materialPreset,
     node.topMaterial,
@@ -117,41 +97,49 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.wallMaterialPreset,
   ])
 
-  const material = resolvedMaterials ?? defaultDormerMaterials
-  const frameSideMat = resolvedMaterials ? resolvedMaterials[1]! : defaultSideMat
+  // The window frame bars / sill take the 'joinery' role when untextured;
+  // otherwise the deck-side material (slot 1) drives the frame look.
+  const frameSideMat = useMemo(() => {
+    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset, undefined, sceneTheme)
+    return material[1]!
+  }, [textures, colorPreset, sceneTheme, material])
 
-  const geometry = useMemo(
-    () => {
-      if (!segment) return null
-      if (isLiveDrag) return buildDormerFallbackGeometry(node)
-      return generateDormerGeometry(node, segment)
-    },
-    [
-      isLiveDrag,
-      segment,
-      node.id,
-      node.roofType,
-      node.width,
-      node.depth,
-      node.height,
-      node.roofHeight,
-      node.wallSkirtHeight,
-      node.position[0],
-      node.position[1],
-      node.position[2],
-      node.rotation,
-      node.windowWidth,
-      node.windowHeight,
-      node.windowOffsetX,
-      node.windowOffsetY,
-      node.windowShape,
-      node.windowArchHeight,
-      node.windowCornerRadii[0],
-      node.windowCornerRadii[1],
-      node.windowCornerRadii[2],
-      node.windowCornerRadii[3],
-    ],
+  // Dormer window glass has no per-node material — it always takes the
+  // themed 'glazing' role (semi-transparent) in both texture modes.
+  const glassMat = useMemo(
+    () => createSurfaceRoleMaterial('glazing', colorPreset, undefined, sceneTheme),
+    [colorPreset, sceneTheme],
   )
+
+  const geometry = useMemo(() => {
+    if (!segment) return null
+    if (isLiveDrag) return buildDormerFallbackGeometry(node)
+    return generateDormerGeometry(node, segment)
+  }, [
+    isLiveDrag,
+    segment,
+    node.id,
+    node.roofType,
+    node.width,
+    node.depth,
+    node.height,
+    node.roofHeight,
+    node.wallSkirtHeight,
+    node.position[0],
+    node.position[1],
+    node.position[2],
+    node.rotation,
+    node.windowWidth,
+    node.windowHeight,
+    node.windowOffsetX,
+    node.windowOffsetY,
+    node.windowShape,
+    node.windowArchHeight,
+    node.windowCornerRadii[0],
+    node.windowCornerRadii[1],
+    node.windowCornerRadii[2],
+    node.windowCornerRadii[3],
+  ])
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
@@ -171,9 +159,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
       rotation-y={segment.rotation ?? 0}
       visible={node.visible}
     >
-      <group
-        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
-      >
+      <group position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}>
         <group rotation-y={node.rotation ?? 0} {...handlers}>
           <mesh
             castShadow
@@ -184,6 +170,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
           />
           <DormerWindowAssembly
             frameMaterial={frameSideMat}
+            glassMaterial={glassMat}
             node={node}
             segment={segment}
           />

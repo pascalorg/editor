@@ -65,9 +65,12 @@ export default function SolarPanelPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as SolarPanelNode | undefined) : undefined,
   )
   const overrides = useLiveNodeOverrides((s) =>
-    selectedId ? (s.get(selectedId as AnyNodeId) as Partial<SolarPanelNode> | undefined) : undefined,
+    selectedId
+      ? (s.get(selectedId as AnyNodeId) as Partial<SolarPanelNode> | undefined)
+      : undefined,
   )
-  const node = storeNode && overrides ? ({ ...storeNode, ...overrides } as SolarPanelNode) : storeNode
+  const node =
+    storeNode && overrides ? ({ ...storeNode, ...overrides } as SolarPanelNode) : storeNode
   const segment = useScene((s) =>
     node?.roofSegmentId
       ? (s.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
@@ -267,15 +270,9 @@ export default function SolarPanelPanel() {
           value={Math.round(num(node.gapY, 0.02) * 1000) / 1000}
         />
         <ActionGroup>
-          <ActionButton
-            disabled={!segment}
-            label="Auto-fit to roof"
-            onClick={handleAutoFit}
-          />
+          <ActionButton disabled={!segment} label="Auto-fit to roof" onClick={handleAutoFit} />
         </ActionGroup>
-        {autoFitMessage ? (
-          <p className="px-1 text-amber-400 text-xs">{autoFitMessage}</p>
-        ) : null}
+        {autoFitMessage ? <p className="px-1 text-amber-400 text-xs">{autoFitMessage}</p> : null}
       </PanelSection>
 
       <PanelSection title="Panel">

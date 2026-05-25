@@ -31,6 +31,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   schemaVersion: 1,
   schema: SlabNode,
   category: 'structure',
+  surfaceRole: 'floor',
 
   defaults: () => ({
     object: 'node',

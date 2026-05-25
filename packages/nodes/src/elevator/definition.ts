@@ -15,6 +15,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   schemaVersion: 1,
   schema: ElevatorNode,
   category: 'structure',
+  surfaceRole: 'joinery',
 
   defaults: () => {
     const stub = ElevatorNodeSchema.parse({ id: 'elevator_default' as never, type: 'elevator' })

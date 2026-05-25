@@ -2,8 +2,8 @@
 
 import {
   type AnyNodeId,
-  ChimneyNode as ChimneyNodeSchema,
   type ChimneyNode,
+  ChimneyNode as ChimneyNodeSchema,
   emitter,
   type RoofEvent,
   type RoofNode,

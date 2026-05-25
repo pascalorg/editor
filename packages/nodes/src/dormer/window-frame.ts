@@ -54,7 +54,11 @@ export function buildDormerWindowGeometries(
 
     const innerHole =
       shape === 'arch'
-        ? createDormerArchShape(winW - 2 * safeFt, winH - 2 * safeFt, Math.max(archHeight - safeFt, 0.01))
+        ? createDormerArchShape(
+            winW - 2 * safeFt,
+            winH - 2 * safeFt,
+            Math.max(archHeight - safeFt, 0.01),
+          )
         : createDormerRoundedShape(winW - 2 * safeFt, winH - 2 * safeFt, insetRadii)
 
     outerShape.holes.push(innerHole)
@@ -88,7 +92,11 @@ export function buildDormerWindowGeometries(
 
     const glassShape =
       shape === 'arch'
-        ? createDormerArchShape(winW - 2 * safeFt, winH - 2 * safeFt, Math.max(archHeight - safeFt, 0.01))
+        ? createDormerArchShape(
+            winW - 2 * safeFt,
+            winH - 2 * safeFt,
+            Math.max(archHeight - safeFt, 0.01),
+          )
         : createDormerRoundedShape(winW - 2 * safeFt, winH - 2 * safeFt, insetRadii)
     const glassGeo = new THREE.ExtrudeGeometry(glassShape, {
       depth: 0.008,

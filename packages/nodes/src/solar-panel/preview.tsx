@@ -16,17 +16,20 @@ const ghostMaterial = new THREE.MeshStandardMaterial({
 })
 
 const SolarPanelPreview = ({ node }: { node: SolarPanelNode }) => {
-  const geometry = useMemo(() => buildSolarPanelGeometry(node), [
-    node.rows,
-    node.columns,
-    node.panelWidth,
-    node.panelHeight,
-    node.gapX,
-    node.gapY,
-    node.frameThickness,
-    node.frameDepth,
-    node.standoffHeight,
-  ])
+  const geometry = useMemo(
+    () => buildSolarPanelGeometry(node),
+    [
+      node.rows,
+      node.columns,
+      node.panelWidth,
+      node.panelHeight,
+      node.gapX,
+      node.gapY,
+      node.frameThickness,
+      node.frameDepth,
+      node.standoffHeight,
+    ],
+  )
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 

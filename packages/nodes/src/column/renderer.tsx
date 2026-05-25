@@ -3,18 +3,22 @@
 import { type ColumnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
 import {
   baseMaterial,
+  type ColorPreset,
   createColumnBoxGeometry,
   createColumnCylinderGeometry,
   createColumnSphereGeometry,
   createColumnTorusGeometry,
   createMaterial,
   createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  type RenderShading,
   useNodeEvents,
+  useViewer,
 } from '@pascal-app/viewer'
 import { createContext, useContext, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
 
-const ColumnMaterialContext = createContext<Material>(baseMaterial as Material)
+const ColumnMaterialContext = createContext<Material>(baseMaterial())
 const ColumnEdgeSoftnessContext = createContext(0.025)
 
 function ColumnMaterial() {
@@ -25,11 +29,20 @@ function ColumnMaterial() {
 function createColumnMaterial({
   material,
   materialPreset,
-}: Pick<ColumnNode, 'material' | 'materialPreset'>) {
-  const presetMaterial = createMaterialFromPresetRef(materialPreset)
+  shading,
+  textures,
+  colorPreset,
+}: Pick<ColumnNode, 'material' | 'materialPreset'> & {
+  shading: RenderShading
+  textures: boolean
+  colorPreset: ColorPreset
+}) {
+  if (!textures) return createSurfaceRoleMaterial('wall', colorPreset)
+
+  const presetMaterial = createMaterialFromPresetRef(materialPreset, shading)
   if (presetMaterial) return presetMaterial
-  if (material) return createMaterial(material)
-  return baseMaterial
+  if (material) return createMaterial(material, shading)
+  return baseMaterial(shading)
 }
 
 function getSegments(node: ColumnNode) {
@@ -118,7 +131,7 @@ function MappedBox({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -226,7 +239,7 @@ function FlatEndedBeam({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null}>
+    <mesh castShadow dispose={null} receiveShadow>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -760,7 +773,7 @@ function MappedCylinder({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -797,7 +810,7 @@ function MappedCone({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -823,7 +836,7 @@ function MappedSphere({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position}>
+    <mesh castShadow dispose={null} position={position} receiveShadow>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -864,7 +877,7 @@ function MappedTorus({
   if (!geometry) return null
 
   return (
-    <mesh dispose={null} position={position} rotation={rotation}>
+    <mesh castShadow dispose={null} position={position} receiveShadow rotation={rotation}>
       <primitive attach="geometry" dispose={null} object={geometry} />
       <ColumnMaterial />
     </mesh>
@@ -2062,13 +2075,22 @@ export const ColumnRenderer = ({ node }: { node: ColumnNode }) => {
   const ref = useRef<Group>(null!)
   const handlers = useNodeEvents(node, 'column')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
   const material = useMemo(
     () =>
       createColumnMaterial({
         material: node.material,
         materialPreset: node.materialPreset,
+        shading,
+        textures,
+        colorPreset,
       }),
     [
+      shading,
+      textures,
+      colorPreset,
       node.material,
       node.material?.preset,
       node.material?.properties,

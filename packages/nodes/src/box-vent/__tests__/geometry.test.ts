@@ -27,9 +27,7 @@ describe('buildBoxVentGeometry', () => {
     // quads, but the bottom + top fan triangulations always include
     // every profile edge (including the degenerate ones — they're
     // zero-area triangles that survive the buffer).
-    const box = buildBoxVentGeometry(
-      BoxVentNode.parse({ style: 'box', cornerBevel: 0 }),
-    )
+    const box = buildBoxVentGeometry(BoxVentNode.parse({ style: 'box', cornerBevel: 0 }))
     expect(box.getAttribute('position').count).toBeGreaterThan(0)
     // Confirm the position attribute carries finite values only.
     const positions = box.getAttribute('position').array as Float32Array
@@ -47,9 +45,7 @@ describe('buildBoxVentGeometry', () => {
   })
 
   test('cap style: zero overhang drops the flange quad', () => {
-    const noFlange = buildBoxVentGeometry(
-      BoxVentNode.parse({ style: 'cap', hoodOverhang: 0 }),
-    )
+    const noFlange = buildBoxVentGeometry(BoxVentNode.parse({ style: 'cap', hoodOverhang: 0 }))
     // 10 quads × 6 vertices/quad = 60.
     expect(noFlange.getAttribute('position').count).toBe(60)
   })

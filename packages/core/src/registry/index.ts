@@ -70,6 +70,7 @@ export type {
   SnapServicesLike,
   SurfacePoint,
   SurfaceQuery,
+  SurfaceRole,
   SurfacesConfig,
   SystemContribution,
   ToolHint,

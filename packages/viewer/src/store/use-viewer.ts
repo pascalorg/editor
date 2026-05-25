@@ -5,6 +5,10 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { EdgeMode } from '../lib/edge-style'
+import type { ColorPreset, RenderShading } from '../lib/materials'
+
+export type RenderContext = 'editor' | 'viewer'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -30,8 +34,27 @@ type ViewerState = {
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
-  theme: 'light' | 'dark'
-  setTheme: (theme: 'light' | 'dark') => void
+  sceneTheme: string
+  setSceneTheme: (id: string) => void
+
+  renderContext: RenderContext
+  setRenderContext: (context: RenderContext) => void
+
+  shading: RenderShading
+  shadingByContext: Partial<Record<RenderContext, RenderShading>>
+  setShading: (shading: RenderShading) => void
+
+  textures: boolean
+  setTextures: (textures: boolean) => void
+
+  colorPreset: ColorPreset
+  setColorPreset: (preset: ColorPreset) => void
+
+  edges: EdgeMode
+  setEdges: (edges: EdgeMode) => void
+
+  shadows: boolean
+  setShadows: (shadows: boolean) => void
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
@@ -104,8 +127,31 @@ const useViewer = create<ViewerState>()(
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
-      theme: 'light',
-      setTheme: (theme) => set({ theme }),
+      sceneTheme: 'studio',
+      setSceneTheme: (id) => set({ sceneTheme: id }),
+
+      renderContext: 'editor',
+      setRenderContext: (context) => set({ renderContext: context }),
+
+      shading: 'rendered',
+      shadingByContext: {},
+      setShading: (shading) =>
+        set((state) => ({
+          shading,
+          shadingByContext: { ...state.shadingByContext, [state.renderContext]: shading },
+        })),
+
+      textures: true,
+      setTextures: (textures) => set({ textures }),
+
+      colorPreset: 'clay',
+      setColorPreset: (preset) => set({ colorPreset: preset }),
+
+      edges: 'soft',
+      setEdges: (edges) => set({ edges }),
+
+      shadows: true,
+      setShadows: (shadows) => set({ shadows }),
 
       unit: 'metric',
       setUnit: (unit) => set({ unit }),
@@ -221,7 +267,12 @@ const useViewer = create<ViewerState>()(
       name: 'viewer-preferences',
       partialize: (state) => ({
         cameraMode: state.cameraMode,
-        theme: state.theme,
+        sceneTheme: state.sceneTheme,
+        shadingByContext: state.shadingByContext,
+        textures: state.textures,
+        colorPreset: state.colorPreset,
+        edges: state.edges,
+        shadows: state.shadows,
         unit: state.unit,
         levelMode: state.levelMode,
         wallMode: state.wallMode,

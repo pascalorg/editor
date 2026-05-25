@@ -1,4 +1,4 @@
-import { type NodeDefinition, BoxVentNode as BoxVentNodeSchema } from '@pascal-app/core'
+import { BoxVentNode as BoxVentNodeSchema, type NodeDefinition } from '@pascal-app/core'
 import { boxVentParametrics } from './parametrics'
 import { BoxVentNode } from './schema'
 
@@ -33,6 +33,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   schemaVersion: 1,
   schema: BoxVentNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     const stub = BoxVentNodeSchema.parse({ id: 'bvent_default' as never, type: 'box-vent' })

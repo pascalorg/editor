@@ -526,14 +526,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
       }
 
-      const initRotation: [number, number, number] = result.cursorRotation ?? [0, result.cursorRotationY, 0]
+      const initRotation: [number, number, number] = result.cursorRotation ?? [
+        0,
+        result.cursorRotationY,
+        0,
+      ]
 
-      draftNode.create(
-        gridPosition.current,
-        asset,
-        initRotation,
-        configRef.current.defaultScale,
-      )
+      draftNode.create(gridPosition.current, asset, initRotation, configRef.current.defaultScale)
 
       const draft = draftNode.current
       if (draft) {

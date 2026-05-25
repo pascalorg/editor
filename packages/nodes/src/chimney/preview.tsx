@@ -21,43 +21,40 @@ const ghostMaterial = new THREE.MeshStandardMaterial({
  * segment is hit, the preview isn't shown at all (the tool guards on
  * `previewPos`).
  */
-const ChimneyPreview = ({
-  node,
-  segment,
-}: {
-  node: ChimneyNode
-  segment: RoofSegmentNode
-}) => {
-  const geo = useMemo(() => buildChimneyGeometry(node, segment), [
-    segment.wallHeight,
-    segment.pitch,
-    segment.roofType,
-    segment.width,
-    segment.depth,
-    node.width,
-    node.depth,
-    node.heightAboveRidge,
-    node.bodyShape,
-    node.shoulderStyle,
-    node.shoulderHeight,
-    node.shoulderExtent,
-    node.cap,
-    node.capShape,
-    node.capOverhang,
-    node.capThickness,
-    node.flueCount,
-    node.flueShape,
-    node.flueHeight,
-    node.flueDiameter,
-    node.flueSpacing,
-    node.cricketStyle,
-    node.cricketSide,
-    node.cricketLength,
-    node.cricketHeight,
-    node.position[0],
-    node.position[2],
-    node.rotation,
-  ])
+const ChimneyPreview = ({ node, segment }: { node: ChimneyNode; segment: RoofSegmentNode }) => {
+  const geo = useMemo(
+    () => buildChimneyGeometry(node, segment),
+    [
+      segment.wallHeight,
+      segment.pitch,
+      segment.roofType,
+      segment.width,
+      segment.depth,
+      node.width,
+      node.depth,
+      node.heightAboveRidge,
+      node.bodyShape,
+      node.shoulderStyle,
+      node.shoulderHeight,
+      node.shoulderExtent,
+      node.cap,
+      node.capShape,
+      node.capOverhang,
+      node.capThickness,
+      node.flueCount,
+      node.flueShape,
+      node.flueHeight,
+      node.flueDiameter,
+      node.flueSpacing,
+      node.cricketStyle,
+      node.cricketSide,
+      node.cricketLength,
+      node.cricketHeight,
+      node.position[0],
+      node.position[2],
+      node.rotation,
+    ],
+  )
 
   useEffect(
     () => () => {

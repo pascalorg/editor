@@ -41,6 +41,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   schemaVersion: 1,
   schema: ItemNode,
   category: 'furnish',
+  surfaceRole: 'furnishing',
 
   // Defaults shape is cast: the schema requires a fully-typed `asset`
   // field, but in practice items are always created from the catalog

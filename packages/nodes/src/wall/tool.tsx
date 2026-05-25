@@ -23,7 +23,7 @@ import {
   triggerSFX,
   type WallPlanPoint,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
@@ -381,7 +381,7 @@ function getCurrentLevelWalls(): WallNode[] {
 
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
-  const theme = useViewer((state) => state.theme)
+  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -389,8 +389,8 @@ export const WallTool: React.FC = () => {
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
-  const measurementColor = theme === 'dark' ? '#ffffff' : '#111111'
-  const measurementShadowColor = theme === 'dark' ? '#111111' : '#ffffff'
+  const measurementColor = isDark ? '#ffffff' : '#111111'
+  const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]

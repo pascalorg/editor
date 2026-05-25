@@ -313,10 +313,7 @@ function buildCutter(
   return brush
 }
 
-function subtractCutters(
-  base: THREE.BufferGeometry,
-  cutters: Brush[],
-): THREE.BufferGeometry {
+function subtractCutters(base: THREE.BufferGeometry, cutters: Brush[]): THREE.BufferGeometry {
   if (cutters.length === 0) return base
 
   const indexed = mergeVertices(base, 1e-4)

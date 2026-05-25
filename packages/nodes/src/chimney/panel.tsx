@@ -11,10 +11,6 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { Vector3 } from 'three'
-import { useViewer } from '@pascal-app/viewer'
-import { Trash2 } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
 import {
   ActionButton,
   ActionGroup,
@@ -24,6 +20,10 @@ import {
   SliderControl,
   triggerSFX,
 } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { Trash2 } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { Vector3 } from 'three'
 import {
   CHIMNEY_PRESET_KEYS,
   CHIMNEY_PRESET_LABELS,
@@ -278,8 +278,9 @@ export default function ChimneyPanel() {
       let newOriginWorldY = 0
       if (newSegObj) {
         newSegObj.updateWorldMatrix(true, false)
-        newOriginWorldY = new Vector3(target.localX, 0, target.localZ)
-          .applyMatrix4(newSegObj.matrixWorld).y
+        newOriginWorldY = new Vector3(target.localX, 0, target.localZ).applyMatrix4(
+          newSegObj.matrixWorld,
+        ).y
       }
       const newHeightAboveRidge = Math.max(0.1, oldWorldTopY - newOriginWorldY - newPeakY)
 
@@ -886,7 +887,6 @@ export default function ChimneyPanel() {
             )}
           </>
         )}
-
       </PanelSection>
 
       <PanelSection title="Actions">

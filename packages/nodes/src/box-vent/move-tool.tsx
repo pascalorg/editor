@@ -14,11 +14,8 @@ import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/edito
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import {
-  getAnalyticalNormal,
-  surfaceQuatFromNormal,
-} from '../solar-panel/geometry'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
 import BoxVentPreview from './preview'
 
 /**
@@ -36,8 +33,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
   }, [])
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewSurfaceQuat, setPreviewSurfaceQuat] =
-    useState<THREE.Quaternion | null>(null)
+  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
 
   useEffect(() => {
@@ -59,15 +55,9 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     const ventObj = sceneRegistry.nodes.get(node.id)
     if (ventObj) ventObj.visible = false
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId
-        ? sceneRegistry.nodes.get(buildingId as AnyNodeId)
-        : null
+      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
       if (!buildingObj) return [wx, wy, wz]
       const v = new THREE.Vector3(wx, wy, wz)
       buildingObj.worldToLocal(v)
@@ -158,9 +148,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
         // user doesn't end up with an orphan they didn't intend to place.
         const parentId = original.roofSegmentId as AnyNodeId | undefined
         if (parentId) {
-          const parent = useScene.getState().nodes[parentId] as
-            | RoofSegmentNode
-            | undefined
+          const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
           if (parent) {
             useScene.getState().updateNode(parentId, {
               children: (parent.children ?? []).filter((id) => id !== node.id),

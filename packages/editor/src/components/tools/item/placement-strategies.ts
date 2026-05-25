@@ -22,7 +22,6 @@ import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import {
   calculateCursorRotation,
   calculateItemRotation,
-  calculateRoofRotation,
   getGridAlignedDimensions,
   getSideFromNormal,
   isValidWallSideFace,

@@ -1,2 +1,2 @@
 export { roofDefinition } from './definition'
-export { resolveRoofSegmentHit, type RoofSegmentHit } from './segment-hit'
+export { type RoofSegmentHit, resolveRoofSegmentHit } from './segment-hit'

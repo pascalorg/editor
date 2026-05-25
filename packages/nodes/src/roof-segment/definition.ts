@@ -14,6 +14,7 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   schemaVersion: 1,
   schema: RoofSegmentNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     const stub = RoofSegmentNodeSchema.parse({

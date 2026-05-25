@@ -48,11 +48,7 @@ const RidgeVentTool = () => {
   useEffect(() => {
     if (!activeBuildingId) return
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
       if (!buildingObj) return [wx, wy, wz]
       worldPoint.set(wx, wy, wz)

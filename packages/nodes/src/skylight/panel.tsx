@@ -1,19 +1,18 @@
 'use client'
 
 import {
-  SKYLIGHT_TYPE_ORDER,
-  SKYLIGHT_TYPE_PRESETS,
   type AnyNode,
   type AnyNodeId,
   type RoofNode,
   type RoofSegmentNode,
+  SKYLIGHT_TYPE_ORDER,
+  SKYLIGHT_TYPE_PRESETS,
   type SkylightNode,
   type SkylightType,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { Vector3 } from 'three'
 import {
   ActionButton,
   ActionGroup,
@@ -26,6 +25,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import { Vector3 } from 'three'
 
 const cn = (...classes: Array<string | false | undefined | null>): string =>
   classes.filter(Boolean).join(' ')

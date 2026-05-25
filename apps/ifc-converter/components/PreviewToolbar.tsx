@@ -10,7 +10,7 @@
 
 import { type AnyNode, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Box, Grid2x2, Layers, Layers2, Maximize, Moon, ScanLine, Square, Sun } from 'lucide-react'
+import { Box, Grid2x2, Layers, Layers2, Maximize, ScanLine, Square } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
 
 const levelModes = ['stacked', 'solo', 'exploded', 'manual'] as const
@@ -65,8 +65,6 @@ function ToolButton({
 export function PreviewToolbar() {
   const cameraMode = useViewer((s) => s.cameraMode)
   const setCameraMode = useViewer((s) => s.setCameraMode)
-  const theme = useViewer((s) => s.theme)
-  const setTheme = useViewer((s) => s.setTheme)
   const showGrid = useViewer((s) => s.showGrid)
   const setShowGrid = useViewer((s) => s.setShowGrid)
   const levelMode = useViewer((s) => s.levelMode)
@@ -114,13 +112,6 @@ export function PreviewToolbar() {
         icon={<Grid2x2 className="size-3.5" />}
         label="Grid"
         onClick={() => setShowGrid(!showGrid)}
-      />
-
-      <ToolButton
-        active={theme === 'dark'}
-        icon={theme === 'dark' ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
-        label={theme === 'dark' ? 'Dark' : 'Light'}
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       />
     </div>
   )

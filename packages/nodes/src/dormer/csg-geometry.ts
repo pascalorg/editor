@@ -20,10 +20,7 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import {
-  mergeGeometries,
-  mergeVertices,
-} from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 // Legacy default for the hung-wall (skirt) height. Used as a fallback
 // when `dormer.wallSkirtHeight` is undefined (e.g. old saved scenes).
@@ -586,19 +583,39 @@ export function buildDormerCutShape(
 
     const positions = new Float32Array([
       // 0..3 = bottom rect (y = -skirt) — NW, NE, SE, SW
-      -hw, -skirt, -hd,
-      hw, -skirt, -hd,
-      hw, -skirt, hd,
-      -hw, -skirt, hd,
+      -hw,
+      -skirt,
+      -hd,
+      hw,
+      -skirt,
+      -hd,
+      hw,
+      -skirt,
+      hd,
+      -hw,
+      -skirt,
+      hd,
       // 4..7 = eave rect (y = wallH) — NW, NE, SE, SW
-      -hw, wallH, -hd,
-      hw, wallH, -hd,
-      hw, wallH, hd,
-      -hw, wallH, hd,
+      -hw,
+      wallH,
+      -hd,
+      hw,
+      wallH,
+      -hd,
+      hw,
+      wallH,
+      hd,
+      -hw,
+      wallH,
+      hd,
       // 8 = ridge endpoint A (- end along the ridge axis)
-      ridgeA[0], ridgeA[1], ridgeA[2],
+      ridgeA[0],
+      ridgeA[1],
+      ridgeA[2],
       // 9 = ridge endpoint B (+ end along the ridge axis)
-      ridgeB[0], ridgeB[1], ridgeB[2],
+      ridgeB[0],
+      ridgeB[1],
+      ridgeB[2],
     ])
 
     // Triangles (CCW from outside). Windings verified by computing
@@ -643,7 +660,10 @@ export function buildDormerCutShape(
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geo.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1))
     // CSG evaluator requires 'uv'; cut brushes are never rendered so zeros are fine.
-    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((positions.length / 3) * 2), 2))
+    geo.setAttribute(
+      'uv',
+      new THREE.BufferAttribute(new Float32Array((positions.length / 3) * 2), 2),
+    )
     geo.computeVertexNormals()
     return geo
   }
