@@ -735,7 +735,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         const { nodes, rootNodeIds, collections } = state
         return { nodes, rootNodeIds, collections }
       },
-      limit: 50, // Limit to last 50 actions
+      limit: 50,
     },
   ),
 )

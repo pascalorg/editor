@@ -7,6 +7,7 @@ import {
   emitter,
   type FenceNode,
   getMaterialPresetByRef,
+  getSceneHistoryPauseDepth,
   getSelectableKinds,
   type ItemNode,
   isRegistrySelectable,
@@ -1767,6 +1768,7 @@ const SelectionMaterialSync = () => {
   useEffect(() => {
     return useScene.subscribe((state, prevState) => {
       if (state.nodes === prevState.nodes) return
+      if (getSceneHistoryPauseDepth() > 0) return
       syncSelectionMaterials()
     })
   }, [syncSelectionMaterials])

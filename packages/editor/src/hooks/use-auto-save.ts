@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { getSceneHistoryPauseDepth, useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
@@ -127,10 +127,8 @@ export function useAutoSave({
         return
       }
 
-      const currentNodesSnapshot = JSON.stringify(state.nodes)
-      if (currentNodesSnapshot === lastNodesSnapshot) return
+      if (getSceneHistoryPauseDepth() > 0) return
 
-      lastNodesSnapshot = currentNodesSnapshot
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
       setSaveStatus('pending')
@@ -144,6 +142,11 @@ export function useAutoSave({
 
       saveTimeoutRef.current = setTimeout(() => {
         saveTimeoutRef.current = undefined
+
+        const currentNodesSnapshot = JSON.stringify(useScene.getState().nodes)
+        if (currentNodesSnapshot === lastNodesSnapshot) return
+        lastNodesSnapshot = currentNodesSnapshot
+
         executeSave()
       }, AUTOSAVE_DEBOUNCE_MS)
     })
