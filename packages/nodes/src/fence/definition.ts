@@ -1,9 +1,69 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import {
+  type FenceNode as FenceNodeType,
+  type HandleDescriptor,
+  type NodeDefinition,
+} from '@pascal-app/core'
 import { buildFenceFloorplan } from './floorplan'
 import { fenceMoveEndpointAffordance } from './floorplan-affordances'
 import { buildFenceGeometry } from './geometry'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
+
+const SIDE_HANDLE_OFFSET = 0.27
+const SIDE_HANDLE_MIN_OFFSET = 0.33
+const SIDE_HANDLE_TOP_INSET = 0.08
+const SIDE_HANDLE_MIN_HEIGHT = 0.4
+
+function fenceMidpointFrame(n: FenceNodeType): {
+  midX: number
+  midZ: number
+  normalX: number
+  normalZ: number
+} {
+  const dx = n.end[0] - n.start[0]
+  const dz = n.end[1] - n.start[1]
+  const len = Math.max(Math.hypot(dx, dz), 1e-6)
+  return {
+    midX: (n.start[0] + n.end[0]) / 2,
+    midZ: (n.start[1] + n.end[1]) / 2,
+    normalX: -dz / len,
+    normalZ: dx / len,
+  }
+}
+
+// Side-move arrows: click to hand the fence to its move tool. Same shape
+// as wall — front + back faces, positioned past the fence thickness near
+// the top so they don't compete with endpoint pickers in the floating
+// menu (which is where fence endpoint move lives today).
+function fenceSideMoveHandle(side: 'front' | 'back'): HandleDescriptor<FenceNodeType> {
+  const sign = side === 'front' ? 1 : -1
+  return {
+    kind: 'tap-action',
+    onActivate: (node, _scene, editor) => editor.engageMove(node),
+    placement: {
+      position: (n) => {
+        const { midX, midZ, normalX, normalZ } = fenceMidpointFrame(n)
+        const offset = Math.max(
+          (n.thickness ?? 0.1) / 2 + SIDE_HANDLE_OFFSET,
+          SIDE_HANDLE_MIN_OFFSET,
+        )
+        const h = n.height ?? 1.8
+        const handleY = Math.max(h - SIDE_HANDLE_TOP_INSET, SIDE_HANDLE_MIN_HEIGHT)
+        return [midX + sign * normalX * offset, handleY, midZ + sign * normalZ * offset]
+      },
+      rotationY: (n) => {
+        const { normalX, normalZ } = fenceMidpointFrame(n)
+        return Math.atan2(-sign * normalZ, sign * normalX)
+      },
+    },
+    cursor: 'move',
+  }
+}
+
+const fenceHandles: HandleDescriptor<FenceNodeType>[] = [
+  fenceSideMoveHandle('front'),
+  fenceSideMoveHandle('back'),
+]
 
 /**
  * Fence — Phase 5 batch kind. Stage B complete: `def.geometry` drives
@@ -59,6 +119,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   },
 
   parametrics: fenceParametrics,
+  handles: fenceHandles,
 
   // Stage D: kind-owned placement tool. Two-click flow (start → end)
   // with live preview, length / angle HUD, snap to walls / fences /

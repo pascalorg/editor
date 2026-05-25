@@ -22,7 +22,34 @@
 //   - endpoint-move  : wall / fence endpoint drag (snapping is bespoke,
 //                      so it delegates to a kind-supplied callback)
 
+import type { AnyNode } from '../schema/types'
 import type { SceneApi } from './types'
+
+/**
+ * Editor-facing verbs that handle descriptors can invoke.
+ *
+ * Parallel to {@link SceneApi} but exposes EDITOR state mutations (move
+ * tools, endpoint dragging, etc.) instead of scene-data writes. Descriptors
+ * receive a concrete implementation from the editor at drag time — `core`
+ * only carries the interface so node definitions can call into editor
+ * affordances without importing the editor package.
+ *
+ * Minimal verb set today; grow it as new descriptor variants land
+ * (engageCurve for wall/fence curving, etc.).
+ */
+export type EditorApi = {
+  /**
+   * Hand the node to its registered move tool (the same path the floating
+   * menu's Move icon uses). Implementations clear any in-progress endpoint
+   * or curving state so the move starts from a clean slate.
+   */
+  engageMove: (node: AnyNode) => void
+  /**
+   * Engage endpoint drag for kinds that own start / end anchors (walls,
+   * fences). No-ops for kinds without endpoints.
+   */
+  engageEndpointMove: (node: AnyNode, endpoint: 'start' | 'end') => void
+}
 
 export type HandlePortal = 'self' | 'parent' | 'grandparent'
 
@@ -139,11 +166,43 @@ export type EndpointMoveHandle<N> = {
 // Default to `any` so type-erased renderers can hold `HandleDescriptor[]`
 // without each variant's contravariant `currentValue: (node: N) => ...`
 // callback fighting the union widening. Per-kind defs supply a real N.
+/**
+ * Click-to-engage affordance. The descriptor doesn't drive a drag — its
+ * single job is to mount a click target at `placement` and dispatch a
+ * verb on the editor API when the user clicks. Used by wall side-move
+ * (engage move tool) and wall corner pickers (engage endpoint move).
+ *
+ * The renderer picks the visual from `shape`. Default `'arrow'` reuses
+ * the chevron shape every resize handle uses. `'corner-picker'` renders
+ * a dashed vertical leader + billboarded hex disc + ring, anchored at
+ * `placement.position` and extending up to `nodeHeight(node)`.
+ */
+export type TapActionHandle<N = any> = {
+  kind: 'tap-action'
+  placement: HandlePlacement<N>
+  /**
+   * Dispatched on pointer-down. Use scene/editor APIs to read state +
+   * trigger the desired action.
+   */
+  onActivate: (node: N, scene: SceneApi, editor: EditorApi) => void
+  /** Visual override; defaults to the standard chevron arrow. */
+  shape?: 'arrow' | 'corner-picker'
+  /**
+   * Required when `shape: 'corner-picker'` — controls the dashed leader's
+   * vertical extent. Pure callback so the descriptor doesn't need to
+   * import 3D libs.
+   */
+  nodeHeight?: (node: N) => number
+  portal?: HandlePortal
+  cursor?: Cursor
+}
+
 export type HandleDescriptor<N = any> =
   | LinearResizeHandle<N>
   | RadialResizeHandle<N>
   | ArcResizeHandle<N>
   | EndpointMoveHandle<N>
+  | TapActionHandle<N>
 
 /**
  * Static array, or a function for shape-dependent cases (column

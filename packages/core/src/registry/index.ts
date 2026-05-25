@@ -18,6 +18,7 @@ export {
 export type {
   ArcResizeHandle,
   Cursor,
+  EditorApi,
   EndpointMoveHandle,
   HandleAnchor,
   HandleAxis,
@@ -27,6 +28,7 @@ export type {
   HandlePortal,
   LinearResizeHandle,
   RadialResizeHandle,
+  TapActionHandle,
 } from './handles'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
 export type {

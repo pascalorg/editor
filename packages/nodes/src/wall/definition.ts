@@ -1,6 +1,7 @@
 import {
   DEFAULT_WALL_HEIGHT,
   getWallCurveFrameAt,
+  getWallThickness,
   type HandleDescriptor,
   isCurvedWall,
   type NodeDefinition,
@@ -15,13 +16,49 @@ import { WallNode } from './schema'
 
 const HEIGHT_HANDLE_OFFSET = 0.26
 const MIN_WALL_HEIGHT = 0.5
+const SIDE_HANDLE_OFFSET = 0.27
+const SIDE_HANDLE_MIN_OFFSET = 0.33
+const SIDE_HANDLE_TOP_INSET = 0.08
+const SIDE_HANDLE_MIN_HEIGHT = 0.4
 
-// Wall's height arrow sits at the wall's visual centerline — apex for
-// curved walls, chord midpoint for straight. Migrated to the registry;
-// side-move arrows + corner pickers stay on `wall-move-side-handles.tsx`
-// because they're click-to-engage-mode affordances (move whole wall /
-// move endpoint) rather than drag-resize, and tap-action descriptors
-// would need editor-state plumbing the descriptor union doesn't have yet.
+// Curve-aware midpoint + outward-normal at the wall's t=0.5 point. For
+// straight walls that's the chord midpoint + perpendicular; for curved
+// walls it's the arc apex + true normal.
+function wallApexFrame(n: WallNodeType): {
+  midX: number
+  midZ: number
+  normalX: number
+  normalZ: number
+  tangentX: number
+  tangentZ: number
+} {
+  if (isCurvedWall(n)) {
+    const f = getWallCurveFrameAt(n, 0.5)
+    return {
+      midX: f.point.x,
+      midZ: f.point.y,
+      normalX: f.normal.x,
+      normalZ: f.normal.y,
+      tangentX: f.tangent.x,
+      tangentZ: f.tangent.y,
+    }
+  }
+  const dx = n.end[0] - n.start[0]
+  const dz = n.end[1] - n.start[1]
+  const len = Math.max(Math.hypot(dx, dz), 1e-6)
+  return {
+    midX: (n.start[0] + n.end[0]) / 2,
+    midZ: (n.start[1] + n.end[1]) / 2,
+    normalX: -dz / len,
+    normalZ: dx / len,
+    tangentX: dx / len,
+    tangentZ: dz / len,
+  }
+}
+
+// Height arrow: drag the +Y end, anchor at the floor (Y = 0). Curve-aware
+// placement so it sits over the visual centre of the wall (arc apex /
+// chord midpoint).
 function wallHeightHandle(): HandleDescriptor<WallNodeType> {
   return {
     kind: 'linear-resize',
@@ -32,26 +69,73 @@ function wallHeightHandle(): HandleDescriptor<WallNodeType> {
     apply: (_n, newHeight) => ({ height: newHeight }),
     placement: {
       position: (n) => {
-        // Curved walls: apex at t=0.5. Straight: chord midpoint.
-        const curve = isCurvedWall(n) ? getWallCurveFrameAt(n, 0.5) : null
-        const midX = curve ? curve.point.x : (n.start[0] + n.end[0]) / 2
-        const midZ = curve ? curve.point.y : (n.start[1] + n.end[1]) / 2
+        const { midX, midZ } = wallApexFrame(n)
         const h = n.height ?? DEFAULT_WALL_HEIGHT
         return [midX, h + HEIGHT_HANDLE_OFFSET, midZ]
       },
-      // Align the arrow with the wall's tangent at the apex so the chevron
-      // points along the wall, matching the legacy WallHeightArrowHandle.
       rotationY: (n) => {
-        const curve = isCurvedWall(n) ? getWallCurveFrameAt(n, 0.5) : null
-        const dirX = curve ? curve.tangent.x : n.end[0] - n.start[0]
-        const dirZ = curve ? curve.tangent.y : n.end[1] - n.start[1]
-        return Math.atan2(-dirZ, dirX)
+        const { tangentX, tangentZ } = wallApexFrame(n)
+        return Math.atan2(-tangentZ, tangentX)
       },
     },
   }
 }
 
-const wallHandles: HandleDescriptor<WallNodeType>[] = [wallHeightHandle()]
+// Side-move arrows: front + back faces of the wall. Clicking either hands
+// the wall to the move tool. Positioned just past each wall face at the
+// upper-third of the wall so they don't collide with door / window
+// handles on the same wall.
+function wallSideMoveHandle(side: 'front' | 'back'): HandleDescriptor<WallNodeType> {
+  const sign = side === 'front' ? 1 : -1
+  return {
+    kind: 'tap-action',
+    onActivate: (node, _scene, editor) => editor.engageMove(node),
+    placement: {
+      position: (n) => {
+        const { midX, midZ, normalX, normalZ } = wallApexFrame(n)
+        const offset = Math.max(
+          getWallThickness(n) / 2 + SIDE_HANDLE_OFFSET,
+          SIDE_HANDLE_MIN_OFFSET,
+        )
+        const h = n.height ?? DEFAULT_WALL_HEIGHT
+        const handleY = Math.max(h - SIDE_HANDLE_TOP_INSET, SIDE_HANDLE_MIN_HEIGHT)
+        return [midX + sign * normalX * offset, handleY, midZ + sign * normalZ * offset]
+      },
+      // Arrow chevron points outward along the (signed) normal direction.
+      rotationY: (n) => {
+        const { normalX, normalZ } = wallApexFrame(n)
+        return Math.atan2(-sign * normalZ, sign * normalX)
+      },
+    },
+    cursor: 'move',
+  }
+}
+
+// Corner pickers: dashed leader from floor up to wall.height + billboarded
+// hex disc at the corner. Clicking the hex engages endpoint move on that
+// corner.
+function wallCornerPickerHandle(endpoint: 'start' | 'end'): HandleDescriptor<WallNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'corner-picker',
+    onActivate: (node, _scene, editor) => editor.engageEndpointMove(node, endpoint),
+    nodeHeight: (n) => n.height ?? DEFAULT_WALL_HEIGHT,
+    placement: {
+      position: (n) => {
+        const corner = endpoint === 'start' ? n.start : n.end
+        return [corner[0], 0, corner[1]]
+      },
+    },
+  }
+}
+
+const wallHandles: HandleDescriptor<WallNodeType>[] = [
+  wallHeightHandle(),
+  wallSideMoveHandle('front'),
+  wallSideMoveHandle('back'),
+  wallCornerPickerHandle('start'),
+  wallCornerPickerHandle('end'),
+]
 
 /**
  * Wall — the Phase 3 stress test of the registry-driven node model.

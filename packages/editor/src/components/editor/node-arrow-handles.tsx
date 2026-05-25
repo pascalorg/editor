@@ -12,13 +12,16 @@ import {
   nodeRegistry,
   type RadialResizeHandle,
   sceneRegistry,
+  type TapActionHandle,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  type BufferGeometry,
   Color,
+  CylinderGeometry,
   DoubleSide,
   ExtrudeGeometry,
   type Group,
@@ -29,7 +32,9 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
@@ -243,6 +248,9 @@ function ArrowHandle({
   }
   if (descriptor.kind === 'arc-resize') {
     return <ArcArrow descriptor={descriptor} node={node} rideObject={rideObject} />
+  }
+  if (descriptor.kind === 'tap-action') {
+    return <TapActionArrow descriptor={descriptor} node={node} />
   }
   // endpoint-move not yet implemented.
   return null
@@ -582,5 +590,250 @@ function ArcArrow({
         renderOrder={1010}
       />
     </group>
+  )
+}
+
+// Click-to-engage affordance — no drag plumbing, just a click target. The
+// descriptor's `onActivate` receives sceneApi + editorApi so it can engage
+// move tools, endpoint drags, or any other editor-state transition without
+// importing editor internals from the node-def layer.
+function TapActionArrow({
+  descriptor,
+  node,
+}: {
+  descriptor: TapActionHandle<AnyNode>
+  node: AnyNode
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+
+  const position = descriptor.placement.position(node)
+  const rotationY = descriptor.placement.rotationY?.(node) ?? 0
+  const shape = descriptor.shape ?? 'arrow'
+  const cursor: Cursor =
+    descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')
+
+  const onActivate = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    sfxEmitter.emit('sfx:item-pick')
+    document.body.style.cursor = ''
+    setIsHovered(false)
+    descriptor.onActivate(node as never, createSceneApi(useScene), createEditorApi())
+  }
+
+  const onEnter = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    setIsHovered(true)
+    document.body.style.cursor = cursor
+  }
+  const onLeave = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    setIsHovered(false)
+    if (document.body.style.cursor === cursor) document.body.style.cursor = ''
+  }
+
+  if (shape === 'corner-picker') {
+    const height = descriptor.nodeHeight?.(node) ?? 1
+    return (
+      <CornerPickerShape
+        height={height}
+        isHovered={isHovered}
+        onActivate={onActivate}
+        onEnter={onEnter}
+        onLeave={onLeave}
+        position={position}
+        zoom={zoom}
+      />
+    )
+  }
+
+  // Default 'arrow' shape — the standard chevron.
+  return (
+    <ArrowShape
+      isHovered={isHovered}
+      onActivate={onActivate}
+      onEnter={onEnter}
+      onLeave={onLeave}
+      position={position}
+      rotationY={rotationY}
+      zoom={zoom}
+    />
+  )
+}
+
+function ArrowShape({
+  position,
+  rotationY,
+  zoom,
+  isHovered,
+  onActivate,
+  onEnter,
+  onLeave,
+}: {
+  position: readonly [number, number, number]
+  rotationY: number
+  zoom: number
+  isHovered: boolean
+  onActivate: (event: ThreeEvent<PointerEvent>) => void
+  onEnter: (event: ThreeEvent<PointerEvent>) => void
+  onLeave: (event: ThreeEvent<PointerEvent>) => void
+}) {
+  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useArrowMaterial()
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
+
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  return (
+    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      <mesh
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        onPointerDown={onActivate}
+        onPointerEnter={onEnter}
+        onPointerLeave={onLeave}
+        renderOrder={1010}
+      />
+    </group>
+  )
+}
+
+// Wall corner-picker visual: dashed vertical leader from floor up to
+// `height` + billboarded hex disc (the click target) + outer ring. The
+// hex disc is the only mesh with a pointer-down handler; the dashes and
+// ring are decorative.
+const CORNER_HEX_RADIUS = 0.16
+const CORNER_DASH_SIZE = 0.1
+const CORNER_GAP_SIZE = 0.07
+const CORNER_DASH_THICKNESS = 0.006
+const CORNER_FLOOR_OFFSET = 0.01
+
+function buildDashedVerticalGeometry(height: number) {
+  const dashes: BufferGeometry[] = []
+  let y = 0
+  while (y < height) {
+    const end = Math.min(y + CORNER_DASH_SIZE, height)
+    const length = end - y
+    const cylinder = new CylinderGeometry(CORNER_DASH_THICKNESS, CORNER_DASH_THICKNESS, length, 8)
+    cylinder.translate(0, y + length / 2, 0)
+    dashes.push(cylinder)
+    y = end + CORNER_GAP_SIZE
+  }
+  const merged = mergeGeometries(dashes, false) ?? dashes[0]
+  for (const dash of dashes) dash.dispose()
+  return merged
+}
+
+function CornerPickerShape({
+  position,
+  height,
+  zoom,
+  isHovered,
+  onActivate,
+  onEnter,
+  onLeave,
+}: {
+  position: readonly [number, number, number]
+  height: number
+  zoom: number
+  isHovered: boolean
+  onActivate: (event: ThreeEvent<PointerEvent>) => void
+  onEnter: (event: ThreeEvent<PointerEvent>) => void
+  onLeave: (event: ThreeEvent<PointerEvent>) => void
+}) {
+  const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(height), [height])
+  useEffect(() => () => dashedGeometry.dispose(), [dashedGeometry])
+
+  const dashMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const hexMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const ringMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  useEffect(() => {
+    const next = isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR
+    dashMaterial.color.set(next)
+    hexMaterial.color.set(next)
+    ringMaterial.color.set(next)
+  }, [dashMaterial, hexMaterial, ringMaterial, isHovered])
+  useEffect(() => () => dashMaterial.dispose(), [dashMaterial])
+  useEffect(() => () => hexMaterial.dispose(), [hexMaterial])
+  useEffect(() => () => ringMaterial.dispose(), [ringMaterial])
+
+  const billboardRef = useRef<Group>(null)
+  const { camera } = useThree()
+  // Billboard the disc to the camera so the picker remains readable at any
+  // viewing angle. Assumes the parent level has no rotation (the standard
+  // case for walls / fences).
+  useFrame(() => {
+    if (billboardRef.current) {
+      billboardRef.current.quaternion.copy(camera.quaternion)
+    }
+  })
+
+  const scale = (isHovered ? 1.25 : 1) * zoom
+
+  return (
+    <>
+      <mesh
+        frustumCulled={false}
+        geometry={dashedGeometry}
+        material={dashMaterial}
+        position={position}
+        renderOrder={1001}
+      />
+      <group
+        position={[position[0], CORNER_FLOOR_OFFSET, position[2]]}
+        ref={billboardRef}
+        scale={scale}
+      >
+        <mesh
+          material={hexMaterial}
+          onPointerDown={onActivate}
+          onPointerEnter={onEnter}
+          onPointerLeave={onLeave}
+          renderOrder={1003}
+        >
+          <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
+        </mesh>
+        <mesh material={ringMaterial} renderOrder={1002}>
+          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
+        </mesh>
+      </group>
+    </>
   )
 }
