@@ -1,4 +1,11 @@
 import { type NodeDefinition, StairNode as StairNodeSchema } from '@pascal-app/core'
+import {
+  curvedStairInnerRadiusAffordance,
+  curvedStairSweepAffordance,
+  curvedStairWidthAffordance,
+  segmentLengthAffordance,
+  segmentWidthAffordance,
+} from './floorplan-affordances'
 import { buildStairFloorplan } from './floorplan'
 import { stairFloorplanMoveTarget } from './floorplan-move'
 import { stairParametrics } from './parametrics'
@@ -46,6 +53,24 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   // `nodes/src/stair/floorplan.ts` for the emitter.
   floorplan: buildStairFloorplan,
   floorplanMoveTarget: stairFloorplanMoveTarget,
+
+  // 2D drag affordances mirror the 3D in-world arrows on selected stairs:
+  //   - `segment-width` / `segment-length` drive per-segment side & length
+  //     arrows on straight stairs (sister to `StairSegmentSideArrow` /
+  //     `StairSegmentLengthArrow` in stair-segment-handles.tsx).
+  //   - `curved-width` / `curved-inner-radius` / `curved-sweep` drive the
+  //     parent-stair arrows for curved & spiral kinds (sister to
+  //     `CurvedStairWidthArrow` / `CurvedStairInnerRadiusArrow` /
+  //     `CurvedStairSweepArrow`).
+  // Height / rise arrows from the 3D set don't translate — no vertical axis
+  // in the plan view.
+  floorplanAffordances: {
+    'segment-width': segmentWidthAffordance,
+    'segment-length': segmentLengthAffordance,
+    'curved-width': curvedStairWidthAffordance,
+    'curved-inner-radius': curvedStairInnerRadiusAffordance,
+    'curved-sweep': curvedStairSweepAffordance,
+  },
 
   presentation: {
     label: 'Stair',

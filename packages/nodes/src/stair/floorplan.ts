@@ -107,6 +107,62 @@ export function buildStairFloorplan(
           opacity: showSelectedChrome ? 0.88 : 0.6,
         })
       }
+
+      // Per-segment side + length resize arrows. Mirror of the 3D
+      // `StairSegmentSideArrow` / `StairSegmentLengthArrow` handles
+      // (~lines 235 / 375 of stair-segment-handles.tsx).
+      // Skip when the stair is being placed — placement-mode arrows would
+      // compete with the cursor follow.
+      if (isSelected && !view?.moving) {
+        const poly = segmentEntry.polygon
+        // Polygon corners (from `getFloorplanStairSegmentPolygon`):
+        //   0 back-left   1 back-right
+        //   3 front-left  2 front-right
+        const c0 = poly[0]
+        const c1 = poly[1]
+        const c2 = poly[2]
+        const c3 = poly[3]
+        if (c0 && c1 && c2 && c3) {
+          const width = segmentEntry.segment.width || 1
+          const length = segmentEntry.segment.length || 1
+          // Segment-local +X (width axis) and +Z (run axis) in plan coords,
+          // captured here so the affordance handler can project pointer
+          // deltas without re-walking the stair chain.
+          const axisX: readonly [number, number] = [
+            (c1.x - c0.x) / width,
+            (c1.y - c0.y) / width,
+          ]
+          const axisZ: readonly [number, number] = [
+            (c3.x - c0.x) / length,
+            (c3.y - c0.y) / length,
+          ]
+          const rightMid: [number, number] = [(c1.x + c2.x) / 2, (c1.y + c2.y) / 2]
+          const leftMid: [number, number] = [(c0.x + c3.x) / 2, (c0.y + c3.y) / 2]
+          const frontMid: [number, number] = [(c2.x + c3.x) / 2, (c2.y + c3.y) / 2]
+          const segmentId = segmentEntry.segment.id
+          children.push({
+            kind: 'move-arrow',
+            point: rightMid,
+            angle: Math.atan2(axisX[1], axisX[0]),
+            affordance: 'segment-width',
+            payload: { segmentId, side: 'right', axisX },
+          })
+          children.push({
+            kind: 'move-arrow',
+            point: leftMid,
+            angle: Math.atan2(-axisX[1], -axisX[0]),
+            affordance: 'segment-width',
+            payload: { segmentId, side: 'left', axisX },
+          })
+          children.push({
+            kind: 'move-arrow',
+            point: frontMid,
+            angle: Math.atan2(axisZ[1], axisZ[0]),
+            affordance: 'segment-length',
+            payload: { segmentId, axisZ },
+          })
+        }
+      }
     }
   } else {
     // Curved / spiral — full arc-band chrome. Mirrors the legacy
@@ -124,6 +180,13 @@ export function buildStairFloorplan(
     )
     const outerRadius = innerRadius + stair.width
     const centerlineRadius = innerRadius + stair.width / 2
+
+    // Stroke widths are screen pixels (paired with `vectorEffect:
+    // 'non-scaling-stroke'` below). World-metre values like 0.02 would
+    // render as sub-pixel — invisible at every zoom. Matches the legacy
+    // `<FloorplanStairLayer>` curved/spiral branches.
+    const outerArcWidth = showSelectedChrome ? 2 : 1.4
+    const innerArcWidth = showSelectedChrome ? 1.7 : 1.2
 
     // 1. Annular sector — the filled shaft footprint.
     children.push({
@@ -147,7 +210,7 @@ export function buildStairFloorplan(
       d: buildSvgArcPath(stairCenter, outerRadius, sectorStartAngle, visualSectorEndAngle),
       fill: 'none',
       stroke: stairStroke,
-      strokeWidth: showSelectedChrome ? 0.026 : 0.022,
+      strokeWidth: outerArcWidth,
       vectorEffect: 'non-scaling-stroke',
     })
     children.push({
@@ -155,7 +218,7 @@ export function buildStairFloorplan(
       d: buildSvgArcPath(stairCenter, innerRadius, sectorStartAngle, visualSectorEndAngle),
       fill: 'none',
       stroke: stairStroke,
-      strokeWidth: showSelectedChrome ? 0.022 : 0.018,
+      strokeWidth: innerArcWidth,
       vectorEffect: 'non-scaling-stroke',
     })
 
@@ -171,14 +234,29 @@ export function buildStairFloorplan(
       const inner = getArcPlanPoint(stairCenter, innerRadius, angle)
       const outer = getArcPlanPoint(stairCenter, outerRadius, angle)
       const isLast = index === stepCount
+      const isFirst = index === 0
+      // Curved: regular stroke everywhere, but both the starting and the
+      // ending step lines are bolded (matches the legacy
+      // `<FloorplanStairLayer>` curved branch).
+      // Spiral: only the last step is accented + bolded; intermediate
+      // steps past `dashedFromIndex` are dashed.
+      const isEmphasised = stairType === 'spiral' ? isLast : isFirst || isLast
+      const stepWidth =
+        stairType === 'spiral'
+          ? isEmphasised
+            ? 1.8
+            : 1.15
+          : isEmphasised
+            ? 1.5
+            : 1.1
       children.push({
         kind: 'line',
         x1: inner.x,
         y1: inner.y,
         x2: outer.x,
         y2: outer.y,
-        stroke: isLast ? stairAccent : stairStroke,
-        strokeWidth: isLast ? 0.026 : 0.018,
+        stroke: stairType === 'spiral' && isLast ? stairAccent : stairStroke,
+        strokeWidth: stepWidth,
         strokeDasharray: index >= dashedFromIndex && !isLast ? '0.1 0.08' : undefined,
         vectorEffect: 'non-scaling-stroke',
       })
@@ -199,7 +277,7 @@ export function buildStairFloorplan(
         fill: 'none',
         stroke: stairAccent,
         strokeDasharray: '0.08 0.11',
-        strokeWidth: 0.018,
+        strokeWidth: 1.1,
         vectorEffect: 'non-scaling-stroke',
       })
     }
@@ -214,7 +292,7 @@ export function buildStairFloorplan(
         r: Math.max(innerRadius * 0.18, 0.06),
         fill,
         stroke: stairAccent,
-        strokeWidth: 0.018,
+        strokeWidth: 1.2,
         vectorEffect: 'non-scaling-stroke',
       })
     }
@@ -231,12 +309,70 @@ export function buildStairFloorplan(
       fill: stairAccent,
       stroke: 'none',
     })
+
+    // 7. Resize arrows — mirror of the 3D `CurvedStairWidthArrow`,
+    //    `CurvedStairInnerRadiusArrow`, and two `CurvedStairSweepArrow`s.
+    //    Hidden during placement (`view?.moving`) so they don't fight the
+    //    cursor follow.
+    if (isSelected && !view?.moving) {
+      const midAngle = (sectorStartAngle + sectorEndAngle) / 2
+      const sweepSign = Math.sign(normalizedSweepAngle) || 1
+      // Width arrow — radially outward at the sweep bisector, on the outer rim.
+      const widthAnchor = getArcPlanPoint(stairCenter, outerRadius, midAngle)
+      children.push({
+        kind: 'move-arrow',
+        point: [widthAnchor.x, widthAnchor.y],
+        angle: midAngle,
+        affordance: 'curved-width',
+        payload: { kind: 'width' },
+      })
+
+      // Inner-radius arrow — just inside the inner edge, chevron pointing
+      // toward the centre. Skip for very tight spirals where there's no
+      // room (chevron would tunnel through the central column).
+      if (innerRadius > 0.18) {
+        const innerArrowRadius = Math.max(innerRadius - 0.04, innerRadius * 0.45)
+        const innerAnchor = getArcPlanPoint(stairCenter, innerArrowRadius, midAngle)
+        children.push({
+          kind: 'move-arrow',
+          point: [innerAnchor.x, innerAnchor.y],
+          angle: midAngle + Math.PI,
+          affordance: 'curved-inner-radius',
+          payload: { kind: 'inner-radius' },
+        })
+      }
+
+      // Sweep arrows — anchored at the actual sweep ends on the outer rim,
+      // chevrons pointing tangentially in the grow direction. (3D clusters
+      // them next to the width arrow because the camera-facing rim is
+      // easier to grab; in plan we have the whole arc visible, so the
+      // ends are the natural placement.)
+      const sweepEndAnchor = getArcPlanPoint(stairCenter, outerRadius, sectorEndAngle)
+      children.push({
+        kind: 'move-arrow',
+        point: [sweepEndAnchor.x, sweepEndAnchor.y],
+        angle: sectorEndAngle + sweepSign * (Math.PI / 2),
+        affordance: 'curved-sweep',
+        payload: { end: 'end' },
+      })
+      const sweepStartAnchor = getArcPlanPoint(stairCenter, outerRadius, sectorStartAngle)
+      children.push({
+        kind: 'move-arrow',
+        point: [sweepStartAnchor.x, sweepStartAnchor.y],
+        angle: sectorStartAngle - sweepSign * (Math.PI / 2),
+        affordance: 'curved-sweep',
+        payload: { end: 'start' },
+      })
+    }
   }
 
   // Direction arrow — emitted by `buildFloorplanStairEntry` as a polyline
   // (the spine) plus a polygon (the head). Tells the user which way
-  // "up" is at a glance.
-  if (entry.arrow) {
+  // "up" is at a glance. Skip for curved / spiral: those already draw
+  // their own arc-aligned arrow above; `buildFloorplanStairArrow` traces
+  // the stair-segment chain in straight space and produces a malformed
+  // polyline once the chain is laid around an arc.
+  if (stairType === 'straight' && entry.arrow) {
     if (entry.arrow.polyline.length >= 2) {
       children.push({
         kind: 'polyline',
