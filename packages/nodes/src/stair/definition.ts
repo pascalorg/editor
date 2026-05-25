@@ -1,5 +1,6 @@
 import { type NodeDefinition, StairNode as StairNodeSchema } from '@pascal-app/core'
 import { buildStairFloorplan } from './floorplan'
+import { stairFloorplanMoveTarget } from './floorplan-move'
 import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
 
@@ -43,6 +44,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   // compute their own polygon in isolation. See
   // `nodes/src/stair/floorplan.ts` for the emitter.
   floorplan: buildStairFloorplan,
+  floorplanMoveTarget: stairFloorplanMoveTarget,
 
   presentation: {
     label: 'Stair',

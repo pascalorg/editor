@@ -66,7 +66,7 @@ import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
-import { StairSegmentHandles } from './stair-segment-handles'
+import { StairHandles, StairSegmentHandles } from './stair-segment-handles'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
@@ -594,6 +594,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isVersionPreviewMode || isFirstPersonMode) && <DoorSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WindowSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <StairSegmentHandles />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <StairHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}

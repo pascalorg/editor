@@ -459,6 +459,8 @@ export function FloatingActionMenu() {
   if (node?.type === 'window') return null
   // Stair segments use the in-world `StairSegmentGroundActionMenu`.
   if (node?.type === 'stair-segment') return null
+  // Parent stairs use the in-world `StairGroundActionMenu`.
+  if (node?.type === 'stair') return null
 
   return (
     <group>

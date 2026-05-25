@@ -227,6 +227,14 @@ type EditorState = {
   setResizingStairSegmentLength: (segment: StairSegmentNode | null) => void
   resizingStairSegmentHeight: StairSegmentNode | null
   setResizingStairSegmentHeight: (segment: StairSegmentNode | null) => void
+  resizingCurvedStairRise: StairNode | null
+  setResizingCurvedStairRise: (stair: StairNode | null) => void
+  resizingCurvedStairWidth: StairNode | null
+  setResizingCurvedStairWidth: (stair: StairNode | null) => void
+  resizingCurvedStairInnerRadius: StairNode | null
+  setResizingCurvedStairInnerRadius: (stair: StairNode | null) => void
+  resizingCurvedStairSweep: StairNode | null
+  setResizingCurvedStairSweep: (stair: StairNode | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -664,6 +672,14 @@ const useEditor = create<EditorState>()(
       setResizingStairSegmentLength: (segment) => set({ resizingStairSegmentLength: segment }),
       resizingStairSegmentHeight: null,
       setResizingStairSegmentHeight: (segment) => set({ resizingStairSegmentHeight: segment }),
+      resizingCurvedStairRise: null,
+      setResizingCurvedStairRise: (stair) => set({ resizingCurvedStairRise: stair }),
+      resizingCurvedStairWidth: null,
+      setResizingCurvedStairWidth: (stair) => set({ resizingCurvedStairWidth: stair }),
+      resizingCurvedStairInnerRadius: null,
+      setResizingCurvedStairInnerRadius: (stair) => set({ resizingCurvedStairInnerRadius: stair }),
+      resizingCurvedStairSweep: null,
+      setResizingCurvedStairSweep: (stair) => set({ resizingCurvedStairSweep: stair }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,
