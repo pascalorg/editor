@@ -5,13 +5,12 @@ import {
   sceneRegistry,
   useScene,
   type WallNode,
-  WindowNode,
+  type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  CanvasTexture,
   Color,
   DoubleSide,
   ExtrudeGeometry,
@@ -20,7 +19,6 @@ import {
   OrthographicCamera,
   Plane,
   Shape,
-  SRGBColorSpace,
   Vector2,
   Vector3,
 } from 'three'
@@ -36,16 +34,6 @@ const MIN_WINDOW_HEIGHT = 0.3
 const MIN_WINDOW_WIDTH = 0.3
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
-const GROUND_MENU_FACE_CLEARANCE = 0.5
-const GROUND_MENU_SPACING = 0.32
-const GROUND_ICON_SIZE = 0.22
-const GROUND_MENU_SIDE_HYSTERESIS = 0.1
-const GROUND_MENU_LERP_RATE = 14
-// Length the chevron tip extends past the arrow's local origin in shape
-// space (matches the `0.22` X coordinate of the tip in `createArrowHandleGeometry`).
-const ARROW_TIP_EXTENT = 0.22 * ARROW_SCALE
-// Small wall-local gap between the bottom arrow's tip and the action menu.
-const MENU_BELOW_ARROW_GAP = 0.06
 
 // Mirror of door-side-handles `swallowNextClick`: pre-empt the synthetic
 // `click` the browser fires immediately after a drag's pointerup, so the
@@ -172,7 +160,6 @@ function WindowSideHandlesForWindow({ windowNode }: { windowNode: WindowNode }) 
         <WindowHeightArrowHandle edge="top" wallObject={wallObject} windowNode={windowNode} />
         <WindowHeightArrowHandle edge="bottom" wallObject={wallObject} windowNode={windowNode} />
       </group>
-      <WindowGroundActionMenu wallObject={wallObject} windowNode={windowNode} />
     </group>,
     levelObject,
   )
@@ -551,237 +538,3 @@ function WindowHeightArrowHandle({
   )
 }
 
-function WindowGroundActionMenu({
-  wallObject,
-  windowNode,
-}: {
-  wallObject: Object3D
-  windowNode: WindowNode
-}) {
-  const menuGroupRef = useRef<Group>(null)
-  const sideRef = useRef<number>(1)
-  const initializedForWindowIdRef = useRef<string | null>(null)
-  const cameraLocalScratch = useMemo(() => new Vector3(), [])
-
-  const rotationY =
-    typeof windowNode.rotation === 'number' ? windowNode.rotation : (windowNode.rotation?.[1] ?? 0)
-
-  useFrame((state, dt) => {
-    const menu = menuGroupRef.current
-    if (!menu) return
-
-    const normalX = Math.sin(rotationY)
-    const normalZ = Math.cos(rotationY)
-    const windowX = windowNode.position[0]
-    const windowZ = windowNode.position[2]
-
-    wallObject.updateMatrixWorld()
-    cameraLocalScratch.copy(state.camera.position)
-    wallObject.worldToLocal(cameraLocalScratch)
-
-    const projection =
-      (cameraLocalScratch.x - windowX) * normalX + (cameraLocalScratch.z - windowZ) * normalZ
-
-    const isFreshWindow = initializedForWindowIdRef.current !== windowNode.id
-    const currentSide = sideRef.current
-    let nextSide: number
-    if (isFreshWindow) {
-      nextSide = projection >= 0 ? 1 : -1
-    } else if (currentSide >= 0 && projection < -GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = -1
-    } else if (currentSide < 0 && projection > GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = 1
-    } else {
-      nextSide = currentSide
-    }
-    sideRef.current = nextSide
-
-    const offset = windowNode.frameDepth / 2 + GROUND_MENU_FACE_CLEARANCE
-    const targetX = windowX + normalX * offset * nextSide
-    const targetZ = windowZ + normalZ * offset * nextSide
-    // Sit the menu just past the bottom arrow's tip so they read as one
-    // stacked column. Arrow base = `windowBottom - HEIGHT_HANDLE_OFFSET`,
-    // chevron tip extends ARROW_TIP_EXTENT further in -Y.
-    const menuY =
-      windowNode.position[1] -
-      windowNode.height / 2 -
-      HEIGHT_HANDLE_OFFSET -
-      ARROW_TIP_EXTENT -
-      MENU_BELOW_ARROW_GAP
-
-    const dirX = -normalZ
-    const dirZ = normalX
-    const targetRot = Math.atan2(-nextSide * dirZ, nextSide * dirX) + Math.PI
-
-    if (isFreshWindow) {
-      menu.position.set(targetX, menuY, targetZ)
-      menu.rotation.y = targetRot
-      initializedForWindowIdRef.current = windowNode.id
-      return
-    }
-
-    const t = 1 - Math.exp(-dt * GROUND_MENU_LERP_RATE)
-    menu.position.x += (targetX - menu.position.x) * t
-    menu.position.z += (targetZ - menu.position.z) * t
-    menu.position.y = menuY
-
-    let rotDelta = targetRot - menu.rotation.y
-    while (rotDelta > Math.PI) rotDelta -= 2 * Math.PI
-    while (rotDelta < -Math.PI) rotDelta += 2 * Math.PI
-    menu.rotation.y += rotDelta * t
-  })
-
-  const items: Array<'move' | 'duplicate' | 'delete'> = ['move', 'duplicate', 'delete']
-  const centerIndex = (items.length - 1) / 2
-
-  return (
-    <group ref={menuGroupRef}>
-      {items.map((kind, index) => (
-        <WindowGroundActionIcon
-          key={kind}
-          kind={kind}
-          offsetIndex={index - centerIndex}
-          windowNode={windowNode}
-        />
-      ))}
-    </group>
-  )
-}
-
-function WindowGroundActionIcon({
-  kind,
-  offsetIndex,
-  windowNode,
-}: {
-  kind: 'move' | 'duplicate' | 'delete'
-  offsetIndex: number
-  windowNode: WindowNode
-}) {
-  const [isHovered, setIsHovered] = useState(false)
-  const { camera } = useThree()
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.2 : 1) * zoom
-
-  const texture = useMemo(() => getIconTexture(kind), [kind])
-  const material = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        map: texture,
-        side: DoubleSide,
-        alphaTest: 0.4,
-        transparent: true,
-        opacity: 1,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [texture],
-  )
-
-  useEffect(() => {
-    material.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [material, isHovered])
-  useEffect(() => () => material.dispose(), [material])
-
-  useEffect(() => {
-    return () => {
-      if (document.body.style.cursor === 'pointer') {
-        document.body.style.cursor = ''
-      }
-    }
-  }, [])
-
-  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation()
-    sfxEmitter.emit('sfx:item-pick')
-    document.body.style.cursor = ''
-    setIsHovered(false)
-
-    if (kind === 'move') {
-      useEditor.getState().setMovingNode(windowNode)
-      return
-    }
-
-    if (kind === 'delete') {
-      sfxEmitter.emit('sfx:structure-delete')
-      useViewer.getState().setSelection({ selectedIds: [] })
-      useScene.getState().deleteNode(windowNode.id as AnyNodeId)
-      return
-    }
-
-    useScene.temporal.getState().pause()
-    const input = structuredClone(windowNode) as Record<string, unknown>
-    delete input.id
-    const existingMetadata =
-      input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
-        ? (input.metadata as Record<string, unknown>)
-        : {}
-    input.metadata = { ...existingMetadata, isNew: true }
-    try {
-      const dup = WindowNode.parse(input)
-      useScene.getState().createNode(dup, dup.parentId as AnyNodeId)
-      useEditor.getState().setMovingNode(dup)
-      useViewer.getState().setSelection({ selectedIds: [dup.id] })
-    } catch (err) {
-      console.error('Failed to duplicate window', err)
-      useScene.temporal.getState().resume()
-    }
-  }
-
-  return (
-    <group
-      onPointerDown={onPointerDown}
-      onPointerEnter={(event) => {
-        event.stopPropagation()
-        setIsHovered(true)
-        document.body.style.cursor = 'pointer'
-      }}
-      onPointerLeave={(event) => {
-        event.stopPropagation()
-        setIsHovered(false)
-        if (document.body.style.cursor === 'pointer') {
-          document.body.style.cursor = ''
-        }
-      }}
-      position={[offsetIndex * GROUND_MENU_SPACING, 0, 0]}
-      scale={scale}
-    >
-      <mesh material={material} renderOrder={1010} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[GROUND_ICON_SIZE, GROUND_ICON_SIZE]} />
-      </mesh>
-    </group>
-  )
-}
-
-const ICON_SVGS: Record<'move' | 'duplicate' | 'delete', string> = {
-  move: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>`,
-  duplicate: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
-  delete: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`,
-}
-
-const ICON_TEXTURE_CACHE = new Map<string, CanvasTexture>()
-const ICON_TEXTURE_SIZE = 128
-
-function getIconTexture(kind: 'move' | 'duplicate' | 'delete'): CanvasTexture {
-  const cached = ICON_TEXTURE_CACHE.get(kind)
-  if (cached) return cached
-
-  const canvas = document.createElement('canvas')
-  canvas.width = ICON_TEXTURE_SIZE
-  canvas.height = ICON_TEXTURE_SIZE
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
-  ICON_TEXTURE_CACHE.set(kind, texture)
-
-  const img = new Image()
-  img.onload = () => {
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.clearRect(0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
-    ctx.drawImage(img, 0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
-    texture.needsUpdate = true
-  }
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ICON_SVGS[kind])}`
-
-  return texture
-}

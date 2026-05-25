@@ -9,14 +9,13 @@ import {
   isCurvedWall,
   sceneRegistry,
   useScene,
-  WallNode,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BufferGeometry,
-  CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
@@ -26,7 +25,6 @@ import {
   OrthographicCamera,
   Plane,
   Shape,
-  SRGBColorSpace,
   Vector2,
   Vector3,
 } from 'three'
@@ -51,20 +49,6 @@ const CORNER_DASH_SIZE = 0.1
 const CORNER_GAP_SIZE = 0.07
 const CORNER_DASH_THICKNESS = 0.006
 const CORNER_FLOOR_OFFSET = 0.01
-const GROUND_MENU_FACE_CLEARANCE = 0.85
-const GROUND_MENU_SPACING = 0.32
-const GROUND_ICON_SIZE = 0.22
-const GROUND_ICON_LIFT = 0.1
-// Dead-zone width (world units) around the wall plane before the menu
-// commits to the opposite face. Prevents per-frame flicker when the
-// camera orbits along the wall plane and floating-point jitter pushes
-// the camera-to-wall projection across zero.
-const GROUND_MENU_SIDE_HYSTERESIS = 0.1
-// Per-second lerp factor for position + rotation. Picked so a side-flip
-// finishes in ~250 ms — fast enough to feel responsive, slow enough that
-// the eye reads it as the three icons swinging around the wall together
-// instead of three separate teleports.
-const GROUND_MENU_LERP_RATE = 14
 
 type WallMoveHandle = {
   key: string
@@ -200,295 +184,9 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
       <WallHeightArrowHandle wall={wall} />
       <WallCornerLeaderHandle endpoint="start" wall={wall} />
       <WallCornerLeaderHandle endpoint="end" wall={wall} />
-      <WallGroundActionMenuV2 wall={wall} />
     </group>,
     levelObject,
   )
-}
-
-function WallGroundActionMenuV2({ wall }: { wall: WallNode }) {
-  // Subscribe to children so the curve icon hides/shows reactively when
-  // doors / windows / wall-attached items get added or removed.
-  const canCurve = useScene((state) => {
-    return !(wall.children ?? []).some((childId) => {
-      const child = state.nodes[childId as AnyNodeId]
-      if (!child) return false
-      if (child.type === 'door' || child.type === 'window') return true
-      if (child.type === 'item') {
-        const attachTo = (child as { asset?: { attachTo?: string } }).asset?.attachTo
-        return attachTo === 'wall' || attachTo === 'wall-side'
-      }
-      return false
-    })
-  })
-
-  const menuGroupRef = useRef<Group>(null)
-  const sideRef = useRef<number>(1)
-  const initializedForWallIdRef = useRef<string | null>(null)
-
-  // Per-frame transform update — geometry, side decision, and target pose
-  // are all (re)computed inside useFrame instead of being captured from
-  // render closures, so the menu tracks the wall through edit paths that
-  // bypass React (e.g. mid-drag `useLiveNodeOverrides` writes), and the
-  // side decision can carry frame-to-frame hysteresis.
-  useFrame((state, dt) => {
-    const menu = menuGroupRef.current
-    if (!menu) return
-
-    // Curved walls: chord midpoint is off the centerline, so we sample
-    // the curve frame at t=0.5 to get a true centerline midpoint + a
-    // perpendicular normal — keeps the menu equidistant on either face.
-    const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
-    let midX: number
-    let midZ: number
-    let dirX: number
-    let dirZ: number
-    let normalX: number
-    let normalZ: number
-
-    if (curveFrame) {
-      midX = curveFrame.point.x
-      midZ = curveFrame.point.y
-      normalX = curveFrame.normal.x
-      normalZ = curveFrame.normal.y
-      dirX = curveFrame.normal.y
-      dirZ = -curveFrame.normal.x
-    } else {
-      const dx = wall.end[0] - wall.start[0]
-      const dz = wall.end[1] - wall.start[1]
-      const len = Math.hypot(dx, dz)
-      if (len < 1e-6) return
-      midX = (wall.start[0] + wall.end[0]) / 2
-      midZ = (wall.start[1] + wall.end[1]) / 2
-      dirX = dx / len
-      dirZ = dz / len
-      normalX = -dirZ
-      normalZ = dirX
-    }
-
-    // Offset from the wall *face* (centerline + half-thickness), so the
-    // menu always sits clearly outside the wall mesh.
-    const offset = getWallThickness(wall) / 2 + GROUND_MENU_FACE_CLEARANCE
-
-    const projection =
-      (state.camera.position.x - midX) * normalX +
-      (state.camera.position.z - midZ) * normalZ
-
-    const isFreshWall = initializedForWallIdRef.current !== wall.id
-
-    // Hysteresis: only flip when the camera is clearly past the wall
-    // plane. The previous binary `projection >= 0 ? 1 : -1` flickered
-    // on grazing orbits and the resulting per-frame 180° flip is what
-    // visually fanned the three icons across each other — the outer
-    // two (curve, delete) crossed while the centre one (duplicate,
-    // offsetIndex 0) barely moved, reading as "icons move one at a time."
-    const currentSide = sideRef.current
-    let nextSide: number
-    if (isFreshWall) {
-      nextSide = projection >= 0 ? 1 : -1
-    } else if (currentSide >= 0 && projection < -GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = -1
-    } else if (currentSide < 0 && projection > GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = 1
-    } else {
-      nextSide = currentSide
-    }
-    sideRef.current = nextSide
-
-    const targetX = midX + normalX * offset * nextSide
-    const targetZ = midZ + normalZ * offset * nextSide
-    const targetRot = Math.atan2(-nextSide * dirZ, nextSide * dirX)
-
-    if (isFreshWall) {
-      // First frame for this wall — snap so the menu doesn't slide in
-      // from the previous wall's pose (or the default origin).
-      menu.position.set(targetX, GROUND_ICON_LIFT, targetZ)
-      menu.rotation.y = targetRot
-      initializedForWallIdRef.current = wall.id
-      return
-    }
-
-    const t = 1 - Math.exp(-dt * GROUND_MENU_LERP_RATE)
-    menu.position.x += (targetX - menu.position.x) * t
-    menu.position.z += (targetZ - menu.position.z) * t
-    menu.position.y = GROUND_ICON_LIFT
-
-    // Shortest angular path — a ~180° side-flip target must rotate the
-    // short way around, otherwise the menu unwinds the long way and the
-    // icons trace an even more dramatic arc.
-    let rotDelta = targetRot - menu.rotation.y
-    while (rotDelta > Math.PI) rotDelta -= 2 * Math.PI
-    while (rotDelta < -Math.PI) rotDelta += 2 * Math.PI
-    menu.rotation.y += rotDelta * t
-  })
-
-  // Don't render an empty menu shell for degenerate walls.
-  const segLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-  if (segLength < 1e-6) return null
-
-  const items: Array<'curve' | 'duplicate' | 'delete'> = []
-  if (canCurve) items.push('curve')
-  items.push('duplicate')
-  items.push('delete')
-  const centerIndex = (items.length - 1) / 2
-
-  return (
-    <group ref={menuGroupRef}>
-      {items.map((kind, index) => (
-        <WallGroundActionIconV2
-          key={kind}
-          kind={kind}
-          offsetIndex={index - centerIndex}
-          wall={wall}
-        />
-      ))}
-    </group>
-  )
-}
-
-function WallGroundActionIconV2({
-  wall,
-  kind,
-  offsetIndex,
-}: {
-  wall: WallNode
-  kind: 'curve' | 'duplicate' | 'delete'
-  offsetIndex: number
-}) {
-  const [isHovered, setIsHovered] = useState(false)
-  const { camera } = useThree()
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.2 : 1) * zoom
-
-  const texture = useMemo(() => getIconTexture(kind), [kind])
-  const material = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        map: texture,
-        side: DoubleSide,
-        // `alphaTest` discards the transparent background pixels of the
-        // SVG icon outright. Without it the WebGPU node-material pipeline
-        // alpha-blends the plane as a translucent square, which is what
-        // shows up when the wall sits between the camera and the icon
-        // (because `depthTest: false` keeps the plane drawing over the
-        // wall).
-        alphaTest: 0.4,
-        transparent: true,
-        opacity: 1,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [texture],
-  )
-  useEffect(() => {
-    material.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [material, isHovered])
-  useEffect(() => () => material.dispose(), [material])
-
-  useEffect(() => {
-    return () => {
-      if (document.body.style.cursor === 'pointer') {
-        document.body.style.cursor = ''
-      }
-    }
-  }, [])
-
-  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation()
-    sfxEmitter.emit('sfx:item-pick')
-    document.body.style.cursor = ''
-    setIsHovered(false)
-
-    if (kind === 'curve') {
-      useViewer.getState().setSelection({ selectedIds: [] })
-      useEditor.getState().setCurvingWall(wall)
-      return
-    }
-    if (kind === 'delete') {
-      sfxEmitter.emit('sfx:structure-delete')
-      useViewer.getState().setSelection({ selectedIds: [] })
-      useScene.getState().deleteNode(wall.id as AnyNodeId)
-      return
-    }
-    // duplicate
-    useScene.temporal.getState().pause()
-    const input = structuredClone(wall) as Record<string, unknown>
-    delete input.id
-    const existingMetadata =
-      input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
-        ? (input.metadata as Record<string, unknown>)
-        : {}
-    input.metadata = { ...existingMetadata, isNew: true }
-    try {
-      const dup = WallNode.parse(input)
-      useScene.getState().createNode(dup, dup.parentId as AnyNodeId)
-      useEditor.getState().setMovingNode(dup)
-    } catch (err) {
-      console.error('Failed to duplicate wall', err)
-      useScene.temporal.getState().resume()
-    }
-    useViewer.getState().setSelection({ selectedIds: [] })
-  }
-
-  return (
-    <group
-      onPointerDown={onPointerDown}
-      onPointerEnter={(event) => {
-        event.stopPropagation()
-        setIsHovered(true)
-        document.body.style.cursor = 'pointer'
-      }}
-      onPointerLeave={(event) => {
-        event.stopPropagation()
-        setIsHovered(false)
-        if (document.body.style.cursor === 'pointer') {
-          document.body.style.cursor = ''
-        }
-      }}
-      position={[offsetIndex * GROUND_MENU_SPACING, 0, 0]}
-      scale={scale}
-    >
-      <mesh material={material} renderOrder={1004} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[GROUND_ICON_SIZE, GROUND_ICON_SIZE]} />
-      </mesh>
-    </group>
-  )
-}
-
-// Lucide icon paths — match the Spline / Copy / Trash2 icons the HTML
-// floating menu uses. Stroke is white so material.color can tint them.
-const ICON_SVGS: Record<'curve' | 'duplicate' | 'delete', string> = {
-  curve: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M5 17A12 12 0 0 1 17 5"/></svg>`,
-  duplicate: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
-  delete: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`,
-}
-
-const ICON_TEXTURE_CACHE = new Map<string, CanvasTexture>()
-const ICON_TEXTURE_SIZE = 128
-
-function getIconTexture(kind: 'curve' | 'duplicate' | 'delete'): CanvasTexture {
-  const cached = ICON_TEXTURE_CACHE.get(kind)
-  if (cached) return cached
-
-  const canvas = document.createElement('canvas')
-  canvas.width = ICON_TEXTURE_SIZE
-  canvas.height = ICON_TEXTURE_SIZE
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
-  ICON_TEXTURE_CACHE.set(kind, texture)
-
-  const img = new Image()
-  img.onload = () => {
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.clearRect(0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
-    ctx.drawImage(img, 0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
-    texture.needsUpdate = true
-  }
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ICON_SVGS[kind])}`
-
-  return texture
 }
 
 function buildDashedVerticalGeometry(height: number) {
@@ -643,9 +341,9 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       new MeshBasicNodeMaterial({
         color: new Color(ARROW_COLOR),
         side: DoubleSide,
-        depthTest: true,
-        depthWrite: true,
-        transparent: false,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
         opacity: 1,
       }),
     [],
@@ -795,9 +493,9 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
       new MeshBasicNodeMaterial({
         color: new Color(ARROW_COLOR),
         side: DoubleSide,
-        depthTest: true,
-        depthWrite: true,
-        transparent: false,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
         opacity: 1,
       }),
     [],
@@ -875,9 +573,9 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
       new MeshBasicNodeMaterial({
         color: new Color(ARROW_COLOR),
         side: DoubleSide,
-        depthTest: true,
-        depthWrite: true,
-        transparent: false,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
         opacity: 1,
       }),
     [],

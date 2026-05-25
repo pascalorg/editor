@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   type StairNode,
   type StairSegmentNode,
-  StairSegmentNode as StairSegmentSchema,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -12,7 +11,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  CanvasTexture,
   Color,
   DoubleSide,
   ExtrudeGeometry,
@@ -23,13 +21,11 @@ import {
   Plane,
   RingGeometry,
   Shape,
-  SRGBColorSpace,
   Vector2,
   Vector3,
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
 
 const SIDE_HANDLE_OFFSET = 0.24
@@ -41,11 +37,6 @@ const MIN_SEGMENT_LENGTH = 0.4
 const MIN_SEGMENT_HEIGHT = 0.1
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
-const GROUND_MENU_SIDE_CLEARANCE = 0.68
-const GROUND_MENU_SPACING = 0.32
-const GROUND_ICON_SIZE = 0.22
-const GROUND_MENU_SIDE_HYSTERESIS = 0.1
-const GROUND_MENU_LERP_RATE = 14
 
 // Synthetic `click` after a drag's pointerup would deselect the segment via
 // the canvas-level PointerMissedHandler. Mirrors the window/door handles.
@@ -187,7 +178,6 @@ function StairSegmentHandlesForSegment({ segmentNode }: { segmentNode: StairSegm
         {segmentNode.segmentType === 'stair' ? (
           <StairSegmentHeightArrow segmentNode={segmentNode} segmentObject={segmentObject} />
         ) : null}
-        <StairSegmentGroundActionMenu segmentNode={segmentNode} segmentObject={segmentObject} />
       </group>
     </group>,
     parentObject,
@@ -623,238 +613,6 @@ function StairSegmentHeightArrow({
   )
 }
 
-function StairSegmentGroundActionMenu({
-  segmentNode,
-  segmentObject,
-}: {
-  segmentNode: StairSegmentNode
-  segmentObject: Mesh
-}) {
-  const menuGroupRef = useRef<Group>(null)
-  const sideRef = useRef<number>(1)
-  const initializedForSegmentIdRef = useRef<string | null>(null)
-  const cameraLocalScratch = useMemo(() => new Vector3(), [])
-
-  useFrame((state, dt) => {
-    const menu = menuGroupRef.current
-    if (!menu) return
-
-    // Work in segment-local space: the wrapper this menu lives under already
-    // applies the segment's chained transform, so a flat +X axis is the
-    // segment's width-axis side and +Z is the run direction.
-    segmentObject.updateMatrixWorld()
-    cameraLocalScratch.copy(state.camera.position)
-    segmentObject.worldToLocal(cameraLocalScratch)
-
-    const projection = cameraLocalScratch.x
-
-    const isFresh = initializedForSegmentIdRef.current !== segmentNode.id
-    const currentSide = sideRef.current
-    let nextSide: number
-    if (isFresh) {
-      nextSide = projection >= 0 ? 1 : -1
-    } else if (currentSide >= 0 && projection < -GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = -1
-    } else if (currentSide < 0 && projection > GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = 1
-    } else {
-      nextSide = currentSide
-    }
-    sideRef.current = nextSide
-
-    const offset = segmentNode.width / 2 + GROUND_MENU_SIDE_CLEARANCE
-    const targetX = nextSide * offset
-    const targetZ = segmentNode.length / 2
-    // Stays glued to the segment's base — for chained segments this is the
-    // top of the previous segment, not the absolute slab. That's what the
-    // user expects: the menu rides with the segment as the chain shifts.
-    const targetY = 0
-    // Rotate the menu so its local +X (where icons fan out) aligns with the
-    // segment's run (+Z): rotY = -π/2 for +X side, +π/2 for -X side.
-    const targetRot = nextSide >= 0 ? -Math.PI / 2 : Math.PI / 2
-
-    if (isFresh) {
-      menu.position.set(targetX, targetY, targetZ)
-      menu.rotation.y = targetRot
-      initializedForSegmentIdRef.current = segmentNode.id
-      return
-    }
-
-    const t = 1 - Math.exp(-dt * GROUND_MENU_LERP_RATE)
-    menu.position.x += (targetX - menu.position.x) * t
-    menu.position.z += (targetZ - menu.position.z) * t
-    menu.position.y = targetY
-
-    let rotDelta = targetRot - menu.rotation.y
-    while (rotDelta > Math.PI) rotDelta -= 2 * Math.PI
-    while (rotDelta < -Math.PI) rotDelta += 2 * Math.PI
-    menu.rotation.y += rotDelta * t
-  })
-
-  const items: Array<'duplicate' | 'delete'> = ['duplicate', 'delete']
-  const centerIndex = (items.length - 1) / 2
-
-  return (
-    <group ref={menuGroupRef}>
-      {/* Inner 180° flip so the icons read upright from the camera's side
-          after the outer menu's camera-facing Y rotation. */}
-      <group rotation={[0, Math.PI, 0]}>
-        {items.map((kind, index) => (
-          <StairSegmentGroundActionIcon
-            key={kind}
-            kind={kind}
-            offsetIndex={index - centerIndex}
-            segmentNode={segmentNode}
-          />
-        ))}
-      </group>
-    </group>
-  )
-}
-
-function StairSegmentGroundActionIcon({
-  kind,
-  offsetIndex,
-  segmentNode,
-}: {
-  kind: 'duplicate' | 'delete'
-  offsetIndex: number
-  segmentNode: StairSegmentNode
-}) {
-  const [isHovered, setIsHovered] = useState(false)
-  const { camera } = useThree()
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.2 : 1) * zoom
-
-  const texture = useMemo(() => getIconTexture(kind), [kind])
-  const material = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        map: texture,
-        side: DoubleSide,
-        alphaTest: 0.4,
-        transparent: true,
-        opacity: 1,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [texture],
-  )
-
-  useEffect(() => {
-    material.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [material, isHovered])
-  useEffect(() => () => material.dispose(), [material])
-
-  useEffect(() => {
-    return () => {
-      if (document.body.style.cursor === 'pointer') {
-        document.body.style.cursor = ''
-      }
-    }
-  }, [])
-
-  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation()
-    sfxEmitter.emit('sfx:item-pick')
-    document.body.style.cursor = ''
-    setIsHovered(false)
-
-    if (kind === 'delete') {
-      sfxEmitter.emit('sfx:structure-delete')
-      useViewer.getState().setSelection({ selectedIds: [] })
-      useScene.getState().deleteNode(segmentNode.id as AnyNodeId)
-      return
-    }
-
-    // Duplicate: createNodesAction appends to the parent's children, so the
-    // clone lands at the END of the chain. Force `attachmentSide: 'front'`
-    // so it cleanly continues from whatever segment is currently last —
-    // copying the original's side could turn it into a U-turn relative to
-    // the new chain end, which is almost never what the user wants.
-    const input = structuredClone(segmentNode) as Record<string, unknown>
-    delete input.id
-    input.attachmentSide = 'front'
-    const existingMetadata =
-      input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
-        ? (input.metadata as Record<string, unknown>)
-        : {}
-    input.metadata = { ...existingMetadata, isNew: true }
-    try {
-      const dup = StairSegmentSchema.parse(input)
-      useScene.getState().createNode(dup, dup.parentId as AnyNodeId)
-      useViewer.getState().setSelection({ selectedIds: [dup.id] })
-    } catch (err) {
-      console.error('Failed to duplicate stair segment', err)
-    }
-  }
-
-  return (
-    <group position={[offsetIndex * GROUND_MENU_SPACING, 0, 0]} scale={scale}>
-      <mesh
-        material={material}
-        // Handlers on the mesh itself (not the outer group) so each icon
-        // owns its own raycast target. With `depthTest: false` the icons
-        // can show up in multiple intersection lists at a glancing camera
-        // angle; gating on `intersections[0]?.object === event.object`
-        // makes sure only the truly front-most icon takes the hover.
-        onPointerDown={onPointerDown}
-        onPointerOut={(event) => {
-          event.stopPropagation()
-          setIsHovered(false)
-          if (document.body.style.cursor === 'pointer') {
-            document.body.style.cursor = ''
-          }
-        }}
-        onPointerOver={(event) => {
-          event.stopPropagation()
-          if (event.intersections[0]?.object !== event.object) return
-          setIsHovered(true)
-          document.body.style.cursor = 'pointer'
-        }}
-        renderOrder={1010}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <planeGeometry args={[GROUND_ICON_SIZE, GROUND_ICON_SIZE]} />
-      </mesh>
-    </group>
-  )
-}
-
-const ICON_SVGS: Record<'duplicate' | 'delete' | 'move', string> = {
-  duplicate: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
-  delete: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`,
-  move: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg>`,
-}
-
-const ICON_TEXTURE_CACHE = new Map<string, CanvasTexture>()
-const ICON_TEXTURE_SIZE = 128
-
-function getIconTexture(kind: 'duplicate' | 'delete' | 'move'): CanvasTexture {
-  const cached = ICON_TEXTURE_CACHE.get(kind)
-  if (cached) return cached
-
-  const canvas = document.createElement('canvas')
-  canvas.width = ICON_TEXTURE_SIZE
-  canvas.height = ICON_TEXTURE_SIZE
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
-  ICON_TEXTURE_CACHE.set(kind, texture)
-
-  const img = new Image()
-  img.onload = () => {
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.clearRect(0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
-    ctx.drawImage(img, 0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE)
-    texture.needsUpdate = true
-  }
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ICON_SVGS[kind])}`
-
-  return texture
-}
-
 // ───────────────────────────────────────────────────────────────────────
 // Parent-stair handles — ground-anchored action menu for the whole stair
 // (move / duplicate / delete). Mirrors the per-segment ground menu above
@@ -939,260 +697,8 @@ function StairHandlesForStair({ stairNode }: { stairNode: StairNode }) {
           <CurvedStairSweepArrow end="end" stairNode={stairNode} stairObject={stairObject} />
         </>
       ) : null}
-      <StairGroundActionMenu stairNode={stairNode} stairObject={stairObject} />
     </group>,
     parentObject,
-  )
-}
-
-// Sum the visible straight-segment lengths to find the chain centerline.
-// Curved / spiral stairs have no segment chain — fall back to 0 so the menu
-// lands at the stair's root anchor.
-function useStairChainLength(stairNode: StairNode): number {
-  return useScene((state) => {
-    if ((stairNode.stairType ?? 'straight') !== 'straight') return 0
-    let total = 0
-    for (const childId of stairNode.children ?? []) {
-      const child = state.nodes[childId as AnyNodeId]
-      if (child?.type !== 'stair-segment') continue
-      if (child.visible === false) continue
-      total += child.length ?? 0
-    }
-    return total
-  })
-}
-
-function StairGroundActionMenu({
-  stairNode,
-  stairObject,
-}: {
-  stairNode: StairNode
-  stairObject: Object3D
-}) {
-  const menuGroupRef = useRef<Group>(null)
-  const sideRef = useRef<number>(1)
-  const initializedForStairIdRef = useRef<string | null>(null)
-  const cameraLocalScratch = useMemo(() => new Vector3(), [])
-
-  const chainLength = useStairChainLength(stairNode)
-
-  useFrame((state, dt) => {
-    const menu = menuGroupRef.current
-    if (!menu) return
-
-    // Work in stair-local space: the wrapper this menu lives under already
-    // applies the stair's world transform, so +X is the stair's width axis
-    // and +Z is the run direction.
-    stairObject.updateMatrixWorld()
-    cameraLocalScratch.copy(state.camera.position)
-    stairObject.worldToLocal(cameraLocalScratch)
-
-    const stairType = stairNode.stairType ?? 'straight'
-    const isArc = stairType === 'curved' || stairType === 'spiral'
-
-    // For arc stairs the footprint is a disc; the "side" projection should
-    // come from the camera vector that's the longest local axis so the menu
-    // doesn't end up biased to +X just because the arc happens to face it.
-    const projection = isArc
-      ? // Larger absolute axis decides the side, signed by that axis's value.
-        Math.abs(cameraLocalScratch.x) >= Math.abs(cameraLocalScratch.z)
-        ? cameraLocalScratch.x
-        : cameraLocalScratch.z
-      : cameraLocalScratch.x
-
-    const isFresh = initializedForStairIdRef.current !== stairNode.id
-    const currentSide = sideRef.current
-    let nextSide: number
-    if (isFresh) {
-      nextSide = projection >= 0 ? 1 : -1
-    } else if (currentSide >= 0 && projection < -GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = -1
-    } else if (currentSide < 0 && projection > GROUND_MENU_SIDE_HYSTERESIS) {
-      nextSide = 1
-    } else {
-      nextSide = currentSide
-    }
-    sideRef.current = nextSide
-
-    // Straight stairs: side offset along +X by half-width; menu sits at the
-    // chain centerline along +Z.
-    // Curved / spiral stairs: footprint is an annular disc centered at the
-    // stair root with outer radius `innerRadius + width`. Place the menu
-    // just outside that disc, on whichever cardinal side faces the camera.
-    let targetX: number
-    let targetZ: number
-    let targetRot: number
-    if (isArc) {
-      const innerRadius = Math.max(
-        stairType === 'spiral' ? 0.05 : 0.2,
-        stairNode.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
-      )
-      const outerRadius = innerRadius + Math.max(stairNode.width ?? 1, 0.4)
-      const radial = outerRadius + GROUND_MENU_SIDE_CLEARANCE
-      // Which local axis the menu sits on: pick whichever the camera leans
-      // toward most. Side sign (±1) flips it to the camera-facing half.
-      const cameraOnX = Math.abs(cameraLocalScratch.x) >= Math.abs(cameraLocalScratch.z)
-      targetX = cameraOnX ? nextSide * radial : 0
-      targetZ = cameraOnX ? 0 : nextSide * radial
-      // Icons fan out along the menu's local +X and the icon texture's "top"
-      // (after the plane's -π/2 X-rotation + the inner 180° Y-flip) points
-      // along the menu's local +Z. The outer Y rotation has to land that +Z
-      // direction AWAY from the camera so icons read upright; otherwise the
-      // texture appears upside-down (icons facing inward toward the stair).
-      // For the ±Z cardinal sides that means π / 0, not 0 / π.
-      targetRot = cameraOnX
-        ? nextSide >= 0
-          ? -Math.PI / 2
-          : Math.PI / 2
-        : nextSide >= 0
-          ? Math.PI
-          : 0
-    } else {
-      const offset = stairNode.width / 2 + GROUND_MENU_SIDE_CLEARANCE
-      targetX = nextSide * offset
-      // Centerline of the chain along the run.
-      targetZ = chainLength / 2
-      targetRot = nextSide >= 0 ? -Math.PI / 2 : Math.PI / 2
-    }
-    const targetY = 0
-
-    if (isFresh) {
-      menu.position.set(targetX, targetY, targetZ)
-      menu.rotation.y = targetRot
-      initializedForStairIdRef.current = stairNode.id
-      return
-    }
-
-    const t = 1 - Math.exp(-dt * GROUND_MENU_LERP_RATE)
-    menu.position.x += (targetX - menu.position.x) * t
-    menu.position.z += (targetZ - menu.position.z) * t
-    menu.position.y = targetY
-
-    let rotDelta = targetRot - menu.rotation.y
-    while (rotDelta > Math.PI) rotDelta -= 2 * Math.PI
-    while (rotDelta < -Math.PI) rotDelta += 2 * Math.PI
-    menu.rotation.y += rotDelta * t
-  })
-
-  const items: Array<'move' | 'duplicate' | 'delete'> = ['move', 'duplicate', 'delete']
-  const centerIndex = (items.length - 1) / 2
-
-  return (
-    <group ref={menuGroupRef}>
-      {/* Inner 180° flip so icons read upright from the camera side after the
-          outer menu's camera-facing Y rotation. */}
-      <group rotation={[0, Math.PI, 0]}>
-        {items.map((kind, index) => (
-          <StairGroundActionIcon
-            key={kind}
-            kind={kind}
-            offsetIndex={index - centerIndex}
-            stairNode={stairNode}
-          />
-        ))}
-      </group>
-    </group>
-  )
-}
-
-function StairGroundActionIcon({
-  kind,
-  offsetIndex,
-  stairNode,
-}: {
-  kind: 'move' | 'duplicate' | 'delete'
-  offsetIndex: number
-  stairNode: StairNode
-}) {
-  const [isHovered, setIsHovered] = useState(false)
-  const { camera } = useThree()
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.2 : 1) * zoom
-
-  const texture = useMemo(() => getIconTexture(kind), [kind])
-  const material = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        map: texture,
-        side: DoubleSide,
-        alphaTest: 0.4,
-        transparent: true,
-        opacity: 1,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [texture],
-  )
-
-  useEffect(() => {
-    material.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [material, isHovered])
-  useEffect(() => () => material.dispose(), [material])
-
-  useEffect(() => {
-    return () => {
-      if (document.body.style.cursor === 'pointer') {
-        document.body.style.cursor = ''
-      }
-    }
-  }, [])
-
-  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
-    event.stopPropagation()
-    sfxEmitter.emit('sfx:item-pick')
-    document.body.style.cursor = ''
-    setIsHovered(false)
-
-    if (kind === 'move') {
-      // Hand the stair to the move tool the same way the floating menu does:
-      // clear selection so selection-gated UI unmounts during the drag,
-      // then set `movingNode`. `MoveRoofTool` picks it up.
-      useViewer.getState().setSelection({ selectedIds: [] })
-      useEditor.getState().setMovingNode(stairNode)
-      return
-    }
-
-    if (kind === 'delete') {
-      sfxEmitter.emit('sfx:structure-delete')
-      useViewer.getState().setSelection({ selectedIds: [] })
-      useScene.getState().deleteNode(stairNode.id as AnyNodeId)
-      return
-    }
-
-    // Duplicate: `duplicateStairSubtree` clones the stair + all its segments
-    // and hands the duplicate to move mode (offset by +1,+1 inside).
-    try {
-      duplicateStairSubtree(stairNode.id as AnyNodeId, { mode: 'move' })
-    } catch (err) {
-      console.error('Failed to duplicate stair', err)
-    }
-  }
-
-  return (
-    <group position={[offsetIndex * GROUND_MENU_SPACING, 0, 0]} scale={scale}>
-      <mesh
-        material={material}
-        onPointerDown={onPointerDown}
-        onPointerOut={(event) => {
-          event.stopPropagation()
-          setIsHovered(false)
-          if (document.body.style.cursor === 'pointer') {
-            document.body.style.cursor = ''
-          }
-        }}
-        onPointerOver={(event) => {
-          event.stopPropagation()
-          if (event.intersections[0]?.object !== event.object) return
-          setIsHovered(true)
-          document.body.style.cursor = 'pointer'
-        }}
-        renderOrder={1010}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <planeGeometry args={[GROUND_ICON_SIZE, GROUND_ICON_SIZE]} />
-      </mesh>
-    </group>
   )
 }
 

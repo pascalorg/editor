@@ -574,6 +574,16 @@ function PaintCursorBadge({
   )
 }
 
+// Subscribes to `gridSnapStep` so the visible grid cell size matches whatever
+// the wall draft tool snaps to — otherwise the cursor lands between visible
+// grid lines when the user picks a finer snap (0.25 / 0.1 / 0.05).
+function SnapAwareGrid() {
+  const gridSnapStep = useEditor((s) => s.gridSnapStep)
+  return (
+    <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
+  )
+}
+
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
 
 const ViewerSceneContent = memo(function ViewerSceneContent({
@@ -605,9 +615,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <CeilingSelectionAffordanceSystem />
       <RoofEditSystem />
       <StairEditSystem />
-      {!(isLoading || isFirstPersonMode) && (
-        <Grid cellColor="#aaa" fadeDistance={500} sectionColor="#ccc" />
-      )}
+      {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />

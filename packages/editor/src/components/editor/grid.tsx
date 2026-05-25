@@ -1,10 +1,10 @@
 'use client'
 
-import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
+import { type AnyNodeId, emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MathUtils, type Mesh, PlaneGeometry, Vector2 } from 'three'
+import { MathUtils, type Mesh, PlaneGeometry, Vector2, Vector3 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGridEvents } from '../../hooks/use-grid-events'
@@ -130,16 +130,34 @@ export const Grid = ({
     }
   }, [])
 
+  const worldPosScratch = useMemo(() => new Vector3(), [])
   useFrame((_, delta) => {
-    const currentLevelId = useViewer.getState().selection.levelId
+    const { levelId, buildingId } = useViewer.getState().selection
+    // Align the grid's XZ origin to the active building so its visible cell
+    // lines pass through building-local snap points (walls snap in
+    // building-local coords; a building placed at world (0.25, 0.25) would
+    // otherwise leave snapped wall endpoints stranded between grid lines).
+    let targetX = 0
+    let targetZ = 0
+    if (buildingId) {
+      const buildingMesh = sceneRegistry.nodes.get(buildingId as AnyNodeId)
+      if (buildingMesh) {
+        buildingMesh.getWorldPosition(worldPosScratch)
+        targetX = worldPosScratch.x
+        targetZ = worldPosScratch.z
+      }
+    }
     let targetY = 0
-    if (currentLevelId) {
-      const levelMesh = sceneRegistry.nodes.get(currentLevelId)
+    if (levelId) {
+      const levelMesh = sceneRegistry.nodes.get(levelId)
       if (levelMesh) {
         targetY = levelMesh.position.y
       }
     }
-    const newY = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
+    const t = 12 * delta
+    gridRef.current.position.x = MathUtils.lerp(gridRef.current.position.x, targetX, t)
+    gridRef.current.position.z = MathUtils.lerp(gridRef.current.position.z, targetZ, t)
+    const newY = MathUtils.lerp(gridRef.current.position.y, targetY, t)
     gridRef.current.position.y = newY
     setGridY(newY)
   })

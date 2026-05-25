@@ -53,6 +53,17 @@ const ALLOWED_TYPES = [
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
 
+// Menu scales with camera zoom so it feels anchored to the object, but is
+// clamped on both ends so it stays readable when zoomed way out and doesn't
+// dominate the screen when zoomed in close. Reference values are picked so
+// scale = 1 lands near the editor's default framing.
+const MIN_MENU_SCALE = 0.5
+// Cap at 1 so zooming in doesn't grow the menu past its default pixel size —
+// only zoom-out shrinks it (down to MIN_MENU_SCALE).
+const MAX_MENU_SCALE = 1
+const REF_ORTHO_ZOOM = 20
+const REF_CAMERA_DISTANCE = 12
+
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
@@ -71,6 +82,7 @@ export function FloatingActionMenu() {
   const groupRef = useRef<THREE.Group>(null)
   const startEndpointGroupRef = useRef<THREE.Group>(null)
   const endEndpointGroupRef = useRef<THREE.Group>(null)
+  const menuScaleRef = useRef<HTMLDivElement>(null)
   const [altPressed, setAltPressed] = useState(false)
 
   // Only show for single selection of specific types
@@ -131,8 +143,22 @@ export function FloatingActionMenu() {
     }
   }, [])
 
-  useFrame(() => {
+  useFrame((state) => {
     if (!(selectedId && isValidType && groupRef.current)) return
+
+    // Scale the HTML menu with camera zoom (ortho) or inverse distance
+    // (perspective) so it feels anchored to the world, clamped on both ends
+    // so it stays readable at extreme zoom-out and doesn't fill the screen
+    // when zoomed in close.
+    if (menuScaleRef.current) {
+      const raw =
+        state.camera instanceof THREE.OrthographicCamera
+          ? state.camera.zoom / REF_ORTHO_ZOOM
+          : REF_CAMERA_DISTANCE /
+            Math.max(state.camera.position.distanceTo(groupRef.current.position), 0.001)
+      const scale = Math.min(MAX_MENU_SCALE, Math.max(MIN_MENU_SCALE, raw))
+      menuScaleRef.current.style.transform = `scale(${scale})`
+    }
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
@@ -145,7 +171,25 @@ export function FloatingActionMenu() {
         // measurement labels.
         const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
         const isWall = node?.type === 'wall'
-        const yOffset = isWall ? 1 : isStructural ? 0.8 : 0.3
+        const isOpening = node?.type === 'door' || node?.type === 'window'
+        const isLandingSegment =
+          node?.type === 'stair-segment' && node.segmentType === 'landing'
+        const isFlightSegment =
+          node?.type === 'stair-segment' && node.segmentType === 'stair'
+        const isParentStair = node?.type === 'stair'
+        const yOffset = isWall
+          ? 0.5
+          : isOpening
+            ? 0.6
+            : isLandingSegment
+              ? 0.5
+              : isFlightSegment
+                ? 0.75
+                : isParentStair
+                  ? 0.2
+                  : isStructural
+                    ? 0.4
+                    : 0.05
         groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
       }
 
@@ -175,37 +219,6 @@ export function FloatingActionMenu() {
     }
   })
 
-  const handleMove = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!node) return
-      sfxEmitter.emit('sfx:item-pick')
-      if (
-        node.type === 'item' ||
-        node.type === 'window' ||
-        node.type === 'door' ||
-        node.type === 'elevator' ||
-        node.type === 'wall' ||
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'spawn' ||
-        node.type === 'roof' ||
-        node.type === 'roof-segment' ||
-        node.type === 'stair' ||
-        node.type === 'stair-segment' ||
-        // Registry-driven kinds default to movable; MoveTool dispatches them
-        // to MoveRegistryNodeTool. Phase 4 reads `capabilities.movable` to
-        // gate this instead of the unconditional OR.
-        isRegistrySelectable(node.type)
-      ) {
-        setMovingNode(node as any)
-      }
-      setSelection({ selectedIds: [] })
-    },
-    [node, setMovingNode, setSelection],
-  )
   const handleCurve = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -449,19 +462,6 @@ export function FloatingActionMenu() {
   )
     return null
 
-  // Walls now expose their actions through the in-world ground menu
-  // (`WallGroundActionMenu` in `wall-move-side-handles.tsx`). Skip the
-  // HTML floating menu for them so we don't render duplicate UI.
-  if (node?.type === 'wall') return null
-  // Doors use the in-world `DoorGroundActionMenu` for the same reason.
-  if (node?.type === 'door') return null
-  // Windows use the in-world `WindowGroundActionMenu`.
-  if (node?.type === 'window') return null
-  // Stair segments use the in-world `StairSegmentGroundActionMenu`.
-  if (node?.type === 'stair-segment') return null
-  // Parent stairs use the in-world `StairGroundActionMenu`.
-  if (node?.type === 'stair') return null
-
   return (
     <group>
       <group ref={groupRef}>
@@ -473,26 +473,27 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[100, 0]}
         >
-          <NodeActionMenu
-            onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-            onCurve={node?.type === 'fence' ? handleCurve : undefined}
-            onDelete={handleDelete}
-            onDuplicate={
-              node &&
-              node.type !== 'spawn' &&
-              !DELETE_ONLY_TYPES.includes(node.type) &&
-              !HOLE_TYPES.includes(node.type)
-                ? handleDuplicate
-                : undefined
-            }
-            onMove={
-              node && node.type !== 'fence' && !DELETE_ONLY_TYPES.includes(node.type)
-                ? handleMove
-                : undefined
-            }
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-          />
+          <div ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
+            <NodeActionMenu
+              onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+              onCurve={
+                node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
+                  ? handleCurve
+                  : undefined
+              }
+              onDelete={handleDelete}
+              onDuplicate={
+                node &&
+                node.type !== 'spawn' &&
+                !DELETE_ONLY_TYPES.includes(node.type) &&
+                !HOLE_TYPES.includes(node.type)
+                  ? handleDuplicate
+                  : undefined
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+            />
+          </div>
         </Html>
       </group>
       {node?.type === 'fence' && (
