@@ -101,13 +101,52 @@ function snapshotsToUpdates(snapshots: NodeSnapshot[]) {
 }
 
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
-  const levelId = useViewer((s) => s.selection.levelId)
+  const selectedLevelId = useViewer((s) => s.selection.levelId)
+  const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
+  // When a building is being moved, its explicit selection may be
+  // cleared as part of the move handoff. Fall back to the
+  // mid-drag building id so the dimmed floor keeps rendering
+  // throughout the gesture.
+  const movingBuildingId = useEditor((state) =>
+    state.movingNode?.type === 'building' ? state.movingNode.id : null,
+  )
+  const ambientBuildingSourceId = selectedBuildingId ?? movingBuildingId
+
+  // When only a building is in scope (no specific level), fall back to
+  // its level 0 (or the lowest-indexed level) so the floor still
+  // renders as context — dimmed and non-interactive — instead of
+  // disappearing entirely.
+  const ambientLevelId = useMemo<AnyNodeId | null>(() => {
+    if (selectedLevelId || !ambientBuildingSourceId) return null
+    const building = nodes[ambientBuildingSourceId]
+    if (!building || building.type !== 'building') return null
+    let zero: AnyNodeId | null = null
+    let lowestId: AnyNodeId | null = null
+    let lowestIdx = Number.POSITIVE_INFINITY
+    const childIds = (building as unknown as { children?: AnyNodeId[] }).children ?? []
+    for (const childId of childIds) {
+      const child = nodes[childId]
+      if (child?.type !== 'level') continue
+      if (child.level === 0) {
+        zero = child.id
+        break
+      }
+      if (child.level < lowestIdx) {
+        lowestIdx = child.level
+        lowestId = child.id
+      }
+    }
+    return zero ?? lowestId
+  }, [selectedLevelId, ambientBuildingSourceId, nodes])
+
+  const levelId = selectedLevelId ?? ambientLevelId
+  const isAmbient = !selectedLevelId && !!ambientLevelId
   const renderCtx = useFloorplanRender()
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -582,7 +621,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // appear to "deselect themselves a fraction of a second after
     // clicking." Scoped to `onClick` so hover / drag / pointer events
     // still propagate normally inside the registry tree.
-    <g className="floorplan-registry-layer" onClick={handleClickStop}>
+    <g
+      className="floorplan-registry-layer"
+      onClick={handleClickStop}
+      opacity={isAmbient ? 0.3 : undefined}
+      style={isAmbient ? { pointerEvents: 'none' } : undefined}
+    >
       {/* Base pass — rank-sorted body geometry (polygons, paths, fills,
           strokes, hatches). Lower-rank kinds (zones) paint first so
           higher-rank kinds (slabs, then walls / items / shelves) layer

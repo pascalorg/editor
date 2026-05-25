@@ -3,6 +3,7 @@
 import type { LevelNode } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
 import type { LevelDuplicatePreset } from '../../lib/level-duplication'
+import { getLevelDisplayName } from '../../lib/level-name'
 import { cn } from '../../lib/utils'
 import {
   Dialog,
@@ -42,7 +43,7 @@ const DUPLICATE_PRESETS: Array<{
 
 function getLevelLabel(level: LevelNode | null) {
   if (!level) return 'this level'
-  return level.name || `Level ${level.level}`
+  return getLevelDisplayName(level)
 }
 
 export function LevelDuplicateDialog({

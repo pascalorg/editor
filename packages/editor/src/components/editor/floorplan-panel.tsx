@@ -4119,6 +4119,27 @@ export function FloorplanPanel() {
     walls,
     zones,
   } = useFloorplanSceneData({ buildingId, levelId })
+  // When only a building is selected (or we're mid-drag on a building),
+  // the FloorplanRegistryLayer falls back to that building's level 0
+  // (or lowest level) and renders it dimmed as context. We let the SVG
+  // mount in that case so the dimmed-floor render path is reachable
+  // instead of swapping in the "Switch to a building level" message.
+  //
+  // `currentBuildingId` covers both the user-selected building and the
+  // building inferred from a selected level. During a building move the
+  // `movingNode` carries the building's id even if the explicit
+  // selection has been cleared as part of the move handoff.
+  const movingBuildingId =
+    useEditor((state) =>
+      state.movingNode?.type === 'building' ? state.movingNode.id : null,
+    ) ?? null
+  const ambientBuildingId = currentBuildingId ?? movingBuildingId
+  const hasAmbientBuildingLevel = useScene((state) => {
+    if (levelId || !ambientBuildingId) return false
+    const building = state.nodes[ambientBuildingId]
+    if (!building || building.type !== 'building') return false
+    return building.children.some((cid) => state.nodes[cid]?.type === 'level')
+  })
   const elevators = useScene(
     useShallow((state) => {
       const building = currentBuildingId ? state.nodes[currentBuildingId] : null
@@ -8722,7 +8743,7 @@ export function FloorplanPanel() {
           </form>
         )}
 
-        {!levelNode || levelNode.type !== 'level' ? (
+        {(!levelNode || levelNode.type !== 'level') && !hasAmbientBuildingLevel ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
             Switch to a building level to view and edit the floorplan.
           </div>

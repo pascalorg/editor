@@ -5,6 +5,7 @@ import {
   emitter,
   type GridEvent,
   sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -71,6 +72,16 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
 
     useScene.temporal.getState().pause()
 
+    // Publish the building's current pose to useLiveTransforms so the
+    // floor-plan (and any other live consumers) can follow per-frame
+    // without peeking into the Three.js mesh.
+    const publishLive = (posX: number, posZ: number, rotY: number) => {
+      useLiveTransforms.getState().set(nodeId, {
+        position: [posX, originalPosition[1], posZ],
+        rotation: rotY,
+      })
+    }
+
     let wasCommitted = false
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -97,6 +108,9 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
             const off = offsetAt(pendingRotationRef.current)
             mesh.position.x = gridX - off.x
             mesh.position.z = gridZ - off.z
+            publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
+          } else {
+            publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
           }
         }
       }
@@ -122,6 +136,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
         const off = offsetAt(pendingRotationRef.current)
         mesh.position.x = gridX - off.x
         mesh.position.z = gridZ - off.z
+        publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
       }
     }
 
@@ -174,6 +189,10 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
           rotation: [0, originalRotationRef.current, 0],
         })
       }
+      // Drop the live transform — committed positions are now in the scene
+      // store, so the floor-plan should read those instead of the stale
+      // drag overlay.
+      useLiveTransforms.getState().clear(nodeId)
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)

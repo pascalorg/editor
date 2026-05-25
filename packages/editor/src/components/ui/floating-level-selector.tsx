@@ -41,6 +41,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '../../lib/level-duplication'
+import { getDefaultLevelName, getLevelDisplayName } from '../../lib/level-name'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import {
   getEditorClipboardSnapshot,
@@ -60,10 +61,6 @@ import {
 } from './primitives/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from './primitives/popover'
 
-function getLevelDisplayLabel(level: LevelNode) {
-  return level.name || `Level ${level.level}`
-}
-
 // ── Inline rename input for a level row ─────────────────────────────────────
 
 function LevelInlineRename({
@@ -76,7 +73,7 @@ function LevelInlineRename({
   onStopEditing: () => void
 }) {
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = `Level ${level.level}`
+  const defaultName = getDefaultLevelName(level.level)
   const [value, setValue] = useState(level.name || '')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -169,7 +166,7 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayLabel(level)}`}
+            aria-label={`Reorder ${getLevelDisplayName(level)}`}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -192,10 +189,10 @@ function LevelRow({
               e.stopPropagation()
               setIsEditing(true)
             }}
-            title={getLevelDisplayLabel(level)}
+            title={getLevelDisplayName(level)}
             type="button"
           >
-            <span className="truncate">{getLevelDisplayLabel(level)}</span>
+            <span className="truncate">{getLevelDisplayName(level)}</span>
           </button>
 
           {/* Vertical three-dot menu — inside the pill */}
@@ -599,7 +596,7 @@ export function FloatingLevelSelector() {
             <DialogTitle>Delete level</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete{' '}
-              <strong>{deletingLevel ? getLevelDisplayLabel(deletingLevel) : ''}</strong>? All
+              <strong>{deletingLevel ? getLevelDisplayName(deletingLevel) : ''}</strong>? All
               walls, floors, and objects on this level will be permanently removed.
             </DialogDescription>
           </DialogHeader>
