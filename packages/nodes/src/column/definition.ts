@@ -50,6 +50,14 @@ function columnRadiusHandle(): HandleDescriptor<ColumnNodeType> {
     placement: {
       position: (n) => [n.radius + SIDE_HANDLE_OFFSET, n.height / 2, 0],
     },
+    // Guide ring traces the column's footprint at mid-height while the
+    // user is hovering or dragging the radius arrow — clarifies which
+    // edge the drag controls on round / octagonal / sixteen-sided shafts.
+    decoration: {
+      kind: 'ring',
+      radius: (n) => n.radius + SIDE_HANDLE_OFFSET * 0.5,
+      y: (n) => n.height / 2,
+    },
   }
 }
 

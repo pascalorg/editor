@@ -74,8 +74,8 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   window: 0.6,
   column: 0.6,
   stair: 0.2,
-  'stair-flight': 0.75,
-  'stair-landing': 0.5,
+  'stair-stair': 1.1,
+  'stair-landing': 0.9,
   slab: 0.4,
   ceiling: 0.4,
 }
@@ -497,7 +497,9 @@ export function FloatingActionMenu() {
                 node?.type === 'column' ||
                 node?.type === 'wall' ||
                 node?.type === 'door' ||
-                node?.type === 'window'
+                node?.type === 'window' ||
+                node?.type === 'stair' ||
+                node?.type === 'stair-segment'
                   ? handleMove
                   : undefined
               }

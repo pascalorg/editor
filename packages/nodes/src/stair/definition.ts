@@ -16,6 +16,12 @@ const CURVED_WIDTH_HANDLE_OFFSET = 0.5
 const CURVED_RADIAL_OFFSET = 0.16
 const CURVED_SWEEP_RADIAL_OFFSET = 0.3
 const CURVED_SWEEP_LATERAL_OFFSET = 0.24
+// Guide rings — outer hugs just outside the rim, inner sits inside the
+// pillar. Clamp inner so a tiny innerRadius (spiral default 0.05) doesn't
+// push the ring through the axis.
+const CURVED_OUTER_RING_OFFSET = 0.2
+const CURVED_INNER_RING_OFFSET = 0.2
+const CURVED_INNER_RING_MIN = 0.05
 
 type CurvedStairGeom = {
   isSpiral: boolean
@@ -95,6 +101,13 @@ function curvedWidthHandle(): HandleDescriptor<StairNodeType> {
         return [g.outerRadius + CURVED_WIDTH_HANDLE_OFFSET, g.totalRise / 2, 0]
       },
     },
+    // Outer guide ring — traces the rim while the user interacts with the
+    // width arrow so it's obvious which edge the drag affects.
+    decoration: {
+      kind: 'ring',
+      radius: (n) => readCurvedStairGeometry(n).outerRadius + CURVED_OUTER_RING_OFFSET,
+      y: (n) => readCurvedStairGeometry(n).totalRise / 2,
+    },
   }
 }
 
@@ -127,6 +140,16 @@ function curvedInnerRadiusHandle(): HandleDescriptor<StairNodeType> {
         return [g.innerRadius - CURVED_RADIAL_OFFSET, g.totalRise / 2, 0]
       },
       rotationY: () => Math.PI,
+    },
+    // Inner guide ring — traces the central pillar. Clamped so a tiny
+    // innerRadius doesn't pull the ring through the axis.
+    decoration: {
+      kind: 'ring',
+      radius: (n) => {
+        const g = readCurvedStairGeometry(n)
+        return Math.max(g.innerRadius - CURVED_INNER_RING_OFFSET, CURVED_INNER_RING_MIN)
+      },
+      y: (n) => readCurvedStairGeometry(n).totalRise / 2,
     },
   }
 }

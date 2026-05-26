@@ -17,6 +17,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -29,6 +30,7 @@ import {
   type Object3D,
   OrthographicCamera,
   Plane,
+  RingGeometry,
   Shape,
   Vector2,
   Vector3,
@@ -41,6 +43,50 @@ import useEditor from '../../store/use-editor'
 
 const ARROW_SCALE = 0.65
 const ARROW_COLOR = '#8381ed'
+
+// Mirrors the formatter used by wall / fence measurement labels so all
+// in-world dimension chips read consistently.
+function formatDimension(value: number, unit: 'metric' | 'imperial'): string {
+  if (unit === 'imperial') {
+    const feet = value * 3.280_84
+    const wholeFeet = Math.floor(feet)
+    const inches = Math.round((feet - wholeFeet) * 12)
+    if (inches === 12) return `${wholeFeet + 1}'0"`
+    return `${wholeFeet}'${inches}"`
+  }
+  return `${Number.parseFloat(value.toFixed(2))}m`
+}
+
+// In-world dimension chip rendered next to a resize arrow during hover
+// or drag. Uses the same screen-space `<Html>` recipe + text-shadow
+// halo as the wall measurement label so it reads at every camera angle.
+function DimensionLabel({
+  position,
+  text,
+}: {
+  position: readonly [number, number, number]
+  text: string
+}) {
+  return (
+    <Html
+      center
+      position={position as unknown as [number, number, number]}
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+      zIndexRange={[40, 0]}
+    >
+      <div
+        className="whitespace-nowrap font-bold font-mono text-[13px]"
+        style={{
+          color: '#fafafa',
+          textShadow:
+            '-1.5px -1.5px 0 #0b0b0b, 1.5px -1.5px 0 #0b0b0b, -1.5px 1.5px 0 #0b0b0b, 1.5px 1.5px 0 #0b0b0b, 0 0 4px #0b0b0b',
+        }}
+      >
+        {text}
+      </div>
+    </Html>
+  )
+}
 const ARROW_HOVER_COLOR = '#a5b4fc'
 
 // Reused chevron+shaft silhouette — matches every other handle file. The
@@ -91,8 +137,21 @@ export function NodeArrowHandles() {
   const movingNode = useEditor((state) => state.movingNode)
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
-  const node = useScene((state) =>
+  const rawNode = useScene((state) =>
     selectedId ? (state.nodes[selectedId as AnyNodeId] ?? null) : null,
+  )
+
+  // Merge any live drag override so the arrows themselves (positions,
+  // ring decorations) track the in-flight drag instead of freezing at
+  // pre-drag values. Subscribe to just this node's entry so unrelated
+  // override writes don't re-render the handle stack.
+  const liveOverride = useLiveNodeOverrides((s) =>
+    rawNode ? s.overrides.get(rawNode.id) : undefined,
+  )
+  const node = useMemo<AnyNode | null>(
+    () =>
+      rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode,
+    [rawNode, liveOverride],
   )
 
   const def = node ? nodeRegistry.get(node.type) : null
@@ -297,12 +356,14 @@ function LinearArrow({
   rideObject: Object3D
 }) {
   const [isHovered, setIsHovered] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
   const arrowMaterial = useArrowMaterial()
   const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
   const dragCleanupRef = useRef<(() => void) | null>(null)
+  const unit = useViewer((s) => s.unit)
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -380,6 +441,7 @@ function LinearArrow({
     sfxEmitter.emit('sfx:item-pick')
     useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
+    setIsDragging(true)
 
     let lastPatch: Partial<AnyNode> | null = null
 
@@ -422,6 +484,7 @@ function LinearArrow({
       }
       useScene.temporal.getState().resume()
       useViewer.getState().setHandleDragging(false)
+      setIsDragging(false)
       dragCleanupRef.current = null
     }
     const onUp = () => {
@@ -451,34 +514,98 @@ function LinearArrow({
   }
 
   // For axis === 'y' (vertical handles), tilt the chevron up via local
-  // X+Z rotation chain matching DoorHeightArrowHandle.
+  // X+Z rotation chain matching DoorHeightArrowHandle. When the handle
+  // sits below the node (placement Y < 0, e.g. window bottom arrow),
+  // flip the Z rotation so the chevron points outward (downward).
   const innerRotation: [number, number, number] =
-    descriptor.axis === 'y' ? [0, Math.PI / 2, Math.PI / 2] : [0, 0, 0]
+    descriptor.axis === 'y'
+      ? [0, Math.PI / 2, position[1] < 0 ? -Math.PI / 2 : Math.PI / 2]
+      : [0, 0, 0]
+
+  // Optional guide decoration — linear handles use it for curved-stair
+  // width / inner-radius rings; radial handles use it for the column's
+  // round footprint ring.
+  const decoration = descriptor.decoration
+  const showDecoration = Boolean(decoration) && (isHovered || isDragging)
+
+  // Dimension chip — shows the live value the drag is steering. `node`
+  // is already the effective (override-merged) node, so currentValue
+  // returns the in-flight value during a drag and the label tracks
+  // smoothly without an extra subscription.
+  const showLabel = isHovered || isDragging
+  const labelText = showLabel ? formatDimension(descriptor.currentValue(node), unit) : ''
 
   return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <group rotation={innerRotation} scale={scale}>
-        <mesh
-          frustumCulled={false}
-          geometry={arrowGeometry}
-          material={arrowMaterial}
-          onPointerDown={activate}
-          onPointerEnter={(event) => {
-            event.stopPropagation()
-            setIsHovered(true)
-            document.body.style.cursor = cursor
-          }}
-          onPointerLeave={(event) => {
-            event.stopPropagation()
-            setIsHovered(false)
-            if (document.body.style.cursor === cursor) {
-              document.body.style.cursor = ''
-            }
-          }}
-          renderOrder={1010}
+    <>
+      {showDecoration && decoration ? (
+        <GuideRing
+          radius={decoration.radius(node as never)}
+          y={decoration.y?.(node as never) ?? 0}
         />
+      ) : null}
+      <group position={position} rotation={[0, rotationY, 0]}>
+        {showLabel ? <DimensionLabel position={[0, 0.22, 0]} text={labelText} /> : null}
+        <group rotation={innerRotation} scale={scale}>
+          <mesh
+            frustumCulled={false}
+            geometry={arrowGeometry}
+            material={arrowMaterial}
+            onPointerDown={activate}
+            onPointerEnter={(event) => {
+              event.stopPropagation()
+              setIsHovered(true)
+              document.body.style.cursor = cursor
+            }}
+            onPointerLeave={(event) => {
+              event.stopPropagation()
+              setIsHovered(false)
+              if (document.body.style.cursor === cursor) {
+                document.body.style.cursor = ''
+              }
+            }}
+            renderOrder={1010}
+          />
+        </group>
       </group>
-    </group>
+    </>
+  )
+}
+
+// Thin horizontal ring used as a visual guide alongside a resize arrow —
+// e.g. the curved-stair width arrow traces the outer rim, the inner-radius
+// arrow traces the central pillar. Floats at node-local `y`, lies in the
+// XZ plane.
+function GuideRing({ radius, y }: { radius: number; y: number }) {
+  const safeRadius = Math.max(radius, 0.01)
+  const ringGeometry = useMemo(() => {
+    const inner = Math.max(safeRadius - 0.015, 0.001)
+    const outer = safeRadius + 0.015
+    return new RingGeometry(inner, outer, 96)
+  }, [safeRadius])
+  const ringMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  useEffect(() => () => ringGeometry.dispose(), [ringGeometry])
+  useEffect(() => () => ringMaterial.dispose(), [ringMaterial])
+
+  return (
+    <mesh
+      frustumCulled={false}
+      geometry={ringGeometry}
+      material={ringMaterial}
+      position={[0, y, 0]}
+      renderOrder={1009}
+      rotation={[-Math.PI / 2, 0, 0]}
+    />
   )
 }
 
@@ -552,6 +679,13 @@ function ArcArrow({
     useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
 
+    let lastPatch: Partial<AnyNode> | null = null
+
+    // Mirrors LinearArrow: drag publishes the patch (sweepAngle + rotation
+    // for curved-stair sweep handles) to `useLiveNodeOverrides` and marks
+    // the node dirty. The StairRenderer subscribes to that store and re-
+    // renders the curved/spiral mesh with the effective node, so zustand
+    // stays at the pre-drag values until commit on release.
     const onMove = (e: PointerEvent) => {
       setNDC(e.clientX, e.clientY)
       raycaster.setFromCamera(ndc, camera)
@@ -564,7 +698,9 @@ function ArcArrow({
       while (delta < -Math.PI) delta += 2 * Math.PI
 
       const patch = descriptor.apply(initialNode as never, delta, sceneApi)
-      sceneApi.update(nodeId, patch as Partial<AnyNode>)
+      lastPatch = patch as Partial<AnyNode>
+      useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
+      useScene.getState().markDirty(nodeId)
     }
 
     const cleanup = () => {
@@ -581,9 +717,22 @@ function ArcArrow({
     const onUp = () => {
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
+      // Commit the final patch to zustand, then drop the override so the
+      // store is the single source of truth again.
+      if (lastPatch) {
+        sceneApi.update(nodeId, lastPatch)
+      }
+      useLiveNodeOverrides.getState().clear(nodeId)
+      useScene.getState().markDirty(nodeId)
       cleanup()
     }
-    const onCancel = () => cleanup()
+    const onCancel = () => {
+      // Revert: drop the override + mark dirty so the renderer rebuilds
+      // against the original scene values.
+      useLiveNodeOverrides.getState().clear(nodeId)
+      useScene.getState().markDirty(nodeId)
+      cleanup()
+    }
     dragCleanupRef.current = cleanup
 
     window.addEventListener('pointermove', onMove)

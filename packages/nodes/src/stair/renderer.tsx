@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type StairNode,
   type StairSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -52,8 +53,18 @@ type LandingChainNextStair = {
   isTerminalLandingBeforeStair: boolean
 }
 
-export const StairRenderer = ({ node }: { node: StairNode }) => {
+export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   const ref = useRef<THREE.Group>(null!)
+  // Merge any live drag override into the node so curved/spiral geometry
+  // (built declaratively in JSX below) rebuilds on every drag tick. The
+  // resize arrows publish to `useLiveNodeOverrides` and only commit to
+  // zustand on release — subscribing here turns those override writes
+  // into the React re-renders that drive the visible mesh update.
+  const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(rawNode.id))
+  const node = useMemo<StairNode>(
+    () => (liveOverride ? ({ ...rawNode, ...liveOverride } as StairNode) : rawNode),
+    [rawNode, liveOverride],
+  )
   const isSegmentBasedStair = node.stairType === 'straight'
 
   useRegistry(node.id, 'stair', ref)

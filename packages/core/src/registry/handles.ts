@@ -67,6 +67,22 @@ export type HandlePlacement<N> = {
 export type Cursor = 'ew-resize' | 'ns-resize' | 'move'
 
 /**
+ * Visual decoration shown alongside a handle while the user is hovering
+ * or dragging it. Today: a thin horizontal ring at a node-local radius —
+ * the curved-stair width / inner-radius arrows use this to trace the
+ * outer rim / inner pillar so the user sees what the drag affects.
+ *
+ * Pure data: the editor's arrow renderer reads it and mounts the visual.
+ */
+export type HandleDecoration<N> = {
+  kind: 'ring'
+  /** Node-local radius of the ring (XZ plane). */
+  radius: (node: N) => number
+  /** Node-local Y of the ring. Defaults to 0. */
+  y?: (node: N) => number
+}
+
+/**
  * Linear resize along a single local axis. Covers width / depth / height
  * arrows whose visible behaviour is "drag the +axis edge, the dimension
  * grows."
@@ -98,6 +114,8 @@ export type LinearResizeHandle<N> = {
    */
   portal?: HandlePortal
   cursor?: Cursor
+  /** Optional visual guide shown while the arrow is hovered or dragging. */
+  decoration?: HandleDecoration<N>
 }
 
 /**
@@ -115,6 +133,8 @@ export type RadialResizeHandle<N> = {
   max?: number | ((node: N, sceneApi: SceneApi) => number)
   placement: HandlePlacement<N>
   portal?: HandlePortal
+  /** Optional visual guide shown while the arrow is hovered or dragging. */
+  decoration?: HandleDecoration<N>
 }
 
 /**

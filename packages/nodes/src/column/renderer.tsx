@@ -1,6 +1,11 @@
 'use client'
 
-import { type ColumnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
+import {
+  type ColumnNode,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useRegistry,
+} from '@pascal-app/core'
 import {
   baseMaterial,
   type ColorPreset,
@@ -2071,8 +2076,17 @@ function Capital({ node, y, height }: { node: ColumnNode; y: number; height: num
   )
 }
 
-export const ColumnRenderer = ({ node }: { node: ColumnNode }) => {
+export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
   const ref = useRef<Group>(null!)
+  // Merge any live drag override so width / depth / radius / height
+  // arrows update the mesh on every pointer move, with zustand only
+  // hearing the commit on release. Subscribes narrowly to this node's
+  // override entry; unrelated writes don't re-render.
+  const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(rawNode.id))
+  const node = useMemo<ColumnNode>(
+    () => (liveOverride ? ({ ...rawNode, ...liveOverride } as ColumnNode) : rawNode),
+    [rawNode, liveOverride],
+  )
   const handlers = useNodeEvents(node, 'column')
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const shading = useViewer((state) => state.shading)
