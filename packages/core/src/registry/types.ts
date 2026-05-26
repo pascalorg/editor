@@ -1189,6 +1189,14 @@ export type SnapServicesLike = unknown
 
 export type SceneApi = {
   get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => N | undefined
+  /**
+   * Snapshot of the full nodes record. For descriptors / placement
+   * callbacks that need to walk many siblings or resolve cross-node
+   * structure (elevator level entries, building level chains, etc.)
+   * without N round-trips through `get`. Returns the live reference —
+   * do not mutate.
+   */
+  nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
   update: (id: AnyNodeId, patch: Partial<AnyNode>) => void
   upsert: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId
   delete: (id: AnyNodeId) => void

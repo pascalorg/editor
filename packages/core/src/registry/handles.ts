@@ -59,9 +59,15 @@ export type HandleAnchor = 'center' | 'min' | 'max'
 
 /** 3D position + rotation of the arrow in its portal target's local space. */
 export type HandlePlacement<N> = {
-  position: (node: N) => readonly [number, number, number]
+  /**
+   * `sceneApi` is supplied so descriptors that depend on cross-node state
+   * (elevator height resolving level entries, future cross-kind handles)
+   * can compute placement against the live scene. Existing descriptors
+   * that only need `node` can ignore the second argument.
+   */
+  position: (node: N, sceneApi: SceneApi) => readonly [number, number, number]
   /** Optional Y rotation (radians). Defaults to 0. */
-  rotationY?: (node: N) => number
+  rotationY?: (node: N, sceneApi: SceneApi) => number
 }
 
 export type Cursor = 'ew-resize' | 'ns-resize' | 'move'
@@ -162,6 +168,14 @@ export type ArcResizeHandle<N = any> = {
   apply: (initialNode: N, delta: number, sceneApi: SceneApi) => Partial<N>
   placement: HandlePlacement<N>
   portal?: HandlePortal
+  /** Optional visual guide shown while the arrow is hovered or dragging. */
+  decoration?: HandleDecoration<N>
+  /**
+   * Visual override. Defaults to the standard chevron (used by the
+   * stair-sweep extend handles). 'rotate' renders a two-headed curved
+   * arrow icon, intended for whole-node rotation handles.
+   */
+  shape?: 'chevron' | 'rotate'
 }
 
 /**

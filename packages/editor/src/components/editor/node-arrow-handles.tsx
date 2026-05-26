@@ -89,6 +89,91 @@ function DimensionLabel({
 }
 const ARROW_HOVER_COLOR = '#a5b4fc'
 
+// Two-headed curved-arrow silhouette for whole-node rotation handles
+// (today: the elevator's corner rotate gizmo). Symmetric arc centred on
+// +X with sweeps to ±halfSweep, arrowhead wings + tangentially-extended
+// tips at each end. Drawn in 2D then extruded and rotated to lie in the
+// XZ plane — same final-orientation contract as the chevron, so the
+// outer rotation Y and inner-rotation chain in the renderer are reused
+// unchanged.
+function createRotateArrowHandleGeometry() {
+  const R = 0.2
+  const ribbonHalfWidth = 0.02 // ribbon thickness / 2
+  const halfSweep = Math.PI / 3 // 60° per side → 120° total arc
+  const headHalfWidth = 0.045 // arrowhead wings extend this far past ribbon
+  const headOvershoot = 0.075 // tangential reach of the arrowhead tip
+  const rIn = R - ribbonHalfWidth
+  const rOut = R + ribbonHalfWidth
+  const a1 = halfSweep
+  const a2 = -halfSweep
+
+  // Tip positions: at radius R, displaced tangentially past the ribbon end.
+  // CCW tangent at a1: (-sin a1, cos a1) → push past a1.
+  // CW tangent at a2: (+sin a2, -cos a2) → push past a2 the other way.
+  const tip1: [number, number] = [
+    R * Math.cos(a1) - headOvershoot * Math.sin(a1),
+    R * Math.sin(a1) + headOvershoot * Math.cos(a1),
+  ]
+  const tip2: [number, number] = [
+    R * Math.cos(a2) + headOvershoot * Math.sin(a2),
+    R * Math.sin(a2) - headOvershoot * Math.cos(a2),
+  ]
+  const innerWing1: [number, number] = [
+    (rIn - headHalfWidth) * Math.cos(a1),
+    (rIn - headHalfWidth) * Math.sin(a1),
+  ]
+  const outerWing1: [number, number] = [
+    (rOut + headHalfWidth) * Math.cos(a1),
+    (rOut + headHalfWidth) * Math.sin(a1),
+  ]
+  const innerWing2: [number, number] = [
+    (rIn - headHalfWidth) * Math.cos(a2),
+    (rIn - headHalfWidth) * Math.sin(a2),
+  ]
+  const outerWing2: [number, number] = [
+    (rOut + headHalfWidth) * Math.cos(a2),
+    (rOut + headHalfWidth) * Math.sin(a2),
+  ]
+  const innerCorner1: [number, number] = [rIn * Math.cos(a1), rIn * Math.sin(a1)]
+  const outerCorner1: [number, number] = [rOut * Math.cos(a1), rOut * Math.sin(a1)]
+  const innerCorner2: [number, number] = [rIn * Math.cos(a2), rIn * Math.sin(a2)]
+  const outerCorner2: [number, number] = [rOut * Math.cos(a2), rOut * Math.sin(a2)]
+
+  const shape = new Shape()
+  // Trace: top inner-corner → top inner-wing → top tip → top outer-wing →
+  //        top outer-corner → outer arc CW → bot outer-corner →
+  //        bot outer-wing → bot tip → bot inner-wing → bot inner-corner →
+  //        inner arc CCW → back to top inner-corner.
+  shape.moveTo(innerCorner1[0], innerCorner1[1])
+  shape.lineTo(innerWing1[0], innerWing1[1])
+  shape.lineTo(tip1[0], tip1[1])
+  shape.lineTo(outerWing1[0], outerWing1[1])
+  shape.lineTo(outerCorner1[0], outerCorner1[1])
+  shape.absarc(0, 0, rOut, a1, a2, true)
+  shape.lineTo(outerWing2[0], outerWing2[1])
+  shape.lineTo(tip2[0], tip2[1])
+  shape.lineTo(innerWing2[0], innerWing2[1])
+  shape.lineTo(innerCorner2[0], innerCorner2[1])
+  shape.absarc(0, 0, rIn, a2, a1, false)
+  shape.closePath()
+
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: 0.06,
+    bevelEnabled: true,
+    bevelThickness: 0.018,
+    bevelSize: 0.012,
+    bevelOffset: 0,
+    bevelSegments: 6,
+    curveSegments: 24,
+    steps: 1,
+  })
+  geometry.translate(0, 0, -0.03)
+  geometry.rotateX(-Math.PI / 2)
+  geometry.computeVertexNormals()
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
 // Reused chevron+shaft silhouette — matches every other handle file. The
 // chevron points along +X by default; descriptors with `axis: 'z'` rotate
 // it around Y, and `axis: 'y'` rotates so it points up.
@@ -373,8 +458,9 @@ function LinearArrow({
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
   const cursor = pickCursor(descriptor)
-  const position = descriptor.placement.position(node)
-  const baseRotationY = descriptor.placement.rotationY?.(node) ?? 0
+  const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
+  const position = descriptor.placement.position(node, placementSceneApi)
+  const baseRotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   // Default chevron points +X. Rotate around Y to face the chosen axis.
   const axisRotationY = descriptor.axis === 'z' ? -Math.PI / 2 : 0
   // For axis === 'y' we orient the chevron up. Z-rotation by π/2 then
@@ -624,11 +710,22 @@ function ArcArrow({
   rideObject: Object3D
 }) {
   const [isHovered, setIsHovered] = useState(false)
-  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const [isDragging, setIsDragging] = useState(false)
+  // 'rotate' descriptors (whole-node rotation handles like the elevator
+  // corner) render a two-headed curved arrow; everything else (stair
+  // sweep, etc.) keeps the chevron.
+  const isRotateShape = descriptor.shape === 'rotate'
+  const arrowGeometry = useMemo(
+    () => (isRotateShape ? createRotateArrowHandleGeometry() : createArrowHandleGeometry()),
+    [isRotateShape],
+  )
   const arrowMaterial = useArrowMaterial()
   const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  // The rotate icon is denser than the chevron; pump scale a touch so the
+  // ribbon reads at the same on-screen size as the other handles.
+  const arrowScale = isRotateShape ? ARROW_SCALE * 1.05 : ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * zoom * arrowScale
   const dragCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -638,9 +735,16 @@ function ArcArrow({
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
-  const position = descriptor.placement.position(node)
-  const rotationY = descriptor.placement.rotationY?.(node) ?? 0
+  const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
+  const position = descriptor.placement.position(node, placementSceneApi)
+  const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   const cursor: Cursor = 'ew-resize'
+
+  // Optional guide ring (elevator rotation circle) shown while the arc
+  // arrow is hovered or dragging. Same recipe as the linear / radial
+  // decoration path.
+  const decoration = descriptor.decoration
+  const showDecoration = Boolean(decoration) && (isHovered || isDragging)
 
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
@@ -678,6 +782,7 @@ function ArcArrow({
     sfxEmitter.emit('sfx:item-pick')
     useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
+    setIsDragging(true)
 
     let lastPatch: Partial<AnyNode> | null = null
 
@@ -712,6 +817,7 @@ function ArcArrow({
       }
       useScene.temporal.getState().resume()
       useViewer.getState().setHandleDragging(false)
+      setIsDragging(false)
       dragCleanupRef.current = null
     }
     const onUp = () => {
@@ -741,27 +847,35 @@ function ArcArrow({
   }
 
   return (
-    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
-      <mesh
-        frustumCulled={false}
-        geometry={arrowGeometry}
-        material={arrowMaterial}
-        onPointerDown={activate}
-        onPointerEnter={(event) => {
-          event.stopPropagation()
-          setIsHovered(true)
-          document.body.style.cursor = cursor
-        }}
-        onPointerLeave={(event) => {
-          event.stopPropagation()
-          setIsHovered(false)
-          if (document.body.style.cursor === cursor) {
-            document.body.style.cursor = ''
-          }
-        }}
-        renderOrder={1010}
-      />
-    </group>
+    <>
+      {showDecoration && decoration ? (
+        <GuideRing
+          radius={decoration.radius(node as never)}
+          y={decoration.y?.(node as never) ?? 0}
+        />
+      ) : null}
+      <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+        <mesh
+          frustumCulled={false}
+          geometry={arrowGeometry}
+          material={arrowMaterial}
+          onPointerDown={activate}
+          onPointerEnter={(event) => {
+            event.stopPropagation()
+            setIsHovered(true)
+            document.body.style.cursor = cursor
+          }}
+          onPointerLeave={(event) => {
+            event.stopPropagation()
+            setIsHovered(false)
+            if (document.body.style.cursor === cursor) {
+              document.body.style.cursor = ''
+            }
+          }}
+          renderOrder={1010}
+        />
+      </group>
+    </>
   )
 }
 
@@ -780,8 +894,9 @@ function TapActionArrow({
   const { camera } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
-  const position = descriptor.placement.position(node)
-  const rotationY = descriptor.placement.rotationY?.(node) ?? 0
+  const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
+  const position = descriptor.placement.position(node, placementSceneApi)
+  const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   const shape = descriptor.shape ?? 'arrow'
   const cursor: Cursor =
     descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')

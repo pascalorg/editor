@@ -15,6 +15,8 @@ const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
 const BRACE_HANDLE_OFFSET = 0.3
 const SPREAD_HANDLE_OFFSET = 0.22
+const ROTATE_CORNER_OFFSET = 0.32
+const ROTATE_RING_OFFSET = 0.04
 const MIN_COLUMN_HEIGHT = 0.2
 const MIN_COLUMN_WIDTH = 0.1
 const MIN_COLUMN_DEPTH = 0.1
@@ -185,6 +187,69 @@ const STYLES_WITH_TOP_SPREAD = new Set<ColumnNodeType['supportStyle']>([
   'v-frame',
 ])
 
+// Resolve the column's visible XZ footprint half-extents per supportStyle
+// + crossSection. Vertical supports use the shaft geometry (radius for
+// round / octagonal / sixteen-sided, width/depth for square / rectangular);
+// non-vertical supports fall back to the widest sensible brace bound so
+// the rotation handle clears the splay.
+function columnFootprintHalf(n: ColumnNodeType): { halfX: number; halfZ: number } {
+  if (n.supportStyle === 'vertical') {
+    if (ROUND_CROSS_SECTIONS.has(n.crossSection)) {
+      return { halfX: n.radius, halfZ: n.radius }
+    }
+    if (n.crossSection === 'square') {
+      return { halfX: n.width / 2, halfZ: n.width / 2 }
+    }
+    return { halfX: n.width / 2, halfZ: n.depth / 2 }
+  }
+  return {
+    halfX:
+      Math.max(
+        n.width,
+        n.braceWidth ?? 0,
+        n.braceBottomSpread ?? 0,
+        n.braceTopSpread ?? 0,
+      ) / 2,
+    halfZ: Math.max(n.depth, n.braceDepth ?? 0) / 2,
+  }
+}
+
+// Whole-column rotation gizmo — same pattern as the elevator. Curved
+// two-headed arrow at the +X / +Z corner of the footprint, a guide ring
+// at the corner-diagonal radius on hover/drag. `apply` negates the
+// angular delta so dragging the cursor CCW around the column rotates
+// the column CCW (cursor atan2 ticks opposite-handed from three.js Ry).
+function columnRotateHandle(): HandleDescriptor<ColumnNodeType> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta) => ({ rotation: (initial.rotation ?? 0) - delta }),
+    placement: {
+      // Offset along +Z only so the gizmo sticks out the front of the
+      // column rather than diagonally at the corner — keeps the rotate
+      // arrow from crowding the +X side handles (radius / axis / uniform)
+      // while still reading as attached to the column.
+      position: (n) => {
+        const { halfX, halfZ } = columnFootprintHalf(n)
+        const yMid = Math.max(n.height, MIN_COLUMN_HEIGHT) / 2
+        return [halfX, yMid, halfZ + ROTATE_CORNER_OFFSET]
+      },
+      // Fixed −45° tilt — leans the curve clockwise (as seen from above)
+      // toward the column's front face.
+      rotationY: () => -Math.PI / 4,
+    },
+    decoration: {
+      kind: 'ring',
+      radius: (n) => {
+        const { halfX, halfZ } = columnFootprintHalf(n)
+        return Math.hypot(halfX, halfZ) + ROTATE_RING_OFFSET
+      },
+      y: (n) => Math.max(n.height, MIN_COLUMN_HEIGHT) / 2,
+    },
+  }
+}
+
 function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[] {
   // 1. Height (universal).
   // 2. Footprint arrows depending on supportStyle + crossSection:
@@ -209,6 +274,7 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   } else {
     handles.push(columnAxisHandle('x'), columnAxisHandle('z'))
   }
+  handles.push(columnRotateHandle())
   return handles
 }
 

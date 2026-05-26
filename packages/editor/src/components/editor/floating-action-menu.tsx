@@ -75,6 +75,9 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   // Fence: clears the height-resize arrow (sits at fence.height + 0.45)
   // plus the chevron's own visual size, so the menu floats just above it.
   fence: 1.05,
+  // Elevator: clears the cab-height arrow which sits above the SHAFT
+  // top (resolved through level entries), so the menu floats above it.
+  elevator: 0.9,
   stair: 0.2,
   'stair-stair': 1.1,
   'stair-landing': 0.9,
@@ -435,6 +438,7 @@ export function FloatingActionMenu() {
                 node?.type === 'door' ||
                 node?.type === 'window' ||
                 node?.type === 'fence' ||
+                node?.type === 'elevator' ||
                 node?.type === 'stair' ||
                 node?.type === 'stair-segment'
                   ? handleMove

@@ -50,6 +50,10 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
       return store.getState().nodes[id] as N | undefined
     },
 
+    nodes() {
+      return store.getState().nodes
+    },
+
     update(id, patch) {
       captureIfNeeded(id)
       store.getState().updateNode(id, patch)
