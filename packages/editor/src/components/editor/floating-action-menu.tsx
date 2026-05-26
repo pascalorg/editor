@@ -81,8 +81,16 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   stair: 0.2,
   'stair-stair': 1.1,
   'stair-landing': 0.9,
-  slab: 0.4,
-  ceiling: 0.4,
+  // Slab: clears the height arrow that sits at elevation + 0.22 plus the
+  // chevron's own visual reach, so the menu floats just above it.
+  slab: 0.7,
+  // Ceiling: clears the upward height arrow that sits ~0.22 above the
+  // ceiling plane, plus extra headroom so the menu doesn't crowd the
+  // chevron at any zoom level.
+  ceiling: 1.0,
+  // Shelf: clears the height arrow that sits at shelf.height + 0.22
+  // plus the chevron's visual reach.
+  shelf: 0.6,
 }
 
 function getMenuYOffset(node: AnyNode | null): number {
@@ -440,7 +448,10 @@ export function FloatingActionMenu() {
                 node?.type === 'fence' ||
                 node?.type === 'elevator' ||
                 node?.type === 'stair' ||
-                node?.type === 'stair-segment'
+                node?.type === 'stair-segment' ||
+                node?.type === 'slab' ||
+                node?.type === 'ceiling' ||
+                node?.type === 'shelf'
                   ? handleMove
                   : undefined
               }

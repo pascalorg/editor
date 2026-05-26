@@ -70,7 +70,7 @@ export type HandlePlacement<N> = {
   rotationY?: (node: N, sceneApi: SceneApi) => number
 }
 
-export type Cursor = 'ew-resize' | 'ns-resize' | 'move'
+export type Cursor = 'ew-resize' | 'ns-resize' | 'move' | 'grab' | 'grabbing'
 
 /**
  * Visual decoration shown alongside a handle while the user is hovering

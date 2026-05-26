@@ -1,4 +1,10 @@
-import { type AnyNodeId, type CeilingNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type CeilingNode,
+  getEffectiveNode,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
@@ -29,7 +35,10 @@ export const CeilingSystem = () => {
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (mesh) {
-        updateCeilingGeometry(node as CeilingNode, mesh)
+        // Merge any live drag override so the polygon / height resize
+        // arrow rebuilds the mesh at pointer rate — zustand only learns
+        // the final value on commit. Mirrors WallSystem / GeometrySystem.
+        updateCeilingGeometry(getEffectiveNode(node as CeilingNode), mesh)
         clearDirty(id as AnyNodeId)
       }
       // If mesh not found, keep it dirty for next frame

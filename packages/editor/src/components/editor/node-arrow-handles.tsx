@@ -27,6 +27,7 @@ import {
   DoubleSide,
   ExtrudeGeometry,
   type Group,
+  Matrix4,
   type Object3D,
   OrthographicCamera,
   Plane,
@@ -474,6 +475,13 @@ function LinearArrow({
     // camera's projected horizontal direction. For axis='y' we need the
     // plane to be vertical too — projection.y maps directly.
     rideObject.updateMatrixWorld()
+    // Freeze the ride frame at drag-start. Some kinds park their mesh
+    // position on the field being dragged (ceiling: mesh.position.y =
+    // height) — using the *live* matrix in `onMove` would chase that
+    // moving frame and the value stalls or jitters. The inverse is
+    // captured once so local-coord math stays anchored to the pre-drag
+    // pose for the duration of the drag.
+    const initialFrameInverse = new Matrix4().copy(rideObject.matrixWorld).invert()
     const worldOrigin = new Vector3(...position).applyMatrix4(rideObject.matrixWorld)
     const planeNormal = new Vector3().subVectors(camera.position, worldOrigin).setY(0)
     if (planeNormal.lengthSq() === 0) return
@@ -493,7 +501,7 @@ function LinearArrow({
     raycaster.setFromCamera(ndc, camera)
     const hitWorld = new Vector3()
     if (!raycaster.ray.intersectPlane(plane, hitWorld)) return
-    const hitLocal = rideObject.worldToLocal(hitWorld.clone())
+    const hitLocal = hitWorld.clone().applyMatrix4(initialFrameInverse)
 
     // Capture node + initial value at drag start so `apply` can reference
     // pre-drag state (e.g. door right-width anchors the LEFT edge at
@@ -541,7 +549,9 @@ function LinearArrow({
       raycaster.setFromCamera(ndc, camera)
       const intersection = new Vector3()
       if (!raycaster.ray.intersectPlane(plane, intersection)) return
-      const intersectionLocal = rideObject.worldToLocal(intersection.clone())
+      // Use the frozen drag-start frame, not the live one. See the
+      // `initialFrameInverse` comment above.
+      const intersectionLocal = intersection.clone().applyMatrix4(initialFrameInverse)
       const currentPointer =
         descriptor.axis === 'x'
           ? intersectionLocal.x
@@ -738,7 +748,10 @@ function ArcArrow({
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
   const position = descriptor.placement.position(node, placementSceneApi)
   const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
-  const cursor: Cursor = 'ew-resize'
+  // Rotation gizmo: hover signals "grabbable", active drag signals
+  // "grabbed". `ew-resize` was wrong — it implies linear width drag.
+  const hoverCursor: Cursor = 'grab'
+  const dragCursor: Cursor = 'grabbing'
 
   // Optional guide ring (elevator rotation circle) shown while the arc
   // arrow is hovered or dragging. Same recipe as the linear / radial
@@ -778,7 +791,7 @@ function ArcArrow({
     const sceneApi = createSceneApi(useScene)
     const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
 
-    document.body.style.cursor = cursor
+    document.body.style.cursor = dragCursor
     sfxEmitter.emit('sfx:item-pick')
     useViewer.getState().setHandleDragging(true)
     useScene.temporal.getState().pause()
@@ -812,7 +825,7 @@ function ArcArrow({
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
-      if (document.body.style.cursor === cursor) {
+      if (document.body.style.cursor === dragCursor) {
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
@@ -863,12 +876,16 @@ function ArcArrow({
           onPointerEnter={(event) => {
             event.stopPropagation()
             setIsHovered(true)
-            document.body.style.cursor = cursor
+            // Only show the hover cursor if no drag is already in flight —
+            // otherwise we'd stomp `grabbing` back to `grab` mid-gesture.
+            if (document.body.style.cursor !== dragCursor) {
+              document.body.style.cursor = hoverCursor
+            }
           }}
           onPointerLeave={(event) => {
             event.stopPropagation()
             setIsHovered(false)
-            if (document.body.style.cursor === cursor) {
+            if (document.body.style.cursor === hoverCursor) {
               document.body.style.cursor = ''
             }
           }}
