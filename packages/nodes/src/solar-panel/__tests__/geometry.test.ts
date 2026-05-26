@@ -87,6 +87,75 @@ describe('getAnalyticalNormal', () => {
     expect(n.z).toBeGreaterThan(0)
     expect(n.y).toBeGreaterThan(0)
   })
+  // Regression: previously `(0, depth, -rh)` flipped the shed preview's
+  // tilt opposite the actual slope (peak at -d/2, eave at +d/2 → outward
+  // normal tilts toward +Z, the low side).
+  test('shed returns normal tilted toward the +z low side', () => {
+    const n = getAnalyticalNormal(0, 0, fixtureSegment({ roofType: 'shed' }))
+    expect(n.z).toBeGreaterThan(0)
+    expect(n.y).toBeGreaterThan(0)
+  })
+  test('gambrel lower tier z=+halfD tilts toward +z', () => {
+    const seg = fixtureSegment({ roofType: 'gambrel' })
+    const n = getAnalyticalNormal(0, seg.depth / 2 - 0.01, seg)
+    expect(n.z).toBeGreaterThan(0)
+    expect(n.y).toBeGreaterThan(0)
+  })
+  test('gambrel upper tier (|z|<mz) uses shallower slope than lower tier', () => {
+    const seg = fixtureSegment({
+      roofType: 'gambrel',
+      gambrelLowerWidthRatio: 0.5,
+      gambrelLowerHeightRatio: 0.7,
+    })
+    const lower = getAnalyticalNormal(0, seg.depth / 2 - 0.01, seg)
+    const upper = getAnalyticalNormal(0, 0.01, seg)
+    // Both tilt toward +z; upper tier is shallower, so its Z component
+    // (sin θ) is smaller than the lower tier's.
+    expect(upper.z).toBeGreaterThan(0)
+    expect(upper.z).toBeLessThan(lower.z)
+  })
+  test('hip +x face tilts toward +x, not +z', () => {
+    const n = getAnalyticalNormal(2, 0, fixtureSegment({ roofType: 'hip' }))
+    expect(n.x).toBeGreaterThan(0)
+    expect(Math.abs(n.z)).toBeLessThan(1e-6)
+    expect(n.y).toBeGreaterThan(0)
+  })
+  // Regression: mansard previously fell through to gable code, ignoring
+  // the X axis. Points near the +X edge tilted toward +Z instead of +X.
+  test('mansard +x steep band tilts toward +x', () => {
+    const seg = fixtureSegment({ roofType: 'mansard' })
+    const n = getAnalyticalNormal(seg.width / 2 - 0.01, 0, seg)
+    expect(n.x).toBeGreaterThan(0)
+    expect(Math.abs(n.z)).toBeLessThan(1e-6)
+    expect(n.y).toBeGreaterThan(0)
+  })
+  test('mansard top hip (inside waist) is shallower than the steep band', () => {
+    const seg = fixtureSegment({
+      roofType: 'mansard',
+      mansardSteepWidthRatio: 0.2,
+      mansardSteepHeightRatio: 0.7,
+    })
+    const steep = getAnalyticalNormal(seg.width / 2 - 0.01, 0, seg)
+    const top = getAnalyticalNormal(0.01, 0, seg)
+    expect(top.x).toBeGreaterThan(0)
+    expect(top.x).toBeLessThan(steep.x)
+  })
+  // Regression: dutch previously fell through to gable code, ignoring
+  // the X axis. Hip ends rendered with the wrong tilt direction.
+  test('dutch +x hip end tilts toward +x (w>=d)', () => {
+    const seg = fixtureSegment({ roofType: 'dutch', width: 8, depth: 6 })
+    const n = getAnalyticalNormal(seg.width / 2 - 0.01, 0, seg)
+    expect(n.x).toBeGreaterThan(0)
+    expect(Math.abs(n.z)).toBeLessThan(1e-6)
+    expect(n.y).toBeGreaterThan(0)
+  })
+  test('dutch +z gable side tilts toward +z (w>=d)', () => {
+    const seg = fixtureSegment({ roofType: 'dutch', width: 8, depth: 6 })
+    const n = getAnalyticalNormal(0, seg.depth / 2 - 0.01, seg)
+    expect(n.z).toBeGreaterThan(0)
+    expect(Math.abs(n.x)).toBeLessThan(1e-6)
+    expect(n.y).toBeGreaterThan(0)
+  })
 })
 
 describe('computeAutoFit', () => {

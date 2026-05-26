@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveNode,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   nodeRegistry,
@@ -8,6 +9,7 @@ import {
   type RoofSegmentNode,
   type RoofType,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -75,6 +77,11 @@ export const RoofSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
+  // Subscribe so an override-only update (no scene write) still re-runs
+  // the component, letting the useFrame loop pick up the latest dirtyNodes
+  // set from the render pass that received the override-publishing
+  // `markDirty` call. Mirrors WallSystem / DoorSystem.
+  useLiveNodeOverrides((s) => s.overrides)
 
   useFrame(() => {
     // Clear stale pending updates when the scene is unloaded
@@ -115,12 +122,17 @@ export const RoofSystem = () => {
 
       if (node.type === 'roof-segment') {
         const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
+        // Merge any live override (width / depth / wallHeight / pitch /
+        // rotation) so the mesh rebuild reflects the in-flight handle drag
+        // without zustand churn. When no override is set this returns the
+        // scene node unchanged. Same pattern as DoorSystem / WallSystem.
+        const effectiveSegment = getEffectiveNode(node as RoofSegmentNode)
         if (mesh) {
           // Only compute expensive individual CSG when the segment is actually rendered
           // (its parent group is visible = the roof is selected for editing)
           const isVisible = mesh.parent?.visible !== false
           if (isVisible && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
-            updateRoofSegmentGeometry(node as RoofSegmentNode, mesh)
+            updateRoofSegmentGeometry(effectiveSegment, mesh)
             segmentsProcessed++
           } else if (isVisible) {
             return // Over budget — keep dirty, process next frame
@@ -136,16 +148,20 @@ export const RoofSystem = () => {
               computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
             }
-            mesh.position.set(node.position[0], node.position[1], node.position[2])
-            mesh.rotation.y = node.rotation
+            mesh.position.set(
+              effectiveSegment.position[0],
+              effectiveSegment.position[1],
+              effectiveSegment.position[2],
+            )
+            mesh.rotation.y = effectiveSegment.rotation
           }
           clearDirty(id as AnyNodeId)
         } else {
           clearDirty(id as AnyNodeId)
         }
         // Queue the parent roof for a merged geometry update
-        if (node.parentId) {
-          pendingRoofUpdates.add(node.parentId as AnyNodeId)
+        if (effectiveSegment.parentId) {
+          pendingRoofUpdates.add(effectiveSegment.parentId as AnyNodeId)
         }
       } else if (node.type === 'roof') {
         pendingRoofUpdates.add(id as AnyNodeId)
@@ -211,8 +227,15 @@ function updateMergedRoofGeometry(
   // in `RoofRenderer` so the painted material is preserved. Exclude them
   // from the merged shell — otherwise the merged mesh would draw on top
   // with the roof's default material.
+  //
+  // Merge each child through `getEffectiveNode` so an in-flight handle
+  // drag (live override on width / depth / wallHeight / pitch / rotation)
+  // is reflected in the merged shell during the drag, not only on commit.
   const children = (roofNode.children ?? [])
-    .map((id) => nodes[id] as RoofSegmentNode)
+    .map((id) => {
+      const scn = nodes[id] as RoofSegmentNode | undefined
+      return scn ? getEffectiveNode(scn) : undefined
+    })
     .filter((n): n is RoofSegmentNode => Boolean(n) && !hasSegmentMaterialOverride(n))
 
   if (children.length === 0) {

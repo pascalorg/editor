@@ -66,6 +66,9 @@ const REF_CAMERA_DISTANCE = 12
 // World-space Y distance from a node's bbox top to the floating menu anchor.
 // Per-type because in-world chrome above the node (height-resize arrows,
 // measurement labels) varies in vertical reach.
+// `EXTRA_MENU_LIFT` is a uniform global nudge — easier to tune one
+// constant than to bump every per-type entry below.
+const EXTRA_MENU_LIFT = 0.35
 const MENU_Y_OFFSET_DEFAULT = 0.3
 const MENU_Y_OFFSETS: Record<string, number> = {
   wall: 0.5,
@@ -94,11 +97,13 @@ const MENU_Y_OFFSETS: Record<string, number> = {
 }
 
 function getMenuYOffset(node: AnyNode | null): number {
-  if (!node) return MENU_Y_OFFSET_DEFAULT
+  if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
   if (node.type === 'stair-segment') {
-    return MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT
+    return (
+      (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
+    )
   }
-  return MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT
+  return (MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
 }
 
 export function FloatingActionMenu() {
@@ -451,7 +456,8 @@ export function FloatingActionMenu() {
                 node?.type === 'stair-segment' ||
                 node?.type === 'slab' ||
                 node?.type === 'ceiling' ||
-                node?.type === 'shelf'
+                node?.type === 'shelf' ||
+                node?.type === 'roof-segment'
                   ? handleMove
                   : undefined
               }
