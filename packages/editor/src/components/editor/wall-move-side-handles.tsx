@@ -116,9 +116,14 @@ export function WallMoveSideHandles() {
   const curvingFence = useEditor((state) => state.curvingFence)
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  // Fence side-move / height / corner-pickers now flow through the
+  // registry handle path (see packages/nodes/src/fence/definition.ts).
+  // Only walls still need the legacy renderer here — the registry path
+  // didn't render correctly for walls specifically and was reverted in
+  // commit 0e207a7f; revisit once that's diagnosed.
   const selectedNode = useScene((state) => {
     const node = selectedId ? state.nodes[selectedId as AnyNodeId] : null
-    return node?.type === 'wall' || node?.type === 'fence' ? node : null
+    return node?.type === 'wall' ? node : null
   })
 
   const shouldRender =
@@ -133,11 +138,7 @@ export function WallMoveSideHandles() {
 
   if (!shouldRender || !selectedNode) return null
 
-  return selectedNode.type === 'wall' ? (
-    <WallMoveSideHandlesForWall wall={selectedNode} />
-  ) : (
-    <WallMoveSideHandlesForFence fence={selectedNode} />
-  )
+  return <WallMoveSideHandlesForWall wall={selectedNode} />
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {

@@ -14,11 +14,14 @@ import { ColumnNode } from './schema'
 const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
 const BRACE_HANDLE_OFFSET = 0.3
+const SPREAD_HANDLE_OFFSET = 0.22
 const MIN_COLUMN_HEIGHT = 0.2
 const MIN_COLUMN_WIDTH = 0.1
 const MIN_COLUMN_DEPTH = 0.1
 const MIN_COLUMN_RADIUS = 0.05
 const MIN_BRACE_DIMENSION = 0.04
+const MIN_BRACE_BOTTOM_SPREAD = 0.2
+const MIN_BRACE_TOP_SPREAD = 0
 
 const ROUND_CROSS_SECTIONS = new Set<ColumnNodeType['crossSection']>([
   'round',
@@ -96,6 +99,52 @@ function columnUniformHandle(): HandleDescriptor<ColumnNodeType> {
   }
 }
 
+// Bottom-spread arrow — sits just outside the right foot of the splay
+// (a-frame / x-brace etc.), one beam-width above the floor plate so it
+// clears the support legs. Drags symmetrically: anchor='center' so
+// pointer Δ of d grows the full leg-to-leg distance by 2d, both legs
+// moving ±d. Defaults mirror the renderer fall-throughs.
+function columnBraceBottomSpreadHandle(): HandleDescriptor<ColumnNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: 'center',
+    min: MIN_BRACE_BOTTOM_SPREAD,
+    currentValue: (n) =>
+      Math.max(MIN_BRACE_BOTTOM_SPREAD, n.braceBottomSpread ?? Math.max(n.width * 3, 1.2)),
+    apply: (_n, newValue) => ({ braceBottomSpread: newValue }),
+    placement: {
+      position: (n) => {
+        const spread = Math.max(
+          MIN_BRACE_BOTTOM_SPREAD,
+          n.braceBottomSpread ?? Math.max(n.width * 3, 1.2),
+        )
+        return [spread / 2 + SPREAD_HANDLE_OFFSET, 0.08, 0]
+      },
+    },
+  }
+}
+
+// Top-spread arrow — at the right tip of the brace's top edge. Same
+// symmetric anchor as the bottom spread. For a-frame this is the small
+// "pinch" at the top; for y/v-frame and x-brace it's the wider opening.
+function columnBraceTopSpreadHandle(): HandleDescriptor<ColumnNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: 'center',
+    min: MIN_BRACE_TOP_SPREAD,
+    currentValue: (n) => Math.max(MIN_BRACE_TOP_SPREAD, n.braceTopSpread ?? 0.12),
+    apply: (_n, newValue) => ({ braceTopSpread: newValue }),
+    placement: {
+      position: (n) => {
+        const spread = Math.max(MIN_BRACE_TOP_SPREAD, n.braceTopSpread ?? 0.12)
+        return [spread / 2 + SPREAD_HANDLE_OFFSET, n.height + 0.08, 0]
+      },
+    },
+  }
+}
+
 function columnBraceHandle(axis: 'x' | 'z'): HandleDescriptor<ColumnNodeType> {
   return {
     kind: 'linear-resize',
@@ -125,16 +174,34 @@ function columnBraceHandle(axis: 'x' | 'z'): HandleDescriptor<ColumnNodeType> {
   }
 }
 
+// Which supports surface bottom-spread / top-spread in the renderer. Phase
+// 1 covers the simple two-leg / single-foot supports; x-brace / k-brace /
+// tripod / trestle / portal-frame / box-frame will hook the same handles
+// in a follow-up once we audit their leg geometry.
+const STYLES_WITH_BOTTOM_SPREAD = new Set<ColumnNodeType['supportStyle']>(['a-frame'])
+const STYLES_WITH_TOP_SPREAD = new Set<ColumnNodeType['supportStyle']>([
+  'a-frame',
+  'y-frame',
+  'v-frame',
+])
+
 function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[] {
   // 1. Height (universal).
   // 2. Footprint arrows depending on supportStyle + crossSection:
   //    - non-vertical supports → braceWidth + braceDepth (skips crossSection)
+  //      plus per-style spread arrows at the splay endpoints.
   //    - round / octagonal / sixteen-sided → single radius arrow
   //    - square                            → uniform width+depth
   //    - rectangular                       → width + depth (independent)
   const handles: HandleDescriptor<ColumnNodeType>[] = [columnHeightHandle()]
   if (node.supportStyle !== 'vertical') {
     handles.push(columnBraceHandle('x'), columnBraceHandle('z'))
+    if (STYLES_WITH_BOTTOM_SPREAD.has(node.supportStyle)) {
+      handles.push(columnBraceBottomSpreadHandle())
+    }
+    if (STYLES_WITH_TOP_SPREAD.has(node.supportStyle)) {
+      handles.push(columnBraceTopSpreadHandle())
+    }
   } else if (ROUND_CROSS_SECTIONS.has(node.crossSection)) {
     handles.push(columnRadiusHandle())
   } else if (node.crossSection === 'square') {

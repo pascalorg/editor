@@ -96,6 +96,83 @@ const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportSt
   { label: 'Box Frame', value: 'box-frame' },
 ]
 
+type NonVerticalSupportStyle = Exclude<ColumnNode['supportStyle'], 'vertical'>
+
+// Per-style brace defaults. Values mirror each support's renderer
+// fall-through expressions so switching styles snaps the column to the
+// shape that style was designed around — e.g. an A-frame opens wide at
+// the foot and pinches at the top, an X-brace runs parallel legs, a
+// tripod's "bottomSpread" / "topSpread" double as its X-span / Z-span.
+// Without these, a user who customised one style (say A-frame bottom =
+// 2.0) then switched to Y-frame would carry that 2.0 around in state
+// even though Y-frame doesn't use it — and switching back to X-brace
+// would inherit the leftover 0.12 top from A-frame, making the X look
+// pinched.
+const SUPPORT_STYLE_DEFAULTS: Record<NonVerticalSupportStyle, Partial<ColumnNode>> = {
+  'a-frame': {
+    braceBottomSpread: 1.4,
+    braceTopSpread: 0.12,
+    braceWidth: 0.16,
+    braceDepth: 0.16,
+  },
+  'y-frame': {
+    braceBottomSpread: 0.2,
+    braceTopSpread: 0.9,
+    braceWidth: 0.16,
+    braceDepth: 0.16,
+  },
+  'v-frame': {
+    braceBottomSpread: 0.2,
+    braceTopSpread: 1.0,
+    braceWidth: 0.16,
+    braceDepth: 0.16,
+  },
+  'x-brace': {
+    braceBottomSpread: 1.0,
+    braceTopSpread: 1.0,
+    braceWidth: 0.14,
+    braceDepth: 0.14,
+  },
+  'k-brace': {
+    braceBottomSpread: 1.0,
+    braceTopSpread: 1.0,
+    braceWidth: 0.14,
+    braceDepth: 0.14,
+  },
+  'single-strut': {
+    braceBottomSpread: 0.6,
+    braceTopSpread: 0.6,
+    braceWidth: 0.12,
+    braceDepth: 0.12,
+  },
+  tripod: {
+    // bottomSpread = X span, topSpread = Z span (tripod's three legs).
+    braceBottomSpread: 1.1,
+    braceTopSpread: 1.1,
+    braceWidth: 0.12,
+    braceDepth: 0.12,
+  },
+  trestle: {
+    braceBottomSpread: 1.2,
+    braceTopSpread: 1.0,
+    braceWidth: 0.16,
+    braceDepth: 0.16,
+  },
+  'portal-frame': {
+    braceBottomSpread: 1.4,
+    braceTopSpread: 1.0,
+    braceWidth: 0.16,
+    braceDepth: 0.16,
+  },
+  'box-frame': {
+    // bottomSpread = X span, topSpread = Z span (rectangular footprint).
+    braceBottomSpread: 1.4,
+    braceTopSpread: 1.0,
+    braceWidth: 0.16,
+    braceDepth: 0.16,
+  },
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
@@ -272,7 +349,15 @@ export default function ColumnPanel() {
                     : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
                 )}
                 key={option.value}
-                onClick={() =>
+                onClick={() => {
+                  // Per-style brace defaults reset the column to that
+                  // style's natural proportions on switch. Spread last
+                  // so the preset's braceWidth / braceDepth win over
+                  // the carried-from-previous-style values.
+                  const stylePreset =
+                    option.value === 'vertical'
+                      ? {}
+                      : SUPPORT_STYLE_DEFAULTS[option.value]
                   handleUpdate({
                     supportStyle: option.value,
                     ...(option.value !== 'vertical'
@@ -284,8 +369,9 @@ export default function ColumnPanel() {
                           capitalStyle: 'none',
                         }
                       : {}),
+                    ...stylePreset,
                   })
-                }
+                }}
                 type="button"
               >
                 <span className="truncate font-medium">{option.label}</span>

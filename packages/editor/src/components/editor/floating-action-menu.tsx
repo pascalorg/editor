@@ -25,8 +25,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { Move } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -73,6 +72,9 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   door: 0.6,
   window: 0.6,
   column: 0.6,
+  // Fence: clears the height-resize arrow (sits at fence.height + 0.45)
+  // plus the chevron's own visual size, so the menu floats just above it.
+  fence: 1.05,
   stair: 0.2,
   'stair-stair': 1.1,
   'stair-landing': 0.9,
@@ -97,17 +99,13 @@ export function FloatingActionMenu() {
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const curvingFence = useEditor((s) => s.curvingFence)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
-  const startEndpointGroupRef = useRef<THREE.Group>(null)
-  const endEndpointGroupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
-  const [altPressed, setAltPressed] = useState(false)
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -139,34 +137,6 @@ export function FloatingActionMenu() {
     })
   })
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Alt') {
-        setAltPressed(true)
-      }
-    }
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Alt') {
-        setAltPressed(false)
-      }
-    }
-
-    const handleBlur = () => {
-      setAltPressed(false)
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-    window.addEventListener('blur', handleBlur)
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
-      window.removeEventListener('blur', handleBlur)
-    }
-  }, [])
-
   useFrame((state) => {
     if (!(selectedId && isValidType && groupRef.current)) return
 
@@ -195,29 +165,6 @@ export function FloatingActionMenu() {
         groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
       }
 
-      if (node?.type === 'fence') {
-        const segment = node as FenceNode
-        const endpointYOffset = 0.35
-        const startWorld = obj.localToWorld(
-          new THREE.Vector3(segment.start[0], 0, segment.start[1]),
-        )
-        const endWorld = obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
-
-        if (startEndpointGroupRef.current) {
-          startEndpointGroupRef.current.position.set(
-            startWorld.x,
-            startWorld.y + endpointYOffset,
-            startWorld.z,
-          )
-        }
-        if (endEndpointGroupRef.current) {
-          endEndpointGroupRef.current.position.set(
-            endWorld.x,
-            endWorld.y + endpointYOffset,
-            endWorld.z,
-          )
-        }
-      }
     }
   })
 
@@ -248,17 +195,6 @@ export function FloatingActionMenu() {
     },
     [node, setMovingNode, setSelection],
   )
-  const handleEndpointMove = useCallback(
-    (endpoint: 'start' | 'end', e: { stopPropagation: () => void }) => {
-      e.stopPropagation()
-      if (!node || node.type !== 'fence') return
-      sfxEmitter.emit('sfx:item-pick')
-      setMovingFenceEndpoint({ fence: node, endpoint })
-      setSelection({ selectedIds: [] })
-    },
-    [node, setMovingFenceEndpoint, setSelection],
-  )
-
   const handleDuplicate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -498,6 +434,7 @@ export function FloatingActionMenu() {
                 node?.type === 'wall' ||
                 node?.type === 'door' ||
                 node?.type === 'window' ||
+                node?.type === 'fence' ||
                 node?.type === 'stair' ||
                 node?.type === 'stair-segment'
                   ? handleMove
@@ -518,54 +455,6 @@ export function FloatingActionMenu() {
           </div>
         </Html>
       </group>
-      {node?.type === 'fence' && (
-        <>
-          <group ref={startEndpointGroupRef}>
-            <Html
-              center
-              style={{ pointerEvents: 'auto', touchAction: 'none' }}
-              zIndexRange={[100, 0]}
-            >
-              <button
-                aria-label="Move fence start"
-                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
-                  altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-                onClick={(e) => handleEndpointMove('start', e)}
-                onPointerDown={(e) => e.stopPropagation()}
-                title="Move fence start (Alt to detach)"
-                type="button"
-              >
-                <Move className="h-4 w-4" />
-              </button>
-            </Html>
-          </group>
-          <group ref={endEndpointGroupRef}>
-            <Html
-              center
-              style={{ pointerEvents: 'auto', touchAction: 'none' }}
-              zIndexRange={[100, 0]}
-            >
-              <button
-                aria-label="Move fence end"
-                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
-                  altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-                onClick={(e) => handleEndpointMove('end', e)}
-                onPointerDown={(e) => e.stopPropagation()}
-                title="Move fence end (Alt to detach)"
-                type="button"
-              >
-                <Move className="h-4 w-4" />
-              </button>
-            </Html>
-          </group>
-        </>
-      )}
     </group>
   )
 }

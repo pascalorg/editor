@@ -13,6 +13,8 @@ const SIDE_HANDLE_OFFSET = 0.27
 const SIDE_HANDLE_MIN_OFFSET = 0.33
 const SIDE_HANDLE_TOP_INSET = 0.08
 const SIDE_HANDLE_MIN_HEIGHT = 0.4
+const HEIGHT_HANDLE_OFFSET = 0.45
+const MIN_FENCE_HEIGHT = 0.3
 
 function fenceMidpointFrame(n: FenceNodeType): {
   midX: number
@@ -60,9 +62,59 @@ function fenceSideMoveHandle(side: 'front' | 'back'): HandleDescriptor<FenceNode
   }
 }
 
+// Height arrow — anchored at the floor (Y=0), grows upward. Sits over
+// the fence midpoint at the top edge with enough clearance to clear the
+// side-move arrows that hug the rail. `rotationY` orients the chevron's
+// broad face along the fence's perpendicular (same direction the front
+// side-move arrow points), so the chevron reads frontally when viewing
+// the fence from either side rather than going edge-on.
+function fenceHeightHandle(): HandleDescriptor<FenceNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_FENCE_HEIGHT,
+    currentValue: (n) => n.height ?? 1.8,
+    apply: (_n, newHeight) => ({ height: newHeight }),
+    placement: {
+      position: (n) => {
+        const { midX, midZ } = fenceMidpointFrame(n)
+        return [midX, (n.height ?? 1.8) + HEIGHT_HANDLE_OFFSET, midZ]
+      },
+      rotationY: (n) => {
+        const { normalX, normalZ } = fenceMidpointFrame(n)
+        return Math.atan2(-normalZ, normalX)
+      },
+    },
+  }
+}
+
+// Corner picker — dashed vertical leader + billboarded hex disc at the
+// endpoint. Tap engages the endpoint-move flow (sister to the wall
+// pickers). nodeHeight controls the leader's vertical reach so the
+// dashes span the full fence height.
+function fenceCornerPicker(endpoint: 'start' | 'end'): HandleDescriptor<FenceNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'corner-picker',
+    cursor: 'move',
+    nodeHeight: (n) => n.height ?? 1.8,
+    onActivate: (node, _scene, editor) => editor.engageEndpointMove(node, endpoint),
+    placement: {
+      position: (n) => {
+        const corner = endpoint === 'start' ? n.start : n.end
+        return [corner[0], 0, corner[1]]
+      },
+    },
+  }
+}
+
 const fenceHandles: HandleDescriptor<FenceNodeType>[] = [
   fenceSideMoveHandle('front'),
   fenceSideMoveHandle('back'),
+  fenceHeightHandle(),
+  fenceCornerPicker('start'),
+  fenceCornerPicker('end'),
 ]
 
 /**

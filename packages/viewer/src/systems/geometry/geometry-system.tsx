@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type GeometryContext,
+  getEffectiveNode,
   nodeRegistry,
   type SurfaceRole,
   sceneRegistry,
@@ -137,10 +138,18 @@ export const GeometrySystem = () => {
       const group = sceneRegistry.nodes.get(id) as Group | undefined
       if (!group) continue // mount hasn't run — keep dirty for next frame
 
+      // Merge any live drag override into the node so resize arrows /
+      // 2D affordances see their in-flight patch on every pointer move
+      // — zustand only learns about the final value on commit. Mirrors
+      // the WallSystem / DoorSystem / WindowSystem hook-up; any kind
+      // that drives its mesh through `def.geometry` (fence, shelf, item)
+      // now smooths drags through this single line.
+      const effectiveNode = getEffectiveNode(node)
+
       const parentId = (node.parentId ?? null) as AnyNodeId | null
       const key: BatchKey = `${node.type}::${parentId ?? ''}`
       const levelData = levelDataByBatch.get(key)
-      const ctx = buildGeometryContext(node, nodes, levelData)
+      const ctx = buildGeometryContext(effectiveNode, nodes, levelData)
 
       // The builder is typed against the kind's specific node — at the
       // generic system level we lose that refinement, so the cast lands
@@ -154,7 +163,7 @@ export const GeometrySystem = () => {
           colorPreset: ColorPreset,
           sceneTheme: string,
         ) => { children: unknown[] }
-      )(node, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
+      )(effectiveNode, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
 
       if (!textures && def.surfaceRole) {
         applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset, sceneTheme)
