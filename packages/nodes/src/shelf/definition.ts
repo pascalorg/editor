@@ -3,6 +3,7 @@ import type {
   NodeDefinition,
   ShelfNode as ShelfNodeType,
 } from '@pascal-app/core'
+import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
 import { buildShelfFloorplan } from './floorplan'
 import { shelfFloorplanMoveTarget } from './floorplan-move'
 import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
@@ -197,6 +198,15 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // transforms during drag for real-time 3D sync and commits via a
   // single tracked `updateNode`.
   floorplanMoveTarget: shelfFloorplanMoveTarget,
+  // 2D drag affordances for the resize chevrons + rotate-arrow emitted
+  // when the shelf is selected. `shelf-resize` handles width / depth
+  // (the payload's `dim` discriminator); `shelf-rotate` is the corner
+  // arc-arrow that drives `rotation[1]`. Body move stays on the
+  // action-menu Move button → `shelfFloorplanMoveTarget` above.
+  floorplanAffordances: {
+    'shelf-resize': shelfResizeAffordance,
+    'shelf-rotate': shelfRotateAffordance,
+  },
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),

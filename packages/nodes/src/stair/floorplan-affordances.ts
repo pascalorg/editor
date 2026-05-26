@@ -213,6 +213,47 @@ export const curvedStairInnerRadiusAffordance: FloorplanAffordance<StairNode> = 
 }
 
 /**
+ * Whole-stair rotation gizmo → stair `rotation`. Mirrors the 3D
+ * `stairRotateHandle` (arc-resize, curved-arrow shape). Angular drag
+ * around the stair's plan-space pivot — atan2 ticks CW visually, the
+ * stored `rotation` field is the schema's Y-axis radians, and the
+ * floorplan plots sectors at `-rotation`, so a positive cursor delta
+ * (CCW around the centre in standard math coords / CW on screen given
+ * inverted Y) should DECREASE `rotation`. Same `- delta` convention the
+ * 3D handle uses; cursor handedness across both views matches.
+ */
+export const stairRotateAffordance: FloorplanAffordance<StairNode> = {
+  start({ node, initialPlanPoint }) {
+    const stairId = node.id as AnyNodeId
+    const initialRotation = node.rotation ?? 0
+    const cx = node.position[0]
+    const cz = node.position[2]
+    const initialAngle = Math.atan2(initialPlanPoint[1] - cz, initialPlanPoint[0] - cx)
+    let lastRotation = initialRotation
+
+    return {
+      affectedIds: [stairId],
+      apply({ planPoint }) {
+        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
+        let delta = currentAngle - initialAngle
+        // Wrap to [-π, π] so a drag crossing ±π doesn't flip sign mid-gesture.
+        while (delta > Math.PI) delta -= 2 * Math.PI
+        while (delta < -Math.PI) delta += 2 * Math.PI
+        const newRotation = initialRotation - delta
+        lastRotation = newRotation
+        useScene.getState().updateNode(stairId, { rotation: newRotation })
+      },
+      canCommit() {
+        return true
+      },
+      commit() {
+        useScene.getState().updateNode(stairId, { rotation: lastRotation })
+      },
+    }
+  },
+}
+
+/**
  * Curved / spiral sweep arrows → stair `sweepAngle` + `rotation`. Anchors
  * the opposite edge world-fixed by nudging `rotation` by half the applied
  * sweep delta — mirror of the 3D `CurvedStairSweepArrow`. Sign math derives

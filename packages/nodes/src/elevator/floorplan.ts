@@ -10,33 +10,26 @@ import {
 } from '@pascal-app/core'
 
 /**
- * Stage C floor-plan emitter for elevator. Renders:
+ * Stage C floor-plan emitter for elevator. Architectural symbol style:
  *
- *  - **Outer shaft footprint** — rotated rectangle (cab + wall thickness).
- *  - **Cab indicator** — inner rectangle showing the cab's position within
- *    the shaft. Highlighted when `runtime.currentLevelId` matches the
- *    active level (i.e. the car is *on this floor*).
- *  - **Door opening indicator** — a short marker on the front face
- *    spanning `doorWidth` so users can see which way the doors open.
- *  - **Selection / target / queued chrome** — selection stroke when
- *    the elevator is selected, accent stroke when the runtime targets
- *    this level (cab is travelling here) or this level is queued.
+ *  - **Outer shaft outline** — outer face of the shaft wall.
+ *  - **Inner shaft outline** — inner face of the shaft wall, offset
+ *    inward by `shaftWallThickness`. The two outlines together read as
+ *    a hollow wall in plan.
+ *  - **Dashed X** — two diagonals across the shaft interior, the
+ *    universal architectural mark for an elevator cab.
+ *  - **Door opening** — two small jamb stubs flanking the opening at
+ *    the front face, with a dashed line spanning the opening (the
+ *    closed door).
+ *  - **Selection / runtime chrome** — selected → palette stroke;
+ *    cab-on-level → green tint on the X; target/queued → sky accent.
  *
- * Reads the elevator's live state via `useLiveNodeOverrides.getState()`
- * (inspector edits) and `useInteractive.getState().elevators[id]`
- * (runtime cab travel). Those reads are non-reactive on their own —
- * `FloorplanRegistryLayer` subscribes to both stores so the layer
- * re-renders when they change, propagating into this builder.
- *
- * Per-level served-level chips (the small floor-label badges on each
- * shaft side) are not emitted yet — they need an HTML-overlay primitive
- * in `FloorplanGeometry` to render properly (SVG `<text>` rotates with
- * the plan, which mangles label legibility). Tracked as follow-up; the
- * legacy `<FloorplanElevatorLayer>` still renders the chips for
- * pre-registry builds while we figure out the right primitive shape.
+ * Reads live overrides (`useLiveNodeOverrides`) and runtime cab state
+ * (`useInteractive.elevators[id]`) non-reactively; the registry layer
+ * subscribes to both stores so this builder re-runs on change.
  */
 
-const STAGE_LEVEL_FILTER_HIDE = true
+const STAGE_LEVEL_FILTER_HIDE = false
 
 export function buildElevatorFloorplan(
   node: ElevatorNode,
@@ -65,9 +58,11 @@ export function buildElevatorFloorplan(
   const cabDepth = Math.max(display.depth, 0.8)
   const shaftWidth = Math.max(display.shaftWidth ?? display.width, cabWidth, 0.8)
   const shaftDepth = Math.max(display.shaftDepth ?? display.depth, cabDepth, 0.8)
-  const doorWidth = Math.min(Math.max(display.doorWidth, 0.45), cabWidth - 0.18, shaftWidth - 0.18)
-  const halfWidth = Math.max(0.1, shaftWidth / 2 + wallThickness)
-  const halfDepth = Math.max(0.1, shaftDepth / 2 + wallThickness)
+  const doorWidth = Math.min(Math.max(display.doorWidth, 0.45), shaftWidth - 0.24)
+  const outerHalfW = Math.max(0.1, shaftWidth / 2 + wallThickness)
+  const outerHalfD = Math.max(0.1, shaftDepth / 2 + wallThickness)
+  const innerHalfW = Math.max(0.05, shaftWidth / 2)
+  const innerHalfD = Math.max(0.05, shaftDepth / 2)
 
   const center = { x: display.position[0], y: display.position[2] }
   const cos = Math.cos(display.rotation)
@@ -78,35 +73,16 @@ export function buildElevatorFloorplan(
     // uses this matrix and not the standard counter-clockwise one.
     return [lx * cos + ly * sin, -lx * sin + ly * cos]
   }
-
-  // Outer shaft footprint corners.
-  const outerCorners: Array<readonly [number, number]> = [
-    [-halfWidth, -halfDepth],
-    [halfWidth, -halfDepth],
-    [halfWidth, halfDepth],
-    [-halfWidth, halfDepth],
-  ]
-  const outerPoints: FloorplanPoint[] = outerCorners.map(([lx, ly]) => {
+  const toPlan = (lx: number, ly: number): FloorplanPoint => {
     const [rx, ry] = rotate(lx, ly)
     return [center.x + rx, center.y + ry]
-  })
-
-  // Cab inner rectangle. The cab sits flush against the front face
-  // (-Z in local coords) so its center is `-shaftDepth/2 + cabDepth/2`
-  // away from shaft center.
-  const cabCenterLocalY = -shaftDepth / 2 + cabDepth / 2
-  const cabHalfW = cabWidth / 2
-  const cabHalfD = cabDepth / 2
-  const cabCorners: Array<readonly [number, number]> = [
-    [-cabHalfW, cabCenterLocalY - cabHalfD],
-    [cabHalfW, cabCenterLocalY - cabHalfD],
-    [cabHalfW, cabCenterLocalY + cabHalfD],
-    [-cabHalfW, cabCenterLocalY + cabHalfD],
+  }
+  const rectPoints = (halfW: number, halfD: number): FloorplanPoint[] => [
+    toPlan(-halfW, -halfD),
+    toPlan(halfW, -halfD),
+    toPlan(halfW, halfD),
+    toPlan(-halfW, halfD),
   ]
-  const cabPoints: FloorplanPoint[] = cabCorners.map(([lx, ly]) => {
-    const [rx, ry] = rotate(lx, ly)
-    return [center.x + rx, center.y + ry]
-  })
 
   // Runtime state — current level / target level / queued.
   const runtime = useInteractive.getState().elevators[node.id]
@@ -122,63 +98,120 @@ export function buildElevatorFloorplan(
   const isHighlighted = view?.highlighted ?? false
   const showSelectedChrome = isSelected || isHighlighted
 
-  // Stroke selection — selected wins, then runtime target / queued
-  // states get the accent palette colour so users can spot "the cab is
-  // coming here" at a glance.
-  const stroke =
-    showSelectedChrome && palette
-      ? palette.selectedStroke
-      : isTargetLevel || isQueuedLevel
-        ? '#0ea5e9'
-        : '#475569'
-  // Shaft fill — orange when selected, light slate otherwise. When the
-  // car is *on this level*, the cab indicator inside gets the highlight
-  // instead of the whole shaft (more legible).
-  const shaftFill = showSelectedChrome ? '#fed7aa' : '#cbd5e1'
-  const cabFill = isCarOnLevel ? '#22c55e' : showSelectedChrome ? '#fef3c7' : '#e2e8f0'
-  const cabStroke = isCarOnLevel ? '#15803d' : '#475569'
+  // Base ink: near-black architectural outline. Selection switches to
+  // the palette accent. Runtime state (car-on-level, target, queued)
+  // is conveyed via the served-level chip column when selected, not
+  // the main outline — so the floor-plan symbol stays neutral and
+  // matches the line weight of the other architectural elements.
+  const baseInk = '#111111'
+  const stroke = showSelectedChrome && palette ? palette.selectedStroke : baseInk
+  const cabMarkInk = stroke
 
   const children: FloorplanGeometry[] = []
 
-  // Outer shaft.
+  // Invisible hit-target — closed polygon over the full outer
+  // footprint so clicks anywhere inside the elevator (not just on the
+  // stroked outlines) select the node. The outer outline below is a
+  // polyline with `fill='none'`, so without this layer the interior
+  // would fall through to whatever sits beneath.
   children.push({
     kind: 'polygon',
-    points: outerPoints,
-    fill: shaftFill,
+    points: rectPoints(outerHalfW, outerHalfD),
+    fill: stroke,
+    fillOpacity: 0,
+    stroke: 'none',
+    strokeWidth: 0,
+    pointerEvents: 'all',
+  })
+
+  // Door geometry. The jambs are little U-shaped notches that hang
+  // BELOW the outer wall's bottom edge on either side of the door
+  // opening; the outer outline traces around them and breaks for the
+  // door in the middle.
+  const doorY = -outerHalfD
+  const effectiveDoorWidth = Math.min(doorWidth, innerHalfW * 2 - 0.16)
+  const jambInnerX = effectiveDoorWidth / 2
+  const jambWidth = Math.max(0.08, Math.min(wallThickness * 2.2, (outerHalfW - jambInnerX) * 0.55))
+  const jambOuterX = Math.min(jambInnerX + jambWidth, outerHalfW - 0.04)
+  const jambStubDepth = Math.max(0.06, wallThickness * 1.05)
+
+  // Outer outline — single polyline that traces clockwise from the
+  // left edge of the door opening, around the left jamb stub, along
+  // the bottom-left segment, up the left side, across the top, down
+  // the right side, along the bottom-right segment, around the right
+  // jamb stub, ending at the right edge of the door opening. The two
+  // endpoints frame the door gap; SVG `polyline` doesn't close.
+  const outerOutline: FloorplanPoint[] = [
+    toPlan(-jambInnerX, doorY),
+    toPlan(-jambInnerX, doorY - jambStubDepth),
+    toPlan(-jambOuterX, doorY - jambStubDepth),
+    toPlan(-jambOuterX, doorY),
+    toPlan(-outerHalfW, doorY),
+    toPlan(-outerHalfW, outerHalfD),
+    toPlan(outerHalfW, outerHalfD),
+    toPlan(outerHalfW, doorY),
+    toPlan(jambOuterX, doorY),
+    toPlan(jambOuterX, doorY - jambStubDepth),
+    toPlan(jambInnerX, doorY - jambStubDepth),
+    toPlan(jambInnerX, doorY),
+  ]
+  children.push({
+    kind: 'polyline',
+    points: outerOutline,
+    fill: 'none',
     stroke,
-    strokeWidth: showSelectedChrome ? 0.04 : 0.03,
-    strokeLinejoin: 'round',
-    opacity: 0.85,
+    strokeWidth: showSelectedChrome ? 0.035 : 0.025,
+    strokeLinejoin: 'miter',
+    strokeLinecap: 'butt',
   })
 
-  // Cab inner rectangle.
+  // Inner outline — closed rectangle, the inner face of the shaft.
+  // The X diagonals terminate at its corners.
   children.push({
     kind: 'polygon',
-    points: cabPoints,
-    fill: cabFill,
-    fillOpacity: isCarOnLevel ? 0.85 : 0.55,
-    stroke: cabStroke,
-    strokeWidth: 0.018,
-    strokeLinejoin: 'round',
-    opacity: 0.92,
+    points: rectPoints(innerHalfW, innerHalfD),
+    fill: 'none',
+    stroke,
+    strokeWidth: 0.02,
+    strokeLinejoin: 'miter',
   })
 
-  // Door opening indicator — a short line on the front edge centered
-  // on the cab. The legacy renders a more complex slide / center-open
-  // hint; this is the minimum useful signal.
-  const doorY = -halfDepth
-  const [doorStartX, doorStartY] = rotate(-doorWidth / 2, doorY)
-  const [doorEndX, doorEndY] = rotate(doorWidth / 2, doorY)
+  // Dashed X across the shaft interior — corner-to-corner of the
+  // inner rectangle, the universal elevator-cab mark.
+  const diagonals: Array<readonly [FloorplanPoint, FloorplanPoint]> = [
+    [toPlan(-innerHalfW, -innerHalfD), toPlan(innerHalfW, innerHalfD)],
+    [toPlan(innerHalfW, -innerHalfD), toPlan(-innerHalfW, innerHalfD)],
+  ]
+  for (const [start, end] of diagonals) {
+    children.push({
+      kind: 'line',
+      x1: start[0],
+      y1: start[1],
+      x2: end[0],
+      y2: end[1],
+      stroke: cabMarkInk,
+      strokeWidth: 0.018,
+      strokeDasharray: '0.08 0.06',
+      strokeLinecap: 'butt',
+      opacity: 0.85,
+    })
+  }
+
+  // Dashed door line — sits on the outer wall line, spanning the gap
+  // between the two jamb stubs.
+  const doorStart = toPlan(-jambInnerX, doorY)
+  const doorEnd = toPlan(jambInnerX, doorY)
   children.push({
     kind: 'line',
-    x1: center.x + doorStartX,
-    y1: center.y + doorStartY,
-    x2: center.x + doorEndX,
-    y2: center.y + doorEndY,
-    stroke: isCarOnLevel ? '#15803d' : '#0f172a',
-    strokeWidth: 0.05,
-    strokeLinecap: 'round',
-    opacity: 0.92,
+    x1: doorStart[0],
+    y1: doorStart[1],
+    x2: doorEnd[0],
+    y2: doorEnd[1],
+    stroke: cabMarkInk,
+    strokeWidth: 0.02,
+    strokeDasharray: '0.08 0.06',
+    strokeLinecap: 'butt',
+    opacity: 0.9,
   })
 
   // Served-level chips — vertical column of marker circles + level
@@ -194,7 +227,7 @@ export function buildElevatorFloorplan(
       const serviceOnlyLevelIds = new Set(display.serviceOnlyLevelIds ?? [])
       const rangeStep = 0.18
       const rangeHeight = Math.max(0, (serviceLevelIds.length - 1) * rangeStep)
-      const [rangeOffsetX, rangeOffsetY] = rotate(halfWidth + 0.38, 0)
+      const [rangeOffsetX, rangeOffsetY] = rotate(outerHalfW + 0.38, 0)
       const rangeX = center.x + rangeOffsetX
       const rangeBottomY = center.y + rangeOffsetY + rangeHeight / 2
       const rangeTopY = center.y + rangeOffsetY - rangeHeight / 2
@@ -265,10 +298,58 @@ export function buildElevatorFloorplan(
     }
   }
 
+  // Selection chrome — orange move-handle dot at the centre, four
+  // perpendicular side resize-arrows ringing the outer shaft, and a
+  // rotate-arrow at the front-right corner. Side arrows drive `width`
+  // (X-axis) and `depth` (Z-axis) through `elevatorResizeAffordance`
+  // with `anchor: 'center'` — sister of the 3D `linear-resize` handles
+  // in `definition.ts`. Body move is reached via the centroid dot or
+  // the floating action menu's Move button.
   if (isSelected) {
     children.push({
       kind: 'move-handle',
       point: [display.position[0], display.position[2]],
+    })
+
+    const sideArrowOffset = 0.12
+    const rotateCornerOffset = 0.22
+    const cx = display.position[0]
+    const cz = display.position[2]
+    const sides: Array<{
+      local: [number, number]
+      localAngle: number
+      axis: 'x' | 'z'
+      side: 1 | -1
+    }> = [
+      { local: [outerHalfW + sideArrowOffset, 0], localAngle: 0, axis: 'x', side: 1 },
+      { local: [-(outerHalfW + sideArrowOffset), 0], localAngle: Math.PI, axis: 'x', side: -1 },
+      { local: [0, outerHalfD + sideArrowOffset], localAngle: Math.PI / 2, axis: 'z', side: 1 },
+      { local: [0, -(outerHalfD + sideArrowOffset)], localAngle: -Math.PI / 2, axis: 'z', side: -1 },
+    ]
+    for (const side of sides) {
+      const [ox, oz] = rotate(side.local[0], side.local[1])
+      const [tx, tz] = rotate(Math.cos(side.localAngle), Math.sin(side.localAngle))
+      children.push({
+        kind: 'move-arrow',
+        point: [cx + ox, cz + oz],
+        angle: Math.atan2(tz, tx),
+        affordance: 'elevator-resize',
+        payload: { axis: side.axis, side: side.side },
+      })
+    }
+
+    // Rotate-arrow at the +X / +Z corner. `localAngle = π/4` puts the
+    // curved arrow's bow at the diagonal corner so it reads as a
+    // rotation gizmo around the elevator centre.
+    const cornerLocalX = outerHalfW + rotateCornerOffset
+    const cornerLocalZ = outerHalfD + rotateCornerOffset
+    const [cornerX, cornerZ] = rotate(cornerLocalX, cornerLocalZ)
+    const [radialX, radialZ] = rotate(1, 1)
+    children.push({
+      kind: 'rotate-arrow',
+      point: [cx + cornerX, cz + cornerZ],
+      angle: Math.atan2(radialZ, radialX),
+      affordance: 'elevator-rotate',
     })
   }
 

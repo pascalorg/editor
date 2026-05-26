@@ -5,6 +5,7 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import { buildColumnFloorplan } from './floorplan'
+import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
 
@@ -338,6 +339,19 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     move: () => import('./move-tool'),
   },
   floorplan: buildColumnFloorplan,
+  // 2D drag affordances — `column-resize` handles every dimension arrow
+  // the floor-plan builder emits per cross-section / support style (the
+  // payload's `dim` field discriminates radius / uniform / width / depth
+  // / brace-width / brace-depth / spreads). `column-rotate` powers the
+  // corner rotate-arrow. Body move continues to flow through the
+  // orange move-handle dot via the registry overlay's generic
+  // free-translate path — columns don't need a kind-specific
+  // `floorplanMoveTarget` since they have no linked-cascade
+  // requirements like wall.
+  floorplanAffordances: {
+    'column-resize': columnResizeAffordance,
+    'column-rotate': columnRotateAffordance,
+  },
 
   presentation: {
     label: 'Column',

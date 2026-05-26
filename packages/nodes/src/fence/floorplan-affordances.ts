@@ -4,10 +4,20 @@ import {
   type FenceNode,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  getMaxWallCurveOffset,
+  getWallChordFrame,
+  normalizeWallCurveOffset,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { type FencePlanPoint, isWallLongEnough, snapFenceDraftPoint } from '@pascal-app/editor'
+import {
+  type FencePlanPoint,
+  getWallGridStep,
+  isWallLongEnough,
+  snapFenceDraftPoint,
+  snapScalarToGrid,
+} from '@pascal-app/editor'
 
 /**
  * Floor-plan 2D drag affordances for fence — sister to the 3D
@@ -68,6 +78,57 @@ function collectLinkedFences(
     })
   }
   return out
+}
+
+/**
+ * Fence curve sagitta drag — 1:1 mirror of `wallCurveAffordance`. Drag
+ * projects the pointer onto the chord normal to compute `curveOffset`,
+ * snaps to grid (Shift bypasses), clamps to `getMaxWallCurveOffset`,
+ * normalizes via `normalizeWallCurveOffset`. Same single-undo dance — the
+ * dispatcher handles snapshot / pause / resume around `apply`. Lives in
+ * the same file as the endpoint affordance to keep the two fence
+ * floor-plan drags side-by-side (both publish to `useLiveNodeOverrides`,
+ * both committed on pointer-up).
+ */
+export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
+  start({ node }): FloorplanAffordanceSession {
+    const chord = getWallChordFrame(node)
+    const maxOffset = getMaxWallCurveOffset(node)
+    const fenceId = node.id as AnyNodeId
+    let lastCurveOffset = node.curveOffset ?? 0
+
+    return {
+      affectedIds: [node.id],
+      apply({ planPoint, modifiers }) {
+        const snapStep = getWallGridStep()
+        const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
+        const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
+
+        const offsetFromMidpoint = -(
+          (x - chord.midpoint.x) * chord.normal.x +
+          (y - chord.midpoint.y) * chord.normal.y
+        )
+        const snappedOffset = modifiers.shiftKey
+          ? offsetFromMidpoint
+          : snapScalarToGrid(offsetFromMidpoint, snapStep)
+        const nextCurveOffset = normalizeWallCurveOffset(
+          node,
+          Math.max(-maxOffset, Math.min(maxOffset, snappedOffset)),
+        )
+        lastCurveOffset = nextCurveOffset
+
+        useLiveNodeOverrides.getState().set(fenceId, { curveOffset: nextCurveOffset })
+        useScene.getState().markDirty(fenceId)
+      },
+      canCommit() {
+        return true
+      },
+      commit() {
+        useScene.getState().updateNodes([{ id: fenceId, data: { curveOffset: lastCurveOffset } }])
+        useLiveNodeOverrides.getState().clear(fenceId)
+      },
+    }
+  },
 }
 
 export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {

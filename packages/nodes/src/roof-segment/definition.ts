@@ -6,6 +6,11 @@ import {
   type RoofSegmentNode as RoofSegmentNodeType,
   RoofSegmentNode as RoofSegmentNodeSchema,
 } from '@pascal-app/core'
+import {
+  roofSegmentMoveTarget,
+  roofSegmentResizeAffordance,
+  roofSegmentRotateAffordance,
+} from './floorplan-affordances'
 import { buildRoofSegmentFloorplan } from './floorplan'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
@@ -195,7 +200,7 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    duplicable: false,
+    duplicable: true,
     deletable: true,
   },
 
@@ -207,6 +212,17 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
     module: () => import('./renderer'),
   },
   floorplan: buildRoofSegmentFloorplan,
+  // Body-move target. The generic Path 2 fallback writes plan coords
+  // directly to `position`, which is wrong here because the segment's
+  // position is roof-local. `roofSegmentMoveTarget` inverts the parent
+  // roof's transform so the segment lands at the world-plan cursor.
+  floorplanMoveTarget: roofSegmentMoveTarget,
+  // 2D drag affordances for the side resize arrows + corner rotate
+  // arrow emitted by `buildRoofSegmentFloorplan`.
+  floorplanAffordances: {
+    'roof-segment-resize': roofSegmentResizeAffordance,
+    'roof-segment-rotate': roofSegmentRotateAffordance,
+  },
 
   presentation: {
     label: 'Roof Segment',

@@ -5,6 +5,12 @@ import type {
   StairNode,
   StairSegmentNode,
 } from '@pascal-app/core'
+
+// Offset from the stair's footprint edge to the rotation chevron's
+// origin. Same magnitude as `STAIR_ROTATE_CORNER_OFFSET` in
+// `definition.ts` so the 2D handle visually lines up with where the 3D
+// curved-arrow gizmo would sit at the matching world point.
+const STAIR_ROTATE_PLAN_OFFSET = 0.4
 import {
   buildFloorplanStairEntry,
   buildSvgAnnularSectorPath,
@@ -172,7 +178,19 @@ export function buildStairFloorplan(
     const sectorStartAngle = -stair.rotation - normalizedSweepAngle / 2
     const sectorEndAngle = sectorStartAngle + normalizedSweepAngle
     const spiralLandingSweep = getFloorplanSpiralLandingSweep(stair, normalizedSweepAngle)
-    const visualSectorEndAngle = sectorEndAngle + spiralLandingSweep
+    // SVG `A` (arc) draws a single sub-360° segment. Once the base sweep
+    // is near a full turn and we add up to 0.75π of integrated landing
+    // on top, the total `visualSectorEnd - sectorStart` overflows 2π and
+    // the path becomes malformed (the whole stair chrome breaks). Cap
+    // the COMBINED visual sweep to just under a full revolution — past
+    // that, the landing visually overlaps the start of the arc, which
+    // is exactly the multi-turn "stack on top of each other" behaviour
+    // we want for spirals with > 360° rotation.
+    const rawVisualSweep = normalizedSweepAngle + spiralLandingSweep
+    const sweepCap = Math.PI * 2 - 0.001
+    const visualSweep =
+      Math.sign(rawVisualSweep || 1) * Math.min(Math.abs(rawVisualSweep), sweepCap)
+    const visualSectorEndAngle = sectorStartAngle + visualSweep
     const stairCenter = { x: stair.position[0], y: stair.position[2] }
     const innerRadius = Math.max(
       stairType === 'spiral' ? 0.05 : 0.2,
@@ -394,6 +412,56 @@ export function buildStairFloorplan(
         opacity: showSelectedChrome ? 0.92 : 0.72,
       })
     }
+  }
+
+  // Whole-stair rotation handle — sister to the 3D `stairRotateHandle`
+  // (arc-resize, curved-arrow). 2D doesn't have a dedicated curved-arrow
+  // primitive, so we emit a `move-arrow` with the `'stair-rotate'`
+  // affordance: the chevron sits at the stair's outer corner and a drag
+  // around the stair centre rotates the whole node. Placement mirrors
+  // the 3D handle:
+  //   - straight: at the +X / -Z corner of the run start
+  //   - curved / spiral: outer rim at the sweep-start side
+  // Position is computed in stair-local coords then rotated into plan
+  // coords by `R(-θ)` — matches the convention the curved sector emitter
+  // already uses (`sectorStartAngle = -stair.rotation - sweep/2`).
+  if (isSelected && !view?.moving) {
+    const cos = Math.cos(stair.rotation)
+    const sin = Math.sin(stair.rotation)
+    const cx = stair.position[0]
+    const cz = stair.position[2]
+    let localX: number
+    let localZ: number
+    if (stairType === 'straight') {
+      const stairWidth = Math.max(stair.width ?? 1, 0.4)
+      localX = stairWidth / 2 + STAIR_ROTATE_PLAN_OFFSET
+      localZ = -STAIR_ROTATE_PLAN_OFFSET
+    } else {
+      const isSpiral = stairType === 'spiral'
+      const innerR = Math.max(
+        isSpiral ? 0.05 : 0.2,
+        stair.innerRadius ?? (isSpiral ? 0.2 : 0.9),
+      )
+      const outerR = innerR + (stair.width ?? 1)
+      const sweep = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
+      const radius = outerR + STAIR_ROTATE_PLAN_OFFSET
+      const localAngle = -sweep / 2
+      localX = radius * Math.cos(localAngle)
+      localZ = radius * Math.sin(localAngle)
+    }
+    const planX = cx + localX * cos + localZ * sin
+    const planY = cz - localX * sin + localZ * cos
+    // The `rotate-arrow` icon is designed in a local frame where +X is
+    // the radial-outward direction from the pivot. `angle` selects that
+    // direction in plan coords; the arrowheads then read as tangential
+    // motion around the stair centre.
+    const radialAngle = Math.atan2(planY - cz, planX - cx)
+    children.push({
+      kind: 'rotate-arrow',
+      point: [planX, planY],
+      angle: radialAngle,
+      affordance: 'stair-rotate',
+    })
   }
 
   // Move handle — orange dot at the stair root position. Same UX as

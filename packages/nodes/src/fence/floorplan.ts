@@ -3,6 +3,7 @@ import {
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallMidpointHandlePoint,
   isCurvedWall,
   sampleWallCenterline,
 } from '@pascal-app/core'
@@ -339,7 +340,10 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
     cursor: 'pointer',
   })
 
-  // 6. Endpoint handles + length label when selected.
+  // 6. Endpoint handles + side move-arrows + curve handle + length when
+  //    selected. Mirrors the wall builder so fences gain the same set of
+  //    in-plan affordances (drag endpoints, drag body via either side
+  //    arrow, drag the midpoint sagitta to curve).
   if (isSelected) {
     children.push({
       kind: 'endpoint-handle',
@@ -354,6 +358,50 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
       state: 'idle',
       affordance: 'move-endpoint',
       payload: { fenceId: node.id, endpoint: 'end' as const },
+    })
+
+    // Two perpendicular `move-arrow` chevrons at the fence midpoint.
+    // No `affordance` → the registry layer routes pointer-down through
+    // `setMovingNode`, which the `FloorplanRegistryMoveOverlay` picks
+    // up and runs through `def.floorplanMoveTarget` (see
+    // `fence/floorplan-move.ts`). Sized in plan-units like the wall
+    // counterpart so they shrink / grow with zoom.
+    {
+      const dx = node.end[0] - node.start[0]
+      const dz = node.end[1] - node.start[1]
+      const lineLength = Math.hypot(dx, dz)
+      if (lineLength > 1e-6) {
+        const frame = isCurvedWall(node) ? getWallCurveFrameAt(node, 0.5) : null
+        const midX = frame ? frame.point.x : (node.start[0] + node.end[0]) / 2
+        const midZ = frame ? frame.point.y : (node.start[1] + node.end[1]) / 2
+        const nx = frame ? frame.normal.x : -dz / lineLength
+        const nz = frame ? frame.normal.y : dx / lineLength
+        const offset = (node.thickness ?? 0.08) / 2 + 0.05
+        children.push({
+          kind: 'move-arrow',
+          point: [midX + nx * offset, midZ + nz * offset],
+          angle: Math.atan2(nz, nx),
+        })
+        children.push({
+          kind: 'move-arrow',
+          point: [midX - nx * offset, midZ - nz * offset],
+          angle: Math.atan2(-nz, -nx),
+        })
+      }
+    }
+
+    // Curve sagitta handle — teal dot at the visual midpoint that drives
+    // `curveOffset`. Routes through `fenceCurveAffordance`. Fences host
+    // no children, so there's no equivalent of wall's curve-blocking
+    // check to gate this.
+    const curveHandle = getWallMidpointHandlePoint(node)
+    children.push({
+      kind: 'endpoint-handle',
+      point: [curveHandle.x, curveHandle.y],
+      state: 'idle',
+      variant: 'curve',
+      affordance: 'curve',
+      payload: { fenceId: node.id },
     })
 
     const length = getWallCurveLength(node)

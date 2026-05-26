@@ -22,6 +22,10 @@ const CURVED_SWEEP_LATERAL_OFFSET = 0.24
 const CURVED_OUTER_RING_OFFSET = 0.2
 const CURVED_INNER_RING_OFFSET = 0.2
 const CURVED_INNER_RING_MIN = 0.05
+// Whole-stair rotation gizmo — curved two-headed arrow at a corner of
+// the footprint. Same pattern as elevator / column / shelf / roof-segment.
+const STAIR_ROTATE_CORNER_OFFSET = 0.4
+const STAIR_ROTATE_RING_OFFSET = 0.08
 
 type CurvedStairGeom = {
   isSpiral: boolean
@@ -200,18 +204,89 @@ function curvedSweepHandle(end: 'start' | 'end'): HandleDescriptor<StairNodeType
   }
 }
 
-function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
-  // Straight stairs have no parent-level arrows — the segment children
-  // each render their own (width / length / height). Curved + spiral
-  // stairs use 5 arrows directly on the parent (no segments).
-  if (!isCurvedOrSpiral(node)) return []
+// Whole-stair rotation gizmo. Lives on the stair parent so it rotates
+// straight + curved + spiral kinds the same way. For straight stairs the
+// gizmo anchors just outside the +X corner of the run start (the stair's
+// root sits at the bottom of the first segment, with the chain extending
+// along +Z). For curved / spiral the gizmo sits at the outer rim, at the
+// sweep-start side, where there's no other handle in the way. apply()
+// negates the cursor delta so dragging CCW (atan2 ticks +) rotates the
+// stair CCW around Y — same convention as elevator / column.
+function stairRotateGizmoPosition(n: StairNodeType): [number, number, number] {
+  if (isCurvedOrSpiral(n)) {
+    const g = readCurvedStairGeometry(n)
+    const radius = g.outerRadius + STAIR_ROTATE_CORNER_OFFSET
+    // Sweep-start side in node-local frame. Sector is centred on
+    // local +X (sweep bisector = 0), so start = -sweep/2.
+    const angle = -g.sweepAngle / 2
+    return [radius * Math.cos(angle), g.totalRise / 2, radius * Math.sin(angle)]
+  }
+  const width = Math.max(n.width ?? 1, MIN_CURVED_WIDTH)
+  const yMid = Math.max(n.totalRise ?? 2.5, 0.1) / 2
   return [
-    curvedRiseHandle(),
-    curvedWidthHandle(),
-    curvedInnerRadiusHandle(),
-    curvedSweepHandle('start'),
-    curvedSweepHandle('end'),
+    width / 2 + STAIR_ROTATE_CORNER_OFFSET,
+    yMid,
+    -STAIR_ROTATE_CORNER_OFFSET,
   ]
+}
+
+function stairRotateHandle(): HandleDescriptor<StairNodeType> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta) => ({ rotation: (initial.rotation ?? 0) - delta }),
+    placement: {
+      position: stairRotateGizmoPosition,
+      // The curved-arrow geometry's bow points along its local +X. Rotate
+      // the icon so the bow points radially outward — away from the
+      // stair's center — so the curve hugs the body's outline at the
+      // gizmo's corner instead of cutting into it. rotateY(−α) maps local
+      // +X to the outward radial direction (same handedness rule as
+      // elevator / column, but here the gizmo lands in different
+      // quadrants per stair kind so the tilt is position-derived rather
+      // than a fixed −π/4).
+      rotationY: (n) => {
+        const [px, , pz] = stairRotateGizmoPosition(n)
+        return -Math.atan2(pz, px)
+      },
+    },
+    decoration: {
+      kind: 'ring',
+      radius: (n) => {
+        if (isCurvedOrSpiral(n)) {
+          const g = readCurvedStairGeometry(n)
+          return g.outerRadius + STAIR_ROTATE_CORNER_OFFSET + STAIR_ROTATE_RING_OFFSET
+        }
+        const width = Math.max(n.width ?? 1, MIN_CURVED_WIDTH)
+        return (
+          Math.hypot(width / 2 + STAIR_ROTATE_CORNER_OFFSET, STAIR_ROTATE_CORNER_OFFSET) +
+          STAIR_ROTATE_RING_OFFSET
+        )
+      },
+      y: (n) => Math.max(n.totalRise ?? 2.5, 0.1) / 2,
+    },
+  }
+}
+
+function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
+  // Straight stairs have no parent-level shape arrows — the segment
+  // children each render their own (width / length / height). Curved +
+  // spiral stairs use 5 arrows directly on the parent (no segments).
+  // The whole-stair rotation gizmo is universal: every stair kind
+  // exposes the same curved-arrow rotate handle.
+  const handles: HandleDescriptor<StairNodeType>[] = []
+  if (isCurvedOrSpiral(node)) {
+    handles.push(
+      curvedRiseHandle(),
+      curvedWidthHandle(),
+      curvedInnerRadiusHandle(),
+      curvedSweepHandle('start'),
+      curvedSweepHandle('end'),
+    )
+  }
+  handles.push(stairRotateHandle())
+  return handles
 }
 import {
   curvedStairInnerRadiusAffordance,
@@ -219,6 +294,7 @@ import {
   curvedStairWidthAffordance,
   segmentLengthAffordance,
   segmentWidthAffordance,
+  stairRotateAffordance,
 } from './floorplan-affordances'
 import { buildStairFloorplan } from './floorplan'
 import { stairFloorplanMoveTarget } from './floorplan-move'
@@ -285,6 +361,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     'curved-width': curvedStairWidthAffordance,
     'curved-inner-radius': curvedStairInnerRadiusAffordance,
     'curved-sweep': curvedStairSweepAffordance,
+    'stair-rotate': stairRotateAffordance,
   },
 
   presentation: {

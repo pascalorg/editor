@@ -4,7 +4,8 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import { buildFenceFloorplan } from './floorplan'
-import { fenceMoveEndpointAffordance } from './floorplan-affordances'
+import { fenceCurveAffordance, fenceMoveEndpointAffordance } from './floorplan-affordances'
+import { fenceFloorplanMoveTarget } from './floorplan-move'
 import { buildFenceGeometry } from './geometry'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
@@ -189,13 +190,23 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   // Legacy `floorplanFenceEntries` short-circuits to [] when fence is
   // registered (see floorplan-panel.tsx).
   floorplan: buildFenceFloorplan,
-  // 2D drag affordance — sister to `actions/move-endpoint.ts`. The 3D
-  // DragAction drives R3F grid events through `createDragSession`; this
-  // one drives SVG pointer events through the floor-plan registry
-  // dispatcher's snapshot + single-undo dance. Same legacy semantics.
+  // 2D drag affordances — sister to `actions/move-endpoint.ts`. The 3D
+  // DragAction drives R3F grid events through `createDragSession`; these
+  // drive SVG pointer events through the floor-plan registry
+  // dispatcher's snapshot + single-undo dance. `move-endpoint` keeps the
+  // legacy fence endpoint semantics; `curve` mirrors the wall sagitta
+  // drag (publishes `curveOffset` overrides per tick, commits on
+  // pointer-up).
   floorplanAffordances: {
     'move-endpoint': fenceMoveEndpointAffordance,
+    curve: fenceCurveAffordance,
   },
+  // Body move on the fence is driven by the two `move-arrow` chevrons
+  // the floor-plan builder emits at the midpoint. Pointer-down enters
+  // movingNode mode; the registry overlay routes through this target
+  // for the live preview + commit. Translates the dragged fence and
+  // cascades the shared endpoints of any linked fences, ALT detaches.
+  floorplanMoveTarget: fenceFloorplanMoveTarget,
   // Stage D — all four fence drag-affordances live in this folder.
   // curve / move-endpoint / move are 1:1 ports of the legacy tools
   // (same snap pipeline, same history dance, same cursor render),

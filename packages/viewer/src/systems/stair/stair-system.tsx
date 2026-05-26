@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveNode,
   resolveLevelId,
   type StairNode,
   type StairSegmentNode,
@@ -84,13 +85,21 @@ export const StairSystem = () => {
 
     // --- Pass 1b: Sync chained transforms to individual segment meshes (edit mode) ---
     for (const stairId of parentsNeedingSegmentSync) {
-      const stairNode = nodes[stairId]
-      if (!stairNode || stairNode.type !== 'stair') continue
+      const baseStairNode = nodes[stairId]
+      if (!baseStairNode || baseStairNode.type !== 'stair') continue
+      // Merge any in-flight drag override (e.g. parent-stair rotate handle)
+      // so slab-elevation spatial queries match where the segments are
+      // actually being rendered. Without this, dragging the rotate gizmo
+      // looks up slabs at the pre-drag world XZ — if rotation carries a
+      // segment off the original slab footprint, getStairSlabElevation
+      // returns 0 and `group.position.y` collapses, dropping the flight
+      // or landing below the floor and out of view mid-drag.
+      const stairNode = getEffectiveNode(baseStairNode as StairNode)
       const group = sceneRegistry.nodes.get(stairId) as THREE.Group | undefined
       if (group) {
-        syncStairGroupElevation(stairNode as StairNode, group, nodes)
+        syncStairGroupElevation(stairNode, group, nodes)
       }
-      syncSegmentMeshTransforms(stairNode as StairNode, nodes)
+      syncSegmentMeshTransforms(stairNode, nodes)
     }
 
     // --- Pass 2: Process pending merged-stair updates (throttled) ---

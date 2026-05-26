@@ -457,7 +457,8 @@ export function FloatingActionMenu() {
                 node?.type === 'slab' ||
                 node?.type === 'ceiling' ||
                 node?.type === 'shelf' ||
-                node?.type === 'roof-segment'
+                node?.type === 'roof-segment' ||
+                node?.type === 'roof'
                   ? handleMove
                   : undefined
               }

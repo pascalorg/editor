@@ -332,6 +332,74 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     visit(levelId as AnyNodeId)
 
+    // Elevators live under the building (siblings of levels), not under
+    // the level — so the `visit(levelId)` DFS above never reaches them.
+    // Emit a separate pass that walks every elevator in the scene whose
+    // building contains the active level. The elevator's real
+    // `parentId` stays pointing to the building (so
+    // `resolveElevatorServiceLevelIds`, which looks up
+    // `elevator.parentId` to find the building, keeps working), but we
+    // synthesise a `GeometryContext` whose `parent` is the active level
+    // — that's what `buildElevatorFloorplan` reads via `ctx.parent?.id`
+    // to decide whether this floor is within the elevator's service
+    // range.
+    const activeLevelNode = nodes[levelId as AnyNodeId] as AnyNode | undefined
+    // The level's `parentId` is sometimes null in scenes that came from
+    // older serialisations even though the building's `children` array
+    // still contains the level id. Trust `parentId` first, then fall
+    // back to scanning buildings whose `children` include this level.
+    let activeBuildingId: AnyNodeId | null = (
+      activeLevelNode as unknown as { parentId?: AnyNodeId | null } | undefined
+    )?.parentId ?? null
+    if (!activeBuildingId && activeLevelNode) {
+      for (const [bid, candidate] of Object.entries(nodes)) {
+        if (candidate?.type !== 'building') continue
+        const cChildren = (candidate as unknown as { children?: AnyNodeId[] }).children
+        if (Array.isArray(cChildren) && cChildren.includes(levelId as AnyNodeId)) {
+          activeBuildingId = bid as AnyNodeId
+          break
+        }
+      }
+    }
+    if (activeLevelNode && activeBuildingId) {
+      for (const [id, node] of Object.entries(nodes)) {
+        if (!node || node.type !== 'elevator') continue
+        const elevatorParentId = (node as unknown as { parentId?: AnyNodeId | null }).parentId
+        if (elevatorParentId !== activeBuildingId) continue
+        const cid = id as AnyNodeId
+        const def = nodeRegistry.get(node.type)
+        const builder = def?.floorplan
+        if (!builder) continue
+        const selected = selectedIdSet.has(cid)
+        const highlighted = highlightedIdSet.has(cid)
+        const hovered = hoveredId === cid
+        const moving = movingNode?.id === cid
+        const ctx: GeometryContext = {
+          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
+            nodes[rid] as N | undefined,
+          children: [],
+          siblings: [],
+          parent: activeLevelNode,
+          viewState: renderCtx?.palette
+            ? {
+                selected,
+                highlighted,
+                hovered,
+                moving,
+                palette: renderCtx.palette,
+              }
+            : undefined,
+        }
+        const geometry = (
+          builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null
+        )(node, ctx)
+        if (geometry) {
+          const { base, overlay } = splitFloorplanOverlay(geometry)
+          out.push({ id: cid, node, base, overlay, selected, highlighted })
+        }
+      }
+    }
+
     // Stable z-order sort. SVG renders in document order — later siblings
     // paint on top of earlier ones — so anything that should sit *under*
     // other floor-plan geometry has to come first in the entries array.
@@ -351,6 +419,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     hoveredId,
     movingNode?.id,
     renderCtx?.palette,
+    interactiveElevators,
   ])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
@@ -901,6 +970,93 @@ function InteractiveGeometry({
           </g>
         )
       }
+      case 'rotate-arrow': {
+        if (!palette) return <></>
+        // 2D counterpart of the 3D `arc-resize` rotate gizmo. Local
+        // frame: +X is the radial-outward direction (away from the
+        // pivot); the arc bows in that direction with arrowheads on
+        // each end pointing tangentially in opposite directions —
+        // "rotate either way."
+        const handleId = makeHandleId(nodeId, g.payload)
+        const isHovered = hoveredHandleId === handleId
+        // Arc geometry (all values precomputed for a 72° arc of
+        // radius 0.13 — comparable footprint to `move-arrow`).
+        const R = 0.13
+        const halfSpan = Math.PI / 5
+        const cosH = Math.cos(halfSpan)
+        const sinH = Math.sin(halfSpan)
+        const endY = R * sinH
+        const headLen = 0.06
+        const headHalfBase = 0.045
+        // End-1 (top) arrowhead — tip along CCW tangent.
+        const t1x = -sinH * headLen
+        const t1y = endY + cosH * headLen
+        const b1ax = cosH * headHalfBase
+        const b1ay = endY + sinH * headHalfBase
+        const b1bx = -cosH * headHalfBase
+        const b1by = endY - sinH * headHalfBase
+        // End-2 (bottom) arrowhead — mirror of End-1.
+        const t2x = -sinH * headLen
+        const t2y = -endY - cosH * headLen
+        const b2ax = cosH * headHalfBase
+        const b2ay = -endY - sinH * headHalfBase
+        const b2bx = -cosH * headHalfBase
+        const b2by = -endY + sinH * headHalfBase
+        const arcPath = `M 0 ${-endY} A ${R} ${R} 0 0 1 0 ${endY}`
+        const head1 = `M ${t1x} ${t1y} L ${b1ax} ${b1ay} L ${b1bx} ${b1by} Z`
+        const head2 = `M ${t2x} ${t2y} L ${b2ax} ${b2ay} L ${b2bx} ${b2by} Z`
+        const fill = isHovered ? '#a5b4fc' : '#8381ed'
+        const strokeWidthPx = isHovered ? 2.4 : 1.8
+        const angleDeg = (g.angle * 180) / Math.PI
+        const affordance = g.affordance
+        const payload = g.payload
+        return (
+          <g
+            key={keyHint}
+            onClick={(e) => e.stopPropagation()}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
+          >
+            <path
+              d={arcPath}
+              fill="none"
+              pointerEvents="none"
+              stroke={fill}
+              strokeLinecap="round"
+              strokeWidth={strokeWidthPx}
+              vectorEffect="non-scaling-stroke"
+            />
+            <path d={head1} fill={fill} pointerEvents="none" />
+            <path d={head2} fill={fill} pointerEvents="none" />
+            {/* Hit target — fat invisible stroke along the arc + filled
+                triangles at the heads so the user can grab anywhere on
+                the visible icon. */}
+            <path
+              d={arcPath}
+              fill="none"
+              onPointerDown={(e) =>
+                onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGPathElement>)
+              }
+              onPointerEnter={() => onHandleHoverChange(handleId)}
+              onPointerLeave={() => onHandleHoverChange(null)}
+              pointerEvents="stroke"
+              stroke="transparent"
+              strokeWidth={0.06}
+              style={{ cursor: 'grab' }}
+            />
+            <path
+              d={`${head1} ${head2}`}
+              fill="transparent"
+              onPointerDown={(e) =>
+                onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGPathElement>)
+              }
+              onPointerEnter={() => onHandleHoverChange(handleId)}
+              onPointerLeave={() => onHandleHoverChange(null)}
+              pointerEvents="fill"
+              style={{ cursor: 'grab' }}
+            />
+          </g>
+        )
+      }
       case 'move-arrow': {
         if (!palette) return <></>
         // Affordance-routed arrows (door width-resize) get a per-payload
@@ -1433,6 +1589,7 @@ const OVERLAY_KINDS = new Set<FloorplanGeometry['kind']>([
   'edge-handle',
   'move-handle',
   'move-arrow',
+  'rotate-arrow',
   'dimension',
   'dimension-label',
 ])

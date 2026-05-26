@@ -28,9 +28,6 @@ class NodeRegistryImpl implements NodeRegistry {
 
   // Internal — exposed via registerNode below.
   _register(def: AnyNodeDefinition): void {
-    if (this.defs.has(def.kind)) {
-      throw new Error(`[registry] duplicate node kind: "${def.kind}" already registered`)
-    }
     if (typeof def.kind !== 'string' || def.kind.length === 0) {
       throw new Error('[registry] NodeDefinition.kind must be a non-empty string')
     }
@@ -38,6 +35,18 @@ class NodeRegistryImpl implements NodeRegistry {
       throw new Error(
         `[registry] NodeDefinition.schemaVersion must be a positive integer (kind: "${def.kind}")`,
       )
+    }
+    // Replace on duplicate rather than throw. The previous behaviour
+    // (throw on `defs.has(kind)`) broke HMR for `def.ts` edits: every
+    // save would either re-execute the module and crash on the second
+    // `registerNode(...)` call, or skip the re-execute entirely and
+    // leave the running app with the original descriptor. Editing
+    // `handles` / `placement.rotationY` / etc. looked like a no-op
+    // because the old object was still pinned. In production we
+    // register each kind exactly once, so silently overwriting only
+    // matters in dev — where it's the desired behaviour.
+    if (this.defs.has(def.kind)) {
+      console.warn(`[registry] re-registering node kind "${def.kind}" (HMR)`)
     }
     this.defs.set(def.kind, def)
   }

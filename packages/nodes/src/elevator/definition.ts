@@ -10,6 +10,10 @@ import {
   type NodeDefinition,
   resolveElevatorLevels,
 } from '@pascal-app/core'
+import {
+  elevatorResizeAffordance,
+  elevatorRotateAffordance,
+} from './floorplan-affordances'
 import { buildElevatorFloorplan } from './floorplan'
 import { elevatorParametrics } from './parametrics'
 import { ElevatorNode } from './schema'
@@ -160,6 +164,11 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    // Generic XZ translate so the floating action menu's Move button
+    // (and the side move-arrows emitted from `def.floorplan`) drive the
+    // 2D body-move flow through `FloorplanRegistryMoveOverlay`'s
+    // Path 2 — position[0] / position[2] update with a 0.5m grid snap.
+    movable: { axes: ['x', 'z'], gridSnap: true },
     duplicable: true,
     deletable: true,
   },
@@ -176,6 +185,13 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     priority: 3,
   },
   floorplan: buildElevatorFloorplan,
+  // 2D drag affordance for the rotate-arrow emitted at the elevator's
+  // front-right corner. Body move uses the generic move-arrow / move-
+  // handle path emitted by the floor-plan builder.
+  floorplanAffordances: {
+    'elevator-resize': elevatorResizeAffordance,
+    'elevator-rotate': elevatorRotateAffordance,
+  },
 
   presentation: {
     label: 'Elevator',

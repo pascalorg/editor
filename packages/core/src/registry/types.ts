@@ -390,6 +390,27 @@ export type FloorplanGeometry =
       payload?: unknown
     }
   /**
+   * Curved two-headed rotation arrow — the 2D counterpart of the 3D
+   * `arc-resize` handle's `shape: 'rotate'` gizmo. Visually a short arc
+   * with arrowheads at each end pointing tangentially in opposite
+   * directions, so it reads as "rotate either way" rather than "drag
+   * along a line." Always routes through an affordance (rotation has no
+   * sensible default Move semantics).
+   *
+   * `angle` is the radial-outward direction in plan coords — the icon's
+   * local +X axis points away from the pivot, with the arc curving
+   * around it. Emitters typically compute this as
+   * `atan2(handle.y − pivot.y, handle.x − pivot.x)`.
+   */
+  | {
+      kind: 'rotate-arrow'
+      point: FloorplanPoint
+      /** Radial-outward direction from the rotation pivot, in radians. */
+      angle: number
+      affordance: string
+      payload?: unknown
+    }
+  /**
    * Centered length / distance label. Renders as a small rounded
    * background plate with text, oriented along `angle` (radians). The
    * 2D layer flips the label upright when it would otherwise be upside
