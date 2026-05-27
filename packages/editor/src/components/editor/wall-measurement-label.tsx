@@ -79,8 +79,7 @@ export function WallMeasurementLabel() {
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selectedNode = selectedId ? nodes[selectedId as AnyNodeId] : null
-  const measurableNode =
-    selectedNode?.type === 'wall' || selectedNode?.type === 'item' ? selectedNode : null
+  const measurableNode = selectedNode?.type === 'item' ? selectedNode : null
 
   const [objectState, setObjectState] = useState<{
     id: AnyNodeId
