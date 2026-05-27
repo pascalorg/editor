@@ -28,6 +28,40 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
   return 'default' // fallback for orphaned items
 }
 
+/**
+ * Returns the building id that contains the given level, or `null` if
+ * the level is unparented or no enclosing building exists.
+ *
+ * Most scenes record the relationship via `level.parentId →
+ * building.id`, but older serialisations occasionally drop `parentId`
+ * even though the building's `children` array still references the
+ * level. The fallback scan covers that case.
+ *
+ * Used by `FloorplanRegistryLayer` to discover building-scoped kinds
+ * (`def.floorplanScope === 'building'`) without hardcoding any kind
+ * name in the editor layer.
+ */
+export function resolveBuildingForLevel(
+  levelId: AnyNodeId,
+  nodes: Record<AnyNodeId, AnyNode>,
+): AnyNodeId | null {
+  const level = nodes[levelId] as AnyNode | undefined
+  if (!level) return null
+  const directParent = (level as { parentId?: AnyNodeId | null }).parentId ?? null
+  if (directParent) {
+    const candidate = nodes[directParent]
+    if (candidate?.type === 'building') return candidate.id as AnyNodeId
+  }
+  for (const candidate of Object.values(nodes)) {
+    if (candidate?.type !== 'building') continue
+    const children = (candidate as { children?: AnyNodeId[] }).children
+    if (Array.isArray(children) && children.includes(levelId)) {
+      return candidate.id as AnyNodeId
+    }
+  }
+  return null
+}
+
 // Call this once at app initialization. Returns an unsubscribe function that
 // detaches the scene-store listener (useful when the editor is unmounted so
 // the spatial grid singleton does not hold stale references to old scenes).

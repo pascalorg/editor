@@ -118,10 +118,18 @@ export const Grid = ({
   // Use custom raycasting for grid events (independent of mesh events)
   useGridEvents(gridY)
 
-  // Update cursor position from grid:move events
+  // Track the last world-space cursor hit. The reveal-fade shader reads
+  // `positionLocal.xy` (vertex position on the un-transformed plane), and
+  // the mesh's -π/2 X rotation maps `positionLocal.y` to world `-Z`
+  // relative to the mesh origin. The mesh origin itself is lerped each
+  // frame toward the active building's world XZ (see `useFrame` below),
+  // so the local-frame cursor must be recomputed every frame from the
+  // stored world cursor — otherwise the ring drifts whenever the grid is
+  // mid-lerp (e.g. just after a building rotation commits).
+  const lastWorldCursorRef = useRef<{ x: number; z: number } | null>(null)
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
-      cursorPositionRef.current.set(event.position[0], -event.position[2])
+      lastWorldCursorRef.current = { x: event.position[0], z: event.position[2] }
     }
 
     emitter.on('grid:move', onGridMove)
@@ -160,6 +168,17 @@ export const Grid = ({
     const newY = MathUtils.lerp(gridRef.current.position.y, targetY, t)
     gridRef.current.position.y = newY
     setGridY(newY)
+
+    // Re-derive the local-frame cursor uniform after the grid's XZ has
+    // lerped this frame, so the reveal ring stays locked under the world
+    // cursor even when the grid origin is mid-transition.
+    const world = lastWorldCursorRef.current
+    if (world) {
+      cursorPositionRef.current.set(
+        world.x - gridRef.current.position.x,
+        -(world.z - gridRef.current.position.z),
+      )
+    }
   })
 
   const showGrid = useViewer((state) => state.showGrid)

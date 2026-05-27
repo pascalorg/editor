@@ -699,6 +699,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
   /**
+   * Which scope the floor-plan layer walks to find instances of this
+   * kind. Default `'level'` — the layer's DFS from the active level id
+   * picks the node up via its parent chain. `'building'` — the kind
+   * lives as a sibling of levels (elevator is the canonical example:
+   * elevators are parented to the *building*, not a level, but the
+   * floor-plan should still surface them for every level inside that
+   * building). For `'building'`-scoped kinds the layer iterates every
+   * instance whose parent matches the active level's building, and
+   * synthesises a `GeometryContext` whose `parent` is the active level.
+   */
+  floorplanScope?: 'level' | 'building'
+  /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via
    * the `affordance` field. The floor-plan registry layer calls

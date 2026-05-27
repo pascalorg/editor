@@ -185,6 +185,14 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     priority: 3,
   },
   floorplan: buildElevatorFloorplan,
+  // Elevators are parented to the building (siblings of levels), so the
+  // floor-plan layer's level-rooted DFS never reaches them. Declaring
+  // `floorplanScope: 'building'` tells `FloorplanRegistryLayer` to walk
+  // building-scoped kinds separately and synthesise `ctx.parent` as the
+  // active level — that's what `buildElevatorFloorplan` reads via
+  // `ctx.parent?.id` to decide whether this floor is in the elevator's
+  // service range.
+  floorplanScope: 'building',
   // 2D drag affordance for the rotate-arrow emitted at the elevator's
   // front-right corner. Body move uses the generic move-arrow / move-
   // handle path emitted by the floor-plan builder.

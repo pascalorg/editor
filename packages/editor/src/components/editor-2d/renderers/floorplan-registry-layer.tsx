@@ -8,8 +8,10 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
+  kindsWithFloorplanScope,
   nodeRegistry,
   pauseSceneHistory,
+  resolveBuildingForLevel,
   resumeSceneHistory,
   useInteractive,
   useLiveNodeOverrides,
@@ -332,40 +334,25 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     visit(levelId as AnyNodeId)
 
-    // Elevators live under the building (siblings of levels), not under
-    // the level — so the `visit(levelId)` DFS above never reaches them.
-    // Emit a separate pass that walks every elevator in the scene whose
-    // building contains the active level. The elevator's real
-    // `parentId` stays pointing to the building (so
-    // `resolveElevatorServiceLevelIds`, which looks up
-    // `elevator.parentId` to find the building, keeps working), but we
-    // synthesise a `GeometryContext` whose `parent` is the active level
-    // — that's what `buildElevatorFloorplan` reads via `ctx.parent?.id`
-    // to decide whether this floor is within the elevator's service
-    // range.
+    // Building-scoped kinds (`def.floorplanScope === 'building'`) live
+    // as siblings of the level, not under it — the `visit(levelId)` DFS
+    // above doesn't reach them. Walk every node of those kinds whose
+    // parent matches the active level's building, and synthesise a
+    // `GeometryContext` whose `parent` is the active level (so kind
+    // builders that gate on the current floor — e.g. elevator service
+    // range — keep working). Pure registry-driven dispatch: no kind
+    // name appears in this file.
     const activeLevelNode = nodes[levelId as AnyNodeId] as AnyNode | undefined
-    // The level's `parentId` is sometimes null in scenes that came from
-    // older serialisations even though the building's `children` array
-    // still contains the level id. Trust `parentId` first, then fall
-    // back to scanning buildings whose `children` include this level.
-    let activeBuildingId: AnyNodeId | null = (
-      activeLevelNode as unknown as { parentId?: AnyNodeId | null } | undefined
-    )?.parentId ?? null
-    if (!activeBuildingId && activeLevelNode) {
-      for (const [bid, candidate] of Object.entries(nodes)) {
-        if (candidate?.type !== 'building') continue
-        const cChildren = (candidate as unknown as { children?: AnyNodeId[] }).children
-        if (Array.isArray(cChildren) && cChildren.includes(levelId as AnyNodeId)) {
-          activeBuildingId = bid as AnyNodeId
-          break
-        }
-      }
-    }
+    const activeBuildingId = activeLevelNode
+      ? resolveBuildingForLevel(levelId as AnyNodeId, nodes)
+      : null
     if (activeLevelNode && activeBuildingId) {
+      const buildingScopedKinds = kindsWithFloorplanScope('building')
+      const buildingScopedKindSet = new Set(buildingScopedKinds)
       for (const [id, node] of Object.entries(nodes)) {
-        if (!node || node.type !== 'elevator') continue
-        const elevatorParentId = (node as unknown as { parentId?: AnyNodeId | null }).parentId
-        if (elevatorParentId !== activeBuildingId) continue
+        if (!node || !buildingScopedKindSet.has(node.type)) continue
+        const parentId = (node as { parentId?: AnyNodeId | null }).parentId
+        if (parentId !== activeBuildingId) continue
         const cid = id as AnyNodeId
         const def = nodeRegistry.get(node.type)
         const builder = def?.floorplan

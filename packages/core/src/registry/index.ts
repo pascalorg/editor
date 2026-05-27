@@ -1,7 +1,9 @@
 export {
   discoverPlugins,
   getSelectableKinds,
+  isRegistryMovable,
   isRegistrySelectable,
+  kindsWithFloorplanScope,
   loadPlugin,
   nodeRegistry,
   type PluginDiscovery,

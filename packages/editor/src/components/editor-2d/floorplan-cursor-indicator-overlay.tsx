@@ -23,7 +23,6 @@ type FloorplanCursorIndicator =
 
 type FloorplanCursorIndicatorOverlayProps = {
   cursorPosition: SvgPoint | null
-  cursorAnchorPosition: SvgPoint | null
   floorplanSelectionTool: FloorplanSelectionTool
   movingOpeningType: 'door' | 'window' | null
   isPanning: boolean
@@ -35,7 +34,6 @@ type FloorplanCursorIndicatorOverlayProps = {
 
 export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndicatorOverlay({
   cursorPosition,
-  cursorAnchorPosition,
   floorplanSelectionTool,
   movingOpeningType,
   isPanning,
@@ -81,7 +79,7 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
     return null
   }, [activeFloorplanToolConfig, floorplanSelectionTool, mode, structureLayer])
 
-  const position = mode === 'delete' ? cursorPosition : cursorAnchorPosition
+  const position = cursorPosition
 
   if (!(indicator && position) || isPanning) {
     return null

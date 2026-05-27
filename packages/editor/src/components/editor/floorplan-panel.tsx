@@ -5459,32 +5459,6 @@ export function FloorplanPanel() {
     () => Math.max(floorplanWorldUnitsPerPixel * 0.55, 0.0001),
     [floorplanWorldUnitsPerPixel],
   )
-  const floorplanCursorAnchorPosition = useMemo(() => {
-    if (
-      cursorPoint &&
-      surfaceSize.width > 0 &&
-      surfaceSize.height > 0 &&
-      viewBox.width > 0 &&
-      viewBox.height > 0
-    ) {
-      return projectSvgPointToSurface(
-        rotateSvgPoint(toSvgPlanPoint(cursorPoint), floorplanSceneRotationDeg),
-        viewBox,
-        surfaceSize,
-      )
-    }
-
-    return floorplanCursorPosition
-  }, [
-    cursorPoint,
-    floorplanCursorPosition,
-    floorplanSceneRotationDeg,
-    surfaceSize,
-    surfaceSize.height,
-    surfaceSize.width,
-    viewBox,
-  ])
-
   useEffect(() => {
     setHoveredGuideCorner(null)
   }, [])
@@ -8610,7 +8584,6 @@ export function FloorplanPanel() {
       <FloorplanSiteKeyHandler onRestoreGroundLevel={restoreGroundLevelStructureSelection} />
       <div className="relative min-h-0 flex-1" ref={viewportHostRef}>
         <Editor2dFloorplanCursorIndicatorOverlay
-          cursorAnchorPosition={floorplanCursorAnchorPosition}
           cursorColor={floorplanCursorColor}
           cursorPosition={floorplanCursorPosition}
           floorplanSelectionTool={floorplanSelectionTool}

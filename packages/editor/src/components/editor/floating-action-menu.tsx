@@ -10,6 +10,7 @@ import {
   FenceNode,
   generateId,
   ItemNode,
+  isRegistryMovable,
   isRegistrySelectable,
   nodeRegistry,
   RoofSegmentNode,
@@ -446,21 +447,13 @@ export function FloatingActionMenu() {
                   : undefined
               }
               onMove={
-                node?.type === 'column' ||
-                node?.type === 'wall' ||
-                node?.type === 'door' ||
-                node?.type === 'window' ||
-                node?.type === 'fence' ||
-                node?.type === 'elevator' ||
-                node?.type === 'stair' ||
-                node?.type === 'stair-segment' ||
-                node?.type === 'slab' ||
-                node?.type === 'ceiling' ||
-                node?.type === 'shelf' ||
-                node?.type === 'roof-segment' ||
-                node?.type === 'roof'
-                  ? handleMove
-                  : undefined
+                // Registry-driven: any kind that declares
+                // `capabilities.movable`, a `floorplanMoveTarget`, or a
+                // 3D `affordanceTools.move` mover gets the Move button.
+                // Replaces the previous 13-arm `node?.type === '…'`
+                // chain so adding a new movable kind doesn't touch this
+                // file.
+                node && isRegistryMovable(node.type) ? handleMove : undefined
               }
               onDelete={handleDelete}
               onDuplicate={

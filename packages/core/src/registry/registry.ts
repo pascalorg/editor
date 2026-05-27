@@ -3,6 +3,23 @@ import type { AnyNodeDefinition, NodeRegistry, Plugin } from './types'
 
 const HOST_API_VERSION = 1 as const
 
+// True in dev / test builds, false in production. Tries Vite's
+// `import.meta.env.DEV` first (the editor app's bundler) and falls back
+// to `process.env.NODE_ENV !== 'production'` for Node test runners.
+function isDevMode(): boolean {
+  try {
+    const meta = import.meta as { env?: { DEV?: boolean } }
+    if (typeof meta?.env?.DEV === 'boolean') return meta.env.DEV
+  } catch {
+    // import.meta unavailable in some CJS contexts — fall through.
+  }
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV) {
+    return process.env.NODE_ENV !== 'production'
+  }
+  // No environment signal — be safe and treat as production.
+  return false
+}
+
 class NodeRegistryImpl implements NodeRegistry {
   private readonly defs = new Map<string, AnyNodeDefinition>()
 
@@ -36,17 +53,20 @@ class NodeRegistryImpl implements NodeRegistry {
         `[registry] NodeDefinition.schemaVersion must be a positive integer (kind: "${def.kind}")`,
       )
     }
-    // Replace on duplicate rather than throw. The previous behaviour
-    // (throw on `defs.has(kind)`) broke HMR for `def.ts` edits: every
-    // save would either re-execute the module and crash on the second
-    // `registerNode(...)` call, or skip the re-execute entirely and
-    // leave the running app with the original descriptor. Editing
-    // `handles` / `placement.rotationY` / etc. looked like a no-op
-    // because the old object was still pinned. In production we
-    // register each kind exactly once, so silently overwriting only
-    // matters in dev — where it's the desired behaviour.
+    // Duplicate-kind handling depends on environment:
+    //   - **Production**: throw. The plugin-authoring contract
+    //     (`wiki/architecture/plugin-authoring.md`) guarantees that two
+    //     plugins shipping `kind: 'couch'` is a startup-time error, not
+    //     a silent overwrite — collisions need to be visible.
+    //   - **Dev (HMR)**: replace with a warning. Saving `def.ts` would
+    //     otherwise either crash on re-execute or skip it entirely,
+    //     leaving stale descriptors pinned in memory.
     if (this.defs.has(def.kind)) {
-      console.warn(`[registry] re-registering node kind "${def.kind}" (HMR)`)
+      if (isDevMode()) {
+        console.warn(`[registry] re-registering node kind "${def.kind}" (HMR)`)
+      } else {
+        throw new Error(`[registry] duplicate node kind: "${def.kind}" already registered`)
+      }
     }
     this.defs.set(def.kind, def)
   }
@@ -92,6 +112,38 @@ export function getSelectableKinds(): string[] {
  */
 export function isRegistrySelectable(kind: string): boolean {
   return nodeRegistry.get(kind)?.capabilities.selectable !== undefined
+}
+
+/**
+ * Kinds whose `def.floorplanScope` matches the requested scope. Used by
+ * `FloorplanRegistryLayer` to discover building-scoped kinds (e.g.
+ * elevator) without hardcoding kind names in the editor layer. `'level'`
+ * is the default, so `kindsWithFloorplanScope('level')` includes kinds
+ * that didn't set the field at all.
+ */
+export function kindsWithFloorplanScope(scope: 'level' | 'building'): string[] {
+  const result: string[] = []
+  for (const [kind, def] of nodeRegistry.entries()) {
+    const declared = def.floorplanScope ?? 'level'
+    if (declared === scope) result.push(kind)
+  }
+  return result
+}
+
+/**
+ * Returns true when the kind is movable from a 2D floor-plan handle —
+ * either via `capabilities.movable`, an explicit
+ * `def.floorplanMoveTarget`, or an `affordanceTools.move` 3D mover that
+ * the floating action menu can engage. Replaces the kind-name ternary
+ * chain in `floating-action-menu.tsx`.
+ */
+export function isRegistryMovable(kind: string): boolean {
+  const def = nodeRegistry.get(kind)
+  if (!def) return false
+  if (def.capabilities.movable !== undefined) return true
+  if (def.floorplanMoveTarget !== undefined) return true
+  if (def.affordanceTools?.move !== undefined) return true
+  return false
 }
 
 export async function loadPlugin(plugin: Plugin): Promise<void> {

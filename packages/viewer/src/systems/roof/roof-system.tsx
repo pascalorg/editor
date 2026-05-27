@@ -236,7 +236,7 @@ function updateMergedRoofGeometry(
       const scn = nodes[id] as RoofSegmentNode | undefined
       return scn ? getEffectiveNode(scn) : undefined
     })
-    .filter((n): n is RoofSegmentNode => Boolean(n) && !hasSegmentMaterialOverride(n))
+    .filter((n): n is RoofSegmentNode => n !== undefined && !hasSegmentMaterialOverride(n))
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()

@@ -68,9 +68,11 @@ export function buildElevatorFloorplan(
   const cos = Math.cos(display.rotation)
   const sin = Math.sin(display.rotation)
   const rotate = (lx: number, ly: number): [number, number] => {
-    // Same clockwise convention as `rotatePlanVector` in editor — see
-    // `wiki/architecture/tools.md` for why every plan-space rotation
-    // uses this matrix and not the standard counter-clockwise one.
+    // Negated-rotation matrix (equivalent to rotating by `-rotation`)
+    // so SVG's CW-with-y-down `rotate` direction visually matches
+    // Three.js Y-rotation (CCW from a top-down view). Column / shelf /
+    // roof-segment do the same thing explicitly via `-node.rotation`
+    // passed to `rotatePlanVector`; this is the inline version.
     return [lx * cos + ly * sin, -lx * sin + ly * cos]
   }
   const toPlan = (lx: number, ly: number): FloorplanPoint => {
