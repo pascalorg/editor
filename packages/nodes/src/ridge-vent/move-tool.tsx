@@ -51,15 +51,9 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
     const ventObj = sceneRegistry.nodes.get(node.id)
     if (ventObj) ventObj.visible = false
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId
-        ? sceneRegistry.nodes.get(buildingId as AnyNodeId)
-        : null
+      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
       if (!buildingObj) return [wx, wy, wz]
       const v = new THREE.Vector3(wx, wy, wz)
       buildingObj.worldToLocal(v)
@@ -142,9 +136,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       if (isNew) {
         const parentId = original.roofSegmentId as AnyNodeId | undefined
         if (parentId) {
-          const parent = useScene.getState().nodes[parentId] as
-            | RoofSegmentNode
-            | undefined
+          const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
           if (parent) {
             useScene.getState().updateNode(parentId, {
               children: (parent.children ?? []).filter((id) => id !== node.id),

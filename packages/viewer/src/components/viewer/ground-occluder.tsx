@@ -2,11 +2,11 @@ import { type LevelNode, useScene } from '@pascal-app/core'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { unionPolygons } from '../../lib/polygon-union'
+import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
 export const GroundOccluder = () => {
-  const theme = useViewer((state) => state.theme)
-  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
+  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
 
   const nodes = useScene((state) => state.nodes)
 

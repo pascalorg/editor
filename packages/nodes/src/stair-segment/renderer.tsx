@@ -7,7 +7,7 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getStraightStairSegmentBodyMaterials, useNodeEvents } from '@pascal-app/viewer'
+import { getStraightStairSegmentBodyMaterials, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
@@ -22,13 +22,19 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   }, [node.id])
 
   const handlers = useNodeEvents(node, 'stair-segment')
+  const shading = useViewer((s) => s.shading)
+  const textures = useViewer((s) => s.textures)
+  const colorPreset = useViewer((s) => s.colorPreset)
   const parentNode = node.parentId
     ? (nodes[node.parentId as AnyNodeId] as StairNode | undefined)
     : undefined
 
   const material = useMemo(() => {
-    return getStraightStairSegmentBodyMaterials(node, parentNode)
+    return getStraightStairSegmentBodyMaterials(node, parentNode, shading, textures, colorPreset)
   }, [
+    shading,
+    textures,
+    colorPreset,
     node.materialPreset,
     node.material,
     node.material?.preset,

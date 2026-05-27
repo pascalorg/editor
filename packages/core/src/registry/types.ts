@@ -512,11 +512,21 @@ export type Plugin = {
 
 export type AnyNodeDefinition = NodeDefinition<ZodObject<any>>
 
+export type SurfaceRole =
+  | 'wall'
+  | 'floor'
+  | 'ceiling'
+  | 'roof'
+  | 'joinery'
+  | 'glazing'
+  | 'furnishing'
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
   schema: S
   category: NodeCategory
+  surfaceRole?: SurfaceRole
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
   migrate?: Record<number, (old: unknown) => unknown>

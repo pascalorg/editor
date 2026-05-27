@@ -30,9 +30,7 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
     },
     {
       label: 'Hung wall',
-      fields: [
-        { key: 'wallSkirtHeight', kind: 'number', unit: 'm', min: 0.2, max: 6, step: 0.05 },
-      ],
+      fields: [{ key: 'wallSkirtHeight', kind: 'number', unit: 'm', min: 0.2, max: 6, step: 0.05 }],
     },
     {
       label: 'Window opening',
@@ -53,9 +51,23 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
     {
       label: 'Window frame',
       fields: [
-        { key: 'windowFrameThickness', kind: 'number', unit: 'm', min: 0.01, max: 0.15, step: 0.005 },
+        {
+          key: 'windowFrameThickness',
+          kind: 'number',
+          unit: 'm',
+          min: 0.01,
+          max: 0.15,
+          step: 0.005,
+        },
         { key: 'windowFrameDepth', kind: 'number', unit: 'm', min: 0.02, max: 0.15, step: 0.005 },
-        { key: 'windowDividerThickness', kind: 'number', unit: 'm', min: 0, max: 0.06, step: 0.002 },
+        {
+          key: 'windowDividerThickness',
+          kind: 'number',
+          unit: 'm',
+          min: 0,
+          max: 0.06,
+          step: 0.002,
+        },
         {
           key: 'windowShape',
           kind: 'enum',

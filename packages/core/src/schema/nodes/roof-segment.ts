@@ -164,8 +164,7 @@ function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
     mansardSteepHeightRatio:
       input.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
     dutchHipWidthRatio: input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
-    dutchHipHeightRatio:
-      input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+    dutchHipHeightRatio: input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
   }
 }
 
@@ -226,12 +225,15 @@ export type SegmentSlopeFrame = {
  * silently drifted when a new roof type was added.
  */
 export function getSegmentSlopeFrame(
-  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> &
-    Partial<ShapeRatios>,
+  node: Pick<RoofSegmentNode, 'roofType' | 'pitch' | 'width' | 'depth'> & Partial<ShapeRatios>,
 ): SegmentSlopeFrame {
   const ratios = withRatioDefaults(node)
   const run = getPrimarySlopeRun(ratios)
-  if (node.roofType === 'flat' || node.pitch <= 0) {
+  // `!(pitch > 0)` (not `pitch <= 0`) so a missing/NaN pitch — e.g. a segment
+  // from an older migration that only set `roofHeight`, or stale persisted data —
+  // resolves to a flat frame instead of computing `Math.tan(NaN)` → NaN geometry,
+  // which poisons the merged-roof CSG ("Coplanar clip not handled" + NaN positions).
+  if (node.roofType === 'flat' || !(node.pitch > 0)) {
     return { run, rise: 0, tanTheta: 0, cosTheta: 1, sinTheta: 0, activeRh: 0 }
   }
   const pitchRad = (node.pitch * Math.PI) / 180
@@ -247,9 +249,7 @@ export function getSegmentSlopeFrame(
  * The eave-to-peak height of the assembled segment, derived from pitch +
  * footprint + roofType. Replaces the legacy `roofHeight` field on the node.
  */
-export function getActiveRoofHeight(
-  node: Parameters<typeof getSegmentSlopeFrame>[0],
-): number {
+export function getActiveRoofHeight(node: Parameters<typeof getSegmentSlopeFrame>[0]): number {
   return getSegmentSlopeFrame(node).activeRh
 }
 
@@ -258,9 +258,7 @@ export function getActiveRoofHeight(
  * `roofHeight` value would correspond to. Used by the scene migration.
  * Ratio overrides are optional and default to the shape defaults.
  */
-export function getPitchFromActiveRoofHeight(
-  input: PitchInputs & { roofHeight: number },
-): number {
+export function getPitchFromActiveRoofHeight(input: PitchInputs & { roofHeight: number }): number {
   if (input.roofType === 'flat' || input.roofHeight <= 0) return 0
   const ratios = withRatioDefaults(input)
   const run = getPrimarySlopeRun(ratios)

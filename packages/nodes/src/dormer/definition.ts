@@ -1,8 +1,8 @@
 import {
   type AnyNode,
+  DormerNode as DormerNodeSchema,
   type DormerNode as DormerNodeType,
   type NodeDefinition,
-  DormerNode as DormerNodeSchema,
 } from '@pascal-app/core'
 import { buildDormerRoofCut } from './csg-geometry'
 import { dormerPaint } from './paint'
@@ -30,6 +30,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   schemaVersion: 1,
   schema: DormerNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     // Zod fills in id/type via their .default() factories; we strip

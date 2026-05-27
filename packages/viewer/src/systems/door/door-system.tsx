@@ -8,19 +8,49 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
-import { baseMaterial, glassMaterial } from '../../lib/materials'
+import {
+  createSurfaceRoleMaterial,
+  glassMaterial as defaultGlassMaterial,
+  baseMaterial as getBaseMaterial,
+} from '../../lib/materials'
+import useViewer from '../../store/use-viewer'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
-const revealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+let baseMaterial = getBaseMaterial()
+let revealMaterial: THREE.Material = defaultRevealMaterial
+let glassMaterial: THREE.Material = defaultGlassMaterial
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+
+  const joineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+  baseMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
+  revealMaterial = textures ? defaultRevealMaterial : joineryMaterial
+  glassMaterial = textures ? defaultGlassMaterial : joineryMaterial
+
+  useEffect(() => {
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      if (node?.type === 'door') {
+        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+      }
+    }
+  }, [shading, textures, colorPreset])
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
+    const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
+    baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
+    revealMaterial = textures ? defaultRevealMaterial : frameJoineryMaterial
+    glassMaterial = textures ? defaultGlassMaterial : frameJoineryMaterial
 
     const nodes = useScene.getState().nodes
 

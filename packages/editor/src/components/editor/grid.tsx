@@ -1,14 +1,13 @@
 'use client'
 
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MathUtils, type Mesh, Vector2 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useGridEvents } from '../../hooks/use-grid-events'
-import { EDITOR_LAYER } from '../../lib/constants'
 
 export const Grid = ({
   cellSize = 0.5,
@@ -31,11 +30,11 @@ export const Grid = ({
   fadeStrength?: number
   revealRadius?: number
 }) => {
-  const theme = useViewer((state) => state.theme)
+  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
 
-  // Use slightly lighter colors for dark mode grid to make it apparent
-  const effectiveCellColor = theme === 'dark' ? '#555566' : cellColor
-  const effectiveSectionColor = theme === 'dark' ? '#666677' : sectionColor
+  // Use slightly lighter colors for dark themes' grid to make it apparent
+  const effectiveCellColor = isDark ? '#555566' : cellColor
+  const effectiveSectionColor = isDark ? '#666677' : sectionColor
 
   const cursorPositionRef = useRef(new Vector2(0, 0))
 
@@ -149,7 +148,7 @@ export const Grid = ({
 
   return (
     <mesh
-      layers={EDITOR_LAYER}
+      layers={GRID_LAYER}
       material={material}
       ref={gridRef}
       rotation-x={-Math.PI / 2}

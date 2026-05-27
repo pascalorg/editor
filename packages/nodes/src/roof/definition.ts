@@ -16,6 +16,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   schemaVersion: 1,
   schema: RoofNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     const stub = RoofNodeSchema.parse({ id: 'roof_default' as never, type: 'roof' })

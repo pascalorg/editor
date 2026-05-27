@@ -13,6 +13,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   schemaVersion: 1,
   schema: StairNode,
   category: 'structure',
+  surfaceRole: 'joinery',
 
   defaults: () => {
     const stub = StairNodeSchema.parse({ id: 'stair_default' as never, type: 'stair' })

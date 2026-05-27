@@ -6,13 +6,10 @@ import { buildRidgeVentGeometry } from './geometry'
 import type { RidgeVentNode } from './schema'
 
 const RidgeVentPreview = ({ node }: { node: RidgeVentNode }) => {
-  const geometry = useMemo(() => buildRidgeVentGeometry(node), [
-    node.length,
-    node.width,
-    node.height,
-    node.style,
-    node.endCaps,
-  ])
+  const geometry = useMemo(
+    () => buildRidgeVentGeometry(node),
+    [node.length, node.width, node.height, node.style, node.endCaps],
+  )
 
   const material = useMemo(
     () =>
@@ -51,12 +48,7 @@ const RidgeVentPreview = ({ node }: { node: RidgeVentNode }) => {
         }}
       />
       <lineSegments geometry={edgesGeometry} renderOrder={1000}>
-        <lineBasicMaterial
-          color={0x6c_a3_ff}
-          depthTest={false}
-          opacity={0.9}
-          transparent
-        />
+        <lineBasicMaterial color={0x6c_a3_ff} depthTest={false} opacity={0.9} transparent />
       </lineSegments>
     </group>
   )

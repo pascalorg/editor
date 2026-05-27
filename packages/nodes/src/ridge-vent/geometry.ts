@@ -49,11 +49,7 @@ export function buildRidgeVentGeometry(node: RidgeVentNode): THREE.BufferGeometr
 
 // ─── Standard curved cap ─────────────────────────────────────────────
 
-function buildCurvedCapProfile(
-  halfLen: number,
-  halfW: number,
-  h: number,
-): THREE.BufferGeometry {
+function buildCurvedCapProfile(halfLen: number, halfW: number, h: number): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
@@ -81,15 +77,27 @@ function buildCurvedCapProfile(
     const fnz = -dy / fLen
     const fny = dz / fLen
 
-    pushQuad(positions, normals, uvs,
-      [-halfLen, oy0, oz0], [halfLen, oy0, oz0],
-      [halfLen, oy1, oz1], [-halfLen, oy1, oz1],
-      [0, fny, fnz])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, oy0, oz0],
+      [halfLen, oy0, oz0],
+      [halfLen, oy1, oz1],
+      [-halfLen, oy1, oz1],
+      [0, fny, fnz],
+    )
 
-    pushQuad(positions, normals, uvs,
-      [-halfLen, iy1, iz1], [halfLen, iy1, iz1],
-      [halfLen, iy0, iz0], [-halfLen, iy0, iz0],
-      [0, -fny, -fnz])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, iy1, iz1],
+      [halfLen, iy1, iz1],
+      [halfLen, iy0, iz0],
+      [-halfLen, iy0, iz0],
+      [0, -fny, -fnz],
+    )
   }
 
   // Eave bottoms
@@ -97,15 +105,27 @@ function buildCurvedCapProfile(
     const [oz, oy] = outerPts[idx]!
     const [iz, iy] = innerPts[idx]!
     if (idx === 0) {
-      pushQuad(positions, normals, uvs,
-        [-halfLen, iy, iz], [halfLen, iy, iz],
-        [halfLen, oy, oz], [-halfLen, oy, oz],
-        [0, -1, 0])
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [-halfLen, iy, iz],
+        [halfLen, iy, iz],
+        [halfLen, oy, oz],
+        [-halfLen, oy, oz],
+        [0, -1, 0],
+      )
     } else {
-      pushQuad(positions, normals, uvs,
-        [-halfLen, oy, oz], [halfLen, oy, oz],
-        [halfLen, iy, iz], [-halfLen, iy, iz],
-        [0, -1, 0])
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [-halfLen, oy, oz],
+        [halfLen, oy, oz],
+        [halfLen, iy, iz],
+        [-halfLen, iy, iz],
+        [0, -1, 0],
+      )
     }
   }
 
@@ -160,11 +180,7 @@ function shingledOuterPts(halfW: number, h: number): [number, number][] {
   return pts
 }
 
-function buildShingledProfile(
-  halfLen: number,
-  halfW: number,
-  h: number,
-): THREE.BufferGeometry {
+function buildShingledProfile(halfLen: number, halfW: number, h: number): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
@@ -185,34 +201,58 @@ function buildShingledProfile(
     const fnz = -dy / fLen
     const fny = dz / fLen
 
-    pushQuad(positions, normals, uvs,
-      [-halfLen, oy0, oz0], [halfLen, oy0, oz0],
-      [halfLen, oy1, oz1], [-halfLen, oy1, oz1],
-      [0, fny, fnz])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, oy0, oz0],
+      [halfLen, oy0, oz0],
+      [halfLen, oy1, oz1],
+      [-halfLen, oy1, oz1],
+      [0, fny, fnz],
+    )
 
-    pushQuad(positions, normals, uvs,
-      [-halfLen, iy1, iz1], [halfLen, iy1, iz1],
-      [halfLen, iy0, iz0], [-halfLen, iy0, iz0],
-      [0, -fny, -fnz])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, iy1, iz1],
+      [halfLen, iy1, iz1],
+      [halfLen, iy0, iz0],
+      [-halfLen, iy0, iz0],
+      [0, -fny, -fnz],
+    )
   }
 
   // Eave bottoms
   {
     const [oz, oy] = outerPts[0]!
     const [iz, iy] = innerPts[0]!
-    pushQuad(positions, normals, uvs,
-      [-halfLen, iy, iz], [halfLen, iy, iz],
-      [halfLen, oy, oz], [-halfLen, oy, oz],
-      [0, -1, 0])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, iy, iz],
+      [halfLen, iy, iz],
+      [halfLen, oy, oz],
+      [-halfLen, oy, oz],
+      [0, -1, 0],
+    )
   }
   {
     const last = outerPts.length - 1
     const [oz, oy] = outerPts[last]!
     const [iz, iy] = innerPts[last]!
-    pushQuad(positions, normals, uvs,
-      [-halfLen, oy, oz], [halfLen, oy, oz],
-      [halfLen, iy, iz], [-halfLen, iy, iz],
-      [0, -1, 0])
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, oy, oz],
+      [halfLen, oy, oz],
+      [halfLen, iy, iz],
+      [-halfLen, iy, iz],
+      [0, -1, 0],
+    )
   }
 
   // Tab divider ridges along the length
@@ -236,13 +276,26 @@ function buildShingledProfile(
       const r0z = oz0 + fnz * ridgeH
       const r1y = oy1 + fny * ridgeH
       const r1z = oz1 + fnz * ridgeH
-      pushQuad(positions, normals, uvs,
-        [x, r0y, r0z], [x, r1y, r1z], [x, oy1, oz1], [x, oy0, oz0],
-        [1, 0, 0])
-      pushQuad(positions, normals, uvs,
-        [x, r0y, r0z], [x, r1y, r1z],
-        [x - ridgeD, oy1, oz1], [x - ridgeD, oy0, oz0],
-        [0, fny, fnz])
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x, r0y, r0z],
+        [x, r1y, r1z],
+        [x, oy1, oz1],
+        [x, oy0, oz0],
+        [1, 0, 0],
+      )
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x, r0y, r0z],
+        [x, r1y, r1z],
+        [x - ridgeD, oy1, oz1],
+        [x - ridgeD, oy0, oz0],
+        [0, fny, fnz],
+      )
     }
   }
 
@@ -341,11 +394,7 @@ function segNormal(z0: number, y0: number, z1: number, y1: number): number[] {
   return [0, dz / len, -dy / len]
 }
 
-function buildMetalProfile(
-  halfLen: number,
-  halfW: number,
-  h: number,
-): THREE.BufferGeometry {
+function buildMetalProfile(halfLen: number, halfW: number, h: number): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
@@ -361,36 +410,56 @@ function buildMetalProfile(
     const outerN = segNormal(oz0, oy0, oz1, oy1)
     const innerN = segNormal(iz0, iy0, iz1, iy1).map((v) => -v)
 
-    pushQuad(positions, normals, uvs,
-      [-halfLen, oy0, oz0], [halfLen, oy0, oz0],
-      [halfLen, oy1, oz1], [-halfLen, oy1, oz1],
-      outerN)
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, oy0, oz0],
+      [halfLen, oy0, oz0],
+      [halfLen, oy1, oz1],
+      [-halfLen, oy1, oz1],
+      outerN,
+    )
 
-    pushQuad(positions, normals, uvs,
-      [-halfLen, iy1, iz1], [halfLen, iy1, iz1],
-      [halfLen, iy0, iz0], [-halfLen, iy0, iz0],
-      innerN)
+    pushQuad(
+      positions,
+      normals,
+      uvs,
+      [-halfLen, iy1, iz1],
+      [halfLen, iy1, iz1],
+      [halfLen, iy0, iz0],
+      [-halfLen, iy0, iz0],
+      innerN,
+    )
   }
 
   // Eave bottoms
-  pushQuad(positions, normals, uvs,
-    [-halfLen, inner[0]![1], inner[0]![0]], [halfLen, inner[0]![1], inner[0]![0]],
-    [halfLen, outer[0]![1], outer[0]![0]], [-halfLen, outer[0]![1], outer[0]![0]],
-    [0, -1, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-halfLen, inner[0]![1], inner[0]![0]],
+    [halfLen, inner[0]![1], inner[0]![0]],
+    [halfLen, outer[0]![1], outer[0]![0]],
+    [-halfLen, outer[0]![1], outer[0]![0]],
+    [0, -1, 0],
+  )
   const last = outer.length - 1
-  pushQuad(positions, normals, uvs,
-    [-halfLen, outer[last]![1], outer[last]![0]], [halfLen, outer[last]![1], outer[last]![0]],
-    [halfLen, inner[last]![1], inner[last]![0]], [-halfLen, inner[last]![1], inner[last]![0]],
-    [0, -1, 0])
+  pushQuad(
+    positions,
+    normals,
+    uvs,
+    [-halfLen, outer[last]![1], outer[last]![0]],
+    [halfLen, outer[last]![1], outer[last]![0]],
+    [halfLen, inner[last]![1], inner[last]![0]],
+    [-halfLen, inner[last]![1], inner[last]![0]],
+    [0, -1, 0],
+  )
 
   return buildBufferGeometry(positions, normals, uvs)
 }
 
-function buildMetalEndCaps(
-  halfLen: number,
-  halfW: number,
-  h: number,
-): THREE.BufferGeometry | null {
+function buildMetalEndCaps(halfLen: number, halfW: number, h: number): THREE.BufferGeometry | null {
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
@@ -415,10 +484,7 @@ function buildMetalEndCaps(
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function offsetProfileInward(
-  pts: [number, number][],
-  t: number,
-): [number, number][] {
+function offsetProfileInward(pts: [number, number][], t: number): [number, number][] {
   const result: [number, number][] = []
   for (let i = 0; i < pts.length; i++) {
     const [z, y] = pts[i]!

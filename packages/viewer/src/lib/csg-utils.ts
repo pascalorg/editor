@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import { Brush, Evaluator } from 'three-bvh-csg'
+import type * as THREE from 'three'
+import { type Brush, Evaluator } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 
 /**
@@ -27,7 +27,9 @@ csgEvaluator.attributes = ['position', 'normal', 'uv']
 export function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as unknown as { computeBoundsTree: typeof computeBoundsTree }).computeBoundsTree =
     computeBoundsTree
-  ;(geometry as unknown as { computeBoundsTree: (opts: { maxLeafSize: number }) => void }).computeBoundsTree({ maxLeafSize: 10 })
+  ;(
+    geometry as unknown as { computeBoundsTree: (opts: { maxLeafSize: number }) => void }
+  ).computeBoundsTree({ maxLeafSize: 10 })
 }
 
 export function prepareBrushForCSG(brush: Brush) {

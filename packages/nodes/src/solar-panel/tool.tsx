@@ -5,8 +5,8 @@ import {
   emitter,
   type RoofEvent,
   type RoofNode,
-  sceneRegistry,
   SolarPanelNode,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
@@ -56,11 +56,7 @@ const SolarPanelTool = () => {
   useEffect(() => {
     if (!activeBuildingId) return
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
       if (!buildingObj) return [wx, wy, wz]
       worldPoint.set(wx, wy, wz)

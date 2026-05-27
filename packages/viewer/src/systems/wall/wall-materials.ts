@@ -8,8 +8,16 @@ import {
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { baseMaterial, createMaterial, createMaterialFromPresetRef } from '../../lib/materials'
+import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import {
+  baseMaterial,
+  type ColorPreset,
+  createMaterial,
+  createMaterialFromPresetRef,
+  createSurfaceRoleMaterial,
+  type RenderShading,
+  resolveSurfaceColor,
+} from '../../lib/materials'
 
 const DEFAULT_WALL_COLOR = '#f2f0ed'
 
@@ -61,16 +69,23 @@ const dotPattern = Fn(() => {
   return dots.mul(yFade)
 })
 
-function getSurfaceVisibleMaterial(spec: WallSurfaceMaterialSpec): Material {
+function getSurfaceVisibleMaterial(
+  spec: WallSurfaceMaterialSpec,
+  shading: RenderShading,
+): Material {
   if (spec.materialPreset) {
-    return createMaterialFromPresetRef(spec.materialPreset) ?? baseMaterial
+    return createMaterialFromPresetRef(spec.materialPreset, shading) ?? baseMaterial(shading)
   }
 
   if (spec.material) {
-    return createMaterial(spec.material)
+    return createMaterial(spec.material, shading)
   }
 
-  return baseMaterial
+  return baseMaterial(shading)
+}
+
+function hasExplicitMaterial(spec: WallSurfaceMaterialSpec): boolean {
+  return Boolean(spec.materialPreset || spec.material)
 }
 
 function getSurfaceColor(spec: WallSurfaceMaterialSpec, fallback = DEFAULT_WALL_COLOR): string {
@@ -119,14 +134,24 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
   return highlightedMaterial
 }
 
-function createInvisibleWallMaterial(color: string): MeshStandardNodeMaterial {
-  return new MeshStandardNodeMaterial({
-    transparent: true,
-    opacityNode: mix(float(0.0), float(0.24), dotPattern()),
-    color,
-    depthWrite: false,
-    emissive: color,
-  })
+function createInvisibleWallMaterial(color: string, shading: RenderShading): Material {
+  const material =
+    shading === 'solid'
+      ? new MeshLambertNodeMaterial({
+          transparent: true,
+          color,
+          depthWrite: false,
+          emissive: color,
+        })
+      : new MeshStandardNodeMaterial({
+          transparent: true,
+          color,
+          depthWrite: false,
+          emissive: color,
+        })
+
+  material.opacityNode = mix(float(0.0), float(0.24), dotPattern())
+  return material
 }
 
 function mapWallMaterialArray(
@@ -148,8 +173,9 @@ function disposeOwnedMaterials(materials: WallMaterialArray[]) {
   })
 }
 
-export function getWallMaterialHash(wallNode: WallNode): string {
+export function getWallMaterialHash(wallNode: WallNode, shading: RenderShading): string {
   return JSON.stringify({
+    shading,
     interior: getWallSurfaceMaterialSignature(
       getEffectiveWallSurfaceMaterial(wallNode, 'interior'),
     ),
@@ -159,9 +185,17 @@ export function getWallMaterialHash(wallNode: WallNode): string {
   })
 }
 
-export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
-  const cacheKey = wallNode.id
-  const materialHash = getWallMaterialHash(wallNode)
+export function getMaterialsForWall(
+  wallNode: WallNode,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): WallMaterials {
+  const cacheKey = `${wallNode.id}-${shading}-${textures}-${colorPreset}-${sceneTheme ?? 'base'}`
+  const materialHash = textures
+    ? getWallMaterialHash(wallNode, shading)
+    : JSON.stringify({ textures, colorPreset, sceneTheme })
 
   const existing = wallMaterialCache.get(cacheKey)
   if (existing && existing.materialHash === materialHash) {
@@ -180,17 +214,33 @@ export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
 
   const interiorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'interior')
   const exteriorSpec = getEffectiveWallSurfaceMaterial(wallNode, 'exterior')
+  const wallRoleMaterial = createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
 
-  const visible: WallMaterialArray = [
-    baseMaterial,
-    getSurfaceVisibleMaterial(interiorSpec),
-    getSurfaceVisibleMaterial(exteriorSpec),
-  ]
+  // Untextured surfaces take the themed wall role colour even with textures on;
+  // only surfaces with an explicit preset/material keep their texture.
+  const visible: WallMaterialArray = textures
+    ? [
+        wallRoleMaterial,
+        hasExplicitMaterial(interiorSpec)
+          ? getSurfaceVisibleMaterial(interiorSpec, shading)
+          : wallRoleMaterial,
+        hasExplicitMaterial(exteriorSpec)
+          ? getSurfaceVisibleMaterial(exteriorSpec, shading)
+          : wallRoleMaterial,
+      ]
+    : [wallRoleMaterial, wallRoleMaterial, wallRoleMaterial]
 
+  const wallRoleColor = resolveSurfaceColor('wall', colorPreset, sceneTheme)
   const invisible: WallMaterialArray = [
-    createInvisibleWallMaterial(DEFAULT_WALL_COLOR),
-    createInvisibleWallMaterial(getSurfaceColor(interiorSpec, DEFAULT_WALL_COLOR)),
-    createInvisibleWallMaterial(getSurfaceColor(exteriorSpec, DEFAULT_WALL_COLOR)),
+    createInvisibleWallMaterial(wallRoleColor, textures ? shading : 'solid'),
+    createInvisibleWallMaterial(
+      textures ? getSurfaceColor(interiorSpec, wallRoleColor) : wallRoleColor,
+      textures ? shading : 'solid',
+    ),
+    createInvisibleWallMaterial(
+      textures ? getSurfaceColor(exteriorSpec, wallRoleColor) : wallRoleColor,
+      textures ? shading : 'solid',
+    ),
   ]
 
   const highlightedVisible = mapWallMaterialArray(visible, (material) =>
@@ -220,6 +270,12 @@ export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
   return result
 }
 
-export function getVisibleWallMaterials(wallNode: WallNode): WallMaterialArray {
-  return getMaterialsForWall(wallNode).visible
+export function getVisibleWallMaterials(
+  wallNode: WallNode,
+  shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
+): WallMaterialArray {
+  return getMaterialsForWall(wallNode, shading, textures, colorPreset, sceneTheme).visible
 }

@@ -5,8 +5,8 @@ import {
   emitter,
   type RoofEvent,
   type RoofNode,
-  sceneRegistry,
   SkylightNode,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
@@ -14,8 +14,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { skylightDefinition } from './definition'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { skylightDefinition } from './definition'
 import SkylightPreview from './preview'
 
 const worldPoint = new THREE.Vector3()
@@ -43,11 +43,7 @@ const SkylightTool = () => {
   useEffect(() => {
     if (!activeBuildingId) return
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
+    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
       const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
       if (!buildingObj) return [wx, wy, wz]
       worldPoint.set(wx, wy, wz)

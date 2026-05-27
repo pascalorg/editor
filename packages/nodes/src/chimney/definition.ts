@@ -1,4 +1,4 @@
-import { type NodeDefinition, ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
+import { ChimneyNode as ChimneyNodeSchema, type NodeDefinition } from '@pascal-app/core'
 import { chimneyPaint } from './paint'
 import { chimneyParametrics } from './parametrics'
 import { ChimneyNode } from './schema'
@@ -36,6 +36,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   schemaVersion: 1,
   schema: ChimneyNode,
   category: 'structure',
+  surfaceRole: 'wall',
 
   defaults: () => {
     const stub = ChimneyNodeSchema.parse({

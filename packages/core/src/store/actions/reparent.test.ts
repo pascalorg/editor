@@ -97,17 +97,15 @@ function vent(): AnyNode {
 
 describe('node-actions reparent — repeated segment-hopping', () => {
   beforeEach(() => {
-    useScene.setState(
-      {
-        nodes: {
-          [ROOF_ID]: makeRoof(),
-          [SEG_A_ID]: makeSegment(SEG_A_ID, [VENT_ID]),
-          [SEG_B_ID]: makeSegment(SEG_B_ID, []),
-          [VENT_ID]: makeVent(SEG_A_ID),
-        },
-        rootNodeIds: [ROOF_ID],
-      } as never,
-    )
+    useScene.setState({
+      nodes: {
+        [ROOF_ID]: makeRoof(),
+        [SEG_A_ID]: makeSegment(SEG_A_ID, [VENT_ID]),
+        [SEG_B_ID]: makeSegment(SEG_B_ID, []),
+        [VENT_ID]: makeVent(SEG_A_ID),
+      },
+      rootNodeIds: [ROOF_ID],
+    } as never)
     useScene.temporal.getState().clear()
   })
 
@@ -166,48 +164,41 @@ describe('node-actions reparent — repeated segment-hopping', () => {
     ['dormer', 'dorm_x'],
     ['solar-panel', 'sp_x'],
     ['ridge-vent', 'rvent_x'],
-  ])(
-    'A→B→A→B for %s: chimney-style auto-reparent leaves children clean',
-    (type, idStr) => {
-      const id = idStr as AnyNodeId
-      useScene.setState(
-        {
-          nodes: {
-            [ROOF_ID]: makeRoof(),
-            [SEG_A_ID]: makeSegment(SEG_A_ID, [id]),
-            [SEG_B_ID]: makeSegment(SEG_B_ID, []),
-            [id]: {
-              id,
-              type,
-              parentId: SEG_A_ID,
-              roofSegmentId: SEG_A_ID,
-              object: 'node',
-              visible: true,
-              name: '',
-              metadata: {},
-              position: [0, 0, 0],
-              rotation: 0,
-            } as unknown as AnyNode,
-          },
-          rootNodeIds: [ROOF_ID],
-        } as never,
-      )
+  ])('A→B→A→B for %s: chimney-style auto-reparent leaves children clean', (type, idStr) => {
+    const id = idStr as AnyNodeId
+    useScene.setState({
+      nodes: {
+        [ROOF_ID]: makeRoof(),
+        [SEG_A_ID]: makeSegment(SEG_A_ID, [id]),
+        [SEG_B_ID]: makeSegment(SEG_B_ID, []),
+        [id]: {
+          id,
+          type,
+          parentId: SEG_A_ID,
+          roofSegmentId: SEG_A_ID,
+          object: 'node',
+          visible: true,
+          name: '',
+          metadata: {},
+          position: [0, 0, 0],
+          rotation: 0,
+        } as unknown as AnyNode,
+      },
+      rootNodeIds: [ROOF_ID],
+    } as never)
 
-      const hop = (to: AnyNodeId) =>
-        useScene
-          .getState()
-          .updateNode(id, { parentId: to, roofSegmentId: to } as Partial<AnyNode>)
+    const hop = (to: AnyNodeId) =>
+      useScene.getState().updateNode(id, { parentId: to, roofSegmentId: to } as Partial<AnyNode>)
 
-      hop(SEG_B_ID)
-      hop(SEG_A_ID)
-      hop(SEG_B_ID)
+    hop(SEG_B_ID)
+    hop(SEG_A_ID)
+    hop(SEG_B_ID)
 
-      expect(childrenOf(SEG_A_ID)).toEqual([])
-      expect(childrenOf(SEG_B_ID)).toEqual([id])
-      const node = useScene.getState().nodes[id] as { parentId: AnyNodeId }
-      expect(node.parentId).toBe(SEG_B_ID)
-    },
-  )
+    expect(childrenOf(SEG_A_ID)).toEqual([])
+    expect(childrenOf(SEG_B_ID)).toEqual([id])
+    const node = useScene.getState().nodes[id] as { parentId: AnyNodeId }
+    expect(node.parentId).toBe(SEG_B_ID)
+  })
 
   test('A→B→A→B with redundant manual children edits (vent move-tool pattern, pre-fix)', () => {
     // Reproduces the box-vent / ridge-vent move-tool order: manual

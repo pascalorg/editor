@@ -23,6 +23,7 @@ import {
   type Object3D,
   OrthographicCamera,
 } from 'three'
+import { EDITOR_LAYER } from '../../lib/constants'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
@@ -198,6 +199,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
         frustumCulled={false}
+        layers={EDITOR_LAYER}
         onPointerDown={activateWallMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -263,6 +265,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
         frustumCulled={false}
+        layers={EDITOR_LAYER}
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()

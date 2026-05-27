@@ -19,6 +19,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   schemaVersion: 1,
   schema: RidgeVentNode,
   category: 'structure',
+  surfaceRole: 'roof',
 
   defaults: () => {
     const stub = RidgeVentNodeSchema.parse({

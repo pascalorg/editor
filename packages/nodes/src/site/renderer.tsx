@@ -1,9 +1,22 @@
 'use client'
 
-import { type AnyNodeId, type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
-import { NodeRenderer, unionPolygons, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import {
+  type AnyNodeId,
+  type SiteNode,
+  type SlabNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
+import {
+  getSceneTheme,
+  NodeRenderer,
+  unionPolygons,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
+import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 const Y_OFFSET = 0.01
 
@@ -37,8 +50,18 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const theme = useViewer((state) => state.theme)
-  const bgColor = theme === 'dark' ? '#1f2433' : '#fafafa'
+  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
+
+  // Lit (not Basic) so the site ground receives the directional shadow — Basic
+  // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
+  // keeps it tucked behind the grid/slab as before.
+  const groundMaterial = useMemo(() => {
+    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    material.polygonOffset = true
+    material.polygonOffsetFactor = 1
+    material.polygonOffsetUnits = 1
+    return material
+  }, [bgColor])
 
   // Cache slab polygon references to keep the selector stable across unrelated store updates
   const slabPolygonsCache = useRef<[number, number][][]>([])
@@ -122,14 +145,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
       {groundShape && (
-        <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh
+          material={groundMaterial}
+          position={[0, -0.05, 0]}
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
           <shapeGeometry args={[groundShape]} />
-          <meshBasicMaterial
-            color={bgColor}
-            polygonOffset={true}
-            polygonOffsetFactor={1}
-            polygonOffsetUnits={1}
-          />
         </mesh>
       )}
 
