@@ -740,6 +740,30 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * unset and rely on the generic overlay path.
    */
   floorplanMoveTarget?: FloorplanMoveTarget<z.infer<S>>
+  /**
+   * Optional hook letting a kind project the `useLiveNodeOverrides` map
+   * into a fresh `nodes` snapshot before its `def.floorplan` builder
+   * runs. The floor-plan layer calls this when present and passes the
+   * returned map both as the builder's `ctx` source AND as the
+   * effective node (so the kind's own override lands in `effectiveNode`).
+   *
+   * Used by wall, whose miter joins read sibling walls via
+   * `ctx.siblings`: during a 2D drag the moved wall + its linked
+   * neighbours publish per-frame `{ start, end, curveOffset }`
+   * overrides, and the floor-plan must merge those into every wall
+   * the builder can see — otherwise miter math snaps back to the
+   * committed positions while the cursor moves. Kinds whose previews
+   * are self-contained leave this unset and the layer hands the raw
+   * `nodes` through.
+   *
+   * Return the input `nodes` unchanged when no override is relevant
+   * so the caller can short-circuit.
+   */
+  floorplanSiblingOverrides?: (args: {
+    nodeId: AnyNodeId
+    nodes: Record<AnyNodeId, AnyNode>
+    liveOverrides: Map<string, Record<string, unknown>>
+  }) => Record<AnyNodeId, AnyNode>
   system?: SystemContribution
   tool?: LazyComponent
   /**
@@ -926,6 +950,26 @@ export type Capabilities = {
   floorPlaced?: FloorPlacedConfig
   roofAccessory?: RoofAccessoryConfig
   paint?: PaintCapability
+  /**
+   * Kind is placed by clicking on a wall (door, window). When set, the
+   * floor-plan layer lets wall background clicks pass through during
+   * placement / move-on-wall — the placement tool's `wall:click` event
+   * needs the SVG's `findClosestWallPoint` handler to run; without
+   * this the wall's registry entry would swallow the click via
+   * `handleSelect`. Read by `FloorplanRegistryLayer` when `movingNode`
+   * is set, so the active move can suspend wall selection.
+   */
+  wallOpeningPlacement?: boolean
+  /**
+   * Instances of this kind contain levels. When such a node is being
+   * moved, the floor-plan layer falls back to the moving node's id as
+   * the ambient building context — so the floor under the cursor keeps
+   * rendering dimmed throughout the gesture even though the explicit
+   * selection may have been cleared as part of the move handoff. Set
+   * on building; future container kinds (e.g. annexes) opt in by
+   * declaring the same flag.
+   */
+  floorplanLevelContainer?: boolean
 }
 
 /**

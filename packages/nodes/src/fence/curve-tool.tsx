@@ -16,7 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  getWallGridStep,
+  getSegmentGridStep,
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
@@ -32,7 +32,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * fence/curve-fence-tool.tsx). Same snap pipeline, same Shift override,
  * same history dance, same activation grace. Imports adjusted to the
  * `@pascal-app/editor` public surface (triggerSFX, markToolCancelConsumed,
- * getWallGridStep, snapScalarToGrid). Mounted via
+ * getSegmentGridStep, snapScalarToGrid). Mounted via
  * `def.affordanceTools.curve` — ToolManager picks it up at runtime,
  * legacy fallback is unused when this kind is registered.
  */
@@ -89,7 +89,7 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const snapStep = getWallGridStep()
+      const snapStep = getSegmentGridStep()
       const localX = shiftPressedRef.current
         ? event.localPosition[0]
         : snapScalarToGrid(event.localPosition[0], snapStep)

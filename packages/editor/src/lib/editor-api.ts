@@ -1,6 +1,25 @@
 import type { AnyNode, EditorApi, FenceNode, WallNode } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 
+type EditorState = ReturnType<typeof useEditor.getState>
+type EndpointEngager = (node: AnyNode, endpoint: 'start' | 'end', editor: EditorState) => void
+
+/**
+ * Per-kind endpoint-move engagement. Kinds whose 2D endpoint drag
+ * needs its own store field (wall ↔ `movingWallEndpoint`, fence ↔
+ * `movingFenceEndpoint`) register their bridge here. The dispatcher
+ * is a table lookup rather than an `if (type === 'wall')` chain so
+ * adding a new endpoint-draggable kind is a one-line entry instead
+ * of a new branch. Each entry casts the generic `AnyNode` to its
+ * concrete kind — the lookup key already guarantees the type.
+ */
+const endpointEngagers: Record<string, EndpointEngager> = {
+  wall: (node, endpoint, editor) =>
+    editor.setMovingWallEndpoint({ wall: node as WallNode, endpoint }),
+  fence: (node, endpoint, editor) =>
+    editor.setMovingFenceEndpoint({ fence: node as FenceNode, endpoint }),
+}
+
 /**
  * Concrete {@link EditorApi} backed by `useEditor`. Descriptors call into
  * editor state through this interface; the editor owns the actual setter
@@ -25,12 +44,7 @@ export function createEditorApi(): EditorApi {
       editor.setCurvingFence(null)
     },
     engageEndpointMove(node: AnyNode, endpoint: 'start' | 'end') {
-      const editor = useEditor.getState()
-      if (node.type === 'wall') {
-        editor.setMovingWallEndpoint({ wall: node as WallNode, endpoint })
-      } else if (node.type === 'fence') {
-        editor.setMovingFenceEndpoint({ fence: node as FenceNode, endpoint })
-      }
+      endpointEngagers[node.type]?.(node, endpoint, useEditor.getState())
     },
   }
 }

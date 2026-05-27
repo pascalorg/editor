@@ -27,6 +27,7 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
     // selection, never 3D click. Same reasoning as `level` / `site`.
     duplicable: false,
     deletable: false,
+    floorplanLevelContainer: true,
   },
 
   parametrics: buildingParametrics,

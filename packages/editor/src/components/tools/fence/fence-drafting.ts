@@ -11,8 +11,8 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   findWallSnapTarget,
   getWallAngleSnapStep,
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapPointTo45Degrees,
   snapPointToGrid,
   type WallPlanPoint,
@@ -135,7 +135,7 @@ export function snapFenceDraftPoint(args: {
   step?: number
 }): FencePlanPoint {
   const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step } = args
-  const gridStep = step ?? getWallGridStep()
+  const gridStep = step ?? getSegmentGridStep()
   const angleStep = getWallAngleSnapStep(gridStep)
   const basePoint =
     start && angleSnap
@@ -153,7 +153,7 @@ export function createFenceOnCurrentLevel(
   const currentLevelId = useViewer.getState().selection.levelId
   const { createNode, nodes } = useScene.getState()
 
-  if (!(currentLevelId && isWallLongEnough(start, end))) {
+  if (!(currentLevelId && isSegmentLongEnough(start, end))) {
     return null
   }
 

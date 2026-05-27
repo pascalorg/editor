@@ -37,13 +37,13 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
   }
 
   // Suppress node pointer events while an interaction drag is in
-  // progress. `cameraDragging` covers orbit/pan/dolly; `handleDragging`
-  // covers in-world handle drags (height arrow, width arrow, etc.).
-  // Without this, the synthesized click on pointerup would reroute
-  // selection to whatever mesh the cursor lands on at release.
+  // progress. `cameraDragging` covers orbit/pan/dolly; `inputDragging`
+  // covers host-driven drags (editor handle arrows etc.). Without
+  // this, the synthesized click on pointerup would reroute selection
+  // to whatever mesh the cursor lands on at release.
   const isInteractionActive = () => {
     const s = useViewer.getState()
-    return s.cameraDragging || s.handleDragging
+    return s.cameraDragging || s.inputDragging
   }
 
   return {

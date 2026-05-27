@@ -6,7 +6,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getWallGridStep, isWallLongEnough, snapPointToGrid } from '@pascal-app/editor'
+import { getSegmentGridStep, isSegmentLongEnough, snapPointToGrid } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 
 type PlanPoint = [number, number]
@@ -104,7 +104,7 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
       }
       const rawDx = planPoint[0] - rawAnchor[0]
       const rawDz = planPoint[1] - rawAnchor[1]
-      const step = getWallGridStep()
+      const step = getSegmentGridStep()
       const nextStart: PlanPoint = modifiers.shiftKey
         ? [originalStart[0] + rawDx, originalStart[1] + rawDz]
         : snapPointToGrid([originalStart[0] + rawDx, originalStart[1] + rawDz], step)
@@ -135,7 +135,7 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
 
     canCommit() {
       const [dx, dz] = lastDelta
-      return (dx !== 0 || dz !== 0) && isWallLongEnough(lastNextStart, lastNextEnd)
+      return (dx !== 0 || dz !== 0) && isSegmentLongEnough(lastNextStart, lastNextEnd)
     },
 
     commit() {

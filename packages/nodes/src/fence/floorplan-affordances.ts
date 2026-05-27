@@ -13,8 +13,8 @@ import {
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapFenceDraftPoint,
   snapScalarToGrid,
   WALL_FINE_GRID_STEP,
@@ -101,7 +101,7 @@ export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
     return {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
-        const snapStep = getWallGridStep()
+        const snapStep = getSegmentGridStep()
         const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
         const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
 
@@ -188,7 +188,7 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         return (
           !!finalFence &&
           finalFence.type === 'fence' &&
-          isWallLongEnough(finalFence.start, finalFence.end)
+          isSegmentLongEnough(finalFence.start, finalFence.end)
         )
       },
     }

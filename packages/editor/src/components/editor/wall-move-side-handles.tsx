@@ -433,11 +433,11 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 
     document.body.style.cursor = 'ns-resize'
     sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setResizingWallHeight(wall)
+    useEditor.getState().setActiveHandleDrag({ nodeId: wallId, label: 'height' })
     // Suppress R3F node pointer events until pointerup completes so the
     // synthesized click doesn't reroute selection to whatever mesh sits
     // under the cursor at release.
-    useViewer.getState().setHandleDragging(true)
+    useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
 
     // Drag publishes `{ height }` to `useLiveNodeOverrides` and marks
@@ -463,8 +463,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useEditor.getState().setResizingWallHeight(null)
-      useViewer.getState().setHandleDragging(false)
+      useEditor.getState().setActiveHandleDrag(null)
+      useViewer.getState().setInputDragging(false)
       dragCleanupRef.current = null
     }
     const onUp = () => {

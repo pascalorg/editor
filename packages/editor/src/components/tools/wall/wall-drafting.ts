@@ -49,7 +49,7 @@ function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
   return dx * dx + dz * dz
 }
 
-export function getWallGridStep(): number {
+export function getSegmentGridStep(): number {
   return useEditor.getState().gridSnapStep
 }
 
@@ -79,7 +79,7 @@ export function snapPointTo45Degrees(
   )
 }
 
-export function getWallAngleSnapStep(step = getWallGridStep()): number {
+export function getWallAngleSnapStep(step = getSegmentGridStep()): number {
   return WALL_ANGLE_SNAP_BY_GRID_STEP[step] ?? DEFAULT_WALL_ANGLE_SNAP_STEP
 }
 
@@ -428,7 +428,7 @@ export function snapWallDraftPoint(args: {
   const endpointSnap = findWallEndpointFromRaw(point, walls, ignoreWallIds)
   if (endpointSnap) return endpointSnap
 
-  const step = overrideStep ?? getWallGridStep()
+  const step = overrideStep ?? getSegmentGridStep()
   const angleStep = getWallAngleSnapStep(step)
   const basePoint =
     start && angleSnap
@@ -442,7 +442,7 @@ export function snapWallDraftPoint(args: {
   )
 }
 
-export function isWallLongEnough(start: WallPlanPoint, end: WallPlanPoint): boolean {
+export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): boolean {
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
@@ -454,7 +454,7 @@ export function createWallOnCurrentLevel(
   const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
   const { updateNodes } = useScene.getState()
 
-  if (!(currentLevelId && isWallLongEnough(start, end))) {
+  if (!(currentLevelId && isSegmentLongEnough(start, end))) {
     return null
   }
 
@@ -493,7 +493,7 @@ export function createWallOnCurrentLevel(
     resolvedStart = splitStart.point
   }
 
-  if (!isWallLongEnough(resolvedStart, resolvedEnd) || pointsEqual(resolvedStart, resolvedEnd)) {
+  if (!isSegmentLongEnough(resolvedStart, resolvedEnd) || pointsEqual(resolvedStart, resolvedEnd)) {
     return null
   }
 

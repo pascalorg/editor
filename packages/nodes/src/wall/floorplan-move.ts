@@ -13,8 +13,8 @@ import {
 } from '@pascal-app/core'
 import {
   getFloorplanWallThickness,
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapScalarToGrid,
   useWallMoveGhosts,
   type WallMoveGhostBridge,
@@ -113,7 +113,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
 
       const rawDx = planPoint[0] - rawAnchor[0]
       const rawDz = planPoint[1] - rawAnchor[1]
-      const step = getWallGridStep()
+      const step = getSegmentGridStep()
 
       // Axis-lock the move to the wall's perpendicular (normal). Project
       // the original centre + raw cursor delta onto the axis, snap the
@@ -164,7 +164,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // doesn't churn the scene graph with create / delete pairs.
       const collapsedIds = new Set([
         ...plannedUpdates
-          .filter((entry) => !isWallLongEnough(entry.start, entry.end))
+          .filter((entry) => !isSegmentLongEnough(entry.start, entry.end))
           .map((entry) => entry.id),
         ...plan.wallsToDelete.map((wall) => wall.id),
       ])
@@ -266,7 +266,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       )
       const collapsedLinkedWallIds = new Set([
         ...linkedWallUpdates
-          .filter((entry) => !isWallLongEnough(entry.start, entry.end))
+          .filter((entry) => !isSegmentLongEnough(entry.start, entry.end))
           .map((entry) => entry.id as AnyNodeId),
         ...plan.wallsToDelete.map((wall) => wall.id as AnyNodeId),
       ])

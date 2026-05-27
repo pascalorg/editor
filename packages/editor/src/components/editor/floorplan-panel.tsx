@@ -106,7 +106,7 @@ import {
 } from '../tools/stair/stair-defaults'
 import {
   createWallOnCurrentLevel,
-  isWallLongEnough,
+  isSegmentLongEnough,
   snapWallDraftPoint,
   WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
@@ -4131,9 +4131,12 @@ export function FloorplanPanel() {
   // `movingNode` carries the building's id even if the explicit
   // selection has been cleared as part of the move handoff.
   const movingBuildingId =
-    useEditor((state) =>
-      state.movingNode?.type === 'building' ? state.movingNode.id : null,
-    ) ?? null
+    useEditor((state) => {
+      const moving = state.movingNode
+      if (!moving) return null
+      const def = nodeRegistry.get(moving.type)
+      return def?.capabilities?.floorplanLevelContainer ? moving.id : null
+    }) ?? null
   const ambientBuildingId = currentBuildingId ?? movingBuildingId
   const hasAmbientBuildingLevel = useScene((state) => {
     if (levelId || !ambientBuildingId) return false
@@ -5029,7 +5032,7 @@ export function FloorplanPanel() {
   }, [shouldShowSiteBoundaryHandles, siteVertexDragState, visibleSitePolygon])
 
   const draftPolygon = useMemo(() => {
-    if (!(levelId && draftStart && draftEnd && isWallLongEnough(draftStart, draftEnd))) {
+    if (!(levelId && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
       return null
     }
 
@@ -5042,7 +5045,7 @@ export function FloorplanPanel() {
   // space. Length renders at the segment midpoint; angle arcs sit at
   // each endpoint that meets an existing wall.
   const draftWallMeasurement = useMemo(() => {
-    if (!(isWallBuildActive && draftStart && draftEnd && isWallLongEnough(draftStart, draftEnd))) {
+    if (!(isWallBuildActive && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
       return null
     }
 
@@ -6859,7 +6862,7 @@ export function FloorplanPanel() {
           )
         })
 
-        if (commitUpdates.length > 0 && isWallLongEnough(nextDraft.start, nextDraft.end)) {
+        if (commitUpdates.length > 0 && isSegmentLongEnough(nextDraft.start, nextDraft.end)) {
           useScene.getState().updateNodes(
             commitUpdates.map((update) => ({
               id: update.id as AnyNodeId,
@@ -7588,7 +7591,7 @@ export function FloorplanPanel() {
         return
       }
 
-      if (!isWallLongEnough(draftStart, point)) {
+      if (!isSegmentLongEnough(draftStart, point)) {
         return
       }
 

@@ -11,8 +11,8 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapScalarToGrid,
   snapWallDraftPoint,
   WALL_FINE_GRID_STEP,
@@ -108,7 +108,7 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
     return {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
-        const snapStep = getWallGridStep()
+        const snapStep = getSegmentGridStep()
         const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
         const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
 
@@ -232,7 +232,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // The dragged wall must still be long enough at the preview
         // length — checked against `lastPrimary*`, not scene, because
         // scene holds baseline values until commit().
-        return isWallLongEnough(lastPrimaryStart, lastPrimaryEnd)
+        return isSegmentLongEnough(lastPrimaryStart, lastPrimaryEnd)
       },
       commit() {
         // Atomic tracked write of the final endpoints, then drop the

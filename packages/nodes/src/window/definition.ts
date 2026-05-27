@@ -139,6 +139,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    wallOpeningPlacement: true,
   },
 
   parametrics: windowParametrics,

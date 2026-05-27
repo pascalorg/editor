@@ -115,9 +115,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // cleared as part of the move handoff. Fall back to the
   // mid-drag building id so the dimmed floor keeps rendering
   // throughout the gesture.
-  const movingBuildingId = useEditor((state) =>
-    state.movingNode?.type === 'building' ? state.movingNode.id : null,
-  )
+  const movingBuildingId = useEditor((state) => {
+    const moving = state.movingNode
+    if (!moving) return null
+    const def = nodeRegistry.get(moving.type)
+    return def?.capabilities?.floorplanLevelContainer ? moving.id : null
+  })
   const ambientBuildingSourceId = selectedBuildingId ?? movingBuildingId
 
   // When only a building is in scope (no specific level), fall back to
@@ -166,8 +169,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (editorPhase === 'structure' &&
       editorMode === 'build' &&
       (editorTool === 'door' || editorTool === 'window')) ||
-    movingNode?.type === 'door' ||
-    movingNode?.type === 'window'
+    (movingNode != null &&
+      !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
@@ -304,28 +307,23 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             }
           }
         }
-        // Wall live-overrides: the 2D drag handlers publish
-        // `{ start, end, curveOffset }` to `useLiveNodeOverrides` so
-        // the visual preview tracks the cursor without writing to
-        // zustand. The wall builder reads `ctx.siblings` for miter
-        // joins, so we also merge overrides into other walls in the
-        // same level via a per-builder `nodes` view below.
-        if (node.type === 'wall') {
-          const wallOverride = liveOverrides.get(id)
-          if (wallOverride && Object.keys(wallOverride).length > 0) {
-            effectiveNode = { ...node, ...wallOverride } as AnyNode
-          }
+        // Live-edit overrides: kinds whose `def.floorplan` builder
+        // reads cross-sibling data (wall miters, …) declare a
+        // `def.floorplanSiblingOverrides` hook that projects the
+        // override map into a merged `nodes` snapshot. The merged
+        // copy feeds `buildContext` so `ctx.siblings` reflects the
+        // live cursor positions, and replaces `effectiveNode` so the
+        // kind's own override lands too (covers the case where the
+        // node being rendered is itself the dragged one). Kinds
+        // without the hook hand the raw `nodes` through — most
+        // previews are self-contained.
+        const contextNodes = def?.floorplanSiblingOverrides
+          ? def.floorplanSiblingOverrides({ nodeId: id, nodes, liveOverrides })
+          : nodes
+        if (contextNodes !== nodes) {
+          const merged = contextNodes[id]
+          if (merged) effectiveNode = merged
         }
-        // For walls, expose an override-merged copy of `nodes` so
-        // `buildContext`'s sibling list (and the linked-wall miter
-        // calculation it feeds) reflects the live cursor positions.
-        // For every other kind we hand the raw `nodes` through —
-        // override-merging an entire scene per tick would be wasteful
-        // when only walls care about sibling state.
-        const contextNodes =
-          node.type === 'wall' && liveOverrides.size > 0
-            ? mergeWallOverridesIntoNodes(nodes, liveOverrides)
-            : nodes
         const ctx = buildContext(effectiveNode, contextNodes, {
           selected,
           highlighted,
@@ -1474,33 +1472,6 @@ function InteractiveGeometry({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Returns a copy of `nodes` where any wall with a live override has
- * `{ start, end, curveOffset, ... }` merged in. Used by the wall
- * branch of the registry builder so `ctx.siblings` (which feeds
- * `calculateLevelMiters`) reflects the live cursor positions during a
- * 2D drag, not the pre-drag scene state.
- *
- * Only wall entries are touched; every other node is shared by
- * reference. The allocation cost is one shallow object per overridden
- * wall — the override map is small (the moved wall + its linked
- * neighbours), so this is cheap.
- */
-function mergeWallOverridesIntoNodes(
-  nodes: Record<string, AnyNode>,
-  overrides: Map<string, Record<string, unknown>>,
-): Record<string, AnyNode> {
-  if (overrides.size === 0) return nodes
-  const out: Record<string, AnyNode> = { ...nodes }
-  for (const [id, override] of overrides) {
-    const existing = out[id]
-    if (!existing || existing.type !== 'wall') continue
-    if (Object.keys(override).length === 0) continue
-    out[id] = { ...existing, ...override } as AnyNode
-  }
-  return out
-}
 
 function buildContext(
   node: AnyNode,

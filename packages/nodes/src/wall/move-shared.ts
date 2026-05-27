@@ -9,7 +9,7 @@ import {
   type WallPlanPoint,
   WallNode as WallSchema,
 } from '@pascal-app/core'
-import { isWallLongEnough } from '@pascal-app/editor'
+import { isSegmentLongEnough } from '@pascal-app/editor'
 
 /**
  * Pure helpers shared by the 3D `MoveWallTool` and the 2D
@@ -150,7 +150,7 @@ export function buildBridgeWallCreates(args: {
   for (const plan of bridgePlans) {
     const nextPoint = plan.movedEndpoint === 'start' ? nextStart : nextEnd
 
-    if (!isWallLongEnough(plan.originalPoint, nextPoint)) {
+    if (!isSegmentLongEnough(plan.originalPoint, nextPoint)) {
       continue
     }
 
@@ -199,7 +199,7 @@ export function buildBridgeWallPreviews(args: {
   for (const plan of bridgePlans) {
     const nextPoint = plan.movedEndpoint === 'start' ? nextStart : nextEnd
 
-    if (!isWallLongEnough(plan.originalPoint, nextPoint)) {
+    if (!isSegmentLongEnough(plan.originalPoint, nextPoint)) {
       continue
     }
 

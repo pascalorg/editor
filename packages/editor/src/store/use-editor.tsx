@@ -211,30 +211,18 @@ type EditorState = {
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   movingFenceEndpoint: MovingFenceEndpoint | null
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
-  resizingWallHeight: WallNode | null
-  setResizingWallHeight: (wall: WallNode | null) => void
-  resizingDoorHeight: DoorNode | null
-  setResizingDoorHeight: (door: DoorNode | null) => void
-  resizingDoorWidth: DoorNode | null
-  setResizingDoorWidth: (door: DoorNode | null) => void
-  resizingWindowHeight: WindowNode | null
-  setResizingWindowHeight: (window: WindowNode | null) => void
-  resizingWindowWidth: WindowNode | null
-  setResizingWindowWidth: (window: WindowNode | null) => void
-  resizingStairSegmentWidth: StairSegmentNode | null
-  setResizingStairSegmentWidth: (segment: StairSegmentNode | null) => void
-  resizingStairSegmentLength: StairSegmentNode | null
-  setResizingStairSegmentLength: (segment: StairSegmentNode | null) => void
-  resizingStairSegmentHeight: StairSegmentNode | null
-  setResizingStairSegmentHeight: (segment: StairSegmentNode | null) => void
-  resizingCurvedStairRise: StairNode | null
-  setResizingCurvedStairRise: (stair: StairNode | null) => void
-  resizingCurvedStairWidth: StairNode | null
-  setResizingCurvedStairWidth: (stair: StairNode | null) => void
-  resizingCurvedStairInnerRadius: StairNode | null
-  setResizingCurvedStairInnerRadius: (stair: StairNode | null) => void
-  resizingCurvedStairSweep: StairNode | null
-  setResizingCurvedStairSweep: (stair: StairNode | null) => void
+  /**
+   * Generic per-kind handle drag state. Set by a node's resize handle
+   * (height arrow, width arrow, rise / sweep / inner-radius for curved
+   * stairs, …) at drag-start and cleared on drag-end. `label`
+   * identifies which dimension the handle controls — measurement
+   * overlays read it to render the right caption; the camera controls
+   * use the truthy value to suppress one-finger pan-rotate. Replaces
+   * the previous per-kind `resizing*` fields so adding a new resize
+   * handle doesn't require a new store field.
+   */
+  activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
+  setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -656,30 +644,8 @@ const useEditor = create<EditorState>()(
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       movingFenceEndpoint: null,
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
-      resizingWallHeight: null,
-      setResizingWallHeight: (wall) => set({ resizingWallHeight: wall }),
-      resizingDoorHeight: null,
-      setResizingDoorHeight: (door) => set({ resizingDoorHeight: door }),
-      resizingDoorWidth: null,
-      setResizingDoorWidth: (door) => set({ resizingDoorWidth: door }),
-      resizingWindowHeight: null,
-      setResizingWindowHeight: (windowNode) => set({ resizingWindowHeight: windowNode }),
-      resizingWindowWidth: null,
-      setResizingWindowWidth: (windowNode) => set({ resizingWindowWidth: windowNode }),
-      resizingStairSegmentWidth: null,
-      setResizingStairSegmentWidth: (segment) => set({ resizingStairSegmentWidth: segment }),
-      resizingStairSegmentLength: null,
-      setResizingStairSegmentLength: (segment) => set({ resizingStairSegmentLength: segment }),
-      resizingStairSegmentHeight: null,
-      setResizingStairSegmentHeight: (segment) => set({ resizingStairSegmentHeight: segment }),
-      resizingCurvedStairRise: null,
-      setResizingCurvedStairRise: (stair) => set({ resizingCurvedStairRise: stair }),
-      resizingCurvedStairWidth: null,
-      setResizingCurvedStairWidth: (stair) => set({ resizingCurvedStairWidth: stair }),
-      resizingCurvedStairInnerRadius: null,
-      setResizingCurvedStairInnerRadius: (stair) => set({ resizingCurvedStairInnerRadius: stair }),
-      resizingCurvedStairSweep: null,
-      setResizingCurvedStairSweep: (stair) => set({ resizingCurvedStairSweep: stair }),
+      activeHandleDrag: null,
+      setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,

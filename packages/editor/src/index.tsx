@@ -81,8 +81,8 @@ export {
 } from './components/tools/stair/stair-defaults'
 export {
   createWallOnCurrentLevel,
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,

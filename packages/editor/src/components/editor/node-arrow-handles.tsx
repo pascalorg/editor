@@ -534,7 +534,7 @@ function LinearArrow({
 
     document.body.style.cursor = cursor
     sfxEmitter.emit('sfx:item-pick')
-    useViewer.getState().setHandleDragging(true)
+    useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
     setIsDragging(true)
 
@@ -580,7 +580,7 @@ function LinearArrow({
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useViewer.getState().setHandleDragging(false)
+      useViewer.getState().setInputDragging(false)
       setIsDragging(false)
       dragCleanupRef.current = null
     }
@@ -794,7 +794,7 @@ function ArcArrow({
 
     document.body.style.cursor = dragCursor
     sfxEmitter.emit('sfx:item-pick')
-    useViewer.getState().setHandleDragging(true)
+    useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
     setIsDragging(true)
 
@@ -830,7 +830,7 @@ function ArcArrow({
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useViewer.getState().setHandleDragging(false)
+      useViewer.getState().setInputDragging(false)
       setIsDragging(false)
       dragCleanupRef.current = null
     }

@@ -139,32 +139,14 @@ export const CustomCameraControls = () => {
   const movingNode = useEditor((s) => s.movingNode)
   const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
-  const resizingWallHeight = useEditor((s) => s.resizingWallHeight)
-  const resizingDoorHeight = useEditor((s) => s.resizingDoorHeight)
-  const resizingDoorWidth = useEditor((s) => s.resizingDoorWidth)
-  const resizingStairSegmentWidth = useEditor((s) => s.resizingStairSegmentWidth)
-  const resizingStairSegmentLength = useEditor((s) => s.resizingStairSegmentLength)
-  const resizingStairSegmentHeight = useEditor((s) => s.resizingStairSegmentHeight)
-  const resizingCurvedStairRise = useEditor((s) => s.resizingCurvedStairRise)
-  const resizingCurvedStairWidth = useEditor((s) => s.resizingCurvedStairWidth)
-  const resizingCurvedStairInnerRadius = useEditor((s) => s.resizingCurvedStairInnerRadius)
-  const resizingCurvedStairSweep = useEditor((s) => s.resizingCurvedStairSweep)
+  const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
   const isInteracting = Boolean(
     tool ||
       movingNode ||
       movingWallEndpoint ||
       movingFenceEndpoint ||
-      resizingWallHeight ||
-      resizingDoorHeight ||
-      resizingDoorWidth ||
-      resizingStairSegmentWidth ||
-      resizingStairSegmentLength ||
-      resizingStairSegmentHeight ||
-      resizingCurvedStairRise ||
-      resizingCurvedStairWidth ||
-      resizingCurvedStairInnerRadius ||
-      resizingCurvedStairSweep ||
+      activeHandleDrag ||
       isBoxSelectActive,
   )
   const touches = useMemo(() => {

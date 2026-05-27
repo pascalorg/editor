@@ -8,7 +8,7 @@ import {
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
-  isWallLongEnough,
+  isSegmentLongEnough,
   snapFenceDraftPoint,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
@@ -28,7 +28,7 @@ import {
  *  - **apply**: writes the fence + linked fence endpoints into the
  *    scene. Drag-session paused history captures originals; cascade
  *    resolver fans dirty marks through `endpoint-match`.
- *  - **commit**: requires `hasChanged` && `isWallLongEnough(next)`.
+ *  - **commit**: requires `hasChanged` && `isSegmentLongEnough(next)`.
  *    Performs the single-undo dance — revert to originals (snapshot),
  *    resume history, re-apply final draft — so the entire drag is one
  *    `Ctrl-Z` step. Returns false to reject; `createDragSession.cancel`
@@ -196,7 +196,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // fence/actions/curve.ts for the rationale (no-op drag must still
       // push a pastState entry to avoid Ctrl-Z cancelling the fence
       // creation that preceded the activation).
-      if (!isWallLongEnough(draft.start, draft.end)) return false
+      if (!isSegmentLongEnough(draft.start, draft.end)) return false
 
       // Single-undo dance: revert to originals (paused history → no
       // zundo record), resume history, then re-apply the final draft

@@ -25,8 +25,8 @@ import {
 import {
   CursorSphere,
   EDITOR_LAYER,
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
@@ -393,7 +393,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       ]
       const previewCollapsedWallIds = new Set([
         ...previewUpdates
-          .filter((entry) => entry.id !== nodeId && !isWallLongEnough(entry.start, entry.end))
+          .filter((entry) => entry.id !== nodeId && !isSegmentLongEnough(entry.start, entry.end))
           .map((entry) => entry.id as AnyNodeId),
         ...previewPlan.wallsToDelete.map((wall) => wall.id as AnyNodeId),
       ])
@@ -432,7 +432,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const onGridMove = (event: GridEvent) => {
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
-      const snapStep = getWallGridStep()
+      const snapStep = getSegmentGridStep()
 
       // Anchor at the raw cursor so the displacement is measured in
       // continuous space.
@@ -514,7 +514,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       )
       const collapsedLinkedWallIds = new Set([
         ...linkedWallUpdates
-          .filter((entry) => !isWallLongEnough(entry.start, entry.end))
+          .filter((entry) => !isSegmentLongEnough(entry.start, entry.end))
           .map((entry) => entry.id as AnyNodeId),
         ...commitPlan.wallsToDelete.map((wall) => wall.id as AnyNodeId),
       ])

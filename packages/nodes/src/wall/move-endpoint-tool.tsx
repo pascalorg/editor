@@ -14,7 +14,7 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
-  isWallLongEnough,
+  isSegmentLongEnough,
   type MovingWallEndpoint,
   markToolCancelConsumed,
   snapWallDraftPoint,
@@ -307,7 +307,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
       )
 
-      if (hasChanged && isWallLongEnough(preview.start, preview.end)) {
+      if (hasChanged && isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
         // Restore original baseline while paused so the next resume+update

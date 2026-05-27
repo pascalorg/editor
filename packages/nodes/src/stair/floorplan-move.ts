@@ -6,7 +6,7 @@ import {
   snapScalar,
   useScene,
 } from '@pascal-app/core'
-import { getWallGridStep } from '@pascal-app/editor'
+import { getSegmentGridStep } from '@pascal-app/editor'
 
 /**
  * 2D floor-plan move handler for stair — kicks in when the user clicks
@@ -73,7 +73,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node 
       // to snap to half-metre cells even when the user had set the grid
       // to a finer step like 0.1, so the cursor and the stair SVG
       // landed at different grid points. Shift bypasses snap entirely.
-      const step = getWallGridStep()
+      const step = getSegmentGridStep()
       const rawX = originalX + rawDx
       const rawZ = originalZ + rawDz
       const sx = modifiers.shiftKey ? rawX : snapScalar(rawX, step)

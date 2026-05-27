@@ -142,6 +142,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    wallOpeningPlacement: true,
   },
 
   parametrics: doorParametrics,
