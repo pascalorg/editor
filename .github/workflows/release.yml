@@ -15,13 +15,14 @@ on:
           - ifc-converter
           - all
       bump:
-        description: "Version bump"
+        description: "Version bump (use 'none' to publish current version as-is)"
         required: true
         type: choice
         options:
           - patch
           - minor
           - major
+          - none
       dry-run:
         description: "Dry run (no publish)"
         required: false
@@ -65,6 +66,7 @@ jobs:
             if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
             if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
             if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
+            if [ "$BUMP" = "none" ]; then echo "$v"; return; fi
             echo "$MAJ.$MIN.$PAT"
           }
 
