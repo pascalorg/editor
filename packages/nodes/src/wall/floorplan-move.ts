@@ -83,10 +83,20 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         originalEnd,
       })
 
-  // Raw (un-snapped) cursor at drag start. Using the raw anchor lets the
-  // wall respond to every sub-step cursor movement: the wall's
-  // perpendicular projection is snapped to grid each tick, so the wall
-  // lands on grid lines along its normal regardless of starting offset.
+  // Anchor lazily at the first cursor sample (the click point) and
+  // measure cursor movement from there. The wall doesn't shift on
+  // click — `rawDelta` is zero on the first apply, so the snapped
+  // centre projection equals `originalProj` (already grid-aligned for
+  // walls placed via the draft tool). As the cursor moves, the wall
+  // translates along its normal by the cursor's perpendicular delta,
+  // snapped to absolute grid lines.
+  //
+  // Using `originalCenter` as the anchor instead would pin the wall's
+  // centre to the cursor — but the floor-plan drag icon lives inside
+  // a floating menu whose hit-area is offset from the exact wall
+  // centre, so the first `planPoint` would never equal `originalCenter`
+  // and the wall would snap to a different grid cell the instant the
+  // drag began, even before the cursor moved.
   let rawAnchor: WallPlanPoint | null = null
   let lastDelta: WallPlanPoint = [0, 0]
   let lastNextStart: WallPlanPoint = originalStart

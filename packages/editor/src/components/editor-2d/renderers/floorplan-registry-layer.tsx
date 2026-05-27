@@ -152,6 +152,22 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const renderCtx = useFloorplanRender()
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  // Door / window placement (both build and move) needs the SVG's
+  // background click handler to run — it finds the closest wall via
+  // `findClosestWallPoint` and emits `wall:click` for the door / window
+  // tool. When the user clicks *on top of* a wall in this mode, the
+  // wall's registry entry would otherwise swallow the click via
+  // `handleClickStop` / `handleSelect`, so the placement never fires.
+  // Pass clicks through in that case.
+  const editorPhase = useEditor((s) => s.phase)
+  const editorMode = useEditor((s) => s.mode)
+  const editorTool = useEditor((s) => s.tool)
+  const isOpeningPlacementActive =
+    (editorPhase === 'structure' &&
+      editorMode === 'build' &&
+      (editorTool === 'door' || editorTool === 'window')) ||
+    movingNode?.type === 'door' ||
+    movingNode?.type === 'window'
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
@@ -618,8 +634,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       className="floorplan-registry-entry"
       data-node-id={id}
       key={key}
-      onClick={handleClickStop}
-      onPointerDown={(e) => handleSelect(id, e)}
+      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
+      onPointerDown={isOpeningPlacementActive ? undefined : (e) => handleSelect(id, e)}
       // Mirror the sidebar tree nodes' hover wiring — `useViewer.
       // hoveredId` drives the highlight halo in 3D as well as the
       // wall / fence floor-plan hover stroke. Setting it on
@@ -679,7 +695,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // still propagate normally inside the registry tree.
     <g
       className="floorplan-registry-layer"
-      onClick={handleClickStop}
+      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
       opacity={isAmbient ? 0.3 : undefined}
       style={isAmbient ? { pointerEvents: 'none' } : undefined}
     >

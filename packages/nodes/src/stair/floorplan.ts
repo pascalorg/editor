@@ -144,7 +144,19 @@ export function buildStairFloorplan(
           ]
           const rightMid: [number, number] = [(c1.x + c2.x) / 2, (c1.y + c2.y) / 2]
           const leftMid: [number, number] = [(c0.x + c3.x) / 2, (c0.y + c3.y) / 2]
-          const frontMid: [number, number] = [(c2.x + c3.x) / 2, (c2.y + c3.y) / 2]
+          const frontEdgeMid: [number, number] = [(c2.x + c3.x) / 2, (c2.y + c3.y) / 2]
+          // Offset the length arrow's base OUT past the front edge so the
+          // shaft+head sit entirely beyond the stair body. The arrow path's
+          // own `bi` inset is only 0.03 m — short enough that the head can
+          // still overlap the stair fill at common zooms, which reads as
+          // "the arrow is lying along the edge / pointing sideways" instead
+          // of clearly pointing forward off the run. Pushing the anchor
+          // along +axisZ removes that ambiguity.
+          const segmentLengthArrowOffset = 0.06
+          const frontArrowAnchor: [number, number] = [
+            frontEdgeMid[0] + axisZ[0] * segmentLengthArrowOffset,
+            frontEdgeMid[1] + axisZ[1] * segmentLengthArrowOffset,
+          ]
           const segmentId = segmentEntry.segment.id
           children.push({
             kind: 'move-arrow',
@@ -160,9 +172,14 @@ export function buildStairFloorplan(
             affordance: 'segment-width',
             payload: { segmentId, side: 'left', axisX },
           })
+          // Length arrow — anchored just past the front edge, pointing in
+          // the segment's run direction (axisZ = back-to-front). After the
+          // SVG `rotate(angle)`, the arrow's local +X (its tip) lines up
+          // with +axisZ, so the head clearly extends forward off the front
+          // edge instead of sideways across it.
           children.push({
             kind: 'move-arrow',
-            point: frontMid,
+            point: frontArrowAnchor,
             angle: Math.atan2(axisZ[1], axisZ[0]),
             affordance: 'segment-length',
             payload: { segmentId, axisZ },

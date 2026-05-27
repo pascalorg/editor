@@ -266,6 +266,10 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
       useViewer.getState().setSelection({ selectedIds: [fenceId] })
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      // Claim teardown ownership so the 2D overlay doesn't redundantly
+      // revert the same baseline on its own cleanup. Mirrors wall's
+      // move-tool cancel path.
+      useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
     }
 
@@ -275,7 +279,22 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
 
     return () => {
       if (!wasCommitted) {
-        restoreOriginal()
+        // The 2D `FloorplanRegistryMoveOverlay` mounts in parallel with
+        // this 3D tool whenever the user enters fence move mode from the
+        // floor plan. When the 2D overlay commits via
+        // `fenceFloorplanMoveTarget.commit()` it calls
+        // `setMovingNode(null)`, which unmounts this tool. Our local
+        // `wasCommitted` is still false (its own `onGridClick` never
+        // ran), so a blind `restoreOriginal()` here would overwrite the
+        // just-committed new positions back to the originals — the
+        // "fence reverts on commit" symptom users see in the 2D view.
+        // The 2D overlay sets `movingNodeOrigin = '2d'` before clearing
+        // movingNode; respect that flag and skip the restore. Mirrors
+        // the wall move-tool's `finalisedBy2D` guard.
+        const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
+        if (!finalisedBy2D) {
+          restoreOriginal()
+        }
       }
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)

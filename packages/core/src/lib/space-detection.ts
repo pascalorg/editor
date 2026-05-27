@@ -47,6 +47,12 @@ export type AutoSlabSyncPlan = {
   delete: Array<SlabNodeType['id']>
 }
 
+export type AutoCeilingSyncPlan = {
+  create: CeilingNodeType[]
+  update: Array<{ id: CeilingNodeType['id']; data: Partial<CeilingNodeType> }>
+  delete: Array<CeilingNodeType['id']>
+}
+
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
 const DEFAULT_AUTO_CEILING_HEIGHT = 2.5
 const ROOM_CURVE_TOLERANCE = 0.04
@@ -650,12 +656,10 @@ function syncAutoSlabsForLevel(
   }
 }
 
-function syncAutoCeilingsForLevel(
-  levelId: string,
+export function planAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
-  sceneStore: any,
-) {
+): AutoCeilingSyncPlan {
   const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
   const manualSignatures = new Set(
     manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
@@ -782,16 +786,31 @@ function syncAutoCeilingsForLevel(
     )
   }
 
-  if (ceilingsToDelete.length > 0) {
-    sceneStore.getState().deleteNodes(ceilingsToDelete)
+  return {
+    create: ceilingsToCreate,
+    update: ceilingsToUpdate,
+    delete: ceilingsToDelete,
+  }
+}
+
+function syncAutoCeilingsForLevel(
+  levelId: string,
+  roomPolygons: Point2D[][],
+  existingCeilings: CeilingNodeType[],
+  sceneStore: any,
+) {
+  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings)
+
+  if (plan.delete.length > 0) {
+    sceneStore.getState().deleteNodes(plan.delete)
   }
 
-  if (ceilingsToUpdate.length > 0) {
-    sceneStore.getState().updateNodes(ceilingsToUpdate)
+  if (plan.update.length > 0) {
+    sceneStore.getState().updateNodes(plan.update)
   }
 
-  if (ceilingsToCreate.length > 0) {
-    sceneStore.getState().createNodes(ceilingsToCreate.map((node) => ({ node, parentId: levelId })))
+  if (plan.create.length > 0) {
+    sceneStore.getState().createNodes(plan.create.map((node) => ({ node, parentId: levelId })))
   }
 }
 

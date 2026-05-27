@@ -2,16 +2,21 @@
 
 import {
   type AnyNodeId,
+  type AutoCeilingSyncPlan,
+  type AutoSlabSyncPlan,
+  type CeilingNode,
   detectSpacesForLevel,
   emitter,
   type GridEvent,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
   pauseSceneHistory,
+  planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
   resumeSceneHistory,
   type SlabNode,
+  useLiveNodeOverrides,
   useScene,
   type WallMoveAxis,
   type WallMoveJunctionPlan,
@@ -69,27 +74,17 @@ function rotateVector([x, z]: [number, number], angle: number): [number, number]
   return [x * cos - z * sin, x * sin + z * cos]
 }
 
-function cloneSlabSnapshot(slab: SlabNode): SlabNode {
-  return {
-    ...slab,
-    polygon: slab.polygon.map(([x, z]) => [x, z] as [number, number]),
-    holes: slab.holes.map((hole) => hole.map(([x, z]) => [x, z] as [number, number])),
-    holeMetadata: slab.holeMetadata.map((metadata) => ({ ...metadata })),
-  }
-}
-
 function getLevelSlabs(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
   return Object.values(nodes).filter(
     (entry): entry is SlabNode => entry?.type === 'slab' && (entry.parentId ?? null) === levelId,
   )
 }
 
-function getLevelAutoSlabs(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
-  return getLevelSlabs(levelId, nodes).filter((slab) => slab.autoFromWalls)
-}
-
-function getLevelAutoSlabSnapshots(levelId: string) {
-  return getLevelAutoSlabs(levelId, useScene.getState().nodes).map(cloneSlabSnapshot)
+function getLevelCeilings(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
+  return Object.values(nodes).filter(
+    (entry): entry is CeilingNode =>
+      entry?.type === 'ceiling' && (entry.parentId ?? null) === levelId,
+  )
 }
 
 function setPreviewGeometryAttributes(
@@ -189,9 +184,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           originalEnd: node.end,
         }),
   )
-  const originalAutoSlabsRef = useRef<SlabNode[]>(
-    node.parentId ? getLevelAutoSlabSnapshots(node.parentId) : [],
-  )
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const nodeIdRef = useRef(node.id)
   const previewRef = useRef<{ start: [number, number]; end: [number, number] } | null>(null)
@@ -216,8 +208,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const originalCenter = originalCenterRef.current
     const originalHalfVector = originalHalfVectorRef.current
     const levelId = node.parentId ?? null
-    const originalAutoSlabs = originalAutoSlabsRef.current
-
     pauseSceneHistory(useScene)
     let shouldRestoreOnCleanup = true
 
@@ -235,70 +225,125 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       }
     }
 
-    const applyLiveAutoSlabPreview = (walls: WallNode[]) => {
-      if (!levelId) {
-        return
-      }
+    // Live auto-slab / auto-ceiling preview. Calculates the new
+    // surfaces from the moving wall configuration each tick, then
+    // sends polygon overrides to `useLiveNodeOverrides` (and marks
+    // the slab / ceiling dirty) so `GeometrySystem` / `CeilingSystem`
+    // rebuild the mesh through the existing `getEffectiveNode` merge
+    // path. *Nothing* is written to the scene store during the drag —
+    // the store stays at pre-drag values; commit writes the final
+    // plan in one atomic `applyNodeChanges`. Mirrors the wall's own
+    // 2D drag pattern (`useLiveNodeOverrides` → mesh, store on
+    // commit).
+    //
+    // Creates / deletes from the plan are *deferred* to commit. We
+    // can't represent a "node that doesn't exist yet" through
+    // overrides, so newly-detected rooms only get their slab/ceiling
+    // materialised on release; rooms whose closing wall pulls away
+    // keep their slab/ceiling visible (at the original polygon) until
+    // commit clears them. UX-wise this trades the previous "ghost
+    // appears/disappears mid-drag" feedback for atomic, undoable
+    // commits — which is what the user asked for.
+    //
+    // `latestSurfacePlans` holds the most recent plan from the last
+    // live tick. `commitSurfacesToStore` flushes it (creates,
+    // updates, deletes) into the scene as part of the commit-time
+    // atomic write, then `clearSurfaceOverrides` drops the override
+    // map so the system reads from the now-committed store.
+    let latestSurfacePlans: { slabs: AutoSlabSyncPlan; ceilings: AutoCeilingSyncPlan } | null = null
+    const touchedSlabIds = new Set<AnyNodeId>()
+    const touchedCeilingIds = new Set<AnyNodeId>()
+
+    const publishLiveSurfaceOverrides = (walls: WallNode[]) => {
+      if (!levelId) return
 
       const levelWalls = walls.filter((wall) => (wall.parentId ?? null) === levelId)
       const sceneState = useScene.getState()
       const { roomPolygons } = detectSpacesForLevel(levelId, levelWalls)
-      const slabPlan = planAutoSlabsForLevel(roomPolygons, getLevelSlabs(levelId, sceneState.nodes))
 
-      if (
-        slabPlan.create.length === 0 &&
-        slabPlan.update.length === 0 &&
-        slabPlan.delete.length === 0
-      ) {
-        return
+      // Plan against the pre-drag scene — `getLevelSlabs/Ceilings`
+      // reads from the unchanged store, so the matcher's "remap
+      // existing room → existing slab" logic sees stable IDs across
+      // ticks. Without this anchor, IDs would drift as overrides
+      // re-flowed through the planner.
+      const slabPlan = planAutoSlabsForLevel(roomPolygons, getLevelSlabs(levelId, sceneState.nodes))
+      const ceilingPlan = planAutoCeilingsForLevel(
+        roomPolygons,
+        getLevelCeilings(levelId, sceneState.nodes),
+      )
+
+      latestSurfacePlans = { slabs: slabPlan, ceilings: ceilingPlan }
+
+      const overrideEntries: Array<[string, Record<string, unknown>]> = []
+      for (const update of slabPlan.update) {
+        if (update.data.polygon === undefined) continue
+        overrideEntries.push([update.id, { polygon: update.data.polygon }])
+        touchedSlabIds.add(update.id as AnyNodeId)
+      }
+      for (const update of ceilingPlan.update) {
+        if (update.data.polygon === undefined) continue
+        overrideEntries.push([update.id, { polygon: update.data.polygon }])
+        touchedCeilingIds.add(update.id as AnyNodeId)
       }
 
-      sceneState.applyNodeChanges({
-        update: slabPlan.update.map((entry) => ({
+      if (overrideEntries.length > 0) {
+        useLiveNodeOverrides.getState().setMany(overrideEntries)
+        for (const [id] of overrideEntries) {
+          sceneState.markDirty(id as AnyNodeId)
+        }
+      }
+    }
+
+    // Commit-time: flush the last live plan into the scene store as
+    // one atomic write, then drop overrides so the renderer reads
+    // from the now-current store state. Called from `commitPreview`
+    // *while history is resumed*, so the entire surface delta is one
+    // undoable step alongside the wall update.
+    const commitSurfacesToStore = () => {
+      if (!levelId || !latestSurfacePlans) return
+
+      const { slabs, ceilings } = latestSurfacePlans
+      const update = [
+        ...slabs.update.map((entry) => ({
           id: entry.id as AnyNodeId,
           data: entry.data,
         })),
-        create: slabPlan.create.map((slab) => ({
+        ...ceilings.update.map((entry) => ({
+          id: entry.id as AnyNodeId,
+          data: entry.data,
+        })),
+      ]
+      const create = [
+        ...slabs.create.map((slab) => ({
           node: slab,
           parentId: levelId as AnyNodeId,
         })),
-        delete: slabPlan.delete.map((id) => id as AnyNodeId),
-      })
-    }
-
-    const restoreAutoSlabPreview = () => {
-      if (!levelId) {
-        return
-      }
-
-      const sceneState = useScene.getState()
-      const originalIds = new Set(originalAutoSlabs.map((slab) => slab.id))
-      const currentAutoSlabs = getLevelAutoSlabs(levelId, sceneState.nodes)
-      const update = originalAutoSlabs
-        .filter((slab) => sceneState.nodes[slab.id as AnyNodeId])
-        .map((slab) => ({
-          id: slab.id as AnyNodeId,
-          data: cloneSlabSnapshot(slab),
-        }))
-      const create = originalAutoSlabs
-        .filter((slab) => !sceneState.nodes[slab.id as AnyNodeId])
-        .map((slab) => ({
-          node: cloneSlabSnapshot(slab),
+        ...ceilings.create.map((ceiling) => ({
+          node: ceiling,
           parentId: levelId as AnyNodeId,
-        }))
-      const deleteIds = currentAutoSlabs
-        .filter((slab) => !originalIds.has(slab.id))
-        .map((slab) => slab.id as AnyNodeId)
+        })),
+      ]
+      const deleteIds = [
+        ...slabs.delete.map((id) => id as AnyNodeId),
+        ...ceilings.delete.map((id) => id as AnyNodeId),
+      ]
 
-      if (update.length === 0 && create.length === 0 && deleteIds.length === 0) {
-        return
-      }
+      if (update.length === 0 && create.length === 0 && deleteIds.length === 0) return
 
-      sceneState.applyNodeChanges({
+      useScene.getState().applyNodeChanges({
         update,
         create,
         delete: deleteIds,
       })
+    }
+
+    const clearSurfaceOverrides = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      for (const id of touchedSlabIds) overrides.clear(id)
+      for (const id of touchedCeilingIds) overrides.clear(id)
+      touchedSlabIds.clear()
+      touchedCeilingIds.clear()
+      latestSurfacePlans = null
     }
 
     const buildWallFromCenter = (center: [number, number]) => {
@@ -369,7 +414,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const virtualBridgeWalls = bridgePreviews.map((preview) => preview.wall)
       setGhostWallPreviews(nextGhostWalls)
       applyNodePreview(previewUpdates)
-      applyLiveAutoSlabPreview([...previewSceneWalls, ...virtualBridgeWalls])
+      publishLiveSurfaceOverrides([...previewSceneWalls, ...virtualBridgeWalls])
     }
 
     const restoreOriginal = () => {
@@ -378,7 +423,10 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         { id: nodeId, start: originalStart, end: originalEnd },
         ...linkedOriginalsRef.current,
       ])
-      restoreAutoSlabPreview()
+      // No scene rollback for surfaces — nothing was written. Just
+      // clear the live overrides so the renderer falls back to the
+      // (pre-drag, unchanged) store state.
+      clearSurfaceOverrides()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -447,12 +495,13 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       // Restore original baseline while paused so the next resume+update
       // registers as a single tracked change (undo reverts to original).
+      // Surfaces stayed in the store the whole drag (override-driven
+      // mesh preview), so there's nothing to restore for them.
       setGhostWallPreviews([])
       applyNodePreview([
         { id: nodeId, start: originalStart, end: originalEnd },
         ...linkedOriginalsRef.current,
       ])
-      restoreAutoSlabPreview()
 
       resumeSceneHistory(useScene)
       const commitPlan = getMovePlan(preview.start, preview.end)
@@ -504,6 +553,14 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         create: bridgeCreates,
         delete: Array.from(collapsedLinkedWallIds),
       })
+
+      // Flush the last live surface plan (slab + ceiling creates,
+      // updates, deletes) into the store while history is still
+      // resumed, so the surface delta joins the wall change as one
+      // undoable step. Then drop the live overrides — the renderer
+      // now reads the committed polygons directly.
+      commitSurfacesToStore()
+      clearSurfaceOverrides()
 
       pauseSceneHistory(useScene)
 

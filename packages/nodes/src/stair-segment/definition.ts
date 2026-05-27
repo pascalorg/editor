@@ -44,6 +44,14 @@ function stairSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<Stair
 // Length: segment's back-face (Z = length) anchors against the chain end,
 // so the run simply extends toward +Z as length grows. anchor='min' →
 // drag +Z grows length 1:1.
+//
+// `rotationY` is intentionally omitted. The generic linear-arrow renderer
+// already auto-rotates `axis: 'z'` chevrons by `-π/2` so the local +X tip
+// faces +Z (see `axisRotationY` in `node-arrow-handles.tsx`). Adding our
+// own `-π/2` here stacks to `-π`, which spins the tip to `-X` and the
+// chevron reads as sideways across the front edge instead of pointing
+// forward off the run. Shelf / roof-segment depth handles match this —
+// neither sets `rotationY` for their `axis: 'z'` arrow.
 function stairSegmentLengthHandle(): HandleDescriptor<StairSegmentNodeType> {
   return {
     kind: 'linear-resize',
@@ -54,7 +62,6 @@ function stairSegmentLengthHandle(): HandleDescriptor<StairSegmentNodeType> {
     apply: (_n, newValue) => ({ length: newValue }),
     placement: {
       position: (n) => [0, n.height / 2, n.length + LENGTH_HANDLE_OFFSET],
-      rotationY: () => -Math.PI / 2,
     },
     portal: 'grandparent',
   }
