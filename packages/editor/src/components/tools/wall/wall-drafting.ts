@@ -19,6 +19,9 @@ import useEditor from '../../../store/use-editor'
 export type WallPlanPoint = [number, number]
 
 export const WALL_GRID_STEP = 0.5
+// Smallest available grid snap. Used as a precision-mode step (Shift +
+// drag) so a drag can land on values the regular grid skips.
+export const WALL_FINE_GRID_STEP = 0.05
 export const WALL_JOIN_SNAP_RADIUS = 0.35
 export const WALL_MIN_LENGTH = 0.01
 const DEFAULT_WALL_ANGLE_SNAP_STEP = Math.PI / 4
@@ -377,9 +380,11 @@ export function snapWallDraftPoint(args: {
   start?: WallPlanPoint
   angleSnap?: boolean
   ignoreWallIds?: string[]
+  /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
+  step?: number
 }): WallPlanPoint {
-  const { point, walls, start, angleSnap = false, ignoreWallIds } = args
-  const step = getWallGridStep()
+  const { point, walls, start, angleSnap = false, ignoreWallIds, step: overrideStep } = args
+  const step = overrideStep ?? getWallGridStep()
   const angleStep = getWallAngleSnapStep(step)
   const basePoint =
     start && angleSnap

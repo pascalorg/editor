@@ -25,6 +25,7 @@ import {
   type Object3D,
   OrthographicCamera,
   Plane,
+  Quaternion,
   Shape,
   Vector2,
   Vector3,
@@ -213,6 +214,7 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const [isHovered, setIsHovered] = useState(false)
   const { camera } = useThree()
   const billboardRef = useRef<Group>(null)
+  const parentWorldQuaternionRef = useRef(new Quaternion())
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   const scale = (isHovered ? 1.25 : 1) * zoom
 
@@ -275,11 +277,23 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   useEffect(() => () => ringMaterial.dispose(), [ringMaterial])
 
   // Billboard the hex disc to the camera so the picker is always
-  // recognisable regardless of viewing angle. Assumes the parent level
-  // has no rotation, which is the standard case.
+  // recognisable regardless of viewing angle.
+  //
+  // Why parent-aware: the disc lives under a `createPortal` into the
+  // level object, which itself sits under a building. Both can have
+  // non-identity world rotations. `quaternion.copy(camera.quaternion)`
+  // alone sets the LOCAL quaternion, so any ancestor rotation rotates
+  // the disc away from the camera. We instead solve for a local
+  // quaternion whose composition with the parent world quaternion
+  // equals the camera's: `local = parentWorld⁻¹ · cameraWorld`.
   useFrame(() => {
-    if (billboardRef.current) {
-      billboardRef.current.quaternion.copy(camera.quaternion)
+    const billboard = billboardRef.current
+    if (!billboard) return
+    billboard.quaternion.copy(camera.quaternion)
+    const parent = billboard.parent
+    if (parent) {
+      parent.getWorldQuaternion(parentWorldQuaternionRef.current)
+      billboard.quaternion.premultiply(parentWorldQuaternionRef.current.invert())
     }
   })
 

@@ -20,6 +20,7 @@ import {
   snapWallDraftPoint,
   triggerSFX,
   useEditor,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -262,12 +263,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     const onGridMove = (event: GridEvent) => {
       const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
+      // Endpoint *move* snaps to the grid (and to other wall corners) —
+      // 45° angle snap is for the initial draft, where it gives clean
+      // orthogonal corners; here it would fight every perpendicular
+      // drag by warping the endpoint onto the nearest 45° line from
+      // the fixed corner.
+      //
+      // Shift switches to the *fine* grid step (`WALL_FINE_GRID_STEP`)
+      // for precision placement, so it can land on positions the
+      // active grid would skip (e.g. 0.05m increments when the active
+      // grid is 0.5m). It does NOT bypass snap.
       const snappedPoint = snapWallDraftPoint({
         point: planPoint,
         walls: levelWalls,
-        start: fixedPoint,
-        angleSnap: !shiftPressedRef.current,
         ignoreWallIds: [nodeId],
+        step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
       })
 
       if (

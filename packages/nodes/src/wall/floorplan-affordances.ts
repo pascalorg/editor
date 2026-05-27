@@ -15,6 +15,7 @@ import {
   isWallLongEnough,
   snapScalarToGrid,
   snapWallDraftPoint,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 
@@ -179,12 +180,15 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the legacy flow.
         const sceneNodes = useScene.getState().nodes
         const walls = collectLevelWalls(sceneNodes, node.id)
+        // Endpoint move = grid snap, never 45° from the fixed corner —
+        // the angle snap is for initial draft only. Shift switches to
+        // the fine grid step for precision, matching the 3D
+        // `MoveWallEndpointTool`.
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
-          start: fixedPoint,
-          angleSnap: !modifiers.shiftKey,
           ignoreWallIds: [node.id],
+          step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
         })
 
         const primaryStart: WallPlanPoint = endpoint === 'start' ? snapped : fixedPoint

@@ -108,6 +108,7 @@ import {
   createWallOnCurrentLevel,
   isWallLongEnough,
   snapWallDraftPoint,
+  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
@@ -6679,12 +6680,14 @@ export function FloorplanPanel() {
           return
         }
 
+        // Wall endpoint move: grid snap only (no 45° angle snap from the
+        // fixed corner — that's draft-only behaviour). Shift switches
+        // to the fine grid step for precision.
         const snappedPoint = snapWallDraftPoint({
           point: planPoint,
           walls,
-          start: dragState.fixedPoint,
-          angleSnap: !shiftPressed,
           ignoreWallIds: [dragState.wallId],
+          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
 
         if (pointsEqual(dragState.currentPoint, snappedPoint)) {
@@ -7375,11 +7378,13 @@ export function FloorplanPanel() {
         return
       }
 
+      // Wall draft: grid snap only — orthogonal walls follow naturally
+      // from a grid-aligned start. Shift switches to the fine grid step
+      // (0.05m) for precision.
       const snappedPoint = snapWallDraftPoint({
         point: planPoint,
         walls,
-        start: draftStart ?? undefined,
-        angleSnap: Boolean(draftStart) && !shiftPressed,
+        step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
       })
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview

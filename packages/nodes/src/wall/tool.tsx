@@ -21,6 +21,7 @@ import {
   type SegmentAngleReference,
   snapWallDraftPoint,
   triggerSFX,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -407,14 +408,19 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      gridPosition = snapWallDraftPoint({ point: localPoint, walls })
+      // Default to the active grid step; Shift switches to the fine
+      // step (0.05m) for precision. No 45° angle snap — we want the
+      // cursor to track grid lines in every direction. Orthogonal
+      // walls fall out of grid snap naturally when the start sits on
+      // a grid intersection.
+      const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      gridPosition = snapWallDraftPoint({ point: localPoint, walls, step })
 
       if (buildingState.current === 1) {
         const snappedLocal = snapWallDraftPoint({
           point: localPoint,
           walls,
-          start: [startingPoint.current.x, startingPoint.current.z],
-          angleSnap: !shiftPressed.current,
+          step,
         })
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
@@ -453,8 +459,10 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
+      const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+
       if (buildingState.current === 0) {
-        const snappedStart = snapWallDraftPoint({ point: localClick, walls })
+        const snappedStart = snapWallDraftPoint({ point: localClick, walls, step: clickStep })
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
@@ -471,8 +479,7 @@ export const WallTool: React.FC = () => {
         const snappedEnd = snapWallDraftPoint({
           point: localClick,
           walls,
-          start: [startingPoint.current.x, startingPoint.current.z],
-          angleSnap: !shiftPressed.current,
+          step: clickStep,
         })
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z

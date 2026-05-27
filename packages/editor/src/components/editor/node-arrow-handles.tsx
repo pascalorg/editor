@@ -31,6 +31,7 @@ import {
   type Object3D,
   OrthographicCamera,
   Plane,
+  Quaternion,
   RingGeometry,
   Shape,
   Vector2,
@@ -1101,11 +1102,23 @@ function CornerPickerShape({
   const billboardRef = useRef<Group>(null)
   const { camera } = useThree()
   // Billboard the disc to the camera so the picker remains readable at any
-  // viewing angle. Assumes the parent level has no rotation (the standard
-  // case for walls / fences).
+  // viewing angle. The disc lives under the building-rotated tool group
+  // (and possibly a rotated level), so copying `camera.quaternion` onto
+  // the local quaternion no longer yields camera-aligned WORLD rotation
+  // when the parent has a rotation of its own — compute the local
+  // quaternion that, composed with the parent's world rotation, equals
+  // the camera's world rotation.
+  const parentWorldQuat = useMemo(() => new Quaternion(), [])
+  const invParentWorldQuat = useMemo(() => new Quaternion(), [])
   useFrame(() => {
-    if (billboardRef.current) {
-      billboardRef.current.quaternion.copy(camera.quaternion)
+    const group = billboardRef.current
+    if (!group) return
+    if (group.parent) {
+      group.parent.getWorldQuaternion(parentWorldQuat)
+      invParentWorldQuat.copy(parentWorldQuat).invert()
+      group.quaternion.copy(invParentWorldQuat).multiply(camera.quaternion)
+    } else {
+      group.quaternion.copy(camera.quaternion)
     }
   })
 

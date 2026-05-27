@@ -2,7 +2,6 @@
 
 import {
   type AnyNodeId,
-  constrainWallMoveDeltaToAxis,
   detectSpacesForLevel,
   emitter,
   type GridEvent,
@@ -386,17 +385,44 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
       const snapStep = getWallGridStep()
-      const localX = shiftPressedRef.current ? rawX : snapScalarToGrid(rawX, snapStep)
-      const localZ = shiftPressedRef.current ? rawZ : snapScalarToGrid(rawZ, snapStep)
 
-      const anchor = dragAnchorRef.current ?? [localX, localZ]
+      // Anchor at the raw cursor so the displacement is measured in
+      // continuous space.
+      const anchor = dragAnchorRef.current ?? [rawX, rawZ]
       dragAnchorRef.current = anchor
 
-      const [deltaX, deltaZ] = constrainWallMoveDeltaToAxis(
-        localX - anchor[0],
-        localZ - anchor[1],
-        moveAxisRef.current,
-      )
+      const rawDeltaX = rawX - anchor[0]
+      const rawDeltaZ = rawZ - anchor[1]
+
+      // When the move is axis-locked (side-handle drag), snap the wall
+      // center's absolute perpendicular offset to a multiple of
+      // `snapStep`. For axis-aligned walls this puts the wall on grid
+      // lines along its normal regardless of the wall's starting
+      // position; for diagonal walls the wall steps in exact
+      // `snapStep` increments along its normal.
+      //
+      // Why absolute (perp · centre) rather than `delta` snap: snapping
+      // the displacement alone preserves any pre-existing off-grid
+      // offset, so the wall could only ever sit at `originalCentre ±
+      // k·snapStep` — never on actual grid lines. Snapping the wall's
+      // own perpendicular coordinate fixes that.
+      const axis = moveAxisRef.current
+      let deltaX: number
+      let deltaZ: number
+      if (axis) {
+        const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
+        const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
+        const snappedProj = shiftPressedRef.current
+          ? rawProj
+          : snapScalarToGrid(rawProj, snapStep)
+        const perpDelta = snappedProj - originalProj
+        deltaX = axis[0] * perpDelta
+        deltaZ = axis[1] * perpDelta
+      } else {
+        deltaX = shiftPressedRef.current ? rawDeltaX : snapScalarToGrid(rawDeltaX, snapStep)
+        deltaZ = shiftPressedRef.current ? rawDeltaZ : snapScalarToGrid(rawDeltaZ, snapStep)
+      }
+
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
 
       if (
