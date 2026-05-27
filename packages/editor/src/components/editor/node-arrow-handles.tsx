@@ -39,6 +39,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -340,6 +341,17 @@ function NodeArrowHandlesForNode({
 
   const outerRef = useRef<Group>(null)
   const innerRef = useRef<Group>(null)
+
+  // Tag all arrow objects for EDITOR_LAYER so the ThumbnailGenerator camera
+  // (which calls cam.layers.disable(EDITOR_LAYER)) excludes them from captures.
+  // descriptors is used as a trigger dep: when handles change, new mesh objects
+  // are created and need their layers set even though it isn't read in the body.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger dep
+  useEffect(() => {
+    outerRef.current?.traverse((obj) => {
+      obj.layers.set(EDITOR_LAYER)
+    })
+  }, [descriptors])
 
   useFrame(() => {
     if (outerRef.current && outerRide) {
