@@ -4,7 +4,7 @@ import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-ap
 import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
 import { getPlanPointDistance } from '../../lib/floorplan'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
-import type { WallPlanPoint } from '../tools/wall/wall-drafting'
+import { WALL_FINE_GRID_STEP, type WallPlanPoint } from '../tools/wall/wall-drafting'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
@@ -53,7 +53,8 @@ type UseFloorplanBackgroundPlacementArgs = {
     point: WallPlanPoint
     walls: WallNode[]
     start?: WallPlanPoint
-    angleSnap: boolean
+    angleSnap?: boolean
+    step?: number
   }) => WallPlanPoint
   snapPolygonDraftPoint: (args: {
     point: WallPlanPoint
@@ -156,12 +157,12 @@ export function useFloorplanBackgroundPlacement({
       if (isFenceBuildActive) {
         emitFloorplanGridEvent('click', planPoint, event)
 
+        // Fence draft: grid snap only; Shift = fine step. See `wall/tool.tsx`.
         const snappedPoint = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: Boolean(fenceDraftStart) && !shiftPressed,
+          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
 
         setCursorPoint(snappedPoint)
@@ -212,11 +213,11 @@ export function useFloorplanBackgroundPlacement({
       // / draftEnd state in the floor plan would never update, leaving
       // the dashed-line draft preview invisible.
       if (isWallBuildActive) {
+        // Wall draft: grid snap only; Shift = fine step. See `wall/tool.tsx`.
         const snappedPoint = snapWallDraftPoint({
           point: planPoint,
           walls,
-          start: draftStart ?? undefined,
-          angleSnap: Boolean(draftStart) && !shiftPressed,
+          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
 
         emitFloorplanGridEvent('click', snappedPoint, event)

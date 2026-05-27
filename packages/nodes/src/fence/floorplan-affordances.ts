@@ -17,6 +17,7 @@ import {
   isWallLongEnough,
   snapFenceDraftPoint,
   snapScalarToGrid,
+  WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 
 /**
@@ -153,13 +154,15 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
         // itself is excluded via `ignoreFenceIds`).
         const sceneNodes = useScene.getState().nodes
         const { walls: nextWalls, fences: nextFences } = collectLevel(sceneNodes, parentId)
+        // Endpoint move = grid snap only; the 45°-from-start angle
+        // snap is draft-only. Shift switches to the fine grid step for
+        // precision, matching the 3D fence endpoint action.
         const snapped = snapFenceDraftPoint({
           point: planPoint as FencePlanPoint,
           walls: nextWalls,
           fences: nextFences,
-          start: fixedPoint,
-          angleSnap: !modifiers.shiftKey,
           ignoreFenceIds: [node.id],
+          step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
         })
         const nextStart = endpoint === 'start' ? snapped : fixedPoint
         const nextEnd = endpoint === 'end' ? snapped : fixedPoint

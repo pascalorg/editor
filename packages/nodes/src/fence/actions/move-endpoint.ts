@@ -6,7 +6,12 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { type FencePlanPoint, isWallLongEnough, snapFenceDraftPoint } from '@pascal-app/editor'
+import {
+  type FencePlanPoint,
+  isWallLongEnough,
+  snapFenceDraftPoint,
+  WALL_FINE_GRID_STEP,
+} from '@pascal-app/editor'
 
 /**
  * Phase 5 Stage D — move-fence-endpoint drag affordance.
@@ -143,13 +148,15 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
 
     preview: (ctx, point, modifiers) => {
       const planPoint: FencePlanPoint = [point[0], point[1]]
+      // Endpoint move = grid snap only; the 45°-from-start angle snap
+      // is draft-only. Shift switches to the fine grid step for
+      // precision, mirroring the wall convention.
       const snapped = snapFenceDraftPoint({
         point: planPoint,
         walls: ctx.levelWalls,
         fences: ctx.levelFences,
-        start: ctx.fixedPoint,
-        angleSnap: !modifiers.shift,
         ignoreFenceIds: [ctx.fenceId as string],
+        step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
       })
       const nextStart = ctx.endpoint === 'start' ? snapped : ctx.fixedPoint
       const nextEnd = ctx.endpoint === 'end' ? snapped : ctx.fixedPoint

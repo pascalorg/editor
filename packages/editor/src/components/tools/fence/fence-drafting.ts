@@ -131,9 +131,11 @@ export function snapFenceDraftPoint(args: {
   start?: FencePlanPoint
   angleSnap?: boolean
   ignoreFenceIds?: string[]
+  /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
+  step?: number
 }): FencePlanPoint {
-  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds } = args
-  const gridStep = getWallGridStep()
+  const { point, walls, fences, start, angleSnap = false, ignoreFenceIds, step } = args
+  const gridStep = step ?? getWallGridStep()
   const angleStep = getWallAngleSnapStep(gridStep)
   const basePoint =
     start && angleSnap

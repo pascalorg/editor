@@ -7262,12 +7262,14 @@ export function FloorplanPanel() {
       if (isFenceBuildActive) {
         emitFloorplanGridEvent('move', planPoint, event)
 
+        // Fence draft: grid snap only — orthogonal fences fall out of
+        // a grid-aligned start. Shift switches to the fine grid step
+        // for precision. Mirrors `wall/tool.tsx`.
         const snappedPoint = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: Boolean(fenceDraftStart) && !shiftPressed,
+          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
 
         setCursorPoint((previousPoint) =>
