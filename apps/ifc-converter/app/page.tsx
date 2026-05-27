@@ -16,7 +16,7 @@ export default function HomePage() {
           elements, default-height walls, skipped items.{' '}
           <a
             className="font-medium underline decoration-amber-400 underline-offset-2 hover:text-amber-700"
-            href="https://github.com/pascalorg/editor/apps/ifc-converter"
+            href="https://github.com/pascalorg/editor/tree/main/apps/ifc-converter"
             rel="noopener noreferrer"
             target="_blank"
           >

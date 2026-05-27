@@ -903,6 +903,29 @@ function runSpaceDetection(
   editorStore.getState().setSpaces(nextSpaces)
 }
 
+// Refcount of outstanding pause requests, matching the pauseSceneHistory
+// pattern. The community editor flips this off while the AI is actively
+// mutating the scene so the wall-driven auto slab/ceiling sync doesn't race
+// `create_room`'s explicit slabs/ceilings (see plan
+// `ai-pause-space-detection`).
+let spaceDetectionPauseDepth = 0
+
+/** Pause the wall-driven auto slab/ceiling sync. Refcounted — pair with `resumeSpaceDetection`. */
+export function pauseSpaceDetection(): void {
+  spaceDetectionPauseDepth += 1
+}
+
+/** Resume the wall-driven auto slab/ceiling sync. No-op if not currently paused. */
+export function resumeSpaceDetection(): void {
+  if (spaceDetectionPauseDepth === 0) return
+  spaceDetectionPauseDepth -= 1
+}
+
+/** True iff the wall-driven auto slab/ceiling sync is currently paused. */
+export function isSpaceDetectionPaused(): boolean {
+  return spaceDetectionPauseDepth > 0
+}
+
 export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () => void {
   const previousSnapshots = new Map<string, string>()
   let isProcessing = false
@@ -926,6 +949,17 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
     const currentSnapshots = new Map<string, string>()
     for (const [levelId, walls] of wallsByLevel.entries()) {
       currentSnapshots.set(levelId, levelWallSnapshot(walls))
+    }
+
+    // Paused: roll the snapshot forward so we don't backfill (and re-duplicate)
+    // every paused change once detection resumes. Whatever the AI built while
+    // paused becomes the new baseline; only future changes will reconcile.
+    if (spaceDetectionPauseDepth > 0) {
+      previousSnapshots.clear()
+      for (const [levelId, snapshot] of currentSnapshots.entries()) {
+        previousSnapshots.set(levelId, snapshot)
+      }
+      return
     }
 
     const levelsToUpdate = new Set<string>()

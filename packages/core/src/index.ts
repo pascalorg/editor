@@ -58,8 +58,11 @@ export {
   type AutoSlabSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
+  isSpaceDetectionPaused,
+  pauseSpaceDetection,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  resumeSpaceDetection,
   type Space,
   wallTouchesOthers,
 } from './lib/space-detection'
