@@ -52,10 +52,12 @@ git push -u origin HEAD
 Check for an existing PR first:
 
 ```bash
-gh pr view --json url 2>/dev/null
+gh pr view --json number,url,title,body 2>/dev/null
 ```
 
-If none exists, create it. Pass the body via HEREDOC to preserve markdown formatting:
+### 3a. No existing PR → create one
+
+Pass the body via HEREDOC to preserve markdown formatting:
 
 ```bash
 gh pr create --title "short, scope-prefixed title" --body "$(cat <<'EOF'
@@ -85,7 +87,40 @@ EOF
 
 Keep the title under ~70 characters. Use a scope prefix when there's an obvious one (`viewer:`, `core:`, `editor:`, `mcp:`).
 
-If a PR already exists, print its URL and stop — don't recreate.
+### 3b. PR already exists → update its description
+
+Do **not** recreate the PR. Refresh the existing body so it reflects everything currently on the branch, while keeping the template structure and any reviewer-meaningful state the user already set.
+
+1. Capture the existing body and the full branch history:
+
+   ```bash
+   gh pr view --json number,body -q '.number, .body' > /tmp/existing-pr.txt
+   git log --oneline main..HEAD
+   git diff --stat main..HEAD
+   ```
+
+2. Reconstruct the body section-by-section. Keep the four template headings in the same order (`## What does this PR do?`, `## How to test`, `## Screenshots / screen recording`, `## Checklist`). For each section:
+
+   - **What does this PR do?** — rewrite from the *current* commits and diff on the branch, not from memory. Preserve any `Fixes #123` / `Refs #123` lines from the old body.
+   - **How to test** — regenerate concrete steps for the *current* behaviour. If a previous step is still valid, keep its wording; drop steps that no longer apply; add steps for new commits.
+   - **Screenshots / screen recording** — preserve the existing content verbatim (links, embedded images, "N/A — …"). Do not blank it out. Only change it if the user explicitly provided a new recording.
+   - **Checklist** — preserve the user's tick state (`[x]` vs `[ ]`) for every item that still exists in the template. Add any new template items as unchecked.
+
+   If the old body contains extra sections the template doesn't have (e.g. a manual "Notes" block), keep them at the end.
+
+3. Apply the update:
+
+   ```bash
+   gh pr edit <number> --body "$(cat <<'EOF'
+   ## What does this PR do?
+   …
+   EOF
+   )"
+   ```
+
+   Use `gh pr edit --title` *only* if the branch's scope has clearly changed; otherwise leave the title alone.
+
+4. Print the PR URL so the user can confirm the edit.
 
 ## 4. Report
 
