@@ -236,26 +236,21 @@ export function FloorplanRegistryMoveOverlay() {
         // inside the SVG viewport, including empty grid background.
         if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
 
-        // Apply once more at the pointer-up coords before committing.
-        // Browsers don't guarantee a pointermove fires right before
-        // pointerup — a quick click after a drag can land pointerup a
-        // few pixels past the last pointermove. Without this re-apply,
-        // the commit would freeze the item at the stale pointermove
-        // position, leaving a visible drift between where the user
-        // released the click and where the item lands.
-        const finalPlanPoint = toMeters(event.clientX, event.clientY)
-        if (finalPlanPoint) {
-          hasMovedSinceStart = true
-          session.apply({
-            planPoint: finalPlanPoint,
-            modifiers: {
-              shiftKey: event.shiftKey,
-              altKey: event.altKey,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-            },
-          })
-        }
+        // Commit using the LAST pointermove's state — no re-apply at
+        // pointer-up coords. A previous version re-applied here to
+        // close a sub-pixel "drift" window when pointer-up fires
+        // without a preceding pointermove, but that re-apply also
+        // re-snaps: if the pointer-up coord crosses a grid boundary
+        // relative to the last pointermove, the snapped result flips
+        // to a different grid cell and the wall (or other moved node)
+        // visibly jumps from where it was painted during the drag to
+        // a different commit position. Trusting the last pointermove
+        // means "what you saw is what gets committed", which is the
+        // UX users expect — at the cost of a sub-pixel drift in the
+        // rare case where the OS fires pointerup with no preceding
+        // pointermove. Modern browsers reliably emit a final
+        // pointermove right before pointerup, so the trade-off lands
+        // on the side of WYSIWYG.
 
         commitFinalStateOrRevert()
         setMovingNode(null)
