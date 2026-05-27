@@ -169,10 +169,12 @@ jobs:
 
       - name: Build & publish ifc-converter
         if: inputs.package == 'ifc-converter' || inputs.package == 'all'
-        working-directory: packages/ifc-converter
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          # ifc-converter depends on @pascal-app/core (workspace) — build it first
+          bun run build --filter @pascal-app/core 2>/dev/null || (cd packages/core && bun run build)
+          cd packages/ifc-converter
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
