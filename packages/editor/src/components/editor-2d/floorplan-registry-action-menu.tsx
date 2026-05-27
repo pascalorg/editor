@@ -122,17 +122,13 @@ export function FloorplanRegistryActionMenu() {
   // Move button is enabled when any of:
   //   - `capabilities.movable` (generic translate-on-XZ — shelf / spawn / fence)
   //   - `def.floorplanMoveTarget` (anchor-aware 2D — door / window / item)
-  //   - `def.affordanceTools.move` (kind-owned 3D mover — slab / ceiling)
+  //   - `def.affordanceTools.move` (kind-owned 3D mover — slab / ceiling / wall)
   // From the menu's perspective all three are "this kind can move from
-  // the floor plan." The `MoveTool` dispatcher resolves the right path.
-  //
-  // Walls opt out: they expose move via the side-arrow handles emitted
-  // from `def.floorplan` (see `buildWallFloorplan`), so a menu button
-  // would be a redundant second entry point — and lets the user start a
-  // body-follow drag from anywhere, which we don't want for walls.
+  // the floor plan." The `MoveTool` dispatcher resolves the right path —
+  // walls land on their bespoke `MoveWallTool` (perpendicular slide
+  // with linked-wall cascade) via `affordanceTools.move`.
   const canMove =
-    node.type !== 'wall' &&
-    (!!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move)
+    !!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
