@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
   planWallMoveJunctions,
   useLiveNodeOverrides,
@@ -14,7 +15,7 @@ import {
   getFloorplanWallThickness,
   getWallGridStep,
   isWallLongEnough,
-  snapPointToGrid,
+  snapScalarToGrid,
   useWallMoveGhosts,
   type WallMoveGhostBridge,
 } from '@pascal-app/editor'
@@ -61,6 +62,16 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   const wallId = node.id as AnyNodeId
   const originalStart: WallPlanPoint = [node.start[0], node.start[1]]
   const originalEnd: WallPlanPoint = [node.end[0], node.end[1]]
+  const originalCenter: WallPlanPoint = [
+    (originalStart[0] + originalEnd[0]) / 2,
+    (originalStart[1] + originalEnd[1]) / 2,
+  ]
+  // Perpendicular (wall normal) axis — same lock the 3D `MoveWallTool`
+  // uses, so a 2D drag slides the wall sideways across its own
+  // direction rather than free-floating in XZ. `null` only for
+  // degenerate zero-length walls; we fall through to free motion in
+  // that case (the wall is going to be deleted anyway).
+  const moveAxis = getPerpendicularWallMoveAxis(originalStart, originalEnd)
   const isNew = !!(node.metadata as { isNew?: unknown } | null)?.isNew
 
   const linkedOriginals: LinkedWallSnapshot[] = isNew
@@ -73,11 +84,9 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       })
 
   // Raw (un-snapped) cursor at drag start. Using the raw anchor lets the
-  // wall start respond to every sub-step cursor movement: the resulting
-  // wall position is rounded to absolute grid each tick, so the wall
-  // lands on grid lines (instead of the previous "delta from snapped
-  // anchor" path, which kept the wall at its original off-grid offset
-  // and introduced a half-step dead-zone before the first jump).
+  // wall respond to every sub-step cursor movement: the wall's
+  // perpendicular projection is snapped to grid each tick, so the wall
+  // lands on grid lines along its normal regardless of starting offset.
   let rawAnchor: WallPlanPoint | null = null
   let lastDelta: WallPlanPoint = [0, 0]
   let lastNextStart: WallPlanPoint = originalStart
@@ -94,25 +103,31 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
 
       const rawDx = planPoint[0] - rawAnchor[0]
       const rawDz = planPoint[1] - rawAnchor[1]
-
-      // Snap the wall's start to the absolute grid (not the cursor
-      // delta) so the wall actually lines up with grid lines, and the
-      // wall jumps to a new grid position the moment the cursor crosses
-      // the midpoint between two grid lines — no "half-step before
-      // anything happens" lag.
       const step = getWallGridStep()
-      const nextStart: WallPlanPoint = modifiers.shiftKey
-        ? [originalStart[0] + rawDx, originalStart[1] + rawDz]
-        : snapPointToGrid(
-            [originalStart[0] + rawDx, originalStart[1] + rawDz] as WallPlanPoint,
-            step,
-          )
 
-      const dx = nextStart[0] - originalStart[0]
-      const dz = nextStart[1] - originalStart[1]
+      // Axis-lock the move to the wall's perpendicular (normal). Project
+      // the original centre + raw cursor delta onto the axis, snap the
+      // absolute projection to a grid multiple, then translate the wall
+      // by `axis * perpDelta`. Matches `MoveWallTool` so 2D and 3D drag
+      // produce identical wall topology. Shift bypasses snap.
+      let dx: number
+      let dz: number
+      if (moveAxis) {
+        const originalProj = originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
+        const rawProj = originalProj + rawDx * moveAxis[0] + rawDz * moveAxis[1]
+        const snappedProj = modifiers.shiftKey ? rawProj : snapScalarToGrid(rawProj, step)
+        const perpDelta = snappedProj - originalProj
+        dx = moveAxis[0] * perpDelta
+        dz = moveAxis[1] * perpDelta
+      } else {
+        dx = modifiers.shiftKey ? rawDx : snapScalarToGrid(rawDx, step)
+        dz = modifiers.shiftKey ? rawDz : snapScalarToGrid(rawDz, step)
+      }
+
       if (dx === lastDelta[0] && dz === lastDelta[1]) return
       lastDelta = [dx, dz]
 
+      const nextStart: WallPlanPoint = [originalStart[0] + dx, originalStart[1] + dz]
       const nextEnd: WallPlanPoint = [originalEnd[0] + dx, originalEnd[1] + dz]
       lastNextStart = nextStart
       lastNextEnd = nextEnd
