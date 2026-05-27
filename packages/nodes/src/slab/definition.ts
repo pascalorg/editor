@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type { HandleDescriptor, NodeDefinition, SlabNode as SlabNodeType } from '@pascal-app/core'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -9,6 +9,48 @@ import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
 import { slabParametrics } from './parametrics'
 import { SlabNode } from './schema'
+
+const HEIGHT_HANDLE_OFFSET = 0.22
+const MIN_SLAB_ELEVATION = 0.02
+
+function slabPolygonCenter(n: SlabNodeType): [number, number] {
+  const polygon = n.polygon ?? []
+  if (polygon.length === 0) return [0, 0]
+  let cx = 0
+  let cz = 0
+  for (const [x, z] of polygon) {
+    cx += x
+    cz += z
+  }
+  return [cx / polygon.length, cz / polygon.length]
+}
+
+// Slab height arrow — vertical chevron at the polygon centroid, just
+// above the slab's top face. Drags elevation (the extrusion thickness)
+// with `anchor: 'min'` so the bottom stays at world Y=0 and the top
+// follows the pointer. Same registry-handle pipeline as the column
+// height arrow, so live override + commit-on-release come for free.
+function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_SLAB_ELEVATION,
+    currentValue: (n) => n.elevation ?? 0.05,
+    apply: (_n, newValue) => ({ elevation: newValue }),
+    placement: {
+      position: (n) => {
+        const [cx, cz] = slabPolygonCenter(n)
+        const elevation = n.elevation ?? 0.05
+        return [cx, elevation + HEIGHT_HANDLE_OFFSET, cz]
+      },
+    },
+  }
+}
+
+function slabHandles(_node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
+  return [slabHeightHandle()]
+}
 
 /**
  * Slab — Phase 5 batch kind, polygon-based. Stage B: `def.geometry`
@@ -60,6 +102,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   },
 
   parametrics: slabParametrics,
+  handles: slabHandles,
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with axis/45° snap (Shift to defeat).

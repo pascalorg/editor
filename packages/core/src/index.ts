@@ -40,6 +40,7 @@ export {
 export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
   initSpatialGridSync,
+  resolveBuildingForLevel,
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
@@ -53,11 +54,13 @@ export {
 } from './lib/door-operation'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
+  type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   isSpaceDetectionPaused,
   pauseSpaceDetection,
+  planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   resumeSpaceDetection,
   type Space,
@@ -100,6 +103,7 @@ export {
 export {
   default as useLiveNodeOverrides,
   type LiveNodeOverrides,
+  getEffectiveNode,
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
@@ -172,11 +176,14 @@ export {
 } from './systems/wall/wall-mitering'
 export {
   constrainWallMoveDeltaToAxis,
+  getLinkedWallUpdates,
   getPerpendicularWallMoveAxis,
+  getPlannedLinkedWallUpdates,
   planWallMoveJunctions,
   type WallMoveAxis,
   type WallMoveBridgePlan,
   type WallMoveJunctionPlan,
+  type WallMoveLinkedWallTargetPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
 export type { SceneGraph } from './utils/clone-scene-graph'

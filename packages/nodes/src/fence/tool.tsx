@@ -25,6 +25,7 @@ import {
   type SegmentAngleReference,
   snapFenceDraftPoint,
   triggerSFX,
+  WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -437,14 +438,16 @@ export const FenceTool: React.FC = () => {
       if (!(cursorRef.current && previewRef.current)) return
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
+      // Default = active grid step; Shift switches to the fine step
+      // (0.05m). No 45° angle snap — see `wall/tool.tsx` for rationale.
+      const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
 
       if (buildingState.current === 1) {
         const snappedLocal = snapFenceDraftPoint({
           point: localPoint,
           walls,
           fences,
-          start: [startingPoint.current.x, startingPoint.current.z],
-          angleSnap: !shiftPressed.current,
+          step,
         })
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
@@ -467,7 +470,7 @@ export const FenceTool: React.FC = () => {
           ),
         )
       } else {
-        const snappedPoint = snapFenceDraftPoint({ point: localPoint, walls, fences })
+        const snappedPoint = snapFenceDraftPoint({ point: localPoint, walls, fences, step })
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
         setDraftMeasurement(null)
       }
@@ -481,9 +484,15 @@ export const FenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
+      const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
 
       if (buildingState.current === 0) {
-        const snappedStart = snapFenceDraftPoint({ point: localClick, walls, fences })
+        const snappedStart = snapFenceDraftPoint({
+          point: localClick,
+          walls,
+          fences,
+          step: clickStep,
+        })
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
@@ -494,8 +503,7 @@ export const FenceTool: React.FC = () => {
           point: localClick,
           walls,
           fences,
-          start: [startingPoint.current.x, startingPoint.current.z],
-          angleSnap: !shiftPressed.current,
+          step: clickStep,
         })
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z

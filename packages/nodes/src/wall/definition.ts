@@ -1,6 +1,8 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { buildWallFloorplan } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
+import { wallFloorplanMoveTarget } from './floorplan-move'
+import { wallFloorplanSiblingOverrides } from './floorplan-overrides'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
@@ -64,6 +66,9 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   parametrics: wallParametrics,
+  // Height arrow + side-move arrows + corner pickers all live in the legacy
+  // `wall-move-side-handles.tsx` component. The registry handle path didn't
+  // render correctly for walls specifically; revisit once that's diagnosed.
 
   // Stage D — all four wall drag affordances live in this folder.
   // curve / move-endpoint / move are 1:1 ports of the legacy tools
@@ -98,6 +103,8 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     'move-endpoint': wallMoveEndpointAffordance,
     curve: wallCurveAffordance,
   },
+  floorplanMoveTarget: wallFloorplanMoveTarget,
+  floorplanSiblingOverrides: wallFloorplanSiblingOverrides,
 
   toolHints: [
     { key: 'Left click', label: 'Set wall start / end' },

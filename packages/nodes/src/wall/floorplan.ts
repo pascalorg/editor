@@ -95,6 +95,12 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
+      // Once the wall is selected, the body keeps catching the pointer
+      // so the cursor stays neutral (no drag/pointer affordance from
+      // the slab below leaking through), but only the side-arrows and
+      // endpoint handles should start a drag — the wrapper g's click
+      // handler is a no-op re-select for the already-selected wall.
+      cursor: isSelected ? 'default' : undefined,
     },
   ]
 
@@ -110,16 +116,20 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   }
 
   // Hit-line on the centerline. Stroke width is in screen pixels so it
-  // stays clickable at any zoom.
-  children.push({
-    kind: 'hit-line',
-    x1: node.start[0],
-    y1: node.start[1],
-    x2: node.end[0],
-    y2: node.end[1],
-    strokeWidthPx: 18,
-    cursor: 'pointer',
-  })
+  // stays clickable at any zoom. Skipped while selected — the user has
+  // the side-arrows / endpoint handles by then, and leaving the hit-line
+  // live would re-introduce a "click-and-drag the wall body" path.
+  if (!isSelected) {
+    children.push({
+      kind: 'hit-line',
+      x1: node.start[0],
+      y1: node.start[1],
+      x2: node.end[0],
+      y2: node.end[1],
+      strokeWidthPx: 18,
+      cursor: 'pointer',
+    })
+  }
 
   // Endpoint handles only when the user has actively selected this wall.
   if (isSelected) {
@@ -137,6 +147,34 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       affordance: 'move-endpoint',
       payload: { wallId: node.id, endpoint: 'end' as const },
     })
+
+    // Side move arrows — two directional arrows at the wall midpoint,
+    // pointing outward perpendicular to the wall. Mirrors the 3D
+    // `WallMoveSideHandles` arrows so users can grab the wall body
+    // from the floor plan. PointerDown on either arrow activates
+    // `wallFloorplanMoveTarget` via the registry-layer dispatcher.
+    {
+      const dx = node.end[0] - node.start[0]
+      const dz = node.end[1] - node.start[1]
+      const wallLength = Math.hypot(dx, dz)
+      if (wallLength > 1e-6) {
+        const midX = (node.start[0] + node.end[0]) / 2
+        const midZ = (node.start[1] + node.end[1]) / 2
+        const nx = -dz / wallLength
+        const nz = dx / wallLength
+        const offset = floorplanWallThickness(node) / 2 + 0.05
+        children.push({
+          kind: 'move-arrow',
+          point: [midX + nx * offset, midZ + nz * offset],
+          angle: Math.atan2(nz, nx),
+        })
+        children.push({
+          kind: 'move-arrow',
+          point: [midX - nx * offset, midZ - nz * offset],
+          angle: Math.atan2(-nz, -nx),
+        })
+      }
+    }
 
     // Curve sagitta handle — teal dot at the wall midpoint that
     // controls `curveOffset`. Hidden when the wall hosts a door /
@@ -191,7 +229,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
           start: [node.start[0], node.start[1]],
           end: [node.end[0], node.end[1]],
           offsetNormal: [nx * facingAway, nz * facingAway],
-          offsetDistance: 0.42,
+          offsetDistance: 0.75,
           extensionOvershoot: 0.12,
           text: formatLengthMetric(length),
         })

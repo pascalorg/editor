@@ -46,6 +46,8 @@ function styleAttrs(g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['ki
     strokeOpacity?: number
     opacity?: number
     vectorEffect?: 'non-scaling-stroke'
+    pointerEvents?: string
+    cursor?: string
   }
   return {
     fill: s.fill ?? 'none',
@@ -58,6 +60,8 @@ function styleAttrs(g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['ki
     strokeOpacity: s.strokeOpacity,
     opacity: s.opacity,
     vectorEffect: s.vectorEffect,
+    pointerEvents: s.pointerEvents,
+    style: s.cursor ? { cursor: s.cursor } : undefined,
   }
 }
 

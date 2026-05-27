@@ -1,7 +1,9 @@
 export {
   discoverPlugins,
   getSelectableKinds,
+  isRegistryMovable,
   isRegistrySelectable,
+  kindsWithFloorplanScope,
   loadPlugin,
   nodeRegistry,
   type PluginDiscovery,
@@ -15,6 +17,21 @@ export {
   collectDescendants,
   type SpatialQuery,
 } from './relations-resolver'
+export type {
+  ArcResizeHandle,
+  Cursor,
+  EditorApi,
+  EndpointMoveHandle,
+  HandleAnchor,
+  HandleAxis,
+  HandleDescriptor,
+  HandleList,
+  HandlePlacement,
+  HandlePortal,
+  LinearResizeHandle,
+  RadialResizeHandle,
+  TapActionHandle,
+} from './handles'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
 export type {
   Affordance,

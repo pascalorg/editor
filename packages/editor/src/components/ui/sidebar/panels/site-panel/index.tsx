@@ -36,6 +36,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from './../../../../../lib/level-duplication'
+import { getDefaultLevelName } from './../../../../../lib/level-name'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
 import { cn } from './../../../../../lib/utils'
@@ -723,7 +724,7 @@ const LevelItem = memo(function LevelItem({
             src="/icons/level.png"
           />
           <InlineRenameInput
-            defaultName={`Level ${level.level}`}
+            defaultName={getDefaultLevelName(level.level)}
             isEditing={isEditing}
             nodeId={level.id}
             onStartEditing={() => setIsEditing(true)}

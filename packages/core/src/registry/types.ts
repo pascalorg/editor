@@ -3,6 +3,7 @@ import type { BufferGeometry, Object3D } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { HandleList } from './handles'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -146,6 +147,24 @@ export type FloorplanStyle = {
   strokeLinejoin?: 'miter' | 'round' | 'bevel'
   strokeOpacity?: number
   fillOpacity?: number
+  /**
+   * SVG `pointer-events`. Default (undefined) lets the renderer pick its
+   * normal behaviour — `visiblePainted` for filled shapes, `stroke` for
+   * line / hit-line. Set `'none'` to make a primitive completely
+   * passthrough — useful for chrome that should be visible but never
+   * trigger selection or drag (e.g. a wall's body once it's already
+   * selected, where only the side-arrows / corner handles should grab
+   * the pointer).
+   */
+  pointerEvents?: 'none' | 'auto' | 'all' | 'stroke' | 'fill' | 'visible' | 'visiblePainted'
+  /**
+   * CSS `cursor` for the rendered primitive. Defaults to inheriting the
+   * registry entry wrapper's `cursor: 'pointer'`. Override to neutralise
+   * a hover affordance — e.g. a selected wall body that catches the
+   * pointer (to block fall-through to the slab below) but should not
+   * advertise itself as a drag target.
+   */
+  cursor?: string
 }
 
 // ─── ToolHint ────────────────────────────────────────────────────────
@@ -272,6 +291,12 @@ export type FloorplanGeometry =
       /** Stroke width in screen pixels — converted to plan units by the dispatcher. */
       strokeWidthPx: number
       cursor?: string
+      /**
+       * Override the default `pointer-events="stroke"`. Use `'none'` when
+       * a kind wants to keep the line painted (for hit-debugging or layout
+       * stability) but route grabs through other affordances instead.
+       */
+      pointerEvents?: 'none' | 'stroke' | 'auto'
     }
   /**
    * Endpoint manipulation handle — the 5-circle stack from the legacy
@@ -340,6 +365,50 @@ export type FloorplanGeometry =
   | {
       kind: 'move-handle'
       point: FloorplanPoint
+    }
+  /**
+   * Directional move handle drawn as an arrow pointing AWAY from the
+   * owning node, rotated by `angle` (radians; 0 = +x). Used by wall to
+   * place two arrows on perpendicular sides at the wall midpoint —
+   * mirrors the 3D `WallMoveSideHandles`. Routes through the same
+   * `onMoveHandlePointerDown` → `setMovingNode` path as `move-handle`.
+   */
+  | {
+      kind: 'move-arrow'
+      point: FloorplanPoint
+      /** Rotation in radians; 0 points along +x in plan coords. */
+      angle: number
+      /**
+       * Optional affordance routing. When set, pointer-down on the arrow
+       * starts a `def.floorplanAffordances?.[affordance]` session with the
+       * given `payload` (same dispatch path as `edge-handle`) instead of
+       * the default `setMovingNode` flow. Used by doors for the in-plane
+       * width-resize handles that visually mirror the move arrow shape but
+       * drive a different mutation.
+       */
+      affordance?: string
+      payload?: unknown
+    }
+  /**
+   * Curved two-headed rotation arrow — the 2D counterpart of the 3D
+   * `arc-resize` handle's `shape: 'rotate'` gizmo. Visually a short arc
+   * with arrowheads at each end pointing tangentially in opposite
+   * directions, so it reads as "rotate either way" rather than "drag
+   * along a line." Always routes through an affordance (rotation has no
+   * sensible default Move semantics).
+   *
+   * `angle` is the radial-outward direction in plan coords — the icon's
+   * local +X axis points away from the pivot, with the arc curving
+   * around it. Emitters typically compute this as
+   * `atan2(handle.y − pivot.y, handle.x − pivot.x)`.
+   */
+  | {
+      kind: 'rotate-arrow'
+      point: FloorplanPoint
+      /** Radial-outward direction from the rotation pivot, in radians. */
+      angle: number
+      affordance: string
+      payload?: unknown
     }
   /**
    * Centered length / distance label. Renders as a small rounded
@@ -418,20 +487,40 @@ export type FloorplanAffordanceSession = {
   /** Node IDs the drag may mutate. Used by the dispatcher for the snapshot. */
   affectedIds: AnyNodeId[]
   /**
-   * Run a single drag tick. Implementations call `scene.updateNodes` to
-   * preview the next position. Snap logic, linked-node cascade, and
-   * angle locking live here.
+   * Run a single drag tick. Two patterns are supported:
+   *  - **Scene-write preview**: implementation calls `scene.updateNodes`
+   *    each tick; the dispatcher captures a pre-drag snapshot and runs
+   *    a single-undo dance on commit (revert → resume → re-apply diff).
+   *    Suitable for affordances whose commit is a pure diff of the
+   *    affected fields.
+   *  - **Live-override preview**: implementation publishes per-frame
+   *    overrides to `useLiveNodeOverrides` (or another preview store);
+   *    `useScene` stays untouched during the drag. The session must
+   *    also expose `commit()` below, since there's no scene diff for
+   *    the dispatcher to write back.
+   *
+   * Snap logic, linked-node cascade, and angle locking live here.
    */
   apply(args: {
     planPoint: FloorplanAffordancePoint
     modifiers: FloorplanAffordanceModifiers
   }): void
   /**
-   * Called on pointer-up. Return `true` if the scene's current state
-   * should be committed; `false` reverts to the snapshot (e.g. wall too
-   * short, vertex collapsed onto neighbour).
+   * Called on pointer-up. Return `true` if the drag should commit;
+   * `false` reverts to the snapshot (e.g. wall too short, vertex
+   * collapsed onto neighbour).
    */
   canCommit(): boolean
+  /**
+   * Optional atomic-commit hook — mirror of the same field on
+   * `FloorplanMoveTargetSession`. When present, the dispatcher
+   * reverts to the pre-drag baseline (no-op if `apply()` never wrote
+   * to scene), resumes history, then calls `commit()` instead of
+   * re-applying a diff. The session owns the full final write
+   * (typically `applyNodeChanges` or `updateNodes`) plus clearing any
+   * live overrides it published in `apply()`.
+   */
+  commit?(): void
 }
 
 export type FloorplanAffordance<N> = {
@@ -493,6 +582,23 @@ export type FloorplanMoveTargetSession = {
    * area, overlap detected, ...).
    */
   canCommit(): boolean
+  /**
+   * Optional atomic-commit hook. The default overlay path snapshots
+   * each affected node before drag and writes a diff back on commit —
+   * fine for kinds whose commit is a pure position update, but
+   * insufficient when commit needs to also create or delete nodes
+   * (e.g. wall move emits bridge wall creates + collapsed wall deletes
+   * via `planWallMoveJunctions`).
+   *
+   * When present, the overlay reverts to the pre-drag baseline,
+   * resumes history, and calls `commit()` instead of the default
+   * `updateNodes(finalUpdates)`. The session is responsible for the
+   * full final write (typically `applyNodeChanges`) plus any
+   * post-commit selection / metadata. The overlay still emits the
+   * standard place SFX and clears `movingNode` after `commit()`
+   * returns.
+   */
+  commit?(): void
 }
 
 export type FloorplanMoveTarget<N> = (args: {
@@ -593,6 +699,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
   /**
+   * Which scope the floor-plan layer walks to find instances of this
+   * kind. Default `'level'` — the layer's DFS from the active level id
+   * picks the node up via its parent chain. `'building'` — the kind
+   * lives as a sibling of levels (elevator is the canonical example:
+   * elevators are parented to the *building*, not a level, but the
+   * floor-plan should still surface them for every level inside that
+   * building). For `'building'`-scoped kinds the layer iterates every
+   * instance whose parent matches the active level's building, and
+   * synthesises a `GeometryContext` whose `parent` is the active level.
+   */
+  floorplanScope?: 'level' | 'building'
+  /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via
    * the `affordance` field. The floor-plan registry layer calls
@@ -622,6 +740,30 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * unset and rely on the generic overlay path.
    */
   floorplanMoveTarget?: FloorplanMoveTarget<z.infer<S>>
+  /**
+   * Optional hook letting a kind project the `useLiveNodeOverrides` map
+   * into a fresh `nodes` snapshot before its `def.floorplan` builder
+   * runs. The floor-plan layer calls this when present and passes the
+   * returned map both as the builder's `ctx` source AND as the
+   * effective node (so the kind's own override lands in `effectiveNode`).
+   *
+   * Used by wall, whose miter joins read sibling walls via
+   * `ctx.siblings`: during a 2D drag the moved wall + its linked
+   * neighbours publish per-frame `{ start, end, curveOffset }`
+   * overrides, and the floor-plan must merge those into every wall
+   * the builder can see — otherwise miter math snaps back to the
+   * committed positions while the cursor moves. Kinds whose previews
+   * are self-contained leave this unset and the layer hands the raw
+   * `nodes` through.
+   *
+   * Return the input `nodes` unchanged when no override is relevant
+   * so the caller can short-circuit.
+   */
+  floorplanSiblingOverrides?: (args: {
+    nodeId: AnyNodeId
+    nodes: Record<AnyNodeId, AnyNode>
+    liveOverrides: Map<string, Record<string, unknown>>
+  }) => Record<AnyNodeId, AnyNode>
   system?: SystemContribution
   tool?: LazyComponent
   /**
@@ -679,6 +821,24 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * capability too).
    */
   keyboardActions?: KeyboardActions
+
+  /**
+   * In-world resize / move arrows shown when this kind is selected.
+   *
+   * Pure descriptors — no React, no Three.js. The editor's generic
+   * `<NodeArrowHandles>` reads this list and mounts the matching arrow
+   * components with shared drag plumbing, replacing per-kind
+   * `<XxxSideHandles>` files for the common cases.
+   *
+   * Static array, or a function for shape-dependent affordances
+   * (column `crossSection` / `supportStyle`, stair-segment `segmentType`,
+   * curved-vs-straight stairs). See `./handles.ts` for the variant union.
+   *
+   * Bespoke chrome that doesn't fit the descriptor model (wall corner
+   * leader dashes, fence curving, items with `attachTo`) stays as a
+   * custom React component mounted alongside.
+   */
+  handles?: HandleList<z.infer<S>>
 }
 
 export type NodeCategory = 'site' | 'structure' | 'furnish' | 'analysis' | 'utility'
@@ -790,6 +950,26 @@ export type Capabilities = {
   floorPlaced?: FloorPlacedConfig
   roofAccessory?: RoofAccessoryConfig
   paint?: PaintCapability
+  /**
+   * Kind is placed by clicking on a wall (door, window). When set, the
+   * floor-plan layer lets wall background clicks pass through during
+   * placement / move-on-wall — the placement tool's `wall:click` event
+   * needs the SVG's `findClosestWallPoint` handler to run; without
+   * this the wall's registry entry would swallow the click via
+   * `handleSelect`. Read by `FloorplanRegistryLayer` when `movingNode`
+   * is set, so the active move can suspend wall selection.
+   */
+  wallOpeningPlacement?: boolean
+  /**
+   * Instances of this kind contain levels. When such a node is being
+   * moved, the floor-plan layer falls back to the moving node's id as
+   * the ambient building context — so the floor under the cursor keeps
+   * rendering dimmed throughout the gesture even though the explicit
+   * selection may have been cleared as part of the move handoff. Set
+   * on building; future container kinds (e.g. annexes) opt in by
+   * declaring the same flag.
+   */
+  floorplanLevelContainer?: boolean
 }
 
 /**
@@ -1086,6 +1266,14 @@ export type SnapServicesLike = unknown
 
 export type SceneApi = {
   get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => N | undefined
+  /**
+   * Snapshot of the full nodes record. For descriptors / placement
+   * callbacks that need to walk many siblings or resolve cross-node
+   * structure (elevator level entries, building level chains, etc.)
+   * without N round-trips through `get`. Returns the live reference —
+   * do not mutate.
+   */
+  nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
   update: (id: AnyNodeId, patch: Partial<AnyNode>) => void
   upsert: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId
   delete: (id: AnyNodeId) => void

@@ -43,6 +43,7 @@ function makeNode(kind: string, idStr: string, parentId: string | null = null): 
 function makeFakeScene(nodes: Record<string, AnyNode>): SceneApi {
   return {
     get: ((nid: AnyNodeId) => nodes[nid as string]) as SceneApi['get'],
+    nodes: () => nodes as Readonly<Record<AnyNodeId, AnyNode>>,
     update: () => {},
     upsert: () => id(''),
     delete: () => {},

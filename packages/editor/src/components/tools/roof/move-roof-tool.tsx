@@ -341,7 +341,16 @@ export const MoveRoofTool: React.FC<{
       // Clear ephemeral live transform
       useLiveTransforms.getState().clear(movingNode.id)
 
-      if (!(wasCommitted || wasCancelled || isNew)) {
+      // Skip restore when the 2D floor-plan overlay claimed teardown
+      // ownership — same contract `FloorplanRegistryMoveOverlay` uses to
+      // decide whether to revert its own apply() writes. Without this,
+      // a stair / roof move committed in the floor plan unmounts this
+      // tool with `wasCommitted === false` (this tool's own grid-click
+      // never fired), and the restore below stomps the just-committed
+      // position back to the snapshot.
+      const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
+
+      if (!(wasCommitted || wasCancelled || isNew || finalisedBy2D)) {
         useScene.getState().updateNode(movingNode.id, {
           position: original.position,
           rotation: original.rotation,

@@ -19,7 +19,15 @@ import useEditor from '../../../store/use-editor'
 export type WallPlanPoint = [number, number]
 
 export const WALL_GRID_STEP = 0.5
+// Smallest available grid snap. Used as a precision-mode step (Shift +
+// drag) so a drag can land on values the regular grid skips.
+export const WALL_FINE_GRID_STEP = 0.05
 export const WALL_JOIN_SNAP_RADIUS = 0.35
+// Generous radius for snapping to an *existing* wall's endpoint while
+// drafting. Larger than `WALL_JOIN_SNAP_RADIUS` because endpoint snap
+// is the strongest user intent (closing a polygon, attaching to a
+// corner) and the cursor never lands pixel-perfect on a corner.
+export const WALL_ENDPOINT_SNAP_RADIUS = 0.7
 export const WALL_MIN_LENGTH = 0.01
 const DEFAULT_WALL_ANGLE_SNAP_STEP = Math.PI / 4
 
@@ -41,7 +49,7 @@ function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
   return dx * dx + dz * dz
 }
 
-export function getWallGridStep(): number {
+export function getSegmentGridStep(): number {
   return useEditor.getState().gridSnapStep
 }
 
@@ -71,7 +79,7 @@ export function snapPointTo45Degrees(
   )
 }
 
-export function getWallAngleSnapStep(step = getWallGridStep()): number {
+export function getWallAngleSnapStep(step = getSegmentGridStep()): number {
   return WALL_ANGLE_SNAP_BY_GRID_STEP[step] ?? DEFAULT_WALL_ANGLE_SNAP_STEP
 }
 
@@ -371,15 +379,56 @@ export function findWallSnapTarget(
   return bestTarget
 }
 
+/**
+ * Endpoint-only snap from the *raw* cursor (no grid pre-snap), with a
+ * generous radius. Use this before `findWallSnapTarget` so the strong
+ * "attach to an existing wall corner" intent isn't accidentally pushed
+ * out of range by an interim grid snap that moved the cursor away from
+ * the endpoint.
+ */
+function findWallEndpointFromRaw(
+  point: WallPlanPoint,
+  walls: WallNode[],
+  ignoreWallIds?: string[],
+): WallPlanPoint | null {
+  const ignored = new Set(ignoreWallIds ?? [])
+  const radiusSquared = WALL_ENDPOINT_SNAP_RADIUS ** 2
+  let best: WallPlanPoint | null = null
+  let bestDistSq = Number.POSITIVE_INFINITY
+
+  for (const wall of walls) {
+    if (ignored.has(wall.id)) continue
+    for (const corner of [wall.start, wall.end] as WallPlanPoint[]) {
+      const d = distanceSquared(point, corner)
+      if (d <= radiusSquared && d < bestDistSq) {
+        best = corner
+        bestDistSq = d
+      }
+    }
+  }
+  return best
+}
+
 export function snapWallDraftPoint(args: {
   point: WallPlanPoint
   walls: WallNode[]
   start?: WallPlanPoint
   angleSnap?: boolean
   ignoreWallIds?: string[]
+  /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
+  step?: number
 }): WallPlanPoint {
-  const { point, walls, start, angleSnap = false, ignoreWallIds } = args
-  const step = getWallGridStep()
+  const { point, walls, start, angleSnap = false, ignoreWallIds, step: overrideStep } = args
+
+  // Endpoint of an existing wall wins outright when the cursor is
+  // anywhere within `WALL_ENDPOINT_SNAP_RADIUS` — closing a polygon or
+  // attaching to a corner should "just work" without needing
+  // pixel-perfect aim. Done from the raw cursor so it isn't masked by
+  // an interim grid snap that nudged us out of range.
+  const endpointSnap = findWallEndpointFromRaw(point, walls, ignoreWallIds)
+  if (endpointSnap) return endpointSnap
+
+  const step = overrideStep ?? getSegmentGridStep()
   const angleStep = getWallAngleSnapStep(step)
   const basePoint =
     start && angleSnap
@@ -393,7 +442,7 @@ export function snapWallDraftPoint(args: {
   )
 }
 
-export function isWallLongEnough(start: WallPlanPoint, end: WallPlanPoint): boolean {
+export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): boolean {
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
@@ -405,7 +454,7 @@ export function createWallOnCurrentLevel(
   const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
   const { updateNodes } = useScene.getState()
 
-  if (!(currentLevelId && isWallLongEnough(start, end))) {
+  if (!(currentLevelId && isSegmentLongEnough(start, end))) {
     return null
   }
 
@@ -444,7 +493,7 @@ export function createWallOnCurrentLevel(
     resolvedStart = splitStart.point
   }
 
-  if (!isWallLongEnough(resolvedStart, resolvedEnd) || pointsEqual(resolvedStart, resolvedEnd)) {
+  if (!isSegmentLongEnough(resolvedStart, resolvedEnd) || pointsEqual(resolvedStart, resolvedEnd)) {
     return null
   }
 

@@ -25,6 +25,13 @@ export type FloorplanRenderContextValue = {
   palette: FloorplanPalette
   /** SVG `<pattern>` id mounted in `<defs>` by the legacy panel for selection hatch fills. */
   hatchPatternId: string
+  /**
+   * Rotation (degrees) applied to the registry layer's parent `<g>` by the
+   * legacy panel — 90° by default, adjusted by building rotation. Renderers
+   * that emit text labels use this to keep their final on-screen orientation
+   * readable instead of mirroring whatever the parent rotation is.
+   */
+  sceneRotationDeg: number
 }
 
 const FloorplanRenderContext = createContext<FloorplanRenderContextValue | null>(null)
@@ -34,10 +41,11 @@ export function FloorplanRenderProvider({
   unitsPerPixel,
   palette,
   hatchPatternId,
+  sceneRotationDeg,
 }: FloorplanRenderContextValue & { children: ReactNode }) {
   const value = useMemo<FloorplanRenderContextValue>(
-    () => ({ unitsPerPixel, palette, hatchPatternId }),
-    [unitsPerPixel, palette, hatchPatternId],
+    () => ({ unitsPerPixel, palette, hatchPatternId, sceneRotationDeg }),
+    [unitsPerPixel, palette, hatchPatternId, sceneRotationDeg],
   )
   return <FloorplanRenderContext.Provider value={value}>{children}</FloorplanRenderContext.Provider>
 }

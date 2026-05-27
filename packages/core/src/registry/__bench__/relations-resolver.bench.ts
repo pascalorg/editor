@@ -101,6 +101,7 @@ function buildFixture() {
 function makeScene(nodes: Record<string, AnyNode>): SceneApi {
   return {
     get: ((nid: AnyNodeId) => nodes[nid as string]) as SceneApi['get'],
+    nodes: () => nodes as Readonly<Record<AnyNodeId, AnyNode>>,
     update: () => {},
     upsert: () => ID(''),
     delete: () => {},

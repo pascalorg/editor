@@ -32,6 +32,16 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
   // the window had when the move started.
   const startLocalY = node.position[1]
 
+  // Track the last successful placement so `commit()` can write it
+  // atomically — same deterministic-commit fix as `doorFloorplanMoveTarget`.
+  let lastValid: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    side: WindowNode['side']
+    parentId: string
+    wallId: string
+  } | null = null
+
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
@@ -48,16 +58,18 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         node.height,
       )
 
+      lastValid = {
+        position: [clampedX, clampedY, 0],
+        rotation: [0, hit.itemRotation, 0],
+        side: hit.side,
+        parentId: hit.wall.id,
+        wallId: hit.wall.id,
+      }
+
       useScene.getState().updateNodes([
         {
           id: node.id as AnyNodeId,
-          data: {
-            position: [clampedX, clampedY, 0],
-            rotation: [0, hit.itemRotation, 0],
-            side: hit.side,
-            parentId: hit.wall.id,
-            wallId: hit.wall.id,
-          },
+          data: lastValid,
         },
       ])
     },
@@ -73,6 +85,22 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         live.id,
       )
       return !overlapping
+    },
+    commit() {
+      // Own the atomic write so the overlay takes the deterministic
+      // commit-path (revert → resume → session.commit()). The dispatcher's
+      // diff path would otherwise re-derive the final state by comparing
+      // the post-apply scene to the snapshot — that works most of the
+      // time but produces an empty diff (and silent revert) when the
+      // committed move lands on the same `parentId` with identical data.
+      // See `doorFloorplanMoveTarget.commit` for the original fix.
+      if (!lastValid) return
+      useScene.getState().updateNodes([
+        {
+          id: node.id as AnyNodeId,
+          data: lastValid,
+        },
+      ])
     },
   }
 

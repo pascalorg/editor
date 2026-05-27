@@ -7,6 +7,7 @@ import {
   getAdjacentWallIds,
   getWallCurveFrameAt,
   getWallMiterBoundaryPoints,
+  getEffectiveNode,
   getWallPlanFootprint,
   getWallSurfacePolygon,
   getWallThickness,
@@ -16,6 +17,7 @@ import {
   resolveLevelId,
   sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -332,6 +334,13 @@ const pendingAdjacentByLevel = new Map<string, Set<string>>()
 export const WallSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
+  // Subscribe so override-only changes (no scene write) still re-run
+  // this component, which lets the gate below pick up the latest
+  // `dirtyNodes` set from the same render pass that received the
+  // override-publishing `markDirty` call. Without this, very fast
+  // drags could land an override and a markDirty in the same React
+  // tick and the next `useFrame` would still see the stale closure.
+  useLiveNodeOverrides((s) => s.overrides)
 
   useFrame(() => {
     const hasDirty = dirtyNodes.size > 0
@@ -418,7 +427,22 @@ export const WallSystem = () => {
 }
 
 /**
- * Gets all walls that belong to a level
+ * Merge any live override for a wall into the scene record. Lets the
+ * 2D move handler publish `{ start, end, curveOffset }` to
+ * `useLiveNodeOverrides` and have the geometry / miter pipeline use
+ * those values without zustand churn during the drag. When no
+ * override is set, the wall is returned unchanged.
+ */
+function getEffectiveWall(wall: WallNode): WallNode {
+  const override = useLiveNodeOverrides.getState().get(wall.id)
+  if (!override || Object.keys(override).length === 0) return wall
+  return { ...wall, ...override } as WallNode
+}
+
+/**
+ * Gets all walls that belong to a level, with any live overrides
+ * merged in so miters compute against the cursor-driven positions
+ * (not the pre-drag scene state).
  */
 function getLevelWalls(levelId: string): WallNode[] {
   const { nodes } = useScene.getState()
@@ -430,7 +454,7 @@ function getLevelWalls(levelId: string): WallNode[] {
   for (const childId of level.children) {
     const child = nodes[childId]
     if (child?.type === 'wall') {
-      walls.push(child as WallNode)
+      walls.push(getEffectiveWall(child as WallNode))
     }
   }
 
@@ -438,12 +462,15 @@ function getLevelWalls(levelId: string): WallNode[] {
 }
 
 /**
- * Updates the geometry for a single wall
+ * Updates the geometry for a single wall. Reads the effective node
+ * (override-merged) so a 2D drag visibly moves the 3D mesh without
+ * having touched `useScene` mid-drag.
  */
 function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const nodes = useScene.getState().nodes
-  const node = nodes[wallId as WallNode['id']]
-  if (!node || node.type !== 'wall') return
+  const sceneNode = nodes[wallId as WallNode['id']]
+  if (!sceneNode || sceneNode.type !== 'wall') return
+  const node = getEffectiveWall(sceneNode as WallNode)
 
   const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
   if (!mesh) return
@@ -452,9 +479,16 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
 
   const childrenIds = node.children || []
+  // Merge live overrides into door / window children so cutouts track an
+  // in-flight resize drag (door width arrow, window height arrow, etc.)
+  // without waiting on the scene store. Non-cutout children pass through
+  // unchanged.
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
+    .map((child) =>
+      child.type === 'door' || child.type === 'window' ? getEffectiveNode(child) : child,
+    )
 
   const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
 

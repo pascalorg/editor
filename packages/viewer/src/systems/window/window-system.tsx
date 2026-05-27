@@ -1,7 +1,9 @@
 import {
   type AnyNodeId,
+  getEffectiveNode,
   sceneRegistry,
   useInteractive,
+  useLiveNodeOverrides,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
@@ -36,6 +38,9 @@ export const WindowSystem = () => {
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
+  // Subscribe so override-only updates re-run this component. Mirrors
+  // WallSystem + DoorSystem.
+  useLiveNodeOverrides((s) => s.overrides)
 
   baseMaterial = textures
     ? getBaseMaterial(shading)
@@ -71,15 +76,18 @@ export const WindowSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (!mesh) return // Keep dirty until mesh mounts
 
-      updateWindowMesh(node as WindowNode, mesh)
+      // Merge any live override (width / height / position) so the mesh
+      // rebuild reflects the in-flight drag without zustand churn.
+      const effectiveNode = getEffectiveNode(node as WindowNode)
+      updateWindowMesh(effectiveNode, mesh)
       clearDirty(id as AnyNodeId)
 
       // Rebuild the parent wall so its cutout reflects the updated window geometry
       // Avoid triggering expensive wall CSG rebuilds while the window is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
       const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && (node as WindowNode).parentId) {
-        useScene.getState().dirtyNodes.add((node as WindowNode).parentId as AnyNodeId)
+      if (!isTransient && effectiveNode.parentId) {
+        useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
     })
   }, 3)

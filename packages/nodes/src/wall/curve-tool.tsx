@@ -14,7 +14,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  getWallGridStep,
+  getSegmentGridStep,
   markToolCancelConsumed,
   snapScalarToGrid,
   triggerSFX,
@@ -84,7 +84,7 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const snapStep = getWallGridStep()
+      const snapStep = getSegmentGridStep()
       const localX = shiftPressedRef.current
         ? event.localPosition[0]
         : snapScalarToGrid(event.localPosition[0], snapStep)

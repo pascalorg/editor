@@ -12,6 +12,7 @@ import {
   type SiteNode,
   type SlabNode,
   type SpawnNode,
+  useLiveTransforms,
   useScene,
   type WallNode,
   type WindowNode,
@@ -59,13 +60,22 @@ export function useFloorplanSceneData({
       ? (levelNode.parentId as BuildingNode['id'])
       : buildingId
 
-  const buildingRotationY = useScene((state) => {
+  // Live transform override — when the building is mid-drag (the move
+  // tool publishes per-frame pose to useLiveTransforms), the floor-plan
+  // follows that pose so the dimmed reference floor tracks the cursor
+  // instead of snapping only on commit.
+  const buildingLiveTransform = useLiveTransforms((state) =>
+    currentBuildingId ? state.transforms.get(currentBuildingId) : undefined,
+  )
+
+  const committedBuildingRotationY = useScene((state) => {
     if (!currentBuildingId) return 0
     const node = state.nodes[currentBuildingId]
     return node?.type === 'building' ? (node.rotation[1] ?? 0) : 0
   })
+  const buildingRotationY = buildingLiveTransform?.rotation ?? committedBuildingRotationY
 
-  const buildingPosition = useScene((state) => {
+  const committedBuildingPosition = useScene((state) => {
     if (!currentBuildingId) {
       return DEFAULT_BUILDING_POSITION
     }
@@ -75,6 +85,7 @@ export function useFloorplanSceneData({
       ? (node.position as [number, number, number])
       : DEFAULT_BUILDING_POSITION
   })
+  const buildingPosition = buildingLiveTransform?.position ?? committedBuildingPosition
 
   const site = useScene((state) => {
     for (const rootNodeId of state.rootNodeIds) {

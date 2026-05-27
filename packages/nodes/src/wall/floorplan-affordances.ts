@@ -6,14 +6,16 @@ import {
   getMaxWallCurveOffset,
   getWallChordFrame,
   normalizeWallCurveOffset,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapScalarToGrid,
   snapWallDraftPoint,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 
@@ -29,9 +31,13 @@ import {
  *      ("linked walls").
  *   2. On each tick: snap the moving point (grid → linked-wall → angle),
  *      compute primary endpoints, and cascade matching corners onto the
- *      linked walls. Apply via `useScene.updateNodes` — the registry
- *      dispatcher pauses / resumes history around this.
- *   3. Commit if the resulting wall is still long enough (legacy guard).
+ *      linked walls. Publish to `useLiveNodeOverrides` — `WallSystem`,
+ *      the 2D floor-plan layer, and the sidebar panel all merge the
+ *      overrides in when reading endpoints, so `useScene` never sees a
+ *      mid-drag write.
+ *   3. On pointer-up: the dispatcher invokes `commit()`, which writes
+ *      the final state to scene in one tracked update and clears the
+ *      overrides. `canCommit` still guards against collapsed walls.
  *
  * Alt-detach (drop linked walls) and SHIFT-free-place (skip angle snap)
  * are wired via the standard modifier flags on the session.
@@ -96,11 +102,13 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
     // pointer projection along its normal changes.
     const chord = getWallChordFrame(node)
     const maxOffset = getMaxWallCurveOffset(node)
+    const wallId = node.id as AnyNodeId
+    let lastCurveOffset = node.curveOffset ?? 0
 
     return {
       affectedIds: [node.id],
       apply({ planPoint, modifiers }) {
-        const snapStep = getWallGridStep()
+        const snapStep = getSegmentGridStep()
         const x = modifiers.shiftKey ? planPoint[0] : snapScalarToGrid(planPoint[0], snapStep)
         const y = modifiers.shiftKey ? planPoint[1] : snapScalarToGrid(planPoint[1], snapStep)
 
@@ -121,13 +129,26 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
           node,
           Math.max(-maxOffset, Math.min(maxOffset, snappedOffset)),
         )
+        lastCurveOffset = nextCurveOffset
 
-        useScene.getState().updateNodes([{ id: node.id, data: { curveOffset: nextCurveOffset } }])
+        // Publish the curve preview as a live override so renderers see
+        // it without zustand churn. Mark the wall dirty so `WallSystem`
+        // rebuilds the geometry next frame using the override-merged
+        // node.
+        useLiveNodeOverrides.getState().set(wallId, { curveOffset: nextCurveOffset })
+        useScene.getState().markDirty(wallId)
       },
       canCommit() {
         // Curve drag is always commit-eligible — the offset is already
         // clamped + normalized so we never end up in an invalid state.
         return true
+      },
+      commit() {
+        // Atomic, tracked write of the final curve offset, then drop
+        // the override so the scene state is the single source of
+        // truth again.
+        useScene.getState().updateNodes([{ id: wallId, data: { curveOffset: lastCurveOffset } }])
+        useLiveNodeOverrides.getState().clear(wallId)
       },
     }
   },
@@ -143,20 +164,31 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
     const linkedWalls = collectLinkedWalls(nodes, node.id, originalStart, originalEnd)
     const affectedIds: AnyNodeId[] = [node.id, ...linkedWalls.map((w) => w.id)]
 
+    // Remember the latest preview so `commit()` can write it tracked.
+    let lastPrimaryStart: WallPlanPoint = originalStart
+    let lastPrimaryEnd: WallPlanPoint = originalEnd
+    let lastLinkedUpdates: Array<{ id: AnyNodeId; start: WallPlanPoint; end: WallPlanPoint }> = []
+
     return {
       affectedIds,
       apply({ planPoint, modifiers }) {
         // Re-collect walls every tick so the snap pipeline sees fresh
         // positions (matters when the user releases + re-grabs without
-        // unmounting the layer).
+        // unmounting the layer). Snap reads from scene — which holds
+        // the pre-drag positions throughout — so the linked-wall snap
+        // targets stay anchored to where corners *were*, exactly like
+        // the legacy flow.
         const sceneNodes = useScene.getState().nodes
         const walls = collectLevelWalls(sceneNodes, node.id)
+        // Endpoint move = grid snap, never 45° from the fixed corner —
+        // the angle snap is for initial draft only. Shift switches to
+        // the fine grid step for precision, matching the 3D
+        // `MoveWallEndpointTool`.
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
-          start: fixedPoint,
-          angleSnap: !modifiers.shiftKey,
           ignoreWallIds: [node.id],
+          step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
         })
 
         const primaryStart: WallPlanPoint = endpoint === 'start' ? snapped : fixedPoint
@@ -180,21 +212,42 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
                   : w.end,
             }))
 
+        lastPrimaryStart = primaryStart
+        lastPrimaryEnd = primaryEnd
+        lastLinkedUpdates = linkedUpdates
+
+        // Publish overrides instead of writing to scene. WallSystem +
+        // 2D layer + sidebar panel merge these in. Marking dirty
+        // wakes the system's `useFrame` rebuild pass.
+        const overrides = useLiveNodeOverrides.getState()
+        const sceneState = useScene.getState()
+        overrides.set(node.id as AnyNodeId, { start: primaryStart, end: primaryEnd })
+        sceneState.markDirty(node.id as AnyNodeId)
+        for (const upd of linkedUpdates) {
+          overrides.set(upd.id, { start: upd.start, end: upd.end })
+          sceneState.markDirty(upd.id)
+        }
+      },
+      canCommit() {
+        // The dragged wall must still be long enough at the preview
+        // length — checked against `lastPrimary*`, not scene, because
+        // scene holds baseline values until commit().
+        return isSegmentLongEnough(lastPrimaryStart, lastPrimaryEnd)
+      },
+      commit() {
+        // Atomic tracked write of the final endpoints, then drop the
+        // overrides so the scene state is the single source of truth
+        // again.
         useScene.getState().updateNodes([
-          { id: node.id, data: { start: primaryStart, end: primaryEnd } },
-          ...linkedUpdates.map((u) => ({
+          { id: node.id, data: { start: lastPrimaryStart, end: lastPrimaryEnd } },
+          ...lastLinkedUpdates.map((u) => ({
             id: u.id,
             data: { start: u.start, end: u.end },
           })),
         ])
-      },
-      canCommit() {
-        const finalWall = useScene.getState().nodes[node.id] as WallNode | undefined
-        return (
-          !!finalWall &&
-          finalWall.type === 'wall' &&
-          isWallLongEnough(finalWall.start, finalWall.end)
-        )
+        const overrides = useLiveNodeOverrides.getState()
+        overrides.clear(node.id as AnyNodeId)
+        for (const upd of lastLinkedUpdates) overrides.clear(upd.id)
       },
     }
   },

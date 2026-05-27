@@ -7,6 +7,7 @@ import {
   getMaxWallCurveOffset,
   getWallCurveLength,
   normalizeWallCurveOffset,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -20,18 +21,31 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Move, Spline } from 'lucide-react'
-import { useCallback, useRef } from 'react'
+import { Spline } from 'lucide-react'
+import { useCallback, useMemo, useRef } from 'react'
 
 export default function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const setMovingNode = useEditor((s) => s.setMovingNode)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
 
-  const node = useScene((s) =>
+  const sceneNode = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WallNode | undefined) : undefined,
   )
+
+  // Live override published by the 2D drag handlers (side-arrows /
+  // corner dots / curve handle). Merged on top of the scene node so
+  // the sliders read the live `start` / `end` / `curveOffset` during
+  // a drag without zustand being touched until commit.
+  const liveOverride = useLiveNodeOverrides((s) =>
+    selectedId ? s.get(selectedId as AnyNodeId) : undefined,
+  )
+
+  const node = useMemo<WallNode | undefined>(() => {
+    if (!sceneNode) return undefined
+    if (!liveOverride || Object.keys(liveOverride).length === 0) return sceneNode
+    return { ...sceneNode, ...liveOverride } as WallNode
+  }, [sceneNode, liveOverride])
 
   // Boolean selector — re-renders only when this specific wall's child
   // composition crosses the "has a door/window/wall-item" threshold.
@@ -93,13 +107,6 @@ export default function WallPanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
-
-  const handleMove = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    setMovingNode(node)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
 
   const handleCurve = useCallback(() => {
     if (!node) return
@@ -171,18 +178,17 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Actions">
-        <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
-          {!hasWallChildrenBlockingCurve && (
+      {!hasWallChildrenBlockingCurve && (
+        <PanelSection title="Actions">
+          <ActionGroup>
             <ActionButton
               icon={<Spline className="h-3.5 w-3.5" />}
               label="Curve"
               onClick={handleCurve}
             />
-          )}
-        </ActionGroup>
-      </PanelSection>
+          </ActionGroup>
+        </PanelSection>
+      )}
     </PanelWrapper>
   )
 }
