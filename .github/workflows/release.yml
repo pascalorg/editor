@@ -12,6 +12,7 @@ on:
           - viewer
           - editor
           - mcp
+          - ifc-converter
           - all
       bump:
         description: "Version bump"
@@ -72,13 +73,13 @@ jobs:
           # peerDeps sync below must use shell vars, not env indirection.
           declare -A NEW_VERSIONS
 
-          for pkg in core viewer editor mcp; do
+          for pkg in core viewer editor mcp ifc-converter; do
             if [ "$TARGET" = "$pkg" ] || [ "$TARGET" = "all" ]; then
               CUR=$(jq -r '.version' packages/$pkg/package.json)
               NEW=$(bump_version "$CUR")
               jq --arg v "$NEW" '.version = $v' packages/$pkg/package.json > tmp.json && mv tmp.json packages/$pkg/package.json
               NEW_VERSIONS[$pkg]=$NEW
-              UPPER=$(echo "$pkg" | tr '[:lower:]' '[:upper:]')
+              UPPER=$(echo "$pkg" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
               # Also export for the publish/commit/tag steps that follow.
               echo "${UPPER}_VERSION=$NEW" >> $GITHUB_ENV
               echo "Bumped @pascal-app/$pkg: $CUR → $NEW"
@@ -87,9 +88,9 @@ jobs:
 
           # Sync inter-package references in peerDependencies and devDependencies.
           # Anything that references a bumped @pascal-app/* package is updated to ^NEW.
-          for pkg in core viewer editor mcp; do
+          for pkg in core viewer editor mcp ifc-converter; do
             FILE=packages/$pkg/package.json
-            for dep in core viewer editor mcp; do
+            for dep in core viewer editor mcp ifc-converter; do
               VAL="${NEW_VERSIONS[$dep]}"
               [ -z "$VAL" ] && continue
               jq --arg name "@pascal-app/$dep" --arg v "^$VAL" '
@@ -100,7 +101,7 @@ jobs:
           done
 
           echo "=== @pascal-app/* refs after sync ==="
-          for pkg in core viewer editor mcp; do
+          for pkg in core viewer editor mcp ifc-converter; do
             echo "--- packages/$pkg/package.json ---"
             jq '{ peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
           done
@@ -164,6 +165,21 @@ jobs:
             echo "📦 Published @pascal-app/mcp@$MCP_VERSION"
           fi
 
+      - name: Build & publish ifc-converter
+        if: inputs.package == 'ifc-converter' || inputs.package == 'all'
+        working-directory: packages/ifc-converter
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          bun run build
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
+            npm publish --dry-run --access public
+          else
+            npm publish --access public
+            echo "📦 Published @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
+          fi
+
       - name: Commit version bumps & tag
         if: inputs.dry-run == false
         run: |
@@ -186,6 +202,10 @@ jobs:
           if [ -n "$MCP_VERSION" ]; then
             PKGS="$PKGS @pascal-app/mcp@$MCP_VERSION"
             TAGS="$TAGS @pascal-app/mcp@$MCP_VERSION"
+          fi
+          if [ -n "$IFC_CONVERTER_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
+            TAGS="$TAGS @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
           fi
 
           git commit -m "release:${PKGS}"
