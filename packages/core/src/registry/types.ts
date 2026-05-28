@@ -4,7 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
-import type { NodeSubtree } from './subtree'
+import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -972,6 +972,25 @@ export type Capabilities = {
    */
   floorplanLevelContainer?: boolean
   /**
+   * Names of schema fields on this kind that are *host references* —
+   * values derived from where the node is placed (rather than declared
+   * by the user as part of the kind's parametric configuration). Read
+   * by host apps at preset-save time to strip these from the stored
+   * payload so a placed instance gets fresh host links at the new
+   * placement site (e.g. a door snapshot loses `wallId`/`wallT`; at
+   * placement the auto-attach UX re-derives them from the wall under
+   * the cursor).
+   *
+   * Kinds with no host refs omit this field (default `[]`).
+   *
+   * Examples:
+   *   - door: `['wallId', 'wallT']` (door hosted on a wall)
+   *   - window: `['wallId', 'wallT']`
+   *   - item with `attachTo`: depends on the asset; the kind's
+   *     `defaults()` or the dragging logic populates it dynamically.
+   */
+  hostRefFields?: string[]
+  /**
    * Whether instances of this kind can be saved as a reusable preset
    * (unified `items` catalog, `kind='preset'`). The editor itself does
    * not act on this flag — host apps read it to gate "save as preset"
@@ -1302,23 +1321,24 @@ export type SceneApi = {
   pauseHistory: () => void
   resumeHistory: () => void
   /**
-   * Build a {@link NodeSubtree} snapshot rooted at `rootId` — a
-   * serializable, location-independent payload suitable for storage
-   * in the unified `items` catalog. See {@link buildSubtreeSnapshot}
-   * for the stripping rules. Returns `null` if `rootId` is missing.
+   * Collect the subtree of live nodes rooted at `rootId` — `root` plus
+   * every descendant reachable via `children[]` in BFS order. Returns
+   * live node references (no clones); the caller decides whether to
+   * persist by value or pass them straight into {@link cloneNodesInto}.
+   * Returns `null` if `rootId` is missing.
    */
-  getSubtreeSnapshot: (rootId: AnyNodeId) => NodeSubtree | null
+  getSubtree: (rootId: AnyNodeId) => Subtree | null
   /**
-   * Re-hydrate a {@link NodeSubtree} into the scene at `position`. The
-   * root and every descendant get fresh IDs; the root is parented to
-   * `parentId` (when provided) or becomes a scene root. Returns the
-   * new root id, or `null` if the subtree had no root node.
+   * Clone a flat array of nodes into the live scene with fresh IDs and
+   * rewired parent / children references. Intentionally generic — see
+   * {@link cloneNodesInto} for the transformations applied. Does NOT
+   * strip or re-derive host references (e.g. `wallId` on a door); the
+   * caller is responsible for that policy (read {@link Capabilities.hostRefFields}
+   * on the relevant definition).
+   *
+   * Returns the new root id, or `null` if insertion failed.
    */
-  materializeSubtree: (
-    subtree: NodeSubtree,
-    position: readonly [number, number, number],
-    parentId?: AnyNodeId,
-  ) => AnyNodeId | null
+  cloneNodesInto: (nodes: ReadonlyArray<AnyNode>, opts: CloneNodesIntoOptions) => AnyNodeId | null
 }
 
 // ─── Registry surface ────────────────────────────────────────────────

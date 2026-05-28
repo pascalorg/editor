@@ -15,6 +15,7 @@ export type {
 } from './handles'
 export {
   discoverPlugins,
+  getHostRefFields,
   getSelectableKinds,
   isPresettable,
   isPresettableKind,
@@ -36,11 +37,11 @@ export {
 } from './relations-resolver'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
 export {
-  buildSubtreeSnapshot,
-  type MaterializedSubtree,
-  materializeSubtree,
-  type NodeSubtree,
-  type SubtreeNode,
+  type CloneNodesIntoOptions,
+  type CloneNodesIntoResult,
+  cloneNodesInto,
+  collectSubtree,
+  type Subtree,
 } from './subtree'
 export type {
   Affordance,

@@ -76,6 +76,12 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     // preset system treats `kind='preset'` (parametric subtree
     // snapshots) and `kind='glb'` (this) as siblings, not duplicates.
     presettable: false,
+    // Items can be hosted on walls (assets with `attachTo: 'wall'`)
+    // via `wallId` + `wallT`. When a parametric composition that
+    // includes a wall-hosted item is saved as a preset (e.g. a
+    // shelf-with-items), the host app strips these so the descendant
+    // re-attaches against the new wall geometry at placement time.
+    hostRefFields: ['wallId', 'wallT'],
     // Floor items get lifted by slabs underneath via the generic
     // `<FloorElevationSystem>`. Wall- / ceiling-attached items live in
     // their parent's local frame and skip the lift via `applies`.

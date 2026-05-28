@@ -75,14 +75,27 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [isCaptureMode, setCaptureMode])
 
-  // Reset local state when entering capture mode. Preset mode forces
-  // `area` so the overlay shows the square selection rect immediately.
+  // Reset local state when entering capture mode. Preset mode also
+  // auto-stages a centered square crop sized to ~75% of the shorter
+  // viewport dimension so the user can capture immediately — the
+  // overlay's pan/move/resize handles still apply if they want to
+  // tweak the framing, but they don't have to draw the rect first.
   useEffect(() => {
-    if (isCaptureMode) {
-      setMode(isPreset ? 'area' : 'standard')
+    if (!isCaptureMode) return
+    setMode(isPreset ? 'area' : 'standard')
+    setIsDragging(false)
+    setCaptureState('idle')
+    if (isPreset && overlayRef.current) {
+      const rect = overlayRef.current.getBoundingClientRect()
+      const side = Math.min(rect.width, rect.height) * 0.75
+      const cx = rect.width / 2
+      const cy = rect.height / 2
+      setDrag({
+        start: { x: cx - side / 2, y: cy - side / 2 },
+        end: { x: cx + side / 2, y: cy + side / 2 },
+      })
+    } else {
       setDrag(null)
-      setIsDragging(false)
-      setCaptureState('idle')
     }
   }, [isCaptureMode, isPreset])
 

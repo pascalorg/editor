@@ -1,67 +1,56 @@
 'use client'
 
 import type { AnyNodeId } from '@pascal-app/core'
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import { sceneRegistry } from '@pascal-app/core'
 import type { Object3D } from 'three'
+import { SCENE_LAYER } from './layers'
 
-// Marker stashed on each Object3D we touch during isolation so we can
-// restore the original `.visible` flag. Stored under a `Symbol` so it
+// Marker on each Object3D we modify during isolation so we can restore
+// the original `layers.mask` bitfield. Stored under a `Symbol` so it
 // can't collide with any kind's own userData fields.
-const ORIGINAL_VISIBLE = Symbol('isolation:original-visible')
+const ORIGINAL_LAYERS = Symbol('isolation:original-layers')
 
-type IsolationCarrier = Object3D & { [ORIGINAL_VISIBLE]?: boolean }
+type IsolationCarrier = Object3D & { [ORIGINAL_LAYERS]?: number }
 
 /**
- * Build the set of node IDs that must remain visible to "isolate" the
- * provided ids — the ids themselves, every ancestor along the parent
- * chain (so containers stay rendered, otherwise the scene root would go
- * dark), and every descendant (so children of the isolated nodes still
- * render even after we explicitly toggle individual visibility flags).
+ * Compute the union of every isolated subtree's `Object3D` descendants.
  *
- * Pure / no I/O — exported for testing.
+ * Pure traversal — exported so future "focus mode" / debug tooling can
+ * reuse the same definition of "what's in the isolated set". Each root
+ * is walked via `Object3D.traverse` (the live Three.js graph, not the
+ * data-model `children` array — those can disagree when systems mount
+ * synthesized sub-meshes that the data model doesn't track).
  */
-export function computeIsolationVisibleSet(
-  ids: ReadonlyArray<string>,
-  nodes: Readonly<Record<string, { parentId?: string | null; children?: unknown }>>,
-): Set<string> {
-  const visible = new Set<string>(ids)
-
+export function collectIsolationSubtree(ids: ReadonlyArray<string>): Set<Object3D> {
+  const keep = new Set<Object3D>()
   for (const id of ids) {
-    let parentId = nodes[id]?.parentId
-    while (parentId) {
-      visible.add(parentId)
-      parentId = nodes[parentId]?.parentId
-    }
+    const root = sceneRegistry.nodes.get(id)
+    if (!root) continue
+    root.traverse((child) => {
+      keep.add(child)
+    })
   }
-
-  const stack: string[] = [...ids]
-  while (stack.length > 0) {
-    const current = stack.pop()!
-    const node = nodes[current]
-    const children = node && Array.isArray(node.children) ? (node.children as string[]) : []
-    for (const child of children) {
-      if (!visible.has(child)) {
-        visible.add(child)
-        stack.push(child)
-      }
-    }
-  }
-
-  return visible
+  return keep
 }
 
 /**
- * Imperative visibility filter on the live `sceneRegistry`. Walks every
- * registered (id, Object3D) pair and toggles `obj.visible` so only nodes
- * inside the isolation set remain rendered. Stashes the original visible
- * flag under a private Symbol so {@link clearIsolation} can restore the
- * exact prior state — important because nodes may have been hidden by
- * other features (`useScene.nodes[id].visible === false`).
+ * Imperative visibility filter on the live `sceneRegistry`. Hides every
+ * registered group (and its synthesized child meshes) outside the
+ * isolated subtree by disabling the {@link SCENE_LAYER} bit on the
+ * relevant `Object3D.layers` masks.
  *
- * Composite-visibility note: setting an ancestor group to `visible=true`
- * is necessary because Three.js culls every descendant when an ancestor
- * is hidden. The pre-image of the isolation set therefore includes both
- * the ancestor chain and the descendant tree of the requested IDs.
+ * Why layers instead of `obj.visible = false`? Three.js's visibility
+ * flag *cascades* — hiding a parent hides every descendant — so we
+ * can't hide a host wall while keeping a door rendered inside it.
+ * Layer masks are per-object and don't cascade: `WebGLRenderer
+ * .projectObject` skips objects whose layer mask doesn't intersect the
+ * camera's, but always recurses into their children. So we can disable
+ * `SCENE_LAYER` on the wall and the door (hosted under it in the
+ * scene graph) still renders, with its local position relative to the
+ * wall preserved automatically by the matrix walk.
+ *
+ * The original `layers.mask` is stashed under a private Symbol so
+ * {@link clearIsolation} can restore the exact prior state.
  *
  * Pass `null` to clear isolation (equivalent to calling
  * {@link clearIsolation}).
@@ -72,25 +61,41 @@ export function applyIsolation(ids: ReadonlyArray<AnyNodeId> | null): void {
     return
   }
 
-  const visible = computeIsolationVisibleSet(
-    ids as ReadonlyArray<string>,
-    useScene.getState().nodes,
-  )
-  for (const [id, obj] of sceneRegistry.nodes) {
-    const carrier = obj as IsolationCarrier
-    if (carrier[ORIGINAL_VISIBLE] === undefined) {
-      carrier[ORIGINAL_VISIBLE] = carrier.visible
-    }
-    carrier.visible = visible.has(id)
+  const keep = collectIsolationSubtree(ids as ReadonlyArray<string>)
+
+  // Iterate registered roots. For each one outside the keep set,
+  // disable `SCENE_LAYER` on it and on every descendant — *except*
+  // descendants that are themselves in `keep` (a kept node nested under
+  // a non-kept host: the isolated door under the hidden wall).
+  for (const [, obj] of sceneRegistry.nodes) {
+    if (keep.has(obj)) continue
+    hideRecursive(obj, keep)
+  }
+}
+
+function hideRecursive(obj: Object3D, keep: Set<Object3D>): void {
+  if (keep.has(obj)) return
+  const carrier = obj as IsolationCarrier
+  if (carrier[ORIGINAL_LAYERS] === undefined) {
+    carrier[ORIGINAL_LAYERS] = obj.layers.mask
+  }
+  obj.layers.disable(SCENE_LAYER)
+  for (const child of obj.children) {
+    hideRecursive(child, keep)
   }
 }
 
 export function clearIsolation(): void {
+  // We don't know which objects were touched without re-walking, so
+  // walk every registered root + its descendants and restore any
+  // stashed original-mask. `traverse` is cheap and idempotent here.
   for (const [, obj] of sceneRegistry.nodes) {
-    const carrier = obj as IsolationCarrier
-    if (carrier[ORIGINAL_VISIBLE] !== undefined) {
-      carrier.visible = carrier[ORIGINAL_VISIBLE]
-      delete carrier[ORIGINAL_VISIBLE]
-    }
+    obj.traverse((child) => {
+      const carrier = child as IsolationCarrier
+      if (carrier[ORIGINAL_LAYERS] !== undefined) {
+        child.layers.mask = carrier[ORIGINAL_LAYERS]
+        delete carrier[ORIGINAL_LAYERS]
+      }
+    })
   }
 }

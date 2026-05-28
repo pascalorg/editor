@@ -1,9 +1,9 @@
-import {
-  type AnyNodeId,
-  type HandleDescriptor,
-  type NodeDefinition,
-  type WallNode,
-  type WindowNode as WindowNodeType,
+import type {
+  AnyNodeId,
+  HandleDescriptor,
+  NodeDefinition,
+  WallNode,
+  WindowNode as WindowNodeType,
 } from '@pascal-app/core'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
@@ -77,8 +77,7 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       // bounds. Top arrow caps at wall.height - bottom; bottom arrow caps
       // at top (positive Y room above the floor).
       const wallH = readWallHeight(n, scene)
-      const anchored =
-        edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
+      const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)
         : Math.max(MIN_WINDOW_HEIGHT, anchored)
@@ -140,6 +139,9 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     duplicable: true,
     deletable: true,
     wallOpeningPlacement: true,
+    // `wallId` is re-derived from the wall under the cursor at preset
+    // placement time — see the door capability for the same pattern.
+    hostRefFields: ['wallId'],
   },
 
   parametrics: windowParametrics,

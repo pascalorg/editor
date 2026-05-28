@@ -164,6 +164,16 @@ export function isPresettableKind(kind: string): boolean {
   return def ? isPresettable(def) : false
 }
 
+/**
+ * Names of schema fields on `def` that are host references (`wallId`,
+ * `wallT`, etc.). Read by host apps at preset-save time to strip these
+ * from the stored payload — see `def.capabilities.hostRefFields` docs.
+ * Returns an empty array for kinds that don't declare any.
+ */
+export function getHostRefFields(def: AnyNodeDefinition): ReadonlyArray<string> {
+  return def.capabilities.hostRefFields ?? []
+}
+
 export async function loadPlugin(plugin: Plugin): Promise<void> {
   if (plugin.apiVersion !== HOST_API_VERSION) {
     throw new Error(

@@ -52,8 +52,8 @@ function makeSpyScene(initial: Record<string, AnyNode> = {}): SceneApi & {
     resumeHistory: () => {
       calls.resumeHistory += 1
     },
-    getSubtreeSnapshot: () => null,
-    materializeSubtree: () => null,
+    getSubtree: () => null,
+    cloneNodesInto: () => null,
     _calls: calls,
   }
 }

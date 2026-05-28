@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import {
+  getHostRefFields,
   isPresettable,
   isPresettableKind,
   loadPlugin,
@@ -108,6 +109,18 @@ describe('isPresettable', () => {
     registerNode(makeDefinition('shelfy', { parametrics: { groups: [] } as any }))
     expect(isPresettableKind('shelfy')).toBe(true)
     expect(isPresettableKind('unknown')).toBe(false)
+  })
+})
+
+describe('getHostRefFields', () => {
+  test('returns the declared hostRefFields verbatim', () => {
+    const def = makeDefinition('door', { capabilities: { hostRefFields: ['wallId'] } })
+    expect(getHostRefFields(def)).toEqual(['wallId'])
+  })
+
+  test('defaults to an empty array when none declared', () => {
+    const def = makeDefinition('shelf')
+    expect(getHostRefFields(def)).toEqual([])
   })
 })
 

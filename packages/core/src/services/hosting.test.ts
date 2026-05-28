@@ -52,8 +52,8 @@ function makeFakeScene(nodes: Record<string, AnyNode>): SceneApi {
     markDirty: () => {},
     pauseHistory: () => {},
     resumeHistory: () => {},
-    getSubtreeSnapshot: () => null,
-    materializeSubtree: () => null,
+    getSubtree: () => null,
+    cloneNodesInto: () => null,
   }
 }
 
