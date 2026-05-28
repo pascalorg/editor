@@ -48,6 +48,38 @@
         "typescript": "5.9.3",
       },
     },
+    "apps/pascal-homeassistant": {
+      "name": "pascal-homeassistant",
+      "version": "0.1.0",
+      "dependencies": {
+        "@number-flow/react": "^0.5.14",
+        "@pascal-app/core": "*",
+        "@pascal-app/editor": "*",
+        "@pascal-app/home-assistant": "*",
+        "@pascal-app/viewer": "*",
+        "@react-three/drei": "^10.7.7",
+        "@react-three/fiber": "^9.5.0",
+        "@tailwindcss/postcss": "^4.2.1",
+        "clsx": "^2.1.1",
+        "geist": "^1.7.0",
+        "lucide-react": "^0.562.0",
+        "next": "16.2.1",
+        "postcss": "^8.5.6",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "tailwind-merge": "^3.5.0",
+        "tailwindcss": "^4.2.1",
+        "three": "^0.184.0",
+        "tw-animate-css": "^1.4.0",
+      },
+      "devDependencies": {
+        "@pascal/typescript-config": "*",
+        "@types/node": "^22.19.12",
+        "@types/react": "19.2.2",
+        "@types/react-dom": "19.2.2",
+        "typescript": "5.9.3",
+      },
+    },
     "packages/core": {
       "name": "@pascal-app/core",
       "version": "0.6.0",
@@ -1322,6 +1354,8 @@
 
     "parseurl": ["parseurl@1.3.3", "", {}, "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="],
 
+    "pascal-homeassistant": ["pascal-homeassistant@workspace:apps/pascal-homeassistant"],
+
     "path-exists": ["path-exists@4.0.0", "", {}, "sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w=="],
 
     "path-key": ["path-key@3.1.1", "", {}, "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q=="],
@@ -1695,6 +1729,8 @@
     "next/postcss": ["postcss@8.4.31", "", { "dependencies": { "nanoid": "^3.3.6", "picocolors": "^1.0.0", "source-map-js": "^1.0.2" } }, "sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ=="],
 
     "ora/chalk": ["chalk@5.6.2", "", {}, "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA=="],
+
+    "pascal-homeassistant/@types/react": ["@types/react@19.2.2", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA=="],
 
     "postcss/nanoid": ["nanoid@3.3.11", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w=="],
 
