@@ -43,29 +43,6 @@ export default function HomeAssistantAuthoringPage() {
           </span>
         </div>
       </div>
-      <section className="pointer-events-auto absolute top-14 right-3 z-30 w-[min(24rem,calc(100vw-1.5rem))] rounded-lg border border-border/60 bg-background/95 px-4 py-3 text-xs shadow-sm backdrop-blur">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Quick setup:</h2>
-        <ol className="list-decimal space-y-1.5 pl-4 text-muted-foreground">
-          <li>Create and export your house using Pascal below.</li>
-          <li>
-            Set up HACS in Home Assistant and add the custom repository{' '}
-            <a
-              className="text-cyan-300 underline-offset-2 hover:underline"
-              href="https://github.com/Niutels/editor/tree/dev-lovelace"
-              rel="noreferrer"
-              target="_blank"
-            >
-              https://github.com/Niutels/editor/tree/dev-lovelace
-            </a>
-            .
-          </li>
-          <li>
-            In a dashboard, add the Pascal Viewer card and copy/paste the export from Pascal
-            into it.
-          </li>
-          <li>Bind your smart devices in the editor view and save.</li>
-        </ol>
-      </section>
       <Editor
         layoutVersion="v2"
         projectId={PROJECT_ID}
