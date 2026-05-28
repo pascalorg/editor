@@ -9,6 +9,7 @@ import { DormerNode } from './nodes/dormer'
 import { ElevatorNode } from './nodes/elevator'
 import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
+import { GutterNode } from './nodes/gutter'
 import { ItemNode } from './nodes/item'
 import { LevelNode } from './nodes/level'
 import { RidgeVentNode } from './nodes/ridge-vent'
@@ -51,6 +52,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   DoorNode,
   BoxVentNode,
   RidgeVentNode,
+  GutterNode,
   ChimneyNode,
   SolarPanelNode,
   SkylightNode,

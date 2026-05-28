@@ -12,6 +12,7 @@ import type {
   ElevatorNode,
   FenceNode,
   GuideNode,
+  GutterNode,
   ItemNode,
   LevelNode,
   RidgeVentNode,
@@ -88,6 +89,7 @@ export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
 export type RidgeVentEvent = NodeEvent<RidgeVentNode>
+export type GutterEvent = NodeEvent<GutterNode>
 export type ChimneyEvent = NodeEvent<ChimneyNode>
 export type SolarPanelEvent = NodeEvent<SolarPanelNode>
 export type SkylightEvent = NodeEvent<SkylightNode>
@@ -227,6 +229,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'guide', GuideEvent> &
   NodeEvents<'box-vent', BoxVentEvent> &
   NodeEvents<'ridge-vent', RidgeVentEvent> &
+  NodeEvents<'gutter', GutterEvent> &
   NodeEvents<'chimney', ChimneyEvent> &
   NodeEvents<'solar-panel', SolarPanelEvent> &
   NodeEvents<'skylight', SkylightEvent> &

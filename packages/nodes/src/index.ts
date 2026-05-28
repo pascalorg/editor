@@ -9,6 +9,7 @@ import { dormerDefinition } from './dormer'
 import { elevatorDefinition } from './elevator'
 import { fenceDefinition } from './fence'
 import { guideDefinition } from './guide'
+import { gutterDefinition } from './gutter'
 import { itemDefinition } from './item'
 import { levelDefinition } from './level'
 import { ridgeVentDefinition } from './ridge-vent'
@@ -78,6 +79,7 @@ export const builtinPlugin: Plugin = {
     solarPanelDefinition as unknown as AnyNodeDefinition,
     skylightDefinition as unknown as AnyNodeDefinition,
     dormerDefinition as unknown as AnyNodeDefinition,
+    gutterDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -91,6 +93,7 @@ export { dormerDefinition } from './dormer'
 export { elevatorDefinition } from './elevator'
 export { fenceDefinition } from './fence'
 export { guideDefinition } from './guide'
+export { gutterDefinition } from './gutter'
 export { itemDefinition } from './item'
 export { levelDefinition } from './level'
 export { ridgeVentDefinition } from './ridge-vent'

@@ -13,6 +13,7 @@ export type {
   FenceEvent,
   GridEvent,
   GuideEvent,
+  GutterEvent,
   ItemEvent,
   LevelEvent,
   NodeEvent,
