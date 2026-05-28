@@ -211,7 +211,7 @@
     },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "bin": {
         "pascal-mcp": "./dist/bin/pascal-mcp.js",
       },
