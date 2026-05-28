@@ -22,12 +22,27 @@ export type ArtifactParseResult =
   | { artifact: PascalLovelaceSceneArtifact; error: null }
   | { artifact: null; error: string }
 
-export function parsePascalLovelaceArtifact(input: unknown): ArtifactParseResult {
+function getPascalLovelaceArtifactInput(input: unknown) {
   if (!(input && typeof input === 'object')) {
+    return input
+  }
+
+  const artifact = input as { scene?: unknown; version?: unknown }
+  if (artifact.version === 1) {
+    return input
+  }
+
+  return artifact.scene ?? input
+}
+
+export function parsePascalLovelaceArtifact(input: unknown): ArtifactParseResult {
+  const artifactInput = getPascalLovelaceArtifactInput(input)
+
+  if (!(artifactInput && typeof artifactInput === 'object')) {
     return { artifact: null, error: 'Scene artifact must be a JSON object.' }
   }
 
-  const artifact = input as PascalLovelaceSceneArtifact
+  const artifact = artifactInput as PascalLovelaceSceneArtifact
   if (artifact.version !== 1) {
     return { artifact: null, error: 'Unsupported Pascal Lovelace artifact version.' }
   }

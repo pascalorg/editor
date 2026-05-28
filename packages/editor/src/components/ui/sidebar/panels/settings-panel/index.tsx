@@ -178,6 +178,7 @@ export function SettingsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
+  const collections = useScene((state) => state.collections)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
@@ -203,7 +204,7 @@ export function SettingsPanel({
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
   const handleSaveBuild = () => {
-    const sceneData = { nodes, rootNodeIds }
+    const sceneData = { collections, nodes, rootNodeIds }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -224,7 +225,7 @@ export function SettingsPanel({
       try {
         const data = JSON.parse(event.target?.result as string)
         if (data.nodes && data.rootNodeIds) {
-          setScene(data.nodes, data.rootNodeIds)
+          setScene(data.nodes, data.rootNodeIds, data.collections)
           resetSelection()
           setPhase('site')
         }

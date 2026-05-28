@@ -351,8 +351,8 @@ export function EditorCommands() {
         keywords: ['export', 'download', 'json', 'save', 'data'],
         execute: () =>
           run(() => {
-            const { nodes, rootNodeIds } = useScene.getState()
-            const blob = new Blob([JSON.stringify({ nodes, rootNodeIds }, null, 2)], {
+            const { collections, nodes, rootNodeIds } = useScene.getState()
+            const blob = new Blob([JSON.stringify({ collections, nodes, rootNodeIds }, null, 2)], {
               type: 'application/json',
             })
             const url = URL.createObjectURL(blob)

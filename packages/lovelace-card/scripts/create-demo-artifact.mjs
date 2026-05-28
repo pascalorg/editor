@@ -310,7 +310,10 @@ async function readImportedResources() {
 
   try {
     const artifact = JSON.parse(await readFile(path.join(outDir, 'home.scene.json'), 'utf8'))
-    const resources = artifact.homeAssistant?.bindings?.flatMap((binding) => binding.resources ?? [])
+    const sceneArtifact = artifact.version === 1 ? artifact : artifact.scene
+    const resources = sceneArtifact?.homeAssistant?.bindings?.flatMap(
+      (binding) => binding.resources ?? [],
+    )
     if (Array.isArray(resources) && resources.length > 0) {
       return resources
     }

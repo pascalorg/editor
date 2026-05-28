@@ -9,6 +9,11 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     label: 'Scene',
     component: () => null,
   },
+  {
+    id: 'settings',
+    label: 'Settings',
+    component: () => null,
+  },
 ]
 
 const PROJECT_ID = 'pascal-homeassistant-local'
@@ -39,7 +44,6 @@ export default function HomeAssistantAuthoringPage() {
         </div>
       </div>
       <Editor
-        homeAssistantApiEnabled={false}
         layoutVersion="v2"
         projectId={PROJECT_ID}
         sidebarTabs={SIDEBAR_TABS}
