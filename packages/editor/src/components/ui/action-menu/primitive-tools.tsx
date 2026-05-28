@@ -15,7 +15,7 @@ type PrimitiveShape = {
 // Common parametric shapes shown in the 散件 expansion row. Iconify (mdi)
 // icons are loaded by the same provider already used by the toolbar.
 export const PRIMITIVE_SHAPES: PrimitiveShape[] = [
-  { id: 'box', label: '立方�?, iconifyIcon: 'mdi:cube-outline' },
+  { id: 'box', label: '立方体', iconifyIcon: 'mdi:cube-outline' },
   { id: 'cylinder', label: '圆柱', iconifyIcon: 'mdi:cylinder' },
   { id: 'cone', label: '圆锥', iconifyIcon: 'mdi:cone' },
   { id: 'sphere', label: '球体', iconifyIcon: 'mdi:sphere' },
@@ -29,7 +29,7 @@ export type PrimitiveToolsProps = {
 }
 
 /**
- * 散件 (Primitive) shape row �?rendered inside <ActionMenu>'s expanding
+ * 散件 (Primitive) shape row - rendered inside <ActionMenu>'s expanding
  * panel, mirroring the layout and visual states of <StructureTools />.
  */
 export function PrimitiveTools({ onSelectShape }: PrimitiveToolsProps) {
