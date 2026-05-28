@@ -52,6 +52,20 @@ const ALLOWED_TYPES = [
 ]
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
+// Kinds whose move tool is wired in the legacy tail of `MoveTool`
+// (tools/item/move-tool.tsx) rather than through `affordanceTools.move`.
+// `isRegistryMovable` only sees the registry-native paths, so it returns
+// false for these even though `MoveTool` knows how to drive them — keep
+// this list in sync with the tail of that dispatcher. Drop a kind once
+// it migrates to a kind-owned affordance.
+const LEGACY_MOVABLE_KINDS = new Set([
+  'roof',
+  'roof-segment',
+  'stair',
+  'stair-segment',
+  'building',
+  'elevator',
+])
 
 // Menu scales with camera zoom so it feels anchored to the object, but is
 // clamped on both ends so it stays readable when zoomed way out and doesn't
@@ -447,13 +461,17 @@ export function FloatingActionMenu() {
                   : undefined
               }
               onMove={
-                // Registry-driven: any kind that declares
+                // Registry-driven for kinds that declare
                 // `capabilities.movable`, a `floorplanMoveTarget`, or a
-                // 3D `affordanceTools.move` mover gets the Move button.
-                // Replaces the previous 13-arm `node?.type === '…'`
-                // chain so adding a new movable kind doesn't touch this
-                // file.
-                node && isRegistryMovable(node.type) ? handleMove : undefined
+                // 3D `affordanceTools.move` mover. The legacy tail of
+                // `MoveTool` (see `tools/item/move-tool.tsx`) also handles
+                // a small set of kinds that haven't been ported to a
+                // kind-owned affordance yet — list them here so their
+                // Move buttons render too. Drop a kind from the set when
+                // its bespoke mover migrates onto `affordanceTools.move`.
+                node && (isRegistryMovable(node.type) || LEGACY_MOVABLE_KINDS.has(node.type))
+                  ? handleMove
+                  : undefined
               }
               onDelete={handleDelete}
               onDuplicate={
