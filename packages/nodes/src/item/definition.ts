@@ -72,15 +72,18 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    // The GLB-kind item already has its own catalog — the unified
-    // preset system treats `kind='preset'` (parametric subtree
-    // snapshots) and `kind='glb'` (this) as siblings, not duplicates.
-    presettable: false,
+    // Items participate in compositions — e.g. "table-with-plants",
+    // "shelf-with-books-on-top" — so they're presettable in their own
+    // right (and as descendants of presettable parents). The GLB-kind
+    // catalog still exists alongside; preset-flavoured items become
+    // siblings of GLB items inside the unified `items` table.
+    //
     // Items can be hosted on walls (assets with `attachTo: 'wall'`)
-    // via `wallId` + `wallT`. When a parametric composition that
-    // includes a wall-hosted item is saved as a preset (e.g. a
-    // shelf-with-items), the host app strips these so the descendant
-    // re-attaches against the new wall geometry at placement time.
+    // via `wallId` + `wallT`. When a composition that includes a
+    // wall-hosted item is saved as a preset (a sconce, a hanging
+    // shelf, etc.), the host app strips these via `getHostRefFields(def)`
+    // so the descendant re-attaches against the new wall geometry at
+    // placement time.
     hostRefFields: ['wallId', 'wallT'],
     // Floor items get lifted by slabs underneath via the generic
     // `<FloorElevationSystem>`. Wall- / ceiling-attached items live in

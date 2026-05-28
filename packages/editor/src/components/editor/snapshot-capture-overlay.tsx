@@ -294,31 +294,47 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
-      {/* Area mode: dim layer + crosshair cursor + drag-to-select */}
+      {/* Area mode: dim layer + crosshair cursor + drag-to-select.
+       *
+       * Preset mode reuses the same DOM but stays click-through: the
+       * crop frame is auto-staged and locked, so the user adjusts the
+       * camera (orbit / pan / zoom) instead of dragging the rect. The
+       * dim letterbox + dashed border still render via the inline
+       * `box-shadow` on the selection rect — they're cosmetic. */}
       {mode === 'area' && (
         <div
-          className="pointer-events-auto absolute inset-0 bg-black/30"
-          onPointerDown={onPointerDown}
-          onPointerMove={(e) => {
-            onPointerMove(e)
-            // Update cursor: 'move' when hovering inside an existing selection
-            if (!isDragging && drag && overlayRef.current) {
-              const rect = overlayRef.current.getBoundingClientRect()
-              const px = e.clientX - rect.left
-              const py = e.clientY - rect.top
-              const x0 = Math.min(drag.start.x, drag.end.x)
-              const y0 = Math.min(drag.start.y, drag.end.y)
-              const x1 = Math.max(drag.start.x, drag.end.x)
-              const y1 = Math.max(drag.start.y, drag.end.y)
-              e.currentTarget.style.cursor =
-                px >= x0 && px <= x1 && py >= y0 && py <= y1 ? 'move' : 'crosshair'
-            }
-          }}
-          onPointerUp={onPointerUp}
-          style={{ cursor: 'crosshair' }}
+          className={
+            isPreset
+              ? 'pointer-events-none absolute inset-0'
+              : 'pointer-events-auto absolute inset-0 bg-black/30'
+          }
+          onPointerDown={isPreset ? undefined : onPointerDown}
+          onPointerMove={
+            isPreset
+              ? undefined
+              : (e) => {
+                  onPointerMove(e)
+                  // Update cursor: 'move' when hovering inside an existing selection
+                  if (!isDragging && drag && overlayRef.current) {
+                    const rect = overlayRef.current.getBoundingClientRect()
+                    const px = e.clientX - rect.left
+                    const py = e.clientY - rect.top
+                    const x0 = Math.min(drag.start.x, drag.end.x)
+                    const y0 = Math.min(drag.start.y, drag.end.y)
+                    const x1 = Math.max(drag.start.x, drag.end.x)
+                    const y1 = Math.max(drag.start.y, drag.end.y)
+                    e.currentTarget.style.cursor =
+                      px >= x0 && px <= x1 && py >= y0 && py <= y1 ? 'move' : 'crosshair'
+                  }
+                }
+          }
+          onPointerUp={isPreset ? undefined : onPointerUp}
+          style={isPreset ? undefined : { cursor: 'crosshair' }}
         >
-          {/* "No selection" hint */}
-          {!selectionStyle && (
+          {/* "No selection" hint — only when the user has to draw the
+              area themselves (`standard` capture). Preset mode always
+              has a pre-staged square, so we never show it there. */}
+          {!selectionStyle && !isPreset && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span className="rounded-full bg-black/40 px-4 py-2 text-sm text-white backdrop-blur-sm">
                 Drag the area you want to capture
@@ -341,31 +357,34 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
                 background: 'rgba(255,255,255,0.04)',
               }}
             >
-              {/* Corner handles */}
-              {(
-                [
-                  { pos: { top: -5, left: -5 }, cursor: 'nwse-resize' },
-                  { pos: { top: -5, right: -5 }, cursor: 'nesw-resize' },
-                  { pos: { bottom: -5, left: -5 }, cursor: 'nesw-resize' },
-                  { pos: { bottom: -5, right: -5 }, cursor: 'nwse-resize' },
-                ] as const
-              ).map(({ pos, cursor }, i) => (
-                <div
-                  key={i}
-                  onPointerDown={(e) => onCornerPointerDown(e, i)}
-                  style={{
-                    position: 'absolute',
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
-                    pointerEvents: 'auto',
-                    cursor,
-                    ...pos,
-                  }}
-                />
-              ))}
+              {/* Corner handles — preset mode locks the frame to the
+                  auto-staged centered square; the user adjusts the
+                  camera instead. */}
+              {!isPreset &&
+                (
+                  [
+                    { pos: { top: -5, left: -5 }, cursor: 'nwse-resize' },
+                    { pos: { top: -5, right: -5 }, cursor: 'nesw-resize' },
+                    { pos: { bottom: -5, left: -5 }, cursor: 'nesw-resize' },
+                    { pos: { bottom: -5, right: -5 }, cursor: 'nwse-resize' },
+                  ] as const
+                ).map(({ pos, cursor }, i) => (
+                  <div
+                    key={i}
+                    onPointerDown={(e) => onCornerPointerDown(e, i)}
+                    style={{
+                      position: 'absolute',
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'white',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                      pointerEvents: 'auto',
+                      cursor,
+                      ...pos,
+                    }}
+                  />
+                ))}
             </div>
           )}
         </div>
