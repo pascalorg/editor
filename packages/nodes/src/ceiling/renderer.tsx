@@ -9,6 +9,7 @@ import {
 import {
   createSurfaceRoleMaterial,
   NodeRenderer,
+  resolveSurfaceColor,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -86,8 +87,17 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     // 'ceiling' role colour; only an explicit preset/material keeps a texture.
     const hasExplicit = Boolean(node.materialPreset || node.material)
     if (!textures || !hasExplicit) {
+      // Bottom (seen from inside the room, looking up) stays opaque so the
+      // ceiling reads as a solid surface. Top uses the transparent
+      // grid-pattern material so the ceiling stays see-through whenever
+      // the editor reveals the `ceiling-grid` overlay (placing a
+      // ceiling-hosted item, or selecting one of its children — e.g.
+      // after committing a placement). Without this the top mesh shipped
+      // an opaque surface-role material, so a top-down camera lost view
+      // of everything under the ceiling once the overlay turned on.
+      const ceilingColor = resolveSurfaceColor('ceiling', colorPreset, sceneTheme)
       return {
-        topMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide, sceneTheme),
+        topMaterial: getCeilingMaterials(ceilingColor).topMaterial,
         bottomMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, BackSide, sceneTheme),
       }
     }
