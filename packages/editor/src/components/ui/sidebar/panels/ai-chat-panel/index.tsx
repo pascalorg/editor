@@ -201,7 +201,7 @@ const COMPOSE_ROBOT_ARM_TOOL = {
   },
 }
 
-const BASE_RULES = `You are the 3D modeling assistant inside the Pascal editor. You work in 3 stages: analyze, generate, review.
+const BASE_RULES = `You are the 3D modeling assistant inside the Pascal editor. You work in 2 stages: analyze, generate.
 
 Available tools:
 - compose_primitive(shapes): Create box, cylinder, sphere, or lathe shapes.
@@ -305,30 +305,7 @@ Based on the analysis, call compose_primitive or compose_robot_arm to create the
 Follow the analysis plan — same kinds, dimensions, positions.
 - Include ALL shapes in a single call. Parent before child.
 - For cylinders, use axis ("x"/"y"/"z") rather than manual rotation.
-- REMINDER: car roof/cabin is SPHERE+scale, not box. DO NOT output a box for a roof — it will be rejected by review.
-`
-
-const STAGE3_REVIEWER = `${BASE_RULES}
-
-===== STAGE 3: REVIEW =====
-Review the shapes just created. Check for these violations:
-
-1. BOX OVERUSE: Car roof, cabin top, or dome as BOX → WRONG. Must be SPHERE+scale. A car with a box roof looks like a container truck, not a car. This is the #1 most common error.
-
-2. WRONG PRIMITIVE: Thin disc as sphere → use CYLINDER short height. Curved surface as box → use SPHERE.
-
-3. ORIENTATION: Cylinder axis direction. Car wheels → "z". Table legs → "y".
-
-4. PROPORTIONS: Sphere scale values = half-extents. sz should not exceed body width.
-
-===== CORRECTION RULES (CRITICAL) =====
-- DO NOT recreate the entire object. ONLY fix the specific parts that are WRONG.
-- If the roof is a box but should be sphere+scale → output ONLY the corrected roof shape, NOT the whole car.
-- If wheels are correct → DO NOT include them in the correction.
-- If nothing is wrong → output TEXT ONLY, no tool call.
-- Name corrected shapes with "-fixed" suffix.
-- Example of WRONG: outputting 15 shapes when only the roof needs fixing.
-- Example of CORRECT: outputting 1 shape (the fixed roof) and leaving the rest alone.
+- REMINDER: car roof/cabin is SPHERE+scale, not box. DO NOT output a box for a roof.
 `
 
 
@@ -526,8 +503,7 @@ export function AiChatPanel() {
       const hasTools = tools && tools.length > 0
       const systemMsg = apiMessages.find(m => m.role === 'system')
       const stageTag = systemMsg?.content?.includes('STAGE 1') ? 'Stage1-Analyst' :
-        systemMsg?.content?.includes('STAGE 2') ? 'Stage2-Generator' :
-        systemMsg?.content?.includes('STAGE 3') ? 'Stage3-Reviewer' : 'API'
+        systemMsg?.content?.includes('STAGE 2') ? 'Stage2-Generator' : 'API'
       console.log(`[AI-Chat] ${stageTag} → calling API (tools=${hasTools}, messages=${apiMessages.length})`)
       const body: Record<string, unknown> = {
         model,
@@ -933,30 +909,6 @@ export function AiChatPanel() {
         })
       }
 
-      // ===== STAGE 3: REVIEW (with tools for corrections) =====
-      console.log('[AI-Chat] ===== STAGE 3: REVIEW =====')
-      setMessages((prev) => [...prev, { role: 'assistant', content: '**🔍 Self-Check:**\n_Reviewing..._' }])
-
-      const reviewMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown }> = [
-        { role: 'system', content: STAGE3_REVIEWER },
-        {
-          role: 'user',
-          content: `User request: ${text}\n\nGenerated shapes:\n${genResult.results.join('\n')}\n\nReview these shapes. If any are wrong (boxes instead of sphere+scale for curved bodies, unrealistic dimensions, wrong positions), call compose_primitive with CORRECTED versions. Otherwise confirm.`,
-        },
-      ]
-
-      const reviewResponse = await callApi(reviewMessages, [COMPOSE_PRIMITIVE_TOOL])
-      const reviewResult = await processToolCalls(reviewResponse, reviewMessages, [COMPOSE_PRIMITIVE_TOOL], '🔍 Self-Check')
-
-      // Final update: show review text (confirmations or correction results)
-      setMessages((prev) => {
-        const updated = [...prev]
-        const finalContent = reviewResult.results.length > 0
-          ? `**🔍 Self-Check:**\n${reviewResult.lastContent}\n\nCorrections:\n${reviewResult.results.join('\n')}`
-          : `**🔍 Self-Check:**\n${reviewResult.lastContent || reviewResponse.content || 'Review complete.'}`
-        updated[updated.length - 1] = { role: 'assistant', content: finalContent }
-        return updated
-      })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       setMessages((prev) => [
