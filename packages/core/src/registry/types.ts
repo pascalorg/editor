@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
+import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -970,6 +971,43 @@ export type Capabilities = {
    * declaring the same flag.
    */
   floorplanLevelContainer?: boolean
+  /**
+   * Names of schema fields on this kind that are *host references* —
+   * values derived from where the node is placed (rather than declared
+   * by the user as part of the kind's parametric configuration). Read
+   * by host apps at preset-save time to strip these from the stored
+   * payload so a placed instance gets fresh host links at the new
+   * placement site (e.g. a door snapshot loses `wallId`/`wallT`; at
+   * placement the auto-attach UX re-derives them from the wall under
+   * the cursor).
+   *
+   * Kinds with no host refs omit this field (default `[]`).
+   *
+   * Examples:
+   *   - door: `['wallId', 'wallT']` (door hosted on a wall)
+   *   - window: `['wallId', 'wallT']`
+   *   - item with `attachTo`: depends on the asset; the kind's
+   *     `defaults()` or the dragging logic populates it dynamically.
+   */
+  hostRefFields?: string[]
+  /**
+   * Whether instances of this kind can be saved as a reusable preset
+   * (unified `items` catalog, `kind='preset'`). The editor itself does
+   * not act on this flag — host apps read it to gate "save as preset"
+   * UI on the selected node. Default resolution (callers should use the
+   * `isPresettable(def)` helper rather than reading this directly):
+   *
+   *   - explicit `true`  → presettable
+   *   - explicit `false` → not presettable
+   *   - undefined        → presettable when `def.parametrics` exists
+   *
+   * Structural / utility kinds (level, building, site, zone, spawn,
+   * guide, scan, item) opt out explicitly because saving them as a
+   * standalone preset has no meaning — items already have their own
+   * catalog, scans/guides carry user-uploaded imagery, and the rest
+   * are non-leaf scene containers.
+   */
+  presettable?: boolean
 }
 
 /**
@@ -1282,6 +1320,25 @@ export type SceneApi = {
   markDirty: (id: AnyNodeId) => void
   pauseHistory: () => void
   resumeHistory: () => void
+  /**
+   * Collect the subtree of live nodes rooted at `rootId` — `root` plus
+   * every descendant reachable via `children[]` in BFS order. Returns
+   * live node references (no clones); the caller decides whether to
+   * persist by value or pass them straight into {@link cloneNodesInto}.
+   * Returns `null` if `rootId` is missing.
+   */
+  getSubtree: (rootId: AnyNodeId) => Subtree | null
+  /**
+   * Clone a flat array of nodes into the live scene with fresh IDs and
+   * rewired parent / children references. Intentionally generic — see
+   * {@link cloneNodesInto} for the transformations applied. Does NOT
+   * strip or re-derive host references (e.g. `wallId` on a door); the
+   * caller is responsible for that policy (read {@link Capabilities.hostRefFields}
+   * on the relevant definition).
+   *
+   * Returns the new root id, or `null` if insertion failed.
+   */
+  cloneNodesInto: (nodes: ReadonlyArray<AnyNode>, opts: CloneNodesIntoOptions) => AnyNodeId | null
 }
 
 // ─── Registry surface ────────────────────────────────────────────────

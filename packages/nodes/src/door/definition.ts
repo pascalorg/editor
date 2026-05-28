@@ -1,12 +1,12 @@
-import {
-  type AnyNodeId,
-  type DoorNode as DoorNodeType,
-  type HandleDescriptor,
-  type NodeDefinition,
-  type WallNode,
+import type {
+  AnyNodeId,
+  DoorNode as DoorNodeType,
+  HandleDescriptor,
+  NodeDefinition,
+  WallNode,
 } from '@pascal-app/core'
-import { doorWidthAffordance } from './floorplan-affordances'
 import { buildDoorFloorplan } from './floorplan'
+import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
@@ -143,6 +143,10 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     duplicable: true,
     deletable: true,
     wallOpeningPlacement: true,
+    // `wallId` ties the door to its host wall and is re-derived from
+    // the wall under the cursor when a preset is placed. Host apps
+    // strip this at preset-save time via `getHostRefFields(def)`.
+    hostRefFields: ['wallId'],
   },
 
   parametrics: doorParametrics,

@@ -30,6 +30,9 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Zones describe regions of a site — they don't translate as
+    // reusable presets independent of their site context.
+    presettable: false,
   },
 
   parametrics: zoneParametrics,

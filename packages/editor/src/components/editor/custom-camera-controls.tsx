@@ -319,6 +319,76 @@ export const CustomCameraControls = () => {
     )
   }, [isPreviewMode, previewTargetNodeId])
 
+  // Preset capture auto-framing — when `setCaptureMode({ mode: 'preset',
+  // isolated })` fires, fly the camera to a pose that fits the union
+  // bounds of the isolated subtree inside the locked square crop. The
+  // user can still pan / orbit / zoom from there; we only set the
+  // initial pose. On exit (`mode: 'idle'`), we restore the previous
+  // pose so the user lands back exactly where they were before the
+  // modal opened.
+  const captureMode = useEditor((s) => s.captureMode)
+  useEffect(() => {
+    if (!controls.current) return
+    if (captureMode.mode !== 'preset') return
+    const ids = captureMode.isolated
+    if (ids.length === 0) return
+
+    // Stash the pre-capture pose so we can restore it on exit. Using
+    // a ref keeps the value across the cleanup phase without
+    // re-renders.
+    const restorePos = new Vector3()
+    const restoreTarget = new Vector3()
+    controls.current.getPosition(restorePos)
+    controls.current.getTarget(restoreTarget)
+
+    // Union the bounds of every isolated subtree root. `setFromObject`
+    // walks the Three.js descendants automatically, so this picks up
+    // synthesized children (door/window cutouts under a wall, etc.).
+    tempBox.makeEmpty()
+    for (const id of ids) {
+      const obj = sceneRegistry.nodes.get(id)
+      if (!obj) continue
+      const sub = new Box3().setFromObject(obj)
+      if (!sub.isEmpty()) tempBox.union(sub)
+    }
+    if (tempBox.isEmpty()) return
+
+    tempBox.getCenter(tempCenter)
+    tempBox.getSize(tempSize)
+
+    // Distance heuristic: fit the subject inside the 75%-of-shorter-
+    // side square crop. Multiplier 1.6 keeps a small breathing margin
+    // around the bounds so the dashed frame doesn't kiss the geometry.
+    const maxDim = Math.max(tempSize.x, tempSize.y, tempSize.z)
+    const distance = Math.max(maxDim * 1.6, 3)
+
+    controls.current.setLookAt(
+      tempCenter.x + distance * 0.7,
+      tempCenter.y + Math.max(tempSize.y * 0.4, distance * 0.4),
+      tempCenter.z + distance * 0.7,
+      tempCenter.x,
+      tempCenter.y,
+      tempCenter.z,
+      true,
+    )
+
+    return () => {
+      // Cleanup runs on captureMode change *or* unmount. Restore the
+      // pre-capture pose only if the controls are still around (during
+      // unmount they might be torn down already).
+      if (!controls.current) return
+      controls.current.setLookAt(
+        restorePos.x,
+        restorePos.y,
+        restorePos.z,
+        restoreTarget.x,
+        restoreTarget.y,
+        restoreTarget.z,
+        true,
+      )
+    }
+  }, [captureMode])
+
   useEffect(() => {
     const handleNodeCapture = ({ nodeId }: CameraControlEvent) => {
       if (!controls.current) return
