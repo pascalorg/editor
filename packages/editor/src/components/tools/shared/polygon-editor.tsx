@@ -611,10 +611,17 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               {/* Per-side resize arrow — points outward from the edge.
                   Dragging it pulls (or pushes) only this edge's two
                   vertices along the outward normal; the opposite side
-                  of the polygon stays put. */}
+                  of the polygon stays put.
+
+                  Stays on SCENE_LAYER (no `layers={EDITOR_LAYER}`) so the
+                  post-processing scenePass picks it up in the depth/normal
+                  MRT and the ink-edge shader paints dark outlines on the
+                  chevron — same treatment as the wall and registry height
+                  arrows. The surrounding line/vertex/edge-box handles stay
+                  on EDITOR_LAYER because they're not chevrons and reading
+                  as flat overlays is the intended look there. */}
               <mesh
                 geometry={arrowGeometry}
-                layers={EDITOR_LAYER}
                 onClick={(e) => {
                   if (e.button !== 0) return
                   e.stopPropagation()
@@ -640,8 +647,12 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                   color={
                     isDragging ? '#22c55e' : isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR
                   }
+                  // depthTest off → still drawn on top of underlying surface.
+                  // depthWrite on → silhouette enters the depth buffer so the
+                  // ink-edge shader paints it from every angle, like all the
+                  // other registry chevrons.
                   depthTest={false}
-                  depthWrite={false}
+                  depthWrite={true}
                   transparent
                 />
               </mesh>

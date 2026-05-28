@@ -39,7 +39,6 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -342,16 +341,14 @@ function NodeArrowHandlesForNode({
   const outerRef = useRef<Group>(null)
   const innerRef = useRef<Group>(null)
 
-  // Tag all arrow objects for EDITOR_LAYER so the ThumbnailGenerator camera
-  // (which calls cam.layers.disable(EDITOR_LAYER)) excludes them from captures.
-  // descriptors is used as a trigger dep: when handles change, new mesh objects
-  // are created and need their layers set even though it isn't read in the body.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger dep
-  useEffect(() => {
-    outerRef.current?.traverse((obj) => {
-      obj.layers.set(EDITOR_LAYER)
-    })
-  }, [descriptors])
+  // Keep arrow objects on SCENE_LAYER so the post-processing scenePass
+  // captures them in the depth/normal MRT — that's what feeds the ink-edge
+  // shader, and it's the reason the wall height arrow (which also stays on
+  // SCENE_LAYER) reads as a proper 3D plate with outlined edges. Putting
+  // them on EDITOR_LAYER hides them from scenePass and the chevron renders
+  // flat. Arrows are only mounted while a node is selected, so thumbnail
+  // captures (which never have selection) don't need the layer-based
+  // exclusion the wall arrow also goes without.
 
   useFrame(() => {
     if (outerRef.current && outerRide) {
@@ -421,8 +418,16 @@ function useArrowMaterial(): MeshBasicNodeMaterial {
       new MeshBasicNodeMaterial({
         color: new Color(ARROW_COLOR),
         side: DoubleSide,
+        // `depthTest: false` keeps the chevron drawing on top of any
+        // geometry under it; `depthWrite: true` puts the chevron's depth
+        // into the scenePass buffer so the ink-edge shader's depth
+        // Laplacian fires on its silhouette from every angle. Without
+        // depthWrite, only the normal-discontinuity branch can detect
+        // the chevron, and that signal collapses when the arrow's faces
+        // happen to align with whatever sits behind them in screen space
+        // — which is why the lines used to drop out depending on the view.
         depthTest: false,
-        depthWrite: false,
+        depthWrite: true,
         transparent: true,
         opacity: 1,
       }),
