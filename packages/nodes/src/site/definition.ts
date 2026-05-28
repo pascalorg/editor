@@ -26,6 +26,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
     // override their selection). Same reasoning as `level`.
     duplicable: false,
     deletable: false,
+    presettable: false,
   },
 
   parametrics: siteParametrics,

@@ -146,6 +146,24 @@ export function isRegistryMovable(kind: string): boolean {
   return false
 }
 
+/**
+ * Whether the kind can be saved as a reusable preset. Default: an
+ * explicit `capabilities.presettable` boolean wins; otherwise the kind
+ * is presettable iff it declares `def.parametrics`. Read by host apps
+ * (community shell) to gate "save as preset" UI on a selection.
+ */
+export function isPresettable(def: AnyNodeDefinition): boolean {
+  if (typeof def.capabilities.presettable === 'boolean') {
+    return def.capabilities.presettable
+  }
+  return def.parametrics !== undefined
+}
+
+export function isPresettableKind(kind: string): boolean {
+  const def = nodeRegistry.get(kind)
+  return def ? isPresettable(def) : false
+}
+
 export async function loadPlugin(plugin: Plugin): Promise<void> {
   if (plugin.apiVersion !== HOST_API_VERSION) {
     throw new Error(

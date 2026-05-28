@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
+import type { NodeSubtree } from './subtree'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -970,6 +971,24 @@ export type Capabilities = {
    * declaring the same flag.
    */
   floorplanLevelContainer?: boolean
+  /**
+   * Whether instances of this kind can be saved as a reusable preset
+   * (unified `items` catalog, `kind='preset'`). The editor itself does
+   * not act on this flag — host apps read it to gate "save as preset"
+   * UI on the selected node. Default resolution (callers should use the
+   * `isPresettable(def)` helper rather than reading this directly):
+   *
+   *   - explicit `true`  → presettable
+   *   - explicit `false` → not presettable
+   *   - undefined        → presettable when `def.parametrics` exists
+   *
+   * Structural / utility kinds (level, building, site, zone, spawn,
+   * guide, scan, item) opt out explicitly because saving them as a
+   * standalone preset has no meaning — items already have their own
+   * catalog, scans/guides carry user-uploaded imagery, and the rest
+   * are non-leaf scene containers.
+   */
+  presettable?: boolean
 }
 
 /**
@@ -1282,6 +1301,24 @@ export type SceneApi = {
   markDirty: (id: AnyNodeId) => void
   pauseHistory: () => void
   resumeHistory: () => void
+  /**
+   * Build a {@link NodeSubtree} snapshot rooted at `rootId` — a
+   * serializable, location-independent payload suitable for storage
+   * in the unified `items` catalog. See {@link buildSubtreeSnapshot}
+   * for the stripping rules. Returns `null` if `rootId` is missing.
+   */
+  getSubtreeSnapshot: (rootId: AnyNodeId) => NodeSubtree | null
+  /**
+   * Re-hydrate a {@link NodeSubtree} into the scene at `position`. The
+   * root and every descendant get fresh IDs; the root is parented to
+   * `parentId` (when provided) or becomes a scene root. Returns the
+   * new root id, or `null` if the subtree had no root node.
+   */
+  materializeSubtree: (
+    subtree: NodeSubtree,
+    position: readonly [number, number, number],
+    parentId?: AnyNodeId,
+  ) => AnyNodeId | null
 }
 
 // ─── Registry surface ────────────────────────────────────────────────

@@ -1,5 +1,17 @@
+// Re-exports of the scene / viewer hooks so consumers composing their
+// own shells on top of `@pascal-app/editor` (community-app, embedders)
+// don't have to learn three separate package imports. The canonical
+// definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
+export { useScene } from '@pascal-app/core'
+export { useViewer } from '@pascal-app/viewer'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
+// Headless component aliases: the implementation files keep their
+// internal names (`ParametricInspector`, `FloatingActionMenu`) because
+// they're referenced throughout the editor's own internals; the public
+// surface uses the shorter, shell-friendly names from the unified
+// preset-system spec.
+export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -89,8 +101,19 @@ export {
   WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
-export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
-export { ViewToggles as ViewerToolbarLeft } from './components/ui/action-menu/view-toggles'
+// `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
+// existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
+// underlying components are the same; the alias just matches the names
+// used in `pascalorg/private-editor:plans/community-preset-system.md`
+// so consumer code stays close to the spec vocabulary.
+export {
+  CameraActions as ToolbarRight,
+  CameraActions as ViewerToolbarRight,
+} from './components/ui/action-menu/camera-actions'
+export {
+  ViewToggles as ToolbarLeft,
+  ViewToggles as ViewerToolbarLeft,
+} from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
 export { MaterialPicker } from './components/ui/controls/material-picker'
@@ -107,6 +130,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
+export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
 // Presets popover — used by kind-owned door / window panels for their
 // hardware / type / opening presets.
 export { PresetsPopover } from './components/ui/panels/presets/presets-popover'
@@ -138,6 +162,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { type Selection, useSelection } from './hooks/use-selection'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {

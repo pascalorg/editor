@@ -72,6 +72,10 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // The GLB-kind item already has its own catalog — the unified
+    // preset system treats `kind='preset'` (parametric subtree
+    // snapshots) and `kind='glb'` (this) as siblings, not duplicates.
+    presettable: false,
     // Floor items get lifted by slabs underneath via the generic
     // `<FloorElevationSystem>`. Wall- / ceiling-attached items live in
     // their parent's local frame and skip the lift via `applies`.

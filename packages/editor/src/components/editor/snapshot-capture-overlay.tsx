@@ -7,7 +7,11 @@ import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
-type CaptureMode = 'standard' | 'viewport' | 'area'
+// Local crop-mode enum — distinct from `useEditor.captureMode` (which
+// describes *why* a capture is happening, e.g. `preset`). This one says
+// HOW the captured pixels are cropped: full-frame 16:9 (`standard`),
+// raw canvas viewport, or user-dragged area.
+type CropMode = 'standard' | 'viewport' | 'area'
 type CaptureState = 'idle' | 'capturing' | 'saved'
 
 interface DragPoint {
@@ -21,7 +25,7 @@ interface Drag {
 }
 
 function getResolution(
-  mode: CaptureMode,
+  mode: CropMode,
   overlayEl: HTMLDivElement | null,
   drag: Drag | null,
 ): { w: number; h: number } | null {
@@ -47,10 +51,15 @@ function getResolution(
 
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const captureMode = useEditor((s) => s.captureMode)
   const setCaptureMode = useEditor((s) => s.setCaptureMode)
   const isMobile = useIsMobile()
+  // `preset` capture mode locks the overlay to a square area crop with
+  // a transparent background — the user picks framing but not the
+  // crop shape. Matches the unified preset-thumbnail capture flow.
+  const isPreset = captureMode.mode === 'preset'
 
-  const [mode, setMode] = useState<CaptureMode>('standard')
+  const [mode, setMode] = useState<CropMode>('standard')
   const [drag, setDrag] = useState<Drag | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [captureState, setCaptureState] = useState<CaptureState>('idle')
@@ -66,15 +75,16 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [isCaptureMode, setCaptureMode])
 
-  // Reset local state when entering capture mode
+  // Reset local state when entering capture mode. Preset mode forces
+  // `area` so the overlay shows the square selection rect immediately.
   useEffect(() => {
     if (isCaptureMode) {
-      setMode('standard')
+      setMode(isPreset ? 'area' : 'standard')
       setDrag(null)
       setIsDragging(false)
       setCaptureState('idle')
     }
-  }, [isCaptureMode])
+  }, [isCaptureMode, isPreset])
 
   // Listen for snapshot saved to show feedback then exit
   useEffect(() => {
@@ -142,11 +152,28 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           start: { x: snapshot.start.x + dx, y: snapshot.start.y + dy },
           end: { x: snapshot.end.x + dx, y: snapshot.end.y + dy },
         })
+      } else if (isPreset) {
+        // Preset mode locks the rect to a square — use the smaller
+        // axis to keep the drag predictable, sign-correct so the user
+        // can still drag in any quadrant.
+        setDrag((d) => {
+          if (!d) return null
+          const dx = pt.x - d.start.x
+          const dy = pt.y - d.start.y
+          const side = Math.min(Math.abs(dx), Math.abs(dy))
+          return {
+            start: d.start,
+            end: {
+              x: d.start.x + Math.sign(dx || 1) * side,
+              y: d.start.y + Math.sign(dy || 1) * side,
+            },
+          }
+        })
       } else {
         setDrag((d) => (d ? { start: d.start, end: pt } : null))
       }
     },
-    [isDragging],
+    [isDragging, isPreset],
   )
 
   const onPointerUp = useCallback(() => {
@@ -225,8 +252,12 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       projectId,
       captureMode: mode,
       cropRegion,
+      // In preset mode, the ThumbnailGenerator should keep the alpha
+      // channel transparent so the saved preset thumbnail composes
+      // cleanly onto any palette background.
+      transparent: isPreset,
     })
-  }, [captureState, mode, drag, projectId])
+  }, [captureState, mode, drag, projectId, isPreset])
 
   if (!isCaptureMode) return null
 
@@ -343,7 +374,10 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       {/* Bottom-center mode toolbar */}
       <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2">
         {(() => {
-          const modeButtons = (
+          // Preset capture mode locks both the crop shape (square) and
+          // the transparent-background output — hide the per-shape
+          // mode buttons so the user has nothing to second-guess.
+          const modeButtons = isPreset ? null : (
             <>
               <ModeButton
                 active={mode === 'standard'}
@@ -408,8 +442,16 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           if (isMobile) {
             return (
               <div className="flex flex-col items-stretch gap-2 rounded-2xl border border-white/10 bg-neutral-900/95 px-2 py-2 shadow-xl backdrop-blur-md">
-                <div className="flex items-center justify-center gap-1">{modeButtons}</div>
-                <div className="flex items-center justify-center gap-2 border-white/10 border-t pt-2">
+                {modeButtons && (
+                  <div className="flex items-center justify-center gap-1">{modeButtons}</div>
+                )}
+                <div
+                  className={
+                    modeButtons
+                      ? 'flex items-center justify-center gap-2 border-white/10 border-t pt-2'
+                      : 'flex items-center justify-center gap-2'
+                  }
+                >
                   {resolutionDisplay}
                   {captureButton}
                 </div>
@@ -420,7 +462,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           return (
             <div className="flex items-center gap-1 rounded-full border border-white/10 bg-neutral-900/95 px-2 py-2 shadow-xl backdrop-blur-md">
               {modeButtons}
-              <div className="mx-1 h-4 w-px bg-white/10" />
+              {modeButtons && <div className="mx-1 h-4 w-px bg-white/10" />}
               {resolutionDisplay}
               <div className="mx-1 h-4 w-px bg-white/10" />
               {captureButton}

@@ -1,6 +1,23 @@
+export type {
+  ArcResizeHandle,
+  Cursor,
+  EditorApi,
+  EndpointMoveHandle,
+  HandleAnchor,
+  HandleAxis,
+  HandleDescriptor,
+  HandleList,
+  HandlePlacement,
+  HandlePortal,
+  LinearResizeHandle,
+  RadialResizeHandle,
+  TapActionHandle,
+} from './handles'
 export {
   discoverPlugins,
   getSelectableKinds,
+  isPresettable,
+  isPresettableKind,
   isRegistryMovable,
   isRegistrySelectable,
   kindsWithFloorplanScope,
@@ -17,22 +34,14 @@ export {
   collectDescendants,
   type SpatialQuery,
 } from './relations-resolver'
-export type {
-  ArcResizeHandle,
-  Cursor,
-  EditorApi,
-  EndpointMoveHandle,
-  HandleAnchor,
-  HandleAxis,
-  HandleDescriptor,
-  HandleList,
-  HandlePlacement,
-  HandlePortal,
-  LinearResizeHandle,
-  RadialResizeHandle,
-  TapActionHandle,
-} from './handles'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
+export {
+  buildSubtreeSnapshot,
+  type MaterializedSubtree,
+  materializeSubtree,
+  type NodeSubtree,
+  type SubtreeNode,
+} from './subtree'
 export type {
   Affordance,
   AnyNodeDefinition,

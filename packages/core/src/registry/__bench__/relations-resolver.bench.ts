@@ -110,6 +110,8 @@ function makeScene(nodes: Record<string, AnyNode>): SceneApi {
     markDirty: () => {},
     pauseHistory: () => {},
     resumeHistory: () => {},
+    getSubtreeSnapshot: () => null,
+    materializeSubtree: () => null,
   }
 }
 
