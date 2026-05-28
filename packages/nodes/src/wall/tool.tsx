@@ -21,6 +21,7 @@ import {
   type SegmentAngleReference,
   snapWallDraftPoint,
   triggerSFX,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -407,14 +408,19 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      gridPosition = snapWallDraftPoint({ point: localPoint, walls })
+      // Default to the active grid step; Shift switches to the fine
+      // step (0.05m) for precision. No 45° angle snap — we want the
+      // cursor to track grid lines in every direction. Orthogonal
+      // walls fall out of grid snap naturally when the start sits on
+      // a grid intersection.
+      const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      gridPosition = snapWallDraftPoint({ point: localPoint, walls, step })
 
       if (buildingState.current === 1) {
         const snappedLocal = snapWallDraftPoint({
           point: localPoint,
           walls,
-          start: [startingPoint.current.x, startingPoint.current.z],
-          angleSnap: !shiftPressed.current,
+          step,
         })
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
@@ -453,20 +459,27 @@ export const WallTool: React.FC = () => {
       const walls = getCurrentLevelWalls()
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
+      const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+
       if (buildingState.current === 0) {
-        const snappedStart = snapWallDraftPoint({ point: localClick, walls })
+        const snappedStart = snapWallDraftPoint({ point: localClick, walls, step: clickStep })
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
-        wallPreviewRef.current.visible = true
+        // Visibility is owned by `updateWallPreview` — it flips
+        // `mesh.visible` based on segment length. Setting it here
+        // (before any geometry data has been written) draws the
+        // mesh's empty `<shapeGeometry/>` placeholder, which WebGPU
+        // flags as "Vertex buffer slot 0 ... was not set" on the
+        // first frame after click. Leaving it false until the next
+        // `onGridMove` writes a real BoxGeometry skips that frame.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const snappedEnd = snapWallDraftPoint({
           point: localClick,
           walls,
-          start: [startingPoint.current.x, startingPoint.current.z],
-          angleSnap: !shiftPressed.current,
+          step: clickStep,
         })
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -483,6 +496,12 @@ export const WallTool: React.FC = () => {
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
+        // Hide the preview until the next `onGridMove` writes the
+        // new segment's geometry. Without this the prior segment's
+        // BoxGeometry stays visible for a frame on top of the
+        // freshly-committed real wall, producing a brief
+        // double-paint at the new wall's position.
+        wallPreviewRef.current.visible = false
         setDraftMeasurement(null)
       }
     }

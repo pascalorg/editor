@@ -5,6 +5,7 @@ import {
   emitter,
   type GridEvent,
   sceneRegistry,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -14,6 +15,8 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
+
+const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
 export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   const previousGridPosRef = useRef<[number, number] | null>(null)
@@ -28,9 +31,27 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   const originalRotationRef = useRef<number>(node.rotation[1] ?? 0)
   const pendingRotationRef = useRef<number>(node.rotation[1] ?? 0)
 
+  // Local-space offset from the building's origin to its bbox center. The
+  // floating drag button anchors at the bbox center, so we pin that point to
+  // the cursor during the drag — otherwise the raw origin (often nowhere near
+  // the visual center) would snap to the cursor and the building would jump.
+  const centerOffsetLocalRef = useRef<THREE.Vector3>(new THREE.Vector3())
+
   const [cursorWorldPos, setCursorWorldPos] = useState<[number, number, number]>(() => {
     const obj = sceneRegistry.nodes.get(node.id)
     if (obj) {
+      const box = new THREE.Box3().setFromObject(obj)
+      if (!box.isEmpty()) {
+        const center = box.getCenter(new THREE.Vector3())
+        const originWorld = new THREE.Vector3()
+        obj.getWorldPosition(originWorld)
+        const originalRotation = node.rotation[1] ?? 0
+        centerOffsetLocalRef.current = center
+          .clone()
+          .sub(originWorld)
+          .applyAxisAngle(Y_AXIS, -originalRotation)
+        return [center.x, 0, center.z]
+      }
       const pos = new THREE.Vector3()
       obj.getWorldPosition(pos)
       return [pos.x, pos.y, pos.z]
@@ -45,8 +66,21 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   useEffect(() => {
     const nodeId = nodeIdRef.current
     const originalPosition = originalPositionRef.current
+    const offsetWork = new THREE.Vector3()
+    const offsetAt = (rotationY: number) =>
+      offsetWork.copy(centerOffsetLocalRef.current).applyAxisAngle(Y_AXIS, rotationY)
 
     useScene.temporal.getState().pause()
+
+    // Publish the building's current pose to useLiveTransforms so the
+    // floor-plan (and any other live consumers) can follow per-frame
+    // without peeking into the Three.js mesh.
+    const publishLive = (posX: number, posZ: number, rotY: number) => {
+      useLiveTransforms.getState().set(nodeId, {
+        position: [posX, originalPosition[1], posZ],
+        rotation: rotY,
+      })
+    }
 
     let wasCommitted = false
 
@@ -66,7 +100,19 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
         pendingRotationRef.current += rotationDelta
 
         const mesh = sceneRegistry.nodes.get(nodeId)
-        if (mesh) mesh.rotation.y = pendingRotationRef.current
+        if (mesh) {
+          mesh.rotation.y = pendingRotationRef.current
+          // Keep the bbox center pinned to the cursor through rotation.
+          if (previousGridPosRef.current) {
+            const [gridX, gridZ] = previousGridPosRef.current
+            const off = offsetAt(pendingRotationRef.current)
+            mesh.position.x = gridX - off.x
+            mesh.position.z = gridZ - off.z
+            publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
+          } else {
+            publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
+          }
+        }
       }
     }
 
@@ -87,8 +133,10 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       // Directly update the Three.js group — no store update during drag
       const mesh = sceneRegistry.nodes.get(nodeId)
       if (mesh) {
-        mesh.position.x = gridX
-        mesh.position.z = gridZ
+        const off = offsetAt(pendingRotationRef.current)
+        mesh.position.x = gridX - off.x
+        mesh.position.z = gridZ - off.z
+        publishLive(mesh.position.x, mesh.position.z, pendingRotationRef.current)
       }
     }
 
@@ -98,9 +146,10 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
 
       wasCommitted = true
 
+      const off = offsetAt(pendingRotationRef.current)
       useScene.temporal.getState().resume()
       useScene.getState().updateNode(nodeId, {
-        position: [gridX, originalPosition[1], gridZ],
+        position: [gridX - off.x, originalPosition[1], gridZ - off.z],
         rotation: [0, pendingRotationRef.current, 0],
       })
       useScene.temporal.getState().pause()
@@ -140,6 +189,10 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
           rotation: [0, originalRotationRef.current, 0],
         })
       }
+      // Drop the live transform — committed positions are now in the scene
+      // store, so the floor-plan should read those instead of the stale
+      // drag overlay.
+      useLiveTransforms.getState().clear(nodeId)
       useScene.temporal.getState().resume()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)

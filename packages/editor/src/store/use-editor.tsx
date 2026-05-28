@@ -188,10 +188,41 @@ type EditorState = {
       | BuildingNode
       | null,
   ) => void
+  /**
+   * Which view (2D floor plan or 3D viewer) most recently completed
+   * the active move — set by the committing or cancelling side just
+   * before clearing `movingNode`. Lets the *other* side's effect
+   * cleanup skip its own restore-from-snapshot when the drag was
+   * already finalised elsewhere (split view mounts both the 2D
+   * overlay and the 3D move tool for the same `movingNode`).
+   *
+   * Reset to null when the next non-null `setMovingNode` starts a
+   * fresh drag (so stale values from the previous drag don't poison
+   * cleanups). Preserved across `setMovingNode(null)` so the
+   * non-owning side's cleanup — which fires after the clear
+   * propagates — can still read who finalised. Null while a drag
+   * is in progress means "no side has claimed it yet" — both
+   * cleanups then restore to their pre-drag snapshot, which is the
+   * same baseline, so the result is idempotent.
+   */
+  movingNodeOrigin: '2d' | '3d' | null
+  setMovingNodeOrigin: (origin: '2d' | '3d' | null) => void
   movingWallEndpoint: MovingWallEndpoint | null
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   movingFenceEndpoint: MovingFenceEndpoint | null
   setMovingFenceEndpoint: (value: MovingFenceEndpoint | null) => void
+  /**
+   * Generic per-kind handle drag state. Set by a node's resize handle
+   * (height arrow, width arrow, rise / sweep / inner-radius for curved
+   * stairs, …) at drag-start and cleared on drag-end. `label`
+   * identifies which dimension the handle controls — measurement
+   * overlays read it to render the right caption; the camera controls
+   * use the truthy value to suppress one-finger pan-rotate. Replaces
+   * the previous per-kind `resizing*` fields so adding a new resize
+   * handle doesn't require a new store field.
+   */
+  activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
+  setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
   curvingWall: WallNode | null
   setCurvingWall: (wall: WallNode | null) => void
   curvingFence: FenceNode | null
@@ -597,11 +628,24 @@ const useEditor = create<EditorState>()(
         | StairSegmentNode
         | BuildingNode
         | null,
-      setMovingNode: (node) => set({ movingNode: node }),
+      setMovingNode: (node) =>
+        set(
+          node === null
+            ? // Preserve `movingNodeOrigin` across the clear so the
+              // non-owning side's effect cleanup — which fires after
+              // `setMovingNode(null)` propagates — can still read who
+              // finalised. The next non-null `setMovingNode` resets it.
+              { movingNode: null }
+            : { movingNode: node, movingNodeOrigin: null },
+        ),
+      movingNodeOrigin: null as '2d' | '3d' | null,
+      setMovingNodeOrigin: (origin) => set({ movingNodeOrigin: origin }),
       movingWallEndpoint: null,
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),
       movingFenceEndpoint: null,
       setMovingFenceEndpoint: (value) => set({ movingFenceEndpoint: value }),
+      activeHandleDrag: null,
+      setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
       curvingWall: null,
       setCurvingWall: (wall) => set({ curvingWall: wall }),
       curvingFence: null,

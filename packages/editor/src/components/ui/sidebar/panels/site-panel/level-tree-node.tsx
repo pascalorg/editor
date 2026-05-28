@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getDefaultLevelName } from '../../../../../lib/level-name'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
@@ -35,7 +36,7 @@ export const LevelTreeNode = memo(function LevelTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = `Level ${level}`
+  const defaultName = getDefaultLevelName(level)
 
   return (
     <TreeNodeWrapper

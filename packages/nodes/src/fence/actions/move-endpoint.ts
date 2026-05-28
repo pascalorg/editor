@@ -6,7 +6,12 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { type FencePlanPoint, isWallLongEnough, snapFenceDraftPoint } from '@pascal-app/editor'
+import {
+  type FencePlanPoint,
+  isSegmentLongEnough,
+  snapFenceDraftPoint,
+  WALL_FINE_GRID_STEP,
+} from '@pascal-app/editor'
 
 /**
  * Phase 5 Stage D — move-fence-endpoint drag affordance.
@@ -23,7 +28,7 @@ import { type FencePlanPoint, isWallLongEnough, snapFenceDraftPoint } from '@pas
  *  - **apply**: writes the fence + linked fence endpoints into the
  *    scene. Drag-session paused history captures originals; cascade
  *    resolver fans dirty marks through `endpoint-match`.
- *  - **commit**: requires `hasChanged` && `isWallLongEnough(next)`.
+ *  - **commit**: requires `hasChanged` && `isSegmentLongEnough(next)`.
  *    Performs the single-undo dance — revert to originals (snapshot),
  *    resume history, re-apply final draft — so the entire drag is one
  *    `Ctrl-Z` step. Returns false to reject; `createDragSession.cancel`
@@ -143,13 +148,15 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
 
     preview: (ctx, point, modifiers) => {
       const planPoint: FencePlanPoint = [point[0], point[1]]
+      // Endpoint move = grid snap only; the 45°-from-start angle snap
+      // is draft-only. Shift switches to the fine grid step for
+      // precision, mirroring the wall convention.
       const snapped = snapFenceDraftPoint({
         point: planPoint,
         walls: ctx.levelWalls,
         fences: ctx.levelFences,
-        start: ctx.fixedPoint,
-        angleSnap: !modifiers.shift,
         ignoreFenceIds: [ctx.fenceId as string],
+        step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
       })
       const nextStart = ctx.endpoint === 'start' ? snapped : ctx.fixedPoint
       const nextEnd = ctx.endpoint === 'end' ? snapped : ctx.fixedPoint
@@ -189,7 +196,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       // fence/actions/curve.ts for the rationale (no-op drag must still
       // push a pastState entry to avoid Ctrl-Z cancelling the fence
       // creation that preceded the activation).
-      if (!isWallLongEnough(draft.start, draft.end)) return false
+      if (!isSegmentLongEnough(draft.start, draft.end)) return false
 
       // Single-undo dance: revert to originals (paused history → no
       // zundo record), resume history, then re-apply the final draft

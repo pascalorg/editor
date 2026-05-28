@@ -5,6 +5,7 @@ export type LiveNodeOverrides = Record<string, unknown>
 type LiveNodeOverrideState = {
   overrides: Map<string, LiveNodeOverrides>
   set(nodeId: string, values: LiveNodeOverrides): void
+  setMany(entries: ReadonlyArray<readonly [string, LiveNodeOverrides]>): void
   get(nodeId: string): LiveNodeOverrides | undefined
   clear(nodeId: string): void
   clearAll(): void
@@ -18,6 +19,19 @@ const useLiveNodeOverrides = create<LiveNodeOverrideState>((set, get) => ({
       next.set(nodeId, { ...(next.get(nodeId) ?? {}), ...values })
       return { overrides: next }
     }),
+  // Batch update — one Map clone + one zustand notification regardless
+  // of entry count, so a drag publishing to N linked walls re-renders
+  // subscribers (WallSystem, FloorplanRegistryLayer) once per tick
+  // instead of N+1 times.
+  setMany: (entries) =>
+    set((state) => {
+      if (entries.length === 0) return state
+      const next = new Map(state.overrides)
+      for (const [nodeId, values] of entries) {
+        next.set(nodeId, { ...(next.get(nodeId) ?? {}), ...values })
+      }
+      return { overrides: next }
+    }),
   get: (nodeId) => get().overrides.get(nodeId),
   clear: (nodeId) =>
     set((state) => {
@@ -27,5 +41,17 @@ const useLiveNodeOverrides = create<LiveNodeOverrideState>((set, get) => ({
     }),
   clearAll: () => set({ overrides: new Map() }),
 }))
+
+/**
+ * Merge any live override for `node` into a fresh copy. Spread semantics —
+ * override fields win, untouched fields stay. Returns the input unchanged
+ * when no override exists, so the caller can use the result directly
+ * without an extra "did anything change" check.
+ */
+export function getEffectiveNode<T extends { id: string }>(node: T): T {
+  const override = useLiveNodeOverrides.getState().overrides.get(node.id)
+  if (!override || Object.keys(override).length === 0) return node
+  return { ...node, ...override } as T
+}
 
 export default useLiveNodeOverrides

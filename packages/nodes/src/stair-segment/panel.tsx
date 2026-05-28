@@ -16,6 +16,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -204,34 +205,25 @@ export default function StairSegmentPanel() {
       </PanelSection>
 
       <PanelSection title="Structure">
-        <div className="flex items-center justify-between px-1 py-1">
-          <span className="text-muted-foreground text-xs">Fill to floor</span>
-          <button
-            className={`relative h-5 w-10 rounded-full transition-colors ${
-              node.fillToFloor ? 'bg-blue-500' : 'bg-[#3e3e3e]'
-            }`}
-            onClick={() => handleUpdate({ fillToFloor: !node.fillToFloor })}
-            type="button"
-          >
-            <div
-              className={`absolute top-1 h-3 w-3 rounded-full bg-white transition-transform ${
-                node.fillToFloor ? 'left-6' : 'left-1'
-              }`}
-            />
-          </button>
-        </div>
-        {!node.fillToFloor && (
-          <SliderControl
-            label="Thickness"
-            max={1}
-            min={0.05}
-            onChange={(v) => handleUpdate({ thickness: v })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+        <div className="space-y-3">
+          <ToggleControl
+            checked={node.fillToFloor}
+            label="Fill to floor"
+            onChange={(checked) => handleUpdate({ fillToFloor: checked })}
           />
-        )}
+          {!node.fillToFloor && (
+            <SliderControl
+              label="Thickness"
+              max={1}
+              min={0.05}
+              onChange={(v) => handleUpdate({ thickness: v })}
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+            />
+          )}
+        </div>
       </PanelSection>
 
       <PanelSection title="Position">

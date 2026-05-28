@@ -53,6 +53,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -80,6 +81,7 @@ import {
   type FloorplanRenderContextValue,
   FloorplanRenderProvider,
 } from '../editor-2d/floorplan-render-context'
+import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
@@ -87,6 +89,12 @@ import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-laye
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
+import {
+  formatAngleRadians,
+  getAngleArcToSegmentReference,
+  getAngleToSegmentReference,
+  getSegmentAngleReferenceAtPoint,
+} from '../tools/shared/segment-angle'
 import {
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
@@ -98,8 +106,9 @@ import {
 } from '../tools/stair/stair-defaults'
 import {
   createWallOnCurrentLevel,
-  isWallLongEnough,
+  isSegmentLongEnough,
   snapWallDraftPoint,
+  WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
@@ -2025,6 +2034,168 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
   }
 }
 
+type DraftWallMeasurement = {
+  lengthLabel: string
+  midpoint: WallPlanPoint
+  direction: WallPlanPoint
+  angleLabels: {
+    id: string
+    label: string
+    center: WallPlanPoint
+    radius: number
+    startAngle: number
+    endAngle: number
+    midAngle: number
+  }[]
+}
+
+function FloorplanDraftWallMeasurement({
+  measurement,
+  measurementStroke,
+  labelBackground,
+  labelText,
+  sceneRotationDeg,
+  unitsPerPixel,
+}: {
+  measurement: DraftWallMeasurement
+  measurementStroke: string
+  labelBackground: string
+  labelText: string
+  sceneRotationDeg: number
+  unitsPerPixel: number
+}) {
+  const stroke = measurementStroke
+  const labelBg = labelBackground
+
+  const upx = unitsPerPixel
+  const fontSize = Math.max(upx * 10, 0.08)
+  const padX = upx * 6
+  const padY = upx * 3
+
+  // Length plate: rotates to follow the wall direction, but flips 180°
+  // when its on-screen orientation would read upside-down (same trick as
+  // `floorplan-registry-layer.tsx` for dimension labels).
+  const wallAngleDeg =
+    (Math.atan2(measurement.direction[1], measurement.direction[0]) * 180) / Math.PI
+  let labelAngleDeg = wallAngleDeg
+  let screenDeg = wallAngleDeg + sceneRotationDeg
+  screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
+  if (screenDeg > 90) labelAngleDeg -= 180
+  else if (screenDeg <= -90) labelAngleDeg += 180
+
+  // Push the plate perpendicular to the wall so the dashed footprint
+  // stays visible underneath.
+  const perpX = -measurement.direction[1]
+  const perpY = measurement.direction[0]
+  const offset = upx * 18
+  const cx = measurement.midpoint[0] + perpX * offset
+  const cy = measurement.midpoint[1] + perpY * offset
+
+  const lengthTextWidth = measurement.lengthLabel.length * upx * 6.2
+  const lengthPlateW = lengthTextWidth + padX * 2
+  const lengthPlateH = fontSize + padY * 2
+
+  const arcSampleCount = 32
+
+  return (
+    <g pointerEvents="none">
+      <g transform={`translate(${cx} ${cy}) rotate(${labelAngleDeg})`}>
+        <rect
+          fill={labelBg}
+          height={lengthPlateH}
+          opacity={0.92}
+          rx={upx * 3}
+          ry={upx * 3}
+          stroke={stroke}
+          strokeWidth={upx * 0.5}
+          vectorEffect="non-scaling-stroke"
+          width={lengthPlateW}
+          x={-lengthPlateW / 2}
+          y={-lengthPlateH / 2}
+        />
+        <text
+          dominantBaseline="middle"
+          fill={labelText}
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          fontSize={fontSize}
+          fontWeight={600}
+          textAnchor="middle"
+          x={0}
+          y={0}
+        >
+          {measurement.lengthLabel}
+        </text>
+      </g>
+
+      {measurement.angleLabels.map((arc) => {
+        // Sample the arc as a polyline — avoids the SVG arc command's
+        // sweep-flag direction quirks across negative/positive sweeps.
+        const points: string[] = []
+        for (let i = 0; i <= arcSampleCount; i += 1) {
+          const t = i / arcSampleCount
+          const a = arc.startAngle + (arc.endAngle - arc.startAngle) * t
+          const px = arc.center[0] + Math.cos(a) * arc.radius
+          const py = arc.center[1] + Math.sin(a) * arc.radius
+          points.push(`${px},${py}`)
+        }
+
+        const aFontSize = Math.max(upx * 9, 0.075)
+        const aPadX = upx * 5
+        const aPadY = upx * 2.5
+        const aTextWidth = arc.label.length * upx * 6.2
+        const aPlateW = aTextWidth + aPadX * 2
+        const aPlateH = aFontSize + aPadY * 2
+
+        const labelDist = arc.radius + upx * 16
+        const lx = arc.center[0] + Math.cos(arc.midAngle) * labelDist
+        const ly = arc.center[1] + Math.sin(arc.midAngle) * labelDist
+
+        return (
+          <g key={`draft-angle-${arc.id}`}>
+            <polyline
+              fill="none"
+              points={points.join(' ')}
+              stroke={stroke}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity={0.95}
+              strokeWidth={upx * 1.2}
+              vectorEffect="non-scaling-stroke"
+            />
+            <g transform={`translate(${lx} ${ly})`}>
+              <rect
+                fill={labelBg}
+                height={aPlateH}
+                opacity={0.92}
+                rx={upx * 3}
+                ry={upx * 3}
+                stroke={stroke}
+                strokeWidth={upx * 0.5}
+                vectorEffect="non-scaling-stroke"
+                width={aPlateW}
+                x={-aPlateW / 2}
+                y={-aPlateH / 2}
+              />
+              <text
+                dominantBaseline="middle"
+                fill={labelText}
+                fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                fontSize={aFontSize}
+                fontWeight={600}
+                textAnchor="middle"
+                x={0}
+                y={0}
+              >
+                {arc.label}
+              </text>
+            </g>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
 function pointsEqual(a: WallPlanPoint, b: WallPlanPoint): boolean {
   return a[0] === b[0] && a[1] === b[1]
 }
@@ -3875,6 +4046,7 @@ export function FloorplanPanel() {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const floorplanSceneRef = useRef<SVGGElement>(null)
+  const floorplanContentRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
@@ -3904,6 +4076,11 @@ export function FloorplanPanel() {
   const selectedItem = useEditor((state) => state.selectedItem)
 
   const setFloorplanHovered = useEditor((state) => state.setFloorplanHovered)
+  // Panel is permanently mounted and toggled via `display: none` in
+  // editor/index.tsx — subscribing here lets us re-fit the viewport when
+  // the user closes and re-opens the 2D editor instead of restoring the
+  // stale viewport from before they closed it.
+  const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
   const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
   const setSelectedReferenceId = useEditor((state) => state.setSelectedReferenceId)
   const setMode = useEditor((state) => state.setMode)
@@ -3943,6 +4120,30 @@ export function FloorplanPanel() {
     walls,
     zones,
   } = useFloorplanSceneData({ buildingId, levelId })
+  // When only a building is selected (or we're mid-drag on a building),
+  // the FloorplanRegistryLayer falls back to that building's level 0
+  // (or lowest level) and renders it dimmed as context. We let the SVG
+  // mount in that case so the dimmed-floor render path is reachable
+  // instead of swapping in the "Switch to a building level" message.
+  //
+  // `currentBuildingId` covers both the user-selected building and the
+  // building inferred from a selected level. During a building move the
+  // `movingNode` carries the building's id even if the explicit
+  // selection has been cleared as part of the move handoff.
+  const movingBuildingId =
+    useEditor((state) => {
+      const moving = state.movingNode
+      if (!moving) return null
+      const def = nodeRegistry.get(moving.type)
+      return def?.capabilities?.floorplanLevelContainer ? moving.id : null
+    }) ?? null
+  const ambientBuildingId = currentBuildingId ?? movingBuildingId
+  const hasAmbientBuildingLevel = useScene((state) => {
+    if (levelId || !ambientBuildingId) return false
+    const building = state.nodes[ambientBuildingId]
+    if (!building || building.type !== 'building') return false
+    return building.children.some((cid) => state.nodes[cid]?.type === 'level')
+  })
   const elevators = useScene(
     useShallow((state) => {
       const building = currentBuildingId ? state.nodes[currentBuildingId] : null
@@ -4080,6 +4281,17 @@ export function FloorplanPanel() {
   const [isPanelReady, setIsPanelReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState({ width: 1, height: 1 })
   const [viewport, setViewport] = useState<FloorplanViewport | null>(null)
+  // Tight bbox of the painted floor-plan scene (the rotation `<g>`'s
+  // children), read via SVG `getBBox()` after each render. The legacy
+  // polygon arrays (`wallPolygons`, `displaySlabPolygons`, etc.) are now
+  // empty stubs because rendering moved to the registry layer, so
+  // measuring the DOM is how `fittedViewport` learns where content lives.
+  const [measuredSceneBBox, setMeasuredSceneBBox] = useState<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
 
   useEffect(() => {
     if (structureLayer === 'zones' && floorplanSelectionTool === 'marquee') {
@@ -4820,7 +5032,7 @@ export function FloorplanPanel() {
   }, [shouldShowSiteBoundaryHandles, siteVertexDragState, visibleSitePolygon])
 
   const draftPolygon = useMemo(() => {
-    if (!(levelId && draftStart && draftEnd && isWallLongEnough(draftStart, draftEnd))) {
+    if (!(levelId && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
       return null
     }
 
@@ -4828,6 +5040,74 @@ export function FloorplanPanel() {
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
   }, [draftEnd, draftStart, levelId])
+  // Live length + angle feedback for the wall draft — parity with the 3D
+  // `WallTool` (`packages/nodes/src/wall/tool.tsx`), ported to 2D plan
+  // space. Length renders at the segment midpoint; angle arcs sit at
+  // each endpoint that meets an existing wall.
+  const draftWallMeasurement = useMemo(() => {
+    if (!(isWallBuildActive && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
+      return null
+    }
+
+    const dx = draftEnd[0] - draftStart[0]
+    const dy = draftEnd[1] - draftStart[1]
+    const length = Math.hypot(dx, dy)
+
+    const draftFromStart: WallPlanPoint = [dx, dy]
+    const draftFromEnd: WallPlanPoint = [-dx, -dy]
+    const endpoints = [
+      { id: 'start', point: draftStart, draftVector: draftFromStart },
+      { id: 'end', point: draftEnd, draftVector: draftFromEnd },
+    ] as const
+
+    type AngleLabel = {
+      id: string
+      label: string
+      center: WallPlanPoint
+      radius: number
+      startAngle: number
+      endAngle: number
+      midAngle: number
+    }
+
+    const angleLabels: AngleLabel[] = []
+    for (const endpoint of endpoints) {
+      const connectedWall = walls.find((wall) =>
+        Boolean(getSegmentAngleReferenceAtPoint(endpoint.point, wall)),
+      )
+      if (!connectedWall) continue
+      const ref = getSegmentAngleReferenceAtPoint(endpoint.point, connectedWall)
+      if (!ref) continue
+
+      const angle = getAngleToSegmentReference(endpoint.draftVector, ref)
+      if (angle === null) continue
+      const arc = getAngleArcToSegmentReference(endpoint.draftVector, ref)
+      if (!arc || arc.angle < 0.01) continue
+
+      const refLen = Math.hypot(ref.vector[0], ref.vector[1])
+      const radius = Math.max(0.32, Math.min(0.72, Math.min(length, refLen) * 0.28))
+
+      angleLabels.push({
+        id: endpoint.id,
+        label: formatAngleRadians(angle),
+        center: endpoint.point,
+        radius,
+        startAngle: arc.startAngle,
+        endAngle: arc.endAngle,
+        midAngle: arc.midAngle,
+      })
+    }
+
+    return {
+      lengthLabel: formatMeasurement(length, unit),
+      midpoint: [
+        (draftStart[0] + draftEnd[0]) / 2,
+        (draftStart[1] + draftEnd[1]) / 2,
+      ] as WallPlanPoint,
+      direction: [dx / length, dy / length] as WallPlanPoint,
+      angleLabels,
+    }
+  }, [draftEnd, draftStart, isWallBuildActive, unit, walls])
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
       const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
@@ -4920,7 +5200,11 @@ export function FloorplanPanel() {
   const svgAspectRatio = surfaceSize.width / surfaceSize.height || 1
 
   const fittedViewport = useMemo(() => {
-    const allPoints = [
+    // Collect bounds from the legacy polygon arrays first. Most are empty
+    // stubs (rendering moved to the registry layer), but we still honor
+    // anything that does emit points so the fit is correct during the
+    // brief window before `measuredSceneBBox` is populated.
+    const legacyPoints = [
       ...(visibleSitePolygon ? visibleSitePolygon.polygon : []),
       ...displayCeilingPolygons.flatMap((entry) => entry.polygon),
       ...displaySlabPolygons.flatMap((entry) => entry.polygon),
@@ -4935,25 +5219,44 @@ export function FloorplanPanel() {
       ...wallPolygons.flatMap((entry) => entry.polygon),
     ]
 
-    if (allPoints.length === 0) {
-      return {
-        centerX: 0,
-        centerY: 0,
-        width: Math.max(FALLBACK_VIEW_SIZE, FALLBACK_VIEW_SIZE * svgAspectRatio),
-      }
-    }
-
     let minX = Number.POSITIVE_INFINITY
     let maxX = Number.NEGATIVE_INFINITY
     let minY = Number.POSITIVE_INFINITY
     let maxY = Number.NEGATIVE_INFINITY
 
-    for (const point of allPoints) {
-      const svgPoint = toSvgPoint(point)
+    for (const point of legacyPoints) {
+      const svgPoint = rotateSvgPoint(toSvgPoint(point), floorplanSceneRotationDeg)
       minX = Math.min(minX, svgPoint.x)
       maxX = Math.max(maxX, svgPoint.x)
       minY = Math.min(minY, svgPoint.y)
       maxY = Math.max(maxY, svgPoint.y)
+    }
+
+    // Fold in the DOM-measured bbox of the registry-driven scene. `getBBox`
+    // returns coords in the rotation group's pre-transform space, so we
+    // rotate the four corners to land in viewBox coords before bbox'ing.
+    if (measuredSceneBBox && measuredSceneBBox.width >= 0 && measuredSceneBBox.height >= 0) {
+      const { x, y, width: w, height: h } = measuredSceneBBox
+      const corners = [
+        rotateSvgPoint({ x, y }, floorplanSceneRotationDeg),
+        rotateSvgPoint({ x: x + w, y }, floorplanSceneRotationDeg),
+        rotateSvgPoint({ x, y: y + h }, floorplanSceneRotationDeg),
+        rotateSvgPoint({ x: x + w, y: y + h }, floorplanSceneRotationDeg),
+      ]
+      for (const corner of corners) {
+        minX = Math.min(minX, corner.x)
+        maxX = Math.max(maxX, corner.x)
+        minY = Math.min(minY, corner.y)
+        maxY = Math.max(maxY, corner.y)
+      }
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      return {
+        centerX: 0,
+        centerY: 0,
+        width: Math.max(FALLBACK_VIEW_SIZE, FALLBACK_VIEW_SIZE * svgAspectRatio),
+      }
     }
 
     const rawWidth = maxX - minX
@@ -4976,12 +5279,51 @@ export function FloorplanPanel() {
     floorplanFenceEntries,
     floorplanItemEntries,
     floorplanRoofEntries,
+    floorplanSceneRotationDeg,
     floorplanStairEntries,
+    measuredSceneBBox,
     svgAspectRatio,
     visibleSitePolygon,
     visibleZonePolygons,
     wallPolygons,
   ])
+
+  // Measure the painted floor-plan scene after each render. `getBBox()`
+  // gives us the tight bounds of whatever the registry layer emitted,
+  // even for kinds whose legacy entry arrays are empty stubs. Bail out
+  // when nothing has painted (empty group throws in some browsers).
+  // We measure the content-only sub-group (not the full scene group) to
+  // exclude the grid layer, whose extent tracks the viewBox and would
+  // otherwise create a measure→fit→measure update loop.
+  useLayoutEffect(() => {
+    const el = floorplanContentRef.current
+    if (!el) return
+    let bbox: { x: number; y: number; width: number; height: number }
+    try {
+      const measured = el.getBBox()
+      bbox = {
+        x: measured.x,
+        y: measured.y,
+        width: measured.width,
+        height: measured.height,
+      }
+    } catch {
+      return
+    }
+    if (bbox.width <= 0 && bbox.height <= 0) return
+    setMeasuredSceneBBox((prev) => {
+      if (
+        prev &&
+        prev.x === bbox.x &&
+        prev.y === bbox.y &&
+        prev.width === bbox.width &&
+        prev.height === bbox.height
+      ) {
+        return prev
+      }
+      return bbox
+    })
+  })
 
   useEffect(() => {
     const host = viewportHostRef.current
@@ -5029,6 +5371,19 @@ export function FloorplanPanel() {
       window.removeEventListener('resize', update)
     }
   }, [])
+
+  // Reset to auto-fit each time the 2D editor re-opens. The panel stays
+  // mounted across close/open (hidden via `display: none`), so without
+  // this the user's last pan/zoom — and any stale `measuredSceneBBox`
+  // captured before they closed it — would survive and the reopened
+  // editor would show the same off-screen viewport instead of fitting
+  // to the current scene.
+  useEffect(() => {
+    if (!isFloorplanOpen) return
+    hasUserAdjustedViewportRef.current = false
+    setViewport(null)
+    setMeasuredSceneBBox(null)
+  }, [isFloorplanOpen])
 
   useEffect(() => {
     const levelChanged = previousLevelIdRef.current !== (levelId ?? null)
@@ -5108,32 +5463,6 @@ export function FloorplanPanel() {
     () => Math.max(floorplanWorldUnitsPerPixel * 0.55, 0.0001),
     [floorplanWorldUnitsPerPixel],
   )
-  const floorplanCursorAnchorPosition = useMemo(() => {
-    if (
-      cursorPoint &&
-      surfaceSize.width > 0 &&
-      surfaceSize.height > 0 &&
-      viewBox.width > 0 &&
-      viewBox.height > 0
-    ) {
-      return projectSvgPointToSurface(
-        rotateSvgPoint(toSvgPlanPoint(cursorPoint), floorplanSceneRotationDeg),
-        viewBox,
-        surfaceSize,
-      )
-    }
-
-    return floorplanCursorPosition
-  }, [
-    cursorPoint,
-    floorplanCursorPosition,
-    floorplanSceneRotationDeg,
-    surfaceSize,
-    surfaceSize.height,
-    surfaceSize.width,
-    viewBox,
-  ])
-
   useEffect(() => {
     setHoveredGuideCorner(null)
   }, [])
@@ -5864,10 +6193,16 @@ export function FloorplanPanel() {
         return
       }
 
-      const svgPoint = getSvgPointFromClientPoint(clientX, clientY)
-      if (!svgPoint) {
+      // `getSvgPointFromClientPoint` resolves to the rotation group's
+      // local coords (pre-rotation). The viewBox lives in the outer
+      // SVG space (post-rotation), so apply the scene rotation here
+      // before using the point as a zoom anchor — otherwise a rotated
+      // scene zooms around the wrong location instead of the cursor.
+      const localPoint = getSvgPointFromClientPoint(clientX, clientY)
+      if (!localPoint) {
         return
       }
+      const svgPoint = rotateSvgPoint(localPoint, floorplanSceneRotationDeg)
 
       const currentViewport = viewport ?? fittedViewport
       const currentViewBox = viewBox
@@ -5889,6 +6224,7 @@ export function FloorplanPanel() {
     },
     [
       fittedViewport,
+      floorplanSceneRotationDeg,
       getSvgPointFromClientPoint,
       maxViewportWidth,
       minViewportWidth,
@@ -6347,12 +6683,14 @@ export function FloorplanPanel() {
           return
         }
 
+        // Wall endpoint move: grid snap only (no 45° angle snap from the
+        // fixed corner — that's draft-only behaviour). Shift switches
+        // to the fine grid step for precision.
         const snappedPoint = snapWallDraftPoint({
           point: planPoint,
           walls,
-          start: dragState.fixedPoint,
-          angleSnap: !shiftPressed,
           ignoreWallIds: [dragState.wallId],
+          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
 
         if (pointsEqual(dragState.currentPoint, snappedPoint)) {
@@ -6524,7 +6862,7 @@ export function FloorplanPanel() {
           )
         })
 
-        if (commitUpdates.length > 0 && isWallLongEnough(nextDraft.start, nextDraft.end)) {
+        if (commitUpdates.length > 0 && isSegmentLongEnough(nextDraft.start, nextDraft.end)) {
           useScene.getState().updateNodes(
             commitUpdates.map((update) => ({
               id: update.id as AnyNodeId,
@@ -6927,12 +7265,14 @@ export function FloorplanPanel() {
       if (isFenceBuildActive) {
         emitFloorplanGridEvent('move', planPoint, event)
 
+        // Fence draft: grid snap only — orthogonal fences fall out of
+        // a grid-aligned start. Shift switches to the fine grid step
+        // for precision. Mirrors `wall/tool.tsx`.
         const snappedPoint = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: Boolean(fenceDraftStart) && !shiftPressed,
+          step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
 
         setCursorPoint((previousPoint) =>
@@ -6973,19 +7313,14 @@ export function FloorplanPanel() {
         return
       }
 
-      // Wall build also needs to run before the catch-all — see the
-      // wall branch in `handleBackgroundPlacementClick` for the same
-      // restructuring. The wall branch lives further below in this
-      // handler (`if (!isWallBuildActive) ... setDraftEnd(...)`); the
-      // grid emit is inlined there.
-      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
-        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
-        setCursorPoint((previousPoint) =>
-          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
-        )
-        return
-      }
-
+      // Opening placement (door / window build, plus door / window move)
+      // must run before the registry catch-all: door & window are
+      // registered kinds, so `isRegistryToolBuildActive` is true during
+      // their build mode and the catch-all would otherwise emit
+      // `grid:move` and return — never emitting the `wall:enter` /
+      // `wall:move` events the door / window placement tools listen for.
+      // Same reason `handleBackgroundPlacementClick` runs its opening
+      // branch before its grid catch-all.
       if (isOpeningPlacementActive) {
         const closest = findClosestWallPoint(planPoint, walls, {
           canUseWall: (wall) => !isCurvedWall(wall),
@@ -7020,6 +7355,19 @@ export function FloorplanPanel() {
         return
       }
 
+      // Registry-driven catch-all for kinds without bespoke 2D handling
+      // (shelf, etc.). Must run AFTER the opening branch above (door /
+      // window are also registered kinds, but need wall events — see
+      // comment there). Wall build skips this so its own branch below
+      // updates local `draftEnd` state alongside the registry tool.
+      if (!isWallBuildActive && isFloorplanGridInteractionActive) {
+        const snappedPoint = emitFloorplanGridEvent('move', planPoint, event)
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
+        return
+      }
+
       if (isMarqueeSelectionToolActive) {
         setCursorPoint((previousPoint) => {
           const snappedPoint = getSnappedFloorplanPoint(planPoint)
@@ -7035,11 +7383,13 @@ export function FloorplanPanel() {
         return
       }
 
+      // Wall draft: grid snap only — orthogonal walls follow naturally
+      // from a grid-aligned start. Shift switches to the fine grid step
+      // (0.05m) for precision.
       const snappedPoint = snapWallDraftPoint({
         point: planPoint,
         walls,
-        start: draftStart ?? undefined,
-        angleSnap: Boolean(draftStart) && !shiftPressed,
+        step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
       })
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
@@ -7241,14 +7591,34 @@ export function FloorplanPanel() {
         return
       }
 
-      if (!isWallLongEnough(draftStart, point)) {
+      if (!isSegmentLongEnough(draftStart, point)) {
         return
       }
 
-      createWallOnCurrentLevel(draftStart, point)
-      clearDraft()
+      // The 3D wall tool's `grid:click` listener
+      // (`packages/nodes/src/wall/tool.tsx`) owns the wall-create
+      // call. `emitFloorplanGridEvent('click', …)` in
+      // `useFloorplanBackgroundPlacement` fires it synchronously
+      // just before this callback runs, so by the time we get here
+      // the wall already exists in the scene.
+      //
+      // We still attempt the create as a fallback in case the 3D
+      // tool isn't mounted (unusual — both views are always
+      // mounted today, but defensive). When the wall already
+      // exists `createWallOnCurrentLevel` returns null via its
+      // duplicate-detection branch; we treat that as "the 3D side
+      // committed" and chain the draft state forward instead of
+      // clearing it (the previous behaviour caused the 2nd-segment
+      // draft to silently break after click 2).
+      const createdWall = createWallOnCurrentLevel(draftStart, point)
+      const nextStart: WallPlanPoint = createdWall
+        ? [createdWall.end[0], createdWall.end[1]]
+        : point
+      setDraftStart(nextStart)
+      setDraftEnd(nextStart)
+      setCursorPoint(nextStart)
     },
-    [clearDraft, draftStart],
+    [draftStart],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     ceilingPolygons: displayCeilingPolygons,
@@ -8224,7 +8594,6 @@ export function FloorplanPanel() {
       <FloorplanSiteKeyHandler onRestoreGroundLevel={restoreGroundLevelStructureSelection} />
       <div className="relative min-h-0 flex-1" ref={viewportHostRef}>
         <Editor2dFloorplanCursorIndicatorOverlay
-          cursorAnchorPosition={floorplanCursorAnchorPosition}
           cursorColor={floorplanCursorColor}
           cursorPosition={floorplanCursorPosition}
           floorplanSelectionTool={floorplanSelectionTool}
@@ -8357,7 +8726,7 @@ export function FloorplanPanel() {
           </form>
         )}
 
-        {!levelNode || levelNode.type !== 'level' ? (
+        {(!levelNode || levelNode.type !== 'level') && !hasAmbientBuildingLevel ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
             Switch to a building level to view and edit the floorplan.
           </div>
@@ -8542,9 +8911,23 @@ export function FloorplanPanel() {
               <FloorplanRenderProvider
                 hatchPatternId={wallSelectionHatchId}
                 palette={floorplanRegistryPalette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
                 unitsPerPixel={floorplanUnitsPerPixel}
               >
-                <FloorplanRegistryLayer />
+                {/* Wrapped in a measured `<g>` so `fittedViewport` can
+                    fit to just the painted node geometry — measuring the
+                    whole rotation group would include the grid layer,
+                    whose extent is derived from the current viewBox and
+                    would create a measure→fit→measure loop. */}
+                <g ref={floorplanContentRef}>
+                  <FloorplanRegistryLayer />
+                  {/* Bridge-wall ghost previews painted on top of the
+                      registry layer (drag-time only); cleared by the
+                      wall move's `commit()` so real bridges replace
+                      them without a frame of overlap. See
+                      `floorplan-wall-move-ghost-layer.tsx`. */}
+                  <FloorplanWallMoveGhostLayer />
+                </g>
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal
@@ -8594,6 +8977,17 @@ export function FloorplanPanel() {
                 }
                 unitsPerPixel={floorplanUnitsPerPixel}
               />
+
+              {draftWallMeasurement && (
+                <FloorplanDraftWallMeasurement
+                  labelBackground={isDark ? '#0f172a' : '#ffffff'}
+                  labelText={isDark ? '#e2e8f0' : '#171717'}
+                  measurement={draftWallMeasurement}
+                  measurementStroke={palette.measurementStroke}
+                  sceneRotationDeg={floorplanSceneRotationDeg}
+                  unitsPerPixel={floorplanUnitsPerPixel}
+                />
+              )}
 
               {/* Wall / fence endpoint, wall curve, slab / ceiling /
                   zone vertex+midpoint+edge handles are all driven by the

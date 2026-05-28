@@ -3,8 +3,10 @@ import {
   clampDoorOperationState,
   type DoorNode,
   getDoorRenderOpenAmount,
+  getEffectiveNode,
   sceneRegistry,
   useInteractive,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -30,6 +32,11 @@ export const DoorSystem = () => {
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
+  // Subscribe so an override-only update (no scene write) still re-runs
+  // the component, letting the gate below pick up the latest dirtyNodes
+  // set from the same render pass that received the override-publishing
+  // `markDirty` call. Mirrors WallSystem.
+  useLiveNodeOverrides((s) => s.overrides)
 
   const joineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
   baseMaterial = textures ? getBaseMaterial(shading) : joineryMaterial
@@ -61,15 +68,19 @@ export const DoorSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
       if (!mesh) return // Keep dirty until mesh mounts
 
-      updateDoorMesh(node as DoorNode, mesh)
+      // Merge any live override (width / height / position) so the mesh
+      // rebuild reflects the in-flight drag without zustand churn. When
+      // no override is set this returns the scene node unchanged.
+      const effectiveNode = getEffectiveNode(node as DoorNode)
+      updateDoorMesh(effectiveNode, mesh)
       clearDirty(id as AnyNodeId)
 
       // Rebuild the parent wall so its cutout reflects the updated door geometry
       // Avoid triggering expensive wall CSG rebuilds while the door is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
       const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && (node as DoorNode).parentId) {
-        useScene.getState().dirtyNodes.add((node as DoorNode).parentId as AnyNodeId)
+      if (!isTransient && effectiveNode.parentId) {
+        useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
     })
   }, 3)

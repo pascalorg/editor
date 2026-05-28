@@ -101,6 +101,88 @@ function getMoveWallRelation(
   return normalizedDot >= 0 ? 'same-direction' : 'opposite-direction'
 }
 
+/**
+ * Apply a junction plan to a list of linked walls, producing the per-wall
+ * endpoint updates. Mirrors the 3D `MoveWallTool`'s drag-preview behavior
+ * so the 2D move handler can drive the same scene topology.
+ *
+ * `linkedWallTargetPlans` take precedence over `linkedWallsToMove` — when
+ * the planner emits a target plan for a same-direction-consumed wall the
+ * matchPoint/targetPoint pair encodes the pivot, not the original ↔ next
+ * endpoint mapping.
+ */
+export function getLinkedWallUpdates<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>>(
+  linkedWalls: Array<{
+    wall: TWall
+    matchPoint?: WallPlanPoint
+    targetPoint?: WallPlanPoint
+  }>,
+  originalStart: WallPlanPoint,
+  originalEnd: WallPlanPoint,
+  nextStart: WallPlanPoint,
+  nextEnd: WallPlanPoint,
+): Array<{ id: TWall['id']; start: WallPlanPoint; end: WallPlanPoint }> {
+  return linkedWalls.map(({ wall, matchPoint, targetPoint }) => {
+    if (matchPoint && targetPoint) {
+      return {
+        id: wall.id,
+        start: pointsEqual(wall.start, matchPoint) ? targetPoint : wall.start,
+        end: pointsEqual(wall.end, matchPoint) ? targetPoint : wall.end,
+      }
+    }
+
+    const targetStart = targetPoint ?? nextStart
+    const targetEnd = targetPoint ?? nextEnd
+
+    return {
+      id: wall.id,
+      start: pointsEqual(wall.start, originalStart)
+        ? targetStart
+        : pointsEqual(wall.start, originalEnd)
+          ? targetEnd
+          : wall.start,
+      end: pointsEqual(wall.end, originalStart)
+        ? targetStart
+        : pointsEqual(wall.end, originalEnd)
+          ? targetEnd
+          : wall.end,
+    }
+  })
+}
+
+export function getPlannedLinkedWallUpdates<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>>(
+  plan: WallMoveJunctionPlan<TWall>,
+  originalStart: WallPlanPoint,
+  originalEnd: WallPlanPoint,
+  nextStart: WallPlanPoint,
+  nextEnd: WallPlanPoint,
+): Array<{ id: TWall['id']; start: WallPlanPoint; end: WallPlanPoint }> {
+  const movePlans = new Map<
+    TWall['id'],
+    { wall: TWall; matchPoint?: WallPlanPoint; targetPoint?: WallPlanPoint }
+  >()
+
+  for (const wall of plan.linkedWallsToMove) {
+    movePlans.set(wall.id, { wall })
+  }
+
+  for (const targetPlan of plan.linkedWallTargetPlans) {
+    movePlans.set(targetPlan.wall.id, {
+      wall: targetPlan.wall,
+      matchPoint: targetPlan.originalPoint,
+      targetPoint: targetPlan.targetPoint,
+    })
+  }
+
+  return getLinkedWallUpdates(
+    Array.from(movePlans.values()),
+    originalStart,
+    originalEnd,
+    nextStart,
+    nextEnd,
+  )
+}
+
 export function planWallMoveJunctions<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>>(
   linkedWalls: TWall[],
   originalStart: WallPlanPoint,

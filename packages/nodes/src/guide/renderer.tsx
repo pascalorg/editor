@@ -3,8 +3,8 @@
 import { type GuideNode, useRegistry } from '@pascal-app/core'
 import { useAssetUrl, useViewer } from '@pascal-app/viewer'
 import { useLoader } from '@react-three/fiber'
-import { Suspense, useMemo, useRef } from 'react'
-import { DoubleSide, type Group, type Texture, TextureLoader } from 'three'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { DoubleSide, type Group, PlaneGeometry, type Texture, TextureLoader } from 'three'
 import { float, texture } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 
@@ -34,7 +34,13 @@ export const GuideRenderer = ({ node }: { node: GuideNode }) => {
 const GuidePlane = ({ url, scale, opacity }: { url: string; scale: number; opacity: number }) => {
   const tex = useLoader(TextureLoader, url) as Texture
 
-  const { width, height, material } = useMemo(() => {
+  // Pass the geometry as a prop. JSX-child `<planeGeometry>` plus
+  // `frustumCulled={false}` lets the mesh submit a first-frame draw
+  // with R3F's empty placeholder BufferGeometry before the child
+  // attaches — WebGPU then flags "Vertex buffer slot 0 required by
+  // [RenderPipeline renderPipeline_MeshBasicNodeMaterial_NNNN] was
+  // not set." Same fix as wall-move-side-handles.tsx / grid.tsx.
+  const { geometry, material } = useMemo(() => {
     const img = tex.image as HTMLImageElement | ImageBitmap
     const w = img.width || 1
     const h = img.height || 1
@@ -54,18 +60,28 @@ const GuidePlane = ({ url, scale, opacity }: { url: string; scale: number; opaci
       depthWrite: false,
     })
 
-    return { width: planeWidth, height: planeHeight, material: mat }
+    const geom = new PlaneGeometry(planeWidth, planeHeight)
+    geom.boundingBox = null
+    geom.boundingSphere = null
+
+    return { geometry: geom, material: mat }
   }, [tex, scale, opacity])
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      material.dispose()
+    },
+    [geometry, material],
+  )
 
   return (
     <mesh
       frustumCulled={false}
+      geometry={geometry}
       material={material}
       raycast={() => {}}
       rotation={[-Math.PI / 2, 0, 0]}
-    >
-      <planeGeometry args={[width, height]} boundingBox={null} boundingSphere={null} />
-    </mesh>
+    />
   )
 }
 

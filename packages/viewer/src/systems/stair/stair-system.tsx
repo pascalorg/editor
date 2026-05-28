@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveNode,
   resolveLevelId,
   type StairNode,
   type StairSegmentNode,
@@ -53,8 +54,13 @@ export const StairSystem = () => {
         if (mesh) {
           const isVisible = mesh.parent?.visible !== false
           if (isVisible && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
-            // Geometry will be updated; chained position is applied in the parent sync pass below
-            updateStairSegmentGeometry(node as StairSegmentNode, mesh)
+            // Geometry will be updated; chained position is applied in the parent sync pass below.
+            // Merge live overrides so width / length / height drags update the
+            // mesh in real time — the resize arrows publish to
+            // `useLiveNodeOverrides` and only commit to scene on pointer-up, so
+            // without this the geometry would rebuild from the pre-drag values.
+            const effectiveSegment = getEffectiveNode(node as StairSegmentNode)
+            updateStairSegmentGeometry(effectiveSegment, mesh)
             if (node.parentId) parentsNeedingSegmentSync.add(node.parentId as AnyNodeId)
             segmentsProcessed++
           } else if (isVisible) {
@@ -84,13 +90,21 @@ export const StairSystem = () => {
 
     // --- Pass 1b: Sync chained transforms to individual segment meshes (edit mode) ---
     for (const stairId of parentsNeedingSegmentSync) {
-      const stairNode = nodes[stairId]
-      if (!stairNode || stairNode.type !== 'stair') continue
+      const baseStairNode = nodes[stairId]
+      if (!baseStairNode || baseStairNode.type !== 'stair') continue
+      // Merge any in-flight drag override (e.g. parent-stair rotate handle)
+      // so slab-elevation spatial queries match where the segments are
+      // actually being rendered. Without this, dragging the rotate gizmo
+      // looks up slabs at the pre-drag world XZ — if rotation carries a
+      // segment off the original slab footprint, getStairSlabElevation
+      // returns 0 and `group.position.y` collapses, dropping the flight
+      // or landing below the floor and out of view mid-drag.
+      const stairNode = getEffectiveNode(baseStairNode as StairNode)
       const group = sceneRegistry.nodes.get(stairId) as THREE.Group | undefined
       if (group) {
-        syncStairGroupElevation(stairNode as StairNode, group, nodes)
+        syncStairGroupElevation(stairNode, group, nodes)
       }
-      syncSegmentMeshTransforms(stairNode as StairNode, nodes)
+      syncSegmentMeshTransforms(stairNode, nodes)
     }
 
     // --- Pass 2: Process pending merged-stair updates (throttled) ---
@@ -230,9 +244,14 @@ function updateStairSegmentGeometry(node: StairSegmentNode, mesh: THREE.Mesh) {
  * not by the node's stored position field.
  */
 function syncSegmentMeshTransforms(stairNode: StairNode, nodes: Record<string, AnyNode>) {
+  // Merge live overrides into each segment so the chain math reflects the
+  // in-flight drag (a width / length change shifts every downstream segment's
+  // anchor). Without this, dragging a width handle would resize the dragged
+  // segment's mesh but leave subsequent segments at their pre-drag positions.
   const segments = (stairNode.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+    .map((n) => getEffectiveNode(n))
 
   if (segments.length === 0) return
 
@@ -264,9 +283,11 @@ function getStairSlabElevation(
   stairNode: StairNode,
   nodes: Record<string, AnyNode>,
 ): number {
+  // Merge live overrides so slab queries match the visual chain during a drag.
   const segments = (stairNode.children ?? [])
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+    .map((n) => getEffectiveNode(n))
 
   if (segments.length === 0) return 0
 
@@ -329,9 +350,14 @@ function updateMergedStairGeometry(
   }
 
   const children = stairNode.children ?? []
+  // Merge live overrides — same reason as `syncSegmentMeshTransforms`: a
+  // width / length / height drag publishes the new value to
+  // `useLiveNodeOverrides`, so the merged geometry has to read through that
+  // overlay or the merged mesh stays at pre-drag values until pointer-up.
   const segments = children
     .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
+    .map((n) => getEffectiveNode(n))
 
   if (segments.length === 0) {
     replaceMeshGeometry(mergedMesh, createEmptyGeometry())

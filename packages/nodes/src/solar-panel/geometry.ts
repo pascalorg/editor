@@ -1,4 +1,10 @@
-import { getActiveRoofHeight, type RoofSegmentNode, type SolarPanelNode } from '@pascal-app/core'
+import {
+  getActiveRoofHeight,
+  getSegmentSlopeFrame,
+  ROOF_SHAPE_DEFAULTS,
+  type RoofSegmentNode,
+  type SolarPanelNode,
+} from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -217,35 +223,97 @@ export function getSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): numbe
   return peakY - t * rh
 }
 
+// Outward normal for a roof surface tilting at angle θ in the horizontal
+// direction (dx, dz). Derivation: the surface tangent vectors are the
+// ridge axis (perpendicular to the fall line, horizontal) and the
+// down-slope direction (cos θ horizontal + −sin θ vertical). Crossing
+// them gives the outward normal ∝ (sin θ · dx, cos θ, sin θ · dz),
+// equivalently (dx · tan θ, 1, dz · tan θ) un-normalised.
+function buildSlopeNormal(dx: number, dz: number, tan: number): THREE.Vector3 {
+  return new THREE.Vector3(dx * tan, 1, dz * tan).normalize()
+}
+
 export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode): THREE.Vector3 {
   const { roofType, depth, width } = seg
-  const rh = getActiveRoofHeight(seg)
-  if (rh === 0) return new THREE.Vector3(0, 1, 0)
-
-  if (roofType === 'gable') {
-    const halfD = depth / 2
-    return new THREE.Vector3(0, halfD, lz >= 0 ? rh : -rh).normalize()
+  const slope = getSegmentSlopeFrame(seg)
+  if (slope.activeRh === 0 || slope.tanTheta === 0) {
+    return new THREE.Vector3(0, 1, 0)
   }
-  if (roofType === 'shed') {
-    return new THREE.Vector3(0, depth, -rh).normalize()
-  }
-  if (roofType === 'hip') {
-    // All four hip faces share the same slope angle, set by `rh` over
-    // `min(w/2, d/2)` (the eave-to-ridge horizontal reach perpendicular
-    // to the ridge — short axis for both the trapezoidal long faces and
-    // the triangular short faces). Using `depth/2` for the front/back
-    // normal and `width/2` for the sides was correct only when w == d;
-    // for any other aspect ratio it tilted the long-axis faces wrong.
-    const fx = width > 0 ? Math.abs(lx) / (width / 2) : 0
-    const fz = depth > 0 ? Math.abs(lz) / (depth / 2) : 0
-    const slopeReach = Math.min(width, depth) / 2
-    if (fz >= fx) {
-      return new THREE.Vector3(0, slopeReach, lz >= 0 ? rh : -rh).normalize()
-    }
-    return new THREE.Vector3(lx >= 0 ? rh : -rh, slopeReach, 0).normalize()
-  }
+  const primaryTan = slope.tanTheta
+  const halfW = width / 2
   const halfD = depth / 2
-  return new THREE.Vector3(0, halfD, lz >= 0 ? rh : -rh).normalize()
+
+  // Ridge runs along X — slope falls in ±Z. Gambrel shares the gable
+  // dispatch (its kink-to-eave/lower tier is the primary slope frame).
+  if (roofType === 'gable' || roofType === 'gambrel') {
+    if (roofType === 'gambrel') {
+      // Tier-aware: the upper (shallower) face spans |z| < mz; the
+      // lower (steep) face spans mz < |z| ≤ halfD. Using primaryTan on
+      // the upper tier would tilt the ghost too steeply near the ridge.
+      const lowerWidthRatio =
+        seg.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio
+      const lowerHeightRatio =
+        seg.gambrelLowerHeightRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerHeightRatio
+      const mz = halfD * lowerWidthRatio
+      if (Math.abs(lz) <= mz) {
+        const upperRise = slope.activeRh * (1 - lowerHeightRatio)
+        const upperRun = mz
+        const upperTan = upperRun > 0 ? upperRise / upperRun : 0
+        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan)
+      }
+    }
+    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
+  }
+
+  // Single slope falling toward +Z (ridge at -Z, eave at +Z).
+  if (roofType === 'shed') {
+    return buildSlopeNormal(0, 1, primaryTan)
+  }
+
+  // 4-sided slopes: the dominant axis chooses which face the point sits
+  // on. Hip is uniform across all four faces. Mansard has a steep outer
+  // band (primaryTan) and a shallow top inside the waist. Dutch has hip
+  // ends and gable sides — both share the same primaryTan from the
+  // slope frame, so directional dispatch is enough.
+  if (roofType === 'hip') {
+    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
+    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
+    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan)
+  }
+
+  if (roofType === 'mansard') {
+    const widthRatio = seg.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio
+    const heightRatio = seg.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio
+    const inset = Math.min(width, depth) * widthRatio
+    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
+    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
+    const onZ = fz >= fx
+    const inSteepBand = onZ ? Math.abs(lz) > halfD - inset : Math.abs(lx) > halfW - inset
+
+    let tan = primaryTan
+    if (!inSteepBand) {
+      // Top hip (shallow) above the waist — rises from the waist
+      // rectangle at fraction `heightRatio` of activeRh up to the peak.
+      const topRise = slope.activeRh * (1 - heightRatio)
+      const topRun = Math.max(0, Math.min(halfW, halfD) - inset)
+      tan = topRun > 0 ? topRise / topRun : 0
+    }
+    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, tan)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, tan)
+  }
+
+  if (roofType === 'dutch') {
+    // Hip on the short-axis ends, gable on the long-axis sides. Both
+    // share the primary pitch on their primary (eave-band) face, so the
+    // approximation collapses to "pick the dominant axis."
+    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
+    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
+    if (fz >= fx) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan)
+    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan)
+  }
+
+  return new THREE.Vector3(0, 1, 0)
 }
 
 // ─── Quaternion helper ───────────────────────────────────────────────

@@ -8,31 +8,49 @@ import {
   getWallThickness,
   isCurvedWall,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useState } from 'react'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BufferGeometry,
-  ConeGeometry,
+  Color,
   CylinderGeometry,
   DoubleSide,
-  Float32BufferAttribute,
+  ExtrudeGeometry,
+  type Group,
   type Object3D,
   OrthographicCamera,
+  Plane,
+  Quaternion,
+  Shape,
+  Vector2,
+  Vector3,
 } from 'three'
-import { EDITOR_LAYER } from '../../lib/constants'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
-const HANDLE_OFFSET = 0.42
-const HANDLE_MIN_OFFSET = 0.5
-const HANDLE_MIN_HEIGHT = 0.62
+const HANDLE_OFFSET = 0.27
+const HANDLE_MIN_OFFSET = 0.33
+const HANDLE_MIN_HEIGHT = 0.4
 const HANDLE_TOP_INSET = 0.08
+const HEIGHT_HANDLE_OFFSET = 0.26
+const MIN_WALL_HEIGHT = 0.5
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
+// Match the door arrows: scale the rendered chevron down to ~two-thirds
+// so the in-world handles read as a single UI family.
+const ARROW_SCALE = 0.65
+const CORNER_HEX_RADIUS = 0.16
+const CORNER_DASH_SIZE = 0.1
+const CORNER_GAP_SIZE = 0.07
+const CORNER_DASH_THICKNESS = 0.006
+const CORNER_FLOOR_OFFSET = 0.01
 
 type WallMoveHandle = {
   key: string
@@ -40,41 +58,49 @@ type WallMoveHandle = {
   rotationY: number
 }
 
-function createArrowHandleGeometry() {
-  const shaft = new CylinderGeometry(0.04, 0.064, 0.25, 36)
-  const head = new ConeGeometry(0.13, 0.3, 48)
-  shaft.rotateZ(-Math.PI / 2)
-  shaft.translate(-0.085, 0, 0)
-  head.rotateZ(-Math.PI / 2)
-  head.translate(0.17, 0, 0)
-
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-
-  for (const sourceGeometry of [shaft, head]) {
-    const geometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry
-    const position = geometry.getAttribute('position')
-    const normal = geometry.getAttribute('normal')
-    const uv = geometry.getAttribute('uv')
-
-    for (let index = 0; index < position.count; index += 1) {
-      positions.push(position.getX(index), position.getY(index), position.getZ(index))
-      normals.push(normal.getX(index), normal.getY(index), normal.getZ(index))
-      uvs.push(uv?.getX(index) ?? 0, uv?.getY(index) ?? 0)
-    }
-
-    if (geometry !== sourceGeometry) {
-      geometry.dispose()
-    }
-    sourceGeometry.dispose()
+// Pre-empt the synthetic `click` the browser fires immediately after a
+// drag's pointerup. Without this, PointerMissedHandler treats the click
+// as "missed" and deselects the wall when the height arrow drag commits.
+function swallowNextClick() {
+  const swallow = (clickEvent: Event) => {
+    clickEvent.stopPropagation()
+    clickEvent.preventDefault()
   }
+  window.addEventListener('click', swallow, { capture: true, once: true })
+  setTimeout(() => {
+    window.removeEventListener('click', swallow, { capture: true })
+  }, 300)
+}
 
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
-  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
-  geometry.setAttribute('uv2', new Float32BufferAttribute([...uvs], 2))
+function createArrowHandleGeometry() {
+  // Classic arrow silhouette — chevron head + rectangular shaft — extruded
+  // slightly so the handle reads as a 3D plate but stays visually light.
+  const shape = new Shape()
+  shape.moveTo(0.22, 0)
+  shape.lineTo(-0.04, 0.12)
+  shape.lineTo(-0.04, 0.035)
+  shape.lineTo(-0.2, 0.035)
+  shape.lineTo(-0.2, -0.035)
+  shape.lineTo(-0.04, -0.035)
+  shape.lineTo(-0.04, -0.12)
+  shape.lineTo(0.22, 0)
+
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: 0.08,
+    bevelEnabled: true,
+    bevelThickness: 0.035,
+    bevelSize: 0.03,
+    bevelOffset: 0,
+    bevelSegments: 10,
+    curveSegments: 16,
+    steps: 1,
+  })
+
+  // Centre the extruded plate around y=0 and re-orient it so the depth
+  // axis points up: the chevron lies flat in the XZ plane, tip along +X,
+  // wings spread across ±Z.
+  geometry.translate(0, 0, -0.04)
+  geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
   return geometry
@@ -91,9 +117,14 @@ export function WallMoveSideHandles() {
   const curvingFence = useEditor((state) => state.curvingFence)
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  // Fence side-move / height / corner-pickers now flow through the
+  // registry handle path (see packages/nodes/src/fence/definition.ts).
+  // Only walls still need the legacy renderer here — the registry path
+  // didn't render correctly for walls specifically and was reverted in
+  // commit 0e207a7f; revisit once that's diagnosed.
   const selectedNode = useScene((state) => {
     const node = selectedId ? state.nodes[selectedId as AnyNodeId] : null
-    return node?.type === 'wall' || node?.type === 'fence' ? node : null
+    return node?.type === 'wall' ? node : null
   })
 
   const shouldRender =
@@ -108,11 +139,7 @@ export function WallMoveSideHandles() {
 
   if (!shouldRender || !selectedNode) return null
 
-  return selectedNode.type === 'wall' ? (
-    <WallMoveSideHandlesForWall wall={selectedNode} />
-  ) : (
-    <WallMoveSideHandlesForFence fence={selectedNode} />
-  )
+  return <WallMoveSideHandlesForWall wall={selectedNode} />
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
@@ -157,19 +184,368 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
       {handles.map((handle) => (
         <WallMoveArrowHandle handle={handle} key={handle.key} wall={wall} />
       ))}
+      <WallHeightArrowHandle wall={wall} />
+      <WallCornerLeaderHandle endpoint="start" wall={wall} />
+      <WallCornerLeaderHandle endpoint="end" wall={wall} />
     </group>,
     levelObject,
+  )
+}
+
+function buildDashedVerticalGeometry(height: number) {
+  // Build each dash as a thin cylinder section so thickness is
+  // controllable — native `lineSegments` lock to 1px on WebGL/WebGPU.
+  const dashes: BufferGeometry[] = []
+  let y = 0
+  while (y < height) {
+    const end = Math.min(y + CORNER_DASH_SIZE, height)
+    const length = end - y
+    const cylinder = new CylinderGeometry(CORNER_DASH_THICKNESS, CORNER_DASH_THICKNESS, length, 8)
+    cylinder.translate(0, y + length / 2, 0)
+    dashes.push(cylinder)
+    y = end + CORNER_GAP_SIZE
+  }
+  const merged = mergeGeometries(dashes, false) ?? new BufferGeometry()
+  for (const dash of dashes) dash.dispose()
+  return merged
+}
+
+function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 'start' | 'end' }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const { camera } = useThree()
+  const billboardRef = useRef<Group>(null)
+  const parentWorldQuaternionRef = useRef(new Quaternion())
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.25 : 1) * zoom
+
+  const corner = endpoint === 'start' ? wall.start : wall.end
+  const x = corner[0]
+  const z = corner[1]
+  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+
+  const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
+  useEffect(() => () => dashedGeometry.dispose(), [dashedGeometry])
+
+  // Node materials matched to the rest of the file — mixing plain
+  // `meshBasicMaterial` with WebGPU node materials trips
+  // "Color target has no corresponding fragment stage output".
+  const dashMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const hexMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const ringMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+
+  useEffect(() => {
+    const next = isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR
+    dashMaterial.color.set(next)
+    hexMaterial.color.set(next)
+    ringMaterial.color.set(next)
+  }, [dashMaterial, hexMaterial, ringMaterial, isHovered])
+
+  useEffect(() => () => dashMaterial.dispose(), [dashMaterial])
+  useEffect(() => () => hexMaterial.dispose(), [hexMaterial])
+  useEffect(() => () => ringMaterial.dispose(), [ringMaterial])
+
+  // Billboard the hex disc to the camera so the picker is always
+  // recognisable regardless of viewing angle.
+  //
+  // Why parent-aware: the disc lives under a `createPortal` into the
+  // level object, which itself sits under a building. Both can have
+  // non-identity world rotations. `quaternion.copy(camera.quaternion)`
+  // alone sets the LOCAL quaternion, so any ancestor rotation rotates
+  // the disc away from the camera. We instead solve for a local
+  // quaternion whose composition with the parent world quaternion
+  // equals the camera's: `local = parentWorld⁻¹ · cameraWorld`.
+  useFrame(() => {
+    const billboard = billboardRef.current
+    if (!billboard) return
+    billboard.quaternion.copy(camera.quaternion)
+    const parent = billboard.parent
+    if (parent) {
+      parent.getWorldQuaternion(parentWorldQuaternionRef.current)
+      billboard.quaternion.premultiply(parentWorldQuaternionRef.current.invert())
+    }
+  })
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
+        document.body.style.cursor = ''
+      }
+    }
+  }, [])
+
+  const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    sfxEmitter.emit('sfx:item-pick')
+    document.body.style.cursor = 'grabbing'
+    useEditor.getState().setMovingWallEndpoint({ wall, endpoint })
+  }
+
+  return (
+    <>
+      <mesh
+        frustumCulled={false}
+        geometry={dashedGeometry}
+        material={dashMaterial}
+        position={[x, 0, z]}
+        renderOrder={1001}
+      />
+      <group position={[x, CORNER_FLOOR_OFFSET, z]} ref={billboardRef} scale={scale}>
+        <mesh
+          material={hexMaterial}
+          onPointerDown={activateEndpointMove}
+          onPointerEnter={(event) => {
+            event.stopPropagation()
+            setIsHovered(true)
+            document.body.style.cursor = 'grab'
+          }}
+          onPointerLeave={(event) => {
+            event.stopPropagation()
+            setIsHovered(false)
+            if (document.body.style.cursor === 'grab') {
+              document.body.style.cursor = ''
+            }
+          }}
+          renderOrder={1003}
+        >
+          <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
+        </mesh>
+        <mesh material={ringMaterial} renderOrder={1002}>
+          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
+        </mesh>
+      </group>
+    </>
+  )
+}
+
+function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 1,
+      }),
+    [],
+  )
+  const { camera, raycaster, gl } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === 'ns-resize') {
+        document.body.style.cursor = ''
+      }
+      dragCleanupRef.current?.()
+    }
+  }, [])
+
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
+
+  // Sit on the visual centre of the wall — for curved walls that's the
+  // arc apex at t=0.5, not the chord midpoint. Use the curve tangent for
+  // the yaw so the arrow's local frame matches the wall direction at the
+  // apex, consistent with `getWallMoveHandles`.
+  const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const midX = curveFrame ? curveFrame.point.x : (wall.start[0] + wall.end[0]) / 2
+  const midZ = curveFrame ? curveFrame.point.y : (wall.start[1] + wall.end[1]) / 2
+  const dirX = curveFrame ? curveFrame.tangent.x : wall.end[0] - wall.start[0]
+  const dirZ = curveFrame ? curveFrame.tangent.y : wall.end[1] - wall.start[1]
+  const wallAngle = Math.atan2(-dirZ, dirX)
+  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
+
+  const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
+    if (!levelObject) return
+
+    // Vertical plane through the wall midpoint whose normal points toward
+    // the camera (projected to horizontal). Raycasting against it converts
+    // pointer movement into a world-space Y value.
+    const midpointWorld = new Vector3(midX, 0, midZ).applyMatrix4(levelObject.matrixWorld)
+    const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
+    if (planeNormal.lengthSq() === 0) return
+    planeNormal.normalize()
+    const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
+
+    const ndc = new Vector2()
+    const setNDC = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      )
+    }
+
+    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    raycaster.setFromCamera(ndc, camera)
+    const hit = new Vector3()
+    if (!raycaster.ray.intersectPlane(plane, hit)) return
+
+    const initialHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+    const initialY = hit.y
+    const wallId = wall.id as AnyNodeId
+    let pendingHeight = initialHeight
+
+    document.body.style.cursor = 'ns-resize'
+    sfxEmitter.emit('sfx:item-pick')
+    useEditor.getState().setActiveHandleDrag({ nodeId: wallId, label: 'height' })
+    // Suppress R3F node pointer events until pointerup completes so the
+    // synthesized click doesn't reroute selection to whatever mesh sits
+    // under the cursor at release.
+    useViewer.getState().setInputDragging(true)
+    useScene.temporal.getState().pause()
+
+    // Drag publishes `{ height }` to `useLiveNodeOverrides` and marks
+    // the wall dirty so `WallSystem.updateWallGeometry` rebuilds against
+    // the override-merged value (via `getEffectiveWall`). Zustand stays
+    // at the pre-drag height until pointerup commits one tracked write.
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      const intersection = new Vector3()
+      if (!raycaster.ray.intersectPlane(plane, intersection)) return
+      const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (intersection.y - initialY))
+      pendingHeight = newHeight
+      useLiveNodeOverrides.getState().set(wallId, { height: newHeight })
+      useScene.getState().markDirty(wallId)
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      if (document.body.style.cursor === 'ns-resize') {
+        document.body.style.cursor = ''
+      }
+      useScene.temporal.getState().resume()
+      useEditor.getState().setActiveHandleDrag(null)
+      useViewer.getState().setInputDragging(false)
+      dragCleanupRef.current = null
+    }
+    const onUp = () => {
+      swallowNextClick()
+      sfxEmitter.emit('sfx:item-place')
+      // Commit: write the final override-merged value to zustand once
+      // (tracked, undoable), then drop the override so the renderer
+      // falls back to the scene store.
+      if (pendingHeight !== initialHeight) {
+        useScene.getState().updateNode(wallId, { height: pendingHeight })
+      }
+      useLiveNodeOverrides.getState().clear(wallId)
+      useScene.getState().markDirty(wallId)
+      cleanup()
+    }
+    const onCancel = () => {
+      // Revert: drop the override, mark dirty so the geometry rebuilds
+      // against the original scene height.
+      useLiveNodeOverrides.getState().clear(wallId)
+      useScene.getState().markDirty(wallId)
+      cleanup()
+    }
+
+    dragCleanupRef.current = cleanup
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
+
+  return (
+    <group position={[midX, handleY, midZ]} rotation={[0, wallAngle, 0]}>
+      <group rotation={[0, Math.PI / 2, Math.PI / 2]} scale={scale}>
+        <mesh
+          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
+          frustumCulled={false}
+          geometry={arrowGeometry}
+          material={arrowMaterial}
+          onPointerDown={activateHeightResize}
+          onPointerEnter={(event) => {
+            event.stopPropagation()
+            setIsHovered(true)
+            document.body.style.cursor = 'ns-resize'
+          }}
+          onPointerLeave={(event) => {
+            event.stopPropagation()
+            setIsHovered(false)
+            if (document.body.style.cursor === 'ns-resize') {
+              document.body.style.cursor = ''
+            }
+          }}
+          renderOrder={1002}
+        />
+      </group>
+    </group>
   )
 }
 
 function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 1,
+      }),
+    [],
+  )
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
-  const scale = (isHovered ? 1.12 : 1) * zoom
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
 
   useEffect(() => {
     return () => {
@@ -180,10 +556,10 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
-    event.nativeEvent.preventDefault()
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
@@ -192,14 +568,21 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
     useEditor.getState().setMovingFenceEndpoint(null)
     useEditor.getState().setCurvingWall(null)
     useEditor.getState().setCurvingFence(null)
-    useViewer.getState().setSelection({ selectedIds: [] })
+    // Keep the wall selected so it stays the active item once the move
+    // commits; the `!movingNode` guard on the handles hides them mid-drag.
   }
 
   return (
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
+        // Pass geometry as a prop (not `<primitive attach="geometry">`)
+        // so the mesh is never rendered with R3F's default empty
+        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
+        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
+        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
         frustumCulled={false}
-        layers={EDITOR_LAYER}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
         onPointerDown={activateWallMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -214,17 +597,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
           }
         }}
         renderOrder={1002}
-      >
-        <primitive attach="geometry" object={arrowGeometry} />
-        <meshBasicMaterial
-          color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
-          depthTest
-          depthWrite
-          opacity={1}
-          side={DoubleSide}
-          transparent={false}
-        />
-      </mesh>
+      />
     </group>
   )
 }
@@ -232,10 +605,26 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const arrowMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 1,
+      }),
+    [],
+  )
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
 
   useEffect(() => {
     return () => {
@@ -246,10 +635,10 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
-    event.nativeEvent.preventDefault()
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
@@ -258,14 +647,18 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
     useEditor.getState().setMovingFenceEndpoint(null)
     useEditor.getState().setCurvingWall(null)
     useEditor.getState().setCurvingFence(null)
-    useViewer.getState().setSelection({ selectedIds: [] })
+    // Keep the fence selected so it stays active once the move commits.
   }
 
   return (
     <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
       <mesh
+        // Pass geometry as a prop — see WallMoveArrowHandle for the
+        // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
         frustumCulled={false}
-        layers={EDITOR_LAYER}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -280,17 +673,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
           }
         }}
         renderOrder={1002}
-      >
-        <primitive attach="geometry" object={arrowGeometry} />
-        <meshBasicMaterial
-          color={isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR}
-          depthTest
-          depthWrite
-          opacity={1}
-          side={DoubleSide}
-          transparent={false}
-        />
-      </mesh>
+      />
     </group>
   )
 }

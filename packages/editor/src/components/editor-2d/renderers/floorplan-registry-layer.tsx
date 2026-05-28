@@ -8,8 +8,10 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
+  kindsWithFloorplanScope,
   nodeRegistry,
   pauseSceneHistory,
+  resolveBuildingForLevel,
   resumeSceneHistory,
   useInteractive,
   useLiveNodeOverrides,
@@ -101,16 +103,74 @@ function snapshotsToUpdates(snapshots: NodeSnapshot[]) {
 }
 
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
-  const levelId = useViewer((s) => s.selection.levelId)
+  const selectedLevelId = useViewer((s) => s.selection.levelId)
+  const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
+  // When a building is being moved, its explicit selection may be
+  // cleared as part of the move handoff. Fall back to the
+  // mid-drag building id so the dimmed floor keeps rendering
+  // throughout the gesture.
+  const movingBuildingId = useEditor((state) => {
+    const moving = state.movingNode
+    if (!moving) return null
+    const def = nodeRegistry.get(moving.type)
+    return def?.capabilities?.floorplanLevelContainer ? moving.id : null
+  })
+  const ambientBuildingSourceId = selectedBuildingId ?? movingBuildingId
+
+  // When only a building is in scope (no specific level), fall back to
+  // its level 0 (or the lowest-indexed level) so the floor still
+  // renders as context — dimmed and non-interactive — instead of
+  // disappearing entirely.
+  const ambientLevelId = useMemo<AnyNodeId | null>(() => {
+    if (selectedLevelId || !ambientBuildingSourceId) return null
+    const building = nodes[ambientBuildingSourceId]
+    if (!building || building.type !== 'building') return null
+    let zero: AnyNodeId | null = null
+    let lowestId: AnyNodeId | null = null
+    let lowestIdx = Number.POSITIVE_INFINITY
+    const childIds = (building as unknown as { children?: AnyNodeId[] }).children ?? []
+    for (const childId of childIds) {
+      const child = nodes[childId]
+      if (child?.type !== 'level') continue
+      if (child.level === 0) {
+        zero = child.id
+        break
+      }
+      if (child.level < lowestIdx) {
+        lowestIdx = child.level
+        lowestId = child.id
+      }
+    }
+    return zero ?? lowestId
+  }, [selectedLevelId, ambientBuildingSourceId, nodes])
+
+  const levelId = selectedLevelId ?? ambientLevelId
+  const isAmbient = !selectedLevelId && !!ambientLevelId
   const renderCtx = useFloorplanRender()
   const movingNode = useEditor((s) => s.movingNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  // Door / window placement (both build and move) needs the SVG's
+  // background click handler to run — it finds the closest wall via
+  // `findClosestWallPoint` and emits `wall:click` for the door / window
+  // tool. When the user clicks *on top of* a wall in this mode, the
+  // wall's registry entry would otherwise swallow the click via
+  // `handleClickStop` / `handleSelect`, so the placement never fires.
+  // Pass clicks through in that case.
+  const editorPhase = useEditor((s) => s.phase)
+  const editorMode = useEditor((s) => s.mode)
+  const editorTool = useEditor((s) => s.tool)
+  const isOpeningPlacementActive =
+    (editorPhase === 'structure' &&
+      editorMode === 'build' &&
+      (editorTool === 'door' || editorTool === 'window')) ||
+    (movingNode != null &&
+      !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
@@ -140,6 +200,21 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (event.button !== 0) return
       event.stopPropagation()
       setSelection({ selectedIds: [id] })
+      // Setting selection re-renders the entry — the overlay pass mounts
+      // (endpoint handles, etc.), reshuffling DOM under the cursor between
+      // pointerdown and click. If the click target ends up on the SVG
+      // background, `<g floorplan-registry-layer onClick=handleClickStop>`
+      // never sees it, and the SVG's `handleBackgroundClick` clears the
+      // selection we just set. Swallow the next click globally to break
+      // that race; the listener removes itself after firing (or after a
+      // safety timeout if no click follows).
+      const swallowClick = (ev: Event) => {
+        ev.stopPropagation()
+        ev.preventDefault()
+        window.removeEventListener('click', swallowClick, true)
+      }
+      window.addEventListener('click', swallowClick, true)
+      setTimeout(() => window.removeEventListener('click', swallowClick, true), 200)
     },
     [setSelection],
   )
@@ -232,7 +307,24 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             }
           }
         }
-        const ctx = buildContext(effectiveNode, nodes, {
+        // Live-edit overrides: kinds whose `def.floorplan` builder
+        // reads cross-sibling data (wall miters, …) declare a
+        // `def.floorplanSiblingOverrides` hook that projects the
+        // override map into a merged `nodes` snapshot. The merged
+        // copy feeds `buildContext` so `ctx.siblings` reflects the
+        // live cursor positions, and replaces `effectiveNode` so the
+        // kind's own override lands too (covers the case where the
+        // node being rendered is itself the dragged one). Kinds
+        // without the hook hand the raw `nodes` through — most
+        // previews are self-contained.
+        const contextNodes = def?.floorplanSiblingOverrides
+          ? def.floorplanSiblingOverrides({ nodeId: id, nodes, liveOverrides })
+          : nodes
+        if (contextNodes !== nodes) {
+          const merged = contextNodes[id]
+          if (merged) effectiveNode = merged
+        }
+        const ctx = buildContext(effectiveNode, contextNodes, {
           selected,
           highlighted,
           hovered,
@@ -256,6 +348,59 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     visit(levelId as AnyNodeId)
 
+    // Building-scoped kinds (`def.floorplanScope === 'building'`) live
+    // as siblings of the level, not under it — the `visit(levelId)` DFS
+    // above doesn't reach them. Walk every node of those kinds whose
+    // parent matches the active level's building, and synthesise a
+    // `GeometryContext` whose `parent` is the active level (so kind
+    // builders that gate on the current floor — e.g. elevator service
+    // range — keep working). Pure registry-driven dispatch: no kind
+    // name appears in this file.
+    const activeLevelNode = nodes[levelId as AnyNodeId] as AnyNode | undefined
+    const activeBuildingId = activeLevelNode
+      ? resolveBuildingForLevel(levelId as AnyNodeId, nodes)
+      : null
+    if (activeLevelNode && activeBuildingId) {
+      const buildingScopedKinds = kindsWithFloorplanScope('building')
+      const buildingScopedKindSet = new Set(buildingScopedKinds)
+      for (const [id, node] of Object.entries(nodes)) {
+        if (!node || !buildingScopedKindSet.has(node.type)) continue
+        const parentId = (node as { parentId?: AnyNodeId | null }).parentId
+        if (parentId !== activeBuildingId) continue
+        const cid = id as AnyNodeId
+        const def = nodeRegistry.get(node.type)
+        const builder = def?.floorplan
+        if (!builder) continue
+        const selected = selectedIdSet.has(cid)
+        const highlighted = highlightedIdSet.has(cid)
+        const hovered = hoveredId === cid
+        const moving = movingNode?.id === cid
+        const ctx: GeometryContext = {
+          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
+            nodes[rid] as N | undefined,
+          children: [],
+          siblings: [],
+          parent: activeLevelNode,
+          viewState: renderCtx?.palette
+            ? {
+                selected,
+                highlighted,
+                hovered,
+                moving,
+                palette: renderCtx.palette,
+              }
+            : undefined,
+        }
+        const geometry = (
+          builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null
+        )(node, ctx)
+        if (geometry) {
+          const { base, overlay } = splitFloorplanOverlay(geometry)
+          out.push({ id: cid, node, base, overlay, selected, highlighted })
+        }
+      }
+    }
+
     // Stable z-order sort. SVG renders in document order — later siblings
     // paint on top of earlier ones — so anything that should sit *under*
     // other floor-plan geometry has to come first in the entries array.
@@ -269,11 +414,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     levelId,
     nodes,
     liveTransforms,
+    liveOverrides,
     selectedIdSet,
     highlightedIdSet,
     hoveredId,
     movingNode?.id,
     renderCtx?.palette,
+    interactiveElevators,
   ])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
@@ -362,6 +509,25 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       const commitValid = drag.session.canCommit()
 
+      // Sessions with a `commit` hook own their atomic write (e.g.
+      // affordances that publish to `useLiveNodeOverrides` during
+      // `apply()` and never touch scene mid-drag). Mirrors the move
+      // overlay's `session.commit` path — revert untracked (no-op when
+      // the session never wrote to scene), resume history, then let
+      // the session do the tracked write.
+      if (commitValid && drag.session.commit) {
+        useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
+        if (drag.historyPaused) {
+          resumeSceneHistory(useScene)
+          drag.historyPaused = false
+        }
+        drag.session.commit()
+        sfxEmitter.emit('sfx:structure-build')
+        dragRef.current = null
+        setActiveDragId(null)
+        return
+      }
+
       // Capture the final state BEFORE the revert so we know what to
       // re-apply post-resume.
       const sceneNodes = useScene.getState().nodes
@@ -395,12 +561,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         sfxEmitter.emit('sfx:structure-build')
       } else {
         // Either no net change or canCommit() rejected — revert and
-        // resume without committing.
+        // resume without committing. Also clear any live overrides
+        // the session published (no-op when the session writes to
+        // scene directly).
         useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
         if (drag.historyPaused) {
           resumeSceneHistory(useScene)
           drag.historyPaused = false
         }
+        const overrides = useLiveNodeOverrides.getState()
+        for (const id of drag.session.affectedIds) overrides.clear(id)
       }
 
       dragRef.current = null
@@ -417,6 +587,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         resumeSceneHistory(useScene)
         drag.historyPaused = false
       }
+      // Drop any live overrides the session may have published. No-op
+      // for affordances whose `apply()` writes straight to scene; the
+      // override-routed sessions (wall endpoint, wall curve) rely on
+      // this to revert cleanly.
+      const overrides = useLiveNodeOverrides.getState()
+      for (const id of drag.session.affectedIds) overrides.clear(id)
 
       dragRef.current = null
       setActiveDragId(null)
@@ -430,13 +606,17 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
       // Component unmounted mid-drag — restore the baseline and unpause
-      // history so we don't leak a paused store across mounts.
+      // history so we don't leak a paused store across mounts. Also
+      // drop any live overrides the session published so the next
+      // mount doesn't render at the cancelled position.
       const drag = dragRef.current
       if (drag) {
         useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
         if (drag.historyPaused) {
           resumeSceneHistory(useScene)
         }
+        const overrides = useLiveNodeOverrides.getState()
+        for (const id of drag.session.affectedIds) overrides.clear(id)
         dragRef.current = null
       }
     }
@@ -452,8 +632,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       className="floorplan-registry-entry"
       data-node-id={id}
       key={key}
-      onClick={handleClickStop}
-      onPointerDown={(e) => handleSelect(id, e)}
+      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
+      onPointerDown={isOpeningPlacementActive ? undefined : (e) => handleSelect(id, e)}
       // Mirror the sidebar tree nodes' hover wiring — `useViewer.
       // hoveredId` drives the highlight halo in 3D as well as the
       // wall / fence floor-plan hover stroke. Setting it on
@@ -490,6 +670,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           setMovingNode(node as never)
         }}
         palette={palette}
+        sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
         unitsPerPixel={unitsPerPixel}
       />
     </g>
@@ -510,7 +691,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // appear to "deselect themselves a fraction of a second after
     // clicking." Scoped to `onClick` so hover / drag / pointer events
     // still propagate normally inside the registry tree.
-    <g className="floorplan-registry-layer" onClick={handleClickStop}>
+    <g
+      className="floorplan-registry-layer"
+      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
+      opacity={isAmbient ? 0.3 : undefined}
+      style={isAmbient ? { pointerEvents: 'none' } : undefined}
+    >
       {/* Base pass — rank-sorted body geometry (polygons, paths, fills,
           strokes, hatches). Lower-rank kinds (zones) paint first so
           higher-rank kinds (slabs, then walls / items / shelves) layer
@@ -544,6 +730,7 @@ function InteractiveGeometry({
   hoveredHandleId,
   activeDragId,
   nodeId,
+  sceneRotationDeg,
   onHandleHoverChange,
   onHandlePointerDown,
   onMoveHandlePointerDown,
@@ -555,6 +742,7 @@ function InteractiveGeometry({
   hoveredHandleId: string | null
   activeDragId: string | null
   nodeId: AnyNodeId
+  sceneRotationDeg: number
   onHandleHoverChange: (id: string | null) => void
   onHandlePointerDown: (
     affordance: string,
@@ -591,7 +779,7 @@ function InteractiveGeometry({
         return (
           <line
             key={keyHint}
-            pointerEvents="stroke"
+            pointerEvents={g.pointerEvents ?? 'stroke'}
             stroke="transparent"
             strokeLinecap="round"
             strokeWidth={g.strokeWidthPx * unitsPerPixel}
@@ -705,15 +893,19 @@ function InteractiveGeometry({
         if (!palette) return <></>
         const moveHandleId = `${nodeId}:move`
         const isHovered = hoveredHandleId === moveHandleId
-        // Move dots are visually bigger than endpoint handles — the
-        // legacy prod render uses ~13px outer / ~6px dot. Endpoint
-        // handles top out at 8/9px because there are usually two per
-        // wall + linked walls + curve handle nearby; the move dot is
-        // a singleton centerpiece so it can afford the extra weight.
-        const baseRadiusPx = 13
-        const hoverRadiusPx = 15
-        const outerRadius = (isHovered ? hoverRadiusPx : baseRadiusPx) * unitsPerPixel
-        const dotRadius = 6 * unitsPerPixel
+        // World-relative sizing: the move dot is anchored to the door,
+        // not to the screen, so it grows when the user zooms in and
+        // shrinks when they zoom out — same scaling rule as the door
+        // footprint itself. Sizes are tuned for a ~0.9 m door at default
+        // zoom; the ratios match the legacy 13/15/6/16/7/18 px stack.
+        const baseRadius = 0.1
+        const hoverRadius = 0.115
+        const outerRadius = isHovered ? hoverRadius : baseRadius
+        const dotRadius = 0.045
+        const fillStroke = 0.005
+        const glowStroke = 0.12
+        const ringStroke = 0.055
+        const hitStroke = 0.14
         // Same 5-circle stack as the orange endpoint dot — hover glow +
         // hover ring + filled outer + inner dot + transparent hit. On
         // pointer-down, the layer calls `setMovingNode(node)`, which
@@ -734,9 +926,8 @@ function InteractiveGeometry({
               r={outerRadius}
               stroke={palette.endpointHandleHoverStroke}
               strokeOpacity={0.16}
-              strokeWidth={ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={glowStroke}
               style={{ opacity: isHovered ? 1 : 0, transition: HOVER_TRANSITION }}
-              vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={g.point[0]}
@@ -746,9 +937,8 @@ function InteractiveGeometry({
               r={outerRadius}
               stroke={palette.endpointHandleHoverStroke}
               strokeOpacity={0.52}
-              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={ringStroke}
               style={{ opacity: isHovered ? 1 : 0, transition: HOVER_TRANSITION }}
-              vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={g.point[0]}
@@ -758,8 +948,7 @@ function InteractiveGeometry({
               pointerEvents="none"
               r={outerRadius}
               stroke={palette.endpointHandleStroke}
-              strokeWidth="0.05"
-              vectorEffect="non-scaling-stroke"
+              strokeWidth={fillStroke}
             />
             <circle
               cx={g.point[0]}
@@ -767,7 +956,6 @@ function InteractiveGeometry({
               fill={palette.endpointHandleStroke}
               pointerEvents="none"
               r={dotRadius}
-              vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={g.point[0]}
@@ -777,9 +965,155 @@ function InteractiveGeometry({
               pointerEvents="all"
               r={outerRadius}
               stroke="transparent"
-              strokeWidth={ENDPOINT_HIT_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={hitStroke}
               style={{ cursor: 'move' }}
+            />
+          </g>
+        )
+      }
+      case 'rotate-arrow': {
+        if (!palette) return <></>
+        // 2D counterpart of the 3D `arc-resize` rotate gizmo. Local
+        // frame: +X is the radial-outward direction (away from the
+        // pivot); the arc bows in that direction with arrowheads on
+        // each end pointing tangentially in opposite directions —
+        // "rotate either way."
+        const handleId = makeHandleId(nodeId, g.payload)
+        const isHovered = hoveredHandleId === handleId
+        // Arc geometry (all values precomputed for a 72° arc of
+        // radius 0.13 — comparable footprint to `move-arrow`).
+        const R = 0.13
+        const halfSpan = Math.PI / 5
+        const cosH = Math.cos(halfSpan)
+        const sinH = Math.sin(halfSpan)
+        const endY = R * sinH
+        const headLen = 0.06
+        const headHalfBase = 0.045
+        // End-1 (top) arrowhead — tip along CCW tangent.
+        const t1x = -sinH * headLen
+        const t1y = endY + cosH * headLen
+        const b1ax = cosH * headHalfBase
+        const b1ay = endY + sinH * headHalfBase
+        const b1bx = -cosH * headHalfBase
+        const b1by = endY - sinH * headHalfBase
+        // End-2 (bottom) arrowhead — mirror of End-1.
+        const t2x = -sinH * headLen
+        const t2y = -endY - cosH * headLen
+        const b2ax = cosH * headHalfBase
+        const b2ay = -endY - sinH * headHalfBase
+        const b2bx = -cosH * headHalfBase
+        const b2by = -endY + sinH * headHalfBase
+        const arcPath = `M 0 ${-endY} A ${R} ${R} 0 0 1 0 ${endY}`
+        const head1 = `M ${t1x} ${t1y} L ${b1ax} ${b1ay} L ${b1bx} ${b1by} Z`
+        const head2 = `M ${t2x} ${t2y} L ${b2ax} ${b2ay} L ${b2bx} ${b2by} Z`
+        const fill = isHovered ? '#a5b4fc' : '#8381ed'
+        const strokeWidthPx = isHovered ? 2.4 : 1.8
+        const angleDeg = (g.angle * 180) / Math.PI
+        const affordance = g.affordance
+        const payload = g.payload
+        return (
+          <g
+            key={keyHint}
+            onClick={(e) => e.stopPropagation()}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
+          >
+            <path
+              d={arcPath}
+              fill="none"
+              pointerEvents="none"
+              stroke={fill}
+              strokeLinecap="round"
+              strokeWidth={strokeWidthPx}
               vectorEffect="non-scaling-stroke"
+            />
+            <path d={head1} fill={fill} pointerEvents="none" />
+            <path d={head2} fill={fill} pointerEvents="none" />
+            {/* Hit target — fat invisible stroke along the arc + filled
+                triangles at the heads so the user can grab anywhere on
+                the visible icon. */}
+            <path
+              d={arcPath}
+              fill="none"
+              onPointerDown={(e) =>
+                onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGPathElement>)
+              }
+              onPointerEnter={() => onHandleHoverChange(handleId)}
+              onPointerLeave={() => onHandleHoverChange(null)}
+              pointerEvents="stroke"
+              stroke="transparent"
+              strokeWidth={0.06}
+              style={{ cursor: 'grab' }}
+            />
+            <path
+              d={`${head1} ${head2}`}
+              fill="transparent"
+              onPointerDown={(e) =>
+                onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGPathElement>)
+              }
+              onPointerEnter={() => onHandleHoverChange(handleId)}
+              onPointerLeave={() => onHandleHoverChange(null)}
+              pointerEvents="fill"
+              style={{ cursor: 'grab' }}
+            />
+          </g>
+        )
+      }
+      case 'move-arrow': {
+        if (!palette) return <></>
+        // Affordance-routed arrows (door width-resize) get a per-payload
+        // handle id so each side can hover independently; default
+        // (move-flow) arrows share the node's :move id like the dot.
+        const handleId = g.affordance ? makeHandleId(nodeId, g.payload) : `${nodeId}:move`
+        const isHovered = hoveredHandleId === handleId
+        // Arrow geometry in plan units (meters) — scales with the scene
+        // so it shrinks on zoom-out and grows on zoom-in, matching the
+        // wall it accompanies. Composed of a rectangular shaft + triangular
+        // head, drawn as a single path for a clean fill + stroke outline.
+        const sl = 0.1 // shaft length (shortened body)
+        const hl = 0.12 // head length
+        const sh = 0.04 // shaft half-height
+        const hh = 0.1 // head half-height
+        // Inset the shaft start so the arrow sits a little off the wall
+        // body (matches the 3D `HANDLE_OFFSET`).
+        const bi = 0.03 // base inset
+        const arrowD = `M ${bi},${-sh} L ${bi + sl},${-sh} L ${bi + sl},${-hh} L ${bi + sl + hl},0 L ${bi + sl},${hh} L ${bi + sl},${sh} L ${bi},${sh} Z`
+        // Indigo palette to match the 3D `WallMoveSideHandles` arrows
+        // (`ARROW_COLOR` / `ARROW_HOVER_COLOR`) and the corner-sphere
+        // accent in `floating-action-menu.tsx`.
+        const fill = isHovered ? '#a5b4fc' : '#8381ed'
+        const angleDeg = (g.angle * 180) / Math.PI
+        const cursor = g.affordance ? 'ew-resize' : 'move'
+        const affordance = g.affordance
+        const payload = g.payload
+        // No hover-grow: a scaling transform would enlarge the hit area
+        // too, letting clicks just outside the visible arrow still start
+        // a drag. Hover feedback is colour-only so the click region
+        // always matches the painted arrow shape exactly.
+        return (
+          <g
+            key={keyHint}
+            onClick={(e) => e.stopPropagation()}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
+          >
+            <path d={arrowD} fill={fill} pointerEvents="none" />
+            <path
+              d={arrowD}
+              fill="transparent"
+              onPointerDown={(e) => {
+                if (affordance) {
+                  onHandlePointerDown(
+                    affordance,
+                    payload,
+                    e as ReactPointerEvent<SVGGElement>,
+                  )
+                } else {
+                  onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)
+                }
+              }}
+              onPointerEnter={() => onHandleHoverChange(handleId)}
+              onPointerLeave={() => onHandleHoverChange(null)}
+              pointerEvents="fill"
+              style={{ cursor }}
             />
           </g>
         )
@@ -937,11 +1271,19 @@ function InteractiveGeometry({
       }
       case 'dimension-label': {
         if (!palette) return <></>
-        // Flip the label upright if it would otherwise be upside-down
-        // (legacy floorplan-panel.tsx does the same — see line ~2548).
+        // Flip the label upright relative to the SCREEN, not the local
+        // coord system. The registry layer's parent `<g>` is rotated by
+        // `sceneRotationDeg` (default 90° in the floor plan), so a label
+        // we draw "upright" in local coords ends up sideways on screen.
+        // Combine local angle + scene rotation, normalise to (-180, 180],
+        // and flip by 180° if it falls outside (-90, 90] — that keeps
+        // text reading left-to-right, top-to-bottom regardless of the
+        // building's orientation.
         let degrees = (g.angle * 180) / Math.PI
-        if (degrees > 90) degrees -= 180
-        else if (degrees <= -90) degrees += 180
+        let screenDegrees = degrees + sceneRotationDeg
+        screenDegrees = ((((screenDegrees + 180) % 360) + 360) % 360) - 180
+        if (screenDegrees > 90) degrees -= 180
+        else if (screenDegrees <= -90) degrees += 180
 
         const padX = unitsPerPixel * 6
         const padY = unitsPerPixel * 3
@@ -1220,6 +1562,8 @@ const OVERLAY_KINDS = new Set<FloorplanGeometry['kind']>([
   'midpoint-handle',
   'edge-handle',
   'move-handle',
+  'move-arrow',
+  'rotate-arrow',
   'dimension',
   'dimension-label',
 ])

@@ -1,4 +1,8 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type {
+  CeilingNode as CeilingNodeType,
+  HandleDescriptor,
+  NodeDefinition,
+} from '@pascal-app/core'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -8,6 +12,52 @@ import {
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
+
+const HEIGHT_HANDLE_OFFSET = 0.22
+const MIN_CEILING_HEIGHT = 0.5
+
+function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
+  const polygon = n.polygon ?? []
+  if (polygon.length === 0) return [0, 0]
+  let cx = 0
+  let cz = 0
+  for (const [x, z] of polygon) {
+    cx += x
+    cz += z
+  }
+  return [cx / polygon.length, cz / polygon.length]
+}
+
+// Ceiling height arrow — vertical chevron at the polygon centroid,
+// hovering just above the ceiling plane. Drags the `height` field
+// (the Y position of the ceiling surface). `anchor: 'min'` so dragging
+// the cursor upward grows the value directly. Live override + commit
+// flow comes from the shared registry arrow pipeline.
+//
+// The placement Y is in *mesh-local* coords. CeilingSystem already
+// parks `mesh.position.y = ceiling.height - 0.01`, so the local Y is
+// just the offset above that plane (NOT `height + offset` — that
+// would double-add the height and push the arrow off-screen).
+function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_CEILING_HEIGHT,
+    currentValue: (n) => n.height ?? 2.5,
+    apply: (_n, newValue) => ({ height: newValue }),
+    placement: {
+      position: (n) => {
+        const [cx, cz] = ceilingPolygonCenter(n)
+        return [cx, HEIGHT_HANDLE_OFFSET, cz]
+      },
+    },
+  }
+}
+
+function ceilingHandles(_node: CeilingNodeType): HandleDescriptor<CeilingNodeType>[] {
+  return [ceilingHeightHandle()]
+}
 
 /**
  * Ceiling — Phase 5 batch kind, polygon-based. Structurally similar to
@@ -60,6 +110,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   parametrics: ceilingParametrics,
+  handles: ceilingHandles,
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with a vertical TSL-gradient connector + ground-shadow lines.

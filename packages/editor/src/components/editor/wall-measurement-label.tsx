@@ -32,6 +32,12 @@ const HEIGHT_TICK_HALF_LENGTH = 0.14
 const HEIGHT_GUIDE_OUTSIDE_OFFSET = 0.16
 
 const BAR_AXIS = new THREE.Vector3(0, 1, 0)
+// Shared unit cube — each MeasurementBar scales it to BAR_THICKNESS × length
+// × BAR_THICKNESS instead of constructing a fresh BoxGeometry every frame.
+// Per-frame `<boxGeometry args={[..., length, ...]}/>` triggers R3F to
+// rebuild the geometry whenever the wall moves, and the WebGPU backend
+// flags the in-flight buffer churn as "Vertex buffer slot N ... was not set".
+const SHARED_BAR_GEOMETRY = new THREE.BoxGeometry(1, 1, 1)
 
 type Vec3 = [number, number, number]
 
@@ -73,8 +79,7 @@ export function WallMeasurementLabel() {
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selectedNode = selectedId ? nodes[selectedId as AnyNodeId] : null
-  const measurableNode =
-    selectedNode?.type === 'wall' || selectedNode?.type === 'item' ? selectedNode : null
+  const measurableNode = selectedNode?.type === 'item' ? selectedNode : null
 
   const [objectState, setObjectState] = useState<{
     id: AnyNodeId
@@ -447,11 +452,12 @@ function MeasurementBar({ start, end, color }: { start: Vec3; end: Vec3; color: 
 
   return (
     <mesh
+      geometry={SHARED_BAR_GEOMETRY}
       position={[segment.position.x, segment.position.y, segment.position.z]}
       quaternion={segment.quaternion}
       renderOrder={1000}
+      scale={[BAR_THICKNESS, segment.length, BAR_THICKNESS]}
     >
-      <boxGeometry args={[BAR_THICKNESS, segment.length, BAR_THICKNESS]} />
       <meshBasicMaterial
         color={color}
         depthTest={false}

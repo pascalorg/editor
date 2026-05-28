@@ -183,6 +183,29 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       kind: 'move-handle',
       point: [cx, cz],
     })
+
+    // Width-resize arrows at each side of the door (along the wall
+    // direction). Pointer-down on either routes through the door's
+    // `resize-width` affordance — anchored at the opposite edge, clamped
+    // to wall bounds. Mirrors the 3D `DoorSideArrow` width drag.
+    const startEdgeX = cx - dirX * halfWidth
+    const startEdgeZ = cz - dirZ * halfWidth
+    const endEdgeX = cx + dirX * halfWidth
+    const endEdgeZ = cz + dirZ * halfWidth
+    children.push({
+      kind: 'move-arrow',
+      point: [startEdgeX, startEdgeZ],
+      angle: Math.atan2(-dirZ, -dirX),
+      affordance: 'resize-width',
+      payload: { side: 'start' },
+    })
+    children.push({
+      kind: 'move-arrow',
+      point: [endEdgeX, endEdgeZ],
+      angle: Math.atan2(dirZ, dirX),
+      affordance: 'resize-width',
+      payload: { side: 'end' },
+    })
   }
 
   // Placement-measurement dimensions — distances to adjacent openings

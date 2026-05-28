@@ -13,6 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getLevelDisplayName } from '../../../lib/level-name'
 import { createLocalGuideImage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
@@ -82,10 +83,6 @@ function useLowerReferenceLevels(): LevelNode[] {
         .sort((a, b) => b.level - a.level)
     }),
   )
-}
-
-function getLevelDisplayName(level: LevelNode) {
-  return level.name || `Level ${level.level}`
 }
 
 // ── Shared upload button for dropdowns ──────────────────────────────────────

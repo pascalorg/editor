@@ -10,6 +10,7 @@ import {
   FenceNode,
   generateId,
   ItemNode,
+  isRegistryMovable,
   isRegistrySelectable,
   nodeRegistry,
   RoofSegmentNode,
@@ -25,8 +26,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { Move } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -53,6 +53,60 @@ const ALLOWED_TYPES = [
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
 
+// Menu scales with camera zoom so it feels anchored to the object, but is
+// clamped on both ends so it stays readable when zoomed way out and doesn't
+// dominate the screen when zoomed in close. Reference values are picked so
+// scale = 1 lands near the editor's default framing.
+const MIN_MENU_SCALE = 0.5
+// Cap at 1 so zooming in doesn't grow the menu past its default pixel size —
+// only zoom-out shrinks it (down to MIN_MENU_SCALE).
+const MAX_MENU_SCALE = 1
+const REF_ORTHO_ZOOM = 20
+const REF_CAMERA_DISTANCE = 12
+
+// World-space Y distance from a node's bbox top to the floating menu anchor.
+// Per-type because in-world chrome above the node (height-resize arrows,
+// measurement labels) varies in vertical reach.
+// `EXTRA_MENU_LIFT` is a uniform global nudge — easier to tune one
+// constant than to bump every per-type entry below.
+const EXTRA_MENU_LIFT = 0.35
+const MENU_Y_OFFSET_DEFAULT = 0.3
+const MENU_Y_OFFSETS: Record<string, number> = {
+  wall: 0.5,
+  door: 0.6,
+  window: 0.6,
+  column: 0.6,
+  // Fence: clears the height-resize arrow (sits at fence.height + 0.45)
+  // plus the chevron's own visual size, so the menu floats just above it.
+  fence: 1.05,
+  // Elevator: clears the cab-height arrow which sits above the SHAFT
+  // top (resolved through level entries), so the menu floats above it.
+  elevator: 0.9,
+  stair: 0.2,
+  'stair-stair': 1.1,
+  'stair-landing': 0.9,
+  // Slab: clears the height arrow that sits at elevation + 0.22 plus the
+  // chevron's own visual reach, so the menu floats just above it.
+  slab: 0.7,
+  // Ceiling: clears the upward height arrow that sits ~0.22 above the
+  // ceiling plane, plus extra headroom so the menu doesn't crowd the
+  // chevron at any zoom level.
+  ceiling: 1.0,
+  // Shelf: clears the height arrow that sits at shelf.height + 0.22
+  // plus the chevron's visual reach.
+  shelf: 0.6,
+}
+
+function getMenuYOffset(node: AnyNode | null): number {
+  if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
+  if (node.type === 'stair-segment') {
+    return (
+      (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
+    )
+  }
+  return (MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
+}
+
 export function FloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
@@ -62,17 +116,13 @@ export function FloatingActionMenu() {
   const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
   const curvingFence = useEditor((s) => s.curvingFence)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const setMovingWallEndpoint = useEditor((s) => s.setMovingWallEndpoint)
-  const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
   const setCurvingWall = useEditor((s) => s.setCurvingWall)
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
   const groupRef = useRef<THREE.Group>(null)
-  const startEndpointGroupRef = useRef<THREE.Group>(null)
-  const endEndpointGroupRef = useRef<THREE.Group>(null)
-  const [altPressed, setAltPressed] = useState(false)
+  const menuScaleRef = useRef<HTMLDivElement>(null)
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -104,36 +154,22 @@ export function FloatingActionMenu() {
     })
   })
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Alt') {
-        setAltPressed(true)
-      }
-    }
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Alt') {
-        setAltPressed(false)
-      }
-    }
-
-    const handleBlur = () => {
-      setAltPressed(false)
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-    window.addEventListener('blur', handleBlur)
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
-      window.removeEventListener('blur', handleBlur)
-    }
-  }, [])
-
-  useFrame(() => {
+  useFrame((state) => {
     if (!(selectedId && isValidType && groupRef.current)) return
+
+    // Scale the HTML menu with camera zoom (ortho) or inverse distance
+    // (perspective) so it feels anchored to the world, clamped on both ends
+    // so it stays readable at extreme zoom-out and doesn't fill the screen
+    // when zoomed in close.
+    if (menuScaleRef.current) {
+      const raw =
+        state.camera instanceof THREE.OrthographicCamera
+          ? state.camera.zoom / REF_ORTHO_ZOOM
+          : REF_CAMERA_DISTANCE /
+            Math.max(state.camera.position.distanceTo(groupRef.current.position), 0.001)
+      const scale = Math.min(MAX_MENU_SCALE, Math.max(MIN_MENU_SCALE, raw))
+      menuScaleRef.current.style.transform = `scale(${scale})`
+    }
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
@@ -141,79 +177,14 @@ export function FloatingActionMenu() {
       const box = new THREE.Box3().setFromObject(obj)
       if (!box.isEmpty()) {
         const center = box.getCenter(new THREE.Vector3())
-        // Position above the object, with extra offset for walls/slabs to avoid covering measurement labels
-        const isStructural = node && [...DELETE_ONLY_TYPES, ...HOLE_TYPES].includes(node.type)
-        const yOffset = isStructural ? 0.8 : 0.3
-        groupRef.current.position.set(center.x, box.max.y + yOffset, center.z)
+        // Position above the object. Per-type offsets clear each kind's
+        // in-world chrome (height-resize arrows, measurement labels).
+        groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
       }
 
-      if (node?.type === 'wall' || node?.type === 'fence') {
-        const segment = node as WallNode | FenceNode
-        const endpointYOffset = 0.35
-        const startWorld =
-          node.type === 'wall'
-            ? obj.localToWorld(new THREE.Vector3(0, 0, 0))
-            : obj.localToWorld(new THREE.Vector3(segment.start[0], 0, segment.start[1]))
-        const endWorld =
-          node.type === 'wall'
-            ? obj.localToWorld(
-                new THREE.Vector3(
-                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
-                  0,
-                  0,
-                ),
-              )
-            : obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
-
-        if (startEndpointGroupRef.current) {
-          startEndpointGroupRef.current.position.set(
-            startWorld.x,
-            startWorld.y + endpointYOffset,
-            startWorld.z,
-          )
-        }
-        if (endEndpointGroupRef.current) {
-          endEndpointGroupRef.current.position.set(
-            endWorld.x,
-            endWorld.y + endpointYOffset,
-            endWorld.z,
-          )
-        }
-      }
     }
   })
 
-  const handleMove = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!node) return
-      sfxEmitter.emit('sfx:item-pick')
-      if (
-        node.type === 'item' ||
-        node.type === 'window' ||
-        node.type === 'door' ||
-        node.type === 'elevator' ||
-        node.type === 'wall' ||
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'spawn' ||
-        node.type === 'roof' ||
-        node.type === 'roof-segment' ||
-        node.type === 'stair' ||
-        node.type === 'stair-segment' ||
-        // Registry-driven kinds default to movable; MoveTool dispatches them
-        // to MoveRegistryNodeTool. Phase 4 reads `capabilities.movable` to
-        // gate this instead of the unconditional OR.
-        isRegistrySelectable(node.type)
-      ) {
-        setMovingNode(node as any)
-      }
-      setSelection({ selectedIds: [] })
-    },
-    [node, setMovingNode, setSelection],
-  )
   const handleCurve = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -231,23 +202,16 @@ export function FloatingActionMenu() {
     },
     [canCurveSelectedWall, node, setCurvingFence, setCurvingWall, setSelection],
   )
-  const handleEndpointMove = useCallback(
-    (endpoint: 'start' | 'end', e: React.MouseEvent) => {
+  const handleMove = useCallback(
+    (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
-      if (node.type === 'wall') {
-        setMovingWallEndpoint({ wall: node, endpoint })
-      } else if (node.type === 'fence') {
-        setMovingFenceEndpoint({ fence: node, endpoint })
-      } else {
-        return
-      }
+      setMovingNode(node as any)
       setSelection({ selectedIds: [] })
     },
-    [node, setMovingFenceEndpoint, setMovingWallEndpoint, setSelection],
+    [node, setMovingNode, setSelection],
   )
-
   const handleDuplicate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -474,91 +438,38 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[100, 0]}
         >
-          <NodeActionMenu
-            onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-            onCurve={
-              node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
-                ? handleCurve
-                : undefined
-            }
-            onDelete={handleDelete}
-            onDuplicate={
-              node &&
-              node.type !== 'spawn' &&
-              !DELETE_ONLY_TYPES.includes(node.type) &&
-              !HOLE_TYPES.includes(node.type)
-                ? handleDuplicate
-                : undefined
-            }
-            onMove={
-              node &&
-              node.type !== 'wall' &&
-              node.type !== 'fence' &&
-              !DELETE_ONLY_TYPES.includes(node.type)
-                ? handleMove
-                : undefined
-            }
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-          />
+          <div ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
+            <NodeActionMenu
+              onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+              onCurve={
+                node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
+                  ? handleCurve
+                  : undefined
+              }
+              onMove={
+                // Registry-driven: any kind that declares
+                // `capabilities.movable`, a `floorplanMoveTarget`, or a
+                // 3D `affordanceTools.move` mover gets the Move button.
+                // Replaces the previous 13-arm `node?.type === '…'`
+                // chain so adding a new movable kind doesn't touch this
+                // file.
+                node && isRegistryMovable(node.type) ? handleMove : undefined
+              }
+              onDelete={handleDelete}
+              onDuplicate={
+                node &&
+                node.type !== 'spawn' &&
+                !DELETE_ONLY_TYPES.includes(node.type) &&
+                !HOLE_TYPES.includes(node.type)
+                  ? handleDuplicate
+                  : undefined
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+            />
+          </div>
         </Html>
       </group>
-      {(node?.type === 'wall' || node?.type === 'fence') && (
-        <>
-          <group ref={startEndpointGroupRef}>
-            <Html
-              center
-              style={{ pointerEvents: 'auto', touchAction: 'none' }}
-              zIndexRange={[100, 0]}
-            >
-              <button
-                aria-label={node.type === 'wall' ? 'Move wall start' : 'Move fence start'}
-                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
-                  altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-                onClick={(e) => handleEndpointMove('start', e)}
-                onPointerDown={(e) => e.stopPropagation()}
-                title={
-                  node.type === 'wall'
-                    ? 'Move wall start (Alt to detach)'
-                    : 'Move fence start (Alt to detach)'
-                }
-                type="button"
-              >
-                <Move className="h-4 w-4" />
-              </button>
-            </Html>
-          </group>
-          <group ref={endEndpointGroupRef}>
-            <Html
-              center
-              style={{ pointerEvents: 'auto', touchAction: 'none' }}
-              zIndexRange={[100, 0]}
-            >
-              <button
-                aria-label={node.type === 'wall' ? 'Move wall end' : 'Move fence end'}
-                className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors ${
-                  altPressed
-                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-                onClick={(e) => handleEndpointMove('end', e)}
-                onPointerDown={(e) => e.stopPropagation()}
-                title={
-                  node.type === 'wall'
-                    ? 'Move wall end (Alt to detach)'
-                    : 'Move fence end (Alt to detach)'
-                }
-                type="button"
-              >
-                <Move className="h-4 w-4" />
-              </button>
-            </Html>
-          </group>
-        </>
-      )}
     </group>
   )
 }

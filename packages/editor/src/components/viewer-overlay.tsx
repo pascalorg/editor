@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useShallow } from 'zustand/react/shallow'
+import { getLevelDisplayName } from '../lib/level-name'
 import { cn } from '../lib/utils'
 import { ActionButton } from './ui/action-menu/action-button'
 import {
@@ -363,7 +364,7 @@ export const ViewerOverlay = ({
                       className={`truncate transition-colors ${zone ? 'text-muted-foreground hover:text-foreground' : 'font-medium text-foreground'}`}
                       onClick={() => handleBreadcrumbClick('level')}
                     >
-                      {level.name || `Level ${level.level}`}
+                      {getLevelDisplayName(level)}
                     </button>
                   </>
                 )}

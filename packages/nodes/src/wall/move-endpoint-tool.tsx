@@ -14,12 +14,13 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
-  isWallLongEnough,
+  isSegmentLongEnough,
   type MovingWallEndpoint,
   markToolCancelConsumed,
   snapWallDraftPoint,
   triggerSFX,
   useEditor,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -27,14 +28,12 @@ import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
- * Phase 5 Stage D — wall endpoint move tool (kind-owned).
+ * Wall endpoint move tool (kind-owned).
  *
- * 1:1 port of the legacy `MoveWallEndpointTool` (426 LoC, the largest
- * single tool in wall/). Same drag pipeline (snap → preview → apply
- * with linked-wall corner cascade), same Alt-detach modifier, same
- * angle label between the dragged segment and any neighbour sharing
- * the endpoint, same single-undo dance on commit, same activation
- * grace window.
+ * Press-drag-release: the endpoint handle's pointerdown activates this
+ * tool; cursor movement updates the preview (snap → linked-wall cascade
+ * → Alt-detach); pointerup commits if the endpoint actually moved, else
+ * dismisses without committing.
  *
  * Mounted via `def.affordanceTools['move-endpoint']` from
  * `wall/definition.ts`. Editor state trigger is
@@ -160,7 +159,7 @@ function getLinkedWallUpdates(
 }
 
 export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
-  const activatedAtRef = useRef<number>(Date.now())
+  const hasDraggedRef = useRef(false)
   const previousGridPosRef = useRef<WallPlanPoint | null>(null)
   const shiftPressedRef = useRef(false)
   const altPressedRef = useRef(false)
@@ -264,12 +263,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     const onGridMove = (event: GridEvent) => {
       const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
+      // Endpoint *move* snaps to the grid (and to other wall corners) —
+      // 45° angle snap is for the initial draft, where it gives clean
+      // orthogonal corners; here it would fight every perpendicular
+      // drag by warping the endpoint onto the nearest 45° line from
+      // the fixed corner.
+      //
+      // Shift switches to the *fine* grid step (`WALL_FINE_GRID_STEP`)
+      // for precision placement, so it can land on positions the
+      // active grid would skip (e.g. 0.05m increments when the active
+      // grid is 0.5m). It does NOT bypass snap.
       const snappedPoint = snapWallDraftPoint({
         point: planPoint,
         walls: levelWalls,
-        start: fixedPoint,
-        angleSnap: !shiftPressedRef.current,
         ignoreWallIds: [nodeId],
+        step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
       })
 
       if (
@@ -280,13 +288,17 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         triggerSFX('sfx:grid-snap')
       }
       previousGridPosRef.current = snappedPoint
+      hasDraggedRef.current = true
 
       applyPreview(snappedPoint, event.nativeEvent.altKey)
     }
 
-    const onGridClick = (event: GridEvent) => {
-      if (Date.now() - activatedAtRef.current < 150) {
-        event.nativeEvent?.stopPropagation?.()
+    const onPointerUp = () => {
+      // Press-release without drag: dismiss the tool without committing.
+      if (!hasDraggedRef.current) {
+        useViewer.getState().setSelection({ selectedIds: [nodeId] })
+        setAngleLabel(null)
+        exitMoveMode()
         return
       }
 
@@ -295,7 +307,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
       )
 
-      if (hasChanged && isWallLongEnough(preview.start, preview.end)) {
+      if (hasChanged && isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
         // Restore original baseline while paused so the next resume+update
@@ -325,7 +337,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       setAngleLabel(null)
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
     }
 
     const onCancel = () => {
@@ -367,8 +378,8 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onWindowBlur)
@@ -379,8 +390,8 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       }
       resumeSceneHistory(useScene)
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onWindowBlur)

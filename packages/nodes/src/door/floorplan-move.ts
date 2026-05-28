@@ -37,6 +37,17 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     return wall ? (wall.parentId as AnyNodeId | null) : null
   })()
 
+  // Track the last successful placement so `commit()` can write it
+  // atomically — see the comment on `commit` below for why we don't
+  // rely on the dispatcher's diff path.
+  let lastValid: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    side: DoorNode['side']
+    parentId: string
+    wallId: string
+  } | null = null
+
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
@@ -48,6 +59,14 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const snappedLocalX = modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX)
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
 
+      lastValid = {
+        position: [clampedX, clampedY, 0],
+        rotation: [0, hit.itemRotation, 0],
+        side: hit.side,
+        parentId: hit.wall.id,
+        wallId: hit.wall.id,
+      }
+
       // Build the updates atomically — position + rotation + side +
       // parentId + wallId in a single scene write. The current door's
       // parent might be a different wall; re-anchoring requires moving
@@ -56,13 +75,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       useScene.getState().updateNodes([
         {
           id: node.id as AnyNodeId,
-          data: {
-            position: [clampedX, clampedY, 0],
-            rotation: [0, hit.itemRotation, 0],
-            side: hit.side,
-            parentId: hit.wall.id,
-            wallId: hit.wall.id,
-          },
+          data: lastValid,
         },
       ])
     },
@@ -80,6 +93,23 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         live.id,
       )
       return !overlapping
+    },
+    commit() {
+      // Own the atomic write so the overlay takes the deterministic
+      // commit-path (revert → resume → session.commit()). The dispatcher's
+      // diff path would otherwise re-derive the final state by comparing
+      // the post-apply scene to the snapshot — that works most of the
+      // time, but produces an empty diff (and silent revert) when the
+      // committed move happens to land on the same `parentId` AND has
+      // been re-applied with identical data. Owning commit removes that
+      // foot-gun without forcing the dispatcher to track per-key writes.
+      if (!lastValid) return
+      useScene.getState().updateNodes([
+        {
+          id: node.id as AnyNodeId,
+          data: lastValid,
+        },
+      ])
     },
   }
 

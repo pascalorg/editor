@@ -81,11 +81,12 @@ export {
 } from './components/tools/stair/stair-defaults'
 export {
   createWallOnCurrentLevel,
-  getWallGridStep,
-  isWallLongEnough,
+  getSegmentGridStep,
+  isSegmentLongEnough,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
+  WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
 export { CameraActions as ViewerToolbarRight } from './components/ui/action-menu/camera-actions'
@@ -158,6 +159,7 @@ export {
   type FloorplanStairArrowEntry,
   type FloorplanStairEntry,
   type FloorplanStairSegmentEntry,
+  getFloorplanWallThickness,
 } from './lib/floorplan'
 export {
   buildRoofSurfaceMaterialPatch,
@@ -192,3 +194,4 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { useUploadStore } from './store/use-upload'
+export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'

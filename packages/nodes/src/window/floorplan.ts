@@ -135,6 +135,30 @@ export function buildWindowFloorplan(
       kind: 'move-handle',
       point: [cx, cz],
     })
+
+    // Width-resize arrows at each side of the window (along the wall
+    // direction). Pointer-down on either routes through the window's
+    // `resize-width` affordance — anchored at the opposite edge, clamped
+    // to wall bounds. Mirrors the 3D `WindowSideArrow` width drag and the
+    // door's 2D pattern.
+    const startEdgeX = cx - dirX * halfWidth
+    const startEdgeZ = cz - dirZ * halfWidth
+    const endEdgeX = cx + dirX * halfWidth
+    const endEdgeZ = cz + dirZ * halfWidth
+    children.push({
+      kind: 'move-arrow',
+      point: [startEdgeX, startEdgeZ],
+      angle: Math.atan2(-dirZ, -dirX),
+      affordance: 'resize-width',
+      payload: { side: 'start' },
+    })
+    children.push({
+      kind: 'move-arrow',
+      point: [endEdgeX, endEdgeZ],
+      angle: Math.atan2(dirZ, dirX),
+      affordance: 'resize-width',
+      payload: { side: 'end' },
+    })
   }
 
   // Placement-measurement dimensions when actively moving — same

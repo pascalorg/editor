@@ -26,6 +26,7 @@ function makeSpyScene(initial: Record<string, AnyNode> = {}): SceneApi & {
   const nodes = { ...initial }
   return {
     get: ((nid: AnyNodeId) => nodes[nid as string]) as SceneApi['get'],
+    nodes: () => nodes as Readonly<Record<AnyNodeId, AnyNode>>,
     update: (nid, patch) => {
       calls.updated.push([nid, patch])
       const existing = nodes[nid as string]
