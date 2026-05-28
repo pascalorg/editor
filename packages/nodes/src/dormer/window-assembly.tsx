@@ -113,6 +113,19 @@ const DormerWindowAssembly = ({
       node.position[0],
       node.position[1],
       node.position[2],
+      // Rotation flips which dormer-local face projects to which Z in
+      // segment frame, so dragging the dormer across the ridge with a
+      // non-zero yaw needs to recompute exposure to know which gable
+      // is now poking above the slope.
+      node.rotation,
+      // Window position + height feed `getDormerExposedFaces` now that
+      // it's gating on window-bottom-above-slope (not wall-top-above-
+      // slope) — dragging the window down via inspector or the new
+      // window-height/offset handles must re-evaluate which gable
+      // still has a fully-visible opening.
+      node.windowHeight,
+      node.windowOffsetY,
+      node.wallSkirtHeight,
     ],
   )
 
