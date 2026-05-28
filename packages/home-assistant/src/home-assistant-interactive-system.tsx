@@ -21,9 +21,10 @@ import {
   getBindingAfterRoomGrouping,
 } from './home-assistant-binding-presentation'
 import {
-  getSmartHomeRoomGroupMemberResourceId,
-  smartHomeRoomGroupMemberReferencesResource,
-} from './smart-home-composition'
+  getHomeAssistantDisplayItemKind,
+  type HomeAssistantDisplayItemKind,
+} from './home-assistant-display-items'
+import { HomeAssistantItemEffects, homeAssistantItemEffects } from './home-assistant-item-effects'
 import type {
   RoomControlChange,
   RoomControlTile,
@@ -36,8 +37,11 @@ import {
   getActionBindingForMember,
   getCollectionDisplayName,
 } from './room-overlay/room-overlay-nodes'
+import {
+  getSmartHomeRoomGroupMemberResourceId,
+  smartHomeRoomGroupMemberReferencesResource,
+} from './smart-home-composition'
 import { DEFAULT_SMART_HOME_OVERLAY_VISIBILITY, type SmartHomeOverlayVisibility } from './types'
-import { homeAssistantItemEffects, HomeAssistantItemEffects } from './home-assistant-item-effects'
 
 export type HomeAssistantDeviceActionDispatch = {
   binding: HomeAssistantCollectionBinding
@@ -47,12 +51,35 @@ export type HomeAssistantDeviceActionDispatch = {
 
 type HomeAssistantInteractiveSystemProps = {
   onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
+  overlayInteractive?: boolean
   overlayVisibility?: SmartHomeOverlayVisibility
+  showItemEffects?: boolean
+}
+
+function getResourceDomain(resourceId: string | null | undefined) {
+  return typeof resourceId === 'string' ? resourceId.split('.', 1)[0] : null
+}
+
+function getPrimaryResourceDomain(binding: HomeAssistantCollectionBinding) {
+  const primaryResource =
+    binding.resources.find((resource) => resource.id === binding.primaryResourceId) ??
+    binding.resources[0]
+  return getResourceDomain(
+    primaryResource?.entityId ?? primaryResource?.id ?? binding.primaryResourceId,
+  )
+}
+
+function getDisplayFallbackKind(
+  binding: HomeAssistantCollectionBinding,
+): HomeAssistantDisplayItemKind | undefined {
+  return getPrimaryResourceDomain(binding) === 'media_player' ? 'television' : undefined
 }
 
 export function HomeAssistantInteractiveSystem({
   onHomeAssistantDeviceAction,
+  overlayInteractive = true,
   overlayVisibility = DEFAULT_SMART_HOME_OVERLAY_VISIBILITY,
+  showItemEffects = true,
 }: HomeAssistantInteractiveSystemProps = {}) {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const sceneNodes = useScene((state) => state.nodes)
@@ -187,10 +214,7 @@ export function HomeAssistantInteractiveSystem({
         return
       }
 
-      const nextBinding = getBindingAfterDeviceResourceRemovalFromGroup(
-        bindingNode,
-        resourceId,
-      )
+      const nextBinding = getBindingAfterDeviceResourceRemovalFromGroup(bindingNode, resourceId)
       if (!nextBinding) {
         return
       }
@@ -223,19 +247,23 @@ export function HomeAssistantInteractiveSystem({
       }
 
       const visualItemId = member.linkedItemId ?? member.itemId
+      const visualNode = sceneNodes[visualItemId]
+      const displayFallbackKind = getDisplayFallbackKind(actionBinding)
+      const displayKind =
+        visualNode?.type === 'item' ? getHomeAssistantDisplayItemKind(visualNode) : null
       if (
         source === 'primary' &&
-        member.itemKind === 'tv' &&
-        sceneNodes[visualItemId]?.type === 'item'
+        visualNode?.type === 'item' &&
+        (displayKind || displayFallbackKind)
       ) {
         if (request.kind === 'toggle') {
           if (request.value) {
-            homeAssistantItemEffects.trigger(visualItemId)
+            homeAssistantItemEffects.trigger(visualItemId, 450, displayFallbackKind)
           } else {
             homeAssistantItemEffects.clear(visualItemId)
           }
         } else if (request.kind === 'trigger') {
-          homeAssistantItemEffects.trigger(visualItemId)
+          homeAssistantItemEffects.trigger(visualItemId, 450, displayFallbackKind)
         }
       }
 
@@ -278,8 +306,9 @@ export function HomeAssistantInteractiveSystem({
 
   return (
     <>
-      <HomeAssistantItemEffects />
+      {showItemEffects && <HomeAssistantItemEffects />}
       <RoomControlOverlay
+        interactive={overlayInteractive}
         onApplyRoomGrouping={applyRoomGroupingToCollection}
         onCopyRoomControlToRoom={copyDeviceResourceToGroup}
         onRemoveRoomControlFromRoom={removeDeviceResourceFromGroup}

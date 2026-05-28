@@ -7,14 +7,14 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { useEffect, useMemo } from 'react'
 import {
   getHomeAssistantBindingNodeMap,
   type HomeAssistantCollectionBinding,
-  homeAssistantItemEffects,
   HomeAssistantItemEffects,
   type HomeAssistantResourceBinding,
+  homeAssistantItemEffects,
 } from '@pascal-app/home-assistant'
+import { useEffect, useMemo } from 'react'
 import { getResourceEntityIds, summarizeResourceState } from './artifact'
 import type { HomeAssistantLike, PendingHomeAssistantState, ResourceStateSummary } from './types'
 
@@ -22,6 +22,10 @@ const ACTIVE_DOMAINS = new Set(['fan', 'light', 'media_player', 'switch'])
 
 function getResourceDomain(resourceId: string | null | undefined) {
   return typeof resourceId === 'string' ? resourceId.split('.', 1)[0] : null
+}
+
+function getResourceDisplayFallbackKind(domain: string | null | undefined) {
+  return domain === 'media_player' ? 'television' : undefined
 }
 
 function isGroupResource(resource: HomeAssistantResourceBinding | null | undefined) {
@@ -112,7 +116,9 @@ function getResourceAnchorItemIds({
     collectionAnchorIds.length === deviceResources.length &&
     directResourceIndex >= 0
   ) {
-    return collectionAnchorIds[directResourceIndex] ? [collectionAnchorIds[directResourceIndex]] : []
+    return collectionAnchorIds[directResourceIndex]
+      ? [collectionAnchorIds[directResourceIndex]]
+      : []
   }
 
   const linkedItemIds = new Set<AnyNodeId>()
@@ -218,6 +224,7 @@ export function PascalLovelaceHomeAssistantSystem({
           sceneNodes,
         })
         const domain = getResourceDomain(state.primaryEntityId)
+        const displayFallbackKind = getResourceDisplayFallbackKind(domain)
 
         for (const itemId of anchorIds) {
           const { brightness, toggle } = getInteractiveControlIndexes(sceneNodes[itemId])
@@ -230,7 +237,7 @@ export function PascalLovelaceHomeAssistantSystem({
 
           if (domain === 'media_player' || ACTIVE_DOMAINS.has(domain ?? '')) {
             if (state.isOn) {
-              homeAssistantItemEffects.trigger(itemId)
+              homeAssistantItemEffects.trigger(itemId, 450, displayFallbackKind)
             } else {
               homeAssistantItemEffects.clear(itemId)
             }

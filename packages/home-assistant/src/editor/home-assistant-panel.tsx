@@ -242,6 +242,26 @@ const PROVIDERS: ProviderDefinition[] = [
   },
 ]
 
+const BINDABLE_HOME_ASSISTANT_DEVICE_DOMAINS = new Set([
+  'climate',
+  'cover',
+  'fan',
+  'light',
+  'lock',
+  'media_player',
+  'switch',
+  'vacuum',
+])
+
+function isBindableDeviceResource(resource: HomeAssistantImportedResource) {
+  const domain = resource.domain ?? resource.entityId?.split('.')[0] ?? null
+
+  return (
+    isDeviceResource(resource) &&
+    Boolean(domain && BINDABLE_HOME_ASSISTANT_DEVICE_DOMAINS.has(domain))
+  )
+}
+
 function ensureHomeAssistantResourceCollection(
   resource: HomeAssistantImportedResource,
 ): Collection | null {
@@ -466,7 +486,7 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
   const resourceOwners = smartHomeGraph.resourceOwners
 
   const deviceImports = useMemo(
-    () => imports.filter((resource) => isDeviceResource(resource)),
+    () => imports.filter((resource) => isBindableDeviceResource(resource)),
     [imports],
   )
   const deviceCategoryGroups = useMemo(
@@ -2238,35 +2258,33 @@ export function HomeAssistantPanel(_props: HomeAssistantPanelProps = {}) {
                   SMART HOME
                 </p>
               )}
+              <button
+                aria-label="Export current Pascal scene for Lovelace"
+                className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-cyan-700/18 bg-cyan-50/80 text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
+                disabled={isPublishingLovelace}
+                onClick={() => void exportLovelaceScene()}
+                title="Export Lovelace card config"
+                type="button"
+              >
+                {isPublishingLovelace ? (
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </button>
               {activePanel.kind === 'config' && (
-                <>
-                  <button
-                    aria-label="Export current Pascal scene for Lovelace"
-                    className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-cyan-700/18 bg-cyan-50/80 text-cyan-800 transition hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
-                    disabled={isPublishingLovelace}
-                    onClick={() => void exportLovelaceScene()}
-                    title="Export Lovelace card config"
-                    type="button"
-                  >
-                    {isPublishingLovelace ? (
-                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                  <button
-                    aria-label="Refresh imported devices"
-                    className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-black/8 bg-white/55 text-zinc-700 transition hover:bg-white/80 hover:text-zinc-950"
-                    onClick={() => void refreshImports()}
-                    type="button"
-                  >
-                    {isRefreshingImports ? (
-                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </>
+                <button
+                  aria-label="Refresh imported devices"
+                  className="flex h-7.5 w-7.5 items-center justify-center rounded-xl border border-black/8 bg-white/55 text-zinc-700 transition hover:bg-white/80 hover:text-zinc-950"
+                  onClick={() => void refreshImports()}
+                  type="button"
+                >
+                  {isRefreshingImports ? (
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                </button>
               )}
             </div>
             <button

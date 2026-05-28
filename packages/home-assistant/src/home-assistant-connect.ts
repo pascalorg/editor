@@ -1,4 +1,5 @@
 import type { ItemNode } from '@pascal-app/core'
+import { isHomeAssistantDisplayItem } from './home-assistant-display-items'
 
 export const PASCAL_HA_CONNECT_REQUEST_EVENT = 'pascal:ha-connect-request'
 
@@ -7,21 +8,8 @@ export type PascalHaConnectRequestDetail = {
   itemName: ItemNode['asset']['name']
 }
 
-function normalizeConnectCandidate(value: string | undefined) {
-  return value?.trim().toLowerCase() ?? ''
-}
-
 export function isHomeAssistantConnectableItem(item: ItemNode | null | undefined) {
-  if (!item) {
-    return false
-  }
-
-  const { asset } = item
-  const candidates = [asset.id, asset.name, asset.src, ...(asset.tags ?? [])]
-    .map(normalizeConnectCandidate)
-    .filter(Boolean)
-
-  return candidates.some((candidate) => candidate.includes('television') || candidate === 'tv')
+  return isHomeAssistantDisplayItem(item)
 }
 
 export function requestHomeAssistantConnect(item: ItemNode) {

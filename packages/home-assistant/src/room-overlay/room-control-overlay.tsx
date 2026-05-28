@@ -10,7 +10,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ViewerHtml as Html, useViewer, useViewerFrame } from '@pascal-app/viewer'
-import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT } from '../home-assistant-binding'
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -23,6 +22,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { type Object3D, Vector3 } from 'three'
+import { HOME_ASSISTANT_RTS_PILL_WORLD_HEIGHT } from '../home-assistant-binding'
 import {
   applyNumericGroupDelta,
   canMergeControlGroups,
@@ -634,6 +634,7 @@ const getReorderPlacement = (
 }
 
 export const RoomControlOverlay = ({
+  interactive = true,
   onApplyRoomGrouping,
   onCopyRoomControlToRoom,
   onMergeRoomControlDevices,
@@ -734,14 +735,14 @@ export const RoomControlOverlay = ({
   )
 
   useEffect(() => {
-    useViewer.getState().setInteractiveOverlayActive(openRoomId !== null)
-  }, [openRoomId])
+    useViewer.getState().setInteractiveOverlayActive(interactive && openRoomId !== null)
+  }, [interactive, openRoomId])
 
   useEffect(() => {
-    if (openRoomId && selectedIds.length > 0) {
+    if (interactive && openRoomId && selectedIds.length > 0) {
       useViewer.getState().setSelection({ selectedIds: [] })
     }
-  }, [openRoomId, selectedIds])
+  }, [interactive, openRoomId, selectedIds])
 
   useEffect(
     () => () => {
@@ -751,7 +752,7 @@ export const RoomControlOverlay = ({
   )
 
   useEffect(() => {
-    if (!openRoomId) {
+    if (!interactive || !openRoomId) {
       return
     }
 
@@ -768,7 +769,7 @@ export const RoomControlOverlay = ({
 
     window.addEventListener('pointerdown', handlePointerDown)
     return () => window.removeEventListener('pointerdown', handlePointerDown)
-  }, [openRoomId, setHoveredId, setPreviewSelectedIds])
+  }, [interactive, openRoomId, setHoveredId, setPreviewSelectedIds])
 
   const roomControlMemberLookup = useMemo(() => {
     const lookup = new Map<string, RoomControlLookupEntry>()
@@ -1004,6 +1005,7 @@ export const RoomControlOverlay = ({
               editing={editingRoomId === roomOverlayNode.id}
               expandedGroupId={expandedEditGroupByRoomId[roomOverlayNode.id] ?? null}
               isOpen={openRoomId === roomOverlayNode.id}
+              interactive={interactive}
               onApplyGrouping={(nextGroups) =>
                 onApplyRoomGrouping?.(
                   roomOverlayNode.collectionId ?? roomOverlayNode.id,
@@ -1081,6 +1083,7 @@ const RoomPanel = ({
   editing,
   expandedGroupId,
   iconOnly,
+  interactive,
   isOpen,
   onApplyGrouping,
   onChange,
@@ -1104,6 +1107,7 @@ const RoomPanel = ({
   editing: boolean
   expandedGroupId: string | null
   iconOnly?: boolean
+  interactive: boolean
   isOpen: boolean
   onApplyGrouping: (nextGroups: string[][]) => void
   onChange: (itemId: AnyNodeId, controlIndex: number, nextValue: ControlValue) => void
@@ -2092,6 +2096,7 @@ const RoomPanel = ({
     exitEditMode,
     groupById,
     onRemoveDeviceFromGroup,
+    onSetExpandedGroupId,
     refsStore,
     roomId,
     suppressEditExitActions,
@@ -2274,7 +2279,10 @@ const RoomPanel = ({
       onDoubleClickCapture={guardRoomPanelPointer}
       onPointerDownCapture={guardRoomPanelPointer}
       ref={(node) => setOverlayDomRef(refsStore, roomId, 'panel', node)}
-      style={panelBaseStyle}
+      style={{
+        ...panelBaseStyle,
+        pointerEvents: interactive ? panelBaseStyle.pointerEvents : 'none',
+      }}
     >
       {isOpen ? (
         <div style={headerRowStyle}>
@@ -3588,9 +3596,7 @@ const getDeviceDropTarget = (
     }
   }
 
-  const collectionId = smallestTarget?.dataset.roomControlCollectionId as
-    | CollectionId
-    | undefined
+  const collectionId = smallestTarget?.dataset.roomControlCollectionId as CollectionId | undefined
   return collectionId
     ? {
         collectionId,

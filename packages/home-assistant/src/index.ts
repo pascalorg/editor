@@ -28,6 +28,7 @@ export type { SmartHomeOverlayVisibility } from './types'
 export * from './home-assistant-binding'
 
 export * from './home-assistant'
+export * from './home-assistant-display-items'
 export * from './home-assistant-item-effects'
 export * from './home-assistant-binding-presentation'
 export * from './home-assistant-collections'

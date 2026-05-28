@@ -1,24 +1,26 @@
 'use client'
 
 import {
-  RoomControlOverlay,
-  type RoomControlChange,
-  type RoomControlTile,
-  type RoomOverlayNode,
-  buildCollectionActionRequest,
-  buildHomeAssistantRoomOverlayNodes,
-  getActionBindingForMember,
-  getCollectionDisplayName,
-  homeAssistantItemEffects,
-  HomeAssistantItemEffects,
-} from '@pascal-app/home-assistant'
-import {
   type AnyNode,
   type AnyNodeId,
   type CollectionId,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
+import {
+  buildCollectionActionRequest,
+  buildHomeAssistantRoomOverlayNodes,
+  getActionBindingForMember,
+  getCollectionDisplayName,
+  getHomeAssistantDisplayItemKind,
+  type HomeAssistantDisplayItemKind,
+  HomeAssistantItemEffects,
+  homeAssistantItemEffects,
+  type RoomControlChange,
+  RoomControlOverlay,
+  type RoomControlTile,
+  type RoomOverlayNode,
+} from '@pascal-app/home-assistant'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
@@ -49,6 +51,25 @@ type HomeAssistantInteractiveSystemProps = {
   onHomeAssistantDeviceAction?: (payload: HomeAssistantDeviceActionDispatch) => void | Promise<void>
 }
 
+function getResourceDomain(resourceId: string | null | undefined) {
+  return typeof resourceId === 'string' ? resourceId.split('.', 1)[0] : null
+}
+
+function getPrimaryResourceDomain(binding: HomeAssistantCollectionBinding) {
+  const primaryResource =
+    binding.resources.find((resource) => resource.id === binding.primaryResourceId) ??
+    binding.resources[0]
+  return getResourceDomain(
+    primaryResource?.entityId ?? primaryResource?.id ?? binding.primaryResourceId,
+  )
+}
+
+function getDisplayFallbackKind(
+  binding: HomeAssistantCollectionBinding,
+): HomeAssistantDisplayItemKind | undefined {
+  return getPrimaryResourceDomain(binding) === 'media_player' ? 'television' : undefined
+}
+
 export function HomeAssistantInteractiveSystem({
   onHomeAssistantDeviceAction,
 }: HomeAssistantInteractiveSystemProps = {}) {
@@ -74,13 +95,7 @@ export function HomeAssistantInteractiveSystem({
         selectedLevelId,
         visibility: overlayVisibility,
       }),
-    [
-      homeAssistantBindings,
-      sceneCollections,
-      sceneNodes,
-      selectedLevelId,
-      overlayVisibility,
-    ],
+    [homeAssistantBindings, sceneCollections, sceneNodes, selectedLevelId, overlayVisibility],
   )
 
   useEffect(
@@ -212,10 +227,7 @@ export function HomeAssistantInteractiveSystem({
         return
       }
 
-      const nextBinding = getBindingAfterDeviceResourceRemovalFromGroup(
-        bindingNode,
-        resourceId,
-      )
+      const nextBinding = getBindingAfterDeviceResourceRemovalFromGroup(bindingNode, resourceId)
       if (!nextBinding) {
         return
       }
@@ -249,19 +261,23 @@ export function HomeAssistantInteractiveSystem({
       }
 
       const visualItemId = member.linkedItemId ?? member.itemId
+      const visualNode = sceneNodes[visualItemId]
+      const displayFallbackKind = getDisplayFallbackKind(actionBinding)
+      const displayKind =
+        visualNode?.type === 'item' ? getHomeAssistantDisplayItemKind(visualNode) : null
       if (
         source === 'primary' &&
-        member.itemKind === 'tv' &&
-        sceneNodes[visualItemId]?.type === 'item'
+        visualNode?.type === 'item' &&
+        (displayKind || displayFallbackKind)
       ) {
         if (request.kind === 'toggle') {
           if (request.value) {
-            homeAssistantItemEffects.trigger(visualItemId)
+            homeAssistantItemEffects.trigger(visualItemId, 450, displayFallbackKind)
           } else {
             homeAssistantItemEffects.clear(visualItemId)
           }
         } else if (request.kind === 'trigger') {
-          homeAssistantItemEffects.trigger(visualItemId)
+          homeAssistantItemEffects.trigger(visualItemId, 450, displayFallbackKind)
         }
       }
 

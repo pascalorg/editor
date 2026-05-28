@@ -5,6 +5,7 @@ import { CameraControlsImpl } from '@react-three/drei'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   Box3,
+  type Camera,
   MathUtils,
   Matrix4,
   Quaternion,
@@ -13,9 +14,8 @@ import {
   Spherical,
   Vector2,
   Vector3,
-  Vector4,
-  type Camera,
   type Vector3Tuple,
+  Vector4,
 } from 'three'
 
 CameraControlsImpl.install({
@@ -38,13 +38,27 @@ type LovelaceFitCameraControlsProps = {
   radius: number
 }
 
-function applyEmbeddedCardControlBindings(controls: CameraControlsImpl) {
-  controls.mouseButtons.left = CameraControlsImpl.ACTION.NONE
-  controls.mouseButtons.middle = CameraControlsImpl.ACTION.NONE
+function isInteractiveKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false
+  }
+
+  return Boolean(
+    target.closest(
+      'input, textarea, select, button, a, [role="button"], [contenteditable]:not([contenteditable="false"])',
+    ),
+  )
+}
+
+function applyEmbeddedCardControlBindings(controls: CameraControlsImpl, spacePanActive = false) {
+  controls.mouseButtons.left = spacePanActive
+    ? CameraControlsImpl.ACTION.SCREEN_PAN
+    : CameraControlsImpl.ACTION.NONE
+  controls.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
   controls.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
   controls.mouseButtons.wheel = CameraControlsImpl.ACTION.DOLLY
   controls.touches.one = CameraControlsImpl.ACTION.TOUCH_ROTATE
-  controls.touches.two = CameraControlsImpl.ACTION.TOUCH_DOLLY_ROTATE
+  controls.touches.two = CameraControlsImpl.ACTION.TOUCH_DOLLY_TRUCK
   controls.touches.three = CameraControlsImpl.ACTION.NONE
 }
 
@@ -63,6 +77,7 @@ export const LovelaceFitCameraControls = ({ center, radius }: LovelaceFitCameraC
   const contextMenuCleanupRef = useRef<(() => void) | null>(null)
   const domElementRef = useRef<HTMLElement | null>(null)
   const poseKeyRef = useRef<string | null>(null)
+  const spacePanActiveRef = useRef(false)
   const pose = useMemo(() => {
     const safeRadius = Math.max(radius, 1)
     const [cx, cy, cz] = center
@@ -78,7 +93,37 @@ export const LovelaceFitCameraControls = ({ center, radius }: LovelaceFitCameraC
   }, [center, radius])
 
   useEffect(() => {
+    const applyControls = () => {
+      if (controls.current) {
+        applyEmbeddedCardControlBindings(controls.current, spacePanActiveRef.current)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || isInteractiveKeyboardTarget(event.target)) {
+        return
+      }
+      spacePanActiveRef.current = true
+      document.body.style.cursor = 'grab'
+      event.preventDefault()
+      applyControls()
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') {
+        return
+      }
+      spacePanActiveRef.current = false
+      document.body.style.cursor = ''
+      event.preventDefault()
+      applyControls()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+
     return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      document.body.style.cursor = ''
       contextMenuCleanupRef.current?.()
       controls.current?.disconnect()
       controls.current?.dispose()
@@ -103,7 +148,7 @@ export const LovelaceFitCameraControls = ({ center, radius }: LovelaceFitCameraC
       controls.current = new CameraControlsImpl(state.camera)
       controls.current.connect(domElement)
       controls.current.dollyToCursor = true
-      applyEmbeddedCardControlBindings(controls.current)
+      applyEmbeddedCardControlBindings(controls.current, spacePanActiveRef.current)
       contextMenuCleanupRef.current = bindContextMenuGuard(domElement)
       cameraRef.current = state.camera
       domElementRef.current = domElement
@@ -111,7 +156,7 @@ export const LovelaceFitCameraControls = ({ center, radius }: LovelaceFitCameraC
     }
 
     const currentControls = controls.current
-    applyEmbeddedCardControlBindings(currentControls)
+    applyEmbeddedCardControlBindings(currentControls, spacePanActiveRef.current)
     currentControls.maxDistance = pose.maxDistance
     currentControls.minDistance = pose.minDistance
 

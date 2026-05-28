@@ -4,6 +4,8 @@ import { Bvh } from '@react-three/drei'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
+import { WebGLRenderer } from 'three'
+import '../../lib/suppress-three-clock-warning'
 import useViewer from '../../store/use-viewer'
 import { CeilingSystem } from '../../systems/ceiling/ceiling-system'
 import { DoorAnimationSystem } from '../../systems/door/door-animation-system'
@@ -73,12 +75,20 @@ extend(THREE as any)
 // `state.gl` but R3F's store already holds the new size/dpr, so the new
 // renderer is never resized and stays at the canvas's 300×150 default.
 //
-// Caching by canvas guarantees both branches return the same instance, so
-// "duplicate" configure calls become no-ops on an already-sized renderer.
+// Caching by canvas guarantees configure calls return the same instance, so
+// "duplicate" calls become no-ops on an already-sized renderer.
 // We cache the in-flight Promise (not just the resolved renderer) so two
 // concurrent configure() calls await the same init instead of creating two
 // renderers in parallel and only caching the second.
-const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
+type ViewerRenderer = THREE.WebGPURenderer | WebGLRenderer
+const VIEWER_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<ViewerRenderer>>()
+
+function createWebGLRendererFallback(props: { canvas?: HTMLCanvasElement }) {
+  const renderer = new WebGLRenderer(props)
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 0.9
+  return renderer
+}
 
 /**
  * Monitors the WebGPU device for loss events and logs them.
@@ -165,37 +175,42 @@ const Viewer: React.FC<ViewerProps> = ({
       gl={
         ((props: { canvas?: HTMLCanvasElement }) => {
           const canvas = props.canvas
-          const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
+          const cache = VIEWER_RENDERER_CACHE
+          const cached = canvas ? cache.get(canvas) : undefined
           if (cached) return cached
+
           // Surface the env we're about to ask WebGPU for — catches "no
           // navigator.gpu" / "adapter request failed" silently failing in
           // mobile WebViews where WebGPU is gated behind flags.
           const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator
-          console.log('[viewer] Creating WebGPURenderer', {
+          const hasSecureContext = typeof window !== 'undefined' ? window.isSecureContext : false
+          console.log('[viewer] Creating WebGPU renderer', {
             hasNavigatorGPU: hasGpu,
+            hasSecureContext,
             ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
           })
           const promise = (async () => {
-            try {
-              const renderer = new THREE.WebGPURenderer(props as any)
-              renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = 0.9
-              await renderer.init()
-              console.log('[viewer] WebGPURenderer ready', {
-                backend: (renderer as any).backend?.constructor?.name,
-                isWebGPU: (renderer as any).isWebGPURenderer === true,
-              })
-              return renderer
-            } catch (err) {
-              // Drop the failed promise from the cache so a future Canvas
-              // mount on the same DOM can retry instead of inheriting the
-              // rejection forever.
-              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
-              console.error('[viewer] WebGPURenderer init failed', err)
-              throw err
+            if (hasGpu && hasSecureContext) {
+              try {
+                const renderer = new THREE.WebGPURenderer(props as any)
+                renderer.toneMapping = THREE.ACESFilmicToneMapping
+                renderer.toneMappingExposure = 0.9
+                await renderer.init()
+                console.log('[viewer] WebGPURenderer ready', {
+                  backend: (renderer as any).backend?.constructor?.name,
+                  isWebGPU: (renderer as any).isWebGPURenderer === true,
+                })
+                return renderer
+              } catch (err) {
+                console.error('[viewer] WebGPURenderer init failed, falling back to WebGL', err)
+              }
             }
+
+            return createWebGLRendererFallback(props)
           })()
-          if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
+          if (canvas) {
+            cache.set(canvas, promise)
+          }
           return promise
         }) as any
       }

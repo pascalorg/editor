@@ -32,6 +32,7 @@ import {
   isSmartHomeDeviceComponentResource,
   isSmartHomeGroupResource,
 } from '../smart-home-composition'
+import { isHomeAssistantDisplayText } from '../home-assistant-display-items'
 import type { SmartHomeOverlayVisibility } from '../types'
 import {
   buildRoomControlGroups,
@@ -376,7 +377,7 @@ const getResourceItemMatchScore = (resource: HomeAssistantResourceBinding, item:
     return 40
   }
 
-  if (domain === 'media_player' && (itemName.includes('tv') || itemName.includes('television'))) {
+  if (domain === 'media_player' && isHomeAssistantDisplayText(itemName)) {
     return 40
   }
 

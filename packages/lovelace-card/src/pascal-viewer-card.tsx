@@ -1,6 +1,6 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useEffect, useState, useSyncExternalStore } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { loadPascalLovelaceArtifact } from './artifact'
+import { applyPascalViewerCardHomeAssistantConfig, loadPascalLovelaceArtifact } from './artifact'
 import { PascalViewerRuntime } from './pascal-viewer-runtime'
 import type {
   HomeAssistantLike,
@@ -9,6 +9,81 @@ import type {
 } from './types'
 
 const CARD_TAG = 'pascal-viewer-card'
+
+function getModuleScopedEditorTag() {
+  let hash = 0
+  for (const character of import.meta.url || CARD_TAG) {
+    hash = (hash * 31 + character.charCodeAt(0)) | 0
+  }
+  return `pascal-viewer-card-editor-${Math.abs(hash).toString(36)}`
+}
+
+const CARD_EDITOR_TAG = getModuleScopedEditorTag()
+const editorActivityListeners = new Set<() => void>()
+let activeEditorCount = 0
+
+type PascalViewerCardConstructor = CustomElementConstructor & {
+  getConfigElement?: () => HTMLElement | Promise<HTMLElement>
+  getStubConfig?: () => PascalViewerCardConfig
+}
+
+function getDefaultCardConfig(config: PascalViewerCardConfig): PascalViewerCardConfig {
+  return {
+    mode: 'overview',
+    renderer: 'auto',
+    show_floor_selector: true,
+    show_header: true,
+    tap_action: { action: 'toggle' },
+    view_mode: '3d',
+    ...config,
+  }
+}
+
+function getDefaultEditorConfig(config: PascalViewerCardConfig): PascalViewerCardConfig {
+  return {
+    ...getDefaultCardConfig(config),
+    scene_url:
+      config.scene || config.scene_url ? config.scene_url : '/local/pascal/home.scene.json',
+  }
+}
+
+function serializeConfig(config: PascalViewerCardConfig) {
+  try {
+    return JSON.stringify(config)
+  } catch {
+    return null
+  }
+}
+
+function emitEditorActivityChange() {
+  for (const listener of editorActivityListeners) {
+    listener()
+  }
+}
+
+function subscribeEditorActivity(listener: () => void) {
+  editorActivityListeners.add(listener)
+  return () => {
+    editorActivityListeners.delete(listener)
+  }
+}
+
+function getEditorActiveSnapshot() {
+  return activeEditorCount > 0
+}
+
+function updateEditorActivity(delta: 1 | -1) {
+  activeEditorCount = Math.max(0, activeEditorCount + delta)
+  emitEditorActivityChange()
+}
+
+function useEditorActive() {
+  return useSyncExternalStore(
+    subscribeEditorActivity,
+    getEditorActiveSnapshot,
+    getEditorActiveSnapshot,
+  )
+}
 
 declare global {
   interface Window {
@@ -24,20 +99,31 @@ declare global {
 
 function PascalViewerCardApp({
   config,
+  editMode = false,
   eventTarget,
   hass,
+  onConfigChange,
 }: {
   config: PascalViewerCardConfig
+  editMode?: boolean
   eventTarget: HTMLElement
   hass: HomeAssistantLike | null
+  onConfigChange?: (config: PascalViewerCardConfig) => void
 }) {
   const [artifact, setArtifact] = useState<PascalLovelaceSceneArtifact | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const editorPreviewSuppressed = useEditorActive() && !editMode
 
   useEffect(() => {
     let cancelled = false
     setError(null)
     setArtifact(null)
+
+    if (editorPreviewSuppressed) {
+      return () => {
+        cancelled = true
+      }
+    }
 
     loadPascalLovelaceArtifact(config.scene, config.scene_url)
       .then((nextArtifact) => {
@@ -54,7 +140,11 @@ function PascalViewerCardApp({
     return () => {
       cancelled = true
     }
-  }, [config.scene, config.scene_url])
+  }, [config.scene, config.scene_url, editorPreviewSuppressed])
+
+  if (editorPreviewSuppressed) {
+    return <PascalViewerCardPreviewPaused />
+  }
 
   if (error) {
     return (
@@ -73,8 +163,21 @@ function PascalViewerCardApp({
     <PascalViewerRuntime
       artifact={artifact}
       config={config}
+      editMode={editMode}
       eventTarget={eventTarget}
       hass={hass}
+      onHomeAssistantConfigChange={(homeAssistantConfig) => {
+        const nextConfig: PascalViewerCardConfig = {
+          ...config,
+          home_assistant: homeAssistantConfig,
+        }
+        if (config.scene) {
+          nextConfig.scene = applyPascalViewerCardHomeAssistantConfig(artifact, nextConfig)
+        }
+        onConfigChange?.({
+          ...nextConfig,
+        })
+      }}
     />
   )
 }
@@ -99,6 +202,34 @@ const errorStyle: React.CSSProperties = {
   flexDirection: 'column',
   gap: 8,
   justifyContent: 'center',
+}
+
+const pausedPreviewStyle: React.CSSProperties = {
+  ...loadingStyle,
+  alignItems: 'stretch',
+  background: 'var(--ha-card-background, var(--card-background-color, #151515))',
+  justifyContent: 'flex-start',
+  minHeight: 180,
+  padding: 0,
+}
+
+function PascalViewerCardPreviewPaused() {
+  return (
+    <div style={pausedPreviewStyle}>
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          minHeight: 40,
+          padding: '8px 12px',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Pascal</div>
+        <div style={{ color: '#86efac', fontSize: 11, fontWeight: 700 }}>Editing</div>
+      </div>
+    </div>
+  )
 }
 
 class PascalViewerCard extends HTMLElement {
@@ -135,15 +266,7 @@ class PascalViewerCard extends HTMLElement {
       throw new Error('Pascal Viewer Card requires scene_url or an inline scene artifact.')
     }
 
-    this.config = {
-      mode: 'overview',
-      renderer: 'auto',
-      show_floor_selector: true,
-      show_header: true,
-      tap_action: { action: 'toggle' },
-      view_mode: '3d',
-      ...config,
-    }
+    this.config = getDefaultCardConfig(config)
     this.renderCard()
   }
 
@@ -185,11 +308,7 @@ class PascalViewerCard extends HTMLElement {
     this.root = this.root ?? createRoot(this.mount)
     this.root.render(
       <StrictMode>
-        <PascalViewerCardApp
-          config={this.config}
-          eventTarget={this}
-          hass={this.hassValue}
-        />
+        <PascalViewerCardApp config={this.config} eventTarget={this} hass={this.hassValue} />
       </StrictMode>,
     )
   }
@@ -203,45 +322,135 @@ class PascalViewerCard extends HTMLElement {
     }
   }
 
-  static getConfigForm() {
-    return {
-      schema: [
-        { name: 'scene_url', required: true, selector: { text: {} } },
-        {
-          name: 'mode',
-          selector: {
-            select: {
-              mode: 'dropdown',
-              options: [
-                { label: 'Overview', value: 'overview' },
-                { label: 'Room', value: 'room' },
-                { label: 'Compact', value: 'compact' },
-              ],
-            },
-          },
-        },
-        { name: 'room', selector: { text: {} } },
-        { name: 'default_level', selector: { text: {} } },
-        {
-          name: 'view_mode',
-          selector: {
-            select: {
-              mode: 'dropdown',
-              options: [
-                { label: '3D', value: '3d' },
-                { label: '2D', value: '2d' },
-              ],
-            },
-          },
-        },
-        { name: 'show_header', selector: { boolean: {} } },
-      ],
-    }
+  static getConfigElement() {
+    return document.createElement(CARD_EDITOR_TAG)
   }
 }
 
-if (!customElements.get(CARD_TAG)) {
+class PascalViewerCardEditor extends HTMLElement {
+  private config: PascalViewerCardConfig | null = null
+  private editorActivityRegistered = false
+  private hassValue: HomeAssistantLike | null = null
+  private lastEmittedConfigKey: string | null = null
+  private mount: HTMLDivElement
+  private root: Root | null = null
+
+  constructor() {
+    super()
+    const shadow = this.attachShadow({ mode: 'open' })
+    const style = document.createElement('style')
+    style.textContent = `
+      :host {
+        display: block;
+        min-height: 520px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      canvas {
+        display: block;
+      }
+    `
+    this.mount = document.createElement('div')
+    this.mount.style.height = 'min(72vh, 720px)'
+    this.mount.style.minHeight = '520px'
+    shadow.append(style, this.mount)
+  }
+
+  connectedCallback() {
+    this.registerEditorActivity()
+  }
+
+  setConfig(config: PascalViewerCardConfig) {
+    const nextConfig = getDefaultEditorConfig(config)
+    const nextConfigKey = serializeConfig(nextConfig)
+    if (this.root && this.lastEmittedConfigKey && nextConfigKey === this.lastEmittedConfigKey) {
+      return
+    }
+
+    this.config = nextConfig
+    this.lastEmittedConfigKey = null
+    this.renderEditor()
+  }
+
+  set hass(hass: HomeAssistantLike) {
+    this.hassValue = hass
+    this.renderEditor()
+  }
+
+  disconnectedCallback() {
+    this.unregisterEditorActivity()
+    this.root?.unmount()
+    this.root = null
+  }
+
+  private registerEditorActivity() {
+    if (this.editorActivityRegistered) {
+      return
+    }
+
+    this.editorActivityRegistered = true
+    updateEditorActivity(1)
+  }
+
+  private unregisterEditorActivity() {
+    if (!this.editorActivityRegistered) {
+      return
+    }
+
+    this.editorActivityRegistered = false
+    updateEditorActivity(-1)
+  }
+
+  private handleConfigChange = (config: PascalViewerCardConfig) => {
+    this.lastEmittedConfigKey = serializeConfig(config)
+    this.dispatchEvent(
+      new CustomEvent('config-changed', {
+        bubbles: true,
+        composed: true,
+        detail: { config },
+      }),
+    )
+  }
+
+  private renderEditor() {
+    if (!this.config) {
+      return
+    }
+
+    this.root = this.root ?? createRoot(this.mount)
+    this.root.render(
+      <StrictMode>
+        <PascalViewerCardApp
+          config={this.config}
+          editMode
+          eventTarget={this}
+          hass={this.hassValue}
+          onConfigChange={this.handleConfigChange}
+        />
+      </StrictMode>,
+    )
+  }
+}
+
+function installPascalCardEditorHooks(cardConstructor: PascalViewerCardConstructor) {
+  cardConstructor.getConfigElement = PascalViewerCard.getConfigElement
+  cardConstructor.getStubConfig = PascalViewerCard.getStubConfig
+}
+
+const registeredCardConstructor = customElements.get(CARD_TAG) as
+  | PascalViewerCardConstructor
+  | undefined
+
+if (registeredCardConstructor) {
+  installPascalCardEditorHooks(registeredCardConstructor)
+} else {
   customElements.define(CARD_TAG, PascalViewerCard)
+  installPascalCardEditorHooks(PascalViewerCard)
+}
+
+if (!customElements.get(CARD_EDITOR_TAG)) {
+  customElements.define(CARD_EDITOR_TAG, PascalViewerCardEditor)
 }
 
 window.customCards = window.customCards || []

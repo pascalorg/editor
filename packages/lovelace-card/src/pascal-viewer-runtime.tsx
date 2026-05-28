@@ -2,12 +2,17 @@
 
 import { useScene } from '@pascal-app/core'
 import {
-  HomeAssistantInteractiveSystem,
   type HomeAssistantDeviceActionDispatch,
+  HomeAssistantInteractiveSystem,
 } from '@pascal-app/home-assistant'
-import { Viewer, useViewer } from '@pascal-app/viewer'
+import { useViewer, Viewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { getArtifactBindings, getResourceEntityIds } from './artifact'
+import {
+  applyPascalViewerCardHomeAssistantConfig,
+  getArtifactBindings,
+  getResourceEntityIds,
+} from './artifact'
+import { PascalBindingEditorOverlay } from './binding-editor'
 import { runHomeAssistantActionRequest } from './ha-actions'
 import { LovelaceFitCameraControls } from './lovelace-fit-camera-controls'
 import { PascalLovelaceHomeAssistantSystem } from './pascal-lovelace-system'
@@ -15,6 +20,7 @@ import type {
   HomeAssistantLike,
   PascalLovelaceSceneArtifact,
   PascalViewerCardConfig,
+  PascalViewerCardHomeAssistantConfig,
   PendingHomeAssistantState,
 } from './types'
 
@@ -40,6 +46,7 @@ const viewerWrapStyle: React.CSSProperties = {
 }
 
 const PENDING_HOME_ASSISTANT_STATE_TTL_MS = 3500
+let activeSceneOwner: symbol | null = null
 
 function applyViewerDefaults(
   artifact: PascalLovelaceSceneArtifact,
@@ -183,15 +190,24 @@ function PascalLovelaceHeader({
 export function PascalViewerRuntime({
   artifact,
   config,
+  editMode = false,
   hass,
+  onHomeAssistantConfigChange,
 }: {
   artifact: PascalLovelaceSceneArtifact
   config: PascalViewerCardConfig
+  editMode?: boolean
   eventTarget: HTMLElement
   hass: HomeAssistantLike | null
+  onHomeAssistantConfigChange?: (config: PascalViewerCardHomeAssistantConfig) => void
 }) {
-  const sceneBounds = useMemo(() => getSceneBounds(artifact), [artifact])
+  const effectiveArtifact = useMemo(
+    () => applyPascalViewerCardHomeAssistantConfig(artifact, config),
+    [artifact, config],
+  )
+  const sceneBounds = useMemo(() => getSceneBounds(effectiveArtifact), [effectiveArtifact])
   const pendingHomeAssistantStateRef = useRef<Record<string, PendingHomeAssistantState>>({})
+  const sceneOwnerRef = useRef(Symbol('pascal-lovelace-runtime'))
   const handleHomeAssistantDeviceAction = useCallback(
     async ({ binding, request }: HomeAssistantDeviceActionDispatch) => {
       if (!hass) {
@@ -220,22 +236,28 @@ export function PascalViewerRuntime({
   )
 
   useEffect(() => {
+    activeSceneOwner = sceneOwnerRef.current
     const scene = useScene.getState()
     scene.setReadOnly(false)
     scene.setScene(
-      artifact.scene.nodes as never,
-      artifact.scene.rootNodeIds as never,
-      artifact.scene.collections as never,
+      effectiveArtifact.scene.nodes as never,
+      effectiveArtifact.scene.rootNodeIds as never,
+      effectiveArtifact.scene.collections as never,
     )
     scene.setReadOnly(true)
-    applyViewerDefaults(artifact, config)
+    applyViewerDefaults(effectiveArtifact, config)
 
     return () => {
+      if (activeSceneOwner !== sceneOwnerRef.current) {
+        return
+      }
+
+      activeSceneOwner = null
       const nextScene = useScene.getState()
       nextScene.setReadOnly(false)
       nextScene.unloadScene()
     }
-  }, [artifact, config])
+  }, [effectiveArtifact, config])
 
   return (
     <div
@@ -243,18 +265,26 @@ export function PascalViewerRuntime({
         ...cardShellStyle,
       }}
     >
-      <PascalLovelaceHeader artifact={artifact} config={config} hass={hass} />
+      <PascalLovelaceHeader artifact={effectiveArtifact} config={config} hass={hass} />
       <div style={viewerWrapStyle}>
-        <Viewer selectionManager="custom">
+        <Viewer selectionManager={editMode ? 'default' : 'custom'}>
           <LovelaceFitCameraControls center={sceneBounds.center} radius={sceneBounds.radius} />
           <PascalLovelaceHomeAssistantSystem
             hass={hass}
             pendingStateRef={pendingHomeAssistantStateRef}
           />
           <HomeAssistantInteractiveSystem
-            onHomeAssistantDeviceAction={handleHomeAssistantDeviceAction}
+            onHomeAssistantDeviceAction={editMode ? undefined : handleHomeAssistantDeviceAction}
+            overlayInteractive={!editMode}
+            showItemEffects={false}
           />
         </Viewer>
+        {editMode && (
+          <PascalBindingEditorOverlay
+            hass={hass}
+            onHomeAssistantConfigChange={onHomeAssistantConfigChange}
+          />
+        )}
       </div>
     </div>
   )

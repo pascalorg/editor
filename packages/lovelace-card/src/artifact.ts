@@ -1,16 +1,22 @@
+import type { AnyNode, AnyNodeId, Collection, CollectionId } from '@pascal-app/core'
+import type {
+  HomeAssistantCollectionBinding,
+  PascalLovelaceSceneArtifact as HomeAssistantPascalLovelaceSceneArtifact,
+  HomeAssistantResourceBinding,
+} from '@pascal-app/home-assistant'
+import {
+  createHomeAssistantBindingNode,
+  normalizeHomeAssistantCollectionBinding,
+  normalizePascalLovelaceArtifactAssetUrls,
+} from '@pascal-app/home-assistant'
 import type {
   BindingControlSummary,
   HomeAssistantLike,
   PascalLovelaceSceneArtifact,
+  PascalViewerCardConfig,
+  PascalViewerCardHomeAssistantConfig,
   ResourceStateSummary,
 } from './types'
-import type { Collection } from '@pascal-app/core'
-import type {
-  HomeAssistantCollectionBinding,
-  HomeAssistantResourceBinding,
-  PascalLovelaceSceneArtifact as HomeAssistantPascalLovelaceSceneArtifact,
-} from '@pascal-app/home-assistant'
-import { normalizePascalLovelaceArtifactAssetUrls } from '@pascal-app/home-assistant'
 
 export type ArtifactParseResult =
   | { artifact: PascalLovelaceSceneArtifact; error: null }
@@ -89,6 +95,109 @@ export function getArtifactBindings(
   )
 }
 
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function getConfigHomeAssistant(
+  config: PascalViewerCardConfig,
+): PascalViewerCardHomeAssistantConfig | null {
+  return config.home_assistant ?? config.homeAssistant ?? null
+}
+
+function getNormalizedConfigBindings(
+  homeAssistantConfig: PascalViewerCardHomeAssistantConfig | null,
+) {
+  if (!Array.isArray(homeAssistantConfig?.bindings)) {
+    return null
+  }
+
+  return homeAssistantConfig.bindings
+    .map((binding) => normalizeHomeAssistantCollectionBinding(binding))
+    .filter((binding): binding is HomeAssistantCollectionBinding => Boolean(binding))
+}
+
+function removeHomeAssistantBindingNodes(scene: PascalLovelaceSceneArtifact['scene']) {
+  const removedNodeIds = new Set<AnyNodeId>()
+
+  for (const [nodeId, node] of Object.entries(scene.nodes) as Array<[AnyNodeId, AnyNode]>) {
+    if ((node as { type?: unknown })?.type === 'home-assistant-binding') {
+      delete scene.nodes[nodeId]
+      removedNodeIds.add(nodeId)
+    }
+  }
+
+  if (removedNodeIds.size > 0) {
+    scene.rootNodeIds = scene.rootNodeIds.filter((nodeId) => !removedNodeIds.has(nodeId))
+  }
+}
+
+function findBindingNodeId(
+  nodes: Record<string, unknown>,
+  collectionId: CollectionId,
+): AnyNodeId | undefined {
+  for (const [nodeId, node] of Object.entries(nodes)) {
+    if (
+      node &&
+      typeof node === 'object' &&
+      (node as { type?: unknown }).type === 'home-assistant-binding' &&
+      (node as { collectionId?: unknown }).collectionId === collectionId
+    ) {
+      return nodeId as AnyNodeId
+    }
+  }
+
+  return undefined
+}
+
+export function applyPascalViewerCardHomeAssistantConfig(
+  artifact: PascalLovelaceSceneArtifact,
+  config: PascalViewerCardConfig,
+): PascalLovelaceSceneArtifact {
+  const nextArtifact = cloneJson(artifact)
+  const homeAssistantConfig = getConfigHomeAssistant(config)
+  const configBindings = getNormalizedConfigBindings(homeAssistantConfig)
+  const hasConfigOverride = configBindings !== null
+  const bindings = configBindings ?? getArtifactBindings(nextArtifact)
+
+  nextArtifact.scene.collections = {
+    ...(nextArtifact.scene.collections ?? {}),
+    ...(homeAssistantConfig?.collections ?? {}),
+  }
+
+  if (hasConfigOverride) {
+    removeHomeAssistantBindingNodes(nextArtifact.scene)
+  }
+
+  if (bindings.length > 0 || hasConfigOverride) {
+    nextArtifact.homeAssistant = {
+      ...(nextArtifact.homeAssistant ?? {}),
+      bindings: cloneJson(bindings),
+    }
+  }
+
+  for (const binding of bindings) {
+    const collection = nextArtifact.scene.collections?.[binding.collectionId]
+    const existingNodeId = findBindingNodeId(nextArtifact.scene.nodes, binding.collectionId)
+    const bindingNode = createHomeAssistantBindingNode({
+      binding,
+      ...(existingNodeId ? { id: existingNodeId as never } : {}),
+      name: collection?.name,
+    })
+
+    if (!bindingNode) {
+      continue
+    }
+
+    nextArtifact.scene.nodes[bindingNode.id as AnyNodeId] = bindingNode as unknown as AnyNode
+    if (!nextArtifact.scene.rootNodeIds.includes(bindingNode.id as AnyNodeId)) {
+      nextArtifact.scene.rootNodeIds.push(bindingNode.id as AnyNodeId)
+    }
+  }
+
+  return nextArtifact
+}
+
 export function getResourceEntityIds(resource: HomeAssistantResourceBinding): string[] {
   const ids = [
     resource.entityId,
@@ -100,7 +209,10 @@ export function getResourceEntityIds(resource: HomeAssistantResourceBinding): st
 function summarizeEntityState(hass: HomeAssistantLike | null, entityId: string) {
   const stateObj = hass?.states?.[entityId]
   const state = stateObj?.state ?? 'missing'
+  const domain = entityId.split('.', 1)[0] ?? ''
   const unavailable = state === 'missing' || state === 'unavailable' || state === 'unknown'
+  const inactiveStates =
+    domain === 'media_player' ? ['off', 'standby'] : ['closed', 'idle', 'locked', 'off', 'standby']
   const brightness = stateObj?.attributes?.brightness
   const percentage = stateObj?.attributes?.percentage
   const volume = stateObj?.attributes?.volume_level
@@ -116,7 +228,7 @@ function summarizeEntityState(hass: HomeAssistantLike | null, entityId: string) 
   return {
     available: !unavailable,
     brightnessPct,
-    isOn: !unavailable && !['closed', 'idle', 'locked', 'off', 'standby'].includes(state),
+    isOn: !unavailable && !inactiveStates.includes(state),
     state,
   }
 }

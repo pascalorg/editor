@@ -26,6 +26,7 @@ import {
 } from '../home-assistant-controls'
 import { cn } from '../utils'
 import { HomeAssistantActionIconView } from '../components/home-assistant-action-icon'
+import { isHomeAssistantDisplayItem } from '../home-assistant-display-items'
 import { homeAssistantItemEffects } from '../home-assistant-item-effects'
 
 type DeviceLoadState = 'idle' | 'loading' | 'ready' | 'error'
@@ -123,19 +124,6 @@ function getDeviceKey(device: Pick<HomeAssistantDiscoveredDevice, 'haEntityId' |
 
 function getLinkKey(link: Pick<HomeAssistantLink, 'haEntityId' | 'deviceId'>) {
   return link.haEntityId ?? link.deviceId
-}
-
-function isTelevisionItem(item: ItemNode) {
-  const candidates = [item.asset.id, item.asset.name, item.asset.src, ...(item.asset.tags ?? [])]
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean)
-
-  return candidates.some(
-    (candidate) =>
-      candidate === 'tv' ||
-      candidate.includes('television') ||
-      candidate.includes('flat-screen-tv'),
-  )
 }
 
 function isHomeAssistantOffAction(action: HomeAssistantAvailableAction, link: HomeAssistantLink) {
@@ -341,7 +329,7 @@ export function HomeAssistantConnectivityPanel({
       setActionError('')
       setActionResult(null)
       setStatusMessage(`Running ${actionToRun.label} on ${device.name}...`)
-      if (isTelevisionItem(item)) {
+      if (isHomeAssistantDisplayItem(item)) {
         if (isHomeAssistantOffAction(actionToRun, actionLink)) {
           homeAssistantItemEffects.clear(item.id)
         } else if (!isDeferredHomeAssistantPowerToggle(actionToRun, actionLink)) {
@@ -366,7 +354,7 @@ export function HomeAssistantConnectivityPanel({
       }
 
       setActionResult(payload)
-      if (isTelevisionItem(item)) {
+      if (isHomeAssistantDisplayItem(item)) {
         if (isHomeAssistantOffState(payload.finalState)) {
           homeAssistantItemEffects.clear(item.id)
         } else {

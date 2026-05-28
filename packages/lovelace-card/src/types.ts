@@ -46,6 +46,8 @@ export type PascalViewerCardConfig = {
   type?: string
   scene?: PascalLovelaceSceneArtifact
   scene_url?: string
+  home_assistant?: PascalViewerCardHomeAssistantConfig
+  homeAssistant?: PascalViewerCardHomeAssistantConfig
   mode?: PascalLovelaceCardMode
   room?: string
   default_level?: string
@@ -56,6 +58,11 @@ export type PascalViewerCardConfig = {
   tap_action?: HassActionConfig
   hold_action?: HassActionConfig
   double_tap_action?: HassActionConfig
+}
+
+export type PascalViewerCardHomeAssistantConfig = {
+  bindings?: HomeAssistantCollectionBinding[]
+  collections?: Record<CollectionId, Collection>
 }
 
 export type HassEntity = {
@@ -73,6 +80,7 @@ export type HomeAssistantLike = {
     serviceData?: Record<string, unknown>,
     target?: Record<string, unknown>,
   ) => Promise<unknown>
+  callWS?: <T = unknown>(message: Record<string, unknown>) => Promise<T>
   states: Record<string, HassEntity | undefined>
   user?: { name?: string }
 }

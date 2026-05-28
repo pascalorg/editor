@@ -73,6 +73,7 @@ export type RoomControlChange = {
 }
 
 export type RoomControlOverlayProps = {
+  interactive?: boolean
   onApplyRoomGrouping?: (roomId: string, nextGroups: string[][]) => void
   onCopyRoomControlToRoom?: (
     sourceCollectionId: CollectionId,
