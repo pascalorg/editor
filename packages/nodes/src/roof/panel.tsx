@@ -6,6 +6,7 @@ import {
   type BoxVentNode,
   type ChimneyNode,
   type DormerNode,
+  type GutterNode,
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -112,6 +113,19 @@ export default function RoofPanel() {
     }),
   )
 
+  const gutters = useScene(
+    useShallow((s) => {
+      if (segmentIdSet.size === 0) return []
+      const out: GutterNode[] = []
+      for (const n of Object.values(s.nodes)) {
+        if (n?.type === 'gutter' && n.roofSegmentId && segmentIdSet.has(n.roofSegmentId)) {
+          out.push(n as GutterNode)
+        }
+      }
+      return out
+    }),
+  )
+
   // Box vents and ridge vents share the "Vents" UI group — same list,
   // type shown as the right-side label, and an `Add Vent` button with
   // a Box/Ridge segmented picker.
@@ -207,7 +221,16 @@ export default function RoofPanel() {
   // Same code path as the top palette — see `tool-manager.tsx:28`'s
   // `nodeRegistry.get(tool)?.tool` dispatch.
   const activateTool = useCallback(
-    (kind: 'box-vent' | 'ridge-vent' | 'chimney' | 'solar-panel' | 'skylight' | 'dormer') => {
+    (
+      kind:
+        | 'box-vent'
+        | 'ridge-vent'
+        | 'chimney'
+        | 'solar-panel'
+        | 'skylight'
+        | 'dormer'
+        | 'gutter',
+    ) => {
       triggerSFX('sfx:item-pick')
       useEditor.getState().setTool(kind)
       if (useEditor.getState().mode !== 'build') {
@@ -438,6 +461,27 @@ export default function RoofPanel() {
                 icon={<Plus className="h-3.5 w-3.5" />}
                 label="Add Vent"
                 onClick={() => activateTool(ventType)}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {gutters.map((gutter, i) => (
+              <button
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                key={gutter.id}
+                onClick={() => handleSelectElement(gutter.id)}
+                type="button"
+              >
+                <span className="truncate">{gutter.name || `Gutter ${i + 1}`}</span>
+                <span className="text-muted-foreground text-xs">gutter</span>
+              </button>
+            ))}
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Gutter"
+                onClick={() => activateTool('gutter')}
               />
             </ActionGroup>
           </div>

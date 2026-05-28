@@ -63,6 +63,7 @@ import { DoorTreeNode } from './door-tree-node'
 import { DormerTreeNode } from './dormer-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
 import { FenceTreeNode } from './fence-tree-node'
+import { GutterTreeNode } from './gutter-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
 import { RidgeVentTreeNode } from './ridge-vent-tree-node'
@@ -123,6 +124,7 @@ const treeNodeByType: Record<
   }>,
   wall: WallTreeNode,
   fence: FenceTreeNode,
+  gutter: GutterTreeNode,
   'ridge-vent': RidgeVentTreeNode,
   roof: RoofTreeNode,
   stair: StairTreeNode,

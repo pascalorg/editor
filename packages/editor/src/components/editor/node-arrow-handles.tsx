@@ -362,16 +362,6 @@ function NodeArrowHandlesForNode({
     }
   })
 
-  if (!portalObject || !outerRide || (innerRideId !== null && !innerRide)) return null
-
-  // `arrowFrame` is the Object3D used as the spatial reference for the
-  // per-arrow drag math — its world matrix maps node-local coords to
-  // world. In 'parent' mode that's the outer ride (= the node mesh
-  // itself). In 'grandparent' mode it's the inner ride (= the node mesh)
-  // because the inner group mirrors the node's local pose under the
-  // wall-riding outer wrapper.
-  const arrowFrame = innerRide ?? outerRide
-
   // Active-drag tracking. When a handle starts dragging, it claims its
   // descriptor index here and snapshots the store node at drag-start.
   // Non-active arrows re-render against the snapshot + a freeze offset
@@ -379,6 +369,11 @@ function NodeArrowHandlesForNode({
   // asymmetric resize (width L/R, length L/R) doesn't visually slide the
   // depth / height / rotate chevrons. They stay anchored at their
   // pre-drag world positions for the duration of the drag.
+  //
+  // Hooks must sit ABOVE the early-return guard below — the registry-
+  // resolve `useEffect` flips `portalObject` from null → object after
+  // the first frame, so a guard between two hooks would change the
+  // hook count between renders and trip React's rules-of-hooks check.
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [preDragNode, setPreDragNode] = useState<AnyNode | null>(null)
   const dragControls = useMemo(
@@ -394,6 +389,16 @@ function NodeArrowHandlesForNode({
     }),
     [],
   )
+
+  if (!portalObject || !outerRide || (innerRideId !== null && !innerRide)) return null
+
+  // `arrowFrame` is the Object3D used as the spatial reference for the
+  // per-arrow drag math — its world matrix maps node-local coords to
+  // world. In 'parent' mode that's the outer ride (= the node mesh
+  // itself). In 'grandparent' mode it's the inner ride (= the node mesh)
+  // because the inner group mirrors the node's local pose under the
+  // wall-riding outer wrapper.
+  const arrowFrame = innerRide ?? outerRide
 
   const arrows = descriptors.map((descriptor, index) => (
     <ArrowHandle

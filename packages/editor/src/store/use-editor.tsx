@@ -76,6 +76,7 @@ export type StructureTool =
   | 'solar-panel'
   | 'skylight'
   | 'dormer'
+  | 'gutter'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'

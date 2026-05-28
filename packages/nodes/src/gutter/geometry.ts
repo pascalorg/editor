@@ -62,84 +62,85 @@ export function buildGutterGeometry(node: GutterNode): THREE.BufferGeometry {
   return extruded
 }
 
-// K-style cross-section in (X, Y) where X is the gutter's outward
-// direction (positive = away from the wall) and Y is vertical (0 at
-// eave line, -size at the bottom of the trough).
+// Each cross-section below is authored as a single closed polygon that
+// traces the U-channel's MATERIAL — outer wall down → bottom → outer
+// wall up → rim across → inner wall down → inner bottom → inner wall
+// up → closing rim. The interior of the U (where rainwater sits) is
+// empty space, not a hole — so the extrude has an OPEN TOP, which is
+// what makes the geometry read as a gutter rather than a sealed box
+// with a tunnel through it.
 //
-// Outer outline traces an ogee fascia:
-//   top-back  (0, 0) →
-//   bottom-back  (0, -size) →
-//   bottom-front (w_bot, -size) →
-//   front mid     (w_top, -size + size*0.35) — curve outward and up
-//   top-front    (w_top, 0)
-// then a hollow (the water channel) is carved as a Path hole offset by
-// `t` from each face. Closing the top of the outer outline keeps the
-// extrude solid; the lid disappears against the open channel because
-// the hole runs through the entire extrusion.
+// Cross-section authoring frame: X is the gutter's outward direction
+// (X=0 against the fascia, X=+w hanging outward); Y is vertical (Y=0
+// at the eave line, Y=-size at the bottom of the trough). After the
+// rotateY(-π/2) in the parent builder, +X maps to segment-outward (+Z)
+// and the extrude axis (length) maps to segment-+X.
+
 function buildKStyleCross(size: number, t: number): THREE.Shape {
-  const wBot = size * 0.8 // bottom width — narrower than the rim
+  const wBot = size * 0.8 // bottom outer width — narrower than the rim
   const wTop = size * 0.95
-  const ogeeY = -size * 0.65 // S-curve inflection
+  const ogeeY = -size * 0.65 // S-curve inflection on the fascia
 
   const shape = new THREE.Shape()
+  // Outer trace — top-back → down the back → across the bottom → up
+  // the ogee fascia.
   shape.moveTo(0, 0)
-  shape.lineTo(0, -size) // back, straight down
-  shape.lineTo(wBot, -size) // bottom
-  // Bezier the front fascia: bottom-front → ogee inflection → top-front.
+  shape.lineTo(0, -size)
+  shape.lineTo(wBot, -size)
   shape.bezierCurveTo(wBot + size * 0.15, ogeeY, wTop - size * 0.15, ogeeY * 0.4, wTop, 0)
-  shape.closePath()
-
-  // Inner hole, offset by `t` from the outer outline. Same shape with
-  // walls pushed inward.
-  const hole = new THREE.Path()
-  hole.moveTo(t, -t)
-  hole.lineTo(t, -size + t)
-  hole.lineTo(wBot - t, -size + t)
-  hole.bezierCurveTo(
-    wBot + size * 0.15 - t,
-    ogeeY,
+  // Front rim (thin top of the front wall): step inward by `t`.
+  shape.lineTo(wTop - t, 0)
+  // Inner trace — back down the ogee, across the inner bottom, up the
+  // inner back wall. Same bezier control points pushed inward by `t`.
+  shape.bezierCurveTo(
     wTop - size * 0.15 - t,
     ogeeY * 0.4,
-    wTop - t,
-    -t,
+    wBot + size * 0.15 - t,
+    ogeeY,
+    wBot - t,
+    -size + t,
   )
-  hole.closePath()
-  shape.holes.push(hole)
+  shape.lineTo(t, -size + t)
+  shape.lineTo(t, 0)
+  // closePath draws the back rim (t, 0) → (0, 0) — the thin top of
+  // the back wall, sealing the cross-section.
+  shape.closePath()
   return shape
 }
 
-// Half-round cross-section. The shape is approximated as a half-disc
-// hanging below the eave line, with a thin lip pinned at Y=0 on each
-// side so the gutter still reads as "mounted at the eave" rather than
-// "floating below" it.
+// Half-round trough — a semicircular cross-section with a smaller
+// concentric semicircle carved out. Single closed trace: outer half
+// from (0,0) sweeping down and back up to (2r, 0), front rim across by
+// `t`, inner half from (2r-t, 0) sweeping back to (t, 0), back rim
+// closes the loop.
 function buildHalfRoundCross(size: number, t: number): THREE.Shape {
-  const r = size // radius == size: half-circle drops `size` below eave
+  const r = size // radius == size: half-circle drops `size` below the eave
+  const ri = r - t // inner radius
   const segs = 24
 
   const shape = new THREE.Shape()
   shape.moveTo(0, 0)
-  // Trace the outer semicircle from (0, 0) down through (r, -r) back to (2r, 0).
-  for (let i = 1; i <= segs; i++) {
-    const angle = Math.PI + (Math.PI * i) / segs // π → 2π (lower half)
-    shape.lineTo(r + r * Math.cos(angle), r * Math.sin(angle))
-  }
-  shape.closePath()
-
-  // Inner hole: smaller semicircle (radius r - t), same start/end.
-  const ri = r - t
-  const hole = new THREE.Path()
-  hole.moveTo(t, 0)
+  // Outer semicircle, lower half (angle π → 2π). At i=0 we'd be at
+  // (0,0) — already there from moveTo — so start at i=1.
   for (let i = 1; i <= segs; i++) {
     const angle = Math.PI + (Math.PI * i) / segs
-    hole.lineTo(r + ri * Math.cos(angle), ri * Math.sin(angle))
+    shape.lineTo(r + r * Math.cos(angle), r * Math.sin(angle))
   }
-  hole.closePath()
-  shape.holes.push(hole)
+  // Front rim — step inward by `t` to start the inner trace.
+  shape.lineTo(2 * r - t, 0)
+  // Inner semicircle, traced BACK toward the back wall (angle 2π → π).
+  for (let i = 1; i <= segs; i++) {
+    const angle = 2 * Math.PI - (Math.PI * i) / segs
+    shape.lineTo(r + ri * Math.cos(angle), ri * Math.sin(angle))
+  }
+  // closePath draws (t, 0) → (0, 0) — back rim.
+  shape.closePath()
   return shape
 }
 
-// Simple square box (rectangular u-channel). Reads as commercial /
-// industrial. Width equals size (deep-and-narrow ratio).
+// Square / rectangular box U-channel. Width equals size (deep-and-
+// narrow ratio reads as commercial). Traced as outer rect → front rim
+// → inner rect (reverse) → back rim.
 function buildBoxCross(size: number, t: number): THREE.Shape {
   const w = size
 
@@ -148,14 +149,13 @@ function buildBoxCross(size: number, t: number): THREE.Shape {
   shape.lineTo(0, -size)
   shape.lineTo(w, -size)
   shape.lineTo(w, 0)
+  // Front rim.
+  shape.lineTo(w - t, 0)
+  // Inner rect, reversed so the polygon doesn't self-intersect.
+  shape.lineTo(w - t, -size + t)
+  shape.lineTo(t, -size + t)
+  shape.lineTo(t, 0)
+  // closePath draws the back rim (t, 0) → (0, 0).
   shape.closePath()
-
-  const hole = new THREE.Path()
-  hole.moveTo(t, -t)
-  hole.lineTo(t, -size + t)
-  hole.lineTo(w - t, -size + t)
-  hole.lineTo(w - t, -t)
-  hole.closePath()
-  shape.holes.push(hole)
   return shape
 }

@@ -151,6 +151,9 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
   toolHints: [
     { key: 'Left click', label: 'Place gutter on roof eave' },
     { key: 'Esc', label: 'Cancel' },
