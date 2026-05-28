@@ -476,7 +476,13 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   if (!mesh) return
 
   const levelId = resolveLevelId(node, nodes)
-  const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
+  const slabElevation = spatialGridManager.getSlabElevationForWall(
+    levelId,
+    node.start,
+    node.end,
+    node.curveOffset ?? 0,
+    node.thickness,
+  )
 
   const childrenIds = node.children || []
   // Merge live overrides into door / window children so cutouts track an
