@@ -1168,9 +1168,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.position.copy(gridPosition.current)
 
-        // Publish live transform for 2D floorplan
+        // Publish live transform for 2D floorplan. The item override in
+        // `floorplan-registry-layer` treats `live.position` as building-local
+        // plan coords (parentId forced to null so the resolver renders it
+        // directly), so publish the building-local cursor — not the
+        // world-space `result.cursorPosition`, which otherwise lands the 2D
+        // visual off the cursor whenever the building isn't at the origin
+        // with zero rotation.
         useLiveTransforms.getState().set(draft.id, {
-          position: result.cursorPosition,
+          position: [cc.x, cc.y, cc.z],
           rotation: cursorGroupRef.current.rotation.y,
         })
       }
