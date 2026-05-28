@@ -1,29 +1,20 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  DoorNode,
-  emitter,
-  useInteractive,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, DoorNode, useInteractive, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   cn,
   PanelSection,
   PanelWrapper,
-  PresetsPopover,
   SegmentedControl,
   SliderControl,
   ToggleControl,
   triggerSFX,
   useEditor,
-  usePresetsAdapter,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { BookMarked, Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
+import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 
 const doorTypeOptions = [
@@ -150,8 +141,6 @@ export default function DoorPanel() {
     key: keyof DoorNode
     value: unknown
   } | null>(null)
-
-  const adapter = usePresetsAdapter()
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined,
@@ -311,69 +300,6 @@ export default function DoorPanel() {
     )
     handleUpdate({ segments: updated })
   }
-
-  const getDoorPresetData = useCallback(() => {
-    if (!node) return null
-    return {
-      doorCategory: node.doorCategory,
-      doorType: node.doorType,
-      leafCount: node.leafCount,
-      operationState: node.operationState,
-      slideDirection: node.slideDirection,
-      trackStyle: node.trackStyle,
-      garagePanelCount: node.garagePanelCount,
-      width: node.width,
-      height: node.height,
-      frameThickness: node.frameThickness,
-      frameDepth: node.frameDepth,
-      openingKind: node.openingKind,
-      openingShape: node.openingShape,
-      openingRadiusMode: node.openingRadiusMode ?? 'all',
-      openingTopRadii: node.openingTopRadii ?? [0.15, 0.15],
-      cornerRadius: node.cornerRadius,
-      archHeight: node.archHeight,
-      openingRevealRadius: node.openingRevealRadius,
-      contentPadding: node.contentPadding,
-      hingesSide: node.hingesSide,
-      swingDirection: node.swingDirection,
-      threshold: node.threshold,
-      thresholdHeight: node.thresholdHeight,
-      handle: node.handle,
-      handleHeight: node.handleHeight,
-      handleSide: node.handleSide,
-      doorCloser: node.doorCloser,
-      panicBar: node.panicBar,
-      panicBarHeight: node.panicBarHeight,
-      segments: node.segments,
-    }
-  }, [node])
-
-  const handleSavePreset = useCallback(
-    async (name: string) => {
-      const data = getDoorPresetData()
-      if (!(data && selectedId)) return
-      const presetId = await adapter.savePreset('door', name, data)
-      if (presetId) emitter.emit('preset:generate-thumbnail', { presetId, nodeId: selectedId })
-    },
-    [getDoorPresetData, selectedId, adapter],
-  )
-
-  const handleOverwritePreset = useCallback(
-    async (id: string) => {
-      const data = getDoorPresetData()
-      if (!(data && selectedId)) return
-      await adapter.overwritePreset('door', id, data)
-      emitter.emit('preset:generate-thumbnail', { presetId: id, nodeId: selectedId })
-    },
-    [getDoorPresetData, selectedId, adapter],
-  )
-
-  const handleApplyPreset = useCallback(
-    (data: Record<string, unknown>) => {
-      handleUpdate(data as Partial<DoorNode>)
-    },
-    [handleUpdate],
-  )
 
   if (!(node && node.type === 'door' && selectedId)) return null
 
@@ -594,27 +520,6 @@ export default function DoorPanel() {
       title={node.name || 'Door'}
       width={320}
     >
-      {/* Presets strip */}
-      <div className="border-border/30 border-b px-3 pt-2.5 pb-1.5">
-        <PresetsPopover
-          isAuthenticated={adapter.isAuthenticated}
-          onApply={handleApplyPreset}
-          onDelete={(id) => adapter.deletePreset(id)}
-          onFetchPresets={(tab) => adapter.fetchPresets('door', tab)}
-          onOverwrite={handleOverwritePreset}
-          onRename={(id, name) => adapter.renamePreset(id, name)}
-          onSave={handleSavePreset}
-          onToggleCommunity={adapter.togglePresetCommunity}
-          tabs={adapter.tabs}
-          type="door"
-        >
-          <button className="flex w-full items-center gap-2 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 font-medium text-muted-foreground text-xs transition-colors hover:bg-[#3e3e3e] hover:text-foreground">
-            <BookMarked className="h-3.5 w-3.5 shrink-0" />
-            <span>Presets</span>
-          </button>
-        </PresetsPopover>
-      </div>
-
       <PanelSection title="Type">
         <div className="flex flex-col gap-2 px-1 pb-1">
           <SegmentedControl

@@ -189,11 +189,6 @@ type WindowAnimationEvents = {
   }
 }
 
-type PresetEvents = {
-  'preset:generate-thumbnail': { presetId: string; nodeId: string }
-  'preset:thumbnail-updated': { presetId: string; thumbnailUrl: string }
-}
-
 type ThumbnailEvents = {
   'thumbnail:before-capture': undefined
   'thumbnail:after-capture': undefined
@@ -243,7 +238,6 @@ type EditorEvents = GridEvents &
   GuideEvents &
   DoorAnimationEvents &
   WindowAnimationEvents &
-  PresetEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents
