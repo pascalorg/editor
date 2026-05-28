@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   type RidgeVentNode,
   type RoofSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -45,14 +46,25 @@ const defaultMaterial = new THREE.MeshStandardMaterial({
  * family (matte standard / shingled grey / brushed metal) before the
  * user opens the paint tray.
  */
-const RidgeVentRenderer = ({ node }: { node: RidgeVentNode }) => {
+const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const ref = useRef<THREE.Group>(null!)
-  useRegistry(node.id, 'ridge-vent', ref)
-  const handlers = useNodeEvents(node, 'ridge-vent')
+  useRegistry(storeNode.id, 'ridge-vent', ref)
+  const handlers = useNodeEvents(storeNode, 'ridge-vent')
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+
+  // Merge live drag overrides on top of the store node so handle drags
+  // update the mesh in-flight without flushing to zustand on every frame.
+  // Same pattern as box-vent / chimney / dormer — the override is set by
+  // `NodeArrowHandles`' drag handler and cleared on commit.
+  const overrides = useLiveNodeOverrides(
+    (s) => s.get(storeNode.id as AnyNodeId) as Partial<RidgeVentNode> | undefined,
+  )
+  const node: RidgeVentNode = overrides
+    ? ({ ...storeNode, ...overrides } as RidgeVentNode)
+    : storeNode
 
   const segment = useScene((state) =>
     node.roofSegmentId

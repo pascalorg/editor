@@ -128,6 +128,17 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     return cloned
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
+  // Compose slope tilt + yaw onto a single quaternion so the registered
+  // ref's local frame is vent-mesh-local. `NodeArrowHandles` reads this
+  // frame to place its chevrons; collapsing the nested-group stack onto
+  // the registered group lets handles use vent-local coords directly,
+  // without per-arrow tilt compensation. Mirrors solar-panel's renderer.
+  const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])
+  const composedQuat = useMemo(() => {
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(yAxis, node.rotation ?? 0)
+    return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
+  }, [surfaceQuat, node.rotation, yAxis])
+
   if (!segment) return null
 
   // `node.position` is segment-local (the placement + move tools resolve
@@ -146,21 +157,18 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     <group position={segPos} rotation-y={segRotY}>
       <group
         position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        quaternion={composedQuat}
         ref={ref}
         visible={node.visible}
       >
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
-              castShadow
-              geometry={geometry}
-              material={material}
-              name="box-vent-surface"
-              receiveShadow
-              {...handlers}
-            />
-          </group>
-        </group>
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="box-vent-surface"
+          receiveShadow
+          {...handlers}
+        />
       </group>
     </group>
   )

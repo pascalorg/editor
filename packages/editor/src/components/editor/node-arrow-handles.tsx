@@ -372,13 +372,40 @@ function NodeArrowHandlesForNode({
   // wall-riding outer wrapper.
   const arrowFrame = innerRide ?? outerRide
 
+  // Active-drag tracking. When a handle starts dragging, it claims its
+  // descriptor index here and snapshots the store node at drag-start.
+  // Non-active arrows re-render against the snapshot + a freeze offset
+  // that undoes the mesh's `position` drift in node-local frame — so
+  // asymmetric resize (width L/R, length L/R) doesn't visually slide the
+  // depth / height / rotate chevrons. They stay anchored at their
+  // pre-drag world positions for the duration of the drag.
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const [preDragNode, setPreDragNode] = useState<AnyNode | null>(null)
+  const dragControls = useMemo(
+    () => ({
+      onStart: (index: number, snapshot: AnyNode) => {
+        setActiveIndex(index)
+        setPreDragNode(snapshot)
+      },
+      onEnd: () => {
+        setActiveIndex(null)
+        setPreDragNode(null)
+      },
+    }),
+    [],
+  )
+
   const arrows = descriptors.map((descriptor, index) => (
     <ArrowHandle
+      activeIndex={activeIndex}
       descriptor={descriptor}
+      dragControls={dragControls}
+      handleIndex={index}
       // Descriptors come from a per-node-kind static list, so index is a
       // stable identity within this node's selection cycle.
       key={index}
-      node={node}
+      liveNode={node}
+      preDragNode={preDragNode}
       rideObject={arrowFrame}
     />
   ))
@@ -391,23 +418,100 @@ function NodeArrowHandlesForNode({
   )
 }
 
+type DragControls = {
+  onStart: (index: number, snapshot: AnyNode) => void
+  onEnd: () => void
+}
+
+// Offset, in node-local frame, that compensates for `position` drift on
+// the mesh during an asymmetric resize. Width/length L+R recompute
+// `position` so the anchored edge stays world-fixed — the renderer
+// follows that override, the ride object moves, and every arrow under
+// it would drift along with the mesh center. Subtracting this offset
+// from a non-active arrow's local placement undoes that drift so it
+// stays at its pre-drag world position.
+//
+// Rotation drags don't change `position`, so the offset collapses to
+// zero and non-active arrows naturally rotate with the mesh — which is
+// the desired behaviour (the whole rig rotates as a unit).
+function computeFreezeOffset(liveNode: AnyNode, preDragNode: AnyNode): [number, number, number] {
+  // Not every node in the union carries a `position` field (sites are the
+  // notable holdout — they don't have handles anyway, but TypeScript still
+  // requires us to discriminate). Guarded access keeps the freeze logic
+  // safe for the few node kinds that lack the field.
+  const liveP = (liveNode as { position?: readonly [number, number, number] }).position ?? [
+    0, 0, 0,
+  ]
+  const preP = (preDragNode as { position?: readonly [number, number, number] }).position ?? [
+    0, 0, 0,
+  ]
+  const deltaWorldX = liveP[0] - preP[0]
+  const deltaWorldY = liveP[1] - preP[1]
+  const deltaWorldZ = liveP[2] - preP[2]
+  const rotY = (preDragNode as { rotation?: number }).rotation ?? 0
+  // World → node-local for Y-axis rotation by rotY (THREE.Object3D
+  // rotation-y convention): inverse is rotation by -rotY around +Y.
+  const cosR = Math.cos(rotY)
+  const sinR = Math.sin(rotY)
+  const deltaLocalX = cosR * deltaWorldX - sinR * deltaWorldZ
+  const deltaLocalZ = sinR * deltaWorldX + cosR * deltaWorldZ
+  return [deltaLocalX, deltaWorldY, deltaLocalZ]
+}
+
 function ArrowHandle({
   descriptor,
-  node,
+  liveNode,
+  preDragNode,
+  activeIndex,
+  handleIndex,
+  dragControls,
   rideObject,
 }: {
   descriptor: HandleDescriptor
-  node: AnyNode
+  liveNode: AnyNode
+  preDragNode: AnyNode | null
+  activeIndex: number | null
+  handleIndex: number
+  dragControls: DragControls
   rideObject: Object3D
 }) {
+  // During a drag, non-active arrows render against the pre-drag store
+  // snapshot. The active arrow always uses the live (override-merged)
+  // node so it tracks the cursor.
+  const isOtherActive =
+    activeIndex !== null && activeIndex !== handleIndex && preDragNode !== null
+  const placementNode = isOtherActive ? (preDragNode as AnyNode) : liveNode
+  const freezeOffset =
+    isOtherActive && preDragNode ? computeFreezeOffset(liveNode, preDragNode) : null
+
   if (descriptor.kind === 'linear-resize' || descriptor.kind === 'radial-resize') {
-    return <LinearArrow descriptor={descriptor} node={node} rideObject={rideObject} />
+    return (
+      <LinearArrow
+        descriptor={descriptor}
+        dragControls={dragControls}
+        freezeOffset={freezeOffset}
+        handleIndex={handleIndex}
+        liveNode={liveNode}
+        node={placementNode}
+        rideObject={rideObject}
+      />
+    )
   }
   if (descriptor.kind === 'arc-resize') {
-    return <ArcArrow descriptor={descriptor} node={node} rideObject={rideObject} />
+    return (
+      <ArcArrow
+        descriptor={descriptor}
+        dragControls={dragControls}
+        freezeOffset={freezeOffset}
+        handleIndex={handleIndex}
+        liveNode={liveNode}
+        node={placementNode}
+        rideObject={rideObject}
+      />
+    )
   }
   if (descriptor.kind === 'tap-action') {
-    return <TapActionArrow descriptor={descriptor} node={node} />
+    return <TapActionArrow descriptor={descriptor} node={placementNode} />
   }
   // endpoint-move not yet implemented.
   return null
@@ -454,10 +558,21 @@ function resolveBound(
 function LinearArrow({
   descriptor,
   node,
+  liveNode,
+  freezeOffset,
+  handleIndex,
+  dragControls,
   rideObject,
 }: {
   descriptor: LinearResizeHandle<AnyNode> | RadialResizeHandle<AnyNode>
+  /** Effective node for placement (preDrag snapshot when another arrow is active). */
   node: AnyNode
+  /** Always the live (override-merged) node — used inside drag handlers. */
+  liveNode: AnyNode
+  /** Node-local offset that undoes the mesh's `position` drift; null when not frozen. */
+  freezeOffset: [number, number, number] | null
+  handleIndex: number
+  dragControls: DragControls
   rideObject: Object3D
 }) {
   const [isHovered, setIsHovered] = useState(false)
@@ -477,9 +592,29 @@ function LinearArrow({
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
+  // Suppress "declared but unused" for `liveNode` — LinearArrow's apply
+  // operates on `initialNode` (snapshot inside activate) and reads value
+  // updates back via `useLiveNodeOverrides`. The prop is required for
+  // uniformity with ArrowHandle's variant dispatch but isn't consumed in
+  // this variant's render path.
+  void liveNode
+
   const cursor = pickCursor(descriptor)
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
-  const position = descriptor.placement.position(node, placementSceneApi)
+  const basePosition = descriptor.placement.position(node, placementSceneApi)
+  // `freezeOffset` (in node-local frame) cancels the mesh's `position`
+  // drift while another arrow is being dragged — `basePosition` is
+  // computed against the pre-drag snapshot, then we subtract the offset
+  // so the arrow's WORLD location matches its pre-drag world location.
+  // Active arrows + idle state have `freezeOffset === null`, so the
+  // position passes through unchanged.
+  const position: [number, number, number] = freezeOffset
+    ? [
+        basePosition[0] - freezeOffset[0],
+        basePosition[1] - freezeOffset[1],
+        basePosition[2] - freezeOffset[2],
+      ]
+    : [basePosition[0], basePosition[1], basePosition[2]]
   const baseRotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   // Default chevron points +X. Rotate around Y to face the chosen axis.
   const axisRotationY = descriptor.axis === 'z' ? -Math.PI / 2 : 0
@@ -555,6 +690,12 @@ function LinearArrow({
     useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
     setIsDragging(true)
+    // Claim active-drag status — `NodeArrowHandlesForNode` will pass the
+    // snapshot to every OTHER arrow so they render at their pre-drag
+    // world positions while this drag runs. The snapshot must be the
+    // pre-override store node (not the merged `liveNode`) so subsequent
+    // re-renders don't pollute it with this drag's own patch.
+    dragControls.onStart(handleIndex, initialNode)
 
     let lastPatch: Partial<AnyNode> | null = null
 
@@ -600,6 +741,9 @@ function LinearArrow({
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
+      // Release the active-drag claim so non-active arrows return to
+      // live-tracking (and so the next drag can claim its own snapshot).
+      dragControls.onEnd()
       dragCleanupRef.current = null
     }
     const onUp = () => {
@@ -785,10 +929,21 @@ function GuideRing({ radius, y }: { radius: number; y: number }) {
 function ArcArrow({
   descriptor,
   node,
+  liveNode,
+  freezeOffset,
+  handleIndex,
+  dragControls,
   rideObject,
 }: {
   descriptor: ArcResizeHandle<AnyNode>
+  /** Effective node for placement (preDrag snapshot when another arrow is active). */
   node: AnyNode
+  /** Always the live (override-merged) node — used inside drag handlers. */
+  liveNode: AnyNode
+  /** Node-local offset that undoes the mesh's `position` drift; null when not frozen. */
+  freezeOffset: [number, number, number] | null
+  handleIndex: number
+  dragControls: DragControls
   rideObject: Object3D
 }) {
   const [isHovered, setIsHovered] = useState(false)
@@ -818,7 +973,19 @@ function ArcArrow({
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
-  const position = descriptor.placement.position(node, placementSceneApi)
+  const basePosition = descriptor.placement.position(node, placementSceneApi)
+  // See the LinearArrow note on freezeOffset — for rotation drags the
+  // delta collapses to zero (position doesn't change), so the rotate
+  // gizmo naturally rotates with the mesh while another arrow is being
+  // dragged. The offset only kicks in for asymmetric resize drags that
+  // recompute `position` to anchor the opposite edge.
+  const position: [number, number, number] = freezeOffset
+    ? [
+        basePosition[0] - freezeOffset[0],
+        basePosition[1] - freezeOffset[1],
+        basePosition[2] - freezeOffset[2],
+      ]
+    : [basePosition[0], basePosition[1], basePosition[2]]
   const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   // Rotation gizmo: hover signals "grabbable", active drag signals
   // "grabbed". `ew-resize` was wrong — it implies linear width drag.
@@ -880,6 +1047,8 @@ function ArcArrow({
     useViewer.getState().setInputDragging(true)
     useScene.temporal.getState().pause()
     setIsDragging(true)
+    // Claim active-drag status — see LinearArrow's onStart note.
+    dragControls.onStart(handleIndex, initialNode)
 
     let lastPatch: Partial<AnyNode> | null = null
 
@@ -915,6 +1084,8 @@ function ArcArrow({
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
+      // Release the active-drag claim — see LinearArrow's onEnd note.
+      dragControls.onEnd()
       dragCleanupRef.current = null
     }
     const onUp = () => {
@@ -942,6 +1113,13 @@ function ArcArrow({
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
   }
+
+  // Suppress "declared but unused" for `liveNode` — ArcArrow's apply
+  // operates entirely on `initialNode` (snapshot taken inside activate)
+  // and `delta` (live cursor angle), so the live store node doesn't
+  // appear in the rotation pipeline. The prop is still required because
+  // ArrowHandle passes it uniformly to every variant.
+  void liveNode
 
   return (
     <>
