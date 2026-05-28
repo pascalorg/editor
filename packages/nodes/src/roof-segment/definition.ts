@@ -84,21 +84,66 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
   }
 }
 
-// Depth arrow — symmetric on the +Z side.
-function roofSegmentDepthHandle(): HandleDescriptor<RoofSegmentNodeType> {
+// Depth arrow on the +Z (front) or -Z (back) side. Asymmetric: the
+// dragged edge follows the pointer, the opposite edge stays world-fixed
+// — mirrors the width-handle pattern (`roofSegmentWidthHandle`). Because
+// segment depth feeds the pitch math via `getActiveRoofHeight`, growing
+// depth at constant pitch ramps the peak up too, which reads as
+// scaling. We hold the peak height constant by back-solving a new pitch
+// for the new depth (same recipe the pitch handle uses, run in
+// reverse). MIN/MAX_PITCH clamps cover degenerate cases where the new
+// depth would demand a negative or beyond-vertical pitch.
+function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSegmentNodeType> {
+  const sign = side === 'front' ? 1 : -1
   return {
     kind: 'linear-resize',
     axis: 'z',
-    anchor: 'center',
+    anchor: side === 'front' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
     currentValue: (n) => n.depth,
-    apply: (_n, newValue) => ({ depth: newValue }),
+    apply: (initial, newDepth) => {
+      // Recenter so the anchored Z edge stays at the same world point.
+      // Same math as the width handle but along the Z arm: yaw maps
+      // segment-local +Z to (sin r, cos r) in world.
+      const rotY = initial.rotation ?? 0
+      const armX = Math.sin(rotY)
+      const armZ = Math.cos(rotY)
+      const anchorX = initial.position[0] - sign * (initial.depth / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
+      const newCenterX = anchorX + sign * (newDepth / 2) * armX
+      const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
+
+      // Preserve peak height — back-solve pitch for the new depth so
+      // the assembled roof height matches what it was before the drag.
+      const originalRoofHeight = getActiveRoofHeight(initial)
+      const newPitch = getPitchFromActiveRoofHeight({
+        roofType: initial.roofType,
+        width: initial.width,
+        depth: newDepth,
+        roofHeight: originalRoofHeight,
+        gambrelLowerWidthRatio: initial.gambrelLowerWidthRatio,
+        gambrelLowerHeightRatio: initial.gambrelLowerHeightRatio,
+        mansardSteepWidthRatio: initial.mansardSteepWidthRatio,
+        mansardSteepHeightRatio: initial.mansardSteepHeightRatio,
+        dutchHipWidthRatio: initial.dutchHipWidthRatio,
+        dutchHipHeightRatio: initial.dutchHipHeightRatio,
+      })
+
+      return {
+        depth: newDepth,
+        position: [newCenterX, initial.position[1], newCenterZ],
+        pitch: Math.max(MIN_PITCH, Math.min(MAX_PITCH, newPitch)),
+      }
+    },
     placement: {
       position: (n) => [
         0,
         Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2,
-        n.depth / 2 + SIDE_HANDLE_OFFSET,
+        sign * (n.depth / 2 + SIDE_HANDLE_OFFSET),
       ],
+      // For axis 'z', `LinearArrow` adds -π/2 around Y so the chevron
+      // points +Z by default. Flip the back arrow by π so it points -Z.
+      rotationY: () => (side === 'front' ? 0 : Math.PI),
     },
   }
 }
@@ -201,7 +246,8 @@ function roofSegmentRotateHandle(): HandleDescriptor<RoofSegmentNodeType> {
 const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
   roofSegmentWidthHandle('right'),
   roofSegmentWidthHandle('left'),
-  roofSegmentDepthHandle(),
+  roofSegmentDepthHandle('front'),
+  roofSegmentDepthHandle('back'),
   roofSegmentWallHeightHandle(),
   roofSegmentPitchHandle(),
   roofSegmentRotateHandle(),
