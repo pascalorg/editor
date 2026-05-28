@@ -11,6 +11,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 
 const pendingStairUpdates = new Set<AnyNodeId>()
 const MAX_STAIRS_PER_FRAME = 2
@@ -62,9 +63,7 @@ export const StairSystem = () => {
           } else if (mesh.geometry.type === 'BoxGeometry') {
             // Replace BoxGeometry placeholder with empty geometry
             mesh.geometry.dispose()
-            const placeholder = new THREE.BufferGeometry()
-            placeholder.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-            mesh.geometry = placeholder
+            mesh.geometry = createSafeEmptyGeometry()
           }
           clearDirty(id as AnyNodeId)
         } else {
@@ -539,8 +538,7 @@ function rotateXZ(x: number, z: number, angle: number): [number, number] {
 }
 
 function createEmptyGeometry(): THREE.BufferGeometry {
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+  const geometry = createSafeEmptyGeometry()
   geometry.addGroup(0, 0, STAIR_TREAD_MATERIAL_INDEX)
   geometry.addGroup(0, 0, STAIR_SIDE_MATERIAL_INDEX)
   return geometry

@@ -25,6 +25,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
@@ -498,7 +499,7 @@ export function generateExtrudedWall(
   const v = { x: wallEnd.x - wallStart.x, y: wallEnd.y - wallStart.y }
   const L = Math.sqrt(v.x * v.x + v.y * v.y)
   if (L < 1e-9) {
-    return new THREE.BufferGeometry()
+    return createSafeEmptyGeometry()
   }
   const boundaryPoints = getWallMiterBoundaryPoints(wallNode, miterData)
   const polyPoints = isCurvedWall(wallNode)
@@ -509,7 +510,7 @@ export function generateExtrudedWall(
       )
     : getWallPlanFootprint(wallNode, miterData)
   if (polyPoints.length < 3) {
-    return new THREE.BufferGeometry()
+    return createSafeEmptyGeometry()
   }
 
   // Transform world coordinates to wall-local coordinates

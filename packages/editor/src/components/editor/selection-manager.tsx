@@ -762,7 +762,8 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
     node.type === 'stair-segment' ||
     node.type === 'spawn' ||
     node.type === 'window' ||
-    node.type === 'door'
+    node.type === 'door' ||
+    node.type === 'box'
   ) {
     return {
       phase: 'structure',

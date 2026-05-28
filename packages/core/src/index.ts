@@ -1,8 +1,10 @@
 export type {
+  BoxEvent,
   BuildingEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
   CeilingEvent,
+  CylinderEvent,
   ColumnEvent,
   DoorEvent,
   ElevatorEvent,
@@ -20,6 +22,7 @@ export type {
   SiteEvent,
   SlabEvent,
   SpawnEvent,
+  SphereEvent,
   StairEvent,
   StairSegmentEvent,
   WallEvent,
@@ -45,6 +48,22 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  type PrimitiveAnchor,
+  type PrimitiveAxis,
+  type PrimitiveShapeInput,
+  type PrimitiveShapeKind,
+  type ResolvedPrimitiveTransform,
+  type ResolveTransformsOptions,
+  resolvePrimitiveWorldTransforms,
+  type Vec3,
+} from './lib/primitive-compose'
+export {
+  composeRobotArmPrimitives,
+  type RobotArmComposeInput,
+  type RobotArmPose,
+  type RobotArmStyle,
+} from './lib/robot-arm-compose'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
   type AutoSlabSyncPlan,

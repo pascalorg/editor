@@ -24,8 +24,10 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export { BoxNode } from './nodes/box'
 export { BuildingNode } from './nodes/building'
 export { CeilingNode } from './nodes/ceiling'
+export { CylinderNode } from './nodes/cylinder'
 export {
   COLUMN_PRESETS,
   ColumnBaseStyle,
@@ -51,6 +53,7 @@ export {
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { PipeMedium, PipeNode } from './nodes/pipe'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
+export { LatheNode } from './nodes/lathe'
 export type {
   AnimationEffect,
   Asset,
@@ -81,6 +84,7 @@ export { ScanNode } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
+export { SphereNode } from './nodes/sphere'
 export { SpawnNode } from './nodes/spawn'
 export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {

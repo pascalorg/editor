@@ -4,13 +4,14 @@
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
 import {
+  AiChatPanel,
   applySceneGraphToEditor,
   Editor,
   ItemsPanel,
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Layers, Package, Settings } from 'lucide-react'
+import { Layers, MessageCircle, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -31,6 +32,13 @@ export interface SceneMeta {
 }
 
 const SIDEBAR_TABS = (): (SidebarTab & { component: React.ComponentType })[] => [
+  {
+    id: 'ai',
+    label: t('sidebar.ai', 'AI'),
+    component: AiChatPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <MessageCircle className="h-5 w-5" />,
+  },
   {
     id: 'site',
     label: t('sidebar.scene', 'Scene'),

@@ -9,6 +9,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 
 type FencePart = {
   position: [number, number, number]
@@ -246,7 +247,7 @@ export function generateFenceGeometry(fence: FenceNode) {
   const parts = createFenceParts(fence)
   const geometries = parts.map(createFencePartGeometry)
 
-  const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
+  const merged = mergeGeometries(geometries, false) ?? createSafeEmptyGeometry()
   geometries.forEach((geometry) => {
     geometry.dispose()
   })

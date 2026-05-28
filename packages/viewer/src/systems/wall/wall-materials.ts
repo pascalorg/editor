@@ -223,3 +223,20 @@ export function getMaterialsForWall(wallNode: WallNode): WallMaterials {
 export function getVisibleWallMaterials(wallNode: WallNode): WallMaterialArray {
   return getMaterialsForWall(wallNode).visible
 }
+
+export function getWallMaterialCacheSize(): number {
+  return wallMaterialCache.size
+}
+
+export function clearWallMaterialCache(): void {
+  for (const materials of wallMaterialCache.values()) {
+    disposeOwnedMaterials([
+      materials.invisible,
+      materials.deleteVisible,
+      materials.deleteInvisible,
+      materials.highlightedVisible,
+      materials.highlightedInvisible,
+    ])
+  }
+  wallMaterialCache.clear()
+}

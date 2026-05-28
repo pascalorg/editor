@@ -28,6 +28,7 @@
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.5.14",
+        "@pascal-app/articraft-bridge": "*",
         "@pascal-app/core": "*",
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
@@ -90,6 +91,19 @@
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.184.0",
         "typescript": "6.0.2",
+      },
+    },
+    "packages/articraft-bridge": {
+      "name": "@pascal-app/articraft-bridge",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@pascal-app/core": "*",
+        "@pascal/typescript-config": "*",
+        "@types/node": "^25.5.0",
+        "typescript": "5.9.3",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": "*",
       },
     },
     "packages/core": {
@@ -481,6 +495,8 @@
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
     "@number-flow/react": ["@number-flow/react@0.5.14", "", { "dependencies": { "esm-env": "^1.1.4", "number-flow": "0.5.12" }, "peerDependencies": { "react": "^18 || ^19", "react-dom": "^18 || ^19" } }, "sha512-FGUqjh/P5/ukr0U0ySwb987M0SbRkrnZq70f0wQFncDbXa3SIib4L+FTr5ngvWwGAW8S6b391eTXcfhErZsw4w=="],
+
+    "@pascal-app/articraft-bridge": ["@pascal-app/articraft-bridge@workspace:packages/articraft-bridge"],
 
     "@pascal-app/core": ["@pascal-app/core@workspace:packages/core"],
 
@@ -1489,6 +1505,8 @@
     "@eslint/eslintrc/ajv": ["ajv@6.15.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw=="],
 
     "@eslint/eslintrc/globals": ["globals@14.0.0", "", {}, "sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ=="],
+
+    "@pascal-app/articraft-bridge/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@pascal-app/mcp/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

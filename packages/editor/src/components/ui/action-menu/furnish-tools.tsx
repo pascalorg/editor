@@ -9,20 +9,34 @@ export type FurnishToolConfig = {
 }
 
 export const furnishTools: FurnishToolConfig[] = [
-  { id: 'item', iconSrc: '/icons/couch.png', label: 'Furniture', catalogCategory: 'furniture' },
-  { id: 'item', iconSrc: '/icons/appliance.png', label: 'Appliance', catalogCategory: 'appliance' },
-  { id: 'item', iconSrc: '/icons/kitchen.png', label: 'Kitchen', catalogCategory: 'kitchen' },
-  { id: 'item', iconSrc: '/icons/bathroom.png', label: 'Bathroom', catalogCategory: 'bathroom' },
+  { id: 'item', iconSrc: '/icons/building.png', label: 'Safety', catalogCategory: 'safety' },
+  { id: 'item', iconSrc: '/icons/appliance.png', label: 'Electrical', catalogCategory: 'electrical' },
+  { id: 'item', iconSrc: '/icons/ceiling.png', label: 'HVAC', catalogCategory: 'hvac' },
+  { id: 'item', iconSrc: '/icons/ceiling.png', label: 'Lighting', catalogCategory: 'lighting' },
+  { id: 'item', iconSrc: '/icons/appliance.png', label: 'Electronics', catalogCategory: 'electronics' },
+  { id: 'item', iconSrc: '/icons/shelf.png', label: 'Equipment', catalogCategory: 'equipment' },
+  { id: 'item', iconSrc: '/icons/column.png', label: 'Structural', catalogCategory: 'structural' },
+  { id: 'item', iconSrc: '/icons/fence.png', label: 'Infrastructure', catalogCategory: 'infrastructure' },
+  { id: 'item', iconSrc: '/icons/door.png', label: 'Openings', catalogCategory: 'opening' },
+  { id: 'item', iconSrc: '/icons/tree.png', label: 'Nature', catalogCategory: 'nature' },
   { id: 'item', iconSrc: '/icons/tree.png', label: 'Outdoor', catalogCategory: 'outdoor' },
+  { id: 'item', iconSrc: '/icons/cube.png', label: 'Vehicles', catalogCategory: 'vehicle' },
 ]
 
 export function getFurnishToolLabel(category: CatalogCategory): string {
   const fallbacks: Partial<Record<CatalogCategory, string>> = {
-    furniture: 'Furniture',
-    appliance: 'Appliance',
-    kitchen: 'Kitchen',
-    bathroom: 'Bathroom',
+    safety: 'Safety',
+    electrical: 'Electrical',
+    hvac: 'HVAC',
+    lighting: 'Lighting',
+    electronics: 'Electronics',
+    equipment: 'Equipment',
+    structural: 'Structural',
+    infrastructure: 'Infrastructure',
+    opening: 'Openings',
+    nature: 'Nature',
     outdoor: 'Outdoor',
+    vehicle: 'Vehicles',
   }
   return t(`sidebar.furnishCategories.${category}`, fallbacks[category] ?? category)
 }

@@ -4,6 +4,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
+    "dev:editor": "bun --cwd apps/editor dev",
+    "dev:articraft": "node scripts/dev-with-articraft.mjs",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",

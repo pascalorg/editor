@@ -85,3 +85,22 @@ export function getStraightStairSegmentBodyMaterials(
 
   return [DEFAULT_STAIR_MATERIAL, DEFAULT_STAIR_MATERIAL]
 }
+
+export function getStairMaterialCacheSize(): number {
+  return stairBodyMaterialCache.size + stairRailingMaterialCache.size
+}
+
+export function clearStairMaterialCache(): void {
+  const materials = new Set<THREE.Material>()
+  for (const materialArray of stairBodyMaterialCache.values()) {
+    for (const material of materialArray) {
+      materials.add(material)
+    }
+  }
+  for (const material of stairRailingMaterialCache.values()) {
+    materials.add(material)
+  }
+  materials.forEach((material) => material.dispose())
+  stairBodyMaterialCache.clear()
+  stairRailingMaterialCache.clear()
+}

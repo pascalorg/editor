@@ -7,9 +7,14 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getRoofMaterialArray, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import {
+  createSafeEmptyGeometry,
+  getRoofMaterialArray,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 import { roofDebugMaterials, roofMaterials } from '../roof/roof-materials'
 
 export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
@@ -24,8 +29,8 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     ? (nodes[node.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
   const placeholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    const geometry = createSafeEmptyGeometry()
+    geometry.clearGroups()
     geometry.addGroup(0, 0, 0)
     geometry.addGroup(0, 0, 1)
     geometry.addGroup(0, 0, 2)

@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -97,8 +98,7 @@ export const RoofSystem = () => {
             // so MeshBVH hits groups[4].materialIndex → undefined.side → crash.
             if (mesh.geometry.type === 'BoxGeometry') {
               mesh.geometry.dispose()
-              const placeholder = new THREE.BufferGeometry()
-              placeholder.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+              const placeholder = createSafeEmptyGeometry()
               computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
             }
@@ -294,15 +294,15 @@ function updateMergedRoofGeometry(
 }
 
 const dummyMats: [
-  THREE.MeshBasicMaterial,
-  THREE.MeshBasicMaterial,
-  THREE.MeshBasicMaterial,
-  THREE.MeshBasicMaterial,
+  THREE.MeshLambertMaterial,
+  THREE.MeshLambertMaterial,
+  THREE.MeshLambertMaterial,
+  THREE.MeshLambertMaterial,
 ] = [
-  new THREE.MeshBasicMaterial(),
-  new THREE.MeshBasicMaterial(),
-  new THREE.MeshBasicMaterial(),
-  new THREE.MeshBasicMaterial(),
+  new THREE.MeshLambertMaterial(),
+  new THREE.MeshLambertMaterial(),
+  new THREE.MeshLambertMaterial(),
+  new THREE.MeshLambertMaterial(),
 ]
 const ROOF_MATERIAL_SLOT_COUNT = 4
 

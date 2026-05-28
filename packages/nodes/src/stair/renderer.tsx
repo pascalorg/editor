@@ -10,6 +10,7 @@ import {
 import {
   createMaterial,
   createMaterialFromPresetRef,
+  createSafeEmptyGeometry,
   DEFAULT_STAIR_MATERIAL,
   getStairBodyMaterials,
   getStairRailingMaterial,
@@ -81,8 +82,8 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   const railingMaterial = useMemo(() => getStairRailingMaterial(node), [node])
 
   const straightPlaceholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    const geometry = createSafeEmptyGeometry()
+    geometry.clearGroups()
     geometry.addGroup(0, 0, 0)
     geometry.addGroup(0, 0, 1)
     return geometry

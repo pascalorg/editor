@@ -136,6 +136,8 @@ interface ViewerProps {
   selectionManager?: 'default' | 'custom'
   perf?: boolean
   useBvh?: boolean
+  fps?: number
+  postProcessing?: boolean
 }
 
 const Viewer: React.FC<ViewerProps> = ({
@@ -144,8 +146,26 @@ const Viewer: React.FC<ViewerProps> = ({
   selectionManager = 'default',
   perf = false,
   useBvh = true,
+  fps = 50,
+  postProcessing = true,
 }) => {
   const theme = useViewer((state) => state.theme)
+  const debugOptions = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return { fps, postProcessing, useBvh }
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const requestedFps = Number(params.get('viewerFps'))
+    return {
+      fps:
+        Number.isFinite(requestedFps) && requestedFps > 0
+          ? Math.min(60, Math.max(1, requestedFps))
+          : fps,
+      postProcessing: postProcessing && !params.has('noPost'),
+      useBvh: useBvh && !params.has('noBvh'),
+    }
+  }, [fps, postProcessing, useBvh])
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
   // Desktops (fine pointer) keep the original 1.5 cap.
@@ -190,7 +210,7 @@ const Viewer: React.FC<ViewerProps> = ({
         enabled: true,
       }}
     >
-      <FrameLimiter fps={50} />
+      <FrameLimiter fps={debugOptions.fps} />
       {/* <AnimatedBackground isDark={theme === 'dark'} /> */}
       <ViewerCamera />
       <GPUDeviceWatcher />
@@ -199,7 +219,7 @@ const Viewer: React.FC<ViewerProps> = ({
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
           /> */}
         <Lights />
-        {useBvh ? (
+        {debugOptions.useBvh ? (
           <SceneBvh>
             <SceneRenderer />
           </SceneBvh>
@@ -224,7 +244,7 @@ const Viewer: React.FC<ViewerProps> = ({
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}
         <RegisteredSystems />
-        <PostProcessing hoverStyles={hoverStyles} />
+        {debugOptions.postProcessing ? <PostProcessing hoverStyles={hoverStyles} /> : null}
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}

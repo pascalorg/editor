@@ -22,6 +22,9 @@ export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+export { createCylinderGeometry } from './lib/create-cylinder-geometry'
+export { clearViewerMaterialCaches, getViewerMaterialCacheSize } from './lib/material-cache'
+export { createSafeEmptyGeometry } from './lib/safe-geometry'
 export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
@@ -73,7 +76,11 @@ export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { LevelSystem } from './systems/level/level-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
-export { getRoofMaterialArray } from './systems/roof/roof-materials'
+export {
+  clearRoofMaterialCache,
+  getRoofMaterialArray,
+  getRoofMaterialCacheSize,
+} from './systems/roof/roof-materials'
 export { RoofSystem } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
 // Slab system follows the wall + fence re-export pattern — composed into
@@ -81,14 +88,20 @@ export { ScanSystem } from './systems/scan/scan-system'
 // alongside the legacy slab mount point.
 export { generateSlabGeometry, SlabSystem } from './systems/slab/slab-system'
 export {
+  clearStairMaterialCache,
   getStairBodyMaterials,
+  getStairMaterialCacheSize,
   getStairRailingMaterial,
   getStraightStairSegmentBodyMaterials,
   type StairBodyMaterials,
 } from './systems/stair/stair-materials'
 export { StairSystem } from './systems/stair/stair-system'
 export { WallCutout } from './systems/wall/wall-cutout'
-export { getVisibleWallMaterials } from './systems/wall/wall-materials'
+export {
+  clearWallMaterialCache,
+  getVisibleWallMaterials,
+  getWallMaterialCacheSize,
+} from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are

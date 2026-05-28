@@ -1,7 +1,7 @@
 'use client'
 
-import { Editor, ItemsPanel } from '@pascal-app/editor'
-import { Layers, Package, Settings } from 'lucide-react'
+import { AiChatPanel, Editor, ItemsPanel } from '@pascal-app/editor'
+import { Layers, MessageCircle, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo } from 'react'
 import {
@@ -15,6 +15,13 @@ const PROJECT_ID = 'local-editor'
 export default function Home() {
   const sidebarTabs = useMemo(
     () => [
+      {
+        id: 'ai',
+        label: t('sidebar.ai', 'AI'),
+        component: AiChatPanel,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <MessageCircle className="h-5 w-5" />,
+      },
       {
         id: 'site',
         label: t('sidebar.scene', 'Scene'),

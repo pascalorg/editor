@@ -9,7 +9,10 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
+import { BoxTool } from './box/box-tool'
+import { CylinderTool } from './cylinder/cylinder-tool'
 import { ColumnTool } from './column/column-tool'
+import { SphereTool } from './sphere/sphere-tool'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -53,6 +56,7 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const primitivePlacement = useEditor((state) => state.primitivePlacement)
   const movingNode = useEditor((state) => state.movingNode)
   const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
   const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
@@ -274,6 +278,15 @@ export const ToolManager: React.FC = () => {
           <Suspense fallback={null}>
             <RegistryToolComponent />
           </Suspense>
+        )}
+        {!movingNode && primitivePlacement === 'box' && mode !== 'build' && (
+          <BoxTool currentLevelId={activeLevelId ?? null} />
+        )}
+        {!movingNode && primitivePlacement === 'cylinder' && mode !== 'build' && (
+          <CylinderTool currentLevelId={activeLevelId ?? null} />
+        )}
+        {!movingNode && primitivePlacement === 'sphere' && mode !== 'build' && (
+          <SphereTool currentLevelId={activeLevelId ?? null} />
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'column' && (
           <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />

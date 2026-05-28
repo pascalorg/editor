@@ -1,6 +1,8 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { boxDefinition } from './box'
 import { buildingDefinition } from './building'
 import { ceilingDefinition } from './ceiling'
+import { cylinderDefinition } from './cylinder'
 import { columnDefinition } from './column'
 import { doorDefinition } from './door'
 import { elevatorDefinition } from './elevator'
@@ -8,6 +10,7 @@ import { fenceDefinition } from './fence'
 import { pipeDefinition } from './pipe'
 import { guideDefinition } from './guide'
 import { itemDefinition } from './item'
+import { latheDefinition } from './lathe'
 import { levelDefinition } from './level'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -16,6 +19,7 @@ import { shelfDefinition } from './shelf'
 import { siteDefinition } from './site'
 import { slabDefinition } from './slab'
 import { spawnDefinition } from './spawn'
+import { sphereDefinition } from './sphere'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
 import { wallDefinition } from './wall'
@@ -55,6 +59,10 @@ export const builtinPlugin: Plugin = {
     itemDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
+    boxDefinition as unknown as AnyNodeDefinition,
+    cylinderDefinition as unknown as AnyNodeDefinition,
+    sphereDefinition as unknown as AnyNodeDefinition,
+    latheDefinition as unknown as AnyNodeDefinition,
     columnDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
@@ -70,8 +78,10 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export { boxDefinition } from './box'
 export { buildingDefinition } from './building'
 export { ceilingDefinition } from './ceiling'
+export { cylinderDefinition } from './cylinder'
 export { columnDefinition } from './column'
 export { doorDefinition } from './door'
 export { elevatorDefinition } from './elevator'
@@ -79,6 +89,7 @@ export { fenceDefinition } from './fence'
 export { pipeDefinition } from './pipe'
 export { guideDefinition } from './guide'
 export { itemDefinition } from './item'
+export { latheDefinition } from './lathe'
 export { levelDefinition } from './level'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
@@ -87,6 +98,7 @@ export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { slabDefinition } from './slab'
 export { spawnDefinition } from './spawn'
+export { sphereDefinition } from './sphere'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
 export { wallDefinition } from './wall'

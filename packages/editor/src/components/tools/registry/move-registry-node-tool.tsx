@@ -65,6 +65,7 @@ const CLICK_TRIGGER_KINDS = [
   'roof-segment',
   'stair',
   'stair-segment',
+  'box',
 ] as const
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
@@ -137,11 +138,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const onGridMove = (event: GridEvent) => {
       const x = roundToHalf(event.localPosition[0])
       const z = roundToHalf(event.localPosition[2])
-      setCursorPosition([x, 0, z])
-      lastCursorRef.current = [x, 0, z]
+      const y = originalPosition[1]
+      setCursorPosition([x, y, z])
+      lastCursorRef.current = [x, y, z]
 
       // Pure imperative: move the mesh via its registered Object3D ref.
-      sceneRegistry.nodes.get(node.id)?.position.set(x, 0, z)
+      sceneRegistry.nodes.get(node.id)?.position.set(x, y, z)
       // Publish to `useLiveTransforms` so the 2D floor plan can mirror
       // the drag in real-time (the floor-plan layer subscribes to this
       // store and overrides the node's rendered position when an entry
@@ -153,7 +155,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // (slab / ceiling / fence) follow a different delta contract —
       // their floor-plan move-targets handle the override themselves.
       useLiveTransforms.getState().set(node.id, {
-        position: [x, 0, z],
+        position: [x, y, z],
         rotation: originalRotationY,
       })
 

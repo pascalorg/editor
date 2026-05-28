@@ -19,6 +19,7 @@
     "createNew": "新建"
   },
   "sidebar": {
+    "ai": "AI助手",
     "scene": "场景",
     "items": "物品",
     "settings": "设置",
@@ -163,11 +164,17 @@
       }
     },
     "furnishCategories": {
-      "furniture": "家具",
-      "appliance": "电器",
-      "kitchen": "厨房",
-      "bathroom": "卫浴",
-      "outdoor": "户外"
+      "safety": "安全消防",
+      "electrical": "电气",
+      "hvac": "暖通空调",
+      "lighting": "照明",
+      "electronics": "电子设备",
+      "equipment": "工业设备",
+      "structural": "结构",
+      "infrastructure": "基础设施",
+      "opening": "门窗",
+      "nature": "自然景观",
+      "vehicle": "车辆"
     }
   },
   "actionMenu": {
@@ -199,6 +206,7 @@
     "siteEditingGroundOnly": "场地编辑（仅地面层）",
     "build": "建造",
     "materialPaint": "材质涂刷",
+    "primitive": "散件",
     "furnish": "软装",
     "zone": "区域",
     "toggleTheme": "切换主题",
@@ -254,6 +262,15 @@
       "zone": "区域",
       "spawn": "出生点",
       "shelf": "搁板"
+    },
+    "primitiveShapes": {
+      "box": "立方体",
+      "cylinder": "圆柱",
+      "sphere": "球体",
+      "cone": "圆锥",
+      "capsule": "胶囊",
+      "torus": "圆环",
+      "pyramid": "棱锥"
     },
     "wallMode": {
       "fullHeight": "全高",
@@ -769,5 +786,18 @@
         "opening": "开洞"
       }
     }
+  },
+  "aiChat": {
+    "title": "AI助手",
+    "placeholder": "描述你想要创建的物体，AI将自动在画布上生成。",
+    "inputPlaceholder": "描述你想要的物体...",
+    "thinking": "思考中...",
+    "noConfig": "请在 .env.local 中设置 NEXT_PUBLIC_AI_BASE_URL 和 NEXT_PUBLIC_AI_API_KEY。",
+    "notConfigured": "未配置",
+    "noShapes": "没有要创建的几何体。",
+    "unknownTool": "未知工具：{name}",
+    "createdShapes": "已创建 {count} 个几何体：{names}",
+    "calling": "正在调用工具...",
+    "error": "错误：{message}"
   }
 }

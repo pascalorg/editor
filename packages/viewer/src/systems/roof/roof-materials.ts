@@ -65,3 +65,18 @@ export function getRoofMaterialArray(node: RoofNode): RoofMaterialArray | null {
   roofMaterialArrayCache.set(cacheKey, materialArray)
   return materialArray
 }
+
+export function getRoofMaterialCacheSize(): number {
+  return roofMaterialArrayCache.size
+}
+
+export function clearRoofMaterialCache(): void {
+  const materials = new Set<THREE.Material>()
+  for (const materialArray of roofMaterialArrayCache.values()) {
+    for (const material of materialArray) {
+      materials.add(material)
+    }
+  }
+  materials.forEach((material) => material.dispose())
+  roofMaterialArrayCache.clear()
+}

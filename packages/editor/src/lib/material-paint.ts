@@ -23,7 +23,7 @@ import {
 
 export type PaintableMaterialTarget = Extract<
   MaterialTarget,
-  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling' | 'shelf'
+  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling' | 'shelf' | 'box'
 >
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -284,6 +284,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'shelf') {
     return 'shelf'
+  }
+
+  if (selectedNode.type === 'box') {
+    return 'box'
   }
 
   return null

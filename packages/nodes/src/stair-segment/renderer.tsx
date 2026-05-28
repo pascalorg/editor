@@ -7,9 +7,13 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getStraightStairSegmentBodyMaterials, useNodeEvents } from '@pascal-app/viewer'
+import {
+  createSafeEmptyGeometry,
+  getStraightStairSegmentBodyMaterials,
+  useNodeEvents,
+} from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 
 export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   const ref = useRef<THREE.Mesh>(null!)
@@ -50,8 +54,8 @@ export const StairSegmentRenderer = ({ node }: { node: StairSegmentNode }) => {
   ])
 
   const placeholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+    const geometry = createSafeEmptyGeometry()
+    geometry.clearGroups()
     geometry.addGroup(0, 0, 0)
     geometry.addGroup(0, 0, 1)
     return geometry

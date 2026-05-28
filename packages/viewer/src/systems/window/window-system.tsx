@@ -10,7 +10,7 @@ import * as THREE from 'three'
 import { baseMaterial, glassMaterial } from '../../lib/materials'
 
 // Invisible material for root mesh — used as selection hitbox only
-const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
+const hitboxMaterial = new THREE.MeshLambertMaterial({ visible: false })
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
 export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'

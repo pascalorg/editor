@@ -1,10 +1,18 @@
 'use client'
 
 import { useRegistry, type ZoneNode } from '@pascal-app/core'
-import { useNodeEvents, ZONE_LAYER } from '@pascal-app/viewer'
+import { createSafeEmptyGeometry, useNodeEvents, ZONE_LAYER } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
-import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
+import {
+  BufferGeometry,
+  Color,
+  DoubleSide,
+  Float32BufferAttribute,
+  type Group,
+  Shape,
+  ShapeGeometry,
+} from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 
@@ -134,6 +142,15 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     return createWallGeometry(node.polygon)
   }, [node?.polygon])
 
+  const floorGeometry = useMemo(() => {
+    if (!floorShape) return null
+    const geometry = new ShapeGeometry(floorShape)
+    const position = geometry.getAttribute('position')
+    if (position && position.count >= 3) return geometry
+    geometry.dispose()
+    return createSafeEmptyGeometry()
+  }, [floorShape])
+
   // Calculate polygon centroid for label positioning using the geometric centroid formula
   // This correctly handles polygons regardless of vertex distribution along edges
   const centroid = useMemo(() => {
@@ -174,7 +191,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   const handlers = useNodeEvents(node, 'zone')
 
-  if (!(node && floorShape && wallGeometry && floorMaterial && wallMaterial)) {
+  if (!(node && floorGeometry && wallGeometry && floorMaterial && wallMaterial)) {
     return null
   }
 
@@ -240,14 +257,13 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
       {/* Floor fill */}
       <mesh
+        geometry={floorGeometry}
         layers={ZONE_LAYER}
         material={floorMaterial}
         name="floor"
         position={[0, Y_OFFSET, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <shapeGeometry args={[floorShape]} />
-      </mesh>
+      />
 
       {/* Wall borders with gradient */}
       <mesh geometry={wallGeometry} layers={ZONE_LAYER} material={wallMaterial} name="walls" />

@@ -5,18 +5,12 @@ import {
   getMaterialPresetByRef,
   resolveMaterial,
   useRegistry,
+  useScene,
 } from '@pascal-app/core'
-import { NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute } from 'three'
+import { createSafeEmptyGeometry, NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
-
-function createEmptyGeometry() {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute([], 3))
-  return geometry
-}
 
 const gridScale = 5
 const gridX = positionWorld.x.mul(gridScale).fract()
@@ -59,11 +53,15 @@ function getCeilingMaterials(color = '#999999') {
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
-  const placeholderGeometry = useMemo(createEmptyGeometry, [])
-  const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
+  const placeholderGeometry = useMemo(createSafeEmptyGeometry, [])
+  const gridPlaceholderGeometry = useMemo(createSafeEmptyGeometry, [])
 
   useRegistry(node.id, 'ceiling', ref)
   const handlers = useNodeEvents(node, 'ceiling')
+
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
 
   useEffect(
     () => () => {

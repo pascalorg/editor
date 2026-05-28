@@ -1,9 +1,14 @@
 'use client'
 
 import { useRegistry, useScene, type WallNode } from '@pascal-app/core'
-import { getVisibleWallMaterials, NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
+import {
+  createSafeEmptyGeometry,
+  getVisibleWallMaterials,
+  NodeRenderer,
+  useNodeEvents,
+} from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
+import type { BufferGeometry, Mesh } from 'three'
 
 /**
  * Thin wall renderer.
@@ -25,8 +30,8 @@ import { BufferGeometry, Float32BufferAttribute, type Mesh } from 'three'
  * ownership of the rebuild loop.
  */
 function createEmptyWallGeometry(): BufferGeometry {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute([], 3))
+  const geometry = createSafeEmptyGeometry()
+  geometry.clearGroups()
   geometry.addGroup(0, 0, 0)
   geometry.addGroup(0, 0, 1)
   geometry.addGroup(0, 0, 2)
@@ -36,11 +41,7 @@ function createEmptyWallGeometry(): BufferGeometry {
 const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
   const placeholderGeometry = useMemo(createEmptyWallGeometry, [])
-  const collisionPlaceholderGeometry = useMemo(() => {
-    const geometry = new BufferGeometry()
-    geometry.setAttribute('position', new Float32BufferAttribute([], 3))
-    return geometry
-  }, [])
+  const collisionPlaceholderGeometry = useMemo(createSafeEmptyGeometry, [])
 
   useRegistry(node.id, 'wall', ref)
 

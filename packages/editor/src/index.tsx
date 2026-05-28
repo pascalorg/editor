@@ -120,6 +120,7 @@ export { Slider } from './components/ui/primitives/slider'
 export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
+export { AiChatPanel } from './components/ui/sidebar/panels/ai-chat-panel'
 export {
   type ProjectVisibility,
   SettingsPanel,

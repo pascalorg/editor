@@ -12,8 +12,8 @@ import * as THREE from 'three'
 import { baseMaterial, glassMaterial } from '../../lib/materials'
 
 // Invisible material for root mesh — used as selection hitbox only
-const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
-const revealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
+const hitboxMaterial = new THREE.MeshLambertMaterial({ visible: false })
+const revealMaterial = new THREE.MeshLambertMaterial({ color: '#7f766c' })
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)

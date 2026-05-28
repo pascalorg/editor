@@ -2,8 +2,10 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BoxNode,
   BuildingNode,
   CeilingNode,
+  CylinderNode,
   ColumnNode,
   DoorNode,
   ElevatorNode,
@@ -19,6 +21,7 @@ import type {
   SiteNode,
   SlabNode,
   SpawnNode,
+  SphereNode,
   StairNode,
   StairSegmentNode,
   WallNode,
@@ -60,6 +63,9 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
+export type BoxEvent = NodeEvent<BoxNode>
+export type CylinderEvent = NodeEvent<CylinderNode>
+export type SphereEvent = NodeEvent<SphereNode>
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type PipeEvent = NodeEvent<PipeNode>
@@ -194,6 +200,9 @@ type AIChatEvents = {
 }
 
 type EditorEvents = GridEvents &
+  NodeEvents<'box', BoxEvent> &
+  NodeEvents<'cylinder', CylinderEvent> &
+  NodeEvents<'sphere', SphereEvent> &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'pipe', PipeEvent> &

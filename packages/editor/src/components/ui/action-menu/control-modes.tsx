@@ -16,6 +16,7 @@ type ControlId =
   | 'site-edit'
   | 'build'
   | 'material-paint'
+  | 'primitive'
   | 'furnish'
   | 'zone'
   | 'delete'
@@ -67,6 +68,12 @@ const controls: Omit<ControlConfig, 'label'>[] = [
     activeColor: 'bg-amber-500/20 text-amber-400',
   },
   {
+    id: 'primitive',
+    imageSrc: '/icons/cube.png',
+    color: 'hover:bg-orange-500/20 hover:text-orange-400',
+    activeColor: 'bg-orange-500/20 text-orange-400',
+  },
+  {
     id: 'furnish',
     imageSrc: '/icons/couch.png',
     shortcut: 'F',
@@ -96,6 +103,7 @@ function getControlLabel(id: ControlId): string {
     'site-edit': 'Edit site',
     build: 'Build',
     'material-paint': 'Material Paint',
+    primitive: 'Primitive',
     furnish: 'Furnish',
     zone: 'Zone',
     delete: 'Delete',
@@ -103,7 +111,17 @@ function getControlLabel(id: ControlId): string {
   return t(`actionMenu.${id === 'box-select' ? 'boxSelect' : id === 'site-edit' ? 'editSite' : id === 'material-paint' ? 'materialPaint' : id}`, fallbacks[id])
 }
 
-export function ControlModes() {
+export type ControlModesProps = {
+  /**
+   * Whether the 散件 (primitive) shape tray is currently expanded above the
+   * action menu. Lifted to <ActionMenu> so the same expansion mechanism used
+   * by 建筑 / 材质涂刷 can host the primitive shape row.
+   */
+  primitivePanelOpen: boolean
+  setPrimitivePanelOpen: (open: boolean) => void
+}
+
+export function ControlModes({ primitivePanelOpen, setPrimitivePanelOpen }: ControlModesProps) {
   const mode = useEditor((state) => state.mode)
   const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
@@ -139,6 +157,7 @@ export function ControlModes() {
     if (id === 'build')
       return mode === 'build' && phase === 'structure' && structureLayer === 'elements'
     if (id === 'material-paint') return mode === 'material-paint'
+    if (id === 'primitive') return primitivePanelOpen
     if (id === 'furnish') return mode === 'build' && phase === 'furnish'
     if (id === 'zone')
       return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
@@ -168,6 +187,21 @@ export function ControlModes() {
       setPhase('structure')
       setStructureLayer('elements')
     }
+
+    if (id === 'primitive') {
+      // Toggle the 散件 shape tray; the actual expansion is rendered by
+      // <ActionMenu>, mirroring how 建筑 / 材质涂刷 expand their own rows.
+      // Exit any active mode so the tray is mutually exclusive with build/paint.
+      if (!primitivePanelOpen) {
+        setMode('select')
+      }
+      setPrimitivePanelOpen(!primitivePanelOpen)
+      return
+    }
+
+    // Any other control button takes over — close the primitive tray so it
+    // stays mutually exclusive with the regular modes.
+    if (primitivePanelOpen) setPrimitivePanelOpen(false)
 
     if (id === 'select') {
       setMode('select')

@@ -2,6 +2,7 @@ import { useScene } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
+import { getViewerMaterialCacheSize } from '../../lib/material-cache'
 import { drainGpuSamples } from '../../lib/gpu-perf'
 
 const SAMPLE_INTERVAL = 0.5 // seconds between display updates
@@ -19,6 +20,13 @@ export const PerfMonitor = () => {
     lines: 0,
     sprites: 0,
     lights: 0,
+    nodes: 0,
+    historyPast: 0,
+    historyFuture: 0,
+    geometries: 0,
+    textures: 0,
+    materialCache: 0,
+    heapMb: 0,
   })
   const frameCount = useRef(0)
   const elapsed = useRef(0)
@@ -60,7 +68,17 @@ export const PerfMonitor = () => {
       const drawCalls = Math.round(totalCalls / Math.max(1, frameCount.current))
       const triangles = totalTriangles / Math.max(1, frameCount.current)
       info.reset()
-      const dirty = useScene.getState().dirtyNodes.size
+      const sceneState = useScene.getState()
+      const temporalState = useScene.temporal.getState()
+      const dirty = sceneState.dirtyNodes.size
+      const nodes = Object.keys(sceneState.nodes).length
+      const historyPast = temporalState.pastStates.length
+      const historyFuture = temporalState.futureStates.length
+      const geometries = info.memory?.geometries ?? 0
+      const textures = info.memory?.textures ?? 0
+      const materialCache = getViewerMaterialCacheSize()
+      const memory = (performance as { memory?: { usedJSHeapSize?: number } }).memory
+      const heapMb = memory?.usedJSHeapSize ? memory.usedJSHeapSize / 1024 / 1024 : 0
 
       // Count visible drawables by type so we can match scene contents
       // against the renderer's draw count and find hidden contributors.
@@ -103,6 +121,13 @@ export const PerfMonitor = () => {
         lines,
         sprites,
         lights,
+        nodes,
+        historyPast,
+        historyFuture,
+        geometries,
+        textures,
+        materialCache,
+        heapMb,
       })
       frameCount.current = 0
       elapsed.current = now
@@ -137,7 +162,13 @@ DIRTY  ${stats.dirty}
 MESH   ${stats.meshes}
 LINE   ${stats.lines}
 SPRITE ${stats.sprites}
-LIGHT  ${stats.lights}`}
+LIGHT  ${stats.lights}
+NODE   ${stats.nodes}
+UNDO   ${stats.historyPast}/${stats.historyFuture}
+GEO    ${stats.geometries}
+TEX    ${stats.textures}
+MCACHE ${stats.materialCache}
+HEAP   ${stats.heapMb > 0 ? `${stats.heapMb.toFixed(1)}mb` : '-'}`}
       </div>
     </Html>
   )

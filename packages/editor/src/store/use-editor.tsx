@@ -3,8 +3,10 @@
 import type { AssetInput } from '@pascal-app/core'
 import {
   type AnyNodeId,
+  type BoxNode,
   type BuildingNode,
   type CeilingNode,
+  type CylinderNode,
   type ColumnNode,
   type DoorNode,
   type ElevatorNode,
@@ -18,6 +20,7 @@ import {
   type SlabNode,
   type Space,
   type SpawnNode,
+  type SphereNode,
   type StairNode,
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
@@ -77,20 +80,32 @@ export type SiteTool = 'property-line'
 
 // Catalog categories for furnish mode items
 export type CatalogCategory =
-  | 'furniture'
-  | 'appliance'
-  | 'bathroom'
-  | 'kitchen'
+  | 'safety'
+  | 'electrical'
+  | 'hvac'
+  | 'lighting'
+  | 'electronics'
+  | 'equipment'
+  | 'structural'
+  | 'infrastructure'
+  | 'opening'
+  | 'nature'
   | 'outdoor'
-  | 'window'
-  | 'door'
+  | 'vehicle'
 
 const FURNISH_CATALOG_CATEGORIES: CatalogCategory[] = [
-  'furniture',
-  'appliance',
-  'bathroom',
-  'kitchen',
+  'safety',
+  'electrical',
+  'hvac',
+  'lighting',
+  'electronics',
+  'equipment',
+  'structural',
+  'infrastructure',
+  'opening',
+  'nature',
   'outdoor',
+  'vehicle',
 ]
 
 function normalizeFurnishCatalogCategory(
@@ -99,7 +114,7 @@ function normalizeFurnishCatalogCategory(
   if (category && FURNISH_CATALOG_CATEGORIES.includes(category)) {
     return category
   }
-  return 'furniture'
+  return 'safety'
 }
 
 export type StructureLayer = 'zones' | 'elements'
@@ -177,6 +192,9 @@ type EditorState = {
     | StairNode
     | StairSegmentNode
     | BuildingNode
+    | BoxNode
+    | CylinderNode
+    | SphereNode
     | null
   setMovingNode: (
     node:
@@ -196,6 +214,9 @@ type EditorState = {
       | StairNode
       | StairSegmentNode
       | BuildingNode
+      | BoxNode
+      | CylinderNode
+      | SphereNode
       | null,
   ) => void
   movingWallEndpoint: MovingWallEndpoint | null
@@ -284,6 +305,8 @@ type EditorState = {
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
   setMobilePanelSheetHeight: (px: number) => void
+  primitivePlacement: string | null
+  setPrimitivePlacement: (kind: string | null) => void
 }
 
 export type PersistedEditorUiState = Pick<
@@ -374,7 +397,7 @@ export function normalizePersistedEditorUiState(
       mode,
       tool: mode === 'build' ? 'item' : null,
       structureLayer: 'elements',
-      catalogCategory: mode === 'build' ? (state?.catalogCategory ?? 'furniture') : null,
+      catalogCategory: mode === 'build' ? (state?.catalogCategory ?? 'safety') : null,
       viewMode,
       isFloorplanOpen,
     }
@@ -527,7 +550,7 @@ const useEditor = create<EditorState>()(
           } else if (phase === 'structure') {
             set({ tool: 'wall', catalogCategory: null })
           } else if (phase === 'furnish') {
-            set({ tool: 'item', catalogCategory: 'furniture' })
+            set({ tool: 'item', catalogCategory: 'safety' })
           }
         } else {
           // Reset to select mode and clear tool/catalog when switching phases
@@ -567,7 +590,7 @@ const useEditor = create<EditorState>()(
             } else if (phase === 'structure' && structureLayer === 'elements') {
               set({ tool: 'wall' })
             } else if (phase === 'furnish') {
-              set({ tool: 'item', catalogCategory: 'furniture' })
+              set({ tool: 'item', catalogCategory: 'safety' })
             }
           }
         } else if (mode === 'material-paint') {
@@ -808,6 +831,8 @@ const useEditor = create<EditorState>()(
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
+      primitivePlacement: null,
+      setPrimitivePlacement: (kind) => set({ primitivePlacement: kind }),
     }),
     {
       name: 'pascal-editor-ui-preferences',

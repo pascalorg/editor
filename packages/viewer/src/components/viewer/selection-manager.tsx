@@ -178,6 +178,11 @@ const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean =
     return true
   }
 
+  if (node.type === 'box' || node.type === 'cylinder' || node.type === 'sphere') {
+    const prim = node as { position: [number, number, number] }
+    return pointInPolygonWithTolerance(prim.position[0], prim.position[2], zone.polygon)
+  }
+
   return false
 }
 
@@ -289,6 +294,9 @@ const getStrategy = (): SelectionStrategy | null => {
         'roof-segment',
         'window',
         'door',
+        'box',
+        'cylinder',
+        'sphere',
       ]
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)

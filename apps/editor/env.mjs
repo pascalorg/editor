@@ -20,6 +20,7 @@ export const env = createEnv({
    */
   client: {
     NEXT_PUBLIC_ASSETS_CDN_URL: z.string().optional(),
+    NEXT_PUBLIC_ARTICRAFT_VIEWER_URL: z.string().optional(),
   },
 
   /**
@@ -28,6 +29,8 @@ export const env = createEnv({
   runtimeEnv: {
     NEXT_PUBLIC_ASSETS_CDN_URL:
       process.env.NEXT_PUBLIC_ASSETS_CDN_URL ?? process.env.NEXT_PUBLIC_EDITOR_ASSETS_CDN_URL,
+    NEXT_PUBLIC_ARTICRAFT_VIEWER_URL:
+      process.env.NEXT_PUBLIC_ARTICRAFT_VIEWER_URL ?? 'http://127.0.0.1:8765',
   },
 
   /**

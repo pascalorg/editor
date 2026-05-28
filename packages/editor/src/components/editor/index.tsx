@@ -7,7 +7,13 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { type HoverStyles, InteractiveSystem, useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  clearViewerMaterialCaches,
+  type HoverStyles,
+  InteractiveSystem,
+  useViewer,
+  Viewer,
+} from '@pascal-app/viewer'
 import {
   memo,
   type ReactNode,
@@ -106,6 +112,7 @@ function initializeEditorRuntime(): () => void {
     unsubscribeSpaceDetection?.()
 
     spatialGridManager.clear()
+    clearViewerMaterialCaches()
 
     const outliner = useViewer.getState().outliner
     outliner.selectedObjects.length = 0

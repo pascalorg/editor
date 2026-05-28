@@ -1,6 +1,7 @@
 import { type AnyNodeId, type CeilingNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
@@ -71,7 +72,7 @@ export function generateCeilingGeometry(ceilingNode: CeilingNode): THREE.BufferG
   const polygon = ceilingNode.polygon
 
   if (polygon.length < 3) {
-    return new THREE.BufferGeometry()
+    return createSafeEmptyGeometry()
   }
 
   // Create shape from polygon

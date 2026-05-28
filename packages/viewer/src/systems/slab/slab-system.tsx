@@ -8,6 +8,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
+import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
@@ -89,7 +90,7 @@ function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry 
   const elevation = slabNode.elevation ?? 0.05
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
-  if (polygon.length < 3) return new THREE.BufferGeometry()
+  if (polygon.length < 3) return createSafeEmptyGeometry()
 
   const shape = new THREE.Shape()
   shape.moveTo(polygon[0]![0], -polygon[0]![1])
@@ -126,7 +127,7 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   const depth = Math.abs(slabNode.elevation ?? 0.05)
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
-  if (polygon.length < 3) return new THREE.BufferGeometry()
+  if (polygon.length < 3) return createSafeEmptyGeometry()
 
   const positions: number[] = []
   const uvs: number[] = []

@@ -1,9 +1,28 @@
 'use client'
 
-import { type AnyNodeId, type SiteNode, type SlabNode, useRegistry, useScene } from '@pascal-app/core'
-import { NodeRenderer, unionPolygons, useNodeEvents, useViewer } from '@pascal-app/viewer'
-import { useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Group, Path, Shape } from 'three'
+import {
+  type AnyNodeId,
+  type SiteNode,
+  type SlabNode,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
+import {
+  createSafeEmptyGeometry,
+  NodeRenderer,
+  unionPolygons,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
+import { useEffect, useMemo, useRef } from 'react'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  type Group,
+  Path,
+  Shape,
+  ShapeGeometry,
+} from 'three'
 
 const Y_OFFSET = 0.01
 
@@ -101,11 +120,29 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return shape
   }, [node?.polygon?.points, slabPolygons])
 
+  const groundGeometry = useMemo(() => {
+    if (!groundShape) return null
+
+    const geometry = new ShapeGeometry(groundShape)
+    const position = geometry.getAttribute('position')
+    if (position && position.count >= 3) return geometry
+
+    geometry.dispose()
+    return createSafeEmptyGeometry()
+  }, [groundShape])
+
   // Create boundary line geometry
   const lineGeometry = useMemo(() => {
     if (!node?.polygon?.points || node.polygon.points.length < 2) return null
     return createBoundaryLineGeometry(node.polygon.points)
   }, [node?.polygon?.points])
+
+  useEffect(() => {
+    return () => {
+      groundGeometry?.dispose()
+      lineGeometry?.dispose()
+    }
+  }, [groundGeometry, lineGeometry])
 
   const handlers = useNodeEvents(node, 'site')
 
@@ -121,9 +158,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {groundShape && (
-        <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <shapeGeometry args={[groundShape]} />
+      {groundGeometry && (
+        <mesh geometry={groundGeometry} position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <meshBasicMaterial
             color={bgColor}
             polygonOffset={true}

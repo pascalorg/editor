@@ -1,0 +1,42 @@
+{
+  "name": "@pascal-app/articraft-bridge",
+  "version": "0.1.0",
+  "description": "Bridge between Articraft (Python) articulated model generation and the Pascal 3D editor",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": "*"
+  },
+  "devDependencies": {
+    "@pascal-app/core": "*",
+    "@pascal/typescript-config": "*",
+    "@types/node": "^25.5.0",
+    "typescript": "5.9.3"
+  },
+  "keywords": [
+    "articraft",
+    "articulated",
+    "3d",
+    "editor",
+    "ai",
+    "generation"
+  ],
+  "license": "MIT"
+}

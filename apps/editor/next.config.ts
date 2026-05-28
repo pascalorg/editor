@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
     '@pascal-app/core',
     '@pascal-app/editor',
     '@pascal-app/nodes',
-    '@pascal-app/mcp',
   ],
   turbopack: {
     resolveAlias: {
