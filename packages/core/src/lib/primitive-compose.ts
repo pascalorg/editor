@@ -1,8 +1,29 @@
 export type Vec3 = [number, number, number]
 
-export type PrimitiveShapeKind = 'box' | 'cylinder' | 'sphere' | 'lathe'
+export type PrimitiveShapeKind =
+  | 'box'
+  | 'cylinder'
+  | 'sphere'
+  | 'lathe'
+  | 'capsule'
+  | 'half-cylinder'
+  | 'rounded-panel'
+  | 'extrude'
+  | 'sweep'
 export type PrimitiveAnchor = 'top' | 'bottom' | 'center' | 'front' | 'back' | 'left' | 'right'
 export type PrimitiveAxis = 'x' | 'y' | 'z'
+export interface PrimitiveMaterialInput {
+  id?: string
+  preset?: string
+  properties?: {
+    color?: string
+    roughness?: number
+    metalness?: number
+    opacity?: number
+    transparent?: boolean
+    side?: 'front' | 'back' | 'double'
+  }
+}
 
 export interface PrimitiveShapeInput {
   kind: PrimitiveShapeKind | string
@@ -13,9 +34,15 @@ export interface PrimitiveShapeInput {
   length?: number
   width?: number
   height?: number
+  depth?: number
+  thickness?: number
+  cornerRadius?: number
+  cornerSegments?: number
   radius?: number
   axis?: PrimitiveAxis | string
+  capSegments?: number
   radialSegments?: number
+  tubularSegments?: number
   widthSegments?: number
   heightSegments?: number
   attachTo?: number
@@ -23,9 +50,16 @@ export interface PrimitiveShapeInput {
   childAnchor?: PrimitiveAnchor | string
   wallThickness?: number
   materialPreset?: string
+  material?: PrimitiveMaterialInput
   profile?: [number, number][]
+  path?: Vec3[]
   segments?: number
   arc?: number
+  bevelSize?: number
+  bevelThickness?: number
+  bevelSegments?: number
+  curveSegments?: number
+  closed?: boolean
 }
 
 export interface ResolvedPrimitiveTransform {
@@ -46,7 +80,7 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
         x: (spec.length ?? 1.0) / 2,
         y: (spec.height ?? 1.0) / 2,
         z: (spec.width ?? 1.0) / 2,
-    }
+      }
     case 'cylinder': {
       const r = spec.radius ?? 0.5
       const halfHeight = (spec.height ?? 1.0) / 2
@@ -55,11 +89,29 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
           return { x: halfHeight, y: r, z: r }
         case 'z':
           return { x: r, y: r, z: halfHeight }
-        case 'y':
         default:
           return { x: r, y: halfHeight, z: r }
       }
     }
+    case 'capsule':
+    case 'half-cylinder': {
+      const r = spec.radius ?? 0.5
+      const halfHeight = (spec.height ?? 1.0) / 2
+      switch (spec.axis) {
+        case 'x':
+          return { x: halfHeight, y: r, z: r }
+        case 'z':
+          return { x: r, y: r, z: halfHeight }
+        default:
+          return { x: r, y: halfHeight, z: r }
+      }
+    }
+    case 'rounded-panel':
+      return {
+        x: (spec.length ?? 1.0) / 2,
+        y: (spec.thickness ?? spec.height ?? 0.04) / 2,
+        z: (spec.width ?? 0.5) / 2,
+      }
     case 'sphere': {
       const r = spec.radius ?? 0.5
       const sx = spec.scale?.[0] ?? 1
@@ -68,7 +120,10 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
       return { x: r * sx, y: r * sy, z: r * sz }
     }
     case 'lathe': {
-      const profile = spec.profile ?? [[0, 0], [0.5, 1]]
+      const profile = spec.profile ?? [
+        [0, 0],
+        [0.5, 1],
+      ]
       let maxX = 0
       let minY = Infinity
       let maxY = -Infinity
@@ -78,6 +133,55 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
         if (y > maxY) maxY = y
       }
       return { x: maxX, y: (maxY - minY) / 2, z: maxX }
+    }
+    case 'extrude': {
+      const profile = spec.profile ?? [
+        [-0.5, -0.25],
+        [0.5, -0.25],
+        [0.5, 0.25],
+        [-0.5, 0.25],
+      ]
+      let minX = Infinity
+      let maxX = -Infinity
+      let minY = Infinity
+      let maxY = -Infinity
+      for (const [x, y] of profile) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+      return {
+        x: Math.max(0.01, (maxX - minX) / 2),
+        y: Math.max(0.01, (maxY - minY) / 2),
+        z: (spec.depth ?? 0.1) / 2,
+      }
+    }
+    case 'sweep': {
+      const path = spec.path ?? [
+        [-0.5, 0, 0],
+        [0.5, 0, 0],
+      ]
+      const r = spec.radius ?? 0.03
+      let minX = Infinity
+      let maxX = -Infinity
+      let minY = Infinity
+      let maxY = -Infinity
+      let minZ = Infinity
+      let maxZ = -Infinity
+      for (const [x, y, z] of path) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+        if (z < minZ) minZ = z
+        if (z > maxZ) maxZ = z
+      }
+      return {
+        x: Math.max(r, (maxX - minX) / 2 + r),
+        y: Math.max(r, (maxY - minY) / 2 + r),
+        z: Math.max(r, (maxZ - minZ) / 2 + r),
+      }
     }
     default:
       return { x: 0.5, y: 0.5, z: 0.5 }
@@ -205,14 +309,15 @@ function subtractVec(a: Vec3, b: Vec3): Vec3 {
 }
 
 function getAxisRotation(spec: PrimitiveShapeInput): Vec3 {
-  if (spec.kind !== 'cylinder') return [0, 0, 0]
+  if (spec.kind !== 'cylinder' && spec.kind !== 'capsule' && spec.kind !== 'half-cylinder') {
+    return [0, 0, 0]
+  }
 
   switch (spec.axis) {
     case 'x':
       return [0, 0, -Math.PI / 2]
     case 'z':
       return [Math.PI / 2, 0, 0]
-    case 'y':
     default:
       return [0, 0, 0]
   }
@@ -271,7 +376,10 @@ export function resolvePrimitiveWorldTransforms(
     const childAnchor = shape.childAnchor ?? 'center'
     const childHE = getHalfExtents(shape)
     const anchorOffset = getAnchorOffset(anchor, parentHE)
-    const composedSemanticRotationMatrix = multiplyMatrix(parentSemanticRotationMatrix, semanticRotationMatrix)
+    const composedSemanticRotationMatrix = multiplyMatrix(
+      parentSemanticRotationMatrix,
+      semanticRotationMatrix,
+    )
     const composedRotationMatrix = multiplyMatrix(parentSemanticRotationMatrix, localRotationMatrix)
     const childAnchorOffset = getAnchorOffset(childAnchor, childHE)
 

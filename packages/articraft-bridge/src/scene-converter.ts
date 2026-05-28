@@ -1,8 +1,7 @@
-import { BoxNode, CylinderNode, SphereNode } from '@pascal-app/core/schema'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import { BoxNode, CylinderNode, SphereNode } from '@pascal-app/core/schema'
 import type {
   ArticraftJoint,
-  ArticraftLink,
   ArticraftModelData,
   ArticraftVisual,
   SceneNodeResult,
@@ -119,11 +118,7 @@ function visualToPrimitiveNode(
 
 // ─── Joint metadata ────────────────────────────────────────────────────
 
-function buildJointMetadata(
-  joint: ArticraftJoint,
-  parentNodeId: string,
-  childNodeId: string,
-): SceneNodeResult['jointMetadata'][string] {
+function buildJointMetadata(joint: ArticraftJoint): SceneNodeResult['jointMetadata'][string] {
   return {
     jointName: joint.name,
     jointType: joint.type,
@@ -181,38 +176,23 @@ export function convertToSceneNodes(
   const jointMetadata: SceneNodeResult['jointMetadata'] = {}
   const rootLinks: string[] = []
 
-  // Build link name → link map
-  const linkByName = new Map<string, ArticraftLink>()
-  for (const link of data.links) {
-    linkByName.set(link.name, link)
-  }
-
   // Build child → parent map from joints
   const parentLinkByChild = new Map<string, string>()
-  const jointsByChild = new Map<string, ArticraftJoint>()
   for (const joint of data.joints) {
     parentLinkByChild.set(joint.child, joint.parent)
-    jointsByChild.set(joint.child, joint)
   }
-
-  // Build parent node ID map (after resolving the actual node IDs)
-  const nodeParentIdByLink = new Map<string, string>()
 
   // Create nodes for each link
   for (const link of data.links) {
     const parentLink = parentLinkByChild.get(link.name)
     if (!parentLink) {
       rootLinks.push(link.name)
-    } else {
-      nodeParentIdByLink.set(link.name, parentLink)
     }
 
     // Convert each visual to a node
     for (let vi = 0; vi < link.visuals.length; vi++) {
       const visual = link.visuals[vi]!
-      const nodeName = link.visuals.length > 1
-        ? `${link.name}_v${vi}`
-        : link.name
+      const nodeName = link.visuals.length > 1 ? `${link.name}_v${vi}` : link.name
 
       const materialPreset = visual.material?.name ?? options.materialPreset
 
@@ -263,16 +243,13 @@ export function convertToSceneNodes(
       nodes.push(placeholder)
       nodeIdByLink.set(link.name, placeholder.id)
     }
+  }
 
-    // Build joint metadata for this link (if it's a child)
-    if (options.articulationMode) {
-      const joint = jointsByChild.get(link.name)
-      if (joint) {
-        const childNodeId = nodeIdByLink.get(link.name)
-        const parentNodeId = nodeIdByLink.get(joint.parent)
-        if (childNodeId && parentNodeId) {
-          jointMetadata[childNodeId] = buildJointMetadata(joint, parentNodeId, childNodeId)
-        }
+  if (options.articulationMode) {
+    for (const joint of data.joints) {
+      const childNodeId = nodeIdByLink.get(joint.child)
+      if (childNodeId && nodeIdByLink.has(joint.parent)) {
+        jointMetadata[childNodeId] = buildJointMetadata(joint)
       }
     }
   }
@@ -295,14 +272,19 @@ export function createModelNodes(
   createNode: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId,
   options: ConvertOptions,
 ): SceneNodeResult {
-  const { nodes, nodeIdByLink, jointMetadata, rootLinks } = convertToSceneNodes(
-    data,
-    options,
-  )
+  const { nodes, nodeIdByLink, jointMetadata } = convertToSceneNodes(data, options)
 
   const createdIds: string[] = []
   const rootNodeIds: string[] = []
+  const createdNodeIdByLink = new Map<string, string>()
+  const rootLinkIds = new Set<string>()
   const pending: Array<{ linkName: string; node: AnyNode }> = []
+
+  const rememberCreatedLinkNode = (linkName: string, node: AnyNode, id: AnyNodeId) => {
+    if (nodeIdByLink.get(linkName) === node.id) {
+      createdNodeIdByLink.set(linkName, id as string)
+    }
+  }
 
   // First pass: create nodes for links that have no parent or whose parent is a root
   for (const node of nodes) {
@@ -319,7 +301,11 @@ export function createModelNodes(
       // Root link → create directly
       const id = createNode(node, options.parentId as AnyNodeId | undefined)
       createdIds.push(id as string)
-      rootNodeIds.push(id as string)
+      rememberCreatedLinkNode(linkName, node, id)
+      if (!rootLinkIds.has(linkName)) {
+        rootNodeIds.push(id as string)
+        rootLinkIds.add(linkName)
+      }
     } else {
       // Child link → defer creation until parent is created
       pending.push({ linkName, node })
@@ -345,10 +331,11 @@ export function createModelNodes(
         continue
       }
 
-      const parentNodeId = nodeIdByLink.get(parentJoint.parent)
+      const parentNodeId = createdNodeIdByLink.get(parentJoint.parent)
       if (parentNodeId) {
         const id = createNode(node, parentNodeId as AnyNodeId)
         createdIds.push(id as string)
+        rememberCreatedLinkNode(linkName, node, id)
       } else {
         stillPending.push({ linkName, node })
       }
@@ -356,9 +343,14 @@ export function createModelNodes(
 
     if (stillPending.length === remaining.length) {
       // No progress — create remaining as roots to avoid infinite loop
-      for (const { node } of stillPending) {
+      for (const { linkName, node } of stillPending) {
         const id = createNode(node, options.parentId as AnyNodeId | undefined)
         createdIds.push(id as string)
+        rememberCreatedLinkNode(linkName, node, id)
+        if (!rootLinkIds.has(linkName)) {
+          rootNodeIds.push(id as string)
+          rootLinkIds.add(linkName)
+        }
       }
       break
     }
@@ -370,10 +362,7 @@ export function createModelNodes(
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function inferLinkName(
-  node: AnyNode,
-  data: ArticraftModelData,
-): string | null {
+function inferLinkName(node: AnyNode, data: ArticraftModelData): string | null {
   const nodeName = node.name
   if (!nodeName) return null
 

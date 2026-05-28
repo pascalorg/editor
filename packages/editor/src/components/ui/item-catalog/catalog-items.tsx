@@ -17,6 +17,13 @@ function localOnly(id: string) {
   } as const
 }
 
+function iconOnly(id: string, thumbnail: string) {
+  return {
+    thumbnail,
+    src: `/items/${id}/model.glb`,
+  } as const
+}
+
 export const CATALOG_ITEMS: AssetInput[] = [
   // ═══════════════════════════════════════════════════════════════════
   // SAFETY / FIRE
@@ -155,6 +162,17 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [1.5708, 0, 0],
     scale: [1, 1, 1],
     attachTo: 'wall-side',
+  },
+  {
+    id: 'factory-electric-box',
+    category: 'electrical',
+    name: 'Factory Electric Box',
+    tags: ['floor', 'electrical', 'industrial', 'factory'],
+    ...iconOnly('factory-electric-box', '/icons/appliance.png'),
+    dimensions: [0.65, 1.0, 0.45],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
   },
 
   // ═══════════════════════════════════════════════════════════════════
@@ -445,6 +463,61 @@ export const CATALOG_ITEMS: AssetInput[] = [
     tags: ['floor', 'storage', 'utility'],
     ...supabase('coat-rack'),
     dimensions: [0.33, 1.76, 0.33],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  },
+  {
+    id: 'factory-straight-pipe',
+    category: 'equipment',
+    name: 'Factory Straight Pipe',
+    tags: ['floor', 'pipe', 'industrial', 'factory'],
+    ...iconOnly('factory-straight-pipe', '/icons/shelf.png'),
+    dimensions: [1.6, 0.4, 0.4],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  },
+  {
+    id: 'factory-curved-pipe',
+    category: 'equipment',
+    name: 'Factory Curved Pipe',
+    tags: ['floor', 'pipe', 'industrial', 'factory'],
+    ...iconOnly('factory-curved-pipe', '/icons/shelf.png'),
+    dimensions: [1.0, 0.75, 1.0],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  },
+  {
+    id: 'factory-t-pipe',
+    category: 'equipment',
+    name: 'Factory T Pipe',
+    tags: ['floor', 'pipe', 'industrial', 'factory'],
+    ...iconOnly('factory-t-pipe', '/icons/shelf.png'),
+    dimensions: [1.35, 0.55, 1.0],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  },
+  {
+    id: 'factory-extractor',
+    category: 'equipment',
+    name: 'Factory Extractor',
+    tags: ['floor', 'ventilation', 'industrial', 'factory'],
+    ...iconOnly('factory-extractor', '/icons/appliance.png'),
+    dimensions: [0.9, 1.4, 0.9],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  },
+  {
+    id: 'factory-barrel',
+    category: 'equipment',
+    name: 'Factory Barrel',
+    tags: ['floor', 'barrel', 'storage', 'industrial'],
+    ...iconOnly('factory-barrel', '/icons/shelf.png'),
+    dimensions: [0.6, 0.9, 0.6],
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],

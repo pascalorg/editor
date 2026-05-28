@@ -5,18 +5,23 @@ import {
   type AnyNodeId,
   type BoxNode,
   type BuildingNode,
+  type CapsuleNode,
   type CeilingNode,
-  type CylinderNode,
   type ColumnNode,
+  type CylinderNode,
   type DoorNode,
   type ElevatorNode,
+  type ExtrudeNode,
   type FenceNode,
+  type HalfCylinderNode,
   type ItemNode,
-  type PipeNode,
+  type LatheNode,
   type LevelNode,
+  type PipeNode,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSurfaceMaterialRole,
+  type RoundedPanelNode,
   type SlabNode,
   type Space,
   type SpawnNode,
@@ -24,6 +29,7 @@ import {
   type StairNode,
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
+  type SweepNode,
   useScene,
   type WallNode,
   type WallSurfaceSide,
@@ -195,6 +201,12 @@ type EditorState = {
     | BoxNode
     | CylinderNode
     | SphereNode
+    | LatheNode
+    | CapsuleNode
+    | HalfCylinderNode
+    | RoundedPanelNode
+    | ExtrudeNode
+    | SweepNode
     | null
   setMovingNode: (
     node:
@@ -217,6 +229,12 @@ type EditorState = {
       | BoxNode
       | CylinderNode
       | SphereNode
+      | LatheNode
+      | CapsuleNode
+      | HalfCylinderNode
+      | RoundedPanelNode
+      | ExtrudeNode
+      | SweepNode
       | null,
   ) => void
   movingWallEndpoint: MovingWallEndpoint | null
@@ -294,10 +312,7 @@ type EditorState = {
   /** Atomically enter furnish + build + item tool (optionally open Items tab). */
   enterFurnishBuildMode: (options?: { openItemsPanel?: boolean }) => void
   /** Atomically enter structure + build (optionally open Scene tab). */
-  enterStructureBuildMode: (options?: {
-    layer?: StructureLayer
-    openSitePanel?: boolean
-  }) => void
+  enterStructureBuildMode: (options?: { layer?: StructureLayer; openSitePanel?: boolean }) => void
   setIsCaptureMode: (enabled: boolean) => void
   floorplanPaneRatio: number
   setFloorplanPaneRatio: (ratio: number) => void
@@ -634,12 +649,22 @@ const useEditor = create<EditorState>()(
         | SlabNode
         | WallNode
         | FenceNode
+        | PipeNode
         | RoofNode
         | RoofSegmentNode
         | SpawnNode
         | StairNode
         | StairSegmentNode
         | BuildingNode
+        | BoxNode
+        | CylinderNode
+        | SphereNode
+        | LatheNode
+        | CapsuleNode
+        | HalfCylinderNode
+        | RoundedPanelNode
+        | ExtrudeNode
+        | SweepNode
         | null,
       setMovingNode: (node) => set({ movingNode: node }),
       movingWallEndpoint: null,

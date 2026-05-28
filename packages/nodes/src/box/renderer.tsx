@@ -1,13 +1,10 @@
 'use client'
 
 import { type BoxNode, useRegistry, useScene } from '@pascal-app/core'
-import {
-  createMaterial,
-  createMaterialFromPresetRef,
-  useNodeEvents,
-} from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 
 export const BoxRenderer = ({ node }: { node: BoxNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -26,18 +23,34 @@ export const BoxRenderer = ({ node }: { node: BoxNode }) => {
     const mat = node.material
     if (!mat) return new THREE.MeshStandardMaterial({ color: 0xcccccc })
     return createMaterial(mat)
-  }, [node.materialPreset, node.material, node.material?.preset, node.material?.properties, node.material?.texture])
+  }, [
+    node.materialPreset,
+    node.material,
+    node.material?.preset,
+    node.material?.properties,
+    node.material?.texture,
+  ])
 
-  const geometry = useMemo(
-    () => new THREE.BoxGeometry(node.length ?? 1, node.height ?? 1, node.width ?? 1),
-    [node.length, node.height, node.width],
-  )
+  const geometry = useMemo(() => {
+    const length = node.length ?? 1
+    const height = node.height ?? 1
+    const width = node.width ?? 1
+    const maxRadius = Math.max(0, Math.min(length, height, width) / 2 - 0.001)
+    const radius = Math.max(0, Math.min(node.cornerRadius ?? 0, maxRadius))
 
-  useEffect(() => {
-    return () => {
-      geometry.dispose()
+    if (radius <= 0) {
+      return new THREE.BoxGeometry(length, height, width)
     }
-  }, [geometry])
+
+    return new RoundedBoxGeometry(
+      length,
+      height,
+      width,
+      Math.max(1, Math.round(node.cornerSegments ?? 4)),
+      radius,
+    )
+  }, [node.length, node.height, node.width, node.cornerRadius, node.cornerSegments])
+
 
   return (
     <group
@@ -49,13 +62,7 @@ export const BoxRenderer = ({ node }: { node: BoxNode }) => {
       visible={node.visible}
       {...handlers}
     >
-      <mesh
-        castShadow
-        geometry={geometry}
-        material={material}
-        name="box-solid"
-        receiveShadow
-      />
+      <mesh castShadow geometry={geometry} material={material} name="box-solid" receiveShadow />
     </group>
   )
 }

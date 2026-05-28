@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { clearRoofDuplicateMetadata } from '../../../lib/roof-duplication'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -105,6 +106,10 @@ export const MoveRoofTool: React.FC<{
 
     // Track pending rotation — no store updates during drag
     let pendingRotation: number = movingNode.rotation as number
+    let pendingPlacement: { localX: number; localZ: number } = {
+      localX: movingNode.position[0],
+      localZ: movingNode.position[2],
+    }
 
     // For roof-segment moves: the selection was cleared before entering move mode,
     // so isSelected=false on the parent roof, hiding individual segment meshes and
@@ -203,11 +208,14 @@ export const MoveRoofTool: React.FC<{
       return [buildingLocalX, buildingLocalZ]
     }
 
-    const onGridMove = (event: GridEvent) => {
-      const y = event.position[1]
+    const previewAt = (
+      position: [number, number, number],
+      localPosition: [number, number, number],
+    ) => {
+      const y = position[1]
 
       const snappedLocal = snapFenceDraftPoint({
-        point: [event.localPosition[0], event.localPosition[2]],
+        point: [localPosition[0], localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
       })
@@ -222,9 +230,10 @@ export const MoveRoofTool: React.FC<{
 
       previousGridPosRef.current = [gridX, gridZ]
       const [lx, lz] = snappedLocal
-      setCursorWorldPos([lx, event.localPosition[1], lz])
+      setCursorWorldPos([lx, localPosition[1], lz])
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
+      pendingPlacement = { localX, localZ }
 
       // Directly update the Three.js mesh — no store update during drag
       const mesh = sceneRegistry.nodes.get(movingNode.id)
@@ -240,18 +249,35 @@ export const MoveRoofTool: React.FC<{
       })
     }
 
-    const onGridClick = (event: GridEvent) => {
-      const y = event.position[1]
+    const onGridMove = (event: GridEvent) => {
+      previewAt(event.position, event.localPosition)
+    }
+
+    if (lastGridMoveRef.position && lastGridMoveRef.localPosition) {
+      previewAt(lastGridMoveRef.position, lastGridMoveRef.localPosition)
+    }
+
+    const computePlacementAt = (
+      position: [number, number, number],
+      localPosition: [number, number, number],
+    ): { localX: number; localZ: number } => {
+      const y = position[1]
       const snappedLocal = snapFenceDraftPoint({
-        point: [event.localPosition[0], event.localPosition[2]],
+        point: [localPosition[0], localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
       })
       const [gridX, , gridZ] = localToWorldPoint(snappedLocal, y)
       const [lx, lz] = snappedLocal
-
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
+      return { localX, localZ }
+    }
 
+    const commitPlacement = (
+      placement: { localX: number; localZ: number },
+      nativeEvent?: { stopPropagation?: () => void },
+    ) => {
+      if (wasCommitted) return
       wasCommitted = true
 
       // The store still holds the original values (we didn't update during drag).
@@ -260,13 +286,13 @@ export const MoveRoofTool: React.FC<{
 
       if (isNew && movingNode.type === 'roof') {
         clearRoofDuplicateMetadata(movingNode.id as AnyNodeId, {
-          position: [localX, movingNode.position[1], localZ],
+          position: [placement.localX, movingNode.position[1], placement.localZ],
           rotation: pendingRotation,
           metadata: committedMeta,
         })
       } else {
         useScene.getState().updateNode(movingNode.id, {
-          position: [localX, movingNode.position[1], localZ],
+          position: [placement.localX, movingNode.position[1], placement.localZ],
           rotation: pendingRotation,
           metadata: committedMeta,
         })
@@ -278,7 +304,17 @@ export const MoveRoofTool: React.FC<{
       useViewer.getState().setSelection({ selectedIds: [movingNode.id] })
       useLiveTransforms.getState().clear(movingNode.id)
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+      nativeEvent?.stopPropagation?.()
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      pendingPlacement = computePlacementAt(event.position, event.localPosition)
+      commitPlacement(pendingPlacement, event.nativeEvent)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitPlacement(pendingPlacement, event)
     }
 
     const onCancel = () => {
@@ -332,6 +368,7 @@ export const MoveRoofTool: React.FC<{
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPointerUp)
 
     return () => {
       // Restore segment wrapper visibility (React will re-sync on next render)
@@ -353,6 +390,7 @@ export const MoveRoofTool: React.FC<{
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPointerUp)
     }
   }, [movingNode, exitMoveMode])
 

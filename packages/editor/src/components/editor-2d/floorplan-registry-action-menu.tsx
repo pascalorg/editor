@@ -11,6 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { isPlanDragMovableNode } from '../../lib/plan-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from '../editor/node-action-menu'
@@ -89,6 +90,7 @@ export function FloorplanRegistryActionMenu() {
   // the floor plan." The `MoveTool` dispatcher resolves the right path.
   const canMove =
     !!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move
+  const isDirectPlanDraggable = isPlanDragMovableNode(node)
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
@@ -179,7 +181,7 @@ export function FloorplanRegistryActionMenu() {
         onAddHole={canAddHole ? handleAddHole : undefined}
         onDelete={canDelete ? handleDelete : undefined}
         onDuplicate={canDuplicate ? handleDuplicate : undefined}
-        onMove={canMove ? handleMove : undefined}
+        onMove={canMove && !isDirectPlanDraggable ? handleMove : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
       />

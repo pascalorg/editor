@@ -1,0 +1,1 @@
+export { capsuleDefinition } from './definition'

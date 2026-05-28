@@ -1,19 +1,23 @@
 import z from 'zod'
 import { BoxNode } from './nodes/box'
 import { BuildingNode } from './nodes/building'
+import { CapsuleNode } from './nodes/capsule'
 import { CeilingNode } from './nodes/ceiling'
-import { CylinderNode } from './nodes/cylinder'
 import { ColumnNode } from './nodes/column'
+import { CylinderNode } from './nodes/cylinder'
 import { DoorNode } from './nodes/door'
 import { ElevatorNode } from './nodes/elevator'
+import { ExtrudeNode } from './nodes/extrude'
 import { FenceNode } from './nodes/fence'
-import { PipeNode } from './nodes/pipe'
 import { GuideNode } from './nodes/guide'
-import { LatheNode } from './nodes/lathe'
+import { HalfCylinderNode } from './nodes/half-cylinder'
 import { ItemNode } from './nodes/item'
+import { LatheNode } from './nodes/lathe'
 import { LevelNode } from './nodes/level'
+import { PipeNode } from './nodes/pipe'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
+import { RoundedPanelNode } from './nodes/rounded-panel'
 import { ScanNode } from './nodes/scan'
 import { ShelfNode } from './nodes/shelf'
 import { SiteNode } from './nodes/site'
@@ -22,6 +26,7 @@ import { SpawnNode } from './nodes/spawn'
 import { SphereNode } from './nodes/sphere'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
+import { SweepNode } from './nodes/sweep'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
@@ -33,6 +38,11 @@ export const AnyNode = z.discriminatedUnion('type', [
   CylinderNode,
   SphereNode,
   LatheNode,
+  CapsuleNode,
+  HalfCylinderNode,
+  RoundedPanelNode,
+  ExtrudeNode,
+  SweepNode,
   ElevatorNode,
   LevelNode,
   ColumnNode,

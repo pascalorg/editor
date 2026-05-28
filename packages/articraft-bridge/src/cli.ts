@@ -55,6 +55,8 @@ export function generateModel(options: GenerateOptions): Promise<ArticraftModelD
     if (!env.ARTICRAFT_REPO_ROOT) {
       env.ARTICRAFT_REPO_ROOT = repoRoot
     }
+    env.PYTHONUTF8 ??= '1'
+    env.PYTHONIOENCODING ??= 'utf-8'
 
     let proc: ChildProcess
     try {

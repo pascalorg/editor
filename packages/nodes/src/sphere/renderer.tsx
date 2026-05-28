@@ -6,7 +6,7 @@ import {
   createMaterialFromPresetRef,
   useNodeEvents,
 } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
 export const SphereRenderer = ({ node }: { node: SphereNode }) => {
@@ -44,11 +44,6 @@ export const SphereRenderer = ({ node }: { node: SphereNode }) => {
     [node.radius, node.widthSegments, node.heightSegments, node.scale[0], node.scale[1], node.scale[2]],
   )
 
-  useEffect(() => {
-    return () => {
-      geometry.dispose()
-    }
-  }, [geometry])
 
   return (
     <group

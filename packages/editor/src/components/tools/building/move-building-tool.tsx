@@ -10,6 +10,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -21,6 +22,11 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
   // Stable refs so the effect never needs node in its dependency array
   const nodeIdRef = useRef(node.id)
   const originalPositionRef = useRef<[number, number, number]>([...node.position] as [
+    number,
+    number,
+    number,
+  ])
+  const previewPositionRef = useRef<[number, number, number]>([...node.position] as [
     number,
     number,
     number,
@@ -82,6 +88,8 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       }
 
       previousGridPosRef.current = [gridX, gridZ]
+      const nextPosition: [number, number, number] = [gridX, originalPosition[1], gridZ]
+      previewPositionRef.current = nextPosition
       setCursorWorldPos([gridX, 0, gridZ])
 
       // Directly update the Three.js group — no store update during drag
@@ -92,15 +100,17 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       }
     }
 
-    const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.position[0] * 2) / 2
-      const gridZ = Math.round(event.position[2] * 2) / 2
+    if (lastGridMoveRef.position) {
+      onGridMove({ position: lastGridMoveRef.position } as GridEvent)
+    }
 
+    const commitPosition = (position: [number, number, number], nativeEvent?: { stopPropagation?: () => void }) => {
+      if (wasCommitted) return
       wasCommitted = true
 
       useScene.temporal.getState().resume()
       useScene.getState().updateNode(nodeId, {
-        position: [gridX, originalPosition[1], gridZ],
+        position,
         rotation: [0, pendingRotationRef.current, 0],
       })
       useScene.temporal.getState().pause()
@@ -108,7 +118,20 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       sfxEmitter.emit('sfx:item-place')
       useViewer.getState().setSelection({ buildingId: nodeId as BuildingNode['id'] })
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+      nativeEvent?.stopPropagation?.()
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      const gridX = Math.round(event.position[0] * 2) / 2
+      const gridZ = Math.round(event.position[2] * 2) / 2
+      const nextPosition: [number, number, number] = [gridX, originalPosition[1], gridZ]
+      previewPositionRef.current = nextPosition
+      commitPosition(nextPosition, event.nativeEvent)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitPosition(previewPositionRef.current, event)
     }
 
     const onCancel = () => {
@@ -132,6 +155,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPointerUp)
 
     return () => {
       if (!wasCommitted) {
@@ -145,6 +169,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPointerUp)
     }
   }, [exitMoveMode]) // stable — node values captured via refs at mount
 

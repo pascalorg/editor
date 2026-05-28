@@ -7,6 +7,7 @@ import {
   type AnyNodeId,
   type EventSuffix,
   emitter,
+  getSelectableKinds,
   type GridEvent,
   type NodeEvent,
   nodeRegistry,
@@ -15,6 +16,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -53,7 +55,7 @@ const roundToHalf = (value: number) => Math.round(value * 2) / 2
  */
 type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
 
-const CLICK_TRIGGER_KINDS = [
+const BASE_CLICK_TRIGGER_KINDS = [
   'shelf',
   'item',
   'slab',
@@ -181,7 +183,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
      *  still set) or the new committed position (liveTransform cleared
      *  AND scene updated) — never the original.
      */
-    const commitAtCursor = (event: ClickTriggerEvent) => {
+    const commitAtCursor = (event?: ClickTriggerEvent | PointerEvent) => {
+      if (committed) return
       const position: [number, number, number] = [...lastCursorRef.current]
 
       if (useScene.getState().nodes[node.id]) {
@@ -221,28 +224,39 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       // Stop further propagation so other listeners (e.g. a selection
       // change on the clicked node) don't fire during the commit click.
-      const native = (event as { nativeEvent?: unknown }).nativeEvent
+      const native = event ? (event as { nativeEvent?: unknown }).nativeEvent : undefined
       if (
         native &&
         typeof (native as { stopPropagation?: () => void }).stopPropagation === 'function'
       ) {
         ;(native as { stopPropagation: () => void }).stopPropagation()
       }
-      const direct = (event as { stopPropagation?: () => void }).stopPropagation
+      const direct = event ? (event as { stopPropagation?: () => void }).stopPropagation : undefined
       if (typeof direct === 'function') direct.call(event)
+    }
+
+    if (lastGridMoveRef.localPosition) {
+      onGridMove({ localPosition: lastGridMoveRef.localPosition } as GridEvent)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitAtCursor(event)
     }
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', commitAtCursor)
+    window.addEventListener('pointerup', onPointerUp)
 
-    // Listen on every common kind's click event too. mitt's typing keeps
-    // `${kind}:click` as a fixed union so the cast is safe at runtime —
-    // we're just routing them through the shared commit path.
-    type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
-    type ClickKey = SuffixedKey<(typeof CLICK_TRIGGER_KINDS)[number]>
-    for (const kind of CLICK_TRIGGER_KINDS) {
-      const key = `${kind}:click` as ClickKey
-      emitter.on(key, commitAtCursor as never)
+    // Listen on every common + registry-selectable kind's click event too.
+    // The registry part keeps newly added primitives from needing another
+    // hardcoded event list just to complete a generic move drag.
+    const clickTriggerKinds = Array.from(
+      new Set<string>([...BASE_CLICK_TRIGGER_KINDS, ...getSelectableKinds()]),
+    )
+    for (const kind of clickTriggerKinds) {
+      const key = `${kind}:click` as `${string}:${EventSuffix}`
+      emitter.on(key as never, commitAtCursor as never)
     }
 
     const onCancel = () => {
@@ -259,9 +273,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
-      for (const kind of CLICK_TRIGGER_KINDS) {
-        const key = `${kind}:click` as ClickKey
-        emitter.off(key, commitAtCursor as never)
+      window.removeEventListener('pointerup', onPointerUp)
+      for (const kind of clickTriggerKinds) {
+        const key = `${kind}:click` as `${string}:${EventSuffix}`
+        emitter.off(key as never, commitAtCursor as never)
       }
       emitter.off('tool:cancel', onCancel)
       // Restore the moved meshes' raycast so they're hoverable / selectable

@@ -7,7 +7,7 @@ import {
   createMaterialFromPresetRef,
   useNodeEvents,
 } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
 export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
@@ -39,11 +39,6 @@ export const CylinderRenderer = ({ node }: { node: CylinderNode }) => {
     [node.radius, node.height, node.radialSegments, node.wallThickness],
   )
 
-  useEffect(() => {
-    return () => {
-      geometry.dispose()
-    }
-  }, [geometry])
 
   return (
     <group

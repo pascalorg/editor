@@ -10,6 +10,7 @@ import {
   type ItemNode,
   type LevelNode,
   type SlabNode,
+  isRegistrySelectable,
   sceneRegistry,
   useScene,
   type WallNode,
@@ -272,11 +273,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
         if (xz && pointInBounds(xz[0], xz[1], bounds)) {
           result.push(item.id)
         }
-      } else if (
-        node.type === 'box' ||
-        node.type === 'cylinder' ||
-        node.type === 'sphere'
-      ) {
+      } else if (isRegistrySelectable(node.type)) {
         if (objectBoundsIntersectsBounds(node.id, bounds)) {
           result.push(node.id)
         }

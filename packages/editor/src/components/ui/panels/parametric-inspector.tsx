@@ -12,6 +12,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
+import { isPlanDragMovableNode } from '../../../lib/plan-drag'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -97,7 +98,8 @@ export function ParametricInspector() {
   const presentation = def.presentation
   const title = presentation?.label ?? nodeType ?? ''
   const iconNode = renderIcon(presentation?.icon)
-  const canMove = !!def.capabilities.movable
+  const node = selectedId ? (useScene.getState().nodes[selectedId] ?? null) : null
+  const canMove = !!def.capabilities.movable && !(node && isPlanDragMovableNode(node))
   const canDelete = def.capabilities.deletable !== false
 
   return (

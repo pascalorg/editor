@@ -10,8 +10,14 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  CursorSphere,
+  lastGridMoveRef,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * Phase 5 Stage D — column's registry-driven 3D move affordance.
@@ -31,6 +37,7 @@ import { useCallback, useEffect, useState } from 'react'
 const roundToHalf = (value: number) => Math.round(value * 2) / 2
 
 function MoveColumnTool({ node }: { node: ColumnNode }) {
+  const previewPositionRef = useRef<[number, number, number]>(node.position)
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(node.position)
 
   const exitMoveMode = useCallback(() => {
@@ -47,6 +54,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     const isNew = !!meta.isNew
 
     const applyPreview = (position: [number, number, number]) => {
+      previewPositionRef.current = position
       setPreviewPosition(position)
       useLiveTransforms.getState().set(node.id, {
         position,
@@ -59,12 +67,12 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       applyPreview([roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])])
     }
 
-    const onGridClick = (event: GridEvent) => {
-      const position: [number, number, number] = [
-        roundToHalf(event.localPosition[0]),
-        0,
-        roundToHalf(event.localPosition[2]),
-      ]
+    if (lastGridMoveRef.localPosition) {
+      onGridMove({ localPosition: lastGridMoveRef.localPosition } as GridEvent)
+    }
+
+    const commitPosition = (position: [number, number, number], nativeEvent?: { stopPropagation?: () => void }) => {
+      if (committed) return
       const nodeId = (node as { id?: ColumnNode['id'] }).id
 
       if (nodeId && useScene.getState().nodes[nodeId]) {
@@ -87,7 +95,19 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       useLiveTransforms.getState().clear(node.id)
       triggerSFX('sfx:item-place')
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+      nativeEvent?.stopPropagation?.()
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      commitPosition(
+        [roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])],
+        event.nativeEvent,
+      )
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitPosition(previewPositionRef.current, event)
     }
 
     const onCancel = () => {
@@ -103,11 +123,13 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPointerUp)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPointerUp)
       useLiveTransforms.getState().clear(node.id)
       if (!committed) {
         sceneRegistry.nodes

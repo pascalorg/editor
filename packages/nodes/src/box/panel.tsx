@@ -9,10 +9,9 @@ import {
   PanelWrapper,
   SliderControl,
   triggerSFX,
-  useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Move, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { L, S } from '../i18n/panel-labels'
 
@@ -24,7 +23,6 @@ export default function BoxPanel() {
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
-  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as BoxNode | undefined) : undefined,
@@ -86,13 +84,6 @@ export default function BoxPanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-  const handleMove = useCallback(() => {
-    if (node) {
-      triggerSFX('sfx:item-pick')
-      setMovingNode(node)
-      setSelection({ selectedIds: [] })
-    }
-  }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -144,6 +135,16 @@ export default function BoxPanel() {
           step={0.05}
           unit="m"
           value={Math.round((node.height ?? 1) * 100) / 100}
+        />
+        <MetricControl
+          label="Corner radius"
+          max={Math.max(0, Math.min(node.length ?? 1, node.width ?? 1, node.height ?? 1) / 2)}
+          min={0}
+          onChange={(value) => handleUpdate({ cornerRadius: value })}
+          precision={2}
+          step={0.01}
+          unit="m"
+          value={Math.round((node.cornerRadius ?? 0) * 100) / 100}
         />
       </PanelSection>
 
@@ -284,11 +285,6 @@ export default function BoxPanel() {
 
       <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton
-            icon={<Move className="h-3.5 w-3.5" />}
-            label={L.move()}
-            onClick={handleMove}
-          />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}

@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Color, Layers, type Object3D, UnsignedByteType } from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
@@ -42,6 +42,29 @@ export const SSGI_PARAMS = {
   useTemporalFiltering: false,
 }
 
+
+const SESSION_POST_FX_DISABLED_KEY = 'pascal.viewer.postFx.disabled'
+
+function readPostFxDisabledForSession() {
+  if (typeof window === 'undefined') return false
+  return window.sessionStorage.getItem(SESSION_POST_FX_DISABLED_KEY) === '1'
+}
+
+function disablePostFxForSession() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(SESSION_POST_FX_DISABLED_KEY, '1')
+}
+
+function summarizeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    }
+  }
+  return { message: String(error) }
+}
+
 // Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
 // to the URL (any subset) and reload to skip those passes. Each flag prevents
 // allocation + per-frame work for that stage, so device temperature deltas
@@ -67,20 +90,18 @@ function readPerfDisableFlags() {
     ao: set.has('ao'),
     denoise: set.has('denoise'),
     outline: set.has('outline'),
-    postFx: set.has('postFx'),
+    postFx: set.has('postFx') || readPostFxDisabledForSession(),
   }
 }
 
 const PERF_POST_FX_DISABLED =
   typeof window !== 'undefined' &&
-  new Set(
+  (new Set(
     (new URLSearchParams(window.location.search).get('disable') ?? '')
       .split(',')
       .map((s) => s.trim()),
-  ).has('postFx')
-
-const MAX_PIPELINE_RETRIES = 3
-const RETRY_DELAY_MS = 500
+  ).has('postFx') ||
+    readPostFxDisabledForSession())
 
 const DARK_BG = '#1f2433'
 const LIGHT_BG = '#ffffff'
@@ -122,6 +143,36 @@ function sanitizeOutlineObjects(objects: Object3D[]) {
   objects.length = nextIndex
 }
 
+function resetRendererForDirectRender(
+  renderer: unknown,
+  clearColor: Color,
+  clearAlpha = 1,
+) {
+  const r = renderer as {
+    autoClear?: boolean
+    setClearAlpha?: (alpha: number) => void
+    setClearColor?: (color: Color | string | number, alpha?: number) => void
+    setMRT?: (mrt: unknown) => void
+    setOutputRenderTarget?: (target: unknown) => void
+    setRenderObjectFunction?: (fn: unknown) => void
+    setRenderTarget?: (target: unknown) => void
+    setScissorTest?: (enabled: boolean) => void
+  }
+
+  try {
+    r.setMRT?.(null)
+    r.setRenderTarget?.(null)
+    r.setOutputRenderTarget?.(null)
+    r.setRenderObjectFunction?.(null)
+    r.setScissorTest?.(false)
+    r.setClearColor?.(clearColor, clearAlpha)
+    r.setClearAlpha?.(clearAlpha)
+    r.autoClear = true
+  } catch (error) {
+    console.warn('[viewer/post-processing] Failed to reset renderer state for fallback.', error)
+  }
+}
+
 const PostProcessingPasses = ({
   hoverStyles = DEFAULT_HOVER_STYLES,
 }: {
@@ -130,8 +181,9 @@ const PostProcessingPasses = ({
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
-  const retryCountRef = useRef(0)
-  const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const postFxDisabledForSessionRef = useRef(PERF_POST_FX_DISABLED)
+  const fallbackErrorLoggedRef = useRef(false)
+  const postFxFailureWarnedRef = useRef(false)
   const skippedZeroSizeRef = useRef(false)
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
@@ -157,37 +209,11 @@ const PostProcessingPasses = ({
   const projectId = useViewer((s) => s.projectId)
   const lastProjectIdRef = useRef(projectId)
 
-  // Bump this to force a pipeline rebuild (used by retry logic)
-  const [pipelineVersion, setPipelineVersion] = useState(0)
-
-  const requestPipelineRebuild = useCallback(() => {
-    if (rebuildTimeoutRef.current !== null) {
-      clearTimeout(rebuildTimeoutRef.current)
-      rebuildTimeoutRef.current = null
-    }
-
-    setPipelineVersion((v) => v + 1)
-  }, [])
-
-  // Reset retry state when project changes
+  // Track project switches so stale outline refs are cleared during rebuilds.
   useEffect(() => {
     if (lastProjectIdRef.current === projectId) return
     lastProjectIdRef.current = projectId
-    retryCountRef.current = 0
-    if (rebuildTimeoutRef.current !== null) {
-      clearTimeout(rebuildTimeoutRef.current)
-      rebuildTimeoutRef.current = null
-    }
   }, [projectId])
-
-  useEffect(() => {
-    return () => {
-      if (rebuildTimeoutRef.current !== null) {
-        clearTimeout(rebuildTimeoutRef.current)
-        rebuildTimeoutRef.current = null
-      }
-    }
-  }, [])
 
   useEffect(() => {
     const style = hoverStyles[hoverHighlightMode] ?? hoverStyles.default
@@ -223,6 +249,15 @@ const PostProcessingPasses = ({
     if (width < 1 || height < 1) {
       skippedZeroSizeRef.current = true
       hasPipelineErrorRef.current = false
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
+      renderPipelineRef.current = null
+      return
+    }
+
+    if (postFxDisabledForSessionRef.current) {
+      hasPipelineErrorRef.current = true
       if (renderPipelineRef.current) {
         renderPipelineRef.current.dispose()
       }
@@ -385,18 +420,21 @@ const PostProcessingPasses = ({
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
-      retryCountRef.current = 0
     } catch (error) {
       hasPipelineErrorRef.current = true
-      console.error(
-        '[viewer/post-processing] Failed to set up post-processing pipeline. Rendering without post FX.',
-        {
-          version: pipelineVersion,
-          ssgi: SSGI_PARAMS.enabled,
-          rendererCtor: (renderer as any).constructor?.name,
-        },
-        error,
-      )
+      postFxDisabledForSessionRef.current = true
+      disablePostFxForSession()
+      if (!postFxFailureWarnedRef.current) {
+        postFxFailureWarnedRef.current = true
+        console.warn(
+          '[viewer/post-processing] Failed to set up post-processing pipeline. Post FX disabled for this browser session.',
+          {
+            ssgi: SSGI_PARAMS.enabled,
+            rendererCtor: (renderer as any).constructor?.name,
+            error: summarizeError(error),
+          },
+        )
+      }
       if (renderPipelineRef.current) {
         renderPipelineRef.current.dispose()
       }
@@ -416,7 +454,6 @@ const PostProcessingPasses = ({
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,
-    pipelineVersion,
     projectId,
     renderer,
     scene,
@@ -441,9 +478,7 @@ const PostProcessingPasses = ({
 
     if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
       try {
-        if ((renderer as any).setClearAlpha) {
-          ;(renderer as any).setClearAlpha(1)
-        }
+        resetRendererForDirectRender(renderer, bgCurrent.current, 1)
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)
         if (PERF_OVERLAY_ENABLED) {
@@ -455,10 +490,19 @@ const PostProcessingPasses = ({
           })
         }
       } catch (fallbackError) {
-        console.error('[viewer/post-processing] Fallback render failed.', fallbackError)
+        if (!fallbackErrorLoggedRef.current) {
+          fallbackErrorLoggedRef.current = true
+          console.warn('[viewer/post-processing] Fallback render failed.', {
+            error: summarizeError(fallbackError),
+          })
+        }
       }
       return
     }
+
+    const previousToneMapping = (renderer as any).toneMapping
+    const previousOutputColorSpace = (renderer as any).outputColorSpace
+    const previousXrEnabled = (renderer as any).xr?.enabled
 
     try {
       // Clear alpha=0 so background pixels in the output MRT attachment (index 0) get a=0,
@@ -480,28 +524,42 @@ const PostProcessingPasses = ({
         })
       }
     } catch (error) {
+      if ((renderer as any).toneMapping !== undefined) {
+        ;(renderer as any).toneMapping = previousToneMapping
+      }
+      if ((renderer as any).outputColorSpace !== undefined) {
+        ;(renderer as any).outputColorSpace = previousOutputColorSpace
+      }
+      if ((renderer as any).xr && typeof previousXrEnabled === 'boolean') {
+        ;(renderer as any).xr.enabled = previousXrEnabled
+      }
       hasPipelineErrorRef.current = true
-      console.error('[viewer/post-processing] Render pass failed.', {
-        retryCount: retryCountRef.current,
-        rendererCtor: (renderer as any).constructor?.name,
-        error,
-      })
+      postFxDisabledForSessionRef.current = true
+      disablePostFxForSession()
+      if (!postFxFailureWarnedRef.current) {
+        postFxFailureWarnedRef.current = true
+        console.warn(
+          '[viewer/post-processing] Render pass failed. Post FX disabled for this browser session.',
+          {
+            rendererCtor: (renderer as any).constructor?.name,
+            error: summarizeError(error),
+          },
+        )
+      }
       if (renderPipelineRef.current) {
         renderPipelineRef.current.dispose()
       }
       renderPipelineRef.current = null
-
-      if (retryCountRef.current < MAX_PIPELINE_RETRIES) {
-        // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit
-        retryCountRef.current++
-        if (rebuildTimeoutRef.current !== null) {
-          clearTimeout(rebuildTimeoutRef.current)
+      try {
+        resetRendererForDirectRender(renderer, bgCurrent.current, 1)
+        ;(renderer as any).render(scene, camera)
+      } catch (fallbackError) {
+        if (!fallbackErrorLoggedRef.current) {
+          fallbackErrorLoggedRef.current = true
+          console.warn('[viewer/post-processing] Immediate fallback render failed.', {
+            error: summarizeError(fallbackError),
+          })
         }
-        rebuildTimeoutRef.current = setTimeout(requestPipelineRebuild, RETRY_DELAY_MS)
-      } else {
-        console.error(
-          '[viewer/post-processing] Retries exhausted. Rendering without post FX for this session.',
-        )
       }
     }
   }, 1)

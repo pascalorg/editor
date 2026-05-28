@@ -31,6 +31,7 @@ import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { isPlanDragMovableNode } from '../../lib/plan-drag'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -96,6 +97,7 @@ export function FloatingActionMenu() {
   const isValidType = node
     ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
     : false
+  const isDirectPlanDraggable = node ? isPlanDragMovableNode(node) : false
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {
@@ -524,6 +526,7 @@ export function FloatingActionMenu() {
             }
             onMove={
               node &&
+              !isDirectPlanDraggable &&
               node.type !== 'wall' &&
               node.type !== 'fence' &&
               node.type !== 'pipe' &&

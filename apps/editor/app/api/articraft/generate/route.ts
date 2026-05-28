@@ -4,6 +4,18 @@ import { generateModel } from '../../../../../../packages/articraft-bridge/src/c
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function compactLogMessage(message: string) {
+  return message.replace(/\s+/g, ' ').trim().slice(0, 700)
+}
+
+function positiveIntEnv(...names: string[]) {
+  for (const name of names) {
+    const value = Number.parseInt(process.env[name] ?? '', 10)
+    if (Number.isFinite(value) && value > 0) return value
+  }
+  return undefined
+}
+
 export async function POST(req: NextRequest) {
   let body: { prompt?: string; mode?: 'articulated' | 'static' }
   try {
@@ -18,6 +30,11 @@ export async function POST(req: NextRequest) {
   }
 
   const mode = body.mode === 'static' ? 'static' : 'articulated'
+  const maxTurns = positiveIntEnv('ARTICRAFT_AI_MAX_TURNS', 'ARTICRAFT_MAX_TURNS')
+  const startedAt = Date.now()
+  console.log(
+    `[articraft/generate] start mode=${mode} max_turns=${maxTurns ?? 'default'} prompt="${compactLogMessage(prompt).slice(0, 120)}"`,
+  )
 
   // SSE streaming response
   const encoder = new TextEncoder()
@@ -31,14 +48,22 @@ export async function POST(req: NextRequest) {
         const result = await generateModel({
           prompt,
           mode,
+          maxTurns,
           onProgress: (message: string) => {
+            console.log(`[articraft/generate] ${compactLogMessage(message)}`)
             enqueue({ type: 'progress', message })
           },
         })
+        console.log(
+          `[articraft/generate] complete record=${result.recordId} elapsed=${Date.now() - startedAt}ms`,
+        )
         enqueue({ type: 'result', data: result })
         controller.close()
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        console.error(
+          `[articraft/generate] failed elapsed=${Date.now() - startedAt}ms ${compactLogMessage(message)}`,
+        )
         enqueue({ type: 'error', message })
         controller.close()
       }

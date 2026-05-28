@@ -26,8 +26,8 @@ export {
 } from './material'
 export { BoxNode } from './nodes/box'
 export { BuildingNode } from './nodes/building'
+export { CapsuleNode } from './nodes/capsule'
 export { CeilingNode } from './nodes/ceiling'
-export { CylinderNode } from './nodes/cylinder'
 export {
   COLUMN_PRESETS,
   ColumnBaseStyle,
@@ -43,6 +43,7 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export { CylinderNode } from './nodes/cylinder'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {
   ElevatorDoorPanelStyle,
@@ -50,10 +51,10 @@ export {
   ElevatorNode,
   ElevatorShaftStyle,
 } from './nodes/elevator'
+export { ExtrudeNode } from './nodes/extrude'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
-export { PipeMedium, PipeNode } from './nodes/pipe'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
-export { LatheNode } from './nodes/lathe'
+export { HalfCylinderNode } from './nodes/half-cylinder'
 export type {
   AnimationEffect,
   Asset,
@@ -75,17 +76,20 @@ export {
   isPlanDragMovableItem,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export { LatheNode } from './nodes/lathe'
 export { LevelNode } from './nodes/level'
+export { PipeMedium, PipeNode } from './nodes/pipe'
 export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export { RoofSegmentNode, RoofType } from './nodes/roof-segment'
+export { RoundedPanelNode } from './nodes/rounded-panel'
 export { ScanNode } from './nodes/scan'
 // Nodes
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'
 export { SlabNode } from './nodes/slab'
-export { SphereNode } from './nodes/sphere'
 export { SpawnNode } from './nodes/spawn'
+export { SphereNode } from './nodes/sphere'
 export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {
   getEffectiveStairSurfaceMaterial,
@@ -97,6 +101,7 @@ export {
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
+export { SweepNode } from './nodes/sweep'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
 export {
   getEffectiveWallSurfaceMaterial,

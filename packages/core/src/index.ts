@@ -3,20 +3,25 @@ export type {
   BuildingEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
+  CapsuleEvent,
   CeilingEvent,
-  CylinderEvent,
   ColumnEvent,
+  CylinderEvent,
   DoorEvent,
   ElevatorEvent,
   EventSuffix,
+  ExtrudeEvent,
   FenceEvent,
   GridEvent,
   GuideEvent,
+  HalfCylinderEvent,
   ItemEvent,
+  LatheEvent,
   LevelEvent,
   NodeEvent,
   RoofEvent,
   RoofSegmentEvent,
+  RoundedPanelEvent,
   ScanEvent,
   ShelfEvent,
   SiteEvent,
@@ -25,6 +30,7 @@ export type {
   SphereEvent,
   StairEvent,
   StairSegmentEvent,
+  SweepEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
@@ -49,8 +55,15 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export {
+  composeObjectPrimitives,
+  type ObjectComposeCategory,
+  type ObjectComposeDetail,
+  type ObjectComposeInput,
+} from './lib/object-compose'
+export {
   type PrimitiveAnchor,
   type PrimitiveAxis,
+  type PrimitiveMaterialInput,
   type PrimitiveShapeInput,
   type PrimitiveShapeKind,
   type ResolvedPrimitiveTransform,
@@ -148,6 +161,16 @@ export {
   resolveElevatorServiceLevelIds,
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
+export {
+  clampPipeRotateDegrees,
+  getPipeEndpoint3D,
+  getPipeMidpoint3D,
+  getPipeRotateRadians,
+  isPipeNearlyVertical,
+  type PipeCenterlineLike,
+  type PipeCenterlinePoint3D,
+  samplePipeCenterline3D,
+} from './systems/pipe/pipe-centerline'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
@@ -163,16 +186,6 @@ export {
   normalizeWallCurveOffset,
   sampleWallCenterline,
 } from './systems/wall/wall-curve'
-export {
-  clampPipeRotateDegrees,
-  getPipeEndpoint3D,
-  getPipeMidpoint3D,
-  getPipeRotateRadians,
-  isPipeNearlyVertical,
-  samplePipeCenterline3D,
-  type PipeCenterlineLike,
-  type PipeCenterlinePoint3D,
-} from './systems/pipe/pipe-centerline'
 export {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,

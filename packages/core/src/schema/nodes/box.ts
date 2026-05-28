@@ -13,10 +13,12 @@ export const BoxNode = BaseNode.extend({
   length: z.number().min(0.01).max(20).default(1.0),
   width: z.number().min(0.01).max(20).default(1.0),
   height: z.number().min(0.01).max(20).default(1.0),
+  cornerRadius: z.number().min(0).max(2).default(0),
+  cornerSegments: z.number().int().min(1).max(12).default(4),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
 }).describe(
-  'Box (cuboid) primitive — configurable solid rectangular volume.',
+  'Box (cuboid) primitive - configurable rectangular volume. Set cornerRadius for rounded manufactured housings, vehicle bodies, appliance shells, and softened furniture.',
 )
 
 export type BoxNode = z.infer<typeof BoxNode>

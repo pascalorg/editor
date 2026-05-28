@@ -53,6 +53,47 @@ describe('resolvePrimitiveWorldTransforms', () => {
     expectVecClose(child!.position, [0, 0, 1.2])
   })
 
+  test('vehicle wheels can use x-axis without manual rotation', () => {
+    const [shape] = resolvePrimitiveWorldTransforms([
+      { kind: 'cylinder', axis: 'x', position: [0, 0.3, 1], radius: 0.3, height: 0.2 },
+    ])
+
+    expectVecClose(shape!.rotation, [0, 0, -Math.PI / 2])
+  })
+
+  test('capsules and half-cylinders share cylinder axis semantics', () => {
+    const [capsule, halfCylinder] = resolvePrimitiveWorldTransforms([
+      { kind: 'capsule', axis: 'z', position: [0, 0, 0], radius: 0.2, height: 1.2 },
+      { kind: 'half-cylinder', axis: 'x', position: [0, 0, 0], radius: 0.2, height: 1.2 },
+    ])
+
+    expectVecClose(capsule!.rotation, [Math.PI / 2, 0, 0])
+    expectVecClose(halfCylinder!.rotation, [0, 0, -Math.PI / 2])
+  })
+
+  test('new curved primitives expose usable half-extents for anchor snapping', () => {
+    const [, child] = resolvePrimitiveWorldTransforms(
+      [
+        { kind: 'rounded-panel', position: [0, 1, 0], length: 2, width: 1, thickness: 0.1 },
+        {
+          kind: 'sweep',
+          attachTo: 0,
+          anchor: 'top',
+          childAnchor: 'bottom',
+          position: [0, 1.2, 0],
+          path: [
+            [-0.5, 0, 0],
+            [0.5, 0, 0],
+          ],
+          radius: 0.05,
+        },
+      ],
+      { positionMode: 'world-center' },
+    )
+
+    expectVecClose(child!.position, [0, 1.1, 0])
+  })
+
   test('inherits parent rotation through matrix composition', () => {
     const [, child] = resolvePrimitiveWorldTransforms([
       {
@@ -205,7 +246,9 @@ describe('resolvePrimitiveWorldTransforms', () => {
           anchor: 'top',
           childAnchor: 'bottom',
           position: [0, 0, 0],
-          length: 0.2, width: 0.2, height: 0.1,
+          length: 0.2,
+          width: 0.2,
+          height: 0.1,
         },
       ],
       { positionMode: 'anchor-offset' },

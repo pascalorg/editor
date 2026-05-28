@@ -2,16 +2,28 @@
 
 import {
   BoxNode,
+  CapsuleNode,
   CylinderNode,
+  ExtrudeNode,
+  HalfCylinderNode,
   LatheNode,
+  RoundedPanelNode,
   SphereNode,
+  SweepNode,
+  composeObjectPrimitives,
   composeRobotArmPrimitives,
   resolvePrimitiveWorldTransforms,
+  type AnyNode,
+  type AnyNodeId,
+  type ObjectComposeInput,
+  type PrimitiveMaterialInput,
   type PrimitiveShapeInput,
   type RobotArmComposeInput,
   type Vec3,
   useScene,
 } from '@pascal-app/core'
+import { createModelNodes } from '@pascal-app/articraft-bridge/scene-converter'
+import type { ArticraftJoint, ArticraftLink, ArticraftModelData } from '@pascal-app/articraft-bridge/types'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -27,15 +39,28 @@ interface ShapeSpec {
   length?: number
   width?: number
   height?: number
+  depth?: number
+  thickness?: number
+  cornerRadius?: number
+  cornerSegments?: number
   radius?: number
   axis?: string
+  capSegments?: number
   radialSegments?: number
+  tubularSegments?: number
   widthSegments?: number
   heightSegments?: number
   wallThickness?: number
   profile?: [number, number][]
+  path?: Vec3[]
   segments?: number
   arc?: number
+  bevelSize?: number
+  bevelThickness?: number
+  bevelSegments?: number
+  curveSegments?: number
+  closed?: boolean
+  material?: PrimitiveMaterialInput
   materialPreset?: string
   attachTo?: number
   anchor?: string
@@ -47,21 +72,32 @@ const COMPOSE_PRIMITIVE_TOOL = {
   function: {
     name: 'compose_primitive',
     description:
-      'Create editable primitive shapes in the 3D scene. Choose the primitive that matches each surface type: flat surfaces → box, curved surfaces → sphere+scale or lathe, circular extrusions → cylinder. Use attachTo/anchor/childAnchor for connected parts instead of hand-computing offsets.',
+      'Create editable primitive shapes in the 3D scene. Choose the primitive that matches each surface type: boxes/panels, round extrusions, capsules, half-cylinders, lathes, extrusions, or swept tubes. Use attachTo/anchor/childAnchor for connected parts instead of hand-computing offsets.',
     parameters: {
       type: 'object',
       properties: {
         shapes: {
           type: 'array',
           description:
-            'Shapes to create, ordered from parent to child. Child shapes use attachTo to reference an earlier shape index.',
+            'Shapes to create, ordered from parent to child. Child shapes use attachTo plus explicit anchor/childAnchor to reference and snap to an earlier shape index.',
           items: {
             type: 'object',
             properties: {
               kind: {
                 type: 'string',
-                enum: ['box', 'cylinder', 'sphere', 'lathe'],
-                description: 'Primitive type. box=flat faces, cylinder=circular extrusion, sphere=curved surface (use scale), lathe=radially symmetric profile.',
+                enum: [
+                  'box',
+                  'cylinder',
+                  'sphere',
+                  'lathe',
+                  'capsule',
+                  'half-cylinder',
+                  'rounded-panel',
+                  'extrude',
+                  'sweep',
+                ],
+                description:
+                  'Primitive type. box=solid cuboid, rounded-panel=thin bevelled rounded rectangle, cylinder=circular extrusion, capsule=rounded-ended bar, half-cylinder=semicircular extrusion, sphere=ellipsoid/dome, lathe=revolved vertical profile, extrude=custom 2D profile with depth, sweep=tube along a 3D path.',
               },
               position: {
                 type: 'array',
@@ -88,18 +124,35 @@ const COMPOSE_PRIMITIVE_TOOL = {
                   'Non-uniform scale [sx, sy, sz] for spheres to create ellipsoids. [2, 0.3, 1] makes a wide flat dome (engine hood). [1, 2, 1] makes an elongated egg shape. [1, 1, 0.3] makes a thin disc. Defaults to [1, 1, 1]. Only meaningful for spheres.',
               },
               length: { type: 'number', description: 'Box length along local X, in meters.' },
-              width: { type: 'number', description: 'Box width/depth along local Z, in meters.' },
-              height: { type: 'number', description: 'Box or cylinder height along its local axis, in meters.' },
+              width: { type: 'number', description: 'Box width/depth along local Z, in meters. If thinking in natural width/depth/height terms, use length for the left-right width and width for the front-back depth.' },
+              height: { type: 'number', description: 'Box height along Y, or cylinder/capsule/half-cylinder length along its axis, in meters. Do not omit this for table legs or handles.' },
+              depth: {
+                type: 'number',
+                description: 'Extrude depth along local Z, in meters. Also accepted as object depth for templates.',
+              },
+              thickness: {
+                type: 'number',
+                description: 'Rounded-panel thickness along local Y, in meters.',
+              },
               radius: { type: 'number', description: 'Cylinder or sphere radius, in meters.' },
               axis: {
                 type: 'string',
                 enum: ['x', 'y', 'z'],
                 description:
-                  'Which direction the cylinder extends. "y"=vertical, "x"=left-right, "z"=front-back. For a wheel rolling along X (forward), use "z" (axle side-to-side).',
+                  'Which direction the cylinder extends. "y"=vertical, "x"=left-right, "z"=front-back. In this editor, vehicle length usually runs along Z, so wheels should use axis="x" (axle side-to-side).',
               },
               radialSegments: {
                 type: 'number',
-                description: 'Cylinder smoothness. Use 24-48 for visible round mechanical parts.',
+                description:
+                  'Round-part smoothness for cylinders, capsules, half-cylinders, and sweeps. Use 24-48 for visible mechanical parts.',
+              },
+              capSegments: {
+                type: 'number',
+                description: 'Capsule cap smoothness. Use 4-8 for low-poly soft rounded ends.',
+              },
+              tubularSegments: {
+                type: 'number',
+                description: 'Sweep path smoothness. Use 16-40 for curved cables/handles.',
               },
               widthSegments: {
                 type: 'number',
@@ -113,10 +166,27 @@ const COMPOSE_PRIMITIVE_TOOL = {
                 type: 'number',
                 description: 'Wall thickness in meters for hollow cylinders (buckets, pipes, barrels, cans, cups, pots, vases, drums). Omit for solid cylinders like legs or columns.',
               },
+              cornerRadius: {
+                type: 'number',
+                description:
+                  'Box-only rounded corner radius in meters. Use 0.02-0.12 for manufactured plastic/metal housings, vehicle bodies, appliance shells, cabinets, and softened furniture. Use 0 for sharp construction blocks.',
+              },
+              cornerSegments: {
+                type: 'number',
+                description:
+                  'Box-only rounded corner smoothness. Use 3-5 for normal low-poly rounded boxes, 6-8 for close-up smooth housings.',
+              },
               profile: {
                 type: 'array',
                 items: { type: 'array', items: { type: 'number' } },
-                description: 'For lathe shapes only. Array of [x, y] point pairs defining a 2D profile revolved around the Y axis. Points should be ordered from bottom to top. x is the radius at each height. Example: [[0.05,0],[0.15,0.1],[0.12,0.25],[0.08,0.3]] creates a bottle shape. Default: [[0,0],[0.5,1]].',
+                description:
+                  'For lathe and extrude shapes. Lathe: [radius,height] points revolved around Y, bottom-to-top. Extrude: closed [x,y] outline extruded through depth.',
+              },
+              path: {
+                type: 'array',
+                items: { type: 'array', items: { type: 'number' } },
+                description:
+                  'For sweep shapes only. Local 3D path as [[x,y,z],...]; node position is the center. Use for cables, hoses, rails, handles, bumper arcs.',
               },
               segments: {
                 type: 'number',
@@ -126,23 +196,49 @@ const COMPOSE_PRIMITIVE_TOOL = {
                 type: 'number',
                 description: 'For lathe shapes only. Revolve angle in radians. Use 2*PI (≈6.283) for full revolution. Use smaller values for partial sweeps. Default: 6.283 (full circle).',
               },
+              bevelSize: {
+                type: 'number',
+                description: 'Extrude bevel size in meters. Use 0.005-0.03 for softened real-world profiles.',
+              },
+              bevelThickness: {
+                type: 'number',
+                description: 'Extrude bevel thickness in meters.',
+              },
+              bevelSegments: {
+                type: 'number',
+                description: 'Extrude bevel smoothness. Use 1-4 for low-poly bevels.',
+              },
+              curveSegments: {
+                type: 'number',
+                description: 'Extrude curve smoothness for curved profile edges.',
+              },
+              closed: {
+                type: 'boolean',
+                description: 'Sweep only. true closes the tube path into a loop.',
+              },
+              material: {
+                type: 'object',
+                description:
+                  'Optional material. Prefer {properties:{color:"#C4956A", roughness:0.6, metalness:0}}. Also accepted: {color:"#C4956A"} or {preset:"wood"}.',
+              },
               materialPreset: { type: 'string', description: 'Optional material preset id.' },
               name: { type: 'string', description: 'Shape name.' },
               attachTo: {
                 type: 'number',
                 description:
-                  '0-based parent shape index in the shapes array. Must reference a prior shape. The child inherits parent rotation.',
+                  '0-based parent shape index in the shapes array. Must reference a prior shape. Requires anchor and childAnchor. The child inherits parent rotation.',
               },
               anchor: {
                 type: 'string',
                 enum: ['top', 'bottom', 'center', 'front', 'back', 'left', 'right'],
-                description: 'Parent connection point. Defaults to top.',
+                description:
+                  'Parent connection point. Required when attachTo is used. Under a desktop uses anchor="bottom". On top of a base uses anchor="top".',
               },
               childAnchor: {
                 type: 'string',
                 enum: ['top', 'bottom', 'center', 'front', 'back', 'left', 'right'],
                 description:
-                  'Child connection point to align to the parent anchor. Use bottom for upright posts on top of a base, back/front for end-to-end horizontal links, and center for centered attachments.',
+                  'Child connection point to align to the parent anchor. Required when attachTo is used. Use top when a drawer/cabinet hangs under a desktop bottom; use bottom for posts on top of a base; use back/front for face-mounted handles.',
               },
             },
             required: ['kind', 'position'],
@@ -201,79 +297,136 @@ const COMPOSE_ROBOT_ARM_TOOL = {
   },
 }
 
+const COMPOSE_OBJECT_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'compose_object',
+    description:
+      'Create a stable editable low-poly object from curated category templates. Prefer this for common whole-object requests such as vehicles, chairs, sofas, outdoor AC units, keyboards, monitors, tables, shelves, and cabinets; use compose_primitive for custom one-off geometry or unsupported categories.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Optional object name prefix.' },
+        category: {
+          type: 'string',
+          enum: [
+            'vehicle',
+            'chair',
+            'outdoor-ac',
+            'sofa',
+            'keyboard',
+            'monitor',
+            'table',
+            'shelf',
+            'cabinet',
+            'generic',
+          ],
+          description:
+            'Object category. Use vehicle for cars/Tesla, chair for chairs/stools, outdoor-ac for air conditioner outdoor units, sofa, keyboard, monitor, table, shelf, cabinet, or generic.',
+        },
+        model: {
+          type: 'string',
+          description: 'Requested model or product name, e.g. "Tesla Model Y" or "air conditioner outdoor unit".',
+        },
+        style: {
+          type: 'string',
+          description: 'Optional style hint such as crossover, office, wooden, modern, metal, etc.',
+        },
+        position: {
+          type: 'array',
+          items: { type: 'number' },
+          minItems: 3,
+          maxItems: 3,
+          description: 'Ground origin [x, y, z] in meters. Defaults to scene origin.',
+        },
+        width: { type: 'number', description: 'Object width along X in meters.' },
+        depth: { type: 'number', description: 'Object depth along Z in meters.' },
+        length: { type: 'number', description: 'Alias for depth/vehicle length along Z in meters.' },
+        height: { type: 'number', description: 'Object height along Y in meters.' },
+        primaryColor: { type: 'string', description: 'CSS hex primary color, e.g. #f4f6f8.' },
+        secondaryColor: { type: 'string', description: 'CSS hex secondary/accent color.' },
+        bodyColor: { type: 'string', description: 'Vehicle/body color alias.' },
+        glassColor: { type: 'string', description: 'Vehicle glass color alias.' },
+        wheelColor: { type: 'string', description: 'Vehicle tire color alias.' },
+        detail: {
+          type: 'string',
+          enum: ['low', 'medium', 'high'],
+          description: 'Round-part smoothness. Use medium by default; low for very abstract blockouts.',
+        },
+      },
+      required: [],
+    },
+  },
+}
+
+type ComposeTool = typeof COMPOSE_OBJECT_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL | typeof COMPOSE_PRIMITIVE_TOOL
+type RawShape = Omit<PrimitiveShapeInput, 'kind' | 'material'> & {
+  kind?: string
+  shape?: string
+  type?: string
+  params?: Record<string, unknown>
+  size?: number[]
+  color?: number[]
+  material?: PrimitiveMaterialInput | Record<string, unknown> | string
+  materialColor?: string
+}
+
 const BASE_RULES = `You are the 3D modeling assistant inside the Pascal editor. You work in 2 stages: analyze, generate.
 
 Available tools:
-- compose_primitive(shapes): Create box, cylinder, sphere, or lathe shapes.
+- compose_object(...): Create stable editable low-poly whole objects from category templates. Prefer for common categories: vehicle/car/Tesla, chair/stool, sofa, outdoor AC unit, keyboard, monitor, table/desk, shelf/rack, cabinet.
+- compose_primitive(shapes): Create custom box, rounded-panel, cylinder, capsule, half-cylinder, sphere, lathe, extrude, or sweep shapes for unsupported categories or user-specified individual parts.
 - compose_robot_arm(...): Create robot arm drafts. Prefer for robot/cobot/FANUC/manipulator requests.
 
 ===== COORDINATE SYSTEM =====
-+X = right, +Y = up, +Z = forward. y=0 is the ground plane.
++X = left/right width, +Y = up, +Z = depth/front-back. y=0 is the ground plane.
 Position [x,y,z] is always the geometric center of the shape.
 Rotation [rx,ry,rz] is Euler angles in radians.
 
 ===== PRIMITIVE CAPABILITIES =====
-Each primitive produces a specific 3D shape. Choose the one that matches the real object's geometry.
+BOX = rectangular block with flat faces; set cornerRadius for rounded corners. Use sharp boxes for construction panels and rounded boxes for vehicle bodies, appliance shells, plastic/metal housings, cabinets, furniture, and softened manufactured parts.
+CYLINDER = round bar/rod/disc. Use for wheels, fans, vents, pipes, table/chair legs.
+CAPSULE = cylinder with hemispherical ends. Use for soft bolsters, sofa arms, pillows, rounded handles, rails, grips, and organic rounded bars.
+HALF-CYLINDER = semicircular extrusion with one flat cut face. Use for fenders, arched covers, half pipes, rounded roof caps, and protective shells.
+ROUNDED-PANEL = thin bevelled rounded rectangle. Use for screens, keycaps, cushions, control panels, appliance front plates, and device faces.
+SPHERE = full ball/ellipsoid. Use sparingly for domes/canopies only; a scaled sphere is still a blob with rounded edges.
+LATHE = vertical radial profile. Use for vases, bowls, lamps, bells, turned parts.
+EXTRUDE = closed custom 2D profile with depth. Use for non-rectangular plates, handles, logos, brackets, silhouettes, and shaped vents.
+SWEEP = circular tube along a 3D path. Use for cables, hoses, curved handles, rails, bumper arcs, and pipes with bends.
 
-BOX = a rectangular block. 6 flat faces, 6 sharp 90° edges.
-  Params: length(X), width(Z), height(Y) in meters.
-  Suitable: walls, tabletops, shelves, panels, chassis, square legs.
-  NOT suitable: anything round, curved, or circular.
+===== TEMPLATE-FIRST RULE =====
+If the requested object matches a supported compose_object category, use compose_object instead of hand-building raw primitives:
+- vehicle/car/Tesla/Model Y -> compose_object({category:"vehicle", model, style})
+- chair/stool -> compose_object({category:"chair"})
+- air conditioner outdoor unit / AC condenser / 空调外机 -> compose_object({category:"outdoor-ac"})
+- sofa/couch/沙发 -> compose_object({category:"sofa"})
+- keyboard/键盘 -> compose_object({category:"keyboard"})
+- monitor/display/screen/显示器 -> compose_object({category:"monitor"})
+- table/desk -> compose_object({category:"table"})
+- shelf/rack -> compose_object({category:"shelf"})
+- cabinet/cupboard -> compose_object({category:"cabinet"})
+Use compose_object only when the template category satisfies the complete request. If the user asks for extra structural features not guaranteed by the template (drawers, doors, shelves, compartments, special handles, asymmetry, exact count of subparts), build the whole object with ONE compose_primitive call instead.
 
-CYLINDER = a round bar/rod/disc with TWO FLAT CIRCULAR END CAPS + one curved side wall.
-  Params: radius, height, axis ("y"=vertical, "x"=left-right, "z"=front-back).
-  height can be SHORT (a thin disc) or LONG (a pipe/rod).
-  Suitable:
-    - WHEEL/TIRE: axis="z", radius=0.35, height=0.22 (car wheel rolling along X)
-    - RIM/HUB: axis="z", radius=0.22, height=0.02 (thin flat disc — the face of a wheel)
-    - TABLE LEG: axis="y", radius=0.03, height=0.7
-    - PIPE: axis="y"/"x"/"z" + wallThickness for hollow
-    - COLUMN: axis="y", radius=0.2, height=3
-  NOT suitable: anything that tapers, bulges, or has non-circular cross-section.
-
-SPHERE = a BALL shape. Base radius=1.0. Stretched by scale [sx,sy,sz].
-  ALL surfaces are curved — NO flat faces anywhere. Even when scaled flat, the rim/edge stays rounded.
-  scale [sx,sy,sz]: final half-extents = scale values (e.g. scale [2,0.5,1] → 4m long, 1m tall, 2m wide).
-  Suitable:
-    - DOME/ROOF: scale [1.5,0.25,0.85] (wide, low, slightly curved roof)
-    - EGG: scale [0.5,1.5,0.5] (tall egg shape)
-    - CAR ROOF: scale [1.5,0.25,0.8] placed on top of body box
-  NOT suitable:
-    - Flat discs (rims, coins, plates) → use CYLINDER with short height instead
-    - Wheels/tires → use CYLINDER
-    - Anything that needs flat faces → use BOX
-    - Pancakes/lenses that should have flat edges → sphere edges stay curved
-
-LATHE = a 2D profile [[x,y],...] revolved around Y axis. Radially symmetric.
-  x = radius at height y. Bottom-to-top order.
-  Suitable: vases, bowls, bottles, lamp shades, turned legs, bells.
-  NOT suitable: anything not symmetric around a vertical axis.
-
-===== HOW TO CHOOSE (decision tree) =====
-Decide by looking at the MAIN visible surface of the part:
-
-1. Is the MAIN surface FLAT / PLANAR?
-   - YES, and it's rectangular → BOX (e.g. wall, tabletop, chassis floor)
-   - YES, and it's circular (disc/coin/plate) → CYLINDER with short height (e.g. rim, hubcap)
-   - YES, and it's a round bar/rod → CYLINDER with long height (e.g. pipe, table leg)
-
-2. Is the MAIN surface CURVED / ROUNDED?
-   - YES, and it's a dome, bump, arch, or organic blob → SPHERE+scale
-   - YES, and it's symmetric around a vertical center → LATHE
-   - YES, and it's a circular extrusion with straight sides → CYLINDER
-
-3. SPECIAL CASE — CAR ROOF: A car roof is CURVED (convex dome). MUST use SPHERE+scale. If you use a box, the car looks like a shipping container. This is the single most common mistake.
-
-CRITICAL: DO NOT DEFAULT TO BOX. If a surface has ANY curvature, it is NOT a box. A roof has curvature. A hood has slight curvature. A car body has curvature on top.
-
-===== INVARIANT RULES =====
-- Position is world-space geometric center. y=0 is ground.
-- Sphere base radius=1.0. Final half-extents = scale values. scale [2,0.5,1] → shape is 4m(X)×1m(Y)×2m(Z).
-- Cylinder axis: "y"=vertical, "x"=left-right, "z"=front-back. Car wheels → "z" (axle side-to-side, rolls along X).
-- wallThickness: makes cylinders hollow (pipes, buckets). Omit for solid cylinders (legs, wheels, rims).
-- attachTo + anchor + childAnchor: parent before child in array. Auto-aligns along anchor axis.
-- widthSegments/heightSegments/radialSegments: 32-48 for smooth visible curves.
-- LIMIT: 8-12 parts max. Skip anything <15cm. Focus on major recognizable shapes, not micro-details.
+===== GEOMETRY RULES =====
+- Build a recognizable silhouette first: main volume + 2-8 distinctive features.
+- Field names are strict: box/rounded-panel use length=X left-right, width=Z front-back depth, height=Y vertical. If you think "width/depth/height", output length=width and width=depth. Never omit length for drawer faces, handles, desks, or panels.
+- Cylinder/capsule/half-cylinder use height as the distance along axis. Table legs must include height, e.g. cylinder axis="y", radius=0.025, height=0.7.
+- Materials are strict: use material:{properties:{color:"#C4956A", roughness:0.6, metalness:0}} or materialPreset:"wood". For wood-colored objects, set the material on every visible wood part, not only in analysis text.
+- Output exactly ONE geometry tool call for the final object. Do not call compose_object and then compose_primitive to add details.
+- attachTo indexes are local to the shapes array inside the same compose_primitive call only. Parent must appear before child. Never reference shapes from a previous tool call.
+- Never set attachTo by itself. If a part must be under/on/front/back/side of another part, include explicit anchors: under desktop -> attachTo desktop, anchor="bottom", childAnchor="top"; on top -> anchor="top", childAnchor="bottom"; front face handle -> anchor="front", childAnchor="back". If you already computed an absolute world position and do not need snapping, omit attachTo.
+- Support stack rule: lower support's top connects to upper part's bottom. Example: a seat on legs uses parent leg anchor="top", childAnchor="bottom"; a hanging drawer under a desktop uses parent desktop anchor="bottom", childAnchor="top".
+- Use cornerRadius on boxes that should not read like sharp shipping containers: cars, appliances, electronics, molded furniture, machine housings.
+- Do not default to sphere. Sphere is not a curved panel; it becomes a blob if too tall or too large.
+- For broad curved rectangular surfaces, prefer a rounded box for the main mass plus a shallow sphere/ellipsoid only for domes or glass canopies.
+- For cylinders, use axis ("x"/"y"/"z") rather than manual rotation.
+- Vehicle length runs along Z; wheels use axis="x" and no manual rotation.
+- Chair/table legs are vertical cylinders with axis="y".
+- Outdoor AC units: rectangular case, dark front grille panel, circular fan grille, vent slats, base feet.
+- Sofas: rounded cushions, capsule arms/bolsters, recessed shadow base.
+- Keyboards: bevelled base tray, repeated rounded-panel keycaps, long spacebar, optional sweep cable.
+- Monitors: rounded screen/bezel panels, capsule stand, bevelled foot, optional sweep cable.
+- LIMIT: 4-16 parts max. Skip anything <15cm. Prefer stable low-poly abstraction over tiny details.
 `
 
 const STAGE1_ANALYST = `${BASE_RULES}
@@ -281,31 +434,28 @@ const STAGE1_ANALYST = `${BASE_RULES}
 ===== STAGE 1: ANALYZE =====
 Analyze the user's request and produce a structured decomposition plan. Output TEXT ONLY. Do NOT call any tools.
 
-For each part, specify:
+First decide whether the request matches a compose_object category. If yes, say the chosen category and key visual traits.
+If the request includes extra structural features beyond the template category, choose compose_primitive instead and decompose the whole object yourself.
+If not, decompose into primitives. For each part specify:
 1. Name
-2. Primitive kind — choose by matching surface type to primitive capability (flat→box, curved→sphere/lathe, circular→cylinder)
-3. Key dimensions in meters (length/width/height for box, radius+height+axis for cylinder, radius+scale for sphere, profile for lathe)
-4. World-space position [x, y, z] — geometric center
-5. How it connects to other parts (attachTo/anchor/childAnchor), if applicable
-
-Think step by step for each part: "What is this surface like in reality? Which primitive matches that geometry?"
-
-VEHICLE-SPECIFIC (most common failure):
-- Roof, cabin top, curved body panels → MUST use SPHERE+scale. A box roof = failure.
-- Lower body, chassis, flat panels → BOX.
-- Wheels, tires → CYLINDER axis "z".
-- 8 parts max: body(box) + roof(sphere) + 4 wheels + optional hood/trunk(box).
+2. Primitive kind (box/rounded-panel/cylinder/capsule/half-cylinder/sphere/lathe/extrude/sweep)
+3. Key dimensions in meters; for box or panel parts, whether they need cornerRadius/bevel and why
+4. World-space position [x, y, z]
+5. Why this primitive matches the surface
 `
 
 const STAGE2_GENERATOR = `${BASE_RULES}
 
 ===== STAGE 2: GENERATE =====
-Based on the analysis, call compose_primitive or compose_robot_arm to create the geometry.
+Based on the analysis, call compose_object, compose_robot_arm, or compose_primitive to create the geometry.
 
-Follow the analysis plan — same kinds, dimensions, positions.
-- Include ALL shapes in a single call. Parent before child.
-- For cylinders, use axis ("x"/"y"/"z") rather than manual rotation.
-- REMINDER: car roof/cabin is SPHERE+scale, not box. DO NOT output a box for a roof.
+- For common whole objects (vehicle/car/Tesla, chair, sofa, outdoor AC unit, keyboard, monitor, table, shelf, cabinet), call compose_object once only when the template fully covers the request.
+- If the user requested extra structural features or exact subpart counts, do not mix tools; call compose_primitive once with the complete object.
+- For robot arms, call compose_robot_arm once.
+- Otherwise call compose_primitive once with all shapes. Parent before child.
+- For cylinders, use axis instead of manual rotation.
+- Every box/rounded-panel must include length, width, and height/thickness explicitly. Every cylinder/capsule/half-cylinder must include radius and height explicitly.
+- For box housings and bodies, include cornerRadius/cornerSegments when the real object has rounded manufactured edges.
 `
 
 
@@ -326,10 +476,145 @@ interface ArticraftResult {
   prompt: string
   status: 'ready' | 'imported'
   recordId: string
+  recordPath: string
   name: string
   partCount: number
   jointCount: number
-  data: Record<string, unknown>
+  links: ArticraftLink[]
+  joints: ArticraftJoint[]
+  data: ArticraftModelData
+}
+
+const ARTICRAFT_PROGRESS_LINE_LIMIT = 12
+
+function formatArticraftProgressMessage(header: string, lines: string[]) {
+  const visibleLines = lines.map((line) => line.trim()).filter(Boolean).slice(-ARTICRAFT_PROGRESS_LINE_LIMIT)
+  if (visibleLines.length === 0) return header
+  return `${header}\n\n${visibleLines.map((line) => `• ${line}`).join('\n')}`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const MATERIAL_PRESETS = new Set([
+  'white',
+  'brick',
+  'concrete',
+  'wood',
+  'glass',
+  'metal',
+  'plaster',
+  'tile',
+  'marble',
+  'custom',
+])
+
+const PRIMITIVE_ANCHORS = new Set(['top', 'bottom', 'center', 'front', 'back', 'left', 'right'])
+
+function colorArrayToHex(color: number[]): string {
+  return `#${color.slice(0, 3).map((channel) => Math.round(Math.max(0, Math.min(1, Number(channel))) * 255).toString(16).padStart(2, '0')).join('')}`
+}
+
+function normalizePrimitiveMaterial(
+  rawMaterial: unknown,
+  materialColor: unknown,
+  color: number[] | undefined,
+): PrimitiveMaterialInput | undefined {
+  if (typeof rawMaterial === 'string') {
+    if (/^(#|rgb\(|rgba\(|hsl\(|hsla\()/i.test(rawMaterial)) return { properties: { color: rawMaterial } }
+    if (MATERIAL_PRESETS.has(rawMaterial)) return { preset: rawMaterial }
+  }
+
+  if (isRecord(rawMaterial)) {
+    const rawProperties = isRecord(rawMaterial.properties) ? rawMaterial.properties : {}
+    const rawColor = rawMaterial.color ?? rawProperties.color
+    const rawRoughness = rawMaterial.roughness ?? rawProperties.roughness
+    const rawMetalness = rawMaterial.metalness ?? rawProperties.metalness
+    const rawOpacity = rawMaterial.opacity ?? rawProperties.opacity
+    const rawTransparent = rawMaterial.transparent ?? rawProperties.transparent
+    const rawSide = rawMaterial.side ?? rawProperties.side
+    const properties: NonNullable<PrimitiveMaterialInput['properties']> = {}
+
+    if (typeof rawColor === 'string') properties.color = rawColor
+    if (typeof rawRoughness === 'number' && Number.isFinite(rawRoughness)) {
+      properties.roughness = Math.max(0, Math.min(1, rawRoughness))
+    }
+    if (typeof rawMetalness === 'number' && Number.isFinite(rawMetalness)) {
+      properties.metalness = Math.max(0, Math.min(1, rawMetalness))
+    }
+    if (typeof rawOpacity === 'number' && Number.isFinite(rawOpacity)) {
+      properties.opacity = Math.max(0, Math.min(1, rawOpacity))
+    }
+    if (typeof rawTransparent === 'boolean') properties.transparent = rawTransparent
+    if (rawSide === 'front' || rawSide === 'back' || rawSide === 'double') properties.side = rawSide
+
+    const material: PrimitiveMaterialInput = {}
+    if (typeof rawMaterial.id === 'string') material.id = rawMaterial.id
+    if (typeof rawMaterial.preset === 'string' && MATERIAL_PRESETS.has(rawMaterial.preset)) {
+      material.preset = rawMaterial.preset
+    }
+    if (Object.keys(properties).length > 0) material.properties = properties
+    if (material.id || material.preset || material.properties) return material
+  }
+
+  if (typeof materialColor === 'string') return { properties: { color: materialColor } }
+  if (color?.length) {
+    return {
+      properties: {
+        color: colorArrayToHex(color),
+        opacity: typeof color[3] === 'number' ? color[3] : 1,
+        transparent: typeof color[3] === 'number' ? color[3] < 1 : false,
+      },
+    }
+  }
+
+  return undefined
+}
+
+function isPrimitiveAnchor(value: unknown): value is string {
+  return typeof value === 'string' && PRIMITIVE_ANCHORS.has(value)
+}
+
+function getExpectedAttachmentSide(
+  anchor: string,
+  childAnchor: string,
+): { axis: 0 | 1 | 2; sign: -1 | 1; label: string } | undefined {
+  if (anchor === 'top' && childAnchor === 'bottom') return { axis: 1, sign: 1, label: 'above the parent' }
+  if (anchor === 'bottom' && childAnchor === 'top') return { axis: 1, sign: -1, label: 'below the parent' }
+  if (anchor === 'right' && childAnchor === 'left') return { axis: 0, sign: 1, label: 'right of the parent' }
+  if (anchor === 'left' && childAnchor === 'right') return { axis: 0, sign: -1, label: 'left of the parent' }
+  if (anchor === 'front' && childAnchor === 'back') return { axis: 2, sign: 1, label: 'in front of the parent' }
+  if (anchor === 'back' && childAnchor === 'front') return { axis: 2, sign: -1, label: 'behind the parent' }
+  return undefined
+}
+
+function getArticraftMetadata(result: ArticraftResult, nodeName: string) {
+  const linkName = nodeName.replace(/_v\d+$/, '')
+  const joint = result.joints.find((candidate) => candidate.child === linkName)
+  return {
+    recordId: result.recordId,
+    recordPath: result.recordPath,
+    jointName: joint?.name ?? null,
+    parentLink: joint?.parent ?? null,
+    childLink: joint?.child ?? linkName,
+  }
+}
+
+type BridgeJointMetadata = ReturnType<typeof createModelNodes>['jointMetadata'][string]
+
+function toSceneJointMetadata(jointMetadata: BridgeJointMetadata) {
+  return {
+    jointName: jointMetadata.jointName,
+    jointType: jointMetadata.jointType,
+    parentLink: jointMetadata.parentLink,
+    childLink: jointMetadata.childLink,
+    axis: jointMetadata.axis,
+    origin: jointMetadata.origin,
+    ...(jointMetadata.limits ? { limits: jointMetadata.limits } : {}),
+    ...(jointMetadata.mimic ? { mimic: jointMetadata.mimic } : {}),
+    currentValue: jointMetadata.currentValue,
+  }
 }
 
 export function AiChatPanel() {
@@ -354,42 +639,166 @@ export function AiChatPanel() {
   }, [])
 
   const executeToolCall = useCallback((name: string, args: Record<string, unknown>): string => {
-    console.log(`[AI-Chat] 🔨 executeToolCall: ${name}`)
-    console.log(`[AI-Chat] 🔨 raw args:`, JSON.stringify(args, null, 2).slice(0, 4000))
+    console.log(`[AI-Chat] executeToolCall: ${name}`)
+    console.log('[AI-Chat] raw args:', JSON.stringify(args, null, 2).slice(0, 4000))
 
-    if (name !== 'compose_primitive' && name !== 'compose_robot_arm') {
-      return t('aiChat.unknownTool', { fallback: '未知工具：{name}', params: { name } })
+    if (name !== 'compose_primitive' && name !== 'compose_robot_arm' && name !== 'compose_object') {
+      return t('aiChat.unknownTool', { fallback: 'Unknown tool: {name}', params: { name } })
     }
 
-    const rawShapes =
+    const rawShapes: RawShape[] | undefined =
       name === 'compose_robot_arm'
         ? composeRobotArmPrimitives(args as RobotArmComposeInput)
-        : (args.shapes as Array<Record<string, unknown>> | undefined)
-    if (!rawShapes?.length) return t('aiChat.noShapes', '没有可创建的几何体。')
+        : name === 'compose_object'
+          ? composeObjectPrimitives(args as ObjectComposeInput)
+          : (args.shapes as RawShape[] | undefined)
+    if (!rawShapes?.length) return t('aiChat.noShapes', 'No geometry to create.')
 
-    const shapes: ShapeSpec[] = rawShapes.map((shape) => ({
-      kind: shape.kind as string,
-      position: (shape.position as Vec3) ?? [0, 0, 0],
-      rotation: (shape.rotation as Vec3) ?? [0, 0, 0],
-      scale: (shape.scale as Vec3) ?? [1, 1, 1],
-      name: shape.name as string | undefined,
-      length: shape.length as number | undefined,
-      width: shape.width as number | undefined,
-      height: shape.height as number | undefined,
-      radius: shape.radius as number | undefined,
-      axis: shape.axis as string | undefined,
-      radialSegments: shape.radialSegments as number | undefined,
-      widthSegments: shape.widthSegments as number | undefined,
-      heightSegments: shape.heightSegments as number | undefined,
-      wallThickness: shape.wallThickness as number | undefined,
-      profile: shape.profile as [number, number][] | undefined,
-      segments: shape.segments as number | undefined,
-      arc: shape.arc as number | undefined,
-      materialPreset: shape.materialPreset as string | undefined,
-      attachTo: shape.attachTo as number | undefined,
-      anchor: shape.anchor as string | undefined,
-      childAnchor: shape.childAnchor as string | undefined,
-    }))
+    const shapes: ShapeSpec[] = rawShapes.map((shape) => {
+      const shapeRecord = shape as Record<string, unknown>
+      const params = isRecord(shapeRecord.params) ? shapeRecord.params : {}
+      const read = (key: string) => shapeRecord[key] ?? params[key]
+      const size = Array.isArray(read('size')) ? read('size') as number[] : undefined
+      const color = Array.isArray(read('color')) ? read('color') as number[] : undefined
+      const material = normalizePrimitiveMaterial(read('material'), read('materialColor'), color)
+
+      const kind = (read('kind') ?? read('shape') ?? read('type')) as string
+      const isBoxLike = kind === 'box' || kind === 'rounded-panel'
+      const isAxisLengthPrimitive =
+        kind === 'cylinder' || kind === 'capsule' || kind === 'half-cylinder'
+      const rawLength = read('length')
+      const rawWidth = read('width')
+      const rawHeight = read('height')
+      const rawDepth = read('depth')
+      const rawThickness = read('thickness')
+      const naturalWidthDepth = isBoxLike && rawLength == null && rawWidth != null && rawDepth != null
+      const normalizedLength = rawLength ?? (naturalWidthDepth ? rawWidth : undefined) ?? size?.[0]
+      const normalizedWidth =
+        (isBoxLike ? rawDepth : undefined) ?? rawWidth ?? (isBoxLike ? size?.[2] : undefined)
+      const normalizedHeight = isAxisLengthPrimitive
+        ? (rawHeight ?? rawLength ?? size?.[1])
+        : (rawHeight ?? size?.[1])
+      const normalizedThickness =
+        kind === 'rounded-panel' ? (rawThickness ?? rawHeight ?? size?.[1]) : rawThickness
+      const normalizedDepth =
+        kind === 'extrude' ? (rawDepth ?? rawWidth ?? size?.[2]) : rawDepth
+
+      return {
+        kind,
+        position: (read('position') as Vec3) ?? [0, 0, 0],
+        rotation: (read('rotation') as Vec3) ?? [0, 0, 0],
+        scale: (read('scale') as Vec3) ?? [1, 1, 1],
+        name: read('name') as string | undefined,
+        length: normalizedLength as number | undefined,
+        width: normalizedWidth as number | undefined,
+        height: normalizedHeight as number | undefined,
+        depth: normalizedDepth as number | undefined,
+        thickness: normalizedThickness as number | undefined,
+        cornerRadius: read('cornerRadius') as number | undefined,
+        cornerSegments: read('cornerSegments') as number | undefined,
+        radius: read('radius') as number | undefined,
+        axis: read('axis') as string | undefined,
+        capSegments: read('capSegments') as number | undefined,
+        radialSegments: read('radialSegments') as number | undefined,
+        tubularSegments: read('tubularSegments') as number | undefined,
+        widthSegments: read('widthSegments') as number | undefined,
+        heightSegments: read('heightSegments') as number | undefined,
+        wallThickness: read('wallThickness') as number | undefined,
+        profile: read('profile') as [number, number][] | undefined,
+        path: read('path') as Vec3[] | undefined,
+        segments: read('segments') as number | undefined,
+        arc: read('arc') as number | undefined,
+        bevelSize: read('bevelSize') as number | undefined,
+        bevelThickness: read('bevelThickness') as number | undefined,
+        bevelSegments: read('bevelSegments') as number | undefined,
+        curveSegments: read('curveSegments') as number | undefined,
+        closed: read('closed') as boolean | undefined,
+        material,
+        materialPreset: read('materialPreset') as string | undefined,
+        attachTo: read('attachTo') as number | undefined,
+        anchor: read('anchor') as string | undefined,
+        childAnchor: read('childAnchor') as string | undefined,
+      }
+    })
+
+    const isPositiveNumber = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) && value > 0
+    const validationIssues = shapes.flatMap((shape, index) => {
+      const label = shape.name ?? `${shape.kind} #${index + 1}`
+      const issues: string[] = []
+      if (shape.attachTo != null && (!Number.isInteger(shape.attachTo) || shape.attachTo < 0 || shape.attachTo >= index)) {
+        issues.push(
+          `${label}: attachTo must reference an earlier shape in the SAME compose_primitive call; got ${shape.attachTo}.`,
+        )
+      }
+      if (shape.attachTo != null && (!isPrimitiveAnchor(shape.anchor) || !isPrimitiveAnchor(shape.childAnchor))) {
+        issues.push(
+          `${label}: attachTo requires explicit anchor and childAnchor. Examples: under desktop uses anchor="bottom", childAnchor="top"; front handle uses anchor="front", childAnchor="back".`,
+        )
+      }
+      if (shape.attachTo != null && isPrimitiveAnchor(shape.anchor) && isPrimitiveAnchor(shape.childAnchor)) {
+        const parent = shapes[shape.attachTo]
+        const expectedSide = getExpectedAttachmentSide(shape.anchor, shape.childAnchor)
+        if (parent && expectedSide) {
+          const delta = shape.position[expectedSide.axis] - parent.position[expectedSide.axis]
+          if (Number.isFinite(delta) && Math.abs(delta) > 0.02 && delta * expectedSide.sign < -0.02) {
+            issues.push(
+              `${label}: anchor="${shape.anchor}" and childAnchor="${shape.childAnchor}" place the child ${expectedSide.label}, but its world-center position is on the opposite side of "${parent.name ?? parent.kind}". Reverse the anchors or remove attachTo.`,
+            )
+          }
+        }
+      }
+
+      switch (shape.kind) {
+        case 'box':
+          if (!isPositiveNumber(shape.length)) issues.push(`${label}: box.length is required (X left-right).`)
+          if (!isPositiveNumber(shape.width)) issues.push(`${label}: box.width is required (Z front-back depth).`)
+          if (!isPositiveNumber(shape.height)) issues.push(`${label}: box.height is required (Y vertical).`)
+          break
+        case 'rounded-panel':
+          if (!isPositiveNumber(shape.length)) issues.push(`${label}: rounded-panel.length is required (X left-right).`)
+          if (!isPositiveNumber(shape.width)) issues.push(`${label}: rounded-panel.width is required (Z front-back depth).`)
+          if (!isPositiveNumber(shape.thickness)) issues.push(`${label}: rounded-panel.thickness is required (Y thickness).`)
+          break
+        case 'cylinder':
+        case 'capsule':
+        case 'half-cylinder':
+          if (!isPositiveNumber(shape.radius)) issues.push(`${label}: ${shape.kind}.radius is required.`)
+          if (!isPositiveNumber(shape.height)) issues.push(`${label}: ${shape.kind}.height is required along axis.`)
+          break
+        case 'sphere':
+          if (!isPositiveNumber(shape.radius)) issues.push(`${label}: sphere.radius is required.`)
+          break
+        case 'lathe':
+          if (!Array.isArray(shape.profile) || shape.profile.length < 2) {
+            issues.push(`${label}: lathe.profile needs at least 2 [radius,height] points.`)
+          }
+          break
+        case 'extrude':
+          if (!Array.isArray(shape.profile) || shape.profile.length < 3) {
+            issues.push(`${label}: extrude.profile needs at least 3 closed outline points.`)
+          }
+          if (!isPositiveNumber(shape.depth)) issues.push(`${label}: extrude.depth is required.`)
+          break
+        case 'sweep':
+          if (!Array.isArray(shape.path) || shape.path.length < 2) {
+            issues.push(`${label}: sweep.path needs at least 2 [x,y,z] points.`)
+          }
+          if (!isPositiveNumber(shape.radius)) issues.push(`${label}: sweep.radius is required.`)
+          break
+        default:
+          issues.push(`${label}: unsupported kind "${shape.kind}".`)
+      }
+      return issues
+    })
+
+    if (validationIssues.length > 0) {
+      return [
+        'Invalid geometry tool call. Nothing was created.',
+        'Fix the arguments and call exactly one geometry tool again.',
+        ...validationIssues.map((issue) => `- ${issue}`),
+      ].join('\n')
+    }
 
     const transforms = resolvePrimitiveWorldTransforms(shapes as PrimitiveShapeInput[], { positionMode: 'world-center' })
     const levelId = useViewer.getState().selection.levelId
@@ -399,6 +808,27 @@ export function AiChatPanel() {
     const clampD = (v: unknown, fallback: number, min = 0.01, max = 50) =>
       Math.max(min, Math.min(max, typeof v === 'number' && !Number.isNaN(v) ? v : fallback))
     const clampR = (v: unknown, fallback: number) => clampD(v, fallback, 0.01, 10)
+    const clampI = (v: unknown, fallback: number, min: number, max: number) =>
+      Math.round(clampD(v, fallback, min, max))
+    const clampCornerRadius = (shape: ShapeSpec) => {
+      if (shape.cornerRadius == null) return undefined
+      const length = clampD(shape.length, 1.0)
+      const width = clampD(shape.width, 1.0)
+      const height = clampD(shape.height, 1.0)
+      return clampD(shape.cornerRadius, 0, 0, Math.max(0, Math.min(length, width, height) / 2 - 0.001))
+    }
+    const clampPanelCornerRadius = (shape: ShapeSpec) => {
+      if (shape.cornerRadius == null) return undefined
+      const length = clampD(shape.length, 1.0)
+      const width = clampD(shape.width, 0.5)
+      const thickness = clampD(shape.thickness ?? shape.height, 0.04, 0.005, 2)
+      return clampD(
+        shape.cornerRadius,
+        0.04,
+        0,
+        Math.max(0, Math.min(length, width, thickness) / 2 - 0.001),
+      )
+    }
 
     for (let i = 0; i < shapes.length; i++) {
       const shape = shapes[i]
@@ -419,6 +849,10 @@ export function AiChatPanel() {
               length: clampD(shape.length, 1.0),
               width: clampD(shape.width, 1.0),
               height: clampD(shape.height, 1.0),
+              cornerRadius: clampCornerRadius(shape),
+              cornerSegments:
+                shape.cornerSegments != null ? Math.round(clampD(shape.cornerSegments, 4, 1, 12)) : undefined,
+              material: shape.material,
               materialPreset: shape.materialPreset,
             })
             break
@@ -433,10 +867,53 @@ export function AiChatPanel() {
               radialSegments:
                 shape.radialSegments != null ? Math.round(clampD(shape.radialSegments, 32, 8, 64)) : undefined,
               wallThickness: wt != null ? clampD(wt, 0.05, 0.001, 10) : undefined,
+              material: shape.material,
               materialPreset: shape.materialPreset,
             })
             break
           }
+          case 'capsule':
+            node = CapsuleNode.parse({
+              name: displayName,
+              position,
+              rotation,
+              radius: clampR(shape.radius, 0.25),
+              height: clampD(shape.height, 1.0, 0.02, 20),
+              capSegments: shape.capSegments != null ? clampI(shape.capSegments, 6, 1, 16) : undefined,
+              radialSegments:
+                shape.radialSegments != null ? clampI(shape.radialSegments, 32, 8, 64) : undefined,
+              material: shape.material,
+              materialPreset: shape.materialPreset,
+            })
+            break
+          case 'half-cylinder':
+            node = HalfCylinderNode.parse({
+              name: displayName,
+              position,
+              rotation,
+              radius: clampR(shape.radius, 0.5),
+              height: clampD(shape.height, 1.0, 0.01, 20),
+              radialSegments:
+                shape.radialSegments != null ? clampI(shape.radialSegments, 24, 8, 64) : undefined,
+              material: shape.material,
+              materialPreset: shape.materialPreset,
+            })
+            break
+          case 'rounded-panel':
+            node = RoundedPanelNode.parse({
+              name: displayName,
+              position,
+              rotation,
+              length: clampD(shape.length, 1.0, 0.01, 20),
+              width: clampD(shape.width, 0.5, 0.01, 20),
+              thickness: clampD(shape.thickness ?? shape.height, 0.04, 0.005, 2),
+              cornerRadius: clampPanelCornerRadius(shape),
+              cornerSegments:
+                shape.cornerSegments != null ? clampI(shape.cornerSegments, 4, 1, 12) : undefined,
+              material: shape.material,
+              materialPreset: shape.materialPreset,
+            })
+            break
           case 'sphere':
             node = SphereNode.parse({
               name: displayName,
@@ -448,6 +925,7 @@ export function AiChatPanel() {
                 shape.widthSegments != null ? Math.round(clampD(shape.widthSegments, 32, 8, 64)) : undefined,
               heightSegments:
                 shape.heightSegments != null ? Math.round(clampD(shape.heightSegments, 32, 8, 64)) : undefined,
+              material: shape.material,
               materialPreset: shape.materialPreset,
             })
             break
@@ -459,6 +937,44 @@ export function AiChatPanel() {
               profile: shape.profile as [number, number][] | undefined,
               segments: shape.segments != null ? Math.round(clampD(shape.segments, 32, 8, 128)) : undefined,
               arc: shape.arc != null ? clampD(shape.arc, Math.PI * 2, 0.01, Math.PI * 2) : undefined,
+              material: shape.material,
+              materialPreset: shape.materialPreset,
+            })
+            break
+          case 'extrude':
+            node = ExtrudeNode.parse({
+              name: displayName,
+              position,
+              rotation,
+              profile: shape.profile as [number, number][] | undefined,
+              depth: clampD(shape.depth ?? shape.width, 0.1, 0.005, 10),
+              bevelSize:
+                shape.bevelSize != null ? clampD(shape.bevelSize, 0.01, 0, 1) : undefined,
+              bevelThickness:
+                shape.bevelThickness != null
+                  ? clampD(shape.bevelThickness, shape.bevelSize ?? 0.01, 0, 1)
+                  : undefined,
+              bevelSegments:
+                shape.bevelSegments != null ? clampI(shape.bevelSegments, 2, 0, 12) : undefined,
+              curveSegments:
+                shape.curveSegments != null ? clampI(shape.curveSegments, 8, 1, 32) : undefined,
+              material: shape.material,
+              materialPreset: shape.materialPreset,
+            })
+            break
+          case 'sweep':
+            node = SweepNode.parse({
+              name: displayName,
+              position,
+              rotation,
+              path: shape.path,
+              radius: clampD(shape.radius, 0.03, 0.005, 2),
+              tubularSegments:
+                shape.tubularSegments != null ? clampI(shape.tubularSegments, 24, 2, 128) : undefined,
+              radialSegments:
+                shape.radialSegments != null ? clampI(shape.radialSegments, 12, 3, 32) : undefined,
+              closed: shape.closed,
+              material: shape.material,
               materialPreset: shape.materialPreset,
             })
             break
@@ -480,15 +996,23 @@ export function AiChatPanel() {
       if (firstNode) useViewer.getState().setSelection({ selectedIds: [firstNode.id] })
     }
 
-    // Build detailed shape summary for Stage 3 review
     const shapeDetails = shapes.map((s) => {
       const parts: string[] = [`  - ${s.name ?? s.kind}: ${s.kind}`]
       parts.push(`pos=[${(s.position as Vec3).join(',')}]`)
-      if (s.kind === 'box') parts.push(`${s.length}x${s.width}x${s.height}`)
+      if (s.kind === 'box') parts.push(`${s.length}x${s.width}x${s.height}, corner=${s.cornerRadius ?? 0}`)
+      if (s.kind === 'rounded-panel') parts.push(`${s.length}x${s.width}x${s.thickness}, corner=${s.cornerRadius ?? 0}`)
       if (s.kind === 'cylinder') parts.push(`axis=${s.axis}, r=${s.radius}, h=${s.height}`)
+      if (s.kind === 'capsule' || s.kind === 'half-cylinder') {
+        parts.push(`axis=${s.axis}, r=${s.radius}, h=${s.height}`)
+      }
       if (s.kind === 'sphere') parts.push(`r=${s.radius}, scale=[${(s.scale as Vec3).join(',')}]${s.rotation && (s.rotation as Vec3).some(v => v !== 0) ? `, rot=[${(s.rotation as Vec3).join(',')}]` : ''}`)
       if (s.kind === 'lathe') parts.push(`profile=${s.profile?.length ?? 0}pts, seg=${s.segments}`)
-      if (s.attachTo != null) parts.push(`attachTo=${s.attachTo}`)
+      if (s.kind === 'extrude') parts.push(`profile=${s.profile?.length ?? 0}pts, depth=${s.depth}`)
+      if (s.kind === 'sweep') parts.push(`path=${s.path?.length ?? 0}pts, r=${s.radius}`)
+      if (s.material?.properties?.color) parts.push(`color=${s.material.properties.color}`)
+      else if (s.material?.preset) parts.push(`material=${s.material.preset}`)
+      else if (s.materialPreset) parts.push(`material=${s.materialPreset}`)
+      if (s.attachTo != null) parts.push(`attachTo=${s.attachTo} ${s.anchor}->${s.childAnchor}`)
       return parts.join(' ')
     }).join('\n')
 
@@ -498,7 +1022,7 @@ export function AiChatPanel() {
   const callApi = useCallback(
     async (
       apiMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown }>,
-      tools?: Array<typeof COMPOSE_PRIMITIVE_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL>,
+      tools?: ComposeTool[],
     ) => {
       const hasTools = tools && tools.length > 0
       const systemMsg = apiMessages.find(m => m.role === 'system')
@@ -550,125 +1074,71 @@ export function AiChatPanel() {
   )
 
   const importArticraftResult = useCallback((result: ArticraftResult): number => {
-    const links = (result.data.links as Array<Record<string, unknown>>) ?? []
-    const joints = (result.data.joints as Array<Record<string, unknown>>) ?? []
-    const createdNames: string[] = []
     const levelId = useViewer.getState().selection.levelId
     const scene = useScene.getState()
-    const nodeIdByLink = new Map<string, string>()
-    const parentLinkByChild = new Map<string, string>()
 
-    for (const joint of joints) {
-      parentLinkByChild.set(joint.child as string, joint.parent as string)
-    }
-
-    function createLinkNodes(linkName: string) {
-      if (nodeIdByLink.has(linkName)) return
-      const parentLink = parentLinkByChild.get(linkName)
-      if (parentLink && !nodeIdByLink.has(parentLink)) createLinkNodes(parentLink)
-
-      const link = links.find((candidate) => candidate.name === linkName)
-      if (!link) return
-
-      const visuals = (link.visuals as Array<Record<string, unknown>>) ?? []
-      for (let vi = 0; vi < Math.max(1, visuals.length); vi++) {
-        const visual = visuals[vi]
-        if (!visual) continue
-
-        const geom = visual.geometry as { type: string; params: Record<string, number> }
-        const origin = visual.origin as { xyz: Vec3; rpy: Vec3 }
-        const pos: Vec3 = [origin.xyz[0], origin.xyz[2], -origin.xyz[1]]
-        const rot: Vec3 = [origin.rpy[0], origin.rpy[2], -origin.rpy[1]]
-        const parentNodeId = parentLink ? nodeIdByLink.get(parentLink) : undefined
-        const parentId = (parentNodeId ?? levelId ?? undefined) as never
-
-        try {
-          let node
-          const nodeName = visuals.length > 1 ? `${linkName}_v${vi}` : linkName
-
-          if (geom.type === 'box') {
-            node = BoxNode.parse({
-              name: nodeName,
-              position: pos,
-              rotation: rot,
-              length: geom.params.length ?? 1.0,
-              width: geom.params.width ?? 1.0,
-              height: geom.params.height ?? 1.0,
-            })
-          } else if (geom.type === 'cylinder') {
-            node = CylinderNode.parse({
-              name: nodeName,
-              position: pos,
-              rotation: rot,
-              radius: geom.params.radius ?? 0.5,
-              height: geom.params.length ?? 1.0,
-            })
-          } else {
-            node = SphereNode.parse({
-              name: nodeName,
-              position: pos,
-              rotation: rot,
-              radius: geom.type === 'sphere' ? (geom.params.radius ?? 0.5) : 0.05,
-            })
-          }
-
-          node.metadata = {
-            ...(node.metadata as Record<string, unknown> | undefined),
-            articraft: {
-              recordId: result.recordId,
-              name: result.name,
-              prompt: result.prompt,
-            },
-          } as Record<string, unknown> as never
-
-          if (articulationMode && vi === 0) {
-            const joint = joints.find((candidate) => candidate.child === linkName)
-            if (joint) {
-              const jOrigin = joint.origin as { xyz: Vec3; rpy: Vec3 }
-              const jAxis = joint.axis as Vec3
-              node.metadata = {
-                ...(node.metadata as Record<string, unknown> | undefined),
-                articraftJoint: {
-                  jointName: joint.name,
-                  jointType: joint.type,
-                  parentLink: joint.parent,
-                  childLink: joint.child,
-                  axis: [jAxis[0], jAxis[2], -jAxis[1]],
-                  origin: {
-                    xyz: [jOrigin.xyz[0], jOrigin.xyz[2], -jOrigin.xyz[1]],
-                    rpy: [jOrigin.rpy[0], jOrigin.rpy[2], -jOrigin.rpy[1]],
-                  },
-                  limits: joint.limits,
-                  currentValue: 0,
-                },
-              } as Record<string, unknown> as never
-            }
-          }
-
-          scene.createNode(node, parentId ?? undefined)
-          createdNames.push(nodeName)
-          if (vi === 0) nodeIdByLink.set(linkName, node.id)
-        } catch {
-          // Skip invalid Articraft visual records.
-        }
-      }
-    }
-
-    const roots = links.filter((link) => !parentLinkByChild.has(link.name as string))
-    for (const root of roots) createLinkNodes(root.name as string)
-
-    const firstNode = [...Object.values(scene.nodes)].reverse().find(
-      (node) => typeof node.name === 'string' && createdNames.includes(node.name),
+    const created = createModelNodes(
+      result.data,
+      (node, parentId) => {
+        scene.createNode(node, parentId)
+        return node.id as AnyNodeId
+      },
+      {
+        articulationMode,
+        parentId: levelId ?? undefined,
+      },
     )
-    if (firstNode) useViewer.getState().setSelection({ selectedIds: [firstNode.id] })
 
-    return createdNames.length
+    const metadataUpdates = created.nodeIds.flatMap((id) => {
+      const node = useScene.getState().nodes[id as AnyNodeId]
+      if (!node) return []
+
+      const existingMetadata = isRecord(node.metadata) ? node.metadata : {}
+      const jointMetadata = created.jointMetadata[id]
+      const articraftMetadata = jointMetadata
+        ? {
+            recordId: result.recordId,
+            recordPath: result.recordPath,
+            jointName: jointMetadata.jointName,
+            parentLink: jointMetadata.parentLink,
+            childLink: jointMetadata.childLink,
+          }
+        : getArticraftMetadata(result, node.name ?? id)
+
+      return [
+        {
+          id: id as AnyNodeId,
+          data: {
+            metadata: {
+              ...existingMetadata,
+              articraft: articraftMetadata,
+              ...(jointMetadata ? { articraftJoint: toSceneJointMetadata(jointMetadata) } : {}),
+            },
+          } as unknown as Partial<AnyNode>,
+        },
+      ]
+    })
+
+    if (metadataUpdates.length > 0) {
+      useScene.getState().updateNodes(metadataUpdates)
+    }
+
+    const selectedRootId = created.rootNodeIds[0] ?? created.nodeIds[0]
+    if (selectedRootId) {
+      useViewer.getState().setSelection({ selectedIds: [selectedRootId] })
+    }
+
+    return created.nodeIds.length
   }, [articulationMode])
 
-  const openArticraftViewer = useCallback((recordId: string) => {
+  const getArticraftViewerUrl = useCallback((recordId: string, tab = 'inspect') => {
     const base = articraftViewerUrl.replace(/\/$/, '')
-    window.open(`${base}/viewer?record=${encodeURIComponent(recordId)}&tab=inspect`, '_blank', 'noopener,noreferrer')
+    return `${base}/viewer?record=${encodeURIComponent(recordId)}&tab=${encodeURIComponent(tab)}`
   }, [articraftViewerUrl])
+
+  const openArticraftViewer = useCallback((recordId: string, tab?: string) => {
+    window.open(getArticraftViewerUrl(recordId, tab), '_blank', 'noopener,noreferrer')
+  }, [getArticraftViewerUrl])
 
   const markArticraftImported = useCallback((recordId: string) => {
     setMessages((prev) =>
@@ -698,9 +1168,11 @@ export function AiChatPanel() {
   const sendArticraftMessage = useCallback(async (text: string) => {
     setInput('')
     const userMsg: ChatMessage = { role: 'user', content: text }
+    const progressHeader = t('aiChat.articraftGenerating', 'Generating with Articraft...')
+    const progressLines: string[] = []
     const progressMsg: ChatMessage = {
       role: 'assistant',
-      content: t('aiChat.articraftGenerating', '正在用 Articraft 生成模型...'),
+      content: progressHeader,
     }
     setMessages((prev) => [...prev, userMsg, progressMsg])
     setLoading(true)
@@ -738,11 +1210,21 @@ export function AiChatPanel() {
           try {
             const event = JSON.parse(jsonStr)
             if (event.type === 'progress') {
+              const message = String(event.message ?? '').trim()
+              if (message) {
+                progressLines.push(message)
+                if (progressLines.length > ARTICRAFT_PROGRESS_LINE_LIMIT) {
+                  progressLines.splice(0, progressLines.length - ARTICRAFT_PROGRESS_LINE_LIMIT)
+                }
+              }
               setMessages((prev) => {
                 const updated = [...prev]
                 const lastIdx = updated.length - 1
                 if (lastIdx >= 0 && updated[lastIdx]?.role === 'assistant' && !updated[lastIdx]?.isToolResult) {
-                  updated[lastIdx] = { ...updated[lastIdx]!, content: event.message as string }
+                  updated[lastIdx] = {
+                    ...updated[lastIdx]!,
+                    content: formatArticraftProgressMessage(progressHeader, progressLines),
+                  }
                 }
                 return updated
               })
@@ -766,10 +1248,13 @@ export function AiChatPanel() {
         prompt: text,
         status: 'ready',
         recordId: String(resultData.recordId ?? ''),
+        recordPath: String(resultData.recordPath ?? ''),
         name: String(resultData.name ?? resultData.recordId ?? 'Articraft asset'),
         partCount: resultLinks.length,
         jointCount: resultJoints.length,
-        data: resultData,
+        links: resultLinks as unknown as ArticraftLink[],
+        joints: resultJoints as unknown as ArticraftJoint[],
+        data: resultData as unknown as ArticraftModelData,
       }
 
       setMessages((prev) => [
@@ -798,20 +1283,39 @@ export function AiChatPanel() {
     async (
       response: { role: string; content?: string; tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }> },
       apiMessages: Array<{ role: string; content: string; tool_call_id?: string; tool_calls?: unknown }>,
-      tools: Array<typeof COMPOSE_PRIMITIVE_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL>,
+      tools: ComposeTool[],
       label: string,
     ): Promise<{ results: string[]; lastContent: string }> => {
       const allResults: string[] = []
       let currentResponse = response
       let lastContent = response.content ?? ''
+      let round = 0
 
-      while (currentResponse.tool_calls?.length) {
+      while (currentResponse.tool_calls?.length && round < 3) {
+        round += 1
         const toolResultApiMsgs: Array<{ role: string; tool_call_id: string; content: string }> = []
+        const geometryToolCalls = currentResponse.tool_calls.filter((tc) =>
+          tc.function.name === 'compose_primitive' ||
+          tc.function.name === 'compose_object' ||
+          tc.function.name === 'compose_robot_arm'
+        )
 
-        for (const tc of currentResponse.tool_calls) {
-          const result = executeToolCall(tc.function.name, JSON.parse(tc.function.arguments))
-          toolResultApiMsgs.push({ role: 'tool', tool_call_id: tc.id, content: result })
-          allResults.push(result)
+        if (geometryToolCalls.length > 1) {
+          for (const tc of currentResponse.tool_calls) {
+            const result = [
+              'Invalid generation plan. Nothing was created.',
+              'Call exactly ONE geometry tool for the complete object.',
+              'Do not split one object across compose_object + compose_primitive, because attachTo indexes are local to a single tool call.',
+            ].join('\n')
+            toolResultApiMsgs.push({ role: 'tool', tool_call_id: tc.id, content: result })
+            allResults.push(result)
+          }
+        } else {
+          for (const tc of currentResponse.tool_calls) {
+            const result = executeToolCall(tc.function.name, JSON.parse(tc.function.arguments))
+            toolResultApiMsgs.push({ role: 'tool', tool_call_id: tc.id, content: result })
+            allResults.push(result)
+          }
         }
 
         // Update the placeholder message with results so far
@@ -831,6 +1335,10 @@ export function AiChatPanel() {
           })),
         } as Record<string, unknown> as never)
         apiMessages.push(...toolResultApiMsgs)
+
+        if (toolResultApiMsgs.some((msg) => msg.content.startsWith('Created '))) {
+          break
+        }
 
         currentResponse = await callApi(apiMessages, tools)
         if (currentResponse.content) lastContent = currentResponse.content
@@ -893,12 +1401,13 @@ export function AiChatPanel() {
         { role: 'system', content: STAGE2_GENERATOR },
         {
           role: 'user',
-          content: `User request: ${text}\n\nAnalysis:\n${analysis}\n\nNow call compose_primitive based on this analysis. Output ALL shapes in one call.`,
+          content: `User request: ${text}\n\nAnalysis:\n${analysis}\n\nNow call the best available tool based on this analysis. Prefer compose_object for supported whole-object categories, compose_robot_arm for robot arms, otherwise compose_primitive. Output the complete object in one tool call.`,
         },
       ]
 
-      let genResponse = await callApi(genMessages, [COMPOSE_PRIMITIVE_TOOL, COMPOSE_ROBOT_ARM_TOOL])
-      const genResult = await processToolCalls(genResponse, genMessages, [COMPOSE_PRIMITIVE_TOOL, COMPOSE_ROBOT_ARM_TOOL], '🔧 Generate')
+      const generationTools: ComposeTool[] = [COMPOSE_OBJECT_TOOL, COMPOSE_ROBOT_ARM_TOOL, COMPOSE_PRIMITIVE_TOOL]
+      const genResponse = await callApi(genMessages, generationTools)
+      const genResult = await processToolCalls(genResponse, genMessages, generationTools, 'Generate')
 
       // If no tool calls were made, show the text response
       if (genResult.results.length === 0) {
@@ -992,6 +1501,11 @@ export function AiChatPanel() {
                     <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
                       record: {msg.articraftResult.recordId || '-'}
                     </div>
+                    {msg.articraftResult.recordPath ? (
+                      <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground" title={msg.articraftResult.recordPath}>
+                        path: {msg.articraftResult.recordPath}
+                      </div>
+                    ) : null}
                   </div>
                   <span
                     className={cn(
@@ -1029,6 +1543,16 @@ export function AiChatPanel() {
                   >
                     <Icon className="size-3.5" icon="mdi:open-in-new" />
                     打开 Articraft Viewer
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!msg.articraftResult.recordId}
+                    onClick={() => openArticraftViewer(msg.articraftResult!.recordId, 'code')}
+                    title={msg.articraftResult.recordPath || undefined}
+                    type="button"
+                  >
+                    <Icon className="size-3.5" icon="mdi:file-document-outline" />
+                    查看源记录
                   </button>
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-emerald-400/50 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"

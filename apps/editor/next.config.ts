@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/viewer',
     '@pascal-app/core',
     '@pascal-app/editor',
+    '@pascal-app/articraft-bridge',
     '@pascal-app/nodes',
   ],
   turbopack: {

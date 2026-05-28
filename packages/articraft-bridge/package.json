@@ -10,6 +10,16 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./scene-converter": {
+      "types": "./src/scene-converter.ts",
+      "import": "./src/scene-converter.ts",
+      "default": "./src/scene-converter.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "import": "./src/types.ts",
+      "default": "./src/types.ts"
     }
   },
   "files": [

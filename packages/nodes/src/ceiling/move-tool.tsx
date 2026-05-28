@@ -9,7 +9,13 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  lastGridMoveRef,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
@@ -149,13 +155,12 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       applyPreview(localX - anchor[0], localZ - anchor[1])
     }
 
-    const onGridClick = (event: GridEvent) => {
-      if (isFloorplanSourcedEvent(event)) return
-      if (Date.now() - activatedAtRef.current < 150) {
-        event.nativeEvent?.stopPropagation?.()
-        return
-      }
+    if (lastGridMoveRef.localPosition) {
+      onGridMove({ localPosition: lastGridMoveRef.localPosition } as GridEvent)
+    }
 
+    const commitDelta = (nativeEvent?: { stopPropagation?: () => void }) => {
+      if (wasCommitted) return
       const [deltaX, deltaZ] = deltaRef.current
       wasCommitted = true
 
@@ -171,7 +176,21 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [ceilingId] })
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+      nativeEvent?.stopPropagation?.()
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      if (isFloorplanSourcedEvent(event)) return
+      if (Date.now() - activatedAtRef.current < 150) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+      commitDelta(event.nativeEvent)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitDelta(event)
     }
 
     const onCancel = () => {
@@ -184,6 +203,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPointerUp)
 
     return () => {
       if (!wasCommitted) {
@@ -194,6 +214,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPointerUp)
     }
   }, [exitMoveMode, node.id])
 

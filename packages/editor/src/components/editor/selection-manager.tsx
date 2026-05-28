@@ -54,7 +54,11 @@ import {
 } from '../../lib/material-paint'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
-import { isPlanDragMovableNode, PLAN_DRAG_3D_KINDS, PLAN_DRAG_THRESHOLD_PX } from '../../lib/plan-drag'
+import {
+  getPlanDrag3DKinds,
+  isPlanDragMovableNode,
+  PLAN_DRAG_THRESHOLD_PX,
+} from '../../lib/plan-drag'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
@@ -1185,19 +1189,20 @@ export const SelectionManager = () => {
       pendingPlanDragRef.current = null
     }
 
-    for (const kind of PLAN_DRAG_3D_KINDS) {
-      emitter.on(`${kind}:pointerdown`, onPointerDown as never)
-      emitter.on(`${kind}:move`, onNodeMove as never)
-      emitter.on(`${kind}:pointerup`, clearPendingDrag as never)
+    const planDragKinds = getPlanDrag3DKinds()
+    for (const kind of planDragKinds) {
+      emitter.on(`${kind}:pointerdown` as never, onPointerDown as never)
+      emitter.on(`${kind}:move` as never, onNodeMove as never)
+      emitter.on(`${kind}:pointerup` as never, clearPendingDrag as never)
     }
     window.addEventListener('pointermove', onWindowPointerMove)
     window.addEventListener('pointerup', clearPendingDrag)
 
     return () => {
-      for (const kind of PLAN_DRAG_3D_KINDS) {
-        emitter.off(`${kind}:pointerdown`, onPointerDown as never)
-        emitter.off(`${kind}:move`, onNodeMove as never)
-        emitter.off(`${kind}:pointerup`, clearPendingDrag as never)
+      for (const kind of planDragKinds) {
+        emitter.off(`${kind}:pointerdown` as never, onPointerDown as never)
+        emitter.off(`${kind}:move` as never, onNodeMove as never)
+        emitter.off(`${kind}:pointerup` as never, clearPendingDrag as never)
       }
       window.removeEventListener('pointermove', onWindowPointerMove)
       window.removeEventListener('pointerup', clearPendingDrag)

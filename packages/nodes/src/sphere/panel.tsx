@@ -9,10 +9,9 @@ import {
   PanelWrapper,
   SliderControl,
   triggerSFX,
-  useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Move, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { L, S } from '../i18n/panel-labels'
 
@@ -24,7 +23,6 @@ export default function SpherePanel() {
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
-  const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as SphereNode | undefined) : undefined,
@@ -86,13 +84,6 @@ export default function SpherePanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-  const handleMove = useCallback(() => {
-    if (node) {
-      triggerSFX('sfx:item-pick')
-      setMovingNode(node)
-      setSelection({ selectedIds: [] })
-    }
-  }, [node, setMovingNode, setSelection])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -264,11 +255,6 @@ export default function SpherePanel() {
 
       <PanelSection title={S.actions()}>
         <ActionGroup>
-          <ActionButton
-            icon={<Move className="h-3.5 w-3.5" />}
-            label={L.move()}
-            onClick={handleMove}
-          />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}

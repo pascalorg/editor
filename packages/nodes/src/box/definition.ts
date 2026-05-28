@@ -1,4 +1,4 @@
-import { type NodeDefinition, BoxNode as BoxNodeSchema } from '@pascal-app/core'
+import { BoxNode as BoxNodeSchema, type NodeDefinition } from '@pascal-app/core'
 import { boxParametrics } from './parametrics'
 import { BoxNode } from './schema'
 
@@ -31,13 +31,14 @@ export const boxDefinition: NodeDefinition<typeof BoxNode> = {
 
   presentation: {
     label: 'Box',
-    description: 'A configurable solid or hollow cuboid primitive.',
+    description: 'A configurable cuboid primitive with optional rounded corners.',
     icon: { kind: 'url', src: '/icons/cube.png' },
     paletteSection: 'structure',
     paletteOrder: 115,
   },
 
   mcp: {
-    description: 'A rectangular box primitive with configurable dimensions and optional hollow core.',
+    description:
+      'A rectangular box primitive with configurable dimensions and optional rounded corners.',
   },
 }

@@ -4,18 +4,23 @@ import type { Object3D } from 'three'
 import type {
   BoxNode,
   BuildingNode,
+  CapsuleNode,
   CeilingNode,
-  CylinderNode,
   ColumnNode,
+  CylinderNode,
   DoorNode,
   ElevatorNode,
+  ExtrudeNode,
   FenceNode,
   GuideNode,
+  HalfCylinderNode,
   ItemNode,
+  LatheNode,
   LevelNode,
   PipeNode,
   RoofNode,
   RoofSegmentNode,
+  RoundedPanelNode,
   ScanNode,
   ShelfNode,
   SiteNode,
@@ -24,6 +29,7 @@ import type {
   SphereNode,
   StairNode,
   StairSegmentNode,
+  SweepNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -66,6 +72,12 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 export type BoxEvent = NodeEvent<BoxNode>
 export type CylinderEvent = NodeEvent<CylinderNode>
 export type SphereEvent = NodeEvent<SphereNode>
+export type LatheEvent = NodeEvent<LatheNode>
+export type CapsuleEvent = NodeEvent<CapsuleNode>
+export type HalfCylinderEvent = NodeEvent<HalfCylinderNode>
+export type RoundedPanelEvent = NodeEvent<RoundedPanelNode>
+export type ExtrudeEvent = NodeEvent<ExtrudeNode>
+export type SweepEvent = NodeEvent<SweepNode>
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type PipeEvent = NodeEvent<PipeNode>
@@ -203,6 +215,12 @@ type EditorEvents = GridEvents &
   NodeEvents<'box', BoxEvent> &
   NodeEvents<'cylinder', CylinderEvent> &
   NodeEvents<'sphere', SphereEvent> &
+  NodeEvents<'lathe', LatheEvent> &
+  NodeEvents<'capsule', CapsuleEvent> &
+  NodeEvents<'half-cylinder', HalfCylinderEvent> &
+  NodeEvents<'rounded-panel', RoundedPanelEvent> &
+  NodeEvents<'extrude', ExtrudeEvent> &
+  NodeEvents<'sweep', SweepEvent> &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'pipe', PipeEvent> &

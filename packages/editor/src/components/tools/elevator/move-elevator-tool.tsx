@@ -13,6 +13,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -150,17 +151,24 @@ export function MoveElevatorTool({
       applyPreview(previewPositionRef.current, pendingRotation)
     }
 
-    const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+    if (lastGridMoveRef.localPosition) {
+      onGridMove({ localPosition: lastGridMoveRef.localPosition } as GridEvent)
+    }
+
+    const resolvePosition = (localPosition: [number, number, number]): ElevatorNode['position'] => {
+      const gridX = Math.round(localPosition[0] * 2) / 2
+      const gridZ = Math.round(localPosition[2] * 2) / 2
       const supportY = resolveElevatorSupportY({
         buildingId: supportBuildingId,
         preferredLevelId: supportLevelId,
         x: gridX,
         z: gridZ,
       })
-      const nextPosition: ElevatorNode['position'] = [gridX, supportY, gridZ]
+      return [gridX, supportY, gridZ]
+    }
 
+    const commitPosition = (nextPosition: ElevatorNode['position'], nativeEvent?: { stopPropagation?: () => void }) => {
+      if (wasCommitted) return
       wasCommitted = true
       clearPreview()
       resumeHistory()
@@ -185,7 +193,18 @@ export function MoveElevatorTool({
 
       sfxEmitter.emit('sfx:item-place')
       exitMoveMode()
-      event.nativeEvent?.stopPropagation?.()
+      nativeEvent?.stopPropagation?.()
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      const nextPosition = resolvePosition(event.localPosition)
+      previewPositionRef.current = nextPosition
+      commitPosition(nextPosition, event.nativeEvent)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      commitPosition(previewPositionRef.current, event)
     }
 
     const onCancel = () => {
@@ -230,6 +249,7 @@ export function MoveElevatorTool({
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerup', onPointerUp)
 
     return () => {
       clearPreview()
@@ -246,6 +266,7 @@ export function MoveElevatorTool({
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerup', onPointerUp)
     }
   }, [movingNode, exitMoveMode])
 

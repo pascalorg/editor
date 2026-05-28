@@ -12,8 +12,9 @@ import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 
 /** Latest building-local cursor position from grid pointermove (for drag tool warm-start). */
 export const lastGridMoveRef: {
+  position: [number, number, number] | null
   localPosition: [number, number, number] | null
-} = { localPosition: null }
+} = { position: null, localPosition: null }
 
 /**
  * Custom grid events hook that uses manual raycasting instead of mesh events.
@@ -69,6 +70,7 @@ export function useGridEvents(gridY: number) {
 
       emitter.emit(eventKey, payload)
       if (suffix === 'move') {
+        lastGridMoveRef.position = payload.position
         lastGridMoveRef.localPosition = payload.localPosition
       }
     }

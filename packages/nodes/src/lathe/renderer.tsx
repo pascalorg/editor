@@ -6,7 +6,7 @@ import {
   createMaterialFromPresetRef,
   useNodeEvents,
 } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
 export const LatheRenderer = ({ node }: { node: LatheNode }) => {
@@ -53,11 +53,6 @@ export const LatheRenderer = ({ node }: { node: LatheNode }) => {
     [node.profile, node.segments, node.arc],
   )
 
-  useEffect(() => {
-    return () => {
-      geometry.dispose()
-    }
-  }, [geometry])
 
   return (
     <group

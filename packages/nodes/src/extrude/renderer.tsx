@@ -1,0 +1,100 @@
+'use client'
+
+import { type ExtrudeNode, useRegistry, useScene } from '@pascal-app/core'
+import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
+
+function centerGeometry(geo: THREE.BufferGeometry) {
+  geo.computeBoundingBox()
+  const box = geo.boundingBox
+  if (!box) return
+  const center = new THREE.Vector3()
+  box.getCenter(center)
+  geo.translate(-center.x, -center.y, -center.z)
+  geo.computeBoundingBox()
+  geo.computeBoundingSphere()
+}
+
+export const ExtrudeRenderer = ({ node }: { node: ExtrudeNode }) => {
+  const ref = useRef<THREE.Group>(null!)
+
+  useRegistry(node.id, 'extrude', ref)
+
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
+
+  const handlers = useNodeEvents(node, 'extrude')
+
+  const material = useMemo(() => {
+    const presetMaterial = createMaterialFromPresetRef(node.materialPreset)
+    if (presetMaterial) return presetMaterial
+    const mat = node.material
+    if (!mat) return new THREE.MeshStandardMaterial({ color: 0xcccccc })
+    return createMaterial(mat)
+  }, [
+    node.materialPreset,
+    node.material,
+    node.material?.preset,
+    node.material?.properties,
+    node.material?.texture,
+  ])
+
+  const geometry = useMemo(() => {
+    const profile = node.profile ?? [
+      [-0.5, -0.25],
+      [0.5, -0.25],
+      [0.5, 0.25],
+      [-0.5, 0.25],
+    ]
+    const first = profile[0] ?? [-0.5, -0.25]
+    const shape = new THREE.Shape()
+    shape.moveTo(first[0], first[1])
+    for (const [x, y] of profile.slice(1)) shape.lineTo(x, y)
+    shape.closePath()
+
+    const bevelSize = node.bevelSize ?? 0.01
+    const bevelThickness = node.bevelThickness ?? bevelSize
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: node.depth ?? 0.1,
+      bevelEnabled: bevelSize > 0 || bevelThickness > 0,
+      bevelSize,
+      bevelThickness,
+      bevelSegments: node.bevelSegments ?? 2,
+      curveSegments: node.curveSegments ?? 8,
+    })
+    centerGeometry(geo)
+    return geo
+  }, [
+    node.profile,
+    node.depth,
+    node.bevelSize,
+    node.bevelThickness,
+    node.bevelSegments,
+    node.curveSegments,
+  ])
+
+
+  return (
+    <group
+      position-x={node.position[0]}
+      position-y={node.position[1]}
+      position-z={node.position[2]}
+      ref={ref}
+      rotation={node.rotation}
+      visible={node.visible}
+      {...handlers}
+    >
+      <mesh
+        castShadow
+        geometry={geometry}
+        material={material}
+        name="primitive-solid"
+        receiveShadow
+      />
+    </group>
+  )
+}
+
+export default ExtrudeRenderer
