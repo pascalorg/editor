@@ -26,6 +26,8 @@ import { surfaceQuatFromNormal } from '../solar-panel/geometry'
 import { buildFrameGeometry } from './frame-csg'
 import { buildLanternGlassGeometry, clamp01, paneSize } from './geometry'
 
+const yAxis = new THREE.Vector3(0, 1, 0)
+
 const defaultFrameMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.3,
@@ -662,6 +664,19 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
     [surfaceFrame.normal],
   )
 
+  // Compose the surface tilt with the skylight's own yaw so the
+  // registered ref group below carries the complete "skylight pose in
+  // segment frame" as a single local position+quaternion. Registry
+  // handles (`portal: 'grandparent'`) read this Object3D's *local*
+  // pose, so splitting the tilt and the yaw across nested groups would
+  // leave the registered group with just the yaw and put the handles
+  // at the wrong spot.
+  const composedQuat = useMemo(() => {
+    const q = new THREE.Quaternion().copy(surfaceQuat)
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(yAxis, node.rotation ?? 0))
+    return q
+  }, [surfaceQuat, node.rotation])
+
   const hasCurb = node.curb ?? false
   const curbH = hasCurb ? Math.max(0, node.curbHeight ?? 0.1) : 0
 
@@ -672,15 +687,26 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
   return (
     <group
       position={segment.position}
-      ref={ref}
       rotation-y={segment.rotation}
       visible={node.visible}
       {...handlers}
     >
-      <group position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}>
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
+      {/*
+        Single registered transform group carries the full skylight pose
+        in segment frame: translation = (skylight.x, surfaceY, skylight.z),
+        quaternion = surfaceQuat · Y(node.rotation). Used to be three
+        nested groups; collapsed because registry handles read this
+        Object3D's *local* position/quaternion (grandparent portal mode),
+        and a split tree would only expose the bottom group's local pose
+        (the yaw) — handles would land at the segment origin on the roof
+        base instead of on the skylight.
+      */}
+      <group
+        position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
+        quaternion={composedQuat}
+        ref={ref}
+      >
+        <mesh
               castShadow
               geometry={frameGeo}
               material={frameMaterial}
@@ -716,17 +742,15 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
                 openAmount={openAmount}
               />
             )}
-            {(activeType === 'flat' || activeType === 'walk-on') && (
-              <GlassPane
-                glassThickness={glassThickness}
-                material={glassMaterial}
-                paneDepth={node.height + 0.004}
-                position={[0, curbH + glassThickness / 2, 0]}
-                width={node.width + 0.004}
-              />
-            )}
-          </group>
-        </group>
+        {(activeType === 'flat' || activeType === 'walk-on') && (
+          <GlassPane
+            glassThickness={glassThickness}
+            material={glassMaterial}
+            paneDepth={node.height + 0.004}
+            position={[0, curbH + glassThickness / 2, 0]}
+            width={node.width + 0.004}
+          />
+        )}
       </group>
     </group>
   )

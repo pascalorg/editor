@@ -122,6 +122,29 @@ export type LinearResizeHandle<N> = {
   cursor?: Cursor
   /** Optional visual guide shown while the arrow is hovered or dragging. */
   decoration?: HandleDecoration<N>
+  /**
+   * Visual override. Defaults to the standard chevron arrow.
+   *
+   * `'tracker'` swaps the chevron for a dashed vertical leader + a small
+   * cube at `placement.position`. The leader runs from the floor (local
+   * y=0) up to the cube; the cube is the drag target and reuses the same
+   * linear-resize drag pipeline as the chevron. Intended for vertical
+   * height handles where the dashed leader makes the "this is the wall
+   * top" relationship readable at a glance — mirrors the `corner-picker`
+   * shape on `tap-action` handles but with a draggable cube instead of a
+   * one-tap hex disc. Use with `axis: 'y'`; horizontal axes will render
+   * the leader vertically and look wrong.
+   */
+  shape?: 'arrow' | 'tracker'
+  /**
+   * Optional override for the bottom Y of the tracker leader. Defaults
+   * to 0 (floor of the rideObject's local frame). Use when the value
+   * being tracked spans a region that doesn't start at the floor — e.g.
+   * a chimney's body height runs from the roof deck up to the body top,
+   * so the leader should start at the deck plane and not climb through
+   * the roof shell below it. Only consulted when `shape === 'tracker'`.
+   */
+  trackerBaseY?: (node: N, sceneApi: SceneApi) => number
 }
 
 /**
@@ -176,6 +199,18 @@ export type ArcResizeHandle<N = any> = {
    * arrow icon, intended for whole-node rotation handles.
    */
   shape?: 'chevron' | 'rotate'
+  /**
+   * Pivot point for the angular drag, in the rideObject's local space.
+   * The renderer measures cursor angle (atan2 on the drag plane) around
+   * this point — descriptors that write `rotation` should anchor it to
+   * the node's visual center. Defaults to the rideObject's own origin,
+   * which is correct for nodes whose mesh origin coincides with the
+   * field they're rotating (roof-segment, elevator). Use this when the
+   * node's pose is baked into its geometry (chimney) so the mesh origin
+   * sits at the parent frame's origin rather than the rotating shape's
+   * center.
+   */
+  rotationCenter?: (node: N, sceneApi: SceneApi) => readonly [number, number, number]
 }
 
 /**

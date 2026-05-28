@@ -21,6 +21,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  BoxGeometry,
   type BufferGeometry,
   Color,
   CylinderGeometry,
@@ -649,6 +650,59 @@ function LinearArrow({
   const showLabel = isHovered || isDragging
   const labelText = showLabel ? formatDimension(descriptor.currentValue(node), unit) : ''
 
+  // `tracker` shape on a linear-resize handle: render a dashed vertical
+  // leader from the floor up to a small cube at `placement.position`. The
+  // cube is the drag target and reuses the same `activate` pointer handler
+  // as the chevron path, so all the override/commit plumbing is unchanged.
+  // Only valid for axis='y' resize handles — the leader is rendered at
+  // (0,0,0)→(0,position.y,0) in the same group as the cube, so for x/z
+  // axes the leader would still climb vertically and look wrong.
+  const shape =
+    descriptor.kind === 'linear-resize' && descriptor.shape === 'tracker' ? 'tracker' : 'arrow'
+
+  if (shape === 'tracker') {
+    // Descriptors can pin the leader's bottom Y above the floor — e.g.
+    // chimney body height starts at the deck plane, not at y=0, so the
+    // dashed leader spans only the body's visible extent.
+    const trackerDescriptor = descriptor as LinearResizeHandle<AnyNode>
+    const baseY =
+      trackerDescriptor.trackerBaseY?.(node as never, placementSceneApi) ?? 0
+    const leaderHeight = Math.max(position[1] - baseY, 0)
+    return (
+      <>
+        {showDecoration && decoration ? (
+          <GuideRing
+            radius={decoration.radius(node as never)}
+            y={decoration.y?.(node as never) ?? 0}
+          />
+        ) : null}
+        {showLabel ? (
+          <DimensionLabel position={[position[0], position[1] + 0.22, position[2]]} text={labelText} />
+        ) : null}
+        <TrackerShape
+          basePosition={[position[0], baseY, position[2]]}
+          cubePosition={position}
+          leaderHeight={leaderHeight}
+          isHovered={isHovered}
+          onActivate={activate}
+          onEnter={(event) => {
+            event.stopPropagation()
+            setIsHovered(true)
+            document.body.style.cursor = cursor
+          }}
+          onLeave={(event) => {
+            event.stopPropagation()
+            setIsHovered(false)
+            if (document.body.style.cursor === cursor) {
+              document.body.style.cursor = ''
+            }
+          }}
+          zoom={zoom}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       {showDecoration && decoration ? (
@@ -781,11 +835,23 @@ function ArcArrow({
     event.stopPropagation()
 
     // Horizontal drag plane at the arrow's world Y. Atan2 around the
-    // node's local origin (= rideObject world center) gives the cursor's
-    // bearing — delta between samples is the angular drag.
+    // rotation pivot gives the cursor's bearing — delta between samples
+    // is the angular drag.
+    //
+    // Default pivot is the rideObject's world origin (= node-local
+    // origin) which is correct when the mesh origin coincides with the
+    // shape being rotated (roof-segment, elevator). Nodes that bake
+    // pose into their geometry (chimney) can override via
+    // `descriptor.rotationCenter`, which we apply through the
+    // rideObject's matrixWorld so the descriptor stays in node-local
+    // coordinates.
     rideObject.updateMatrixWorld()
-    const centerWorld = new Vector3()
-    rideObject.getWorldPosition(centerWorld)
+    const centerWorld =
+      descriptor.rotationCenter !== undefined
+        ? new Vector3(...descriptor.rotationCenter(node as never, createSceneApi(useScene))).applyMatrix4(
+            rideObject.matrixWorld,
+          )
+        : new Vector3().setFromMatrixPosition(rideObject.matrixWorld)
     const arrowWorld = new Vector3(...position).applyMatrix4(rideObject.matrixWorld)
     const planeY = arrowWorld.y
     const plane = new Plane(new Vector3(0, 1, 0), -planeY)
@@ -1168,6 +1234,112 @@ function CornerPickerShape({
           <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
         </mesh>
       </group>
+    </>
+  )
+}
+
+// Tracker visual for the `linear-resize` handle's `shape: 'tracker'` option.
+// Mirrors the corner picker (dashed vertical leader from the floor) but caps
+// the leader with a small draggable cube instead of a hex disc, and the cube
+// sits at the TOP of the leader rather than the floor — the visual reads as
+// "this cube is the wall top; drag it to raise/lower." All interactivity
+// (pointer-down → linear-resize drag) is wired by the parent `LinearArrow`.
+const TRACKER_CUBE_SIZE = 0.16
+
+function TrackerShape({
+  basePosition,
+  cubePosition,
+  leaderHeight,
+  zoom,
+  isHovered,
+  onActivate,
+  onEnter,
+  onLeave,
+}: {
+  basePosition: readonly [number, number, number]
+  cubePosition: readonly [number, number, number]
+  leaderHeight: number
+  zoom: number
+  isHovered: boolean
+  onActivate: (event: ThreeEvent<PointerEvent>) => void
+  onEnter: (event: ThreeEvent<PointerEvent>) => void
+  onLeave: (event: ThreeEvent<PointerEvent>) => void
+}) {
+  // `leaderHeight === 0` (wallHeight collapsed to floor) would make the
+  // dashed builder return an empty geometry — skip the mesh entirely in
+  // that case so the cube still renders by itself.
+  const hasLeader = leaderHeight > 0.0001
+  const dashedGeometry = useMemo(
+    () => (hasLeader ? buildDashedVerticalGeometry(leaderHeight) : null),
+    [hasLeader, leaderHeight],
+  )
+  useEffect(() => () => dashedGeometry?.dispose(), [dashedGeometry])
+
+  const cubeGeometry = useMemo(
+    () => new BoxGeometry(TRACKER_CUBE_SIZE, TRACKER_CUBE_SIZE, TRACKER_CUBE_SIZE),
+    [],
+  )
+  useEffect(() => () => cubeGeometry.dispose(), [cubeGeometry])
+
+  const dashMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const cubeMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        side: DoubleSide,
+        transparent: true,
+        opacity: 1,
+        // depthTest off keeps the cube visible through any geometry sitting
+        // between camera and wall top; depthWrite on so the ink-edge pass
+        // catches the cube silhouette from every angle (same reasoning as
+        // the chevron — without it the lines fade in/out by view angle).
+        depthTest: false,
+        depthWrite: true,
+      }),
+    [],
+  )
+  useEffect(() => {
+    const next = isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR
+    dashMaterial.color.set(next)
+    cubeMaterial.color.set(next)
+  }, [dashMaterial, cubeMaterial, isHovered])
+  useEffect(() => () => dashMaterial.dispose(), [dashMaterial])
+  useEffect(() => () => cubeMaterial.dispose(), [cubeMaterial])
+
+  const cubeScale = (isHovered ? 1.25 : 1) * zoom
+
+  return (
+    <>
+      {dashedGeometry ? (
+        <mesh
+          frustumCulled={false}
+          geometry={dashedGeometry}
+          material={dashMaterial}
+          position={basePosition}
+          renderOrder={1001}
+        />
+      ) : null}
+      <mesh
+        frustumCulled={false}
+        geometry={cubeGeometry}
+        material={cubeMaterial}
+        onPointerDown={onActivate}
+        onPointerEnter={onEnter}
+        onPointerLeave={onLeave}
+        position={cubePosition}
+        renderOrder={1003}
+        scale={cubeScale}
+      />
     </>
   )
 }

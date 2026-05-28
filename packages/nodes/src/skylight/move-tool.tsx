@@ -14,6 +14,8 @@ import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/edito
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
 import SkylightPreview from './preview'
 
 function resolveSegmentFromWorldPoint(
@@ -45,7 +47,15 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
 
   const previewRef = useRef<THREE.Group>(null!)
   const [previewPos, setPreviewPos] = useState<[number, number, number]>([0, 0, 0])
-  const [previewQuat, setPreviewQuat] = useState<[number, number, number, number]>([0, 0, 0, 1])
+  // Mirror the placement tool's transform stack so the ghost reads the
+  // same in both flows: outer rotation-y aligns the segment's world yaw
+  // (roof + segment), inner quaternion tilts to the segment surface in
+  // segment-local space (analytical, not raycast — raycast normals can
+  // be flipped or in the wrong frame depending on hit-object state).
+  // The skylight's own `rotation` is applied on a deeper group so it
+  // stays editable on top of the surface alignment.
+  const [previewYaw, setPreviewYaw] = useState(0)
+  const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [hasHit, setHasHit] = useState(false)
 
   useEffect(() => {
@@ -85,20 +95,25 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     let lastSnapX = 0
     let lastSnapZ = 0
 
-    const captureNormal = (event: RoofEvent) => {
-      if (!event.normal) return
-      const n = new THREE.Vector3(event.normal[0], event.normal[1], event.normal[2])
-      const nm = new THREE.Matrix3().getNormalMatrix(event.object.matrixWorld)
-      n.applyMatrix3(nm).normalize()
-
-      const up = new THREE.Vector3(0, 1, 0)
-      const right = new THREE.Vector3().crossVectors(up, n)
-      if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
-      else right.normalize()
-      const forward = new THREE.Vector3().crossVectors(right, n).normalize()
-      const m = new THREE.Matrix4().makeBasis(right, n, forward)
-      const q = new THREE.Quaternion().setFromRotationMatrix(m)
-      setPreviewQuat([q.x, q.y, q.z, q.w])
+    // Resolve which segment the cursor is over, then derive the same
+    // preview transform stack the placement tool uses (`skylight/tool.tsx`):
+    // analytical surface normal in segment-local frame → outer yaw =
+    // roof + segment rotation. Falls back to leaving the preview hidden
+    // if the cursor is between segments — the placement tool does the
+    // same via its `if (!hit) return` guard.
+    const updateFromHit = (event: RoofEvent) => {
+      const roof = event.node as RoofNode
+      const hit = resolveRoofSegmentHit(roof, event.position[0], event.position[1], event.position[2])
+      if (!hit) {
+        setHasHit(false)
+        return false
+      }
+      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
+      setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
+      setPreviewYaw((roof.rotation ?? 0) + (hit.segment.rotation ?? 0))
+      setPreviewPos(worldToBuildingLocal(event.position[0], event.position[1], event.position[2]))
+      setHasHit(true)
+      return true
     }
 
     const onRoofMove = (event: RoofEvent) => {
@@ -109,16 +124,12 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
         lastSnapX = sx
         lastSnapZ = sz
       }
-      captureNormal(event)
-      setPreviewPos(worldToBuildingLocal(event.position[0], event.position[1], event.position[2]))
-      setHasHit(true)
+      updateFromHit(event)
       event.stopPropagation()
     }
 
     const onRoofEnter = (event: RoofEvent) => {
-      captureNormal(event)
-      setPreviewPos(worldToBuildingLocal(event.position[0], event.position[1], event.position[2]))
-      setHasHit(true)
+      updateFromHit(event)
       event.stopPropagation()
     }
 
@@ -147,7 +158,6 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       })
       useScene.temporal.getState().resume()
 
-      captureNormal(event)
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
@@ -241,10 +251,16 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     }
   }, [exitMoveMode, node])
 
+  if (!previewSurfaceQuat) return null
+
   return (
-    <group position={previewPos} quaternion={previewQuat} ref={previewRef} visible={hasHit}>
-      <group rotation-y={node.rotation ?? 0}>
-        <SkylightPreview node={node} />
+    <group position={previewPos} ref={previewRef} visible={hasHit}>
+      <group rotation-y={previewYaw}>
+        <group quaternion={previewSurfaceQuat}>
+          <group rotation-y={node.rotation ?? 0}>
+            <SkylightPreview node={node} />
+          </group>
+        </group>
       </group>
     </group>
   )

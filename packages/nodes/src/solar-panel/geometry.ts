@@ -322,10 +322,24 @@ export function getAnalyticalNormal(lx: number, lz: number, seg: RoofSegmentNode
 // renderer and the placement preview share one source of truth.
 
 export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaternion) {
-  const up = new THREE.Vector3(0, 1, 0)
-  const right = new THREE.Vector3().crossVectors(up, normal)
-  if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
-  else right.normalize()
+  // Build `right` by projecting world +X onto the surface plane instead of
+  // using `up × normal`. The cross-product version flips sign when the
+  // normal's Z component flips (e.g. the two slopes of a gable roof), so
+  // the resulting basis has its +X axis reversed on one slope — which
+  // makes hosted children's local +X point in opposite world directions
+  // depending on which slope they sit on, and registry chevrons end up
+  // anchored to the wrong edge. Projecting +X keeps the basis stable
+  // across slope-flips that share the same X axis.
+  const wx = new THREE.Vector3(1, 0, 0)
+  const right = wx.sub(normal.clone().multiplyScalar(new THREE.Vector3(1, 0, 0).dot(normal)))
+  if (right.lengthSq() < 1e-6) {
+    // Degenerate: normal is parallel to ±X. Fall back to +Z so the basis
+    // is still well-defined; this is the wall-like edge case (vertical
+    // surface facing along X) where any in-plane convention is OK.
+    right.set(0, 0, 1)
+  } else {
+    right.normalize()
+  }
   const forward = new THREE.Vector3().crossVectors(right, normal).normalize()
   const m = new THREE.Matrix4().makeBasis(right, normal, forward)
   return out.setFromRotationMatrix(m)

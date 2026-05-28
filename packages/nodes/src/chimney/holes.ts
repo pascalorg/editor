@@ -270,8 +270,9 @@ function buildPanelCutters(node: ChimneyNode, topY: number): Brush[] {
   for (const f of faces) {
     const geo = new THREE.BoxGeometry(f.sizeX, h, f.sizeZ)
     geo.translate(f.cx, midY, f.cz)
-    if (Math.abs(node.rotation) > 1e-4) geo.rotateY(node.rotation)
-    geo.translate(node.position[0] ?? 0, 0, node.position[2] ?? 0)
+    // Body geometry is in chimney-local frame (node.position/rotation are
+    // applied by the renderer's nested ref'd group, not baked into the
+    // buffer geometry), so cutters need to stay in chimney-local too.
 
     const idx = geo.getIndex()?.count ?? 0
     geo.clearGroups()
@@ -298,10 +299,9 @@ function buildCutter(
       ? new THREE.CylinderGeometry(spec.sizeX / 2, spec.sizeX / 2, h, 24, 1, false)
       : new THREE.BoxGeometry(spec.sizeX, h, spec.sizeZ)
   geo.translate(spec.xCenter, midY, 0)
-  // Match the same node-local transform that `geometry.ts:applyNodeTransform`
-  // bakes into the body/cap/flue vertices.
-  if (Math.abs(node.rotation) > 1e-4) geo.rotateY(node.rotation)
-  geo.translate(node.position[0] ?? 0, 0, node.position[2] ?? 0)
+  // Cutter stays in chimney-local frame to match the body/cap/flue
+  // geometry (node.position/rotation are applied via the renderer's
+  // nested ref'd group, not baked into the buffer geometry).
 
   const idx = geo.getIndex()?.count ?? 0
   geo.clearGroups()

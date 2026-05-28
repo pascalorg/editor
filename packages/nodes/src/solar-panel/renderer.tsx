@@ -27,6 +27,14 @@ import {
   surfaceQuatFromNormal,
 } from './geometry'
 
+// Module-scope scratch vectors and quaternions for composing the panel's
+// local orientation each render — surfaceQuat · Y(rotation) · X(tilt).
+// Reused so we don't allocate four objects per frame.
+const yAxis = new THREE.Vector3(0, 1, 0)
+const xAxis = new THREE.Vector3(1, 0, 0)
+const panelYawQuat = new THREE.Quaternion()
+const panelTiltQuat = new THREE.Quaternion()
+
 // MeshStandardNodeMaterial: WebGPU-native so it integrates correctly with
 // the MRT pass (normal + roughness attachments). The legacy WebGL
 // MeshStandardMaterial triggers "Color target has no corresponding fragment
@@ -124,32 +132,40 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
 
   const tiltRad = node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
 
+  // Compose surfaceQuat · Y(rotation) · X(tilt) into a single quaternion
+  // so the registered group below carries the panel's complete local pose
+  // (position + orientation) as its own *local* matrix. Registry handles
+  // (`portal: 'grandparent'`) read this Object3D's local position +
+  // quaternion to ride the panel; splitting the rotation across nested
+  // groups would leave the registered group with only the position and
+  // an identity quaternion, so the arrows would land on the segment-flat
+  // axes instead of on the tilted panel.
+  const composedQuat = new THREE.Quaternion()
+    .copy(surfaceQuat)
+    .multiply(panelYawQuat.setFromAxisAngle(yAxis, node.rotation ?? 0))
+    .multiply(panelTiltQuat.setFromAxisAngle(xAxis, tiltRad))
+
   // Roof accessories are mounted under `<group name="roof-elements">`
   // in the roof renderer — that group has NO transform, so the segment
   // frame is NOT inherited from the React tree. Apply segment.position
-  // and segment.rotation here, then the panel's segment-local offset,
-  // then surface quat / yaw / tilt.
+  // and segment.rotation here, then the panel's segment-local offset +
+  // composed orientation on a single registered group.
   return (
     <group position={segment.position} rotation-y={segment.rotation}>
       <group
         position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
+        quaternion={composedQuat}
         ref={ref}
         visible={node.visible}
       >
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <group rotation-x={tiltRad}>
-              <mesh
-                castShadow
-                geometry={geometry}
-                material={[frameMaterial, panelMaterial]}
-                name="solar-panel-surface"
-                receiveShadow
-                {...handlers}
-              />
-            </group>
-          </group>
-        </group>
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={[frameMaterial, panelMaterial]}
+          name="solar-panel-surface"
+          receiveShadow
+          {...handlers}
+        />
       </group>
     </group>
   )

@@ -223,67 +223,71 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
 
   if (!segment || !geo) return null
 
-  // The chimney's geometry bakes its baseY using segment.wallHeight inside
-  // the builder, so the outer group only needs the segment-local X/Z
-  // offset. Y stays at 0 here.
-
   // Chimneys are mounted inside `RoofRenderer`'s `roof-elements` group,
   // which sits at the ROOF's origin — not inside the host segment's
-  // transform. Apply the segment's own position/rotation here so a
-  // chimney parented to segment N lands on segment N (and not on the
-  // first segment) once the chimney's segment-local `node.position[0/2]`
-  // is layered in by `geometry.ts`. Mirrors skylight's renderer.
+  // transform. Apply the segment's pose on the outer group, then nest a
+  // ref'd inner group at the chimney's segment-local position +
+  // rotation so the registered Object3D's local frame is *chimney-local*
+  // — that's what `NodeArrowHandles` reads to place its arrows.
+  // Mirrors skylight's renderer; geometry comes from `geometry.ts` in
+  // chimney-local frame (no transform baking) and lands in the right
+  // world spot via the two-group stack below.
   return (
     <group
       position={segment.position}
-      ref={ref}
       rotation-y={segment.rotation}
       visible={node.visible}
       {...handlers}
     >
-      <mesh
-        castShadow
-        geometry={trimmedBody ?? geo.body}
-        material={surfaceArray}
-        name="chimney-body"
-        receiveShadow
-      />
-      {geo.cap && (
+      <group
+        position={[node.position[0] ?? 0, 0, node.position[2] ?? 0]}
+        ref={ref}
+        rotation-y={node.rotation ?? 0}
+      >
         <mesh
           castShadow
-          geometry={geo.cap}
+          geometry={trimmedBody ?? geo.body}
           material={surfaceArray}
-          name="chimney-cap"
+          name="chimney-body"
           receiveShadow
         />
-      )}
-      {geo.flues && (
-        <mesh
-          castShadow
-          geometry={geo.flues}
-          material={surfaceArray}
-          name="chimney-flues"
-          receiveShadow
-        />
-      )}
-      {geo.cricket && (
-        <mesh
-          castShadow
-          geometry={geo.cricket}
-          material={surfaceMaterial}
-          name="chimney-cricket"
-          receiveShadow
-        />
-      )}
-      {geo.bands && (
-        <mesh
-          castShadow
-          geometry={geo.bands}
-          material={surfaceMaterial}
-          name="chimney-bands"
-          receiveShadow
-        />
-      )}
+        {geo.cap && (
+          <mesh
+            castShadow
+            geometry={geo.cap}
+            material={surfaceArray}
+            name="chimney-cap"
+            receiveShadow
+          />
+        )}
+        {geo.flues && (
+          <mesh
+            castShadow
+            geometry={geo.flues}
+            material={surfaceArray}
+            name="chimney-flues"
+            receiveShadow
+          />
+        )}
+        {geo.cricket && (
+          <mesh
+            castShadow
+            geometry={geo.cricket}
+            material={surfaceMaterial}
+            name="chimney-cricket"
+            receiveShadow
+          />
+        )}
+        {geo.bands && (
+          <mesh
+            castShadow
+            geometry={geo.bands}
+            material={surfaceMaterial}
+            name="chimney-bands"
+            receiveShadow
+          />
+        )}
+      </group>
     </group>
   )
 }

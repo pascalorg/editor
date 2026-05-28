@@ -35,23 +35,51 @@ function getPeakHeight(n: RoofSegmentNodeType): number {
   return n.wallHeight + getActiveRoofHeight(n)
 }
 
-// Width arrow — anchor='center' so dragging the +X side grows the full
-// footprint symmetrically (both edges move ±delta). Same idiom as the
-// elevator / column / shelf width arrow.
-function roofSegmentWidthHandle(): HandleDescriptor<RoofSegmentNodeType> {
+// Width arrow on the +X (right) or -X (left) side. Asymmetric resize:
+// dragging one arrow grows the segment outward from its own edge while
+// the opposite edge stays world-fixed — the same pattern doors use
+// (`door/definition.ts:35-73`). The arrow's chevron points outward
+// (`rotationY: Math.PI` flips the left arrow's chevron to face -X) so
+// you read "this edge is what moves" at a glance.
+//
+// `apply` recomputes `position` so the anchored edge stays at the same
+// world point even when the segment is Y-rotated: project the segment's
+// local +X onto world via (cos r, -sin r), find the anchored edge's
+// world XZ from the pre-drag node, then place the new center half a
+// new-width away from that anchor in the same direction.
+function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSegmentNodeType> {
+  const sign = side === 'right' ? 1 : -1
   return {
     kind: 'linear-resize',
     axis: 'x',
-    anchor: 'center',
+    // 'min' = -X edge anchored (right arrow grows the +X edge outward).
+    // 'max' = +X edge anchored (left arrow grows the -X edge outward).
+    anchor: side === 'right' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
     currentValue: (n) => n.width,
-    apply: (_n, newValue) => ({ width: newValue }),
+    apply: (initial, newWidth) => {
+      const rotY = initial.rotation ?? 0
+      const armX = Math.cos(rotY)
+      const armZ = -Math.sin(rotY)
+      const anchorX = initial.position[0] - sign * (initial.width / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
+      const newCenterX = anchorX + sign * (newWidth / 2) * armX
+      const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
+      return {
+        width: newWidth,
+        position: [newCenterX, initial.position[1], newCenterZ],
+      }
+    },
     placement: {
       position: (n) => [
-        n.width / 2 + SIDE_HANDLE_OFFSET,
+        sign * (n.width / 2 + SIDE_HANDLE_OFFSET),
         Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2,
         0,
       ],
+      // Flip the left chevron so it points outward toward -X. The
+      // generic LinearArrow only auto-orients for axis 'z' (rotates the
+      // chevron 90° to face +Z); +X / -X facing is up to the descriptor.
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
   }
 }
@@ -75,24 +103,26 @@ function roofSegmentDepthHandle(): HandleDescriptor<RoofSegmentNodeType> {
   }
 }
 
-// Wall-height arrow — `anchor: 'min'` keeps the base on the floor and
-// grows the wall upward. Placed on the -X side at the wall's top edge
-// so it doesn't stack on the centered pitch arrow when wallHeight ≈ 0
-// (flat roof / no walls).
+// Wall-height tracker — dashed vertical leader from the floor up to a
+// draggable cube at the wall top, centred on the footprint. Replaces
+// the old -X-side chevron so the wall-top control reads as "the wall is
+// THIS tall" instead of "there's an arrow on the side." Drag math is
+// unchanged: same linear-resize axis='y' / anchor='min' pipeline as
+// every other height handle; the `shape: 'tracker'` flag only swaps the
+// visual. Wall-height clamps to MIN_WALL_DISPLAY for placement so the
+// cube stays grabbable on flat / wall-less segments where the real
+// `wallHeight` is ~0 and the leader would collapse to nothing.
 function roofSegmentWallHeightHandle(): HandleDescriptor<RoofSegmentNodeType> {
   return {
     kind: 'linear-resize',
     axis: 'y',
     anchor: 'min',
+    shape: 'tracker',
     min: MIN_WALL_HEIGHT,
     currentValue: (n) => n.wallHeight,
     apply: (_n, newValue) => ({ wallHeight: newValue }),
     placement: {
-      position: (n) => [
-        -(n.width / 2 + SIDE_HANDLE_OFFSET),
-        Math.max(n.wallHeight, MIN_WALL_DISPLAY),
-        0,
-      ],
+      position: (n) => [0, Math.max(n.wallHeight, MIN_WALL_DISPLAY), 0],
     },
   }
 }
@@ -169,7 +199,8 @@ function roofSegmentRotateHandle(): HandleDescriptor<RoofSegmentNodeType> {
 }
 
 const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
-  roofSegmentWidthHandle(),
+  roofSegmentWidthHandle('right'),
+  roofSegmentWidthHandle('left'),
   roofSegmentDepthHandle(),
   roofSegmentWallHeightHandle(),
   roofSegmentPitchHandle(),
