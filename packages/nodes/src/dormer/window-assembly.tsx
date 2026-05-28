@@ -133,8 +133,18 @@ const DormerWindowAssembly = ({
   const winX = skirtWin.offsetX
   const winY = skirtWin.centerY
 
-  const renderFace = (zPos: number, outDir: number, keyPrefix: string) => (
-    <group name={`dormer-window-${keyPrefix}`} position={[winX, winY, zPos]}>
+  // The glazing role material is FrontSide (DoubleSide on a NodeMaterial
+  // poisons the MRT scene pass — see `createSurfaceRoleMaterial`). The
+  // back gable face therefore renders inside a Y-rotated group so its
+  // FrontSide points outward (-Z in segment frame). With the rotation,
+  // the sill always extrudes along the group's local +Z, so its position
+  // no longer needs to flip per-face.
+  const renderFace = (zPos: number, yRot: number, keyPrefix: string) => (
+    <group
+      name={`dormer-window-${keyPrefix}`}
+      position={[winX, winY, zPos]}
+      rotation-y={yRot}
+    >
       {winGeo.glassPanes.map((pane, i) => (
         <mesh
           geometry={pane.geo}
@@ -162,7 +172,7 @@ const DormerWindowAssembly = ({
           geometry={sillGeo}
           material={frameMaterial}
           name={`dormer-sill-${keyPrefix}`}
-          position={[0, -winH / 2 - sillT / 2, (outDir * sillD) / 2]}
+          position={[0, -winH / 2 - sillT / 2, sillD / 2]}
           receiveShadow
         />
       )}
@@ -171,8 +181,8 @@ const DormerWindowAssembly = ({
 
   return (
     <>
-      {exposed.front && renderFace(gableHalfZ, +1, 'front')}
-      {exposed.back && renderFace(-gableHalfZ, -1, 'back')}
+      {exposed.front && renderFace(gableHalfZ, 0, 'front')}
+      {exposed.back && renderFace(-gableHalfZ, Math.PI, 'back')}
     </>
   )
 }

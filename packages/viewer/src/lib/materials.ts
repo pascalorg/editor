@@ -524,7 +524,15 @@ export function createSurfaceRoleMaterial(
   side: THREE.Side = THREE.FrontSide,
   sceneThemeId?: string,
 ): THREE.Material {
-  const resolvedSide = role === 'glazing' ? THREE.DoubleSide : side
+  // DoubleSide on glazing trips the MRT back-face pipeline issue documented
+  // on `glassMaterial` above — the validator rejects the back-face variant
+  // for missing MRT outputs and poisons the render context (manifests as
+  // "Color target has no corresponding fragment stage output" on scene
+  // open, since the dormer's window-assembly mounts the glazing material
+  // on both gable faces on the first frame). Callers that need both sides
+  // visible (e.g. dormer back gable) must rotate the host mesh 180° so the
+  // FrontSide faces the viewer.
+  const resolvedSide = role === 'glazing' ? THREE.FrontSide : side
   const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}`
   const cached = surfaceRoleMaterialCache.get(cacheKey)
   if (cached) return cached
