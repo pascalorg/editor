@@ -16,6 +16,8 @@ interface PanelWrapperProps {
   onReset?: () => void
   onBack?: () => void
   children: React.ReactNode
+  /** Pinned below the scrollable body, inside the panel card. */
+  footer?: React.ReactNode
   className?: string
   width?: number | string
 }
@@ -27,6 +29,7 @@ export function PanelWrapper({
   onReset,
   onBack,
   children,
+  footer,
   className,
   width = 320, // default width
 }: PanelWrapperProps) {
@@ -104,6 +107,8 @@ export function PanelWrapper({
 
       {/* Content */}
       <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+
+      {footer && <div className="shrink-0 border-border/50 border-t p-3">{footer}</div>}
     </div>
   )
 }

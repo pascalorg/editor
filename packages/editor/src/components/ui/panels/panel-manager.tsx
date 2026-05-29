@@ -74,7 +74,7 @@ function isMovableNode(node: AnyNode | null): node is MovableNode {
   return !!node && MOVABLE_TYPES.has(node.type)
 }
 
-function panelForType(type: string | null) {
+function panelForType(type: string | null, footer?: React.ReactNode) {
   if (!type) return null
   // Every kind now renders through `<ParametricInspector>`, which either
   // composes auto-derived editors from `parametrics.groups` or lazy-
@@ -84,7 +84,7 @@ function panelForType(type: string | null) {
   // future cases where we might want a non-registry fallback (e.g.
   // reference scale, paint mode); leave the function shape intact.
   void type
-  return <ParametricInspector />
+  return <ParametricInspector footer={footer} />
 }
 
 function MobilePanelLayer({
@@ -168,7 +168,7 @@ function MobilePanelLayer({
   )
 }
 
-export function PanelManager() {
+export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.ReactNode }) {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
@@ -215,5 +215,5 @@ export function PanelManager() {
     return <PaintPanel />
   }
 
-  return panelForType(selectedNodeType)
+  return panelForType(selectedNodeType, inspectorFooter)
 }
