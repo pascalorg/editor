@@ -37,7 +37,7 @@ import { PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector() {
+export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {}) {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
@@ -101,7 +101,7 @@ export function ParametricInspector() {
   const canDelete = def.capabilities.deletable !== false
 
   return (
-    <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (

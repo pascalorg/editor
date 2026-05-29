@@ -125,6 +125,12 @@ export interface EditorProps {
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
+  /**
+   * Docked below the node inspector (v2). Hosts mount the "save as preset"
+   * affordance here so it reads as part of the inspector surface and shows
+   * only while a node is selected.
+   */
+  inspectorFooter?: ReactNode
 
   projectId?: string | null
 
@@ -930,6 +936,7 @@ export default function Editor({
   sidebarTabs,
   viewerToolbarLeft,
   viewerToolbarRight,
+  inspectorFooter,
   projectId,
   onLoad,
   onSave,
@@ -1124,11 +1131,12 @@ export default function Editor({
     }
 
     const tabBarTabs =
-      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon }) => ({
+      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
         id,
         label,
         mobileDefaultSnap,
         mobileIcon,
+        icon,
       })) ?? []
 
     return (
@@ -1158,7 +1166,7 @@ export default function Editor({
                   )}
                   {!(isVersionPreviewMode || isCaptureMode) && (
                     <div className="pointer-events-auto">
-                      <PanelManager />
+                      <PanelManager inspectorFooter={inspectorFooter} />
                     </div>
                   )}
                   {!isCaptureMode && (
