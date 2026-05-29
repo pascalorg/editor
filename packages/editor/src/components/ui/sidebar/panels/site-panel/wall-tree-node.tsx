@@ -1,9 +1,11 @@
 import { type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { AlertCircle } from 'lucide-react'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useEditor from './../../../../../store/use-editor'
+import { Tooltip, TooltipContent, TooltipTrigger } from './../../../../../components/ui/primitives/tooltip'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
@@ -22,6 +24,9 @@ export const WallTreeNode = memo(function WallTreeNode({
   const [expanded, setExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
+  const needsReview = useScene(
+    (s) => (s.nodes[nodeId as AnyNodeId] as WallNode | undefined)?.metadata?.['needsReview'] === true,
+  )
   const children = useScene(
     useShallow((s) => (s.nodes[nodeId as AnyNodeId] as WallNode | undefined)?.children ?? []),
   )
@@ -75,6 +80,16 @@ export const WallTreeNode = memo(function WallTreeNode({
   return (
     <TreeNodeWrapper
       actions={<TreeNodeActions nodeId={nodeId as AnyNodeId} />}
+      badge={
+        needsReview ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+            </TooltipTrigger>
+            <TooltipContent side="right">导入时检测到位置偏差，建议检查</TooltipContent>
+          </Tooltip>
+        ) : undefined
+      }
       depth={depth}
       expanded={expanded}
       hasChildren={children.length > 0}

@@ -148,6 +148,7 @@ interface TreeNodeWrapperProps {
   nodeId?: string
   icon: React.ReactNode
   label: React.ReactNode
+  badge?: React.ReactNode
   depth: number
   hasChildren: boolean
   expanded: boolean
@@ -173,6 +174,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
       nodeId,
       icon,
       label,
+      badge,
       depth,
       hasChildren,
       expanded,
@@ -280,6 +282,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               {label}
             </div>
           </div>
+          {badge && <div className="shrink-0 px-0.5">{badge}</div>}
           {actions && (
             <div
               className={cn(
