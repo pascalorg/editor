@@ -173,7 +173,7 @@ function LegacyItemsPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Category tabs */}
-      <div className="flex shrink-0 gap-1 overflow-x-auto border-border/70 border-b p-2">
+      <div className="flex shrink-0 flex-wrap gap-1 border-border/70 border-b p-2">
         {furnishTools.map((cat) => {
           const isActive = activeCategory.catalogCategory === cat.catalogCategory
           return (

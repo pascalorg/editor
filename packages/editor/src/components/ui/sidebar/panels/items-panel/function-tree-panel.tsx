@@ -1,10 +1,16 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
+import { Root as TooltipRoot } from '@radix-ui/react-tooltip'
 import NextImage from 'next/image'
 import { useMemo, useState } from 'react'
 import { cn } from '../../../../../lib/utils'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
+import {
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../../../../../components/ui/primitives/tooltip'
 
 /** A function-axis taxonomy node, assembled into a tree by the embedder. */
 export type FunctionTreeNode = {
@@ -109,40 +115,49 @@ export function FunctionTreePanel({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Root nodes as category tabs */}
-      <div className="flex shrink-0 gap-1 overflow-x-auto border-border/70 border-b p-2">
-        {functionTree.map((root) => {
-          const isActive = activeRoot?.slug === root.slug
-          return (
-            <button
-              className={cn(
-                'flex shrink-0 flex-col items-center gap-1 rounded-xl px-3 py-2 transition-colors',
-                isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
-              )}
-              key={root.slug}
-              onClick={() => selectRoot(root.slug)}
-              type="button"
-            >
-              {root.iconUrl ? (
-                <NextImage
-                  alt={root.name}
-                  className={cn('size-7 object-contain', !isActive && 'opacity-60 grayscale')}
-                  height={28}
-                  src={root.iconUrl}
-                  width={28}
-                />
-              ) : (
-                <div className="flex size-7 items-center justify-center rounded-lg bg-muted/50 font-semibold text-[11px] uppercase">
-                  {root.name.slice(0, 2)}
-                </div>
-              )}
-              <span className="font-medium text-[10px] leading-none">{root.name}</span>
-            </button>
-          )
-        })}
-      </div>
+      {/* Root nodes as a category grid — icon when available, otherwise a
+          two-letter abbreviation, with the full name in a hover tooltip.
+          Mirrors the Build tab's tile grid so the two panels read the same. */}
+      <TooltipProvider delayDuration={0} disableHoverableContent>
+        <div className="grid shrink-0 grid-cols-5 gap-1.5 border-border/70 border-b p-2">
+          {functionTree.map((root) => {
+            const isActive = activeRoot?.slug === root.slug
+            return (
+              <TooltipRoot key={root.slug}>
+                <TooltipTrigger asChild>
+                  <button
+                    className={cn(
+                      'relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
+                      isActive
+                        ? 'bg-primary/10 ring-1 ring-primary/50'
+                        : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                    )}
+                    onClick={() => selectRoot(root.slug)}
+                    type="button"
+                  >
+                    {root.iconUrl ? (
+                      <NextImage
+                        alt={root.name}
+                        className="size-7 object-contain"
+                        height={28}
+                        src={root.iconUrl}
+                        width={28}
+                      />
+                    ) : (
+                      <span className="font-semibold text-muted-foreground text-xs uppercase">
+                        {root.name.slice(0, 2)}
+                      </span>
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="icon-grid-tooltip pointer-events-none" side="top">
+                  {root.name}
+                </TooltipContent>
+              </TooltipRoot>
+            )
+          })}
+        </div>
+      </TooltipProvider>
 
       {/* Search + source filter */}
       <div className="flex shrink-0 flex-col gap-2 border-border/70 border-b p-2">
