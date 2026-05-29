@@ -4,6 +4,7 @@ import { Barlow } from 'next/font/google'
 import localFont from 'next/font/local'
 import Script from 'next/script'
 import './globals.css'
+import { HoltmontBridge } from './holtmont-bridge'
 
 const geistSans = localFont({
   src: './fonts/GeistVF.woff',
@@ -41,6 +42,7 @@ export default function RootLayout({
         )}
       </head>
       <body className="font-sans">
+        <HoltmontBridge />
         {children}
         {process.env.NODE_ENV === 'development' && <Agentation />}
       </body>

@@ -4,6 +4,7 @@ import { Icon as IconifyIcon } from '@iconify/react'
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, ChevronsLeft, ChevronsRight, Columns2, Eye, Footprints, Moon, Sun, Save } from 'lucide-react'
+import { HoltmontExportButton } from './HoltmontExportButton'
 import { useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -407,6 +408,9 @@ export function ViewerToolbarLeft() {
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
+      <div className={TOOLBAR_CONTAINER}>
+        <HoltmontExportButton />
+      </div>
     </>
   )
 }
