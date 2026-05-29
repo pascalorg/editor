@@ -25,6 +25,7 @@ import {
   type SegmentAngleReference,
   snapFenceDraftPoint,
   triggerSFX,
+  useEditor,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
