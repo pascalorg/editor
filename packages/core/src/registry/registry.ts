@@ -174,6 +174,22 @@ export function getHostRefFields(def: AnyNodeDefinition): ReadonlyArray<string> 
   return def.capabilities.hostRefFields ?? []
 }
 
+/**
+ * Whether instances of this kind are created by drawing with a build tool
+ * (tool id === node `type`) rather than dropping a finished instance. Read
+ * by host apps to route preset placement of such kinds through
+ * `setToolDefaults(type, params)` + `setTool(type)` — see
+ * `def.capabilities.drawTool` docs.
+ */
+export function isDrawnViaTool(def: AnyNodeDefinition): boolean {
+  return def.capabilities.drawTool === true
+}
+
+export function isDrawnViaToolKind(kind: string): boolean {
+  const def = nodeRegistry.get(kind)
+  return def ? isDrawnViaTool(def) : false
+}
+
 export async function loadPlugin(plugin: Plugin): Promise<void> {
   if (plugin.apiVersion !== HOST_API_VERSION) {
     throw new Error(

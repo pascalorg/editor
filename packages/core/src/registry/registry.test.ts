@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import {
   getHostRefFields,
+  isDrawnViaTool,
+  isDrawnViaToolKind,
   isPresettable,
   isPresettableKind,
   loadPlugin,
@@ -121,6 +123,28 @@ describe('getHostRefFields', () => {
   test('defaults to an empty array when none declared', () => {
     const def = makeDefinition('shelf')
     expect(getHostRefFields(def)).toEqual([])
+  })
+})
+
+describe('isDrawnViaTool', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('true when capability set', () => {
+    const def = makeDefinition('fence', { capabilities: { drawTool: true } })
+    expect(isDrawnViaTool(def)).toBe(true)
+  })
+
+  test('false when unset or not exactly true', () => {
+    expect(isDrawnViaTool(makeDefinition('column'))).toBe(false)
+    expect(isDrawnViaTool(makeDefinition('off', { capabilities: { drawTool: false } }))).toBe(false)
+  })
+
+  test('isDrawnViaToolKind looks up the registry', () => {
+    registerNode(makeDefinition('fence', { capabilities: { drawTool: true } }))
+    expect(isDrawnViaToolKind('fence')).toBe(true)
+    expect(isDrawnViaToolKind('unknown')).toBe(false)
   })
 })
 

@@ -115,6 +115,14 @@ export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
+/**
+ * Starting parameters seeded into a draw tool before it mints a node.
+ * A loose param bag — the tool's create path validates it through the
+ * kind's schema (`FenceNode.parse({ ...defaults, start, end })`), which
+ * is the real type gate, so unknown keys are simply ignored.
+ */
+export type ToolDefaults = Record<string, unknown>
+
 export type MovingWallEndpoint = {
   wall: WallNode
   endpoint: 'start' | 'end'
@@ -156,6 +164,15 @@ type EditorState = {
   setMode: (mode: Mode) => void
   tool: Tool | null
   setTool: (tool: Tool | null) => void
+  /**
+   * Per-tool starting parameters for the next node a draw tool mints.
+   * Transient (not persisted): host apps seed an entry just before
+   * activating the tool (placing a drawn preset, or a future dimension
+   * picker), the tool's create path merges it, and the tool clears its
+   * own entry on deactivation so a later manual draw isn't poisoned.
+   */
+  toolDefaults: Partial<Record<Tool, ToolDefaults>>
+  setToolDefaults: (tool: Tool, defaults: ToolDefaults | null) => void
   structureLayer: StructureLayer
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
@@ -610,6 +627,17 @@ const useEditor = create<EditorState>()(
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
+      toolDefaults: {},
+      setToolDefaults: (tool, defaults) =>
+        set((state) => {
+          const next = { ...state.toolDefaults }
+          if (defaults === null) {
+            delete next[tool]
+          } else {
+            next[tool] = defaults
+          }
+          return { toolDefaults: next }
+        }),
       structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
       setStructureLayer: (layer) => {
         const { mode } = get()

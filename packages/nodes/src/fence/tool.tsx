@@ -25,6 +25,7 @@ import {
   type SegmentAngleReference,
   snapFenceDraftPoint,
   triggerSFX,
+  useEditor,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -34,9 +35,11 @@ import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
-const DRAFT_LABEL_Y = FENCE_PREVIEW_HEIGHT + 0.22
-const DRAFT_ANGLE_LABEL_Y = FENCE_PREVIEW_HEIGHT + 0.08
-const DRAFT_ANGLE_ARC_Y = FENCE_PREVIEW_HEIGHT + 0.012
+// HUD label heights are measured from the top of the preview bar, so they
+// track whatever height a seeded preset draws at (`previewHeight`).
+const DRAFT_LABEL_Y_OFFSET = 0.22
+const DRAFT_ANGLE_LABEL_Y_OFFSET = 0.08
+const DRAFT_ANGLE_ARC_Y_OFFSET = 0.012
 const DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
 const DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
 const DRAFT_ANGLE_ARC_SEGMENTS = 24
@@ -135,12 +138,16 @@ function toMiterWall(segment: SegmentLike): WallNode {
   }
 }
 
-function buildDraftFenceSegment(start: FencePlanPoint, end: FencePlanPoint): SegmentLike {
+function buildDraftFenceSegment(
+  start: FencePlanPoint,
+  end: FencePlanPoint,
+  thickness: number,
+): SegmentLike {
   return {
     id: 'fence_draft',
     start,
     end,
-    thickness: FENCE_PREVIEW_THICKNESS,
+    thickness,
   }
 }
 
@@ -269,10 +276,12 @@ function getDraftAngleLabels(
   end: FencePlanPoint,
   segments: SegmentLike[],
   baseY: number,
+  previewHeight: number,
+  previewThickness: number,
 ): DraftAngleLabel[] {
   const draftFromStart: FencePlanPoint = [end[0] - start[0], end[1] - start[1]]
   const draftFromEnd: FencePlanPoint = [start[0] - end[0], start[1] - end[1]]
-  const draftSegment = buildDraftFenceSegment(start, end)
+  const draftSegment = buildDraftFenceSegment(start, end, previewThickness)
   const miterData = calculateLevelMiters([...segments, draftSegment].map(toMiterWall))
   const endpoints = [
     { id: 'start', point: start, draftVector: draftFromStart },
@@ -322,7 +331,7 @@ function getDraftAngleLabels(
       label: formatAngleRadians(angle),
       position: [
         arcCenter[0] + Math.cos(arc.midAngle) * (radius + 0.16),
-        baseY + DRAFT_ANGLE_LABEL_Y,
+        baseY + previewHeight + DRAFT_ANGLE_LABEL_Y_OFFSET,
         arcCenter[1] + Math.sin(arc.midAngle) * (radius + 0.16),
       ],
       arc: {
@@ -330,7 +339,7 @@ function getDraftAngleLabels(
         radius,
         startAngle: arc.startAngle,
         endAngle: arc.endAngle,
-        y: baseY + DRAFT_ANGLE_ARC_Y,
+        y: baseY + previewHeight + DRAFT_ANGLE_ARC_Y_OFFSET,
       },
     })
   }
@@ -343,6 +352,8 @@ function getDraftMeasurementState(
   segments: SegmentLike[],
   unit: 'metric' | 'imperial',
   baseY: number,
+  previewHeight: number,
+  previewThickness: number,
 ): DraftMeasurementState {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
@@ -350,8 +361,12 @@ function getDraftMeasurementState(
   if (length < 0.01) return null
   return {
     lengthLabel: formatMeasurement(length, unit),
-    lengthPosition: [(start[0] + end[0]) / 2, baseY + DRAFT_LABEL_Y, (start[1] + end[1]) / 2],
-    angleLabels: getDraftAngleLabels(start, end, segments, baseY),
+    lengthPosition: [
+      (start[0] + end[0]) / 2,
+      baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
+      (start[1] + end[1]) / 2,
+    ],
+    angleLabels: getDraftAngleLabels(start, end, segments, baseY, previewHeight, previewThickness),
   }
 }
 
@@ -374,7 +389,13 @@ function getReferenceSegments(walls: WallNode[], fences: FenceNode[]): SegmentLi
   ]
 }
 
-function updateFencePreview(mesh: Mesh, start: Vector3, end: Vector3) {
+function updateFencePreview(
+  mesh: Mesh,
+  start: Vector3,
+  end: Vector3,
+  previewHeight: number,
+  previewThickness: number,
+) {
   const direction = new Vector3(end.x - start.x, 0, end.z - start.z)
   const length = direction.length()
   if (length < 0.01) {
@@ -383,14 +404,10 @@ function updateFencePreview(mesh: Mesh, start: Vector3, end: Vector3) {
   }
   mesh.visible = true
   direction.normalize()
-  const geometry = new BoxGeometry(length, FENCE_PREVIEW_HEIGHT, FENCE_PREVIEW_THICKNESS)
+  const geometry = new BoxGeometry(length, previewHeight, previewThickness)
   const angle = Math.atan2(direction.z, direction.x)
 
-  mesh.position.set(
-    (start.x + end.x) / 2,
-    start.y + FENCE_PREVIEW_HEIGHT / 2,
-    (start.z + end.z) / 2,
-  )
+  mesh.position.set((start.x + end.x) / 2, start.y + previewHeight / 2, (start.z + end.z) / 2)
   mesh.rotation.y = -angle
 
   if (mesh.geometry) {
@@ -415,6 +432,19 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 export const FenceTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  // A placed preset seeds `toolDefaults.fence` before the tool mounts, so
+  // the draft preview is drawn at the preset's height / thickness rather
+  // than the generic fallbacks. Read through refs so the live event
+  // handlers below see the latest values without re-subscribing.
+  const fenceDefaults = useEditor((s) => s.toolDefaults.fence)
+  const previewHeight =
+    typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
+  const previewThickness =
+    typeof fenceDefaults?.thickness === 'number' ? fenceDefaults.thickness : FENCE_PREVIEW_THICKNESS
+  const previewHeightRef = useRef(previewHeight)
+  previewHeightRef.current = previewHeight
+  const previewThicknessRef = useRef(previewThickness)
+  previewThicknessRef.current = previewThickness
   const cursorRef = useRef<Group>(null)
   const previewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -424,6 +454,11 @@ export const FenceTool: React.FC = () => {
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
+
+  // Scope seeded defaults to this tool session: clear on deactivation so a
+  // later manual fence draw isn't drawn with a stale preset's parameters.
+  // Unmount-only (empty deps) — the [unit] effect below must not clear it.
+  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
 
   useEffect(() => {
     let previousFenceEnd: FencePlanPoint | null = null
@@ -459,7 +494,13 @@ export const FenceTool: React.FC = () => {
           triggerSFX('sfx:grid-snap')
         }
         previousFenceEnd = currentFenceEnd
-        updateFencePreview(previewRef.current, startingPoint.current, endingPoint.current)
+        updateFencePreview(
+          previewRef.current,
+          startingPoint.current,
+          endingPoint.current,
+          previewHeightRef.current,
+          previewThicknessRef.current,
+        )
         setDraftMeasurement(
           getDraftMeasurementState(
             [startingPoint.current.x, startingPoint.current.z],
@@ -467,6 +508,8 @@ export const FenceTool: React.FC = () => {
             getReferenceSegments(walls, fences),
             unit,
             startingPoint.current.y,
+            previewHeightRef.current,
+            previewThicknessRef.current,
           ),
         )
       } else {
@@ -556,7 +599,7 @@ export const FenceTool: React.FC = () => {
 
   return (
     <group>
-      <CursorSphere height={FENCE_PREVIEW_HEIGHT} ref={cursorRef} />
+      <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={previewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial

@@ -1008,6 +1008,20 @@ export type Capabilities = {
    * are non-leaf scene containers.
    */
   presettable?: boolean
+  /**
+   * Instances of this kind are created by operating a build tool and
+   * drawing on the grid (clicking points), rather than dropping a
+   * finished instance. The tool id equals the node `type`. Host apps may
+   * seed the tool's starting parameters via
+   * `useEditor.setToolDefaults(type, params)` before activating it — the
+   * tool's create path merges those defaults when minting the node and
+   * clears its own entry on deactivation. Used so placing a saved preset
+   * of a drawn kind contributes its build parameters (a fence's
+   * height / style / post spacing) while the user draws the fresh span,
+   * and so a future "small / medium / large" picker can prime the same
+   * tool. Read via the `isDrawnViaTool(def)` helper. Default `false`.
+   */
+  drawTool?: boolean
 }
 
 /**
