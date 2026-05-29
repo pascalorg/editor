@@ -15,26 +15,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
-
-// Keep these in sync with the placement tool (`./tool.tsx`). Real
-// gutters mount on the fascia (slightly inside the drip edge) with
-// the rim at the deck-top line; the offsets nudge the bare-slope snap
-// to read as "attached to fascia" rather than "floating at the very
-// tip of the overhang".
-const EAVE_TUCK_INWARD = 0.04
-const EAVE_TUCK_UP = 0.04
-
-function resolveEaveSnap(segment: RoofSegmentNode, localZ: number) {
-  const halfD = (segment.depth ?? 0) / 2
-  const overhang = segment.overhang ?? 0
-  const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
-  const sign = localZ < 0 ? -1 : 1
-  const eaveZ = sign * Math.max(halfD, halfD + overhang - EAVE_TUCK_INWARD)
-  const eaveY = (segment.wallHeight ?? 0) - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
-  const rotation = sign > 0 ? 0 : Math.PI
-  return { eaveZ, eaveY, rotation }
-}
 
 /**
  * Gutter move tool. Mirrors the ridge-vent move flow — ghost follows
@@ -100,12 +82,15 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
 
       // Eave-snap to the segment's near drip edge — same math as the
       // placement tool so picking-up + putting-down lands in the
-      // same place.
-      const snap = resolveEaveSnap(hit.segment, hit.localZ)
+      // same place. The resolver is roofType-aware: hip/flat picks
+      // ±X or ±Z based on which slope the cursor is on; shed always
+      // snaps to its low (+Z) eave; gable / gambrel / mansard / dutch
+      // stay on ±Z.
+      const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
       const segObj = sceneRegistry.nodes.get(hit.segment.id)
       let eaveWorld: [number, number, number]
       if (segObj) {
-        const eaveLocal = new THREE.Vector3(hit.localX, snap.eaveY, snap.eaveZ)
+        const eaveLocal = new THREE.Vector3(snap.eaveX, snap.eaveY, snap.eaveZ)
         segObj.updateWorldMatrix(true, false)
         eaveLocal.applyMatrix4(segObj.matrixWorld)
         eaveWorld = [eaveLocal.x, eaveLocal.y, eaveLocal.z]
@@ -134,7 +119,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       )
       if (!hit) return
       const targetSegmentId = hit.segment.id as AnyNodeId
-      const snap = resolveEaveSnap(hit.segment, hit.localZ)
+      const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
       const st = useScene.getState()
 
       const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
@@ -158,7 +143,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [hit.localX, snap.eaveY, snap.eaveZ],
+        position: [snap.eaveX, snap.eaveY, snap.eaveZ],
         rotation: snap.rotation,
         visible: true,
         metadata: {},
