@@ -26,6 +26,16 @@ const SHADOWS_DISABLED =
 // deliberate middle ground — present, but not the heavy contact shadow there.
 const MAX_SHADOW_INTENSITY = 0.55
 
+// Shadow frustum framing. The directional light is parked at a fixed distance
+// along its (theme-defined) direction from the focus point, and the ortho
+// shadow camera's depth is centred on that focus. Theme offsets are only
+// ~17–32 units long, so without a fixed distance the focus sits near the front
+// of a long frustum and the far end swings around as the focus moves. Keeping
+// the light far away and the focus centred keeps the frustum hugging the view.
+const SHADOW_DISTANCE = 120
+const SHADOW_NEAR = 20
+const SHADOW_FAR = 220
+
 export function Lights() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const theme = getSceneTheme(sceneTheme)
@@ -39,6 +49,8 @@ export function Lights() {
   // ortho shadow camera only covers ±shadowCameraSize around the light target,
   // so it has to track the view or anything far from origin gets no shadows.
   const shadowFocus = useRef(new THREE.Vector3())
+  // Scratch vector for the per-light direction, reused to avoid per-frame allocs.
+  const shadowDir = useRef(new THREE.Vector3())
 
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
@@ -77,7 +89,13 @@ export function Lights() {
         const light = lightRefs.current[index]
         if (!(config?.castShadow && light)) continue
         const [ox, oy, oz] = config.position
-        light.position.set(focus.x + ox, focus.y + oy, focus.z + oz)
+        // Preserve the theme's light DIRECTION but park the light at a fixed
+        // distance, so the ortho frustum (depth centred via SHADOW_NEAR/FAR)
+        // stays centred on the focus instead of dangling far past it.
+        const dir = shadowDir.current.set(ox, oy, oz)
+        if (dir.lengthSq() === 0) dir.set(0, 1, 0)
+        dir.normalize().multiplyScalar(SHADOW_DISTANCE)
+        light.position.set(focus.x + dir.x, focus.y + dir.y, focus.z + dir.z)
         light.target.position.copy(focus)
         light.target.updateMatrixWorld()
       }
@@ -175,9 +193,9 @@ export function Lights() {
             <orthographicCamera
               attach="shadow-camera"
               bottom={-shadowCameraSize}
-              far={100}
+              far={SHADOW_FAR}
               left={-shadowCameraSize}
-              near={1}
+              near={SHADOW_NEAR}
               ref={shadowCamera}
               right={shadowCameraSize}
               top={shadowCameraSize}
