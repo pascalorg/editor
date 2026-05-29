@@ -25,7 +25,6 @@ const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.85,
   metalness: 0.1,
-  side: THREE.DoubleSide,
 })
 
 /**
@@ -108,24 +107,19 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   }, [segment, node.position[0], node.position[2]])
 
   // Paint surface: explicit material wins, then preset, then the cached
-  // default. Mirrors the slab / stair / wall pattern. Preset materials
-  // come from the shared cache with `side: FrontSide`; clone + force
-  // DoubleSide locally so back faces of the vent body / hood don't drop
-  // out when the camera looks up at the eaves.
+  // default. FrontSide everywhere — DoubleSide on the role material's
+  // NodeMaterial poisons the MRT scene pass (see `materials.ts` line 77 /
+  // glazing fix 9400f1c5). Earlier this path forced DoubleSide so back
+  // faces of the vent body / hood wouldn't drop out when looking up at the
+  // eaves; that's now a known visual tradeoff — a closed-solid extrude in
+  // `geometry.ts` is the right fix if undersides become noticeable.
   const material = useMemo(() => {
-    // Untextured box vent (and textures-off mode) takes the themed 'roof'
-    // role colour. Request DoubleSide directly so the cached role material
-    // is the right side — no clone/mutation of a shared material.
     if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.DoubleSide, sceneTheme)
+      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
     }
-    const base = node.material
+    return node.material
       ? createMaterial(node.material, shading)
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-    if (base.side === THREE.DoubleSide) return base
-    const cloned = base.clone()
-    cloned.side = THREE.DoubleSide
-    return cloned
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   // Compose slope tilt + yaw onto a single quaternion so the registered

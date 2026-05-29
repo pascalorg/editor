@@ -577,11 +577,16 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
   const cached = defaultMaterialCache.get(cacheKey)
   if (cached) return cached
 
+  // DoubleSide on a NodeMaterial inside the MRT scene pass compiles a back-face
+  // pipeline variant whose fragment outputs don't cover every MRT target — the
+  // validator rejects it and poisons the render context (see the note above
+  // `glassMaterial`). FrontSide; flip the consumer's back-face group 180° if a
+  // back face is actually visible.
   const params = {
     color: '#87ceeb',
     opacity: 0.3,
     transparent: true,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
   }
   const material =
     shading === 'solid'
