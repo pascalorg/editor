@@ -1,8 +1,4 @@
-import {
-  type FenceNode as FenceNodeType,
-  type HandleDescriptor,
-  type NodeDefinition,
-} from '@pascal-app/core'
+import type { FenceNode as FenceNodeType, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
 import { buildFenceFloorplan } from './floorplan'
 import { fenceCurveAffordance, fenceMoveEndpointAffordance } from './floorplan-affordances'
 import { fenceFloorplanMoveTarget } from './floorplan-move'
@@ -164,6 +160,10 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     surfaces: { sides: { faces: 'all' } },
     duplicable: true,
     deletable: true,
+    // Placed by drawing the span with the two-click tool; a saved preset
+    // seeds its build parameters via `toolDefaults.fence` (see `tool.tsx`
+    // and `createFenceOnCurrentLevel`).
+    drawTool: true,
   },
 
   relations: {

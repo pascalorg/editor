@@ -8,10 +8,11 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import useEditor from '../../../store/use-editor'
 import {
   findWallSnapTarget,
-  getWallAngleSnapStep,
   getSegmentGridStep,
+  getWallAngleSnapStep,
   isSegmentLongEnough,
   snapPointTo45Degrees,
   snapPointToGrid,
@@ -158,7 +159,12 @@ export function createFenceOnCurrentLevel(
   }
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
+  // Build parameters seeded by a placed preset (height, style, post
+  // spacing, …) merge in first; `name`/`start`/`end` always win. The
+  // schema parse validates and drops anything unexpected.
+  const defaults = useEditor.getState().toolDefaults.fence ?? {}
   const fence = FenceNode.parse({
+    ...defaults,
     name: `Fence ${fenceCount + 1}`,
     start,
     end,

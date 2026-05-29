@@ -206,6 +206,7 @@ export type {
   MovingFenceEndpoint,
   MovingWallEndpoint,
   SplitOrientation,
+  ToolDefaults,
   ViewMode,
 } from './store/use-editor'
 export { default as useEditor } from './store/use-editor'

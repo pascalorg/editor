@@ -17,6 +17,8 @@ export {
   discoverPlugins,
   getHostRefFields,
   getSelectableKinds,
+  isDrawnViaTool,
+  isDrawnViaToolKind,
   isPresettable,
   isPresettableKind,
   isRegistryMovable,
