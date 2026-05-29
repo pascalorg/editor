@@ -1073,6 +1073,14 @@ function ArcArrow({
       while (delta > Math.PI) delta -= 2 * Math.PI
       while (delta < -Math.PI) delta += 2 * Math.PI
 
+      // Shift snaps whole-node rotation gizmos (stair, elevator, column…) to
+      // 15° increments. Scoped to `shape: 'rotate'` so curved-stair sweep
+      // handles keep their continuous feel.
+      if (e.shiftKey && descriptor.shape === 'rotate') {
+        const step = Math.PI / 12
+        delta = Math.round(delta / step) * step
+      }
+
       const patch = descriptor.apply(initialNode as never, delta, sceneApi)
       lastPatch = patch as Partial<AnyNode>
       useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
