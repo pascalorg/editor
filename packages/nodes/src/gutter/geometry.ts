@@ -151,6 +151,17 @@ export function buildGutterGeometry(
     pieces.push(rightCap)
   }
 
+  // Hangers: thin metal straps spanning the rim from the back wall to
+  // the front rim, repeated along the length. Each strap is a small
+  // box centered on Y=0 (the eave line, where the rim sits) with its
+  // top ~3mm above the rim — so it reads as a clip resting on the
+  // gutter rather than buried in it.
+  if ((node.hangerStyle ?? 'strap') !== 'none') {
+    for (const hanger of buildHangers(node, len, size, capLeftLen, capRightLen)) {
+      pieces.push(hanger)
+    }
+  }
+
   const merged = pieces.length === 1 ? pieces[0]! : (mergeGeometries(pieces, false) ?? pieces[0]!)
   // Free the intermediate pieces when merge returned a new geometry.
   if (merged !== pieces[0]) {
@@ -303,4 +314,68 @@ function buildBoxOuterOnly(size: number): THREE.Shape {
   shape.lineTo(w, 0)
   shape.closePath()
   return shape
+}
+
+// ─── Hangers ───────────────────────────────────────────────────────
+
+// Strap dimensions — a residential hidden hanger reads as a flat band
+// roughly 25mm wide along the gutter, 3mm thick, sitting on the rim.
+const HANGER_BAR_LEN = 0.025
+const HANGER_BAR_THICKNESS = 0.003
+// Extra spread past the rim's outward extent — so the strap looks like
+// it "wraps over" both edges rather than ending flush.
+const HANGER_OVERHANG = 0.005
+// Distance from each gutter end where a strap is allowed to sit; keeps
+// straps from clashing with end caps and from looking pinned to the
+// very edge.
+const HANGER_END_MARGIN = 0.05
+
+/** Outward Z extent of each profile, used to size the strap. */
+function profileRimWidth(profile: GutterNode['profile'], size: number): number {
+  if (profile === 'half-round') return 2 * size
+  if (profile === 'box') return size
+  return size * 0.95 // k-style wTop
+}
+
+function buildHangers(
+  node: GutterNode,
+  len: number,
+  size: number,
+  capLeftLen: number,
+  capRightLen: number,
+): THREE.BufferGeometry[] {
+  const spacing = Math.max(0.2, node.hangerSpacing ?? 0.6)
+  const profile = node.profile ?? 'k-style'
+  const rimWidth = profileRimWidth(profile, size)
+  const strapDepth = rimWidth + HANGER_OVERHANG * 2
+
+  // Inset by margin AND any cap so straps don't punch into the cap slab.
+  const leftBound = -len / 2 + capLeftLen + HANGER_END_MARGIN
+  const rightBound = len / 2 - capRightLen - HANGER_END_MARGIN
+  const usable = rightBound - leftBound
+  if (usable <= 0) return []
+
+  // Span the usable run with straps at `spacing` between centers, plus
+  // one at each end. Symmetric layout for any length, including very
+  // short gutters where two straps land at the bounds.
+  const count = Math.max(1, Math.floor(usable / spacing) + 1)
+  const stride = count > 1 ? usable / (count - 1) : 0
+
+  const pieces: THREE.BufferGeometry[] = []
+  for (let i = 0; i < count; i++) {
+    const x = count > 1 ? leftBound + i * stride : (leftBound + rightBound) / 2
+    // BoxGeometry is indexed; the channel + cap ExtrudeGeometries are
+    // not. `mergeGeometries` rejects mixed-index sets, so flatten the
+    // box to non-indexed before pushing.
+    const bar = new THREE.BoxGeometry(HANGER_BAR_LEN, HANGER_BAR_THICKNESS, strapDepth).toNonIndexed()
+    // Center the bar at X = position, Y just above the rim line, Z
+    // straddling 0 so the strap covers the full back-to-front span.
+    bar.translate(
+      x,
+      HANGER_BAR_THICKNESS / 2 + 0.001,
+      rimWidth / 2,
+    )
+    pieces.push(bar)
+  }
+  return pieces
 }

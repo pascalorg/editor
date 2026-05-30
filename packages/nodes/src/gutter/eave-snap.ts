@@ -44,6 +44,21 @@ export type EaveSnap = {
 }
 
 /**
+ * Live eave Y from a segment's wallHeight + overhang + pitch. Pulled
+ * out as a shared helper because the renderer derives Y from this same
+ * formula on every frame (the gutter tracks the segment's height
+ * instead of trusting `node.position[1]` from placement time), and
+ * `resolveEaveSnap` uses the same formula at placement.
+ */
+export function computeEaveY(
+  segment: Pick<RoofSegmentNode, 'wallHeight' | 'overhang' | 'pitch'>,
+): number {
+  const overhang = segment.overhang ?? 0
+  const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
+  return (segment.wallHeight ?? 0) - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
+}
+
+/**
  * Pick which of the segment's eaves is closest to the cursor.
  *
  *  - `shed`: low side only. The segment-hit's analytical surface for
@@ -90,12 +105,13 @@ export function resolveEaveSnap(
   const halfW = (segment.width ?? 0) / 2
   const halfD = (segment.depth ?? 0) / 2
   const overhang = segment.overhang ?? 0
-  const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
 
   // The slope keeps descending past the wall edge by the overhang
   // span; same drop on every eave (pitch is the segment-wide primary
   // slope). EAVE_TUCK_UP raises the rim back toward the deck-top line.
-  const eaveY = (segment.wallHeight ?? 0) - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
+  // Shared formula with the renderer so placement and live tracking
+  // agree exactly.
+  const eaveY = computeEaveY(segment)
 
   const side = pickEaveSide(segment.roofType ?? 'gable', localX, localZ, halfW, halfD)
 

@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { computeGutterMitres } from './corner-mitre'
+import { computeEaveY } from './eave-snap'
 import { buildGutterGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
@@ -66,6 +67,23 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       : undefined,
   )
 
+  // While the user is dragging the segment's wall-height / overhang /
+  // pitch handle, the drag pipeline writes to useLiveNodeOverrides
+  // instead of the scene store — the scene entry above stays at the
+  // pre-drag value until pointer-up. Subscribing to the segment's live
+  // overrides too lets the gutter's `computeEaveY` see the in-flight
+  // height and slide up/down on every frame of the drag.
+  const segmentOverrides = useLiveNodeOverrides((s) =>
+    node.roofSegmentId
+      ? (s.get(node.roofSegmentId as AnyNodeId) as Partial<RoofSegmentNode> | undefined)
+      : undefined,
+  )
+  const effectiveSegment: RoofSegmentNode | undefined = segment
+    ? segmentOverrides
+      ? ({ ...segment, ...segmentOverrides } as RoofSegmentNode)
+      : segment
+    : undefined
+
   // Same-segment sibling gutters drive the corner-mitre detector. Pull
   // them as a fresh array each store update; `useShallow` keeps the
   // reference stable when the array contents haven't changed, so the
@@ -106,6 +124,8 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       node.profile,
       node.endCapLeft,
       node.endCapRight,
+      node.hangerStyle,
+      node.hangerSpacing,
       mitres.left,
       mitres.right,
     ],
@@ -132,7 +152,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
-  if (!segment) return null
+  if (!segment || !effectiveSegment) return null
 
   // `node.position` is segment-local — the placement tool resolves the
   // eave click via `segObj.worldToLocal`. The renderer mounts under
@@ -140,13 +160,21 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
   // re-apply the segment's roof-local transform here. Mirrors the
   // ridge-vent / box-vent pattern; without this gutters on rotated
   // segments would land on the first segment instead.
+  //
+  // Y is derived live from `effectiveSegment` (scene + drag overrides)
+  // instead of trusting `node.position[1]` — so changing wallHeight,
+  // overhang, or pitch on the parent segment moves the gutter on the
+  // very next frame, including while a segment-height handle is
+  // mid-drag. Matches the chimney/box-vent pattern of pulling host-
+  // segment geometry at draw time rather than caching it at placement.
   const segPos = segment.position ?? [0, 0, 0]
   const segRotY = segment.rotation ?? 0
+  const liveEaveY = computeEaveY(effectiveSegment)
 
   return (
     <group position={segPos} rotation-y={segRotY}>
       <group
-        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        position={[node.position[0] ?? 0, liveEaveY, node.position[2] ?? 0]}
         ref={ref}
         rotation-y={node.rotation ?? 0}
         visible={node.visible}

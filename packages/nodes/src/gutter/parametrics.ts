@@ -36,5 +36,25 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
         { key: 'endCapRight', kind: 'boolean' },
       ],
     },
+    {
+      label: 'Hangers',
+      fields: [
+        {
+          key: 'hangerStyle',
+          kind: 'enum',
+          options: ['strap', 'none'],
+          display: 'segmented',
+        },
+        {
+          key: 'hangerSpacing',
+          kind: 'number',
+          unit: 'm',
+          min: 0.2,
+          max: 2.0,
+          step: 0.05,
+          visibleIf: (n) => (n.hangerStyle ?? 'strap') !== 'none',
+        },
+      ],
+    },
   ],
 }

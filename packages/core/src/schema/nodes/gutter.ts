@@ -44,6 +44,14 @@ export const GutterNode = BaseNode.extend({
   // true on both — matches a freshly-installed residential gutter.
   endCapLeft: z.boolean().default(true),
   endCapRight: z.boolean().default(true),
+
+  // Hangers are the metal straps that hold the gutter onto the
+  // fascia. 'strap' renders periodic bars across the rim; 'none'
+  // hides them (some plastic gutters use hidden clips). Spacing is
+  // metres between hanger centers; real residential code is roughly
+  // 0.6 m for snow-load areas, 0.75 m elsewhere.
+  hangerStyle: z.enum(['strap', 'none']).default('strap'),
+  hangerSpacing: z.number().default(0.6),
 }).describe(
   dedent`
   Gutter — a rain-water channel running along the eave of a roof
@@ -52,6 +60,7 @@ export const GutterNode = BaseNode.extend({
   - size:   profile drop below the eave line (vertical extent)
   - profile: k-style (ogee fascia), half-round, or square box
   - endCapLeft / endCapRight: close the trough at gutter-local -X / +X
+  - hangerStyle / hangerSpacing: visible metal straps across the rim
   `,
 )
 

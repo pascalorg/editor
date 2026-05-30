@@ -30,6 +30,8 @@ const GutterPreview = ({ node }: { node: GutterNode }) => {
       node.profile,
       node.endCapLeft,
       node.endCapRight,
+      node.hangerStyle,
+      node.hangerSpacing,
     ],
   )
 
