@@ -229,7 +229,8 @@ export default function RoofPanel() {
         | 'solar-panel'
         | 'skylight'
         | 'dormer'
-        | 'gutter',
+        | 'gutter'
+        | 'downspout',
     ) => {
       triggerSFX('sfx:item-pick')
       useEditor.getState().setTool(kind)

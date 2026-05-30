@@ -83,6 +83,7 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export { DownspoutNode } from './nodes/downspout'
 export { GutterNode } from './nodes/gutter'
 export { LevelNode } from './nodes/level'
 // Nodes

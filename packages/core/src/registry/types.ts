@@ -1186,6 +1186,31 @@ export type ParametricDescriptor<N> = {
   invariants?: ReadonlyArray<(n: N) => Issue[]>
   derive?: (n: N) => Partial<N>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
+  /**
+   * Extra buttons rendered in the inspector's Actions section
+   * (below Move/Delete). Lets a kind declare "do this thing to the
+   * current node" affordances without escaping to a full custom
+   * panel. Buttons whose `enabledIf` returns false stay disabled.
+   */
+  actions?: ParamAction<N>[]
+  /**
+   * Lazy-loaded React subsection rendered AFTER the auto-derived
+   * groups and BEFORE the Actions section. Used by kinds that want
+   * to list their child nodes inline — e.g. the gutter's downspout
+   * list with an "Add Downspout" button at the bottom, same shape as
+   * the roof panel's gutter / vent lists. Kind owns the layout; the
+   * inspector just slots it in.
+   */
+  trailingSection?: () => Promise<{ default: ComponentType<{ node: N }> }>
+}
+
+export type ParamAction<N> = {
+  label: string
+  /** Optional asset URL for a leading icon — same shape as palette icons. */
+  iconSrc?: string
+  enabledIf?: (n: N) => boolean
+  /** Click handler. Receives the current node value at click time. */
+  onClick: (n: N) => void
 }
 
 export type ParamGroup<N> = {

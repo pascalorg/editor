@@ -70,6 +70,7 @@ export type {
   PaintPatchArgs,
   PaintPreviewArgs,
   PaintResolveArgs,
+  ParamAction,
   ParametricDescriptor,
   ParamField,
   ParamGroup,

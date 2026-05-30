@@ -6,6 +6,7 @@ import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
+import { downspoutDefinition } from './downspout'
 import { elevatorDefinition } from './elevator'
 import { fenceDefinition } from './fence'
 import { guideDefinition } from './guide'
@@ -80,6 +81,7 @@ export const builtinPlugin: Plugin = {
     skylightDefinition as unknown as AnyNodeDefinition,
     dormerDefinition as unknown as AnyNodeDefinition,
     gutterDefinition as unknown as AnyNodeDefinition,
+    downspoutDefinition as unknown as AnyNodeDefinition,
   ],
 }
 
@@ -90,6 +92,7 @@ export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
+export { downspoutDefinition } from './downspout'
 export { elevatorDefinition } from './elevator'
 export { fenceDefinition } from './fence'
 export { guideDefinition } from './guide'

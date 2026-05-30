@@ -86,4 +86,8 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
       ],
     },
   ],
+  // Lazy-loaded section that lists every downspout attached to this
+  // gutter and offers an Add button at the bottom — same layout as
+  // the roof inspector's gutter / vent lists.
+  trailingSection: () => import('./downspouts-panel'),
 }

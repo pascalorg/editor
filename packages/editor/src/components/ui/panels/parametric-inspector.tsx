@@ -100,6 +100,10 @@ export function ParametricInspector() {
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
 
+  const TrailingSection = parametrics.trailingSection
+    ? resolveCustomPanel(parametrics.trailingSection)
+    : null
+
   return (
     <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
@@ -114,12 +118,37 @@ export function ParametricInspector() {
           ))}
         </PanelSection>
       ))}
-      {(canMove || canDelete) && (
+      {TrailingSection && (
+        <Suspense fallback={null}>
+          <TrailingSection />
+        </Suspense>
+      )}
+      {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
           <ActionGroup>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
+            {parametrics.actions?.map((action, i) => {
+              const node = useScene.getState().nodes[selectedId]
+              const disabled = action.enabledIf && node ? !action.enabledIf(node) : false
+              return (
+                <ActionButton
+                  className={disabled ? 'opacity-40 pointer-events-none' : ''}
+                  icon={
+                    action.iconSrc ? (
+                      <img alt="" className="h-4 w-4 shrink-0 object-contain" src={action.iconSrc} />
+                    ) : undefined
+                  }
+                  key={`paramaction-${i}`}
+                  label={action.label}
+                  onClick={() => {
+                    const live = useScene.getState().nodes[selectedId]
+                    if (live) action.onClick(live)
+                  }}
+                />
+              )
+            })}
             {canDelete && (
               <ActionButton
                 className="border-red-500/40 text-red-200 hover:bg-red-500/15"

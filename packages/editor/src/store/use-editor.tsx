@@ -77,6 +77,7 @@ export type StructureTool =
   | 'skylight'
   | 'dormer'
   | 'gutter'
+  | 'downspout'
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item'
