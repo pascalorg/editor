@@ -29,5 +29,12 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
         },
       ],
     },
+    {
+      label: 'End caps',
+      fields: [
+        { key: 'endCapLeft', kind: 'boolean' },
+        { key: 'endCapRight', kind: 'boolean' },
+      ],
+    },
   ],
 }

@@ -6,19 +6,21 @@ import {
   GutterNode,
   type RoofEvent,
   type RoofNode,
-  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
 import { gutterDefinition } from './definition'
-import { resolveEaveSnap } from './eave-snap'
+import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
 
-const worldPoint = new THREE.Vector3()
+type PreviewTarget = {
+  roof: { position: [number, number, number]; rotation: number }
+  segment: { position: [number, number, number]; rotation: number }
+  snap: EaveSnap
+}
 
 /**
  * Gutter placement tool. Cursor preview snaps to the OUTER eave — the
@@ -26,32 +28,27 @@ const worldPoint = new THREE.Vector3()
  * `Z = ±(depth/2 + overhang)` in segment-local frame; the gutter
  * mounts against the fascia there, hanging outward from the building.
  *
- * Which eave: the sign of the cursor's segment-local Z picks the near
- * eave. `+Z` eave uses rotation=0 (length runs along +X, outward
- * along +Z). `-Z` eave uses rotation=π so the gutter's local +Z
- * (outward) maps to world -Z and the trough hangs away from the
- * building on the back slope too.
+ * Which eave: `eave-snap.ts` picks the side closest to the cursor
+ * (roof-type aware — 4-way for hip/flat, low side only for shed, ±Z
+ * for the rest) and returns the segment-local snap pose. The same
+ * snap drives the ghost AND the commit, so picking-up + putting-down
+ * land at identical world coordinates.
  *
- * Eave Y: the slope keeps descending past the wall edge by the
- * overhang span. For a slope of `pitch` radians, the slope drops
- * `overhang * tan(pitch)` between the wall edge (Z = ±depth/2,
- * Y = wallHeight) and the drip edge (Z = ±(depth/2 + overhang)).
- * Same formula gives the right answer for gable / hip / shed in the
- * common case — primary slope is the eave slope.
- *
- * X (along the eave) follows the cursor's segment-local X so the
- * user controls where along the eave the gutter starts; the length
- * L/R handles + inspector cover follow-up tweaks.
- *
- * Snapping is purely a placement convenience — the inspector /
- * handles can move the gutter off the eave afterward.
+ * Ghost transform: we mount the GutterPreview under the exact same
+ * chain the GutterRenderer applies — roof.position + roof.rotation →
+ * segment.position + segment.rotation → snap.eave + snap.rotation.
+ * No `worldToBuildingLocal` + `previewYaw`-sum shortcut: that
+ * collapses three Y rotations into one scalar and converts world
+ * coords back into building-local, which is mathematically
+ * equivalent for pure-Y stacks but drifts under any future non-Y
+ * roof/segment transform. Sharing the renderer's chain means the
+ * ghost and the placed mesh are guaranteed pixel-identical.
  */
 const GutterTool = () => {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
-  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewYaw, setPreviewYaw] = useState(0)
+  const [target, setTarget] = useState<PreviewTarget | null>(null)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
@@ -68,21 +65,10 @@ const GutterTool = () => {
   useEffect(() => {
     if (!activeBuildingId) return
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
-      const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
-      if (!buildingObj) return [wx, wy, wz]
-      worldPoint.set(wx, wy, wz)
-      buildingObj.worldToLocal(worldPoint)
-      return [worldPoint.x, worldPoint.y, worldPoint.z]
-    }
-
     const updatePreview = (event: RoofEvent) => {
+      const roof = event.node as RoofNode
       const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
+        roof,
         event.position[0],
         event.position[1],
         event.position[2],
@@ -90,30 +76,29 @@ const GutterTool = () => {
       if (!hit) return
 
       const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
-      const segObj = sceneRegistry.nodes.get(hit.segment.id)
-      let eaveWorld: [number, number, number]
-      if (segObj) {
-        const eaveLocal = new THREE.Vector3(snap.eaveX, snap.eaveY, snap.eaveZ)
-        segObj.updateWorldMatrix(true, false)
-        eaveLocal.applyMatrix4(segObj.matrixWorld)
-        eaveWorld = [eaveLocal.x, eaveLocal.y, eaveLocal.z]
-      } else {
-        eaveWorld = [event.position[0], event.position[1], event.position[2]]
-      }
 
-      const sx = Math.round(eaveWorld[0] * 20) / 20
-      const sz = Math.round(eaveWorld[2] * 20) / 20
+      // Grid-snap chime fires when the segment-local snap moves to a
+      // new 5 cm cell along the eave — keeps SFX in lockstep with what
+      // the commit will actually store.
+      const sx = Math.round(snap.eaveX * 20) / 20
+      const sz = Math.round(snap.eaveZ * 20) / 20
       const prev = lastSnapRef.current
       if (!prev || prev[0] !== sx || prev[1] !== sz) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
 
-      // Yaw the preview to match the segment's rotation + the gutter's
-      // own back-eave flip, so the trough visually hangs outward on
-      // whichever eave the cursor is closer to.
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0) + snap.rotation)
-      setPreviewPos(worldToBuildingLocal(eaveWorld[0], eaveWorld[1], eaveWorld[2]))
+      setTarget({
+        roof: {
+          position: (roof.position ?? [0, 0, 0]) as [number, number, number],
+          rotation: roof.rotation ?? 0,
+        },
+        segment: {
+          position: (hit.segment.position ?? [0, 0, 0]) as [number, number, number],
+          rotation: hit.segment.rotation ?? 0,
+        },
+        snap,
+      })
       event.stopPropagation()
     }
 
@@ -157,12 +142,17 @@ const GutterTool = () => {
     }
   }, [activeBuildingId, setSelection])
 
-  if (!activeBuildingId || !previewPos) return null
+  if (!activeBuildingId || !target) return null
 
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <GutterPreview node={previewNode} />
+    <group position={target.roof.position} rotation-y={target.roof.rotation}>
+      <group position={target.segment.position} rotation-y={target.segment.rotation}>
+        <group
+          position={[target.snap.eaveX, target.snap.eaveY, target.snap.eaveZ]}
+          rotation-y={target.snap.rotation}
+        >
+          <GutterPreview node={previewNode} />
+        </group>
       </group>
     </group>
   )

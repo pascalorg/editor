@@ -37,6 +37,13 @@ export const GutterNode = BaseNode.extend({
   thickness: z.number().default(0.006),
 
   profile: z.enum(['k-style', 'half-round', 'box']).default('k-style'),
+
+  // End caps close the open ends of the U-channel so water can't run
+  // out the sides. Independent per-end because a downspout typically
+  // joins the gutter at one end while the other stays capped. Default
+  // true on both — matches a freshly-installed residential gutter.
+  endCapLeft: z.boolean().default(true),
+  endCapRight: z.boolean().default(true),
 }).describe(
   dedent`
   Gutter — a rain-water channel running along the eave of a roof
@@ -44,6 +51,7 @@ export const GutterNode = BaseNode.extend({
   - length: span along the eave (gutter-local +X)
   - size:   profile drop below the eave line (vertical extent)
   - profile: k-style (ogee fascia), half-round, or square box
+  - endCapLeft / endCapRight: close the trough at gutter-local -X / +X
   `,
 )
 

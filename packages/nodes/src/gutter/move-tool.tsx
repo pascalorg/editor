@@ -11,12 +11,16 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
-import * as THREE from 'three'
 import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { resolveEaveSnap } from './eave-snap'
+import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
+
+type PreviewTarget = {
+  roof: { position: [number, number, number]; rotation: number }
+  segment: { position: [number, number, number]; rotation: number }
+  snap: EaveSnap
+}
 
 /**
  * Gutter move tool. Mirrors the ridge-vent move flow — ghost follows
@@ -28,14 +32,18 @@ import GutterPreview from './preview'
  * On commit the gutter rotation may flip from 0 ↔ π if the user moves
  * it from the front eave to the back eave (or vice versa). The
  * pre-drag rotation is restored on cancel.
+ *
+ * Ghost transform: mirrors the GutterRenderer chain (roof → segment →
+ * snap), so the cursor preview lands at the exact world coords the
+ * commit will store. GutterPreview applies no internal rotation, so
+ * the gutter's CURRENT `rotation` doesn't bleed into the new snap.
  */
 export default function MoveGutterTool({ node }: { node: GutterNode }) {
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
 
-  const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
-  const [previewYaw, setPreviewYaw] = useState(0)
+  const [target, setTarget] = useState<PreviewTarget | null>(null)
 
   useEffect(() => {
     useScene.temporal.getState().pause()
@@ -56,57 +64,43 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     const gutterObj = sceneRegistry.nodes.get(node.id)
     if (gutterObj) gutterObj.visible = false
 
-    const worldToBuildingLocal = (
-      wx: number,
-      wy: number,
-      wz: number,
-    ): [number, number, number] => {
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      if (!buildingObj) return [wx, wy, wz]
-      const v = new THREE.Vector3(wx, wy, wz)
-      buildingObj.worldToLocal(v)
-      return [v.x, v.y, v.z]
-    }
-
     let lastSnap: [number, number] | null = null
 
     const updatePreview = (event: RoofEvent) => {
+      const roof = event.node as RoofNode
       const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
+        roof,
         event.position[0],
         event.position[1],
         event.position[2],
       )
       if (!hit) return
 
-      // Eave-snap to the segment's near drip edge — same math as the
-      // placement tool so picking-up + putting-down lands in the
-      // same place. The resolver is roofType-aware: hip/flat picks
+      // Same snap math as the placement tool — picking-up and putting-
+      // down round-trip identically. roofType-aware: hip/flat picks
       // ±X or ±Z based on which slope the cursor is on; shed always
       // snaps to its low (+Z) eave; gable / gambrel / mansard / dutch
       // stay on ±Z.
       const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
-      const segObj = sceneRegistry.nodes.get(hit.segment.id)
-      let eaveWorld: [number, number, number]
-      if (segObj) {
-        const eaveLocal = new THREE.Vector3(snap.eaveX, snap.eaveY, snap.eaveZ)
-        segObj.updateWorldMatrix(true, false)
-        eaveLocal.applyMatrix4(segObj.matrixWorld)
-        eaveWorld = [eaveLocal.x, eaveLocal.y, eaveLocal.z]
-      } else {
-        eaveWorld = [event.position[0], event.position[1], event.position[2]]
-      }
 
-      const sx = Math.round(eaveWorld[0] * 20) / 20
-      const sz = Math.round(eaveWorld[2] * 20) / 20
+      const sx = Math.round(snap.eaveX * 20) / 20
+      const sz = Math.round(snap.eaveZ * 20) / 20
       if (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0) + snap.rotation)
-      setPreviewPos(worldToBuildingLocal(eaveWorld[0], eaveWorld[1], eaveWorld[2]))
+      setTarget({
+        roof: {
+          position: (roof.position ?? [0, 0, 0]) as [number, number, number],
+          rotation: roof.rotation ?? 0,
+        },
+        segment: {
+          position: (hit.segment.position ?? [0, 0, 0]) as [number, number, number],
+          rotation: hit.segment.rotation ?? 0,
+        },
+        snap,
+      })
       event.stopPropagation()
     }
 
@@ -214,12 +208,17 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     }
   }, [exitMoveMode, node])
 
-  if (!previewPos) return null
+  if (!target) return null
 
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <GutterPreview node={node} />
+    <group position={target.roof.position} rotation-y={target.roof.rotation}>
+      <group position={target.segment.position} rotation-y={target.segment.rotation}>
+        <group
+          position={[target.snap.eaveX, target.snap.eaveY, target.snap.eaveZ]}
+          rotation-y={target.snap.rotation}
+        >
+          <GutterPreview node={node} />
+        </group>
       </group>
     </group>
   )

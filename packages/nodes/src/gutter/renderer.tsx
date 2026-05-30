@@ -18,6 +18,8 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
+import { computeGutterMitres } from './corner-mitre'
 import { buildGutterGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
@@ -64,9 +66,49 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       : undefined,
   )
 
+  // Same-segment sibling gutters drive the corner-mitre detector. Pull
+  // them as a fresh array each store update; `useShallow` keeps the
+  // reference stable when the array contents haven't changed, so the
+  // mitres useMemo below only re-runs when a sibling actually moves.
+  const siblingGutters = useScene(
+    useShallow((state) => {
+      const segmentId = node.roofSegmentId as AnyNodeId | undefined
+      if (!segmentId) return [] as GutterNode[]
+      const seg = state.nodes[segmentId] as RoofSegmentNode | undefined
+      if (!seg) return []
+      const out: GutterNode[] = []
+      for (const id of seg.children ?? []) {
+        const n = state.nodes[id as AnyNodeId]
+        if (n?.type === 'gutter' && n.id !== storeNode.id) out.push(n as GutterNode)
+      }
+      return out
+    }),
+  )
+
+  const mitres = useMemo(
+    () => computeGutterMitres(node, siblingGutters),
+    [
+      node.position[0],
+      node.position[1],
+      node.position[2],
+      node.rotation,
+      node.length,
+      siblingGutters,
+    ],
+  )
+
   const geometry = useMemo(
-    () => buildGutterGeometry(node),
-    [node.length, node.size, node.thickness, node.profile],
+    () => buildGutterGeometry(node, mitres),
+    [
+      node.length,
+      node.size,
+      node.thickness,
+      node.profile,
+      node.endCapLeft,
+      node.endCapRight,
+      mitres.left,
+      mitres.right,
+    ],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
 

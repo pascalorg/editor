@@ -1,5 +1,7 @@
 import type { GutterNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { type GutterMitres, NO_MITRES } from './corner-mitre'
 
 /**
  * Pure builder for the gutter mesh. The gutter is a hollow trough that
@@ -19,47 +21,143 @@ import * as THREE from 'three'
  * downward (negative Y) by `size`. +Z is "away from the building" —
  * positive Z is the outer face that hangs over the eave.
  *
+ * End caps: when `endCapLeft` / `endCapRight` is true, the matching
+ * end gets a thin SOLID slice (depth = wall thickness) instead of the
+ * hollow U-channel. The solid slice's end face closes the trough so
+ * water can't run out the side. Caps subtract from the user-set
+ * `length` so the gutter's total span stays constant — capping doesn't
+ * silently grow the geometry past what the inspector reads.
+ *
+ * Corner mitres: when a sibling gutter meets this gutter at a roof
+ * corner, the corner-mitre detector passes a mitre angle for the
+ * affected end. The end-face vertices are skewed (back wall held in
+ * place, front rim extended outward) so two perpendicular gutters'
+ * front rims meet at the outer eave intersection. A mitred end's cap
+ * is force-suppressed — capping a corner would wall off the L.
+ *
  * Pure: no React, no scene access, no store mutation.
  */
-export function buildGutterGeometry(node: GutterNode): THREE.BufferGeometry {
+export function buildGutterGeometry(
+  node: GutterNode,
+  mitres: GutterMitres = NO_MITRES,
+): THREE.BufferGeometry {
   const len = Math.max(0.05, node.length)
   const size = Math.max(0.04, node.size)
   const t = Math.min(Math.max(0.001, node.thickness), size * 0.4)
 
-  let cross: THREE.Shape
+  const capLeft = (node.endCapLeft ?? true) && mitres.left === 0
+  const capRight = (node.endCapRight ?? true) && mitres.right === 0
+
+  // Reserve cap slices at each capped end. Each cap is `t` thick
+  // (matches the wall thickness — a real end cap is a stamped plate
+  // welded onto the gutter). Clamp so a tiny gutter doesn't end up
+  // all-cap-no-channel.
+  const reserved = (capLeft ? t : 0) + (capRight ? t : 0)
+  const channelLen = Math.max(len * 0.1, len - reserved)
+  const totalCap = len - channelLen
+  const capLeftLen = capLeft ? (capRight ? totalCap / 2 : totalCap) : 0
+  const capRightLen = capRight ? (capLeft ? totalCap / 2 : totalCap) : 0
+
+  let channelCross: THREE.Shape
+  let capCross: THREE.Shape
   if (node.profile === 'half-round') {
-    cross = buildHalfRoundCross(size, t)
+    channelCross = buildHalfRoundCross(size, t)
+    capCross = buildHalfRoundOuterOnly(size)
   } else if (node.profile === 'box') {
-    cross = buildBoxCross(size, t)
+    channelCross = buildBoxCross(size, t)
+    capCross = buildBoxOuterOnly(size)
   } else {
-    cross = buildKStyleCross(size, t)
+    channelCross = buildKStyleCross(size, t)
+    capCross = buildKStyleOuterOnly(size)
   }
 
-  // Extrude the cross-section along the gutter's local +X. The Shapes
-  // above are authored with cross-X going from 0 (outer rim) to +w
-  // (back, against the fascia). After extrude (which produces mesh-X =
-  // cross-X, mesh-Y = cross-Y, mesh-Z = extrusion axis = length), we
-  // rotateY(-π/2) so the LENGTH lands along mesh-+X and the OUTWARD
-  // direction lands along mesh-+Z (segment-local +Z is the downslope /
-  // outward direction at the eave). The two-line combination is:
-  //
-  //   rotateY(-π/2): mesh-X (outward) → +Z, mesh-Z (length) → -X
-  //   translate(+len/2, 0, 0):           recenter the now-negative
-  //                                      length span around X = 0
-  //
-  // The renderer mounts this in segment-local frame with no extra
-  // rotation, so the gutter naturally aligns with the eave when
-  // `node.rotation = 0`.
-  const extruded = new THREE.ExtrudeGeometry(cross, {
-    depth: len,
+  // Each extrude below uses the same orient-and-recenter recipe:
+  // ExtrudeGeometry produces (mesh-X = cross-X, mesh-Y = cross-Y,
+  // mesh-Z = extrusion axis); we rotateY(-π/2) so the LENGTH lands
+  // along mesh-+X and the OUTWARD direction lands along mesh-+Z, then
+  // translate so the piece sits in its slot of the gutter's overall
+  // [-len/2, +len/2] span. Z_cs = 0 maps to mesh-+X (right end);
+  // Z_cs = depth maps to mesh--X (left end).
+  const pieces: THREE.BufferGeometry[] = []
+
+  const channel = new THREE.ExtrudeGeometry(channelCross, {
+    depth: channelLen,
     bevelEnabled: false,
     curveSegments: 16,
     steps: 1,
   })
-  extruded.rotateY(-Math.PI / 2)
-  extruded.translate(len / 2, 0, 0)
-  extruded.computeVertexNormals()
-  return extruded
+  // Apply the corner-mitre skew while we're still in the source frame.
+  // Source axes (pre-rotation): X_cs = outward, Y_cs = vertical,
+  // Z_cs = length (0 at right end of mesh, `channelLen` at left end).
+  // After rotateY(-π/2): mesh-X = -Z_cs, mesh-Z = X_cs.
+  //
+  // OUTER-corner mitre rule: the back wall (X_cs = 0) stays at the
+  // original end (mesh-X = ±len/2); the front rim (X_cs = +outward)
+  // extends further along the gutter's length so it can reach the
+  // outer eave intersection of the L. In mesh coords:
+  //   right end: Δmesh-X = +mesh-Z · tan(mitreRight)
+  //   left  end: Δmesh-X = −mesh-Z · tan(mitreLeft)
+  // Mapped back to source coords (Δmesh-X = −ΔZ_cs, mesh-Z = X_cs):
+  //   right end (Z_cs = 0):           new Z_cs = −X_cs · tan(mitreRight)
+  //   left  end (Z_cs = channelLen):  new Z_cs = channelLen + X_cs · tan(mitreLeft)
+  if (mitres.right > 0 || mitres.left > 0) {
+    const tanRight = Math.tan(mitres.right)
+    const tanLeft = Math.tan(mitres.left)
+    const eps = 1e-5
+    const pos = channel.attributes.position!
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const z = pos.getZ(i)
+      if (mitres.right > 0 && Math.abs(z) < eps) {
+        pos.setZ(i, -x * tanRight)
+      } else if (mitres.left > 0 && Math.abs(z - channelLen) < eps) {
+        pos.setZ(i, channelLen + x * tanLeft)
+      }
+    }
+    pos.needsUpdate = true
+    channel.computeVertexNormals()
+  }
+  channel.rotateY(-Math.PI / 2)
+  // Channel spans [-len/2 + capLeftLen, +len/2 - capRightLen]: shift
+  // the recentered extrude so its right end butts against the right cap.
+  channel.translate(len / 2 - capRightLen, 0, 0)
+  pieces.push(channel)
+
+  if (capLeft) {
+    const leftCap = new THREE.ExtrudeGeometry(capCross, {
+      depth: capLeftLen,
+      bevelEnabled: false,
+      curveSegments: 16,
+      steps: 1,
+    })
+    leftCap.rotateY(-Math.PI / 2)
+    // Left cap spans [-len/2, -len/2 + capLeftLen]: translate by
+    // -len/2 + capLeftLen so Z_cs=0 (mesh-+X end of the cap slice)
+    // sits at -len/2 + capLeftLen and Z_cs=depth at -len/2.
+    leftCap.translate(-len / 2 + capLeftLen, 0, 0)
+    pieces.push(leftCap)
+  }
+
+  if (capRight) {
+    const rightCap = new THREE.ExtrudeGeometry(capCross, {
+      depth: capRightLen,
+      bevelEnabled: false,
+      curveSegments: 16,
+      steps: 1,
+    })
+    rightCap.rotateY(-Math.PI / 2)
+    // Right cap spans [+len/2 - capRightLen, +len/2].
+    rightCap.translate(len / 2, 0, 0)
+    pieces.push(rightCap)
+  }
+
+  const merged = pieces.length === 1 ? pieces[0]! : (mergeGeometries(pieces, false) ?? pieces[0]!)
+  // Free the intermediate pieces when merge returned a new geometry.
+  if (merged !== pieces[0]) {
+    for (const p of pieces) p.dispose()
+  }
+  merged.computeVertexNormals()
+  return merged
 }
 
 // Each cross-section below is authored as a single closed polygon that
@@ -156,6 +254,53 @@ function buildBoxCross(size: number, t: number): THREE.Shape {
   shape.lineTo(t, -size + t)
   shape.lineTo(t, 0)
   // closePath draws the back rim (t, 0) → (0, 0).
+  shape.closePath()
+  return shape
+}
+
+// Solid-outer outlines used for the end-cap slices: same outer
+// boundary as the channel cross-sections above but without the inner
+// trough carved out, so the extruded slice is a solid plug that closes
+// the open end of the trough.
+
+function buildKStyleOuterOnly(size: number): THREE.Shape {
+  const wBot = size * 0.8
+  const wTop = size * 0.95
+  const ogeeY = -size * 0.65
+
+  const shape = new THREE.Shape()
+  shape.moveTo(0, 0)
+  shape.lineTo(0, -size)
+  shape.lineTo(wBot, -size)
+  shape.bezierCurveTo(wBot + size * 0.15, ogeeY, wTop - size * 0.15, ogeeY * 0.4, wTop, 0)
+  // closePath draws (wTop, 0) → (0, 0) — the cap's rim line across
+  // the top of the gutter cross-section.
+  shape.closePath()
+  return shape
+}
+
+function buildHalfRoundOuterOnly(size: number): THREE.Shape {
+  const r = size
+  const segs = 24
+
+  const shape = new THREE.Shape()
+  shape.moveTo(0, 0)
+  for (let i = 1; i <= segs; i++) {
+    const angle = Math.PI + (Math.PI * i) / segs
+    shape.lineTo(r + r * Math.cos(angle), r * Math.sin(angle))
+  }
+  shape.closePath()
+  return shape
+}
+
+function buildBoxOuterOnly(size: number): THREE.Shape {
+  const w = size
+
+  const shape = new THREE.Shape()
+  shape.moveTo(0, 0)
+  shape.lineTo(0, -size)
+  shape.lineTo(w, -size)
+  shape.lineTo(w, 0)
   shape.closePath()
   return shape
 }
