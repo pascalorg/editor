@@ -74,6 +74,7 @@ import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import type { GuideUiState } from '../../store/use-editor'
 import useEditor from '../../store/use-editor'
+import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
@@ -9131,6 +9132,12 @@ export function FloorplanPanel() {
                   into the floor-plan scene <g> (the data-floorplan-scene
                   attribute below); see floorplan-registry-move-overlay.tsx. */}
               <FloorplanRegistryMoveOverlay />
+
+              {/* Figma-style alignment guides published by the move
+                  overlay during a free-translate drag. Sits above the
+                  registry layer so the red lines and distance pills
+                  paint on top of node geometry. */}
+              <FloorplanAlignmentGuideLayer />
 
               <FloorplanMarqueeLayer
                 bounds={visibleSvgMarqueeBounds}
