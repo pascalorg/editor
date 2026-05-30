@@ -11,9 +11,12 @@
 import '../lib/bootstrap'
 import { type ReactNode, useEffect } from 'react'
 
+const shouldEnableReactScan =
+  process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_REACT_SCAN === 'true'
+
 export function ClientBootstrap({ children }: { children: ReactNode }) {
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return
+    if (!shouldEnableReactScan) return
     // Loaded here (not via a `<Script>` tag in <head>) to avoid React's
     // "script inside a React component" hydration warning. The package
     // is already a direct dep, so we don't need the CDN auto-global.
