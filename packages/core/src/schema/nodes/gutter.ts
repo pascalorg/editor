@@ -52,6 +52,16 @@ export const GutterNode = BaseNode.extend({
   // 0.6 m for snow-load areas, 0.75 m elsewhere.
   hangerStyle: z.enum(['strap', 'none']).default('strap'),
   hangerSpacing: z.number().default(0.6),
+
+  // Downspout outlet — a short cylindrical drop tube descending from
+  // the gutter floor where a downspout connects. 'none' (default) so
+  // existing gutters don't sprout outlets on schema upgrade. Side
+  // picks the end the outlet sits closest to; inset is the segment-
+  // local distance from that end; diameter is the bore of the tube
+  // (default 0.07 m ≈ 3″ — standard residential downspout).
+  outletSide: z.enum(['none', 'left', 'right']).default('none'),
+  outletInset: z.number().default(0.15),
+  outletDiameter: z.number().default(0.07),
 }).describe(
   dedent`
   Gutter — a rain-water channel running along the eave of a roof
@@ -61,6 +71,7 @@ export const GutterNode = BaseNode.extend({
   - profile: k-style (ogee fascia), half-round, or square box
   - endCapLeft / endCapRight: close the trough at gutter-local -X / +X
   - hangerStyle / hangerSpacing: visible metal straps across the rim
+  - outletSide / outletInset / outletDiameter: drop-tube outlet
   `,
 )
 

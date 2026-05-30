@@ -56,5 +56,34 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
         },
       ],
     },
+    {
+      label: 'Outlet',
+      fields: [
+        {
+          key: 'outletSide',
+          kind: 'enum',
+          options: ['none', 'left', 'right'],
+          display: 'segmented',
+        },
+        {
+          key: 'outletInset',
+          kind: 'number',
+          unit: 'm',
+          min: 0.02,
+          max: 1.0,
+          step: 0.01,
+          visibleIf: (n) => (n.outletSide ?? 'none') !== 'none',
+        },
+        {
+          key: 'outletDiameter',
+          kind: 'number',
+          unit: 'm',
+          min: 0.02,
+          max: 0.15,
+          step: 0.005,
+          visibleIf: (n) => (n.outletSide ?? 'none') !== 'none',
+        },
+      ],
+    },
   ],
 }

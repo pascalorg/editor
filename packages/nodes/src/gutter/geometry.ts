@@ -1,4 +1,11 @@
 import type { GutterNode } from '@pascal-app/core'
+import {
+  Brush,
+  csgEvaluator,
+  csgGeometry,
+  prepareBrushForCSG,
+  SUBTRACTION,
+} from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { type GutterMitres, NO_MITRES } from './corner-mitre'
@@ -162,12 +169,41 @@ export function buildGutterGeometry(
     }
   }
 
+  // Downspout outlet: short cylindrical drop tube hanging off the
+  // gutter floor at the chosen end. The stub itself is solid at the
+  // outer (bore + wall) radius; the bore is then drilled through both
+  // the floor and the stub via CSG, so the result is a real hole in
+  // the trough floor and a hollow tube descending from it. CSG only
+  // runs when the outlet is enabled — `'none'` keeps the fast merge
+  // path.
+  const outletStub = buildOutletStub(node, len, size, capLeftLen, capRightLen)
+  if (outletStub) pieces.push(outletStub)
+
   const merged = pieces.length === 1 ? pieces[0]! : (mergeGeometries(pieces, false) ?? pieces[0]!)
   // Free the intermediate pieces when merge returned a new geometry.
   if (merged !== pieces[0]) {
     for (const p of pieces) p.dispose()
   }
   merged.computeVertexNormals()
+
+  // CSG drill — punches the bore through the merged geometry. Runs
+  // last so the floor + stub are already in one mesh; the drill cuts
+  // both at once.
+  if (outletStub) {
+    const drill = buildOutletDrill(node, len, size, capLeftLen, capRightLen)
+    if (drill) {
+      const mainBrush = new Brush(merged)
+      prepareBrushForCSG(mainBrush)
+      const drillBrush = new Brush(drill)
+      prepareBrushForCSG(drillBrush)
+      const cut = csgEvaluator.evaluate(mainBrush, drillBrush, SUBTRACTION)
+      const cutGeometry = csgGeometry(cut)
+      merged.dispose()
+      drill.dispose()
+      return cutGeometry
+    }
+  }
+
   return merged
 }
 
@@ -378,4 +414,117 @@ function buildHangers(
     pieces.push(bar)
   }
   return pieces
+}
+
+// ─── Outlet ────────────────────────────────────────────────────────
+
+// Stub length — 6 cm reads as "drop tube" without poking conspicuously
+// far below the eave; the downspout pipe (eventually a child node)
+// will visually continue downward from the stub's open end.
+const OUTLET_STUB_LENGTH = 0.06
+// Radial subdivisions — 24 reads as smooth at typical outlet
+// diameters; lower and the 3″ tube starts looking faceted from below.
+const OUTLET_RADIAL_SEGMENTS = 24
+// Wall thickness of the drop tube — 3 mm matches typical residential
+// gauge. After CSG the stub becomes a tube with outer radius =
+// bore + wall and inner radius = bore.
+const OUTLET_WALL_THICKNESS = 0.003
+// Drill overshoot past the floor and past the stub bottom — keeps the
+// CSG cut planes from coinciding with merged-geometry surfaces
+// (coplanar cuts produce degenerate output in three-bvh-csg).
+const OUTLET_DRILL_OVERSHOOT = 0.01
+
+/** Z (outward) coordinate of the trough floor's midpoint per profile. */
+function profileFloorMidZ(profile: GutterNode['profile'], size: number): number {
+  // k-style bottom is `wBot = 0.8 · size` wide; box bottom is `size`
+  // wide; half-round's lowest point sits at the centre of the
+  // semicircle at Z = r = size.
+  if (profile === 'half-round') return size
+  if (profile === 'box') return size / 2
+  return size * 0.4
+}
+
+/**
+ * Common (X, Z) placement + radius math used by both the solid stub
+ * and the CSG drill. Returns null when the outlet is disabled or
+ * doesn't fit between the caps.
+ */
+function resolveOutletPlacement(
+  node: GutterNode,
+  len: number,
+  size: number,
+  capLeftLen: number,
+  capRightLen: number,
+): { x: number; z: number; bore: number; outer: number } | null {
+  const side = node.outletSide ?? 'none'
+  if (side === 'none') return null
+
+  const bore = Math.max(0.01, (node.outletDiameter ?? 0.07) / 2)
+  const outer = bore + OUTLET_WALL_THICKNESS
+  const inset = Math.max(outer, node.outletInset ?? 0.15)
+
+  // Clamp inside the trough-floor span — use the OUTER radius so the
+  // tube body itself can't poke into a cap.
+  const minX = -len / 2 + capLeftLen + outer
+  const maxX = len / 2 - capRightLen - outer
+  if (maxX <= minX) return null
+  let x = side === 'left' ? -len / 2 + capLeftLen + inset : len / 2 - capRightLen - inset
+  x = Math.max(minX, Math.min(maxX, x))
+
+  const profile = node.profile ?? 'k-style'
+  const z = profileFloorMidZ(profile, size)
+  return { x, z, bore, outer }
+}
+
+function buildOutletStub(
+  node: GutterNode,
+  len: number,
+  size: number,
+  capLeftLen: number,
+  capRightLen: number,
+): THREE.BufferGeometry | null {
+  const p = resolveOutletPlacement(node, len, size, capLeftLen, capRightLen)
+  if (!p) return null
+
+  // Solid cylinder at OUTER radius; the CSG drill below will hollow
+  // out the bore and leave a tube wall. Top of the stub sits flush
+  // with the gutter floor (Y = −size). CylinderGeometry is indexed;
+  // flatten to match the ExtrudeGeometries in `pieces`.
+  const tube = new THREE.CylinderGeometry(
+    p.outer,
+    p.outer,
+    OUTLET_STUB_LENGTH,
+    OUTLET_RADIAL_SEGMENTS,
+  ).toNonIndexed()
+  tube.translate(p.x, -size - OUTLET_STUB_LENGTH / 2, p.z)
+  return tube
+}
+
+function buildOutletDrill(
+  node: GutterNode,
+  len: number,
+  size: number,
+  capLeftLen: number,
+  capRightLen: number,
+): THREE.BufferGeometry | null {
+  const p = resolveOutletPlacement(node, len, size, capLeftLen, capRightLen)
+  if (!p) return null
+
+  // Drill spans from slightly above the trough floor to slightly
+  // below the stub's bottom — the overshoots keep CSG cut planes
+  // from sitting coplanar with merged-geometry faces.
+  const top = -size + OUTLET_DRILL_OVERSHOOT
+  const bottom = -size - OUTLET_STUB_LENGTH - OUTLET_DRILL_OVERSHOOT
+  const height = top - bottom
+  const centerY = (top + bottom) / 2
+
+  const drill = new THREE.CylinderGeometry(
+    p.bore,
+    p.bore,
+    height,
+    OUTLET_RADIAL_SEGMENTS,
+  )
+  // CSG doesn't care about indexed vs non-indexed for the input brushes.
+  drill.translate(p.x, centerY, p.z)
+  return drill
 }
