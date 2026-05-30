@@ -118,13 +118,7 @@ function LeftColumn({
         tabs={tabs}
       />
       {!isCollapsed && (
-        <div
-          className="relative flex h-full flex-col"
-          style={{
-            width,
-            transition: isDragging ? 'none' : 'width 150ms ease',
-          }}
-        >
+        <div className="relative flex h-full flex-col" style={{ width }}>
           <div className="relative flex flex-1 flex-col overflow-hidden">
             {renderTabContent(activePanel)}
             {sidebarOverlay && <div className="absolute inset-0 z-50">{sidebarOverlay}</div>}
