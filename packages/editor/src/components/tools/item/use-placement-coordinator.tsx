@@ -1330,7 +1330,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Keyboard rotation ----
 
-    const ROTATION_STEP = Math.PI / 2
+    // 45° increments — matches the R-key rotation step for already-placed
+    // items (use-keyboard.ts) so the ghost/duplicate rotates the same way.
+    const ROTATION_STEP = Math.PI / 4
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Shift') {
         shiftFreeRef.current = true

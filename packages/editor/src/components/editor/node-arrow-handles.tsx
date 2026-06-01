@@ -13,6 +13,7 @@ import {
   type RadialResizeHandle,
   sceneRegistry,
   type TapActionHandle,
+  type TranslateHandle,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -22,11 +23,12 @@ import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BoxGeometry,
-  type BufferGeometry,
+  BufferGeometry,
   Color,
   CylinderGeometry,
   DoubleSide,
   ExtrudeGeometry,
+  Float32BufferAttribute,
   type Group,
   Matrix4,
   type Object3D,
@@ -40,12 +42,19 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { snapToGrid } from '../tools/item/placement-math'
+import { formatAngleRadians } from '../tools/shared/segment-angle'
 
 const ARROW_SCALE = 0.65
 const ARROW_COLOR = '#8381ed'
+// How far a DOWNWARD tracker's dashed leader pokes past its cube so the
+// dashes visibly thread through it (the cube sits ON the line, not at
+// its end). Upward trackers — wall / chimney height — stop at the cube.
+const TRACKER_THROUGH = 0.12
 
 // Mirrors the formatter used by wall / fence measurement labels so all
 // in-world dimension chips read consistently.
@@ -207,6 +216,65 @@ function createArrowHandleGeometry() {
   return geometry
 }
 
+// Double-headed straight arrow silhouette, drawn in 2D pointing along ±X.
+// A thin ribbon between two arrowheads. Two of these (one rotated 90°)
+// merge into the 4-way move cross.
+function createDoubleArrowShape(): Shape {
+  const L = 0.36 // half-length to each tip
+  const rw = 0.03 // ribbon half-width
+  const hw = 0.12 // arrowhead half-width
+  // Long inner ribbon so opposing arrowheads sit well apart rather than
+  // meeting in a cramped knot at the centre.
+  const hx = 0.2 // where each arrowhead meets the ribbon
+  const shape = new Shape()
+  shape.moveTo(L, 0) // right tip
+  shape.lineTo(hx, hw)
+  shape.lineTo(hx, rw)
+  shape.lineTo(-hx, rw)
+  shape.lineTo(-hx, hw)
+  shape.lineTo(-L, 0) // left tip
+  shape.lineTo(-hx, -hw)
+  shape.lineTo(-hx, -rw)
+  shape.lineTo(hx, -rw)
+  shape.lineTo(hx, -hw)
+  shape.closePath()
+  return shape
+}
+
+// 4-way move cross: two double-headed arrows (±X and ±Z) lying flat in the
+// XZ plane. Drawn on top (depthTest off, shared arrow material) so it reads
+// as a floor-move grip centred on the item.
+function createMoveCrossHandleGeometry() {
+  const shape = createDoubleArrowShape()
+  const extrudeOpts = {
+    depth: 0.06,
+    bevelEnabled: true,
+    bevelThickness: 0.018,
+    bevelSize: 0.012,
+    bevelOffset: 0,
+    bevelSegments: 6,
+    curveSegments: 8,
+    steps: 1,
+  }
+  const armX = new ExtrudeGeometry(shape, extrudeOpts)
+  armX.translate(0, 0, -0.03)
+  armX.rotateX(-Math.PI / 2) // lay flat → points along ±X in XZ
+  const armZ = armX.clone()
+  armZ.rotateY(Math.PI / 2) // second arm → points along ±Z
+  const merged = mergeGeometries([armX, armZ], false)
+  if (!merged) {
+    armZ.dispose()
+    armX.computeVertexNormals()
+    armX.computeBoundingSphere()
+    return armX
+  }
+  armX.dispose()
+  armZ.dispose()
+  merged.computeVertexNormals()
+  merged.computeBoundingSphere()
+  return merged
+}
+
 function swallowNextClick() {
   const swallow = (clickEvent: Event) => {
     clickEvent.stopPropagation()
@@ -223,6 +291,14 @@ export function NodeArrowHandles() {
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
+  // Endpoint / curve drags reshape the selected wall or fence; hide its
+  // resize arrows for the duration so they don't clutter (or get blocked
+  // by) the drag's own cursor + dimension overlays. Mirrors the same guard
+  // on the legacy wall handles (`WallMoveSideHandles`).
+  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
+  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
+  const curvingWall = useEditor((state) => state.curvingWall)
+  const curvingFence = useEditor((state) => state.curvingFence)
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const rawNode = useScene((state) =>
@@ -237,8 +313,7 @@ export function NodeArrowHandles() {
     rawNode ? s.overrides.get(rawNode.id) : undefined,
   )
   const node = useMemo<AnyNode | null>(
-    () =>
-      rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode,
+    () => (rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode),
     [rawNode, liveOverride],
   )
 
@@ -254,10 +329,21 @@ export function NodeArrowHandles() {
     Boolean(node && descriptors?.length) &&
     !isFloorplanHovered &&
     mode !== 'delete' &&
-    !movingNode
+    !movingNode &&
+    !movingWallEndpoint &&
+    !movingFenceEndpoint &&
+    !curvingWall &&
+    !curvingFence
 
   if (!shouldRender || !node || !descriptors) return null
-  return <NodeArrowHandlesForNode descriptors={descriptors} node={node} />
+  // Key by the selected node id so switching selection REMOUNTS the rig.
+  // The portal target + ride-mesh refs are seeded from the scene registry
+  // in `useState` initializers; without a remount they'd persist from the
+  // previous selection and the arrows would ride the old node's world pose
+  // (right local placements, wrong frame) until the resolve effect happened
+  // to catch up. Remounting re-resolves both refs synchronously for the new
+  // node, so the arrows land in the right place the instant it's selected.
+  return <NodeArrowHandlesForNode descriptors={descriptors} key={node.id} node={node} />
 }
 
 // Resolves the portal target + ride mesh chain. Descriptor-level `portal`
@@ -400,6 +486,13 @@ function NodeArrowHandlesForNode({
   // wall-riding outer wrapper.
   const arrowFrame = innerRide ?? outerRide
 
+  // A translate drag moves `position`, so the whole handle rig should travel
+  // with the mesh — the freeze-at-pre-drag mechanism (built for asymmetric
+  // resize that re-centres the mesh) must NOT fire for the non-active arrows
+  // here, or they'd lag behind the moving item.
+  const activeIsTranslate =
+    activeIndex !== null && descriptors[activeIndex]?.kind === 'translate'
+
   const arrows = descriptors.map((descriptor, index) => (
     <ArrowHandle
       activeIndex={activeIndex}
@@ -412,6 +505,7 @@ function NodeArrowHandlesForNode({
       liveNode={node}
       preDragNode={preDragNode}
       rideObject={arrowFrame}
+      suppressFreeze={activeIsTranslate}
     />
   ))
 
@@ -444,9 +538,7 @@ function computeFreezeOffset(liveNode: AnyNode, preDragNode: AnyNode): [number, 
   // notable holdout — they don't have handles anyway, but TypeScript still
   // requires us to discriminate). Guarded access keeps the freeze logic
   // safe for the few node kinds that lack the field.
-  const liveP = (liveNode as { position?: readonly [number, number, number] }).position ?? [
-    0, 0, 0,
-  ]
+  const liveP = (liveNode as { position?: readonly [number, number, number] }).position ?? [0, 0, 0]
   const preP = (preDragNode as { position?: readonly [number, number, number] }).position ?? [
     0, 0, 0,
   ]
@@ -471,6 +563,7 @@ function ArrowHandle({
   handleIndex,
   dragControls,
   rideObject,
+  suppressFreeze,
 }: {
   descriptor: HandleDescriptor
   liveNode: AnyNode
@@ -479,15 +572,19 @@ function ArrowHandle({
   handleIndex: number
   dragControls: DragControls
   rideObject: Object3D
+  /** When the active drag is a translate, non-active arrows ride the moving
+   *  mesh instead of freezing at their pre-drag world position. */
+  suppressFreeze?: boolean
 }) {
   // During a drag, non-active arrows render against the pre-drag store
   // snapshot. The active arrow always uses the live (override-merged)
   // node so it tracks the cursor.
-  const isOtherActive =
-    activeIndex !== null && activeIndex !== handleIndex && preDragNode !== null
+  const isOtherActive = activeIndex !== null && activeIndex !== handleIndex && preDragNode !== null
   const placementNode = isOtherActive ? (preDragNode as AnyNode) : liveNode
   const freezeOffset =
-    isOtherActive && preDragNode ? computeFreezeOffset(liveNode, preDragNode) : null
+    isOtherActive && preDragNode && !suppressFreeze
+      ? computeFreezeOffset(liveNode, preDragNode)
+      : null
 
   if (descriptor.kind === 'linear-resize' || descriptor.kind === 'radial-resize') {
     return (
@@ -515,8 +612,25 @@ function ArrowHandle({
       />
     )
   }
+  if (descriptor.kind === 'translate') {
+    return (
+      <TranslateArrow
+        descriptor={descriptor}
+        dragControls={dragControls}
+        handleIndex={handleIndex}
+        node={placementNode}
+        rideObject={rideObject}
+      />
+    )
+  }
   if (descriptor.kind === 'tap-action') {
-    return <TapActionArrow descriptor={descriptor} node={placementNode} />
+    // Tap-action handles (fence side-move arrows, corner pickers) aren't
+    // resize handles, so the freeze-at-pre-drag mechanism — which only
+    // exists to stop arrows sliding when an asymmetric width/length resize
+    // re-centers the mesh — doesn't apply to them. Track the live node so
+    // their height-dependent placement (side arrows ride the top, corner
+    // leaders span the full height) follows a height drag in real time.
+    return <TapActionArrow descriptor={descriptor} node={liveNode} />
   }
   // endpoint-move not yet implemented.
   return null
@@ -551,7 +665,10 @@ function pickCursor(descriptor: LinearResizeHandle<AnyNode> | RadialResizeHandle
 }
 
 function resolveBound(
-  bound: number | ((node: AnyNode, sceneApi: ReturnType<typeof createSceneApi>) => number) | undefined,
+  bound:
+    | number
+    | ((node: AnyNode, sceneApi: ReturnType<typeof createSceneApi>) => number)
+    | undefined,
   fallback: number,
   node: AnyNode,
   sceneApi: ReturnType<typeof createSceneApi>,
@@ -605,6 +722,10 @@ function LinearArrow({
   void liveNode
 
   const cursor = pickCursor(descriptor)
+  // When a handle declares `measureLabel`, its readout is routed to the
+  // floating dimension pill (via `activeHandleDrag`) and its own in-world
+  // chip is suppressed — matches the wall height handle.
+  const measureLabel = descriptor.kind === 'linear-resize' ? descriptor.measureLabel : undefined
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
   const basePosition = descriptor.placement.position(node, placementSceneApi)
   // `freezeOffset` (in node-local frame) cancels the mesh's `position`
@@ -669,6 +790,13 @@ function LinearArrow({
     const nodeId = node.id as AnyNodeId
     const sceneApi = createSceneApi(useScene)
     const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
+    // Cross-node handles (a downspout sliding its gutter's outlet) redirect
+    // the live override + commit to another node; defaults to the selected
+    // node. `currentValue` / `apply` still see the selected node.
+    const overrideId =
+      (descriptor.kind === 'linear-resize'
+        ? descriptor.overrideTarget?.(initialNode as never, sceneApi)
+        : undefined) ?? nodeId
     const initialValue = descriptor.currentValue(initialNode)
     const initialPointer =
       descriptor.axis === 'x' ? hitLocal.x : descriptor.axis === 'y' ? hitLocal.y : hitLocal.z
@@ -701,6 +829,10 @@ function LinearArrow({
     // pre-override store node (not the merged `liveNode`) so subsequent
     // re-renders don't pollute it with this drag's own patch.
     dragControls.onStart(handleIndex, initialNode)
+    // Publish the dimension being steered so the floating pill can show it.
+    if (measureLabel) {
+      useEditor.getState().setActiveHandleDrag({ nodeId, label: measureLabel })
+    }
 
     let lastPatch: Partial<AnyNode> | null = null
 
@@ -724,16 +856,13 @@ function LinearArrow({
             ? intersectionLocal.y
             : intersectionLocal.z
       const delta = currentPointer - initialPointer
-      const next = Math.min(
-        maxBound,
-        Math.max(minBound, initialValue + delta * factor),
-      )
+      const next = Math.min(maxBound, Math.max(minBound, initialValue + delta * factor))
       // apply sees the node-at-drag-start so it can compute anchors from
       // pre-drag geometry (door-width re-centers on the opposite edge).
       const patch = descriptor.apply(initialNode as never, next, sceneApi)
       lastPatch = patch as Partial<AnyNode>
-      useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
-      useScene.getState().markDirty(nodeId)
+      useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
+      useScene.getState().markDirty(overrideId)
     }
 
     const cleanup = () => {
@@ -746,6 +875,9 @@ function LinearArrow({
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
+      if (measureLabel) {
+        useEditor.getState().setActiveHandleDrag(null)
+      }
       // Release the active-drag claim so non-active arrows return to
       // live-tracking (and so the next drag can claim its own snapshot).
       dragControls.onEnd()
@@ -757,17 +889,17 @@ function LinearArrow({
       // Commit: one tracked write to the scene store, then drop the
       // override so subscribers read from scene again.
       if (lastPatch) {
-        sceneApi.update(nodeId, lastPatch)
+        sceneApi.update(overrideId, lastPatch)
       }
-      useLiveNodeOverrides.getState().clear(nodeId)
-      useScene.getState().markDirty(nodeId)
+      useLiveNodeOverrides.getState().clear(overrideId)
+      useScene.getState().markDirty(overrideId)
       cleanup()
     }
     const onCancel = () => {
       // Revert: drop the override + mark dirty so the system rebuilds
       // against the original scene values.
-      useLiveNodeOverrides.getState().clear(nodeId)
-      useScene.getState().markDirty(nodeId)
+      useLiveNodeOverrides.getState().clear(overrideId)
+      useScene.getState().markDirty(overrideId)
       cleanup()
     }
     dragCleanupRef.current = cleanup
@@ -796,7 +928,9 @@ function LinearArrow({
   // is already the effective (override-merged) node, so currentValue
   // returns the in-flight value during a drag and the label tracks
   // smoothly without an extra subscription.
-  const showLabel = isHovered || isDragging
+  // `measureLabel` handles route their readout to the floating dimension
+  // pill, so suppress the inline chip here to avoid showing it twice.
+  const showLabel = (isHovered || isDragging) && !measureLabel
   const labelText = showLabel ? formatDimension(descriptor.currentValue(node), unit) : ''
 
   // `tracker` shape on a linear-resize handle: render a dashed vertical
@@ -814,9 +948,16 @@ function LinearArrow({
     // chimney body height starts at the deck plane, not at y=0, so the
     // dashed leader spans only the body's visible extent.
     const trackerDescriptor = descriptor as LinearResizeHandle<AnyNode>
-    const baseY =
-      trackerDescriptor.trackerBaseY?.(node as never, placementSceneApi) ?? 0
-    const leaderHeight = Math.max(position[1] - baseY, 0)
+    const baseY = trackerDescriptor.trackerBaseY?.(node as never, placementSceneApi) ?? 0
+    // Leader spans base ↔ cube either direction. Upward (cube above base:
+    // wall / chimney height) it stops at the cube as before. Downward
+    // (cube below base: a downspout's length cube under the gutter
+    // outlet) it pokes `TRACKER_THROUGH` past the cube so the dashes
+    // thread through it instead of the leader collapsing to nothing.
+    const cubeY = position[1]
+    const cubeBelowBase = cubeY < baseY
+    const leaderBottomY = Math.min(baseY, cubeY) - (cubeBelowBase ? TRACKER_THROUGH : 0)
+    const leaderHeight = Math.max(Math.max(baseY, cubeY) - leaderBottomY, 0)
     return (
       <>
         {showDecoration && decoration ? (
@@ -826,10 +967,13 @@ function LinearArrow({
           />
         ) : null}
         {showLabel ? (
-          <DimensionLabel position={[position[0], position[1] + 0.22, position[2]]} text={labelText} />
+          <DimensionLabel
+            position={[position[0], position[1] + 0.22, position[2]]}
+            text={labelText}
+          />
         ) : null}
         <TrackerShape
-          basePosition={[position[0], baseY, position[2]]}
+          basePosition={[position[0], leaderBottomY, position[2]]}
           cubePosition={position}
           leaderHeight={leaderHeight}
           isHovered={isHovered}
@@ -926,6 +1070,95 @@ function GuideRing({ radius, y }: { radius: number; y: number }) {
   )
 }
 
+const ROTATION_GUIDE_COLOR = ARROW_COLOR
+const ROTATION_GUIDE_SEGMENTS = 48
+const NO_RAYCAST = () => null
+
+// Live rotation readout shown while a whole-node rotate gizmo is dragged.
+// Mirrors the wall-draft angle arc: a filled wedge + outline swept from the
+// pointer's bearing at grab (`startAngle`) to its current bearing
+// (`endAngle`) around the rotation pivot, plus a degree chip at the wedge's
+// midpoint. All coordinates are world-space — the guide is portalled to the
+// scene root so it stays fixed while the node mesh rotates underneath it.
+type RotationGuideData = {
+  center: [number, number, number]
+  startAngle: number
+  endAngle: number
+  radius: number
+  labelPos: [number, number, number]
+  /** Swept magnitude in radians, for the degree chip. */
+  sweep: number
+}
+
+function RotationGuide({ data }: { data: RotationGuideData }) {
+  const { center, startAngle, endAngle, radius, labelPos, sweep } = data
+  const { outline, fill } = useMemo(() => {
+    const span = endAngle - startAngle
+    const count = Math.max(8, Math.ceil((Math.abs(span) / Math.PI) * ROTATION_GUIDE_SEGMENTS))
+    const arc = Array.from({ length: count + 1 }, (_, index) => {
+      const angle = startAngle + (span * index) / count
+      return new Vector3(
+        center[0] + Math.cos(angle) * radius,
+        center[1],
+        center[2] + Math.sin(angle) * radius,
+      )
+    })
+    const centerV = new Vector3(center[0], center[1], center[2])
+    const outlineGeo = new BufferGeometry().setFromPoints([centerV, ...arc, centerV])
+    const positions: number[] = []
+    for (let i = 0; i < arc.length - 1; i++) {
+      const a = arc[i]
+      const b = arc[i + 1]
+      if (!a || !b) continue
+      positions.push(centerV.x, centerV.y, centerV.z, a.x, a.y, a.z, b.x, b.y, b.z)
+    }
+    const fillGeo = new BufferGeometry()
+    fillGeo.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    return { outline: outlineGeo, fill: fillGeo }
+  }, [center, startAngle, endAngle, radius])
+  useEffect(() => () => outline.dispose(), [outline])
+  useEffect(() => () => fill.dispose(), [fill])
+
+  return (
+    <>
+      <mesh
+        frustumCulled={false}
+        geometry={fill}
+        layers={EDITOR_LAYER}
+        raycast={NO_RAYCAST}
+        renderOrder={1008}
+      >
+        <meshBasicMaterial
+          color={ROTATION_GUIDE_COLOR}
+          depthTest={false}
+          depthWrite={false}
+          opacity={0.18}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+      <RotationGuideOutline geometry={outline} />
+      <DimensionLabel position={labelPos} text={formatAngleRadians(sweep)} />
+    </>
+  )
+}
+
+function RotationGuideOutline({ geometry }: { geometry: BufferGeometry }) {
+  return (
+    // @ts-expect-error - R3F accepts Three line primitives, matching the wall draft arc.
+    <line frustumCulled={false} geometry={geometry} layers={EDITOR_LAYER} renderOrder={1009}>
+      <lineBasicNodeMaterial
+        color={ROTATION_GUIDE_COLOR}
+        depthTest={false}
+        depthWrite={false}
+        linewidth={2}
+        opacity={0.95}
+        transparent
+      />
+    </line>
+  )
+}
+
 // Angular drag: project pointer to a horizontal plane at the arrow's Y
 // and measure the signed angle around the node's local origin (in world
 // XZ). Pass the normalised delta to `apply` — the descriptor owns the
@@ -957,18 +1190,26 @@ function ArcArrow({
   // corner) render a two-headed curved arrow; everything else (stair
   // sweep, etc.) keeps the chevron.
   const isRotateShape = descriptor.shape === 'rotate'
+  // 'node-normal' spins the node about its local +Z (a wall item flat against
+  // its wall) instead of yaw about world-Y. The drag plane and the icon both
+  // tilt into that plane, and the horizontal-only wedge/ring readout is
+  // suppressed.
+  const isNodeNormalRot = descriptor.rotationPlane === 'node-normal'
   const arrowGeometry = useMemo(
     () => (isRotateShape ? createRotateArrowHandleGeometry() : createArrowHandleGeometry()),
     [isRotateShape],
   )
   const arrowMaterial = useArrowMaterial()
-  const { camera, raycaster, gl } = useThree()
+  const { camera, raycaster, gl, scene } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   // The rotate icon is denser than the chevron; pump scale a touch so the
   // ribbon reads at the same on-screen size as the other handles.
   const arrowScale = isRotateShape ? ARROW_SCALE * 1.05 : ARROW_SCALE
   const scale = (isHovered ? 1.12 : 1) * zoom * arrowScale
   const dragCleanupRef = useRef<(() => void) | null>(null)
+  // Live rotation readout (wedge + degree chip) — only populated while a
+  // `shape: 'rotate'` gizmo is mid-drag. See RotationGuide.
+  const [rotationGuide, setRotationGuide] = useState<RotationGuideData | null>(null)
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -1020,13 +1261,52 @@ function ArcArrow({
     rideObject.updateMatrixWorld()
     const centerWorld =
       descriptor.rotationCenter !== undefined
-        ? new Vector3(...descriptor.rotationCenter(node as never, createSceneApi(useScene))).applyMatrix4(
-            rideObject.matrixWorld,
-          )
+        ? new Vector3(
+            ...descriptor.rotationCenter(node as never, createSceneApi(useScene)),
+          ).applyMatrix4(rideObject.matrixWorld)
         : new Vector3().setFromMatrixPosition(rideObject.matrixWorld)
     const arrowWorld = new Vector3(...position).applyMatrix4(rideObject.matrixWorld)
     const planeY = arrowWorld.y
-    const plane = new Plane(new Vector3(0, 1, 0), -planeY)
+
+    // Rotation axis + drag plane. 'horizontal' spins about world-Y on a flat
+    // plane; 'node-normal' spins about the node's local +Z (the wall normal)
+    // on the plane perpendicular to it. The 2D basis (u, v) lets us measure a
+    // consistent bearing in either plane: for horizontal it collapses to the
+    // original atan2(z, x).
+    const axis = isNodeNormalRot
+      ? new Vector3().setFromMatrixColumn(rideObject.matrixWorld, 2).normalize()
+      : new Vector3(0, 1, 0)
+    const plane = isNodeNormalRot
+      ? new Plane().setFromNormalAndCoplanarPoint(axis, centerWorld)
+      : new Plane(new Vector3(0, 1, 0), -planeY)
+    let basisU: Vector3
+    if (isNodeNormalRot) {
+      // In-plane reference: world-up projected onto the plane (falls back to
+      // world-X if the axis is near-vertical, e.g. a ceiling item).
+      const up = new Vector3(0, 1, 0)
+      basisU = up.clone().addScaledVector(axis, -up.dot(axis))
+      if (basisU.lengthSq() < 1e-6) {
+        const x = new Vector3(1, 0, 0)
+        basisU = x.addScaledVector(axis, -x.dot(axis))
+      }
+      basisU.normalize()
+    } else {
+      basisU = new Vector3(1, 0, 0)
+    }
+    const basisV = isNodeNormalRot
+      ? new Vector3().crossVectors(axis, basisU).normalize()
+      : new Vector3(0, 0, 1)
+    const angleOf = (p: Vector3) => {
+      const d = new Vector3().subVectors(p, centerWorld)
+      return Math.atan2(d.dot(basisV), d.dot(basisU))
+    }
+
+    // Wedge radius tracks the handle's orbit (its horizontal distance from
+    // the pivot), nudged inward so the swept fill reads as "the handle swung
+    // around" rather than overlapping the gizmo itself. Clamped so tiny
+    // footprints (column) and large ones (roof segment) both stay legible.
+    const handleRadius = Math.hypot(arrowWorld.x - centerWorld.x, arrowWorld.z - centerWorld.z)
+    const guideRadius = Math.min(Math.max(handleRadius * 0.72, 0.3), 1.6)
 
     const ndc = new Vector2()
     const setNDC = (clientX: number, clientY: number) => {
@@ -1042,7 +1322,7 @@ function ArcArrow({
     const hitWorld = new Vector3()
     if (!raycaster.ray.intersectPlane(plane, hitWorld)) return
 
-    const initialAngle = Math.atan2(hitWorld.z - centerWorld.z, hitWorld.x - centerWorld.x)
+    const initialAngle = angleOf(hitWorld)
     const nodeId = node.id as AnyNodeId
     const sceneApi = createSceneApi(useScene)
     const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
@@ -1067,7 +1347,7 @@ function ArcArrow({
       raycaster.setFromCamera(ndc, camera)
       const hit = new Vector3()
       if (!raycaster.ray.intersectPlane(plane, hit)) return
-      const currentAngle = Math.atan2(hit.z - centerWorld.z, hit.x - centerWorld.x)
+      const currentAngle = angleOf(hit)
       // Normalise so a drag that crosses ±π doesn't flip sign mid-gesture.
       let delta = currentAngle - initialAngle
       while (delta > Math.PI) delta -= 2 * Math.PI
@@ -1085,6 +1365,33 @@ function ArcArrow({
       lastPatch = patch as Partial<AnyNode>
       useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
       useScene.getState().markDirty(nodeId)
+
+      // Whole-node rotate gizmos report how far the node has turned since
+      // grab. The wedge sweeps `delta` (the snapped amount, so it tracks the
+      // 15° steps under Shift), and the chip sits at the wedge midpoint just
+      // past its rim. Suppressed below ~0.5° so a fresh grab doesn't flash a
+      // zero-width sliver. The wedge is drawn in the horizontal plane, so it
+      // only applies to horizontal-axis rotation (not the wall-normal spin).
+      if (isRotateShape && !isNodeNormalRot) {
+        if (Math.abs(delta) < 0.0087) {
+          setRotationGuide(null)
+        } else {
+          const midAngle = initialAngle + delta / 2
+          const labelRadius = guideRadius + 0.22
+          setRotationGuide({
+            center: [centerWorld.x, planeY, centerWorld.z],
+            startAngle: initialAngle,
+            endAngle: initialAngle + delta,
+            radius: guideRadius,
+            labelPos: [
+              centerWorld.x + Math.cos(midAngle) * labelRadius,
+              planeY + 0.02,
+              centerWorld.z + Math.sin(midAngle) * labelRadius,
+            ],
+            sweep: Math.abs(delta),
+          })
+        }
+      }
     }
 
     const cleanup = () => {
@@ -1097,6 +1404,7 @@ function ArcArrow({
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
+      setRotationGuide(null)
       // Release the active-drag claim — see LinearArrow's onEnd note.
       dragControls.onEnd()
       dragCleanupRef.current = null
@@ -1142,7 +1450,16 @@ function ArcArrow({
           y={decoration.y?.(node as never) ?? 0}
         />
       ) : null}
-      <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      {/* World-space rotation readout, portalled to the scene root so it
+          stays fixed while this gizmo's frame rotates with the node mesh. */}
+      {rotationGuide ? createPortal(<RotationGuide data={rotationGuide} />, scene) : null}
+      <group
+        position={position}
+        // The curved arrow is built flat in XZ. For a wall-normal spin, tilt
+        // it up about X so it lies in the item-local XY plane (the wall face).
+        rotation={isNodeNormalRot ? [Math.PI / 2, 0, rotationY] : [0, rotationY, 0]}
+        scale={scale}
+      >
         <mesh
           frustumCulled={false}
           geometry={arrowGeometry}
@@ -1171,6 +1488,201 @@ function ArcArrow({
   )
 }
 
+// Free ground-plane move gizmo (the 4-way cross). Press-drag-release: raycast
+// the horizontal plane at the node's base, convert the hit into the node's
+// parent-local frame, add the delta to the node's drag-start position, grid-
+// snap via the descriptor's `snapExtents`, and publish to `useLiveNodeOverrides`
+// each move — committing one write to the store on release. Same live-preview
+// contract as LinearArrow / ArcArrow; the renderer's mesh follows the override
+// so the item slides under the cursor in real time.
+function TranslateArrow({
+  descriptor,
+  node,
+  handleIndex,
+  dragControls,
+  rideObject,
+}: {
+  descriptor: TranslateHandle<AnyNode>
+  node: AnyNode
+  handleIndex: number
+  dragControls: DragControls
+  rideObject: Object3D
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const arrowGeometry = useMemo(() => createMoveCrossHandleGeometry(), [])
+  const arrowMaterial = useArrowMaterial()
+  const { camera, raycaster, gl } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
+  useEffect(() => () => dragCleanupRef.current?.(), [])
+
+  const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
+  const position = descriptor.placement.position(node, placementSceneApi)
+  const cursor: Cursor = 'move'
+  // 'node-normal' constrains the drag to the wall face (plane ⟂ the node's
+  // local +Z). Its cross icon stands up into that plane (tilt about X).
+  const isWallPlane = descriptor.plane === 'node-normal'
+
+  const activate = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+
+    // Drag plane through the node origin. 'horizontal' uses the world-up
+    // normal (slide on the floor); 'node-normal' uses the node's facing
+    // direction (its local +Z in world) so the item slides on the wall face.
+    // Hits map into the parent frame so the delta composes with `position`
+    // (which lives in parent-local space).
+    rideObject.updateMatrixWorld()
+    const worldOrigin = new Vector3().setFromMatrixPosition(rideObject.matrixWorld)
+    const planeNormal = isWallPlane
+      ? new Vector3().setFromMatrixColumn(rideObject.matrixWorld, 2).normalize()
+      : new Vector3(0, 1, 0)
+    const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, worldOrigin)
+    const parent = rideObject.parent
+    const parentInverse = new Matrix4()
+    if (parent) {
+      parent.updateMatrixWorld()
+      parentInverse.copy(parent.matrixWorld).invert()
+    }
+
+    const ndc = new Vector2()
+    const setNDC = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      )
+    }
+
+    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    raycaster.setFromCamera(ndc, camera)
+    const hitWorld = new Vector3()
+    if (!raycaster.ray.intersectPlane(plane, hitWorld)) return
+    const startLocal = hitWorld.clone().applyMatrix4(parentInverse)
+
+    const nodeId = node.id as AnyNodeId
+    const sceneApi = createSceneApi(useScene)
+    const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
+    const initialPos = (initialNode as { position?: readonly [number, number, number] })
+      .position ?? [0, 0, 0]
+
+    document.body.style.cursor = cursor
+    sfxEmitter.emit('sfx:item-pick')
+    useViewer.getState().setInputDragging(true)
+    useScene.temporal.getState().pause()
+    setIsDragging(true)
+    dragControls.onStart(handleIndex, initialNode)
+
+    let lastPatch: Partial<AnyNode> | null = null
+
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      const hit = new Vector3()
+      if (!raycaster.ray.intersectPlane(plane, hit)) return
+      const curLocal = hit.applyMatrix4(parentInverse)
+      // Add the in-plane delta to the drag-start position; the off-plane axis
+      // (Y on the floor, Z/depth on a wall) keeps its value. Snap / clamp is
+      // the descriptor's job in `apply`.
+      const newPos: [number, number, number] = [initialPos[0], initialPos[1], initialPos[2]]
+      newPos[0] += curLocal.x - startLocal.x
+      if (isWallPlane) {
+        newPos[1] += curLocal.y - startLocal.y
+      } else {
+        newPos[2] += curLocal.z - startLocal.z
+      }
+      // Grid-snap the two in-plane axes (X + the plane's other free axis).
+      const extents = descriptor.snapExtents?.(initialNode as never)
+      if (extents) {
+        newPos[0] = snapToGrid(newPos[0], extents[0])
+        if (isWallPlane) {
+          newPos[1] = snapToGrid(newPos[1], extents[1])
+        } else {
+          newPos[2] = snapToGrid(newPos[2], extents[1])
+        }
+      }
+      const patch = descriptor.apply(initialNode as never, newPos, sceneApi)
+      lastPatch = patch as Partial<AnyNode>
+      useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
+      useScene.getState().markDirty(nodeId)
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      if (document.body.style.cursor === cursor) {
+        document.body.style.cursor = ''
+      }
+      useScene.temporal.getState().resume()
+      useViewer.getState().setInputDragging(false)
+      setIsDragging(false)
+      dragControls.onEnd()
+      dragCleanupRef.current = null
+    }
+    const onUp = () => {
+      swallowNextClick()
+      sfxEmitter.emit('sfx:item-place')
+      if (lastPatch) {
+        sceneApi.update(nodeId, lastPatch)
+      }
+      useLiveNodeOverrides.getState().clear(nodeId)
+      useScene.getState().markDirty(nodeId)
+      cleanup()
+    }
+    const onCancel = () => {
+      useLiveNodeOverrides.getState().clear(nodeId)
+      useScene.getState().markDirty(nodeId)
+      cleanup()
+    }
+    dragCleanupRef.current = cleanup
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
+
+  const onEnter = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    setIsHovered(true)
+    document.body.style.cursor = cursor
+  }
+  const onLeave = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    setIsHovered(false)
+    if (document.body.style.cursor === cursor) document.body.style.cursor = ''
+  }
+
+  // Suppress the unused `isDragging` lint — it only drives the React re-render
+  // that keeps hover/drag cursor state in sync.
+  void isDragging
+
+  // The cross is built flat in the XZ plane. On a wall, tilt it up about X so
+  // it lies in the item-local XY plane (= the wall face).
+  const iconRotation: [number, number, number] = isWallPlane ? [Math.PI / 2, 0, 0] : [0, 0, 0]
+
+  return (
+    <group position={position} rotation={iconRotation} scale={scale}>
+      <mesh
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        onPointerDown={activate}
+        onPointerEnter={onEnter}
+        onPointerLeave={onLeave}
+        renderOrder={1010}
+      />
+    </group>
+  )
+}
+
 // Click-to-engage affordance — no drag plumbing, just a click target. The
 // descriptor's `onActivate` receives sceneApi + editorApi so it can engage
 // move tools, endpoint drags, or any other editor-state transition without
@@ -1190,8 +1702,7 @@ function TapActionArrow({
   const position = descriptor.placement.position(node, placementSceneApi)
   const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   const shape = descriptor.shape ?? 'arrow'
-  const cursor: Cursor =
-    descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')
+  const cursor: Cursor = descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')
 
   const onActivate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()

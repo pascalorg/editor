@@ -1,5 +1,6 @@
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
+export { formatMeasurement, MeasurementPill } from './components/editor/measurement-pill'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,

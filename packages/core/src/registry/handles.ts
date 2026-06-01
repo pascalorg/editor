@@ -22,7 +22,7 @@
 //   - endpoint-move  : wall / fence endpoint drag (snapping is bespoke,
 //                      so it delegates to a kind-supplied callback)
 
-import type { AnyNode } from '../schema/types'
+import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { SceneApi } from './types'
 
 /**
@@ -110,9 +110,30 @@ export type LinearResizeHandle<N> = {
   anchor: HandleAnchor
   currentValue: (node: N) => number
   apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
+  /**
+   * Cross-node redirect. By default the drag's live override + the
+   * committed write both land on the SELECTED node. When this returns
+   * another node's id, the editor publishes the override to / commits on
+   * THAT node instead (and `apply` should return that node's patch).
+   * Used when a node's handle edits a value owned by a sibling — e.g. a
+   * downspout's side-move arrows slide its outlet, which lives on the
+   * host gutter (`gutter.outlets[].offset`). The selected node is still
+   * what `currentValue` / `apply` receive, so the descriptor can read
+   * the downspout to find its gutter + outlet.
+   */
+  overrideTarget?: (node: N, sceneApi: SceneApi) => AnyNodeId | undefined
   min?: number | ((node: N, sceneApi: SceneApi) => number)
   max?: number | ((node: N, sceneApi: SceneApi) => number)
   placement: HandlePlacement<N>
+  /**
+   * Dimension this handle steers (e.g. `'height'`). When set, the editor
+   * publishes it to `activeHandleDrag.label` for the duration of the drag
+   * so out-of-band overlays (the floating dimension pill) can react, and
+   * the handle's own in-world value chip is suppressed to avoid showing
+   * the same number twice. Leave unset for handles that keep their inline
+   * chip and don't drive any external overlay.
+   */
+  measureLabel?: string
   /**
    * Defaults to 'self' (arrow lives in the selected node's own mesh).
    * 'parent' uses the parent mesh — used by doors/windows whose handles
@@ -200,6 +221,16 @@ export type ArcResizeHandle<N = any> = {
    */
   shape?: 'chevron' | 'rotate'
   /**
+   * Plane the angular drag is measured in:
+   *   - 'horizontal' (default): cursor bearing around +Y — whole-node yaw
+   *     (floor items, elevator, stair, roof-segment).
+   *   - 'node-normal': cursor bearing around the node's local +Z axis, in
+   *     the plane perpendicular to it — spins a wall-mounted item flat
+   *     against its wall. The descriptor's `apply` writes the roll
+   *     component (rotation[2]). The gizmo icon stands up into that plane.
+   */
+  rotationPlane?: 'horizontal' | 'node-normal'
+  /**
    * Pivot point for the angular drag, in the rideObject's local space.
    * The renderer measures cursor angle (atan2 on the drag plane) around
    * this point — descriptors that write `rotation` should anchor it to
@@ -224,11 +255,7 @@ export type EndpointMoveHandle<N> = {
   endpoint: 'start' | 'end'
   placement: HandlePlacement<N>
   /** Called with the world-space hit on the ground plane. */
-  apply: (
-    node: N,
-    worldPoint: readonly [number, number, number],
-    sceneApi: SceneApi,
-  ) => Partial<N>
+  apply: (node: N, worldPoint: readonly [number, number, number], sceneApi: SceneApi) => Partial<N>
   portal?: HandlePortal
 }
 
@@ -266,12 +293,54 @@ export type TapActionHandle<N = any> = {
   cursor?: Cursor
 }
 
+/**
+ * Free ground-plane move. Drag the handle and the node slides across the
+ * horizontal plane at its base — the renderer raycasts that plane, converts
+ * the hit into the node's parent-local frame, and reports the new local XZ
+ * (optionally grid-snapped via `snapExtents`) to `apply`. Press-drag-release
+ * with the same live-override → commit-on-release flow as the resize / rotate
+ * handles. Rendered as a 4-way cross of double-headed arrows.
+ */
+export type TranslateHandle<N = any> = {
+  kind: 'translate'
+  placement: HandlePlacement<N>
+  /**
+   * Plane the drag is constrained to (through the node origin):
+   *   - 'horizontal' (default): the ground plane (world-up normal) — slide
+   *     across the floor. The free axes are parent-local X / Z.
+   *   - 'node-normal': the plane perpendicular to the node's local +Z axis
+   *     (its facing direction) — slide across a wall face. The free axes are
+   *     parent-local X / Y; depth (Z) stays pinned to the surface.
+   */
+  plane?: 'horizontal' | 'node-normal'
+  /**
+   * `localPos` is the dragged-to position in the node's PARENT-local frame,
+   * with the two in-plane axes already grid-snapped (if `snapExtents` is set)
+   * and the off-plane axis pinned to its drag-start value. Return the patch
+   * that writes it to the node's position field.
+   */
+  apply: (
+    initialNode: N,
+    localPos: readonly [number, number, number],
+    sceneApi: SceneApi,
+  ) => Partial<N>
+  /**
+   * Optional grid-snap footprint for the two in-plane axes, in order
+   * `[alongX, alongOther]` — `alongOther` is Z for the 'horizontal' plane and
+   * Y for 'node-normal'. Used to align the node's edges to the grid (rotation-
+   * aware: swap the pair at 90°). Omit / return null for free movement.
+   */
+  snapExtents?: (node: N) => readonly [number, number] | null
+  portal?: HandlePortal
+}
+
 export type HandleDescriptor<N = any> =
   | LinearResizeHandle<N>
   | RadialResizeHandle<N>
   | ArcResizeHandle<N>
   | EndpointMoveHandle<N>
   | TapActionHandle<N>
+  | TranslateHandle<N>
 
 /**
  * Static array, or a function for shape-dependent cases (column

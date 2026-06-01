@@ -2,8 +2,11 @@
 
 import {
   type AnyNodeId,
+  DEFAULT_WALL_HEIGHT,
   emitter,
   type GridEvent,
+  getWallCurveLength,
+  getWallThickness,
   pauseSceneHistory,
   resumeSceneHistory,
   useScene,
@@ -15,6 +18,7 @@ import {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   isSegmentLongEnough,
+  MeasurementPill,
   type MovingWallEndpoint,
   markToolCancelConsumed,
   snapWallDraftPoint,
@@ -187,6 +191,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     return [point[0], 0, point[1]]
   })
   const [altPressed, setAltPressed] = useState(false)
+  const unit = useViewer((s) => s.unit)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingWallEndpoint(null)
@@ -398,9 +403,39 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
   }, [exitMoveMode, target])
 
+  // Live segment dimensions for the floating pill. The moving endpoint is
+  // `cursorLocalPos`; the other end is fixed. Length tracks the drag (curve
+  // offset is unchanged by an endpoint move); height + thickness are static.
+  const movingPlanPoint: WallPlanPoint = [cursorLocalPos[0], cursorLocalPos[2]]
+  const fixedPlanPoint = fixedPointRef.current
+  const previewStart = target.endpoint === 'start' ? movingPlanPoint : fixedPlanPoint
+  const previewEnd = target.endpoint === 'end' ? movingPlanPoint : fixedPlanPoint
+  const liveLength = getWallCurveLength({
+    start: previewStart,
+    end: previewEnd,
+    curveOffset: target.wall.curveOffset,
+  })
+  const wallHeight = target.wall.height ?? DEFAULT_WALL_HEIGHT
+  const dimMidX = (previewStart[0] + previewEnd[0]) / 2
+  const dimMidZ = (previewStart[1] + previewEnd[1]) / 2
+
   return (
     <group>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
+      <Html
+        center
+        position={[dimMidX, wallHeight + 0.3, dimMidZ]}
+        style={{ pointerEvents: 'none', touchAction: 'none' }}
+        zIndexRange={[100, 0]}
+      >
+        <MeasurementPill
+          height={wallHeight}
+          length={liveLength}
+          primary="length"
+          thickness={getWallThickness(target.wall)}
+          unit={unit}
+        />
+      </Html>
       <Html
         position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
         style={{ pointerEvents: 'none', touchAction: 'none' }}

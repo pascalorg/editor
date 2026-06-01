@@ -7,6 +7,7 @@ import {
   type ItemNode,
   type LightEffect,
   useInteractive,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -75,10 +76,21 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   )
 }
 
-export const ItemRenderer = ({ node }: { node: ItemNode }) => {
+export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
 
-  useRegistry(node.id, node.type, ref)
+  useRegistry(storeNode.id, storeNode.type, ref)
+
+  // Merge live drag overrides so the mesh transforms in real time during a
+  // drag (e.g. the in-world rotate gizmo). The handle writes the in-flight
+  // rotation to `useLiveNodeOverrides` on every pointer move and commits to
+  // the store only on release — without this merge the item would stay put
+  // until commit.
+  const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id as AnyNodeId))
+  const node = useMemo(
+    () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as ItemNode) : storeNode),
+    [storeNode, liveOverrides],
+  )
 
   return (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>

@@ -75,6 +75,9 @@ function fenceHeightHandle(): HandleDescriptor<FenceNodeType> {
     axis: 'y',
     anchor: 'min',
     min: MIN_FENCE_HEIGHT,
+    // Drives the floating dimension pill (H · L · T) and suppresses the
+    // arrow's own inline chip, matching the wall height handle.
+    measureLabel: 'height',
     currentValue: (n) => n.height ?? 1.8,
     apply: (_n, newHeight) => ({ height: newHeight }),
     placement: {

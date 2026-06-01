@@ -31,6 +31,7 @@ export type {
   LinearResizeHandle,
   RadialResizeHandle,
   TapActionHandle,
+  TranslateHandle,
 } from './handles'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
 export type {
