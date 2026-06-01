@@ -65,6 +65,11 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   object: Object3D
   stopPropagation: () => void
   nativeEvent: ThreeEvent<PointerEvent>
+  // Set when the click originated from a dedicated selection affordance
+  // (e.g. a ceiling corner handle) rather than the node's own surface
+  // mesh. Lets selection logic accept handle clicks while ignoring clicks
+  // on the body so they fall through to whatever sits below.
+  viaHandle?: boolean
 }
 
 export type WallEvent = NodeEvent<WallNode>

@@ -1214,6 +1214,16 @@ export const SelectionManager = () => {
       if (boxSelectHandled) return
 
       const node = event.node
+
+      // A ceiling is selectable only through its corner handles, never via
+      // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
+      // selected, or an item placed beneath it) a top-down click hits the
+      // grid first; selecting the ceiling there both re-selects it as a
+      // no-op and stops propagation, blocking the hosted item below. By
+      // ignoring non-handle ceiling clicks (without stopping propagation)
+      // the click falls through to the item underneath.
+      if (node.type === 'ceiling' && !event.viaHandle) return
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
 
