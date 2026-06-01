@@ -13,19 +13,14 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  getRoofOuterSurfaceFrameAtPoint,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
-import {
-  buildSolarPanelGeometry,
-  getAnalyticalNormal,
-  getDefaultPanelMaterial,
-  getSurfaceY,
-  surfaceQuatFromNormal,
-} from './geometry'
+import { buildSolarPanelGeometry, getDefaultPanelMaterial, surfaceQuatFromNormal } from './geometry'
 
 // Module-scope scratch vectors and quaternions for composing the panel's
 // local orientation each render — surfaceQuat · Y(rotation) · X(tilt).
@@ -47,9 +42,17 @@ const defaultFrameMaterial = new MeshStandardNodeMaterial({
 })
 
 /**
- * Solar panel renderer. Reads the parent roof-segment so the panel's
- * Y can fall back to the analytical surface height when the schema's
- * `surfaceNormal` is absent (legacy nodes / simplified placement).
+ * Solar panel renderer. The panel's Y and surface tilt are derived
+ * live from the parent roof-segment's finished (deck + shingle) surface
+ * on every render via `getRoofOuterSurfaceFrameAtPoint` — the same
+ * authoritative helper skylights use. Deriving rather than reading the
+ * stored `position[1]`/`surfaceNormal` snapshot is what lets the panel
+ * re-seat and re-tilt automatically when the roof's wall height or
+ * pitch changes; a cached snapshot would leave it floating or buried.
+ *
+ * The segment's live overrides are merged too, so the panel tracks the
+ * surface continuously during a wall-height/pitch drag, not just after
+ * the value commits to the scene store.
  *
  * The surface orientation is applied as a quaternion on an inner
  * group computed once per render (not per frame). This matches the
@@ -79,6 +82,20 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
+
+  // Merge the segment's live overrides (written by wall-height / pitch
+  // slider drags before they commit) so the panel re-seats and re-tilts
+  // in real time as the roof changes, mirroring the gutter's eave-snap.
+  const segmentOverrides = useLiveNodeOverrides((s) =>
+    node.roofSegmentId
+      ? (s.get(node.roofSegmentId as AnyNodeId) as Partial<RoofSegmentNode> | undefined)
+      : undefined,
+  )
+  const effectiveSegment: RoofSegmentNode | undefined = segment
+    ? segmentOverrides
+      ? ({ ...segment, ...segmentOverrides } as RoofSegmentNode)
+      : segment
+    : undefined
 
   const geometry = useMemo(
     () => buildSolarPanelGeometry(node),
@@ -115,20 +132,30 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
     )
   }, [shading, node.panelMaterial, node.panelMaterialPreset])
 
-  const surfaceQuat = useMemo(() => {
-    if (!segment) return new THREE.Quaternion()
-    const normal = node.surfaceNormal
-      ? new THREE.Vector3(...node.surfaceNormal).normalize()
-      : getAnalyticalNormal(node.position[0] ?? 0, node.position[2] ?? 0, segment)
-    return surfaceQuatFromNormal(normal, new THREE.Quaternion())
-  }, [segment, node.surfaceNormal, node.position[0], node.position[2]])
+  // Finished-surface frame (deck + shingle top) at the panel's local
+  // X/Z, recomputed from the live segment each render — both the Y and
+  // the tilt normal flow from here, so a wall-height or pitch change
+  // re-seats and re-orients the panel automatically. `segmentOverrides`
+  // is in the deps so a live drag re-derives the frame mid-drag.
+  const surfaceFrame = useMemo(() => {
+    if (!effectiveSegment) {
+      return { point: new THREE.Vector3(), normal: new THREE.Vector3(0, 1, 0) }
+    }
+    return getRoofOuterSurfaceFrameAtPoint(
+      effectiveSegment,
+      node.position[0] ?? 0,
+      node.position[2] ?? 0,
+    )
+  }, [segment, segmentOverrides, node.position[0], node.position[2]])
 
-  if (!segment || !geometry) return null
+  const surfaceQuat = useMemo(
+    () => surfaceQuatFromNormal(surfaceFrame.normal, new THREE.Quaternion()),
+    [surfaceFrame.normal],
+  )
 
-  const surfaceY =
-    (node.position[1] ?? 0) !== 0
-      ? node.position[1]
-      : getSurfaceY(node.position[0] ?? 0, node.position[2] ?? 0, segment)
+  if (!effectiveSegment || !geometry) return null
+
+  const surfaceY = surfaceFrame.point.y
 
   const tiltRad = node.mountingType === 'tilted' ? (node.tiltAngle * Math.PI) / 180 : 0
 
@@ -151,7 +178,7 @@ const SolarPanelRenderer = ({ node: storeNode }: { node: SolarPanelNode }) => {
   // and segment.rotation here, then the panel's segment-local offset +
   // composed orientation on a single registered group.
   return (
-    <group position={segment.position} rotation-y={segment.rotation}>
+    <group position={effectiveSegment.position} rotation-y={effectiveSegment.rotation}>
       <group
         position={[node.position[0] ?? 0, surfaceY, node.position[2] ?? 0]}
         quaternion={composedQuat}
