@@ -53,8 +53,7 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
     const initialRadius = node.radius
     const initialBraceWidth = node.braceWidth ?? node.width
     const initialBraceDepth = node.braceDepth ?? node.depth
-    const initialBraceBottomSpread =
-      node.braceBottomSpread ?? Math.max(node.width * 3, 1.2)
+    const initialBraceBottomSpread = node.braceBottomSpread ?? Math.max(node.width * 3, 1.2)
     const initialBraceTopSpread = node.braceTopSpread ?? 0.12
 
     let lastPatch: Partial<ColumnNode> = {}
@@ -110,10 +109,7 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
             return
           case 'brace-top-spread':
             commitPatch({
-              braceTopSpread: Math.max(
-                MIN_BRACE_TOP_SPREAD,
-                initialBraceTopSpread + 2 * projDelta,
-              ),
+              braceTopSpread: Math.max(MIN_BRACE_TOP_SPREAD, initialBraceTopSpread + 2 * projDelta),
             })
             return
         }

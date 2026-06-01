@@ -11,8 +11,8 @@ import { EditorLayoutMobile } from './editor-layout-mobile'
 const SIDEBAR_MIN_WIDTH = 300
 const SIDEBAR_MAX_WIDTH = 800
 const SIDEBAR_COLLAPSE_THRESHOLD = 220
-// Matches the `w-12` rail in <IconRail>; the resize math is relative to it.
-const RAIL_WIDTH = 48
+// Matches the `w-14` rail in <IconRail>; the resize math is relative to it.
+const RAIL_WIDTH = 56
 
 // ── Left column: resizable panel with tab bar ────────────────────────────────
 

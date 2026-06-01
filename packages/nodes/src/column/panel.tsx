@@ -355,9 +355,7 @@ export default function ColumnPanel() {
                   // so the preset's braceWidth / braceDepth win over
                   // the carried-from-previous-style values.
                   const stylePreset =
-                    option.value === 'vertical'
-                      ? {}
-                      : SUPPORT_STYLE_DEFAULTS[option.value]
+                    option.value === 'vertical' ? {} : SUPPORT_STYLE_DEFAULTS[option.value]
                   handleUpdate({
                     supportStyle: option.value,
                     ...(option.value !== 'vertical'

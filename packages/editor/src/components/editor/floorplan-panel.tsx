@@ -5045,7 +5045,9 @@ export function FloorplanPanel() {
   // space. Length renders at the segment midpoint; angle arcs sit at
   // each endpoint that meets an existing wall.
   const draftWallMeasurement = useMemo(() => {
-    if (!(isWallBuildActive && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
+    if (
+      !(isWallBuildActive && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))
+    ) {
       return null
     }
 

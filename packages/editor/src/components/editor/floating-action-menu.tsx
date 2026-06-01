@@ -100,9 +100,7 @@ const MENU_Y_OFFSETS: Record<string, number> = {
 function getMenuYOffset(node: AnyNode | null): number {
   if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
   if (node.type === 'stair-segment') {
-    return (
-      (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
-    )
+    return (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
   }
   return (MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
 }
@@ -181,7 +179,6 @@ export function FloatingActionMenu() {
         // in-world chrome (height-resize arrows, measurement labels).
         groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
       }
-
     }
   })
 

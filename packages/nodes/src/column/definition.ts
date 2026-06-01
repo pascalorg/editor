@@ -154,20 +154,14 @@ function columnBraceHandle(axis: 'x' | 'z'): HandleDescriptor<ColumnNodeType> {
     axis,
     anchor: 'center',
     min: MIN_BRACE_DIMENSION,
-    currentValue: (n) =>
-      axis === 'x' ? (n.braceWidth ?? n.width) : (n.braceDepth ?? n.depth),
-    apply: (_n, newValue) =>
-      axis === 'x' ? { braceWidth: newValue } : { braceDepth: newValue },
+    currentValue: (n) => (axis === 'x' ? (n.braceWidth ?? n.width) : (n.braceDepth ?? n.depth)),
+    apply: (_n, newValue) => (axis === 'x' ? { braceWidth: newValue } : { braceDepth: newValue }),
     placement: {
       position: (n) => {
         // Position outside any splay so the arrow clears the legs.
         const half =
           axis === 'x'
-            ? Math.max(
-                n.braceBottomSpread ?? 0,
-                n.braceTopSpread ?? 0,
-                n.braceWidth ?? n.width,
-              ) / 2
+            ? Math.max(n.braceBottomSpread ?? 0, n.braceTopSpread ?? 0, n.braceWidth ?? n.width) / 2
             : (n.braceDepth ?? n.depth) / 2
         return axis === 'x'
           ? [half + BRACE_HANDLE_OFFSET, n.height / 2, 0]
@@ -205,12 +199,7 @@ function columnFootprintHalf(n: ColumnNodeType): { halfX: number; halfZ: number 
   }
   return {
     halfX:
-      Math.max(
-        n.width,
-        n.braceWidth ?? 0,
-        n.braceBottomSpread ?? 0,
-        n.braceTopSpread ?? 0,
-      ) / 2,
+      Math.max(n.width, n.braceWidth ?? 0, n.braceBottomSpread ?? 0, n.braceTopSpread ?? 0) / 2,
     halfZ: Math.max(n.depth, n.braceDepth ?? 0) / 2,
   }
 }

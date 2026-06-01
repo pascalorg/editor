@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { cn } from './../../../lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
 
 export type SidebarTab = {
   id: string
@@ -56,34 +57,37 @@ interface IconRailProps {
 /**
  * Vertical icon rail for the v2 left column. Always visible (even when the
  * panel is collapsed) so the user can reopen the panel by clicking an icon.
- * The label renders as a hover tooltip via the native `title`.
+ * The label renders as a hover tooltip on the right.
  */
 export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailProps) {
   return (
-    <div className="flex h-full w-12 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
-      {tabs.map((tab) => {
-        // While expanded, the active tab is filled. While collapsed, nothing
-        // is "open", so the active tab reads as a muted highlight instead.
-        const isActive = activeTab === tab.id
-        return (
-          <button
-            className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
-              isActive && !collapsed
-                ? 'bg-accent text-foreground'
-                : isActive
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-            )}
-            key={tab.id}
-            onClick={() => onIconClick(tab.id)}
-            title={tab.label}
-            type="button"
-          >
-            {tab.icon ?? tab.label.charAt(0)}
-          </button>
-        )
-      })}
-    </div>
+    <TooltipProvider delayDuration={0} disableHoverableContent>
+      <div className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
+        {tabs.map((tab) => {
+          // Only show the active highlight while the panel is open. When
+          // collapsed nothing is "open", so every icon reads as unselected.
+          const showActive = activeTab === tab.id && !collapsed
+          return (
+            <Tooltip key={tab.id}>
+              <TooltipTrigger asChild>
+                <button
+                  className={cn(
+                    'group flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
+                    showActive
+                      ? 'bg-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
+                  )}
+                  onClick={() => onIconClick(tab.id)}
+                  type="button"
+                >
+                  {tab.icon ?? tab.label.charAt(0)}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{tab.label}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+    </TooltipProvider>
   )
 }

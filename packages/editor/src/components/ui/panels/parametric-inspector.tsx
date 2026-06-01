@@ -19,7 +19,7 @@ import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
-import { PanelWrapper } from './panel-wrapper'
+import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -87,10 +87,14 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
   // panel to cover them.
   if (parametrics.customPanel) {
     const CustomPanel = resolveCustomPanel(parametrics.customPanel)
+    // Custom panels render their own `<PanelWrapper>` and don't thread a
+    // `footer` prop, so hand the host footer down via context.
     return (
-      <Suspense fallback={null}>
-        <CustomPanel />
-      </Suspense>
+      <InspectorFooterContext.Provider value={footer}>
+        <Suspense fallback={null}>
+          <CustomPanel />
+        </Suspense>
+      </InspectorFooterContext.Provider>
     )
   }
 
