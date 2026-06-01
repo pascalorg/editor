@@ -25,7 +25,6 @@ const KEEP_IDS = new Set([
   'hydrant', 'exit-sign',
   // Electrical
   'electric-panel', 'ev-wall-charger', 'thermostat', 'alarm-keypad',
-  // HVAC
   'ac-block', 'air-conditioning', 'air-conditioner', 'air-conditioner-block',
   'ceiling-fan', 'freezer',
   // Lighting

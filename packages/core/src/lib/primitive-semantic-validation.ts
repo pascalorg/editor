@@ -1,15 +1,15 @@
-import {
-  buildPrimitiveGeometryFacts,
-  type PrimitiveGeometryFacts,
-  type PrimitiveShapeFact,
-} from './primitive-facts'
 import type {
   PrimitiveGeometryBrief,
   PrimitiveShapeInput,
   ResolvedPrimitiveTransform,
 } from './primitive-compose'
+import {
+  buildPrimitiveGeometryFacts,
+  type PrimitiveGeometryFacts,
+  type PrimitiveShapeFact,
+} from './primitive-facts'
 
-type SemanticFamily = 'vehicle' | 'bicycle' | 'unknown'
+type SemanticFamily = 'vehicle' | 'bicycle' | 'valve' | 'unknown'
 
 export interface PrimitiveSemanticValidationOptions {
   toolName?: string
@@ -67,6 +67,7 @@ function detectFamily(
 
   if (/bicycle|bike|自行车|單車|单车/.test(text)) return 'bicycle'
   if (/vehicle|car|sedan|suv|auto|automobile|汽车|小轿车|轿车/.test(text)) return 'vehicle'
+  if (/valve|gate_valve|gate valve|\u9600\u95e8|\u95f8\u9600/.test(text)) return 'valve'
   return 'unknown'
 }
 
@@ -96,7 +97,8 @@ function isVehicleTire(fact: PrimitiveShapeFact): boolean {
   const name = factName(fact)
   if (name.includes('steering')) return false
   if (/hub|rim|spoke|axle|cap|bolt/.test(name)) return false
-  const tireLikeKind = fact.kind === 'torus' || fact.kind === 'cylinder' || fact.kind === 'hollow-cylinder'
+  const tireLikeKind =
+    fact.kind === 'torus' || fact.kind === 'cylinder' || fact.kind === 'hollow-cylinder'
   return (
     hasRole(fact, ['vehicle_tire']) ||
     (fact.sourcePartKind === 'vehicle_wheels' && tireLikeKind && /tire|wheel/.test(name)) ||
@@ -219,6 +221,26 @@ function normalizeRequiredRole(role: string): string {
     case 'bumper':
     case 'bumpers':
       return 'bumper'
+    case 'inlet_flange':
+    case 'suction_flange':
+    case 'flange_inlet':
+      return 'flange_inlet'
+    case 'outlet_flange':
+    case 'discharge_flange':
+    case 'flange_outlet':
+      return 'flange_outlet'
+    case 'bonnet_bolt':
+    case 'bonnet_bolts':
+    case 'bonnet_bolt_pattern':
+      return 'bonnet_bolts'
+    case 'valve_stem':
+      return 'stem'
+    case 'valve_yoke':
+      return 'yoke'
+    case 'wedge':
+    case 'gate':
+    case 'gate_wedge':
+      return 'gate_wedge'
     default:
       return normalized
   }
@@ -226,7 +248,9 @@ function normalizeRequiredRole(role: string): string {
 
 function requiredRoles(brief: PrimitiveGeometryBrief | undefined): string[] {
   return Array.from(
-    new Set([...(brief?.requiredRoles ?? []), ...(brief?.semanticRoles ?? [])].map(normalizeRequiredRole)),
+    new Set(
+      [...(brief?.requiredRoles ?? []), ...(brief?.semanticRoles ?? [])].map(normalizeRequiredRole),
+    ),
   )
 }
 
@@ -333,10 +357,22 @@ function validateVehicle(
       tires.reduce((total, tire) => total + Math.max(tire.halfExtents[1], tire.halfExtents[2]), 0) /
       tires.length
     const tolerance = Math.max(0.04, averageTireRadius * 1.15)
-    if (countClusters(tires.map((tire) => tire.center[0]), tolerance) < 2) {
-      issues.push('vehicle tires must form two separated front/rear axle positions along the length axis.')
+    if (
+      countClusters(
+        tires.map((tire) => tire.center[0]),
+        tolerance,
+      ) < 2
+    ) {
+      issues.push(
+        'vehicle tires must form two separated front/rear axle positions along the length axis.',
+      )
     }
-    if (countClusters(tires.map((tire) => tire.center[2]), tolerance) < 2) {
+    if (
+      countClusters(
+        tires.map((tire) => tire.center[2]),
+        tolerance,
+      ) < 2
+    ) {
       issues.push('vehicle tires must form left/right pairs across the body width.')
     }
     const bodyWidth = body.max[2] - body.min[2]
@@ -344,7 +380,9 @@ function validateVehicle(
       Math.max(...tires.map((tire) => tire.center[2])) -
       Math.min(...tires.map((tire) => tire.center[2]))
     if (tireSpread < bodyWidth * 0.55) {
-      warnings.push('vehicle tire width spread is narrow; wheels may read as hidden under the body.')
+      warnings.push(
+        'vehicle tire width spread is narrow; wheels may read as hidden under the body.',
+      )
     }
   }
 
@@ -355,7 +393,9 @@ function validateVehicle(
   if (body && headlights.length > 0) {
     const frontLimit = body.max[0] - (body.max[0] - body.min[0]) * 0.18
     const rearLimit = body.min[0] + (body.max[0] - body.min[0]) * 0.18
-    if (!headlights.some((light) => light.center[0] >= frontLimit || light.center[0] <= rearLimit)) {
+    if (
+      !headlights.some((light) => light.center[0] >= frontLimit || light.center[0] <= rearLimit)
+    ) {
       issues.push('vehicle headlights must be placed near one longitudinal end of the body.')
     }
   }
@@ -366,8 +406,12 @@ function validateVehicle(
     const hasPositiveEndBumper = bumpers.some((bumper) => bumper.center[0] >= frontLimit)
     const hasNegativeEndBumper = bumpers.some((bumper) => bumper.center[0] <= rearLimit)
     const namedFrontRear =
-      bumpers.some((bumper) => hasRole(bumper, ['front_bumper']) || factName(bumper).includes('front')) &&
-      bumpers.some((bumper) => hasRole(bumper, ['rear_bumper']) || factName(bumper).includes('rear')) &&
+      bumpers.some(
+        (bumper) => hasRole(bumper, ['front_bumper']) || factName(bumper).includes('front'),
+      ) &&
+      bumpers.some(
+        (bumper) => hasRole(bumper, ['rear_bumper']) || factName(bumper).includes('rear'),
+      ) &&
       Math.max(...bumpers.map((bumper) => bumper.center[0])) -
         Math.min(...bumpers.map((bumper) => bumper.center[0])) >=
         (body.max[0] - body.min[0]) * 0.5
@@ -384,14 +428,12 @@ function validateVehicle(
   }
 }
 
-function validateBicycle(
-  facts: PrimitiveGeometryFacts,
-  issues: string[],
-  warnings: string[],
-) {
+function validateBicycle(facts: PrimitiveGeometryFacts, issues: string[], warnings: string[]) {
   const tires = factsBy(facts, isBicycleTire)
   if (tires.length !== 2) {
-    issues.push(`bicycle requires exactly 2 tires from one bicycle_wheels wheelset, got ${tires.length}.`)
+    issues.push(
+      `bicycle requires exactly 2 tires from one bicycle_wheels wheelset, got ${tires.length}.`,
+    )
   }
 
   const requiredRoles = ['bicycle_frame', 'bicycle_fork', 'handlebar', 'saddle', 'chain_loop']
@@ -404,8 +446,13 @@ function validateBicycle(
     const delta = Math.abs((groundYs[0] ?? 0) - (groundYs[1] ?? 0))
     if (delta > 0.03) issues.push('bicycle tires must share the same ground/contact height.')
     const axleDistance = Math.abs((tires[0]?.center[0] ?? 0) - (tires[1]?.center[0] ?? 0))
-    if (axleDistance < Math.max(tires[0]?.halfExtents[1] ?? 0.1, tires[1]?.halfExtents[1] ?? 0.1) * 1.8) {
-      warnings.push('bicycle wheelbase is very short; the silhouette may read as a cart wheel pair.')
+    if (
+      axleDistance <
+      Math.max(tires[0]?.halfExtents[1] ?? 0.1, tires[1]?.halfExtents[1] ?? 0.1) * 1.8
+    ) {
+      warnings.push(
+        'bicycle wheelbase is very short; the silhouette may read as a cart wheel pair.',
+      )
     }
   }
 }
@@ -424,7 +471,9 @@ export function validatePrimitiveSemantics(
 
   if (facts.shapeCount === 0) issues.push('no primitive geometry facts were produced.')
   if (facts.dimensions.some((dimension) => dimension > 50)) {
-    warnings.push('generated object bounding box is unusually large for meter-based primitive output.')
+    warnings.push(
+      'generated object bounding box is unusually large for meter-based primitive output.',
+    )
   }
 
   switch (family) {

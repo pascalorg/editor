@@ -170,6 +170,22 @@ describe('composePartPrimitives', () => {
     expect(shapes.some((shape) => shape.name?.includes('handwheel rim'))).toBe(true)
   })
 
+  test('auto-completes valve validation roles for gate valve blueprints', () => {
+    const shapes = composePartPrimitives({
+      name: 'Gate valve',
+      parts: [{ kind: 'valve_body' }],
+    })
+
+    expect(shapes.some((shape) => shape.semanticRole === 'flange_inlet')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'flange_outlet')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'bonnet')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'stem')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'gate_wedge')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'bonnet_bolts')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'yoke')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'handwheel')).toBe(true)
+  })
+
   test('composes bicycle and vehicle equipment families', () => {
     const bicycle = composePartPrimitives({
       name: 'Bike',

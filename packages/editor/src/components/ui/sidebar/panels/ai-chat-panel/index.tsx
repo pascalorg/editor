@@ -643,6 +643,42 @@ const COMPOSE_OBJECT_TOOL = {
 
 type ComposeTool = typeof COMPOSE_OBJECT_TOOL | typeof COMPOSE_PARTS_TOOL | typeof COMPOSE_ROBOT_ARM_TOOL | typeof COMPOSE_PRIMITIVE_TOOL
 
+const GEOMETRY_REPAIR_COMPRESSION_INTERVAL = 4
+const GEOMETRY_REPAIR_STAGNATION_LIMIT = 4
+const GEOMETRY_VISIBLE_RESULT_TAIL = 4
+
+function geometryRepairIssues(content: string) {
+  return content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- ') && !line.startsWith('- Warning:'))
+}
+
+function geometryRepairSignature(content: string) {
+  const issues = geometryRepairIssues(content)
+  if (issues.length > 0) return issues.slice().sort().join('|')
+  return content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join('|')
+}
+
+function compactGeometryRepairMemory(attempt: number, content: string) {
+  const issues = geometryRepairIssues(content)
+  const compactIssues = issues.length > 0 ? issues.slice(0, 10) : content.split('\n').slice(0, 6)
+  return [`Attempt ${attempt} failed:`, ...compactIssues].join('\n')
+}
+
+function formatVisibleGeometryResults(results: string[]) {
+  if (results.length <= GEOMETRY_VISIBLE_RESULT_TAIL + 1) return results.join('\n')
+  return [
+    `已自动修复 ${results.length} 次；以下保留最近 ${GEOMETRY_VISIBLE_RESULT_TAIL} 条压缩上下文。`,
+    ...results.slice(-GEOMETRY_VISIBLE_RESULT_TAIL),
+  ].join('\n')
+}
+
 const BASE_RULES = `You are the 3D modeling assistant inside the Pascal editor. You work in 2 stages: analyze, generate.
 
 Available tools:
@@ -694,7 +730,7 @@ For office desks that need visible structure beyond the table template, use desk
 For electrical/control cabinets, use electrical_cabinet with cable_tray plus nameplate/warning_label/vent details when realism is requested. For process piping or pipe corridors, use pipe_run for straight spans, pipe_elbow for 90-degree bends, and flange_ring/valve_body for connection details.
 For bicycles, use bicycle_wheels exactly once (front+rear two-wheel wheelset) + bicycle_frame + bicycle_fork + handlebar + saddle + chain_loop. Do not output bicycle_wheels twice, even if the analysis says the bicycle has two wheels. The chain_loop part creates an elongated chain run, front chainring, and rear sprocket; do not replace it with a circular torus. In geometryBrief.requiredRoles use bicycle_tire + bicycle_frame + bicycle_fork + handlebar + saddle + chain_loop, not bicycle_wheels. For cars/vehicles/汽车/小轿车, call compose_parts once with reusable parts vehicle_body + vehicle_wheels + vehicle_windows + headlights + bumper; set primaryColor/body part color from the user's requested color (e.g. 红色 -> #cc0000). Put the requested overall vehicle dimensions on vehicle_body; then keep vehicle_wheels, vehicle_windows, headlights, and bumper mostly semantic (usually no manual position or rotation) so compose_parts can align axles, glass, lights, and bumpers from the body. Use kind/name, not partType/partName, in new calls. Do not create a special per-model template for sedan/SUV/etc.; tune proportions with part length/width/height and optional positions only when truly needed.
 For follow-up requests like "make the car smoother / 线条再丝滑点", revise the previous compose_parts vehicle call instead of switching to hand-built compose_primitive. Increase vehicle_body cornerRadius/cornerSegments, set detail:"high" and enhanceVisualDetails:true, and keep vehicle_wheels semantic so wheel thickness/axles remain valid.
-For other factory equipment, use conveyor_frame + roller_array + belt_surface for belt conveyors, cylindrical_tank for tanks/vessels, ribbed_motor_body for electric motors, gearbox_body for reducers, filter_vessel for filters, heat_exchanger for shell-and-tube exchangers, agitator_tank for mixing tanks, pipe_rack for pipe corridors, platform_ladder for access platforms, and valve_body + handwheel for valves. Add nameplate, warning_label, seam_ring, vent_slats, flange bolts, and pipe ports for visual detail. Keep autoComplete omitted unless you explicitly need a minimal standalone subpart; omitted autoComplete lets compose_parts run family self-check and add missing required structure for recognized fan/pump/conveyor/bicycle/car/valve/desk/electrical/pipe blueprints. It does not add every optional visual detail automatically, so include requested details explicitly.
+For other factory equipment, use conveyor_frame + roller_array + belt_surface for belt conveyors, cylindrical_tank for tanks/vessels, ribbed_motor_body for electric motors, gearbox_body for reducers, filter_vessel for filters, heat_exchanger for shell-and-tube exchangers, agitator_tank for mixing tanks, pipe_rack for pipe corridors, platform_ladder for access platforms, and valve_body + handwheel for valves. For valves, requiredRoles may include flange_inlet, flange_outlet, bonnet, stem, gate_wedge, bonnet_bolts, and yoke; compose_parts auto-completes inlet/outlet flanges and valve_body creates bonnet/stem/gate/yoke/bonnet bolts, so do not hand-build a partial raw primitive valve unless the user asks for exact custom geometry. Add nameplate, warning_label, seam_ring, vent_slats, flange bolts, and pipe ports for visual detail. Keep autoComplete omitted unless you explicitly need a minimal standalone subpart; omitted autoComplete lets compose_parts run family self-check and add missing required structure for recognized fan/pump/conveyor/bicycle/car/valve/desk/electrical/pipe blueprints. It does not add every optional visual detail automatically, so include requested details explicitly.
 When the user asks for "realistic", "detailed", "\u771f\u5b9e", "\u7ec6\u8282", or similar, set enhanceVisualDetails:true on compose_parts. This may add non-essential visual details such as pump impellers, nameplates, warning labels, fan control knobs, conveyor drive motors, vehicle seam/nameplate details, desk drawers, pipe elbows/flanges, and electrical cabinet trays/labels.
 Use protective_grill instead of a single torus whenever the user asks for a cage/guard/protective grille: it creates a shallow half-round cage with curved concentric rings, radial spokes, side ribs, and rear outer ring. The grill should not be a flat plane; set depth and optional domeDepth for a bowl/half-dome silhouette.
 Use radial_blades instead of hand-made rectangles whenever the user asks for fan blades: it creates swept extruded leaf/airfoil blades with narrow roots, wider curved tips, root collars, pitch, and a hub. For realistic fan blades, set count:3, bladeWidth about 0.06-0.09, bladePitch about 0.22-0.30, and optional bladeSweep about 0.02-0.04.
@@ -2087,11 +2123,16 @@ export function AiChatPanel() {
       let createdArtifact: GeneratedGeometryArtifact | undefined
       let currentResponse = response
       let lastContent = response.content ?? ''
-      let round = 0
+      let repairAttempt = 0
+      let stagnantAttempts = 0
+      let bestIssueCount = Number.POSITIVE_INFINITY
+      let lastFailureSignature = ''
+      const repairMemory: string[] = []
+      const seedApiMessages = apiMessages.slice()
 
-      while (currentResponse.tool_calls?.length && round < 3) {
+      while (currentResponse.tool_calls?.length) {
         throwIfAborted(signal)
-        round += 1
+        repairAttempt += 1
         const toolResultApiMsgs: ApiMessage[] = []
         const geometryToolCalls = currentResponse.tool_calls.filter((tc) =>
           tc.function.name === 'compose_primitive' ||
@@ -2128,7 +2169,7 @@ export function AiChatPanel() {
         // Update the placeholder message with results so far
         setMessages((prev) => {
           const updated = [...prev]
-          const content = `**${label}:**\n${allResults.join('\\n')}`
+          const content = `**${label}:**\n${formatVisibleGeometryResults(allResults)}`
           if (createdArtifact) {
             updated[updated.length - 1] = { role: 'assistant', content, geometryArtifact: createdArtifact }
             if (context.revisionTarget) {
@@ -2168,22 +2209,59 @@ export function AiChatPanel() {
           break
         }
 
-        if (round >= 3) {
+        const roundFailureContent = toolResultApiMsgs
+          .map((msg) => (typeof msg.content === 'string' ? msg.content : ''))
+          .filter(Boolean)
+          .join('\n')
+        const currentIssueCount = Math.max(1, geometryRepairIssues(roundFailureContent).length)
+        const currentSignature = geometryRepairSignature(roundFailureContent)
+        if (currentIssueCount < bestIssueCount) {
+          bestIssueCount = currentIssueCount
+          stagnantAttempts = 0
+        } else if (currentSignature === lastFailureSignature || currentIssueCount >= bestIssueCount) {
+          stagnantAttempts += 1
+        } else {
+          stagnantAttempts = Math.max(0, stagnantAttempts - 1)
+        }
+        lastFailureSignature = currentSignature
+        repairMemory.push(compactGeometryRepairMemory(repairAttempt, roundFailureContent))
+
+        if (stagnantAttempts >= GEOMETRY_REPAIR_STAGNATION_LIMIT) {
           allResults.push(
             [
-              'Generation stopped after 3 invalid geometry attempts.',
-              'No geometry was created. Try a simpler revision or keep the existing blueprint and adjust one trait at a time.',
+              `生成已停止：修复 harness 已连续 ${GEOMETRY_REPAIR_STAGNATION_LIMIT} 轮没有减少校验问题。`,
+              '原因：继续自动对话会反复消耗请求，但仍可能创建错误模型；场景保持不变。',
+              '已保留压缩修复记忆：可用最近失败点重新发起完整蓝图生成。',
+              '下一步方案：请重试一个受支持的完整蓝图。阀门可使用 valve_body + handwheel + inlet/outlet flanges + bonnet/stem/yoke；也可以先生成简化阀门，再一次只调整一个特征。',
             ].join('\n'),
           )
           setMessages((prev) => {
             const updated = [...prev]
             updated[updated.length - 1] = {
               role: 'assistant',
-              content: `**${label}:**\n${allResults.join('\n')}`,
+              content: `**${label}:**\n${formatVisibleGeometryResults(allResults)}`,
             }
             return updated
           })
             break
+        }
+
+        if (repairAttempt % GEOMETRY_REPAIR_COMPRESSION_INTERVAL === 0) {
+          apiMessages.splice(
+            0,
+            apiMessages.length,
+            ...seedApiMessages,
+            {
+              role: 'user',
+              content: [
+                'Compressed geometry repair memory from prior invalid tool calls:',
+                ...repairMemory.slice(-GEOMETRY_REPAIR_COMPRESSION_INTERVAL),
+                '',
+                'Use this memory to produce one complete replacement geometry tool call.',
+                'Do not repeat a missing semantic role; add the required part or switch to the supported compose_parts blueprint.',
+              ].join('\n'),
+            },
+          )
         }
 
         currentResponse = await callApi(apiMessages, tools, signal)

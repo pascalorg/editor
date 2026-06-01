@@ -89,7 +89,6 @@ export type SiteTool = 'property-line'
 export type CatalogCategory =
   | 'safety'
   | 'electrical'
-  | 'hvac'
   | 'lighting'
   | 'electronics'
   | 'equipment'
@@ -103,7 +102,6 @@ export type CatalogCategory =
 const FURNISH_CATALOG_CATEGORIES: CatalogCategory[] = [
   'safety',
   'electrical',
-  'hvac',
   'lighting',
   'electronics',
   'equipment',
@@ -115,12 +113,18 @@ const FURNISH_CATALOG_CATEGORIES: CatalogCategory[] = [
   'vehicle',
 ]
 
-function normalizeFurnishCatalogCategory(
-  category: CatalogCategory | null | undefined,
-): CatalogCategory {
-  if (category && FURNISH_CATALOG_CATEGORIES.includes(category)) {
-    return category
+function normalizeFurnishCatalogCategory(category: unknown): CatalogCategory {
+  if (category === 'hvac') {
+    return 'electrical'
   }
+
+  if (
+    typeof category === 'string' &&
+    FURNISH_CATALOG_CATEGORIES.includes(category as CatalogCategory)
+  ) {
+    return category as CatalogCategory
+  }
+
   return 'safety'
 }
 
@@ -415,7 +419,8 @@ export function normalizePersistedEditorUiState(
       mode,
       tool: mode === 'build' ? 'item' : null,
       structureLayer: 'elements',
-      catalogCategory: mode === 'build' ? (state?.catalogCategory ?? 'safety') : null,
+      catalogCategory:
+        mode === 'build' ? normalizeFurnishCatalogCategory(state?.catalogCategory) : null,
       viewMode,
       isFloorplanOpen,
     }
@@ -453,7 +458,8 @@ export function normalizePersistedEditorUiState(
     tool:
       state?.tool && state.tool !== 'property-line' && state.tool !== 'zone' ? state.tool : 'wall',
     structureLayer,
-    catalogCategory: state?.tool === 'item' ? (state.catalogCategory ?? null) : null,
+    catalogCategory:
+      state?.tool === 'item' ? normalizeFurnishCatalogCategory(state.catalogCategory) : null,
     viewMode,
     isFloorplanOpen,
   }

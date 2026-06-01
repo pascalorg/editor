@@ -11,7 +11,6 @@ export type FurnishToolConfig = {
 export const furnishTools: FurnishToolConfig[] = [
   { id: 'item', iconSrc: '/icons/building.png', label: 'Safety', catalogCategory: 'safety' },
   { id: 'item', iconSrc: '/icons/appliance.png', label: 'Electrical', catalogCategory: 'electrical' },
-  { id: 'item', iconSrc: '/icons/ceiling.png', label: 'HVAC', catalogCategory: 'hvac' },
   { id: 'item', iconSrc: '/icons/ceiling.png', label: 'Lighting', catalogCategory: 'lighting' },
   { id: 'item', iconSrc: '/icons/appliance.png', label: 'Electronics', catalogCategory: 'electronics' },
   { id: 'item', iconSrc: '/icons/shelf.png', label: 'Equipment', catalogCategory: 'equipment' },
@@ -27,7 +26,6 @@ export function getFurnishToolLabel(category: CatalogCategory): string {
   const fallbacks: Partial<Record<CatalogCategory, string>> = {
     safety: 'Safety',
     electrical: 'Electrical',
-    hvac: 'HVAC',
     lighting: 'Lighting',
     electronics: 'Electronics',
     equipment: 'Equipment',

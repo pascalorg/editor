@@ -1721,6 +1721,10 @@ function composeValveBody(
   const radius = clamp(part.radius, 0.12, 0.03, 0.8)
   const length = clamp(part.length ?? part.depth, 0.46, 0.12, 2)
   const mat = partMaterial(part, material(input.primaryColor ?? '#475569', 0.45, 0.45))
+  const metalMat = material(input.metalColor ?? '#cbd5e1', 0.28, 0.78)
+  const darkMat = material(input.darkColor ?? '#1f2937', 0.42, 0.5)
+  const bonnetY = center[1] + radius * 1.16
+  const yokeBaseY = center[1] + radius * 1.72
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'cylinder',
@@ -1731,6 +1735,7 @@ function composeValveBody(
       height: length,
       radialSegments: ringSegments(input.detail),
       material: mat,
+      semanticRole: 'valve_body',
     },
     {
       kind: 'sphere',
@@ -1741,6 +1746,31 @@ function composeValveBody(
       widthSegments: ringSegments(input.detail),
       heightSegments: Math.max(16, Math.round(ringSegments(input.detail) * 0.5)),
       material: mat,
+      semanticRole: 'valve_body',
+    },
+    {
+      kind: 'frustum',
+      name: `${part.name ?? input.name ?? 'object'} valve bonnet`,
+      position: [center[0], bonnetY, center[2]],
+      axis: 'y',
+      radiusBottom: radius * 0.62,
+      radiusTop: radius * 0.42,
+      height: radius * 0.42,
+      radialSegments: Math.max(20, Math.round(ringSegments(input.detail) * 0.55)),
+      material: mat,
+      semanticRole: 'bonnet',
+    },
+    {
+      kind: 'wedge',
+      name: `${part.name ?? input.name ?? 'object'} valve gate wedge`,
+      position: [center[0], center[1] - radius * 0.1, center[2]],
+      length: radius * 0.8,
+      width: radius * 0.42,
+      height: radius * 0.72,
+      slopeAxis: 'x',
+      slopeDirection: 'positive',
+      material: material(input.secondaryColor ?? '#334155', 0.48, 0.35),
+      semanticRole: 'gate_wedge',
     },
     {
       kind: 'cylinder',
@@ -1750,9 +1780,52 @@ function composeValveBody(
       radius: radius * 0.18,
       height: radius * 0.9,
       radialSegments: 16,
-      material: material(input.metalColor ?? '#cbd5e1', 0.28, 0.78),
+      material: metalMat,
+      semanticRole: 'stem',
     },
   ]
+  for (const z of [-radius * 0.48, radius * 0.48]) {
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} valve yoke post`,
+      position: [center[0], yokeBaseY, center[2] + z],
+      axis: 'y',
+      radius: radius * 0.08,
+      height: radius * 0.95,
+      radialSegments: 12,
+      material: metalMat,
+      semanticRole: 'yoke',
+    })
+  }
+  shapes.push({
+    kind: 'cylinder',
+    name: `${part.name ?? input.name ?? 'object'} valve yoke bridge`,
+    position: [center[0], yokeBaseY + radius * 0.48, center[2]],
+    axis: 'z',
+    radius: radius * 0.07,
+    height: radius * 1.15,
+    radialSegments: 12,
+    material: metalMat,
+    semanticRole: 'yoke',
+  })
+  for (let i = 0; i < 6; i += 1) {
+    const angle = (i * Math.PI * 2) / 6
+    shapes.push({
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} valve bonnet bolt ${i + 1}`,
+      position: [
+        center[0] + Math.cos(angle) * radius * 0.54,
+        bonnetY - radius * 0.22,
+        center[2] + Math.sin(angle) * radius * 0.54,
+      ],
+      axis: 'y',
+      radius: radius * 0.045,
+      height: radius * 0.12,
+      radialSegments: 8,
+      material: darkMat,
+      semanticRole: 'bonnet_bolts',
+    })
+  }
   return applyPartRotation(shapes, center, part.rotation)
 }
 
@@ -2070,7 +2143,11 @@ function composeChainLoop(
     {
       kind: 'torus',
       name: `${part.name ?? input.name ?? 'object'} rear sprocket`,
-      position: [center[0] + rearX, center[1] - chainHalfHeight * 0.1, center[2] - tubeRadius * 1.6],
+      position: [
+        center[0] + rearX,
+        center[1] - chainHalfHeight * 0.1,
+        center[2] - tubeRadius * 1.6,
+      ],
       axis: 'z',
       majorRadius: rearCogRadius,
       tubeRadius: tubeRadius * 0.65,
@@ -3978,6 +4055,48 @@ function completePartBlueprint(
     }
   }
 
+  const completedKinds = partKinds(completed)
+  const completedFlangeCount = completed.filter(
+    (part) => normalizedPartKind(part) === 'flange_ring',
+  ).length
+  if (familySpecForParts(completedKinds).family === 'valve' && completedFlangeCount < 2) {
+    if (completedFlangeCount === 0) {
+      completed.push(
+        {
+          id: 'flange_inlet',
+          name: 'flange_inlet',
+          kind: 'flange_ring',
+          connectTo: 'valve_body',
+          connectPoint: 'inlet',
+          childPoint: 'front',
+          axis: 'x',
+          radius: 0.14,
+        },
+        {
+          id: 'flange_outlet',
+          name: 'flange_outlet',
+          kind: 'flange_ring',
+          connectTo: 'valve_body',
+          connectPoint: 'outlet',
+          childPoint: 'back',
+          axis: 'x',
+          radius: 0.14,
+        },
+      )
+    } else {
+      completed.push({
+        id: 'flange_outlet',
+        name: 'flange_outlet',
+        kind: 'flange_ring',
+        connectTo: 'valve_body',
+        connectPoint: 'outlet',
+        childPoint: 'back',
+        axis: 'x',
+        radius: 0.14,
+      })
+    }
+  }
+
   return completed
 }
 
@@ -4030,7 +4149,22 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
     case 'outlet_port':
       return 'outlet_port'
     case 'flange_ring':
+      if (name.includes('flange_inlet') || name.includes('inlet')) {
+        if (name.includes('gasket')) return 'flange_gasket'
+        return name.includes('bolt') ? 'flange_inlet_bolt' : 'flange_inlet'
+      }
+      if (name.includes('flange_outlet') || name.includes('outlet')) {
+        if (name.includes('gasket')) return 'flange_gasket'
+        return name.includes('bolt') ? 'flange_outlet_bolt' : 'flange_outlet'
+      }
       return name.includes('bolt') ? 'flange_bolt' : 'flange_ring'
+    case 'valve_body':
+      if (name.includes('bonnet bolt')) return 'bonnet_bolts'
+      if (name.includes('bonnet')) return 'bonnet'
+      if (name.includes('stem')) return 'stem'
+      if (name.includes('gate wedge')) return 'gate_wedge'
+      if (name.includes('yoke')) return 'yoke'
+      return 'valve_body'
     default:
       return kind
   }

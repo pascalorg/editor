@@ -12,6 +12,10 @@ import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { CATALOG_ITEMS } from './catalog-items'
 
+function itemMatchesCatalogCategory(item: AssetInput, category: CatalogCategory) {
+  return item.category === category || (item.category === 'hvac' && category === 'electrical')
+}
+
 export function ItemCatalog({
   category,
   items: itemsOverride,
@@ -46,7 +50,7 @@ export function ItemCatalog({
     (() => {
       const categoryItems = search
         ? sourceItems
-        : sourceItems.filter((item) => item.category === category)
+        : sourceItems.filter((item) => itemMatchesCatalogCategory(item, category))
       return categoryItems.filter((item) => {
         const tags = item.tags ?? []
         if (activePlacementTag && !tags.includes(activePlacementTag)) return false

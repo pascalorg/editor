@@ -176,13 +176,13 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════════
-  // HVAC
+  // CLIMATE / APPLIANCES
   // ═══════════════════════════════════════════════════════════════════
   {
     id: 'ac-block',
-    category: 'hvac',
+    category: 'electrical',
     name: 'AC Block',
-    tags: ['floor', 'hvac', 'cooling'],
+    tags: ['floor', 'electrical', 'cooling'],
     ...supabase('ac-block'),
     dimensions: [1.06, 0.95, 1.06],
     offset: [0, 0, 0],
@@ -191,9 +191,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'air-conditioning',
-    category: 'hvac',
+    category: 'electrical',
     name: 'Air Conditioning',
-    tags: ['wall', 'hvac', 'cooling'],
+    tags: ['wall', 'electrical', 'cooling'],
     ...supabase('air-conditioning'),
     dimensions: [1.56, 0.6, 0.41],
     offset: [0, 0.3, 0.2018],
@@ -203,9 +203,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'air-conditioner',
-    category: 'hvac',
+    category: 'electrical',
     name: 'Air Conditioner',
-    tags: ['wall', 'hvac', 'cooling'],
+    tags: ['wall', 'electrical', 'cooling'],
     ...localOnly('air-conditioner'),
     dimensions: [1.0, 0.4, 0.3],
     offset: [0, 0, 0],
@@ -215,9 +215,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'air-conditioner-block',
-    category: 'hvac',
+    category: 'electrical',
     name: 'AC Condenser',
-    tags: ['floor', 'hvac', 'outdoor'],
+    tags: ['floor', 'electrical', 'outdoor'],
     ...localOnly('air-conditioner-block'),
     dimensions: [1.0, 0.8, 0.4],
     offset: [0, 0, 0],
@@ -226,9 +226,9 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'ceiling-fan',
-    category: 'hvac',
+    category: 'electrical',
     name: 'Ceiling Fan',
-    tags: ['ceiling', 'hvac', 'ventilation'],
+    tags: ['ceiling', 'electrical', 'ventilation'],
     ...supabase('ceiling-fan'),
     dimensions: [0.92, 0.35, 1.04],
     offset: [-0.1371, 0.3448, 0],
@@ -242,7 +242,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'freezer',
-    category: 'hvac',
+    category: 'electrical',
     name: 'Freezer',
     tags: ['floor', 'cold-storage', 'appliance'],
     ...localOnly('freezer'),

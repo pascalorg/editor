@@ -18,7 +18,6 @@ const ACCEPTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const CATALOG_CATEGORIES = new Set([
   'safety',
   'electrical',
-  'hvac',
   'lighting',
   'electronics',
   'equipment',
@@ -29,6 +28,7 @@ const CATALOG_CATEGORIES = new Set([
   'outdoor',
   'vehicle',
 ])
+const CATALOG_CATEGORY_ALIASES = new Map([['hvac', 'electrical']])
 
 const FALLBACK_THUMBNAIL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAGXRFWHRTb2Z0d2FyZQBwYXNjYWwtaW1hZ2UtdG8tM2QbjmzRAAABhUlEQVR4nO3aQU7CQBBA0QfZ+18u8QbYQIoJEYlG0ifhq9OZqgQYmOm1WgAAAAAAAAAA+M9wH/d1rK3bTu9rD+fzlnW9nT5a4vLx1eF8+L4u46bQpSgJgZgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgv8FSXYKp+uXyNMAAAAASUVORK5CYII=',
@@ -61,6 +61,11 @@ function readBool(value: FormDataEntryValue | null, fallback: boolean) {
   if (normalized === 'false' || normalized === '0' || normalized === 'no') return false
   if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true
   return fallback
+}
+
+function normalizeCatalogCategory(value: string) {
+  const normalized = CATALOG_CATEGORY_ALIASES.get(value) ?? value
+  return CATALOG_CATEGORIES.has(normalized) ? normalized : 'equipment'
 }
 
 async function downloadFile(url: string, outPath: string) {
@@ -156,7 +161,7 @@ export async function POST(req: NextRequest) {
   const prompt = readText(form.get('prompt'), 'object')
   const displayName = readText(form.get('name'), prompt || image.name || 'Image to 3D asset')
   const categoryRaw = readText(form.get('category'), 'equipment')
-  const category = CATALOG_CATEGORIES.has(categoryRaw) ? categoryRaw : 'equipment'
+  const category = normalizeCatalogCategory(categoryRaw)
   const shouldSave = readBool(form.get('save'), true)
   const imageBuffer = Buffer.from(await image.arrayBuffer())
   const imageDataUri = `data:${image.type};base64,${imageBuffer.toString('base64')}`

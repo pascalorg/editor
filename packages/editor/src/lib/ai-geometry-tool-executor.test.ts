@@ -183,7 +183,9 @@ describe('AI geometry tool executor', () => {
     expect(result.artifact).toBeDefined()
     expect(result.content).toContain('Validation: family=vehicle')
     expect(result.content).toContain('vehicle_tire:4')
-    expect(result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire')).toHaveLength(4)
+    expect(
+      result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire'),
+    ).toHaveLength(4)
   })
 
   test('rejects unrealistic primitive cars and returns repairable semantic feedback', () => {
@@ -304,6 +306,35 @@ describe('AI geometry tool executor', () => {
         (shape) => shape.kind === 'sweep' && shape.name?.includes('chain elongated loop'),
       ),
     ).toBe(true)
+  })
+
+  test('accepts valve compose_parts output with strict semantic required roles', () => {
+    const result = executeGeometryToolCall(
+      'compose_parts',
+      {
+        name: 'Gate valve',
+        geometryBrief: {
+          category: 'valve',
+          requiredRoles: [
+            'flange_inlet',
+            'flange_outlet',
+            'bonnet',
+            'stem',
+            'gate_wedge',
+            'bonnet_bolts',
+            'yoke',
+          ],
+        },
+        parts: [{ kind: 'valve_body' }],
+      },
+      { prompt: '生成阀门' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=valve')
+    expect(result.content).toContain('flange_inlet:1')
+    expect(result.content).toContain('flange_outlet:1')
+    expect(result.content).not.toContain('required semantic role')
   })
 
   test('accepts smooth hand-built vehicle retries with role aliases and cylinder wheels', () => {

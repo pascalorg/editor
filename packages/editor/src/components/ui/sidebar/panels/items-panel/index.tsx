@@ -22,7 +22,7 @@ const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
 
 const GENERATED_GEOMETRY_CATEGORY_MAP: Partial<Record<string, CatalogCategory>> = {
   vehicle: 'vehicle',
-  'outdoor-ac': 'hvac',
+  'outdoor-ac': 'electrical',
   keyboard: 'electronics',
   monitor: 'electronics',
   table: 'equipment',
@@ -31,6 +31,10 @@ const GENERATED_GEOMETRY_CATEGORY_MAP: Partial<Record<string, CatalogCategory>> 
   chair: 'equipment',
   sofa: 'equipment',
   generic: 'equipment',
+}
+
+function itemMatchesCatalogCategory(item: AssetInput, category: CatalogCategory) {
+  return item.category === category || (item.category === 'hvac' && category === 'electrical')
 }
 
 function getGeneratedGeometryCatalogCategory(artifact: GeneratedGeometryArtifact): CatalogCategory {
@@ -178,8 +182,8 @@ export function ItemsPanel({
     return true
   }
   const sourceItems = baseItems.filter(matchesSource)
-  const categoryItems = sourceItems.filter(
-    (item) => item.category === activeCategory.catalogCategory,
+  const categoryItems = sourceItems.filter((item) =>
+    itemMatchesCatalogCategory(item, activeCategory.catalogCategory),
   )
 
   const aiGeometryArtifacts = activeSource === 'mine' || activeSource === null
