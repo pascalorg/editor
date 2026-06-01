@@ -4,6 +4,7 @@ import {
   SolarPanelNode as SolarPanelNodeSchema,
   type SolarPanelNode as SolarPanelNodeType,
 } from '@pascal-app/core'
+import { buildSolarPanelFloorplan } from './floorplan'
 import { solarPanelParametrics } from './parametrics'
 import { SolarPanelNode } from './schema'
 
@@ -252,6 +253,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
 
   parametrics: solarPanelParametrics,
   handles: solarPanelHandles,
+  floorplan: buildSolarPanelFloorplan,
 
   renderer: {
     kind: 'parametric',

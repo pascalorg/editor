@@ -137,6 +137,7 @@ export function buildShelfFloorplan(
     point: [px + cornerPlanX, pz + cornerPlanY],
     angle: Math.atan2(radialPlanY, radialPlanX),
     affordance: 'shelf-rotate',
+    pivot: [px, pz],
   })
 
   return { kind: 'group', children }

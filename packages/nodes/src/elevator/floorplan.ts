@@ -352,6 +352,7 @@ export function buildElevatorFloorplan(
       point: [cx + cornerX, cz + cornerZ],
       angle: Math.atan2(radialZ, radialX),
       affordance: 'elevator-rotate',
+      pivot: [cx, cz],
     })
   }
 

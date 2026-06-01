@@ -4,6 +4,7 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { buildBoxVentFloorplan } from './floorplan'
 import { boxVentParametrics } from './parametrics'
 import { BoxVentNode } from './schema'
 
@@ -180,6 +181,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
 
   parametrics: boxVentParametrics,
   handles: boxVentHandles,
+  floorplan: buildBoxVentFloorplan,
 
   renderer: {
     kind: 'parametric',

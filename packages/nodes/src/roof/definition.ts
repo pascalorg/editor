@@ -1,11 +1,15 @@
 import { type NodeDefinition, RoofNode as RoofNodeSchema } from '@pascal-app/core'
+import { buildRoofFloorplan } from './floorplan'
 import { roofParametrics } from './parametrics'
 import { RoofNode } from './schema'
 
 /**
  * Roof — Stage A registration. Wrap-exports the legacy `RoofRenderer`
  * + `RoofSystem` (geometry generation via `getRoofSegmentBrushes` +
- * CSG). Inspector / move / floorplan stay legacy until Stage B-E.
+ * CSG). Inspector / move stay legacy until Stage B-E. `floorplan` draws
+ * the merged silhouette (union of the child segments' footprints), so a
+ * multi-segment roof reads as one combined shape rather than stacked
+ * rectangles.
  *
  * Roof is a "composite" node — it has `roof-segment` children that
  * own per-segment geometry. The parent roof handles overall framing;
@@ -31,6 +35,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   },
 
   parametrics: roofParametrics,
+  floorplan: buildRoofFloorplan,
 
   renderer: {
     kind: 'parametric',

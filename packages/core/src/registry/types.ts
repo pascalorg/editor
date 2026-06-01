@@ -409,6 +409,14 @@ export type FloorplanGeometry =
       angle: number
       affordance: string
       payload?: unknown
+      /**
+       * Rotation pivot (plan coords) this handle turns the node around.
+       * When present, the floor-plan layer draws a live angle wedge + degree
+       * readout swept from grab to the current pointer bearing during the
+       * drag — the 2D twin of the 3D rotate gizmo's readout. Emitters that
+       * already compute the pivot to place the handle should pass it through.
+       */
+      pivot?: FloorplanPoint
     }
   /**
    * Centered length / distance label. Renders as a small rounded

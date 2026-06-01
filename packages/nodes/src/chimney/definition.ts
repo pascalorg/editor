@@ -8,6 +8,7 @@ import {
   type RoofSegmentNode as RoofSegmentNodeType,
   type SceneApi,
 } from '@pascal-app/core'
+import { buildChimneyFloorplan } from './floorplan'
 import { chimneyPaint } from './paint'
 import { chimneyParametrics } from './parametrics'
 import { ChimneyNode } from './schema'
@@ -392,6 +393,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
 
   parametrics: chimneyParametrics,
   handles: chimneyHandles,
+  floorplan: buildChimneyFloorplan,
 
   renderer: {
     kind: 'parametric',

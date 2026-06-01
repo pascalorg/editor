@@ -157,6 +157,7 @@ export function buildColumnFloorplan(
       point: [cx + cornerWorldX, cz + cornerWorldZ],
       angle: Math.atan2(radialZ, radialX),
       affordance: 'column-rotate',
+      pivot: [cx, cz],
     })
   }
 

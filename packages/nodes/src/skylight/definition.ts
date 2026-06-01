@@ -11,6 +11,7 @@ import {
   isOperableSkylightNode,
   toggleSkylightOpenState,
 } from './interaction'
+import { buildSkylightFloorplan } from './floorplan'
 import { skylightParametrics } from './parametrics'
 import { buildSkylightRoofCut } from './roof-cut'
 import { SkylightNode } from './schema'
@@ -251,6 +252,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
 
   parametrics: skylightParametrics,
   handles: skylightHandles,
+  floorplan: buildSkylightFloorplan,
 
   renderer: {
     kind: 'parametric',

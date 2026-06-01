@@ -9,6 +9,7 @@ import {
   type SceneApi,
 } from '@pascal-app/core'
 import { buildDormerRoofCut, getDormerExposedFaces } from './csg-geometry'
+import { buildDormerFloorplan } from './floorplan'
 import { dormerPaint } from './paint'
 import { dormerParametrics } from './parametrics'
 import { DormerNode } from './schema'
@@ -434,6 +435,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
 
   parametrics: dormerParametrics,
   handles: dormerHandles,
+  floorplan: buildDormerFloorplan,
 
   renderer: {
     kind: 'parametric',

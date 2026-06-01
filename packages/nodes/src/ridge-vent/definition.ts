@@ -4,6 +4,7 @@ import {
   type RidgeVentNode as RidgeVentNodeType,
   RidgeVentNode as RidgeVentNodeSchema,
 } from '@pascal-app/core'
+import { buildRidgeVentFloorplan } from './floorplan'
 import { ridgeVentParametrics } from './parametrics'
 import { RidgeVentNode } from './schema'
 
@@ -169,6 +170,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
 
   parametrics: ridgeVentParametrics,
   handles: ridgeVentHandles,
+  floorplan: buildRidgeVentFloorplan,
 
   renderer: {
     kind: 'parametric',
