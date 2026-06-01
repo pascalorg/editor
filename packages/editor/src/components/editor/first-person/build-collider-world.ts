@@ -56,6 +56,24 @@ function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) 
   return Array.isArray(material) ? material.some((entry) => entry.visible) : material.visible
 }
 
+// Decode any attribute (interleaved, quantized/normalized integer, Float64…) into a
+// plain, non-normalized Float32Array BufferAttribute. mergeGeometries() requires every
+// merged geometry to share the same typed-array constructor for matching attributes, so
+// imported item GLBs using KHR_mesh_quantization or interleaved buffers must be coerced
+// to Float32 to match wall/slab geometry.
+function toFloat32Attribute(source: THREE.BufferAttribute | THREE.InterleavedBufferAttribute) {
+  const itemSize = source.itemSize
+  const array = new Float32Array(source.count * itemSize)
+  for (let i = 0; i < source.count; i++) {
+    const offset = i * itemSize
+    array[offset] = source.getX(i)
+    if (itemSize > 1) array[offset + 1] = source.getY(i)
+    if (itemSize > 2) array[offset + 2] = source.getZ(i)
+    if (itemSize > 3) array[offset + 3] = source.getW(i)
+  }
+  return new THREE.BufferAttribute(array, itemSize)
+}
+
 function cloneWorldGeometry(mesh: THREE.Mesh) {
   const sourceGeometry = mesh.geometry
   const position = sourceGeometry.getAttribute('position')
@@ -65,11 +83,11 @@ function cloneWorldGeometry(mesh: THREE.Mesh) {
     ? sourceGeometry.toNonIndexed()
     : sourceGeometry.clone()
   const cleanGeometry = new THREE.BufferGeometry()
-  cleanGeometry.setAttribute('position', workingGeometry.getAttribute('position').clone())
+  cleanGeometry.setAttribute('position', toFloat32Attribute(workingGeometry.getAttribute('position')))
 
   const normal = workingGeometry.getAttribute('normal')
   if (normal) {
-    cleanGeometry.setAttribute('normal', normal.clone())
+    cleanGeometry.setAttribute('normal', toFloat32Attribute(normal))
   } else {
     cleanGeometry.computeVertexNormals()
   }
