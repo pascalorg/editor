@@ -61,14 +61,15 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
-import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { NodeArrowHandles } from './node-arrow-handles'
+import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
+import { WallOpeningHighlights } from './wall-opening-highlights'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
@@ -577,9 +578,7 @@ function PaintCursorBadge({
 // grid lines when the user picks a finer snap (0.25 / 0.1 / 0.05).
 function SnapAwareGrid() {
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
-  return (
-    <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
-  )
+  return <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
 }
 
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
@@ -600,6 +599,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isFirstPersonMode && <SelectionManager />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <WallOpeningHighlights />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
