@@ -57,6 +57,7 @@ export {
   type DormerSurfaceMaterialSpec,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
+export { DownspoutNode } from './nodes/downspout'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
@@ -65,6 +66,7 @@ export {
 } from './nodes/elevator'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
+export { GutterNode, GutterOutlet } from './nodes/gutter'
 export type {
   AnimationEffect,
   Asset,
@@ -83,8 +85,6 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
-export { DownspoutNode } from './nodes/downspout'
-export { GutterNode } from './nodes/gutter'
 export { LevelNode } from './nodes/level'
 // Nodes
 export { RidgeVentNode } from './nodes/ridge-vent'

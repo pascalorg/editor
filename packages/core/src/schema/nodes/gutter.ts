@@ -3,6 +3,22 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+// A single drop outlet drilled in the gutter floor. A gutter can carry
+// several so a long run can split between multiple downspouts (each
+// downspout links to one outlet via its `outletId`).
+export const GutterOutlet = z.object({
+  // Stable id the downspout references. Generated with `generateId('outlet')`.
+  id: z.string(),
+  // Position along the gutter length (gutter-local +X), signed from the
+  // CENTER. The geometry clamps it inside the end caps at build time, so
+  // a stored value that no longer fits just rides the nearest bound.
+  offset: z.number().default(0),
+  // Bore diameter of this drop. Default 0.07 m ≈ 3″. The cross-section
+  // SHAPE (round vs rectangular) follows the gutter's profile, not this.
+  diameter: z.number().default(0.07),
+})
+export type GutterOutlet = z.infer<typeof GutterOutlet>
+
 export const GutterNode = BaseNode.extend({
   id: objectId('gutter'),
   type: nodeType('gutter'),
@@ -53,15 +69,11 @@ export const GutterNode = BaseNode.extend({
   hangerStyle: z.enum(['strap', 'none']).default('strap'),
   hangerSpacing: z.number().default(0.6),
 
-  // Downspout outlet — a short cylindrical drop tube descending from
-  // the gutter floor where a downspout connects. 'none' (default) so
-  // existing gutters don't sprout outlets on schema upgrade. Side
-  // picks the end the outlet sits closest to; inset is the segment-
-  // local distance from that end; diameter is the bore of the tube
-  // (default 0.07 m ≈ 3″ — standard residential downspout).
-  outletSide: z.enum(['none', 'left', 'right']).default('none'),
-  outletInset: z.number().default(0.15),
-  outletDiameter: z.number().default(0.07),
+  // Downspout outlets — short drop tubes descending from the gutter
+  // floor where downspouts connect. Empty by default so existing
+  // gutters don't sprout outlets on schema upgrade. Each is drilled
+  // through the trough floor via CSG; a downspout links to one by id.
+  outlets: z.array(GutterOutlet).default([]),
 }).describe(
   dedent`
   Gutter — a rain-water channel running along the eave of a roof
@@ -71,7 +83,7 @@ export const GutterNode = BaseNode.extend({
   - profile: k-style (ogee fascia), half-round, or square box
   - endCapLeft / endCapRight: close the trough at gutter-local -X / +X
   - hangerStyle / hangerSpacing: visible metal straps across the rim
-  - outletSide / outletInset / outletDiameter: drop-tube outlet
+  - outlets: drop-tube outlets (id + along-length offset + bore diameter)
   `,
 )
 
