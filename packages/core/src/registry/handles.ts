@@ -189,11 +189,7 @@ export type EndpointMoveHandle<N> = {
   endpoint: 'start' | 'end'
   placement: HandlePlacement<N>
   /** Called with the world-space hit on the ground plane. */
-  apply: (
-    node: N,
-    worldPoint: readonly [number, number, number],
-    sceneApi: SceneApi,
-  ) => Partial<N>
+  apply: (node: N, worldPoint: readonly [number, number, number], sceneApi: SceneApi) => Partial<N>
   portal?: HandlePortal
 }
 

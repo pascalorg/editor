@@ -237,8 +237,7 @@ export function NodeArrowHandles() {
     rawNode ? s.overrides.get(rawNode.id) : undefined,
   )
   const node = useMemo<AnyNode | null>(
-    () =>
-      rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode,
+    () => (rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode),
     [rawNode, liveOverride],
   )
 
@@ -251,10 +250,7 @@ export function NodeArrowHandles() {
   }, [node, def])
 
   const shouldRender =
-    Boolean(node && descriptors?.length) &&
-    !isFloorplanHovered &&
-    mode !== 'delete' &&
-    !movingNode
+    Boolean(node && descriptors?.length) && !isFloorplanHovered && mode !== 'delete' && !movingNode
 
   if (!shouldRender || !node || !descriptors) return null
   return <NodeArrowHandlesForNode descriptors={descriptors} node={node} />
@@ -436,7 +432,10 @@ function pickCursor(descriptor: LinearResizeHandle<AnyNode> | RadialResizeHandle
 }
 
 function resolveBound(
-  bound: number | ((node: AnyNode, sceneApi: ReturnType<typeof createSceneApi>) => number) | undefined,
+  bound:
+    | number
+    | ((node: AnyNode, sceneApi: ReturnType<typeof createSceneApi>) => number)
+    | undefined,
   fallback: number,
   node: AnyNode,
   sceneApi: ReturnType<typeof createSceneApi>,
@@ -572,10 +571,7 @@ function LinearArrow({
             ? intersectionLocal.y
             : intersectionLocal.z
       const delta = currentPointer - initialPointer
-      const next = Math.min(
-        maxBound,
-        Math.max(minBound, initialValue + delta * factor),
-      )
+      const next = Math.min(maxBound, Math.max(minBound, initialValue + delta * factor))
       // apply sees the node-at-drag-start so it can compute anchors from
       // pre-drag geometry (door-width re-centers on the opposite edge).
       const patch = descriptor.apply(initialNode as never, next, sceneApi)
@@ -928,8 +924,7 @@ function TapActionArrow({
   const position = descriptor.placement.position(node, placementSceneApi)
   const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   const shape = descriptor.shape ?? 'arrow'
-  const cursor: Cursor =
-    descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')
+  const cursor: Cursor = descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')
 
   const onActivate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()

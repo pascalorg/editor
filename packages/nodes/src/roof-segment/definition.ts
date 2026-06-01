@@ -3,15 +3,15 @@ import {
   getPitchFromActiveRoofHeight,
   type HandleDescriptor,
   type NodeDefinition,
-  type RoofSegmentNode as RoofSegmentNodeType,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  type RoofSegmentNode as RoofSegmentNodeType,
 } from '@pascal-app/core'
+import { buildRoofSegmentFloorplan } from './floorplan'
 import {
   roofSegmentMoveTarget,
   roofSegmentResizeAffordance,
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
-import { buildRoofSegmentFloorplan } from './floorplan'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
 
