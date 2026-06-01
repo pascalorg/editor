@@ -1,36 +1,52 @@
 import {
+  type AnyNodeId,
   DownspoutNode as DownspoutNodeSchema,
   type DownspoutNode as DownspoutNodeType,
+  type GutterNode,
+  type GutterOutlet,
   type HandleDescriptor,
   type NodeDefinition,
+  useLiveNodeOverrides,
+  useScene,
 } from '@pascal-app/core'
 import { downspoutParametrics } from './parametrics'
+import {
+  computeDownspoutPath,
+  downspoutPipeDims,
+  effectiveWallJog,
+  resolveDownspoutRouting,
+} from './routing'
 import { DownspoutNode } from './schema'
 
 // Mirrors the parametric `min`s so handle drags can't shrink the pipe
 // past what the inspector would accept.
 const MIN_LENGTH = 0.1
-const MIN_DIAMETER = 0.02
-// Diameter chevron Y — fixed 20 cm below the outlet (so it sits in
-// the same camera frame as the gutter the user is editing) rather
-// than tracking the pipe length and floating off-screen.
-const DIAMETER_HANDLE_Y = -0.2
-// Cleared past the worst-case k-style gutter rim (~ 1.5 × gutter size,
-// ≤ 0.2 m at the inspector max). Beyond this the chevron is guaranteed
-// to sit outside the gutter footprint and read cleanly from the side.
-const DIAMETER_HANDLE_CLEARANCE = 0.25
+// The length cube + dashed leader ride the straight WALL RUN, offset
+// outward (+Z, over the eave) past the pipe surface so they float clear
+// of the pipe instead of touching it.
+const LENGTH_HANDLE_PAD = 0.12
+// Lift the length cube a little up the run from the very bottom so it
+// reads as a height grip rather than sitting at the pipe's end. Clamped
+// to the run top so it never climbs above the straight section.
+const CUBE_LIFT = 0.18
+// Side-move arrows: how far ±X (along the eave) they sit from the pipe,
+// and how far below the gutter floor — near the top so they read as
+// "grab and slide along the eave".
+const SIDE_MOVE_OFFSET = 0.22
+const SIDE_MOVE_Y = -0.12
 
 /**
- * Length tracker — dashed vertical leader from the outlet (Y = 0,
- * the gutter floor) down to a small cube at the bottom of the pipe,
- * `anchor: 'max'` + `axis: 'y'` so dragging the cube down extends
- * the pipe 1:1.
+ * Length tracker — a dashed vertical leader from the outlet (Y = 0,
+ * the gutter floor) down to a small cube near the bottom of the
+ * straight wall run, `anchor: 'max'` + `axis: 'y'` so dragging the
+ * cube down extends the pipe 1:1.
  *
- * Tracker shape (instead of a plain chevron) because the downspout's
- * default 2.5 m drop pushes the bottom well below the eave — often
- * past the ground plane. The dashed leader keeps the dimension
- * readable even when the cube is off-screen, and matches the
- * existing tracker handles on the wall / chimney height fields.
+ * Both the cube and the leader sit on the wall-run line but offset
+ * outward (away from the pipe) by `radius + LENGTH_HANDLE_PAD`, so the
+ * whole dimension floats clear of the pipe — it reads as "change the
+ * height" rather than a box jammed onto the kicked-out mouth. The cube
+ * rides the run BOTTOM (above the kickout), not the mouth, so the
+ * dimension stays on the straight part.
  */
 function downspoutLengthHandle(): HandleDescriptor<DownspoutNodeType> {
   return {
@@ -42,49 +58,86 @@ function downspoutLengthHandle(): HandleDescriptor<DownspoutNodeType> {
     currentValue: (n) => n.length,
     apply: (_n, newValue) => ({ length: Math.max(MIN_LENGTH, newValue) }),
     placement: {
-      // Cube sits at the bottom of the pipe (the dimension terminus).
-      position: (n) => [0, -Math.max(n.length, MIN_LENGTH), 0],
+      position: (n, scene) => {
+        const routing = resolveDownspoutRouting(n, scene)
+        const path = computeDownspoutPath(
+          n.length,
+          effectiveWallJog(n, routing),
+          (n.terminal ?? 'splash') !== 'straight',
+        )
+        const halfZ = downspoutPipeDims(n, routing).halfZ
+        const y = Math.min(path.wallRunTopY, path.wallRunBottomY + CUBE_LIFT)
+        return [0, y, path.wallRunZ + halfZ + LENGTH_HANDLE_PAD]
+      },
     },
-    // Leader starts at Y = 0 (outlet / gutter floor) and runs DOWN to
-    // the cube — same logic the existing tracker handles use for
-    // "the dimension's other end is up here, against the host."
+    // Leader starts at Y = 0 (outlet / gutter floor) and runs DOWN past
+    // the cube — same tracker the wall / chimney height fields use.
     trackerBaseY: () => 0,
   }
 }
 
+// Usable half-span — keep the outlet a hair inside each end so the
+// collar never lands on a cap (the geometry clamps too; this bounds the
+// drag). Reads the host gutter's length.
+function moveBound(n: DownspoutNodeType, gutter: GutterNode | undefined): number {
+  return Math.max(0.05, Math.max(0.05, gutter?.length ?? 2) / 2 - 0.1)
+}
+
+// Effective outlet offset for `currentValue` — reads the gutter's live
+// override first (so the dragged value tracks) then the store.
+function readOutletOffset(n: DownspoutNodeType): number {
+  if (!n.gutterId) return 0
+  const id = n.gutterId as AnyNodeId
+  const override = useLiveNodeOverrides.getState().get(id) as Partial<GutterNode> | undefined
+  const gutter = useScene.getState().nodes[id] as GutterNode | undefined
+  const outlets = (override?.outlets as GutterOutlet[] | undefined) ?? gutter?.outlets ?? []
+  return outlets.find((o) => o.id === n.outletId)?.offset ?? 0
+}
+
 /**
- * Diameter chevron — symmetric radial growth, dragged outward (away
- * from the building) along the gutter-local +Z axis. `anchor:
- * 'center'` grows the value by 2× the cursor delta so the visible
- * +Z edge tracks the pointer.
- *
- * Sits at a FIXED Y near the top of the pipe (DIAMETER_HANDLE_Y) so
- * it stays in the gutter's camera frame regardless of pipe length,
- * and at a Z far enough outward that the gutter's rim — which
- * extends up to ~ 1.5 × `size` past the outlet axis on k-style
- * profiles — doesn't occlude the chevron.
+ * Side-move arrow — one of a ±X pair that slides the downspout along the
+ * eave. The position lives on the host gutter's outlet
+ * (`gutter.outlets[].offset`), not on the downspout, so `overrideTarget`
+ * redirects the drag's live override + commit to the gutter and `apply`
+ * returns the gutter's patch. The arrows sit near the top of the pipe
+ * and ride its group, which moves with the outlet — so they track the
+ * cursor 1:1 (`anchor: 'min'` → factor +1).
  */
-function downspoutDiameterHandle(): HandleDescriptor<DownspoutNodeType> {
+function downspoutMoveHandle(side: 'left' | 'right'): HandleDescriptor<DownspoutNodeType> {
+  const sign = side === 'right' ? 1 : -1
   return {
     kind: 'linear-resize',
-    axis: 'z',
-    anchor: 'center',
-    min: MIN_DIAMETER,
-    currentValue: (n) => n.diameter,
-    apply: (_n, newValue) => ({ diameter: Math.max(MIN_DIAMETER, newValue) }),
+    axis: 'x',
+    anchor: 'min',
+    cursor: 'ew-resize',
+    overrideTarget: (n) => (n.gutterId ? (n.gutterId as AnyNodeId) : undefined),
+    currentValue: (n) => readOutletOffset(n),
+    apply: (n, newOffset, scene) => {
+      const gutter = n.gutterId ? scene.get<GutterNode>(n.gutterId as AnyNodeId) : undefined
+      if (!gutter) return {}
+      const outlets = (gutter.outlets ?? []).map((o) =>
+        o.id === n.outletId ? { ...o, offset: newOffset } : o,
+      )
+      // Patch targets the GUTTER (overrideTarget), not the downspout.
+      return { outlets } as unknown as Partial<DownspoutNodeType>
+    },
+    min: (n, scene) =>
+      -moveBound(n, n.gutterId ? scene.get<GutterNode>(n.gutterId as AnyNodeId) : undefined),
+    max: (n, scene) =>
+      moveBound(n, n.gutterId ? scene.get<GutterNode>(n.gutterId as AnyNodeId) : undefined),
     placement: {
-      position: (n) => [
-        0,
-        DIAMETER_HANDLE_Y,
-        Math.max(n.diameter, MIN_DIAMETER) / 2 + DIAMETER_HANDLE_CLEARANCE,
-      ],
+      // Static ±X beside the top of the pipe; the group it rides moves
+      // with the outlet, so the arrow stays under the cursor as it slides.
+      position: () => [sign * SIDE_MOVE_OFFSET, SIDE_MOVE_Y, 0],
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
   }
 }
 
 const downspoutHandles: HandleDescriptor<DownspoutNodeType>[] = [
   downspoutLengthHandle(),
-  downspoutDiameterHandle(),
+  downspoutMoveHandle('left'),
+  downspoutMoveHandle('right'),
 ]
 
 /**
@@ -96,9 +149,9 @@ const downspoutHandles: HandleDescriptor<DownspoutNodeType>[] = [
  * position.
  *
  * No `handles` yet — the downspout's geometry is anchored to the
- * gutter's outlet, so length / diameter live in the inspector rather
- * than as draggable arrows for v1. Future passes can add a length
- * tracker handle similar to the gutter's size chevron.
+ * gutter's outlet. Length (tracker cube at the routed mouth) and
+ * diameter (chevron on the wall run) are draggable arrows; the wall
+ * standoff lives in the inspector.
  */
 export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   kind: 'downspout',
@@ -151,7 +204,6 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
 
   mcp: {
     description:
-      'A downspout — vertical drop pipe attached to a gutter outlet. length / diameter parametric; future passes will add elbows and a kickout.',
+      'A downspout — drop pipe from a gutter outlet that elbows back to the wall, runs down the wall face, and kicks out at the bottom. length / diameter / standoff parametric.',
   },
 }
-

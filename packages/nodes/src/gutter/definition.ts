@@ -4,6 +4,7 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { buildGutterFloorplan } from './floorplan'
 import { snapLengthToCorner } from './length-snap'
 import { gutterParametrics } from './parametrics'
 import { GutterNode } from './schema'
@@ -39,11 +40,11 @@ function getRimZ(n: GutterNodeType): number {
 // yaw-aware projection as the box-vent / ridge-vent / chimney width
 // handles.
 //
-// Corner snap: when the dragged endpoint enters the catch radius of a
-// sibling gutter's endpoint, `snapLengthToCorner` overrides the
-// raw newLength so the endpoint lands EXACTLY on the sibling — the
-// corner-mitre detector's 5 cm match window then fires reliably
-// without needing pixel-perfect dragging.
+// Corner snap: when the dragged endpoint nears the geometric corner it
+// would form with another gutter (the crossing of their length axes),
+// `snapLengthToCorner` overrides the raw newLength so the endpoint lands
+// EXACTLY on that corner — the corner-mitre detector then fires reliably
+// without pixel-perfect dragging. Only this gutter's length changes.
 function gutterLengthHandle(side: 'left' | 'right'): HandleDescriptor<GutterNodeType> {
   const sign = side === 'right' ? 1 : -1
   return {
@@ -69,17 +70,9 @@ function gutterLengthHandle(side: 'left' | 'right'): HandleDescriptor<GutterNode
         MIN_LENGTH,
         sceneApi,
       )
-      // Sibling adjustment — write directly to the store. The drag
-      // pipeline pauses history at drag start, so this batches with
-      // the main commit into a single undo step. Skipped when the
-      // snap is already at the sibling's current length (see the
-      // stable-state guard in length-snap.ts).
-      if (snap.sibling) {
-        sceneApi.update(snap.sibling.id, {
-          length: snap.sibling.length,
-          position: snap.sibling.position,
-        })
-      }
+      // Only the dragged gutter's own length is snapped — `snapLengthToCorner`
+      // never moves the corner-mate, so dragging one gutter can't reset
+      // another the user placed deliberately.
       const newCenterX = anchorX + sign * (snap.length / 2) * armX
       const newCenterZ = anchorZ + sign * (snap.length / 2) * armZ
       return {
@@ -172,6 +165,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
 
   parametrics: gutterParametrics,
   handles: gutterHandles,
+  floorplan: buildGutterFloorplan,
 
   renderer: {
     kind: 'parametric',

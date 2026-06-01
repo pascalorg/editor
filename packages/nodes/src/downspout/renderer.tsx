@@ -20,8 +20,9 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { computeEaveY } from '../gutter/eave-snap'
-import { resolveGutterOutletPlacement } from '../gutter/outlet-lookup'
+import { resolveGutterOutletById } from '../gutter/outlet-lookup'
 import { buildDownspoutGeometry } from './geometry'
+import { computeDownspoutRouting } from './routing'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -87,9 +88,7 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
   )
   const segmentOverrides = useLiveNodeOverrides((s) =>
     effectiveGutter?.roofSegmentId
-      ? (s.get(effectiveGutter.roofSegmentId as AnyNodeId) as
-          | Partial<RoofSegmentNode>
-          | undefined)
+      ? (s.get(effectiveGutter.roofSegmentId as AnyNodeId) as Partial<RoofSegmentNode> | undefined)
       : undefined,
   )
   const effectiveSegment: RoofSegmentNode | undefined = segment
@@ -98,7 +97,39 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
       : segment
     : undefined
 
-  const geometry = useMemo(() => buildDownspoutGeometry(node), [node.length, node.diameter])
+  // Routing back to the wall — memoised on the gutter/segment values
+  // that actually move the jog or the collar bore, so the pipe geometry
+  // only rebuilds when one of those changes (not on every override-merge
+  // render). Resolves to null when the gutter has no outlet.
+  const routing = useMemo(
+    () =>
+      effectiveGutter && effectiveSegment
+        ? computeDownspoutRouting(effectiveGutter, effectiveSegment, node.outletId)
+        : null,
+    [
+      effectiveGutter?.profile,
+      effectiveGutter?.size,
+      // The outlets array — its referenced entry's diameter / offset
+      // drives the collar bore + nesting.
+      effectiveGutter ? JSON.stringify(effectiveGutter.outlets) : undefined,
+      effectiveSegment?.overhang,
+      node.outletId,
+    ],
+  )
+
+  const geometry = useMemo(
+    () => buildDownspoutGeometry(node, routing),
+    [
+      node.length,
+      node.diameter,
+      node.standoff,
+      node.shape,
+      node.strapStyle,
+      node.strapSpacing,
+      node.terminal,
+      routing,
+    ],
+  )
   useEffect(() => () => geometry.dispose(), [geometry])
 
   const material = useMemo(() => {
@@ -111,7 +142,7 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
 
   if (!effectiveGutter || !effectiveSegment) return null
-  const outlet = resolveGutterOutletPlacement(effectiveGutter)
+  const outlet = resolveGutterOutletById(effectiveGutter, node.outletId)
   if (!outlet) return null
 
   const segPos = effectiveSegment.position ?? [0, 0, 0]
@@ -119,26 +150,37 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
   const liveEaveY = computeEaveY(effectiveSegment)
   const gutterRotY = effectiveGutter.rotation ?? 0
 
+  // Bake the gutter's position + Y-rotation into the registered ref so it
+  // sits as a DIRECT child of the segment-transform group — its local
+  // pose is the outlet's full segment-local placement. `NodeArrowHandles`
+  // copies the registered object's LOCAL transform into the segment's
+  // object (it assumes a flat node → scene-parent chain); with the old
+  // nested segment → gutter → outlet groups it only saw the innermost
+  // `[outlet.x …]` offset and the handles landed at the roof centre.
+  const gutterX = effectiveGutter.position[0] ?? 0
+  const gutterZ = effectiveGutter.position[2] ?? 0
+  const cos = Math.cos(gutterRotY)
+  const sin = Math.sin(gutterRotY)
+  const outletSegX = gutterX + (outlet.x * cos + outlet.z * sin)
+  const outletSegZ = gutterZ + (-outlet.x * sin + outlet.z * cos)
+  const outletSegY = liveEaveY + outlet.y
+
   return (
     <group position={segPos} rotation-y={segRotY}>
       <group
-        position={[
-          effectiveGutter.position[0] ?? 0,
-          liveEaveY,
-          effectiveGutter.position[2] ?? 0,
-        ]}
+        position={[outletSegX, outletSegY, outletSegZ]}
+        ref={ref}
         rotation-y={gutterRotY}
+        visible={node.visible}
       >
-        <group position={[outlet.x, outlet.y, outlet.z]} ref={ref} visible={node.visible}>
-          <mesh
-            castShadow
-            geometry={geometry}
-            material={material}
-            name="downspout-surface"
-            receiveShadow
-            {...handlers}
-          />
-        </group>
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="downspout-surface"
+          receiveShadow
+          {...handlers}
+        />
       </group>
     </group>
   )

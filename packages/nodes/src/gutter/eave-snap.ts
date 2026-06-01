@@ -51,11 +51,19 @@ export type EaveSnap = {
  * `resolveEaveSnap` uses the same formula at placement.
  */
 export function computeEaveY(
-  segment: Pick<RoofSegmentNode, 'wallHeight' | 'overhang' | 'pitch'>,
+  segment: Pick<RoofSegmentNode, 'wallHeight' | 'overhang' | 'pitch' | 'roofType'>,
 ): number {
+  const wallHeight = segment.wallHeight ?? 0
+  // Flat roofs have no slope drop and no slope-surface-vs-deck-top
+  // offset — the deck top IS the eave line. EAVE_TUCK_UP is a
+  // correction that lifts a SLOPED gutter from the slope-surface up to
+  // the deck-top line; applying it to a flat deck floats the gutter
+  // above the roof and leaves a visible gap between the edge and the
+  // gutter. So mount flat gutters right at the deck top.
+  if ((segment.roofType ?? 'gable') === 'flat') return wallHeight
   const overhang = segment.overhang ?? 0
   const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
-  return (segment.wallHeight ?? 0) - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
+  return wallHeight - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
 }
 
 /**
@@ -66,17 +74,19 @@ export function computeEaveY(
  *    regardless of which side the cursor is on — clicking on the high
  *    side still rolls the gutter down to the low eave.
  *
- *  - `hip` / `flat`: 4-way. The slope the user is standing on is
- *    determined by whichever of `|lx|/halfW` or `|lz|/halfD` is
+ *  - `hip` / `flat` / `dutch`: 4-way. The slope the user is standing
+ *    on is determined by whichever of `|lx|/halfW` or `|lz|/halfD` is
  *    larger — same `max(fx, fz)` discriminator the segment-hit's
  *    `analyticalSurfaceY` uses for hip. Sign of the dominant axis
- *    picks +/-.
+ *    picks +/-. Dutch is a hip base with a gablet on top, so its
+ *    lower run has all four eaves at the eave line — it gets the same
+ *    4-way snap as hip.
  *
- *  - `gable` / `gambrel` / `mansard` / `dutch`: 2-way `±Z`. Mansard
- *    and dutch have real 4-side eaves in plan, but the segment-hit
- *    formula approximates them as 2-slope (depth-only), so we stay
- *    consistent here — the user can re-place the gutter manually on
- *    a side eave if mansard/dutch becomes important.
+ *  - `gable` / `gambrel` / `mansard`: 2-way `±Z`. Mansard has real
+ *    4-side eaves in plan, but the segment-hit formula approximates it
+ *    as 2-slope (depth-only), so we stay consistent here — the user
+ *    can re-place the gutter manually on a side eave if mansard
+ *    becomes important.
  */
 function pickEaveSide(
   roofType: RoofType,
@@ -87,7 +97,7 @@ function pickEaveSide(
 ): EaveSide {
   if (roofType === 'shed') return '+Z'
 
-  if (roofType === 'hip' || roofType === 'flat') {
+  if (roofType === 'hip' || roofType === 'flat' || roofType === 'dutch') {
     const fx = halfW > 0 ? Math.abs(localX) / halfW : 0
     const fz = halfD > 0 ? Math.abs(localZ) / halfD : 0
     if (fx > fz) return localX < 0 ? '-X' : '+X'

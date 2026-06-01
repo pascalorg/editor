@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { buildDownspoutGeometry } from './geometry'
+import type { DownspoutRouting } from './routing'
 import type { DownspoutNode } from './schema'
 
 /**
@@ -10,9 +11,31 @@ import type { DownspoutNode } from './schema'
  * pipe so the placement ghost matches what lands on click. No
  * internal transform wrapper; the placement tool nests this under
  * the gutter / outlet chain so the position math stays in one place.
+ *
+ * `routing` mirrors the renderer's — when the tool resolves the host
+ * gutter it feeds the same wall-jog so the ghost already shows the
+ * elbowed path, not a straight drop.
  */
-const DownspoutPreview = ({ node }: { node: DownspoutNode }) => {
-  const geometry = useMemo(() => buildDownspoutGeometry(node), [node.length, node.diameter])
+const DownspoutPreview = ({
+  node,
+  routing,
+}: {
+  node: DownspoutNode
+  routing?: DownspoutRouting | null
+}) => {
+  const geometry = useMemo(
+    () => buildDownspoutGeometry(node, routing),
+    [
+      node.length,
+      node.diameter,
+      node.standoff,
+      node.shape,
+      node.strapStyle,
+      node.strapSpacing,
+      node.terminal,
+      routing,
+    ],
+  )
 
   const material = useMemo(
     () =>

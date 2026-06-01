@@ -32,9 +32,7 @@ const GutterPreview = ({ node }: { node: GutterNode }) => {
       node.endCapRight,
       node.hangerStyle,
       node.hangerSpacing,
-      node.outletSide,
-      node.outletInset,
-      node.outletDiameter,
+      JSON.stringify(node.outlets),
     ],
   )
 

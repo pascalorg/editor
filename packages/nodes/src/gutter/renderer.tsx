@@ -19,7 +19,8 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import { computeGutterMitres } from './corner-mitre'
+import { computeGutterMitres, type GutterWithSegment, NO_MITRES } from './corner-mitre'
+import { computeSharedEaveY } from './eave-align'
 import { computeEaveY } from './eave-snap'
 import { buildGutterGeometry } from './geometry'
 
@@ -57,9 +58,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
   const overrides = useLiveNodeOverrides(
     (s) => s.get(storeNode.id as AnyNodeId) as Partial<GutterNode> | undefined,
   )
-  const node: GutterNode = overrides
-    ? ({ ...storeNode, ...overrides } as GutterNode)
-    : storeNode
+  const node: GutterNode = overrides ? ({ ...storeNode, ...overrides } as GutterNode) : storeNode
 
   const segment = useScene((state) =>
     node.roofSegmentId
@@ -84,36 +83,80 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       : segment
     : undefined
 
-  // Same-segment sibling gutters drive the corner-mitre detector. Pull
-  // them as a fresh array each store update; `useShallow` keeps the
-  // reference stable when the array contents haven't changed, so the
-  // mitres useMemo below only re-runs when a sibling actually moves.
-  const siblingGutters = useScene(
+  // Corner-mitre inputs: every other gutter under the SAME ROOF, plus
+  // the roof's segments (for the frame lift). A flat array of node refs
+  // keeps `useShallow` stable — it only re-renders when one of those
+  // nodes actually changes. Cross-segment so gutters on different
+  // segments mitre where their segments meet (the mitres useMemo pairs
+  // each gutter back to its segment).
+  const mitreNodes = useScene(
     useShallow((state) => {
       const segmentId = node.roofSegmentId as AnyNodeId | undefined
-      if (!segmentId) return [] as GutterNode[]
-      const seg = state.nodes[segmentId] as RoofSegmentNode | undefined
-      if (!seg) return []
-      const out: GutterNode[] = []
-      for (const id of seg.children ?? []) {
-        const n = state.nodes[id as AnyNodeId]
-        if (n?.type === 'gutter' && n.id !== storeNode.id) out.push(n as GutterNode)
+      const seg = segmentId ? (state.nodes[segmentId] as RoofSegmentNode | undefined) : undefined
+      const roofId = seg?.parentId as AnyNodeId | undefined
+      const roof = roofId
+        ? (state.nodes[roofId] as { children?: readonly string[] } | undefined)
+        : undefined
+      if (!roof) return [] as (GutterNode | RoofSegmentNode)[]
+      const out: (GutterNode | RoofSegmentNode)[] = []
+      for (const sid of roof.children ?? []) {
+        const s = state.nodes[sid as AnyNodeId]
+        if (s?.type !== 'roof-segment') continue
+        out.push(s as RoofSegmentNode)
+        for (const gid of (s as RoofSegmentNode).children ?? []) {
+          const g = state.nodes[gid as AnyNodeId]
+          if (g?.type === 'gutter' && g.id !== storeNode.id) out.push(g as GutterNode)
+        }
       }
       return out
     }),
   )
 
-  const mitres = useMemo(
-    () => computeGutterMitres(node, siblingGutters),
-    [
-      node.position[0],
-      node.position[1],
-      node.position[2],
-      node.rotation,
-      node.length,
-      siblingGutters,
-    ],
-  )
+  // Mitres AND the run's shared eave height come from the same sibling
+  // walk: both key off which gutters meet at corners. `siblings` carries
+  // the FULL host segment (the alignment needs wallHeight / overhang /
+  // pitch / roofType to derive each eave Y), which is a superset of what
+  // the mitre detector reads — so one list feeds both.
+  const { mitres, sharedEaveY } = useMemo(() => {
+    if (!effectiveSegment) return { mitres: NO_MITRES, sharedEaveY: undefined }
+    const segById = new Map<string, RoofSegmentNode>()
+    for (const n of mitreNodes) {
+      if (n.type === 'roof-segment') segById.set(n.id, n as RoofSegmentNode)
+    }
+    const siblings: GutterWithSegment[] = []
+    for (const n of mitreNodes) {
+      if (n.type !== 'gutter') continue
+      const g = n as GutterNode
+      const seg = g.roofSegmentId ? segById.get(g.roofSegmentId) : undefined
+      if (seg) siblings.push({ gutter: g, segment: seg })
+    }
+    return {
+      mitres: computeGutterMitres(node, effectiveSegment, siblings),
+      // `siblings` is typed for the mitre detector (position/rotation),
+      // but the segment objects are the full RoofSegmentNodes from
+      // `mitreNodes`, so `computeSharedEaveY` gets the eave-Y inputs it
+      // needs at runtime.
+      sharedEaveY: computeSharedEaveY(
+        node,
+        effectiveSegment,
+        siblings as unknown as Parameters<typeof computeSharedEaveY>[2],
+      ),
+    }
+  }, [
+    node.position[0],
+    node.position[1],
+    node.position[2],
+    node.rotation,
+    node.length,
+    effectiveSegment?.position?.[0],
+    effectiveSegment?.position?.[2],
+    effectiveSegment?.rotation,
+    effectiveSegment?.wallHeight,
+    effectiveSegment?.overhang,
+    effectiveSegment?.pitch,
+    effectiveSegment?.roofType,
+    mitreNodes,
+  ])
 
   const geometry = useMemo(
     () => buildGutterGeometry(node, mitres),
@@ -126,9 +169,9 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       node.endCapRight,
       node.hangerStyle,
       node.hangerSpacing,
-      node.outletSide,
-      node.outletInset,
-      node.outletDiameter,
+      // Value-compare the outlets array so the CSG drills only rebuild
+      // when an outlet's offset / diameter changes or one is added.
+      JSON.stringify(node.outlets),
       mitres.left,
       mitres.right,
     ],
@@ -172,7 +215,10 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
   // segment geometry at draw time rather than caching it at placement.
   const segPos = segment.position ?? [0, 0, 0]
   const segRotY = segment.rotation ?? 0
-  const liveEaveY = computeEaveY(effectiveSegment)
+  // Prefer the connected run's shared height (aligns gutters meeting at
+  // a corner whose segments derive different eave Ys); fall back to this
+  // segment's own eave Y for an isolated gutter.
+  const liveEaveY = sharedEaveY ?? computeEaveY(effectiveSegment)
 
   return (
     <group position={segPos} rotation-y={segRotY}>

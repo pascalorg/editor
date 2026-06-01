@@ -9,6 +9,15 @@ import {
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { type GutterMitres, NO_MITRES } from './corner-mitre'
+import {
+  OUTLET_STUB_LENGTH,
+  OUTLET_WALL_THICKNESS,
+  type OutletDims,
+  type OutletShape,
+  outletDims,
+  outletShapeForProfile,
+  profileFloorMidZ,
+} from './profile-geometry'
 
 /**
  * Pure builder for the gutter mesh. The gutter is a hollow trough that
@@ -87,7 +96,7 @@ export function buildGutterGeometry(
   // Z_cs = depth maps to mesh--X (left end).
   const pieces: THREE.BufferGeometry[] = []
 
-  const channel = new THREE.ExtrudeGeometry(channelCross, {
+  let channel: THREE.BufferGeometry = new THREE.ExtrudeGeometry(channelCross, {
     depth: channelLen,
     bevelEnabled: false,
     curveSegments: 16,
@@ -98,16 +107,30 @@ export function buildGutterGeometry(
   // Z_cs = length (0 at right end of mesh, `channelLen` at left end).
   // After rotateY(-π/2): mesh-X = -Z_cs, mesh-Z = X_cs.
   //
-  // OUTER-corner mitre rule: the back wall (X_cs = 0) stays at the
-  // original end (mesh-X = ±len/2); the front rim (X_cs = +outward)
-  // extends further along the gutter's length so it can reach the
-  // outer eave intersection of the L. In mesh coords:
+  // Corner mitre rule: the back wall (X_cs = 0) stays at the original
+  // end (mesh-X = ±len/2); the front rim (X_cs = +outward) is SKEWED
+  // along the gutter's length to reach the eave intersection of the L.
+  // The mitre is SIGNED — positive (convex / outer corner) extends the
+  // rim past the end; negative (concave / inner corner) retracts it to
+  // the inner intersection. `Math.tan` carries the sign, so the same
+  // formula handles both. In mesh coords:
   //   right end: Δmesh-X = +mesh-Z · tan(mitreRight)
   //   left  end: Δmesh-X = −mesh-Z · tan(mitreLeft)
   // Mapped back to source coords (Δmesh-X = −ΔZ_cs, mesh-Z = X_cs):
   //   right end (Z_cs = 0):           new Z_cs = −X_cs · tan(mitreRight)
   //   left  end (Z_cs = channelLen):  new Z_cs = channelLen + X_cs · tan(mitreLeft)
-  if (mitres.right > 0 || mitres.left > 0) {
+  if (mitres.right !== 0 || mitres.left !== 0) {
+    // Drop the cross-section CAP at each mitred end first. Both gutters
+    // at a corner skew their end faces onto the SAME mitre plane, so the
+    // thin metal-section caps land coincident and z-fight into the stray
+    // seam lines visible at the joint (and the ink-edge pass outlines
+    // them). With the caps gone the open troughs flow into each other and
+    // the side walls carry the corner — a clean seam. Done before the
+    // skew so the end planes are still the clean z=0 / z=channelLen.
+    const stripped = stripEndCaps(channel, channelLen, mitres.right !== 0, mitres.left !== 0)
+    channel.dispose()
+    channel = stripped
+
     const tanRight = Math.tan(mitres.right)
     const tanLeft = Math.tan(mitres.left)
     const eps = 1e-5
@@ -115,9 +138,9 @@ export function buildGutterGeometry(
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i)
       const z = pos.getZ(i)
-      if (mitres.right > 0 && Math.abs(z) < eps) {
+      if (mitres.right !== 0 && Math.abs(z) < eps) {
         pos.setZ(i, -x * tanRight)
-      } else if (mitres.left > 0 && Math.abs(z - channelLen) < eps) {
+      } else if (mitres.left !== 0 && Math.abs(z - channelLen) < eps) {
         pos.setZ(i, channelLen + x * tanLeft)
       }
     }
@@ -164,20 +187,25 @@ export function buildGutterGeometry(
   // top ~3mm above the rim — so it reads as a clip resting on the
   // gutter rather than buried in it.
   if ((node.hangerStyle ?? 'strap') !== 'none') {
-    for (const hanger of buildHangers(node, len, size, capLeftLen, capRightLen)) {
+    for (const hanger of buildHangers(node, len, size, capLeftLen, capRightLen, mitres)) {
       pieces.push(hanger)
     }
   }
 
-  // Downspout outlet: short cylindrical drop tube hanging off the
-  // gutter floor at the chosen end. The stub itself is solid at the
-  // outer (bore + wall) radius; the bore is then drilled through both
-  // the floor and the stub via CSG, so the result is a real hole in
+  // Downspout outlets: short drop-tube collars hanging off the gutter
+  // floor at each outlet's position. Each collar is solid at the outer
+  // (bore + wall) cross-section; the bore is then drilled through both
+  // the floor and the collar via CSG, so the result is a real hole in
   // the trough floor and a hollow tube descending from it. CSG only
-  // runs when the outlet is enabled — `'none'` keeps the fast merge
-  // path.
-  const outletStub = buildOutletStub(node, len, size, capLeftLen, capRightLen)
-  if (outletStub) pieces.push(outletStub)
+  // runs when at least one outlet exists — an empty `outlets` keeps the
+  // fast merge path.
+  const placements = resolveOutletPlacements(node, len, size, capLeftLen, capRightLen)
+  for (const p of placements) {
+    pieces.push(buildOutletStub(p, size))
+    // Flared funnel lip at the floor so the drop reads as a real drop
+    // outlet rather than a bare tube; the same bore drill cuts it open.
+    pieces.push(buildOutletFunnel(p, size))
+  }
 
   const merged = pieces.length === 1 ? pieces[0]! : (mergeGeometries(pieces, false) ?? pieces[0]!)
   // Free the intermediate pieces when merge returned a new geometry.
@@ -186,25 +214,75 @@ export function buildGutterGeometry(
   }
   merged.computeVertexNormals()
 
-  // CSG drill — punches the bore through the merged geometry. Runs
-  // last so the floor + stub are already in one mesh; the drill cuts
-  // both at once.
-  if (outletStub) {
-    const drill = buildOutletDrill(node, len, size, capLeftLen, capRightLen)
-    if (drill) {
-      const mainBrush = new Brush(merged)
-      prepareBrushForCSG(mainBrush)
+  // CSG drill — punches each bore through the merged geometry. Runs
+  // last so the floor + collars are already in one mesh; each drill
+  // cuts both at once, subtracted sequentially.
+  if (placements.length > 0) {
+    let workingBrush = new Brush(merged)
+    prepareBrushForCSG(workingBrush)
+    for (const p of placements) {
+      const drill = buildOutletDrill(p, size)
       const drillBrush = new Brush(drill)
       prepareBrushForCSG(drillBrush)
-      const cut = csgEvaluator.evaluate(mainBrush, drillBrush, SUBTRACTION)
-      const cutGeometry = csgGeometry(cut)
-      merged.dispose()
+      const next = csgEvaluator.evaluate(workingBrush, drillBrush, SUBTRACTION) as Brush
+      // Free the previous step's intermediate result (but not `merged`,
+      // which is disposed once below).
+      if (workingBrush.geometry !== merged) workingBrush.geometry.dispose()
+      workingBrush = next
       drill.dispose()
-      return cutGeometry
     }
+    const cutGeometry = csgGeometry(workingBrush)
+    merged.dispose()
+    return cutGeometry
   }
 
   return merged
+}
+
+// Remove the extrude's cross-section CAP triangles at a mitred end so two
+// gutters meeting at a corner don't leave coincident, z-fighting end
+// faces (the seam lines at the joint). A cap triangle is one whose three
+// vertices ALL lie on an end plane — z≈0 (right end) or z≈channelLen
+// (left end). Wall triangles always span the two planes, so this cleanly
+// separates caps from walls without depending on ExtrudeGeometry's
+// internal vertex order. Input is non-indexed (ExtrudeGeometry), so every
+// three positions is one triangle; we copy through the survivors and let
+// the caller recompute normals.
+function stripEndCaps(
+  geo: THREE.BufferGeometry,
+  channelLen: number,
+  removeRight: boolean,
+  removeLeft: boolean,
+): THREE.BufferGeometry {
+  const src = geo.index ? geo.toNonIndexed() : geo
+  const pos = src.attributes.position!
+  const uv = src.attributes.uv
+  const eps = 1e-4
+  const keepPos: number[] = []
+  const keepUv: number[] | null = uv ? [] : null
+  const triCount = Math.floor(pos.count / 3)
+  for (let t = 0; t < triCount; t++) {
+    const a = t * 3
+    const za = pos.getZ(a)
+    const zb = pos.getZ(a + 1)
+    const zc = pos.getZ(a + 2)
+    const allRight = Math.abs(za) < eps && Math.abs(zb) < eps && Math.abs(zc) < eps
+    const allLeft =
+      Math.abs(za - channelLen) < eps &&
+      Math.abs(zb - channelLen) < eps &&
+      Math.abs(zc - channelLen) < eps
+    if ((removeRight && allRight) || (removeLeft && allLeft)) continue
+    for (let k = 0; k < 3; k++) {
+      const idx = a + k
+      keepPos.push(pos.getX(idx), pos.getY(idx), pos.getZ(idx))
+      if (keepUv && uv) keepUv.push(uv.getX(idx), uv.getY(idx))
+    }
+  }
+  if (src !== geo) src.dispose()
+  const out = new THREE.BufferGeometry()
+  out.setAttribute('position', new THREE.Float32BufferAttribute(keepPos, 3))
+  if (keepUv) out.setAttribute('uv', new THREE.Float32BufferAttribute(keepUv, 2))
+  return out
 }
 
 // Each cross-section below is authored as a single closed polygon that
@@ -379,15 +457,26 @@ function buildHangers(
   size: number,
   capLeftLen: number,
   capRightLen: number,
+  mitres: GutterMitres,
 ): THREE.BufferGeometry[] {
   const spacing = Math.max(0.2, node.hangerSpacing ?? 0.6)
   const profile = node.profile ?? 'k-style'
   const rimWidth = profileRimWidth(profile, size)
   const strapDepth = rimWidth + HANGER_OVERHANG * 2
 
-  // Inset by margin AND any cap so straps don't punch into the cap slab.
-  const leftBound = -len / 2 + capLeftLen + HANGER_END_MARGIN
-  const rightBound = len / 2 - capRightLen - HANGER_END_MARGIN
+  // At an INNER (concave) corner the two gutters' troughs fold into the
+  // same notch, so a strap sitting near that end overlaps the neighbour
+  // gutter's end strap — the two perpendicular straps read as an X across
+  // the corner. Pull the run's bound back by a full strap depth at a
+  // concave end so the nearest strap clears the joint. OUTER (convex)
+  // corners diverge outward and never overlap, so they keep the tight
+  // margin (`mitre > 0` and non-mitred ends → no extra inset).
+  const concaveInset = (mitre: number) => (mitre < 0 ? strapDepth : 0)
+
+  // Inset by margin AND any cap so straps don't punch into the cap slab,
+  // plus the concave-corner clearance above.
+  const leftBound = -len / 2 + capLeftLen + HANGER_END_MARGIN + concaveInset(mitres.left)
+  const rightBound = len / 2 - capRightLen - HANGER_END_MARGIN - concaveInset(mitres.right)
   const usable = rightBound - leftBound
   if (usable <= 0) return []
 
@@ -403,14 +492,14 @@ function buildHangers(
     // BoxGeometry is indexed; the channel + cap ExtrudeGeometries are
     // not. `mergeGeometries` rejects mixed-index sets, so flatten the
     // box to non-indexed before pushing.
-    const bar = new THREE.BoxGeometry(HANGER_BAR_LEN, HANGER_BAR_THICKNESS, strapDepth).toNonIndexed()
+    const bar = new THREE.BoxGeometry(
+      HANGER_BAR_LEN,
+      HANGER_BAR_THICKNESS,
+      strapDepth,
+    ).toNonIndexed()
     // Center the bar at X = position, Y just above the rim line, Z
     // straddling 0 so the strap covers the full back-to-front span.
-    bar.translate(
-      x,
-      HANGER_BAR_THICKNESS / 2 + 0.001,
-      rimWidth / 2,
-    )
+    bar.translate(x, HANGER_BAR_THICKNESS / 2 + 0.001, rimWidth / 2)
     pieces.push(bar)
   }
   return pieces
@@ -418,113 +507,128 @@ function buildHangers(
 
 // ─── Outlet ────────────────────────────────────────────────────────
 
-// Stub length — 6 cm reads as "drop tube" without poking conspicuously
-// far below the eave; the downspout pipe (eventually a child node)
-// will visually continue downward from the stub's open end.
-const OUTLET_STUB_LENGTH = 0.06
 // Radial subdivisions — 24 reads as smooth at typical outlet
 // diameters; lower and the 3″ tube starts looking faceted from below.
 const OUTLET_RADIAL_SEGMENTS = 24
-// Wall thickness of the drop tube — 3 mm matches typical residential
-// gauge. After CSG the stub becomes a tube with outer radius =
-// bore + wall and inner radius = bore.
-const OUTLET_WALL_THICKNESS = 0.003
 // Drill overshoot past the floor and past the stub bottom — keeps the
 // CSG cut planes from coinciding with merged-geometry surfaces
 // (coplanar cuts produce degenerate output in three-bvh-csg).
 const OUTLET_DRILL_OVERSHOOT = 0.01
+// Funnel lip at the drop outlet — flares this much wider than the collar
+// over this height, just below the trough floor. The bore drill cuts it
+// open along with the collar.
+const OUTLET_FLARE_SCALE = 1.6
+const OUTLET_FLARE_HEIGHT = 0.02
 
-/** Z (outward) coordinate of the trough floor's midpoint per profile. */
-function profileFloorMidZ(profile: GutterNode['profile'], size: number): number {
-  // k-style bottom is `wBot = 0.8 · size` wide; box bottom is `size`
-  // wide; half-round's lowest point sits at the centre of the
-  // semicircle at Z = r = size.
-  if (profile === 'half-round') return size
-  if (profile === 'box') return size / 2
-  return size * 0.4
+type OutletPlacement = {
+  x: number
+  z: number
+  shape: OutletShape
+  /** Bore cross-section (the drilled hole). */
+  inner: OutletDims
+  /** Collar cross-section (bore + wall) — the solid stub body. */
+  outer: OutletDims
 }
 
 /**
- * Common (X, Z) placement + radius math used by both the solid stub
- * and the CSG drill. Returns null when the outlet is disabled or
- * doesn't fit between the caps.
+ * One placement per `node.outlets` entry that fits between the caps. The
+ * shape follows the gutter profile (`outletShapeForProfile`): round
+ * leader on half-round, rectangular on k-style / box. Each outlet's
+ * `offset` (signed from center) is clamped inside the trough-floor span
+ * using the OUTER along-length half-extent so the collar can't poke into
+ * a cap. Outlets that can't fit at all are dropped.
  */
-function resolveOutletPlacement(
+function resolveOutletPlacements(
   node: GutterNode,
   len: number,
   size: number,
   capLeftLen: number,
   capRightLen: number,
-): { x: number; z: number; bore: number; outer: number } | null {
-  const side = node.outletSide ?? 'none'
-  if (side === 'none') return null
+): OutletPlacement[] {
+  const outlets = node.outlets ?? []
+  if (outlets.length === 0) return []
 
-  const bore = Math.max(0.01, (node.outletDiameter ?? 0.07) / 2)
-  const outer = bore + OUTLET_WALL_THICKNESS
-  const inset = Math.max(outer, node.outletInset ?? 0.15)
-
-  // Clamp inside the trough-floor span — use the OUTER radius so the
-  // tube body itself can't poke into a cap.
-  const minX = -len / 2 + capLeftLen + outer
-  const maxX = len / 2 - capRightLen - outer
-  if (maxX <= minX) return null
-  let x = side === 'left' ? -len / 2 + capLeftLen + inset : len / 2 - capRightLen - inset
-  x = Math.max(minX, Math.min(maxX, x))
-
-  const profile = node.profile ?? 'k-style'
-  const z = profileFloorMidZ(profile, size)
-  return { x, z, bore, outer }
+  const shape = outletShapeForProfile(node.profile)
+  const z = profileFloorMidZ(node.profile ?? 'k-style', size)
+  const placements: OutletPlacement[] = []
+  for (const outlet of outlets) {
+    const inner = outletDims(shape, outlet.diameter ?? 0.07)
+    const outer: OutletDims = {
+      shape,
+      halfX: inner.halfX + OUTLET_WALL_THICKNESS,
+      halfZ: inner.halfZ + OUTLET_WALL_THICKNESS,
+    }
+    const minX = -len / 2 + capLeftLen + outer.halfX
+    const maxX = len / 2 - capRightLen - outer.halfX
+    if (maxX <= minX) continue
+    const x = Math.max(minX, Math.min(maxX, outlet.offset ?? 0))
+    placements.push({ x, z, shape, inner, outer })
+  }
+  return placements
 }
 
-function buildOutletStub(
-  node: GutterNode,
-  len: number,
-  size: number,
-  capLeftLen: number,
-  capRightLen: number,
-): THREE.BufferGeometry | null {
-  const p = resolveOutletPlacement(node, len, size, capLeftLen, capRightLen)
-  if (!p) return null
-
-  // Solid cylinder at OUTER radius; the CSG drill below will hollow
-  // out the bore and leave a tube wall. Top of the stub sits flush
-  // with the gutter floor (Y = −size). CylinderGeometry is indexed;
-  // flatten to match the ExtrudeGeometries in `pieces`.
-  const tube = new THREE.CylinderGeometry(
-    p.outer,
-    p.outer,
-    OUTLET_STUB_LENGTH,
-    OUTLET_RADIAL_SEGMENTS,
-  ).toNonIndexed()
-  tube.translate(p.x, -size - OUTLET_STUB_LENGTH / 2, p.z)
-  return tube
+/** Cylinder (round) or box (rect) sized to `dims`, height `h` along Y. */
+function outletSolid(dims: OutletDims, h: number): THREE.BufferGeometry {
+  if (dims.shape === 'round') {
+    return new THREE.CylinderGeometry(
+      dims.halfX,
+      dims.halfX,
+      h,
+      OUTLET_RADIAL_SEGMENTS,
+    ).toNonIndexed()
+  }
+  return new THREE.BoxGeometry(2 * dims.halfX, h, 2 * dims.halfZ).toNonIndexed()
 }
 
-function buildOutletDrill(
-  node: GutterNode,
-  len: number,
-  size: number,
-  capLeftLen: number,
-  capRightLen: number,
-): THREE.BufferGeometry | null {
-  const p = resolveOutletPlacement(node, len, size, capLeftLen, capRightLen)
-  if (!p) return null
+/**
+ * Solid collar at the OUTER cross-section; the CSG drill hollows out the
+ * bore and leaves a tube wall. Top sits flush with the gutter floor
+ * (Y = −size). Flattened to match the ExtrudeGeometries.
+ */
+function buildOutletStub(p: OutletPlacement, size: number): THREE.BufferGeometry {
+  const stub = outletSolid(p.outer, OUTLET_STUB_LENGTH)
+  stub.translate(p.x, -size - OUTLET_STUB_LENGTH / 2, p.z)
+  return stub
+}
 
-  // Drill spans from slightly above the trough floor to slightly
-  // below the stub's bottom — the overshoots keep CSG cut planes
-  // from sitting coplanar with merged-geometry faces.
+/**
+ * Flared funnel lip just below the trough floor — wide at the floor,
+ * tapering to the collar below (round → a cone; rect → a stepped wider
+ * lip). Sits in the bore drill's span so it gets cut open too.
+ */
+function buildOutletFunnel(p: OutletPlacement, size: number): THREE.BufferGeometry {
+  const centerY = -size - OUTLET_FLARE_HEIGHT / 2
+  let funnel: THREE.BufferGeometry
+  if (p.shape === 'round') {
+    funnel = new THREE.CylinderGeometry(
+      p.outer.halfX * OUTLET_FLARE_SCALE,
+      p.outer.halfX,
+      OUTLET_FLARE_HEIGHT,
+      OUTLET_RADIAL_SEGMENTS,
+    ).toNonIndexed()
+  } else {
+    funnel = new THREE.BoxGeometry(
+      2 * p.outer.halfX * OUTLET_FLARE_SCALE,
+      OUTLET_FLARE_HEIGHT,
+      2 * p.outer.halfZ * OUTLET_FLARE_SCALE,
+    ).toNonIndexed()
+  }
+  funnel.translate(p.x, centerY, p.z)
+  return funnel
+}
+
+/**
+ * Bore drill — spans from slightly above the trough floor to slightly
+ * below the collar's bottom; the overshoots keep CSG cut planes from
+ * sitting coplanar with merged-geometry faces.
+ */
+function buildOutletDrill(p: OutletPlacement, size: number): THREE.BufferGeometry {
   const top = -size + OUTLET_DRILL_OVERSHOOT
   const bottom = -size - OUTLET_STUB_LENGTH - OUTLET_DRILL_OVERSHOOT
   const height = top - bottom
   const centerY = (top + bottom) / 2
 
-  const drill = new THREE.CylinderGeometry(
-    p.bore,
-    p.bore,
-    height,
-    OUTLET_RADIAL_SEGMENTS,
-  )
-  // CSG doesn't care about indexed vs non-indexed for the input brushes.
+  const drill = outletSolid(p.inner, height)
   drill.translate(p.x, centerY, p.z)
   return drill
 }
