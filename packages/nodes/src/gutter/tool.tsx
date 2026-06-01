@@ -11,7 +11,7 @@ import {
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { gutterDefinition } from './definition'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'

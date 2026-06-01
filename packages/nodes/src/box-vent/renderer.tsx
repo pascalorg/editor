@@ -18,7 +18,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { buildBoxVentGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({

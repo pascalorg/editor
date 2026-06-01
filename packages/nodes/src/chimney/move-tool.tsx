@@ -15,7 +15,7 @@ import { triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import ChimneyPreview from './preview'
 
 const tmpMatrix = new THREE.Matrix4()

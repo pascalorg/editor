@@ -20,7 +20,8 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { buildSolarPanelGeometry, getDefaultPanelMaterial, surfaceQuatFromNormal } from './geometry'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
+import { buildSolarPanelGeometry, getDefaultPanelMaterial } from './geometry'
 
 // Module-scope scratch vectors and quaternions for composing the panel's
 // local orientation each render — surfaceQuat · Y(rotation) · X(tilt).

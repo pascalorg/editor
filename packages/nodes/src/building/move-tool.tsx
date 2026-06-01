@@ -8,13 +8,10 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
-import { CursorSphere } from '../shared/cursor-sphere'
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
@@ -96,7 +93,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
 
       if (rotationDelta !== 0) {
         event.preventDefault()
-        sfxEmitter.emit('sfx:item-rotate')
+        triggerSFX('sfx:item-rotate')
         pendingRotationRef.current += rotationDelta
 
         const mesh = sceneRegistry.nodes.get(nodeId)
@@ -124,7 +121,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
-        sfxEmitter.emit('sfx:grid-snap')
+        triggerSFX('sfx:grid-snap')
       }
 
       previousGridPosRef.current = [gridX, gridZ]
@@ -154,7 +151,7 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       })
       useScene.temporal.getState().pause()
 
-      sfxEmitter.emit('sfx:item-place')
+      triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ buildingId: nodeId as BuildingNode['id'] })
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
@@ -207,3 +204,5 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
     </group>
   )
 }
+
+export default MoveBuildingContent

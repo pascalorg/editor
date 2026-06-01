@@ -12,7 +12,7 @@ import {
 } from '@pascal-app/core'
 import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
 

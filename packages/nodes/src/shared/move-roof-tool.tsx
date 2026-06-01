@@ -13,15 +13,17 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
+import {
+  CursorSphere,
+  clearRoofDuplicateMetadata,
+  snapFenceDraftPoint,
+  triggerSFX,
+  useEditor,
+  type WallPlanPoint,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { clearRoofDuplicateMetadata } from '../../../lib/roof-duplication'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
-import { snapFenceDraftPoint } from '../fence/fence-drafting'
-import { CursorSphere } from '../shared/cursor-sphere'
-import type { WallPlanPoint } from '../wall/wall-drafting'
 
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
@@ -217,7 +219,7 @@ export const MoveRoofTool: React.FC<{
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
-        sfxEmitter.emit('sfx:grid-snap')
+        triggerSFX('sfx:grid-snap')
       }
 
       previousGridPosRef.current = [gridX, gridZ]
@@ -274,7 +276,7 @@ export const MoveRoofTool: React.FC<{
 
       useScene.temporal.getState().pause()
 
-      sfxEmitter.emit('sfx:item-place')
+      triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [movingNode.id] })
       useLiveTransforms.getState().clear(movingNode.id)
       exitMoveMode()
@@ -309,7 +311,7 @@ export const MoveRoofTool: React.FC<{
 
       if (rotationDelta !== 0) {
         event.preventDefault()
-        sfxEmitter.emit('sfx:item-rotate')
+        triggerSFX('sfx:item-rotate')
 
         pendingRotation += rotationDelta
 
@@ -371,3 +373,5 @@ export const MoveRoofTool: React.FC<{
     </group>
   )
 }
+
+export default MoveRoofTool

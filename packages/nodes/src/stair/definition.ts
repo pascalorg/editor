@@ -1,8 +1,8 @@
 import {
   type HandleDescriptor,
   type NodeDefinition,
-  type StairNode as StairNodeType,
   StairNode as StairNodeSchema,
+  type StairNode as StairNodeType,
 } from '@pascal-app/core'
 
 const MIN_CURVED_RISE = 0.3
@@ -223,11 +223,7 @@ function stairRotateGizmoPosition(n: StairNodeType): [number, number, number] {
   }
   const width = Math.max(n.width ?? 1, MIN_CURVED_WIDTH)
   const yMid = Math.max(n.totalRise ?? 2.5, 0.1) / 2
-  return [
-    width / 2 + STAIR_ROTATE_CORNER_OFFSET,
-    yMid,
-    -STAIR_ROTATE_CORNER_OFFSET,
-  ]
+  return [width / 2 + STAIR_ROTATE_CORNER_OFFSET, yMid, -STAIR_ROTATE_CORNER_OFFSET]
 }
 
 function stairRotateHandle(): HandleDescriptor<StairNodeType> {
@@ -288,6 +284,8 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
   handles.push(stairRotateHandle())
   return handles
 }
+
+import { buildStairFloorplan } from './floorplan'
 import {
   curvedStairInnerRadiusAffordance,
   curvedStairSweepAffordance,
@@ -296,7 +294,6 @@ import {
   segmentWidthAffordance,
   stairRotateAffordance,
 } from './floorplan-affordances'
-import { buildStairFloorplan } from './floorplan'
 import { stairFloorplanMoveTarget } from './floorplan-move'
 import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
@@ -323,6 +320,13 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+  },
+
+  // Bespoke move shared with roof / roof-segment / stair-segment via
+  // `shared/move-roof-tool` — routed through `MoveTool`'s registry-
+  // affordance lookup rather than a hardcoded dispatcher arm.
+  affordanceTools: {
+    move: () => import('../shared/move-roof-tool'),
   },
 
   parametrics: stairParametrics,

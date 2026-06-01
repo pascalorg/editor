@@ -170,7 +170,7 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
-export { duplicateRoofSubtree } from './lib/roof-duplication'
+export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'

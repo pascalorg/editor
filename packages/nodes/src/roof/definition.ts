@@ -34,6 +34,14 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     deletable: true,
   },
 
+  // Bespoke free-floating move (drag-to-place with R/T rotation and
+  // wall/fence snapping). Routes through `MoveTool`'s registry-affordance
+  // lookup — no hardcoded dispatcher arm. Shared with roof-segment / stair
+  // / stair-segment via `shared/move-roof-tool`.
+  affordanceTools: {
+    move: () => import('../shared/move-roof-tool'),
+  },
+
   parametrics: roofParametrics,
   floorplan: buildRoofFloorplan,
 

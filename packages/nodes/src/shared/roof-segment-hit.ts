@@ -19,7 +19,7 @@ export type RoofSegmentHit = {
 
 /**
  * Analytical surface Y for `seg` at segment-local (lx, lz). Mirrors
- * the per-roof-type slope math in `solar-panel/geometry.ts` so the
+ * the per-roof-type slope math in `shared/roof-surface.ts` so the
  * disambiguator below stays free of cross-kind imports. Returns the
  * roof's local surface height; the value is only used to compare
  * candidates, never written to the scene.

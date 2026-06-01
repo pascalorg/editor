@@ -14,8 +14,8 @@ import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/edito
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import SkylightPreview from './preview'
 
 function resolveSegmentFromWorldPoint(
@@ -103,7 +103,12 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     // same via its `if (!hit) return` guard.
     const updateFromHit = (event: RoofEvent) => {
       const roof = event.node as RoofNode
-      const hit = resolveRoofSegmentHit(roof, event.position[0], event.position[1], event.position[2])
+      const hit = resolveRoofSegmentHit(
+        roof,
+        event.position[0],
+        event.position[1],
+        event.position[2],
+      )
       if (!hit) {
         setHasHit(false)
         return false

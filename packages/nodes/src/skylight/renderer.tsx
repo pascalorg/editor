@@ -22,7 +22,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { surfaceQuatFromNormal } from '../shared/roof-surface'
 import { buildFrameGeometry } from './frame-csg'
 import { buildLanternGlassGeometry, clamp01, paneSize } from './geometry'
 
@@ -707,41 +707,41 @@ const SkylightRenderer = ({ node: storeNode }: { node: SkylightNode }) => {
         ref={ref}
       >
         <mesh
-              castShadow
-              geometry={frameGeo}
-              material={frameMaterial}
-              name="skylight-surface"
-              receiveShadow
-            />
-            {activeType === 'lantern' && (
-              <LanternGlass
-                curbHeight={curbH}
-                frameMaterial={frameMaterial}
-                glassMaterial={glassMaterial}
-                node={node}
-              />
-            )}
-            {activeType === 'sliding' && (
-              <SlidingGlass
-                curbHeight={curbH}
-                frameMaterial={frameMaterial}
-                glassMaterial={glassMaterial}
-                glassThickness={glassThickness}
-                node={node}
-                openAmount={openAmount}
-              />
-            )}
-            {activeType === 'opening' && (
-              <HingedGlass
-                curbHeight={curbH}
-                frameMaterial={frameMaterial}
-                glassMaterial={glassMaterial}
-                glassThickness={glassThickness}
-                hasMotorHousing={node.motorHousing ?? false}
-                node={node}
-                openAmount={openAmount}
-              />
-            )}
+          castShadow
+          geometry={frameGeo}
+          material={frameMaterial}
+          name="skylight-surface"
+          receiveShadow
+        />
+        {activeType === 'lantern' && (
+          <LanternGlass
+            curbHeight={curbH}
+            frameMaterial={frameMaterial}
+            glassMaterial={glassMaterial}
+            node={node}
+          />
+        )}
+        {activeType === 'sliding' && (
+          <SlidingGlass
+            curbHeight={curbH}
+            frameMaterial={frameMaterial}
+            glassMaterial={glassMaterial}
+            glassThickness={glassThickness}
+            node={node}
+            openAmount={openAmount}
+          />
+        )}
+        {activeType === 'opening' && (
+          <HingedGlass
+            curbHeight={curbH}
+            frameMaterial={frameMaterial}
+            glassMaterial={glassMaterial}
+            glassThickness={glassThickness}
+            hasMotorHousing={node.motorHousing ?? false}
+            node={node}
+            openAmount={openAmount}
+          />
+        )}
         {(activeType === 'flat' || activeType === 'walk-on') && (
           <GlassPane
             glassThickness={glassThickness}
