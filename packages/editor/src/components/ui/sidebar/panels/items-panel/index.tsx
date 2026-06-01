@@ -9,6 +9,7 @@ import useEditor from '../../../../../store/use-editor'
 import { furnishTools } from '../../../action-menu/furnish-tools'
 import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
+import { type FunctionTreeNode, FunctionTreePanel } from './function-tree-panel'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
 
@@ -18,6 +19,7 @@ export function ItemsPanel({
   searchResults,
   leadingTile,
   emptyState,
+  functionTree,
 }: {
   items?: AssetInput[]
   /** Called when the search query changes (community edition uses this for server-side search) */
@@ -33,6 +35,48 @@ export function ItemsPanel({
    * Optional node rendered when the grid has no items to show (empty category
    * or no search results). Replaces the default "No results" message.
    */
+  emptyState?: React.ReactNode
+  /**
+   * DB-driven function taxonomy. When provided, the panel renders the
+   * hierarchical tree browse instead of the legacy hardcoded category tabs.
+   */
+  functionTree?: FunctionTreeNode[]
+}) {
+  // When the embedder supplies a function taxonomy, the hierarchical browse
+  // replaces the legacy `furnishTools` category tabs entirely.
+  if (functionTree && functionTree.length > 0) {
+    return (
+      <FunctionTreePanel
+        emptyState={emptyState}
+        functionTree={functionTree}
+        items={items}
+        leadingTile={leadingTile}
+        onSearchChange={onSearchChange}
+        searchResults={searchResults}
+      />
+    )
+  }
+
+  return <LegacyItemsPanel
+    emptyState={emptyState}
+    items={items}
+    leadingTile={leadingTile}
+    onSearchChange={onSearchChange}
+    searchResults={searchResults}
+  />
+}
+
+function LegacyItemsPanel({
+  items,
+  onSearchChange,
+  searchResults,
+  leadingTile,
+  emptyState,
+}: {
+  items?: AssetInput[]
+  onSearchChange?: (query: string) => void
+  searchResults?: AssetInput[] | null
+  leadingTile?: React.ReactNode
   emptyState?: React.ReactNode
 }) {
   const mode = useEditor((s) => s.mode)
@@ -129,7 +173,7 @@ export function ItemsPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Category tabs */}
-      <div className="flex shrink-0 gap-1 overflow-x-auto border-border/70 border-b p-2">
+      <div className="flex shrink-0 flex-wrap gap-1 border-border/70 border-b p-2">
         {furnishTools.map((cat) => {
           const isActive = activeCategory.catalogCategory === cat.catalogCategory
           return (

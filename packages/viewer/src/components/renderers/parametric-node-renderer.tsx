@@ -62,10 +62,7 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   // of snapping only on commit. Per-node subscription so unrelated
   // override writes don't re-render the whole tree.
   const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(node.id))
-  const overrideRotation = liveOverride?.rotation as
-    | [number, number, number]
-    | number
-    | undefined
+  const overrideRotation = liveOverride?.rotation as [number, number, number] | number | undefined
   const overridePosition = liveOverride?.position as [number, number, number] | undefined
 
   useRegistry(node.id, node.type, ref)

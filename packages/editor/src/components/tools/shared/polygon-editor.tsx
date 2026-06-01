@@ -514,9 +514,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             position={[x!, editY + height / 2, z!]}
           >
             <cylinderGeometry args={[radius, radius, height, 16]} />
-            <meshBasicMaterial
-              color={isDragging ? '#22c55e' : isHovered ? '#60a5fa' : '#3b82f6'}
-            />
+            <meshBasicMaterial color={isDragging ? '#22c55e' : isHovered ? '#60a5fa' : '#3b82f6'} />
           </mesh>
         )
       })}

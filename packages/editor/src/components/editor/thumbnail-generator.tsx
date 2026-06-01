@@ -461,6 +461,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       captureMode?: 'standard' | 'viewport' | 'area'
       cropRegion?: { x: number; y: number; width: number; height: number }
       snapLevels?: boolean
+      // `transparent` is informational here — the render pipeline already
+      // captures with alpha (see `setClearAlpha(0)` above) — the flag is
+      // forwarded so future tweaks (suppressing the ground occluder, theme
+      // background bits) can branch on it without touching the emitter.
+      transparent?: boolean
     }) => {
       await generate(event.snapLevels === true, event.captureMode, event.cropRegion)
     }

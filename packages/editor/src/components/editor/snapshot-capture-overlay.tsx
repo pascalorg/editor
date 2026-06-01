@@ -7,7 +7,11 @@ import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 
-type CaptureMode = 'standard' | 'viewport' | 'area'
+// Local crop-mode enum — distinct from `useEditor.captureMode` (which
+// describes *why* a capture is happening, e.g. `preset`). This one says
+// HOW the captured pixels are cropped: full-frame 16:9 (`standard`),
+// raw canvas viewport, or user-dragged area.
+type CropMode = 'standard' | 'viewport' | 'area'
 type CaptureState = 'idle' | 'capturing' | 'saved'
 
 interface DragPoint {
@@ -21,7 +25,7 @@ interface Drag {
 }
 
 function getResolution(
-  mode: CaptureMode,
+  mode: CropMode,
   overlayEl: HTMLDivElement | null,
   drag: Drag | null,
 ): { w: number; h: number } | null {
@@ -47,10 +51,15 @@ function getResolution(
 
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const captureMode = useEditor((s) => s.captureMode)
   const setCaptureMode = useEditor((s) => s.setCaptureMode)
   const isMobile = useIsMobile()
+  // `preset` capture mode locks the overlay to a square area crop with
+  // a transparent background — the user picks framing but not the
+  // crop shape. Matches the unified preset-thumbnail capture flow.
+  const isPreset = captureMode.mode === 'preset'
 
-  const [mode, setMode] = useState<CaptureMode>('standard')
+  const [mode, setMode] = useState<CropMode>('standard')
   const [drag, setDrag] = useState<Drag | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [captureState, setCaptureState] = useState<CaptureState>('idle')
@@ -66,15 +75,29 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [isCaptureMode, setCaptureMode])
 
-  // Reset local state when entering capture mode
+  // Reset local state when entering capture mode. Preset mode also
+  // auto-stages a centered square crop sized to ~75% of the shorter
+  // viewport dimension so the user can capture immediately — the
+  // overlay's pan/move/resize handles still apply if they want to
+  // tweak the framing, but they don't have to draw the rect first.
   useEffect(() => {
-    if (isCaptureMode) {
-      setMode('standard')
+    if (!isCaptureMode) return
+    setMode(isPreset ? 'area' : 'standard')
+    setIsDragging(false)
+    setCaptureState('idle')
+    if (isPreset && overlayRef.current) {
+      const rect = overlayRef.current.getBoundingClientRect()
+      const side = Math.min(rect.width, rect.height) * 0.75
+      const cx = rect.width / 2
+      const cy = rect.height / 2
+      setDrag({
+        start: { x: cx - side / 2, y: cy - side / 2 },
+        end: { x: cx + side / 2, y: cy + side / 2 },
+      })
+    } else {
       setDrag(null)
-      setIsDragging(false)
-      setCaptureState('idle')
     }
-  }, [isCaptureMode])
+  }, [isCaptureMode, isPreset])
 
   // Listen for snapshot saved to show feedback then exit
   useEffect(() => {
@@ -142,11 +165,28 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           start: { x: snapshot.start.x + dx, y: snapshot.start.y + dy },
           end: { x: snapshot.end.x + dx, y: snapshot.end.y + dy },
         })
+      } else if (isPreset) {
+        // Preset mode locks the rect to a square — use the smaller
+        // axis to keep the drag predictable, sign-correct so the user
+        // can still drag in any quadrant.
+        setDrag((d) => {
+          if (!d) return null
+          const dx = pt.x - d.start.x
+          const dy = pt.y - d.start.y
+          const side = Math.min(Math.abs(dx), Math.abs(dy))
+          return {
+            start: d.start,
+            end: {
+              x: d.start.x + Math.sign(dx || 1) * side,
+              y: d.start.y + Math.sign(dy || 1) * side,
+            },
+          }
+        })
       } else {
         setDrag((d) => (d ? { start: d.start, end: pt } : null))
       }
     },
-    [isDragging],
+    [isDragging, isPreset],
   )
 
   const onPointerUp = useCallback(() => {
@@ -225,8 +265,12 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       projectId,
       captureMode: mode,
       cropRegion,
+      // In preset mode, the ThumbnailGenerator should keep the alpha
+      // channel transparent so the saved preset thumbnail composes
+      // cleanly onto any palette background.
+      transparent: isPreset,
     })
-  }, [captureState, mode, drag, projectId])
+  }, [captureState, mode, drag, projectId, isPreset])
 
   if (!isCaptureMode) return null
 
@@ -250,31 +294,47 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
-      {/* Area mode: dim layer + crosshair cursor + drag-to-select */}
+      {/* Area mode: dim layer + crosshair cursor + drag-to-select.
+       *
+       * Preset mode reuses the same DOM but stays click-through: the
+       * crop frame is auto-staged and locked, so the user adjusts the
+       * camera (orbit / pan / zoom) instead of dragging the rect. The
+       * dim letterbox + dashed border still render via the inline
+       * `box-shadow` on the selection rect — they're cosmetic. */}
       {mode === 'area' && (
         <div
-          className="pointer-events-auto absolute inset-0 bg-black/30"
-          onPointerDown={onPointerDown}
-          onPointerMove={(e) => {
-            onPointerMove(e)
-            // Update cursor: 'move' when hovering inside an existing selection
-            if (!isDragging && drag && overlayRef.current) {
-              const rect = overlayRef.current.getBoundingClientRect()
-              const px = e.clientX - rect.left
-              const py = e.clientY - rect.top
-              const x0 = Math.min(drag.start.x, drag.end.x)
-              const y0 = Math.min(drag.start.y, drag.end.y)
-              const x1 = Math.max(drag.start.x, drag.end.x)
-              const y1 = Math.max(drag.start.y, drag.end.y)
-              e.currentTarget.style.cursor =
-                px >= x0 && px <= x1 && py >= y0 && py <= y1 ? 'move' : 'crosshair'
-            }
-          }}
-          onPointerUp={onPointerUp}
-          style={{ cursor: 'crosshair' }}
+          className={
+            isPreset
+              ? 'pointer-events-none absolute inset-0'
+              : 'pointer-events-auto absolute inset-0 bg-black/30'
+          }
+          onPointerDown={isPreset ? undefined : onPointerDown}
+          onPointerMove={
+            isPreset
+              ? undefined
+              : (e) => {
+                  onPointerMove(e)
+                  // Update cursor: 'move' when hovering inside an existing selection
+                  if (!isDragging && drag && overlayRef.current) {
+                    const rect = overlayRef.current.getBoundingClientRect()
+                    const px = e.clientX - rect.left
+                    const py = e.clientY - rect.top
+                    const x0 = Math.min(drag.start.x, drag.end.x)
+                    const y0 = Math.min(drag.start.y, drag.end.y)
+                    const x1 = Math.max(drag.start.x, drag.end.x)
+                    const y1 = Math.max(drag.start.y, drag.end.y)
+                    e.currentTarget.style.cursor =
+                      px >= x0 && px <= x1 && py >= y0 && py <= y1 ? 'move' : 'crosshair'
+                  }
+                }
+          }
+          onPointerUp={isPreset ? undefined : onPointerUp}
+          style={isPreset ? undefined : { cursor: 'crosshair' }}
         >
-          {/* "No selection" hint */}
-          {!selectionStyle && (
+          {/* "No selection" hint — only when the user has to draw the
+              area themselves (`standard` capture). Preset mode always
+              has a pre-staged square, so we never show it there. */}
+          {!selectionStyle && !isPreset && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span className="rounded-full bg-black/40 px-4 py-2 text-sm text-white backdrop-blur-sm">
                 Drag the area you want to capture
@@ -297,31 +357,34 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
                 background: 'rgba(255,255,255,0.04)',
               }}
             >
-              {/* Corner handles */}
-              {(
-                [
-                  { pos: { top: -5, left: -5 }, cursor: 'nwse-resize' },
-                  { pos: { top: -5, right: -5 }, cursor: 'nesw-resize' },
-                  { pos: { bottom: -5, left: -5 }, cursor: 'nesw-resize' },
-                  { pos: { bottom: -5, right: -5 }, cursor: 'nwse-resize' },
-                ] as const
-              ).map(({ pos, cursor }, i) => (
-                <div
-                  key={i}
-                  onPointerDown={(e) => onCornerPointerDown(e, i)}
-                  style={{
-                    position: 'absolute',
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
-                    pointerEvents: 'auto',
-                    cursor,
-                    ...pos,
-                  }}
-                />
-              ))}
+              {/* Corner handles — preset mode locks the frame to the
+                  auto-staged centered square; the user adjusts the
+                  camera instead. */}
+              {!isPreset &&
+                (
+                  [
+                    { pos: { top: -5, left: -5 }, cursor: 'nwse-resize' },
+                    { pos: { top: -5, right: -5 }, cursor: 'nesw-resize' },
+                    { pos: { bottom: -5, left: -5 }, cursor: 'nesw-resize' },
+                    { pos: { bottom: -5, right: -5 }, cursor: 'nwse-resize' },
+                  ] as const
+                ).map(({ pos, cursor }, i) => (
+                  <div
+                    key={i}
+                    onPointerDown={(e) => onCornerPointerDown(e, i)}
+                    style={{
+                      position: 'absolute',
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'white',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                      pointerEvents: 'auto',
+                      cursor,
+                      ...pos,
+                    }}
+                  />
+                ))}
             </div>
           )}
         </div>
@@ -343,7 +406,10 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       {/* Bottom-center mode toolbar */}
       <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2">
         {(() => {
-          const modeButtons = (
+          // Preset capture mode locks both the crop shape (square) and
+          // the transparent-background output — hide the per-shape
+          // mode buttons so the user has nothing to second-guess.
+          const modeButtons = isPreset ? null : (
             <>
               <ModeButton
                 active={mode === 'standard'}
@@ -408,8 +474,16 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           if (isMobile) {
             return (
               <div className="flex flex-col items-stretch gap-2 rounded-2xl border border-white/10 bg-neutral-900/95 px-2 py-2 shadow-xl backdrop-blur-md">
-                <div className="flex items-center justify-center gap-1">{modeButtons}</div>
-                <div className="flex items-center justify-center gap-2 border-white/10 border-t pt-2">
+                {modeButtons && (
+                  <div className="flex items-center justify-center gap-1">{modeButtons}</div>
+                )}
+                <div
+                  className={
+                    modeButtons
+                      ? 'flex items-center justify-center gap-2 border-white/10 border-t pt-2'
+                      : 'flex items-center justify-center gap-2'
+                  }
+                >
                   {resolutionDisplay}
                   {captureButton}
                 </div>
@@ -420,7 +494,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           return (
             <div className="flex items-center gap-1 rounded-full border border-white/10 bg-neutral-900/95 px-2 py-2 shadow-xl backdrop-blur-md">
               {modeButtons}
-              <div className="mx-1 h-4 w-px bg-white/10" />
+              {modeButtons && <div className="mx-1 h-4 w-px bg-white/10" />}
               {resolutionDisplay}
               <div className="mx-1 h-4 w-px bg-white/10" />
               {captureButton}

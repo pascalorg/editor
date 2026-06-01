@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { loadPlugin, nodeRegistry, registerNode } from './registry'
+import {
+  getHostRefFields,
+  isDrawnViaTool,
+  isDrawnViaToolKind,
+  isPresettable,
+  isPresettableKind,
+  loadPlugin,
+  nodeRegistry,
+  registerNode,
+} from './registry'
 import type { AnyNodeDefinition, Plugin } from './types'
 
 function makeDefinition(
@@ -67,6 +76,75 @@ describe('nodeRegistry', () => {
     registerNode(a)
     registerNode(b)
     expect(nodeRegistry.schemas()).toEqual([a.schema, b.schema])
+  })
+})
+
+describe('isPresettable', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('explicit true wins', () => {
+    const def = makeDefinition('explicit-true', { capabilities: { presettable: true } })
+    expect(isPresettable(def)).toBe(true)
+  })
+
+  test('explicit false wins even with parametrics', () => {
+    const def = makeDefinition('explicit-false', {
+      capabilities: { presettable: false },
+      parametrics: { groups: [] } as any,
+    })
+    expect(isPresettable(def)).toBe(false)
+  })
+
+  test('defaults to true when parametrics exists', () => {
+    const def = makeDefinition('param', { parametrics: { groups: [] } as any })
+    expect(isPresettable(def)).toBe(true)
+  })
+
+  test('defaults to false without parametrics', () => {
+    const def = makeDefinition('no-param')
+    expect(isPresettable(def)).toBe(false)
+  })
+
+  test('isPresettableKind looks up the registry', () => {
+    registerNode(makeDefinition('shelfy', { parametrics: { groups: [] } as any }))
+    expect(isPresettableKind('shelfy')).toBe(true)
+    expect(isPresettableKind('unknown')).toBe(false)
+  })
+})
+
+describe('getHostRefFields', () => {
+  test('returns the declared hostRefFields verbatim', () => {
+    const def = makeDefinition('door', { capabilities: { hostRefFields: ['wallId'] } })
+    expect(getHostRefFields(def)).toEqual(['wallId'])
+  })
+
+  test('defaults to an empty array when none declared', () => {
+    const def = makeDefinition('shelf')
+    expect(getHostRefFields(def)).toEqual([])
+  })
+})
+
+describe('isDrawnViaTool', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('true when capability set', () => {
+    const def = makeDefinition('fence', { capabilities: { drawTool: true } })
+    expect(isDrawnViaTool(def)).toBe(true)
+  })
+
+  test('false when unset or not exactly true', () => {
+    expect(isDrawnViaTool(makeDefinition('column'))).toBe(false)
+    expect(isDrawnViaTool(makeDefinition('off', { capabilities: { drawTool: false } }))).toBe(false)
+  })
+
+  test('isDrawnViaToolKind looks up the registry', () => {
+    registerNode(makeDefinition('fence', { capabilities: { drawTool: true } }))
+    expect(isDrawnViaToolKind('fence')).toBe(true)
+    expect(isDrawnViaToolKind('unknown')).toBe(false)
   })
 })
 

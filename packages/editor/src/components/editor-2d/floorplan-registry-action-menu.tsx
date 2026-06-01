@@ -100,9 +100,7 @@ export function FloorplanRegistryActionMenu() {
         return
       }
 
-      const el = sceneEl.querySelector(
-        `[data-node-id="${selectedId}"]`,
-      ) as SVGGElement | null
+      const el = sceneEl.querySelector(`[data-node-id="${selectedId}"]`) as SVGGElement | null
       if (el) {
         const rect = el.getBoundingClientRect()
         setPosition({ left: rect.left + rect.width / 2, top: rect.top })

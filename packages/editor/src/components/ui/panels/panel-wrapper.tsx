@@ -2,8 +2,18 @@
 
 import { ChevronLeft, RotateCcw, X } from 'lucide-react'
 import Image from 'next/image'
+import { createContext, useContext } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { cn } from '../../../lib/utils'
+
+/**
+ * Host-supplied inspector footer (e.g. community's "Save as preset"). The
+ * `PanelManager` provides it so every panel — including kind-owned
+ * `customPanel`s that render their own `<PanelWrapper>` without threading a
+ * `footer` prop — picks it up without per-kind wiring. An explicit `footer`
+ * prop still wins over the context.
+ */
+export const InspectorFooterContext = createContext<React.ReactNode>(null)
 
 interface PanelWrapperProps {
   title: string
@@ -16,6 +26,8 @@ interface PanelWrapperProps {
   onReset?: () => void
   onBack?: () => void
   children: React.ReactNode
+  /** Pinned below the scrollable body, inside the panel card. */
+  footer?: React.ReactNode
   className?: string
   width?: number | string
 }
@@ -27,10 +39,13 @@ export function PanelWrapper({
   onReset,
   onBack,
   children,
+  footer,
   className,
   width = 320, // default width
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
+  const contextFooter = useContext(InspectorFooterContext)
+  const resolvedFooter = footer ?? contextFooter
 
   return (
     <div
@@ -104,6 +119,10 @@ export function PanelWrapper({
 
       {/* Content */}
       <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+
+      {resolvedFooter && (
+        <div className="shrink-0 border-border/50 border-t p-3">{resolvedFooter}</div>
+      )}
     </div>
   )
 }

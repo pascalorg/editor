@@ -20,7 +20,7 @@ import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
-import { PanelWrapper } from './panel-wrapper'
+import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -38,7 +38,7 @@ import { PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector() {
+export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {}) {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
@@ -88,10 +88,14 @@ export function ParametricInspector() {
   // panel to cover them.
   if (parametrics.customPanel) {
     const CustomPanel = resolveCustomPanel(parametrics.customPanel)
+    // Custom panels render their own `<PanelWrapper>` and don't thread a
+    // `footer` prop, so hand the host footer down via context.
     return (
-      <Suspense fallback={null}>
-        <CustomPanel />
-      </Suspense>
+      <InspectorFooterContext.Provider value={footer}>
+        <Suspense fallback={null}>
+          <CustomPanel />
+        </Suspense>
+      </InspectorFooterContext.Provider>
     )
   }
 
@@ -106,7 +110,7 @@ export function ParametricInspector() {
     : null
 
   return (
-    <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (

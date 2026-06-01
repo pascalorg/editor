@@ -102,8 +102,7 @@ export function buildColumnFloorplan(
       // outward tip in plan coords. Captured at emit-time so the
       // affordance doesn't need to recompute `column.rotation` (and
       // a mid-drag rotation can't drift the projection basis).
-      const outwardLocal: [number, number] =
-        localDirection === 'x' ? [1, 0] : [0, 1]
+      const outwardLocal: [number, number] = localDirection === 'x' ? [1, 0] : [0, 1]
       const [planAxisX, planAxisY] = rotatePlanVector(outwardLocal[0], outwardLocal[1], rot)
       children.push({
         kind: 'move-arrow',

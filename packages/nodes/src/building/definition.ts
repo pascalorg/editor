@@ -28,6 +28,7 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
     duplicable: false,
     deletable: false,
     floorplanLevelContainer: true,
+    presettable: false,
   },
 
   // Building-wide drag (whole-building translate + R/T rotation). Routed

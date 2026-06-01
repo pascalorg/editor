@@ -460,9 +460,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       if (axis) {
         const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
         const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj = shiftPressedRef.current
-          ? rawProj
-          : snapScalarToGrid(rawProj, snapStep)
+        const snappedProj = shiftPressedRef.current ? rawProj : snapScalarToGrid(rawProj, snapStep)
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta

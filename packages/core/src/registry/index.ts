@@ -1,22 +1,3 @@
-export {
-  discoverPlugins,
-  getSelectableKinds,
-  isRegistryMovable,
-  isRegistrySelectable,
-  kindsWithFloorplanScope,
-  loadPlugin,
-  nodeRegistry,
-  type PluginDiscovery,
-  registerNode,
-  setPluginDiscovery,
-} from './registry'
-export {
-  type CascadeContext,
-  type ChildQuery,
-  cascadeDirty,
-  collectDescendants,
-  type SpatialQuery,
-} from './relations-resolver'
 export type {
   ArcResizeHandle,
   Cursor,
@@ -33,7 +14,38 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
+export {
+  discoverPlugins,
+  getHostRefFields,
+  getSelectableKinds,
+  isDrawnViaTool,
+  isDrawnViaToolKind,
+  isPresettable,
+  isPresettableKind,
+  isRegistryMovable,
+  isRegistrySelectable,
+  kindsWithFloorplanScope,
+  loadPlugin,
+  nodeRegistry,
+  type PluginDiscovery,
+  registerNode,
+  setPluginDiscovery,
+} from './registry'
+export {
+  type CascadeContext,
+  type ChildQuery,
+  cascadeDirty,
+  collectDescendants,
+  type SpatialQuery,
+} from './relations-resolver'
 export { createSceneApi, type SceneStoreLike } from './scene-api'
+export {
+  type CloneNodesIntoOptions,
+  type CloneNodesIntoResult,
+  cloneNodesInto,
+  collectSubtree,
+  type Subtree,
+} from './subtree'
 export type {
   Affordance,
   AnyNodeDefinition,

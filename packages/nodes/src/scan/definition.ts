@@ -23,6 +23,9 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: false,
     deletable: true,
+    // Scans carry user-uploaded imagery — cataloging them as
+    // reusable presets is out of scope.
+    presettable: false,
   },
 
   parametrics: scanParametrics,

@@ -661,10 +661,7 @@ function SpiralStepSupportMesh({
   const sizeX = Math.max(0.04, innerRadius - spiralColumnRadius + 0.04)
   const sizeY = Math.max(thickness * 0.55, 0.025)
   const sizeZ = Math.max(0.04, Math.min(0.12, sizeY * 1.5))
-  const geometry = useMemo(
-    () => new THREE.BoxGeometry(sizeX, sizeY, sizeZ),
-    [sizeX, sizeY, sizeZ],
-  )
+  const geometry = useMemo(() => new THREE.BoxGeometry(sizeX, sizeY, sizeZ), [sizeX, sizeY, sizeZ])
   useEffect(
     () => () => {
       geometry.dispose()

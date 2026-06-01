@@ -146,10 +146,7 @@ export const curvedStairWidthAffordance: FloorplanAffordance<StairNode> = {
       affectedIds: [stairId],
       apply({ planPoint }) {
         const currentRadial = (planPoint[0] - cx) * radialX + (planPoint[1] - cz) * radialZ
-        const newWidth = Math.max(
-          MIN_CURVED_WIDTH,
-          initialWidth + (currentRadial - initialRadial),
-        )
+        const newWidth = Math.max(MIN_CURVED_WIDTH, initialWidth + (currentRadial - initialRadial))
         lastWidth = newWidth
         useScene.getState().updateNode(stairId, { width: newWidth })
       },
@@ -172,7 +169,9 @@ export const curvedStairInnerRadiusAffordance: FloorplanAffordance<StairNode> = 
   start({ node, initialPlanPoint }) {
     const stairId = node.id as AnyNodeId
     const isSpiral = node.stairType === 'spiral'
-    const minInnerRadius = isSpiral ? MIN_CURVED_INNER_RADIUS_SPIRAL : MIN_CURVED_INNER_RADIUS_CURVED
+    const minInnerRadius = isSpiral
+      ? MIN_CURVED_INNER_RADIUS_SPIRAL
+      : MIN_CURVED_INNER_RADIUS_CURVED
     const initialInnerRadius = Math.max(minInnerRadius, node.innerRadius ?? 0.9)
     const initialWidth = Math.max(node.width ?? 1, MIN_CURVED_WIDTH)
     const initialOuterRadius = initialInnerRadius + initialWidth
@@ -303,9 +302,7 @@ export const curvedStairSweepAffordance: FloorplanAffordance<StairNode> = {
         return true
       },
       commit() {
-        useScene
-          .getState()
-          .updateNode(stairId, { sweepAngle: lastSweep, rotation: lastRotation })
+        useScene.getState().updateNode(stairId, { sweepAngle: lastSweep, rotation: lastRotation })
       },
     }
   },

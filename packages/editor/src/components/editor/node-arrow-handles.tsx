@@ -490,8 +490,7 @@ function NodeArrowHandlesForNode({
   // with the mesh — the freeze-at-pre-drag mechanism (built for asymmetric
   // resize that re-centres the mesh) must NOT fire for the non-active arrows
   // here, or they'd lag behind the moving item.
-  const activeIsTranslate =
-    activeIndex !== null && descriptors[activeIndex]?.kind === 'translate'
+  const activeIsTranslate = activeIndex !== null && descriptors[activeIndex]?.kind === 'translate'
 
   const arrows = descriptors.map((descriptor, index) => (
     <ArrowHandle

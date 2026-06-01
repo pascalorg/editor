@@ -190,8 +190,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (editorPhase === 'structure' &&
       editorMode === 'build' &&
       (editorTool === 'door' || editorTool === 'window')) ||
-    (movingNode != null &&
-      !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
+    (movingNode != null && !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
   // Subscribe to the live-transforms map ref so the layer re-renders
   // whenever a 3D mover publishes a per-frame position (see
   // `usePlacementCoordinator`). Without this the 2D floor plan only
@@ -398,8 +397,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         const hovered = hoveredId === cid
         const moving = movingNode?.id === cid
         const ctx: GeometryContext = {
-          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined =>
-            nodes[rid] as N | undefined,
+          resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined => nodes[rid] as N | undefined,
           children: [],
           siblings: [],
           parent: activeLevelNode,
@@ -413,9 +411,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
               }
             : undefined,
         }
-        const geometry = (
-          builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null
-        )(node, ctx)
+        const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
+          node,
+          ctx,
+        )
         if (geometry) {
           const { base, overlay } = splitFloorplanOverlay(geometry)
           out.push({ id: cid, node, base, overlay, selected, highlighted })
@@ -1200,11 +1199,7 @@ function InteractiveGeometry({
               fill="transparent"
               onPointerDown={(e) => {
                 if (affordance) {
-                  onHandlePointerDown(
-                    affordance,
-                    payload,
-                    e as ReactPointerEvent<SVGGElement>,
-                  )
+                  onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGGElement>)
                 } else {
                   onMoveHandlePointerDown(e as ReactPointerEvent<SVGGElement>)
                 }

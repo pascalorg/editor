@@ -671,7 +671,6 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
         frustumCulled={false}
         geometry={arrowGeometry}
         material={arrowMaterial}
-
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()

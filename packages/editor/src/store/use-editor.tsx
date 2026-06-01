@@ -48,6 +48,20 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
 
+// Snapshot capture is invoked from two surfaces with different policies.
+// `standard` mirrors the existing user-driven UX — pick region / viewport /
+// area, save the blob as a project thumbnail. `preset` is the constrained
+// variant for the unified preset capture flow (community save-as-preset
+// modal): the overlay locks to a square crop, the renderer clears alpha
+// (transparent background), and the rendered set is locked to `isolated`
+// — `ThumbnailGenerator` consults `captureMode.mode === 'preset'` and
+// applies those constraints. Keeping it a discriminated union lets us
+// add future modes without surfacing the choice to end users.
+export type CaptureMode =
+  | { mode: 'idle' }
+  | { mode: 'standard' }
+  | { mode: 'preset'; isolated: AnyNodeId[] }
+
 export type Phase = 'site' | 'structure' | 'furnish'
 
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
@@ -103,6 +117,14 @@ export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
 // Combined tool type
 export type Tool = SiteTool | StructureTool | FurnishTool
 
+/**
+ * Starting parameters seeded into a draw tool before it mints a node.
+ * A loose param bag — the tool's create path validates it through the
+ * kind's schema (`FenceNode.parse({ ...defaults, start, end })`), which
+ * is the real type gate, so unknown keys are simply ignored.
+ */
+export type ToolDefaults = Record<string, unknown>
+
 export type MovingWallEndpoint = {
   wall: WallNode
   endpoint: 'start' | 'end'
@@ -144,6 +166,15 @@ type EditorState = {
   setMode: (mode: Mode) => void
   tool: Tool | null
   setTool: (tool: Tool | null) => void
+  /**
+   * Per-tool starting parameters for the next node a draw tool mints.
+   * Transient (not persisted): host apps seed an entry just before
+   * activating the tool (placing a drawn preset, or a future dimension
+   * picker), the tool's create path merges it, and the tool clears its
+   * own entry on deactivation so a later manual draw isn't poisoned.
+   */
+  toolDefaults: Partial<Record<Tool, ToolDefaults>>
+  setToolDefaults: (tool: Tool, defaults: ToolDefaults | null) => void
   structureLayer: StructureLayer
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
@@ -255,9 +286,16 @@ type EditorState = {
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
-  // Capture mode (snapshot toolbar — hides panels for clean framing)
+  // Capture mode (snapshot toolbar — hides panels for clean framing).
+  // `captureMode` is the canonical discriminated-union state; the boolean
+  // `isCaptureMode` is kept synced as a derived convenience for the many
+  // existing read sites that just gate chrome visibility on "is capture
+  // active". New write sites should pass a `CaptureMode` shape; passing a
+  // boolean is accepted as a back-compat shim (`true` → `'standard'`,
+  // `false` → `'idle'`).
+  captureMode: CaptureMode
   isCaptureMode: boolean
-  setCaptureMode: (active: boolean) => void
+  setCaptureMode: (next: boolean | CaptureMode) => void
   // View mode (3D only, 2D only, or split 2D+3D)
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
@@ -289,7 +327,6 @@ type EditorState = {
   setFirstPersonMode: (enabled: boolean) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
-  setIsCaptureMode: (enabled: boolean) => void
   floorplanPaneRatio: number
   setFloorplanPaneRatio: (ratio: number) => void
   // Mobile-only: pixel height of the secondary panel sheet while open (0 when closed).
@@ -592,6 +629,17 @@ const useEditor = create<EditorState>()(
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
+      toolDefaults: {},
+      setToolDefaults: (tool, defaults) =>
+        set((state) => {
+          const next = { ...state.toolDefaults }
+          if (defaults === null) {
+            delete next[tool]
+          } else {
+            next[tool] = defaults
+          }
+          return { toolDefaults: next }
+        }),
       structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
       setStructureLayer: (layer) => {
         const { mode } = get()
@@ -741,8 +789,13 @@ const useEditor = create<EditorState>()(
           set({ isPreviewMode: false })
         }
       },
+      captureMode: { mode: 'idle' } as CaptureMode,
       isCaptureMode: false,
-      setCaptureMode: (active) => set({ isCaptureMode: active }),
+      setCaptureMode: (next) => {
+        const resolved: CaptureMode =
+          typeof next === 'boolean' ? { mode: next ? 'standard' : 'idle' } : next
+        set({ captureMode: resolved, isCaptureMode: resolved.mode !== 'idle' })
+      },
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
       splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
@@ -797,7 +850,6 @@ const useEditor = create<EditorState>()(
       },
       activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
       setActiveSidebarPanel: (id) => set({ activeSidebarPanel: id }),
-      setIsCaptureMode: (enabled) => set({ isCaptureMode: enabled }),
       floorplanPaneRatio: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.floorplanPaneRatio,
       setFloorplanPaneRatio: (ratio) =>
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),

@@ -99,6 +99,10 @@ const assetSchema = z.object({
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
   tags: z.array(z.string()).optional(),
+  // Function-axis tag slugs from the taxonomy. Drives the hierarchical
+  // Items-tab browse: a tree node matches when any of its descendant slugs
+  // appears here. Absent for the seeded built-in catalog.
+  functionTags: z.array(z.string()).optional(),
   // These are "Corrective" transforms to normalize the GLB
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
