@@ -40,6 +40,8 @@ export type {
   IconRef,
   Issue,
   LazyComponent,
+  MaterialTargetDescriptor,
+  MaterialTargetKind,
   McpOverrides,
   Modifiers,
   MovableConfig,

@@ -2,18 +2,22 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  AssemblyNode,
   BoxNode,
   BuildingNode,
   CapsuleNode,
   CeilingNode,
   ColumnNode,
+  ConeNode,
   CylinderNode,
   DoorNode,
   ElevatorNode,
   ExtrudeNode,
   FenceNode,
+  FrustumNode,
   GuideNode,
   HalfCylinderNode,
+  HemisphereNode,
   ItemNode,
   LatheNode,
   LevelNode,
@@ -30,7 +34,10 @@ import type {
   StairNode,
   StairSegmentNode,
   SweepNode,
+  TorusNode,
+  TrapezoidPrismNode,
   WallNode,
+  WedgeNode,
   WindowNode,
   ZoneNode,
 } from '../schema'
@@ -70,8 +77,15 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 }
 
 export type BoxEvent = NodeEvent<BoxNode>
+export type AssemblyEvent = NodeEvent<AssemblyNode>
 export type CylinderEvent = NodeEvent<CylinderNode>
+export type ConeEvent = NodeEvent<ConeNode>
+export type FrustumEvent = NodeEvent<FrustumNode>
 export type SphereEvent = NodeEvent<SphereNode>
+export type HemisphereEvent = NodeEvent<HemisphereNode>
+export type TorusEvent = NodeEvent<TorusNode>
+export type WedgeEvent = NodeEvent<WedgeNode>
+export type TrapezoidPrismEvent = NodeEvent<TrapezoidPrismNode>
 export type LatheEvent = NodeEvent<LatheNode>
 export type CapsuleEvent = NodeEvent<CapsuleNode>
 export type HalfCylinderEvent = NodeEvent<HalfCylinderNode>
@@ -212,8 +226,15 @@ type AIChatEvents = {
 }
 
 type EditorEvents = GridEvents &
+  NodeEvents<'assembly', AssemblyEvent> &
   NodeEvents<'box', BoxEvent> &
   NodeEvents<'cylinder', CylinderEvent> &
+  NodeEvents<'cone', ConeEvent> &
+  NodeEvents<'frustum', FrustumEvent> &
+  NodeEvents<'hemisphere', HemisphereEvent> &
+  NodeEvents<'torus', TorusEvent> &
+  NodeEvents<'wedge', WedgeEvent> &
+  NodeEvents<'trapezoid-prism', TrapezoidPrismEvent> &
   NodeEvents<'sphere', SphereEvent> &
   NodeEvents<'lathe', LatheEvent> &
   NodeEvents<'capsule', CapsuleEvent> &

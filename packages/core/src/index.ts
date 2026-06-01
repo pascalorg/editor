@@ -55,14 +55,31 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export {
+  applyDimensionSemanticsToObjectInput,
+  parseDimensionSemantics,
+  type DimensionSemantics,
+} from './lib/dimension-semantics'
+export {
   composeObjectPrimitives,
   type ObjectComposeCategory,
   type ObjectComposeDetail,
   type ObjectComposeInput,
 } from './lib/object-compose'
 export {
+  assessPartBlueprint,
+  assessPartVisualDetails,
+  composePartPrimitives,
+  type PartBlueprintAssessment,
+  type PartComposeDetail,
+  type PartComposeInput,
+  type PartComposeKind,
+  type PartComposePartInput,
+  type PartVisualAssessment,
+} from './lib/part-compose'
+export {
   type PrimitiveAnchor,
   type PrimitiveAxis,
+  type PrimitiveGeometryBrief,
   type PrimitiveMaterialInput,
   type PrimitiveShapeInput,
   type PrimitiveShapeKind,
@@ -71,6 +88,17 @@ export {
   resolvePrimitiveWorldTransforms,
   type Vec3,
 } from './lib/primitive-compose'
+export {
+  buildPrimitiveGeometryFacts,
+  getPrimitiveShapeHalfExtents,
+  type PrimitiveGeometryFacts,
+  type PrimitiveShapeFact,
+} from './lib/primitive-facts'
+export {
+  type PrimitiveSemanticValidationOptions,
+  type PrimitiveSemanticValidationResult,
+  validatePrimitiveSemantics,
+} from './lib/primitive-semantic-validation'
 export {
   composeRobotArmPrimitives,
   type RobotArmComposeInput,

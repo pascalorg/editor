@@ -3,7 +3,7 @@
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { MaterialPicker } from './../../../components/ui/controls/material-picker'
 import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
 import { useIsMobile } from './../../../hooks/use-mobile'
@@ -13,7 +13,6 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
-import { PrimitiveTools } from './primitive-tools'
 import { StructureTools } from './structure-tools'
 import { GridSnapControl, SecondaryToggles } from './view-toggles'
 
@@ -63,7 +62,6 @@ export function ActionMenu({ className }: { className?: string }) {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const catalogCategory = useEditor((state) => state.catalogCategory)
-  const setPrimitivePlacement = useEditor((state) => state.setPrimitivePlacement)
   const isMobile = useIsMobile()
   const hasSelectionOnMobile = useViewer((s) => isMobile && s.selection.selectedIds.length > 0)
   const hasReferenceOnMobile = useEditor((s) => isMobile && Boolean(s.selectedReferenceId))
@@ -73,10 +71,6 @@ export function ActionMenu({ className }: { className?: string }) {
   )
   const reducedMotion = useReducedMotion()
   const showPaintTray = useMemo(() => mode === 'material-paint', [mode])
-  // 散件 (primitive) shape tray expansion. Lifted here so its expansion
-  // animation lives in the same container as <StructureTools /> and the
-  // material paint tray — same visual mechanism, different content.
-  const [primitivePanelOpen, setPrimitivePanelOpen] = useState(false)
 
   // On mobile, defer the bottom rail to the selection bar when something
   // is selected — the contextual actions take priority over mode controls.
@@ -105,7 +99,7 @@ export function ActionMenu({ className }: { className?: string }) {
       >
         {/* Structure Tools Row - Animated */}
         <AnimatePresence>
-          {phase === 'structure' && mode === 'build' && !primitivePanelOpen && (
+          {phase === 'structure' && mode === 'build' && (
             <motion.div
               animate={{
                 opacity: 1,
@@ -170,55 +164,11 @@ export function ActionMenu({ className }: { className?: string }) {
           )}
         </AnimatePresence>
 
-        {/* Primitive (散件) Shape Row - mirrors the StructureTools row */}
-        <AnimatePresence>
-          {primitivePanelOpen && (
-            <motion.div
-              animate={{
-                opacity: 1,
-                maxHeight: 80,
-                paddingTop: 8,
-                paddingBottom: 8,
-                borderBottomWidth: 1,
-              }}
-              className={cn('max-h-20 overflow-hidden border-border border-b px-2 py-2')}
-              exit={{
-                opacity: 0,
-                maxHeight: 0,
-                paddingTop: 0,
-                paddingBottom: 0,
-                borderBottomWidth: 0,
-              }}
-              initial={{
-                opacity: 0,
-                maxHeight: 0,
-                paddingTop: 0,
-                paddingBottom: 0,
-                borderBottomWidth: 0,
-              }}
-              transition={transition}
-            >
-              <div className="w-max">
-                <PrimitiveTools
-                  onSelectShape={(shape) => {
-                    if (shape.id === 'box' || shape.id === 'cylinder' || shape.id === 'sphere') {
-                      setPrimitivePlacement(shape.id)
-                      setPrimitivePanelOpen(false)
-                    }
-                  }}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
         {isMobile ? (
           <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
             {/* Row 1: control modes only */}
             <div className="flex items-center justify-center gap-1">
-              <ControlModes
-                primitivePanelOpen={primitivePanelOpen}
-                setPrimitivePanelOpen={setPrimitivePanelOpen}
-              />
+              <ControlModes />
             </div>
             {/* Row 2: grid snap + secondary toggles (orbit + top view hidden) */}
             <div className="flex items-center justify-center gap-1 border-border/50 border-t pt-1">
@@ -228,10 +178,7 @@ export function ActionMenu({ className }: { className?: string }) {
           </div>
         ) : (
           <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-            <ControlModes
-              primitivePanelOpen={primitivePanelOpen}
-              setPrimitivePanelOpen={setPrimitivePanelOpen}
-            />
+            <ControlModes />
             <div className="mx-1 h-5 w-px bg-border" />
             <GridSnapControl />
             <SecondaryToggles />

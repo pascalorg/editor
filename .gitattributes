@@ -1,1 +1,12 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.glb binary
+*.bin binary
+
 apps/editor/i18n/locales/zh-CN.json merge=ours

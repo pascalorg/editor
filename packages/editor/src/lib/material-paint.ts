@@ -1,9 +1,6 @@
 'use client'
 
 import {
-  type CeilingNode,
-  type ColumnNode,
-  type FenceNode,
   getCatalogMaterialById,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveStairSurfaceMaterial,
@@ -13,18 +10,18 @@ import {
   type MaterialTarget,
   type RoofNode,
   type RoofSurfaceMaterialRole,
-  type ShelfNode,
-  type SlabNode,
   type StairNode,
   type StairSurfaceMaterialRole,
   type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
+import {
+  getMaterialTargetKindForNode,
+  hasMaterialFields,
+  supportsWholeSurfaceMaterial,
+} from './material-targets'
 
-export type PaintableMaterialTarget = Extract<
-  MaterialTarget,
-  'wall' | 'roof' | 'stair' | 'fence' | 'column' | 'slab' | 'ceiling' | 'shelf' | 'box'
->
+export type PaintableMaterialTarget = MaterialTarget
 
 export type SingleSurfaceMaterialRole = 'surface'
 
@@ -134,7 +131,7 @@ export function buildStairSurfaceMaterialPatch(
 }
 
 export function buildSingleSurfaceMaterialPatch<
-  TNode extends FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
+  TNode extends { material?: MaterialSchema; materialPreset?: string },
 >(material: MaterialSchema | undefined, materialPreset: string | undefined): Partial<TNode> {
   return {
     material,
@@ -220,14 +217,13 @@ export function resolveActivePaintMaterialFromSelection(params: {
   }
 
   if (
-    (selectedNode.type === 'fence' ||
-      selectedNode.type === 'column' ||
-      selectedNode.type === 'slab' ||
-      selectedNode.type === 'ceiling' ||
-      selectedNode.type === 'shelf') &&
+    hasMaterialFields(selectedNode) &&
+    supportsWholeSurfaceMaterial(selectedNode) &&
     selectedMaterialTarget.role === 'surface'
   ) {
-    const target = selectedNode.type
+    const target = getMaterialTargetKindForNode(selectedNode)
+    if (!target) return null
+
     return hasActivePaintMaterial({
       material: selectedNode.material,
       materialPreset: selectedNode.materialPreset,
@@ -266,29 +262,5 @@ export function resolvePaintTargetFromSelection(params: {
     return 'stair'
   }
 
-  if (selectedNode.type === 'fence') {
-    return 'fence'
-  }
-
-  if (selectedNode.type === 'column') {
-    return 'column'
-  }
-
-  if (selectedNode.type === 'slab') {
-    return 'slab'
-  }
-
-  if (selectedNode.type === 'ceiling') {
-    return 'ceiling'
-  }
-
-  if (selectedNode.type === 'shelf') {
-    return 'shelf'
-  }
-
-  if (selectedNode.type === 'box') {
-    return 'box'
-  }
-
-  return null
+  return getMaterialTargetKindForNode(selectedNode)
 }

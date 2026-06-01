@@ -1,4 +1,5 @@
 import { CapsuleNode as CapsuleNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { capsuleParametrics } from './parametrics'
 import { CapsuleNode } from './schema'
 
@@ -23,6 +24,8 @@ export const capsuleDefinition: NodeDefinition<typeof CapsuleNode> = {
   },
 
   parametrics: capsuleParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

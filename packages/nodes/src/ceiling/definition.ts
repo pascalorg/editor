@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -59,6 +60,8 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   parametrics: ceilingParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with a vertical TSL-gradient connector + ground-shadow lines.

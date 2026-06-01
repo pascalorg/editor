@@ -23,9 +23,8 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { createCylinderGeometry } from './lib/create-cylinder-geometry'
-export { clearViewerMaterialCaches, getViewerMaterialCacheSize } from './lib/material-cache'
-export { createSafeEmptyGeometry } from './lib/safe-geometry'
 export { SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export { clearViewerMaterialCaches, getViewerMaterialCacheSize } from './lib/material-cache'
 export {
   applyMaterialPresetToMaterials,
   baseMaterial,
@@ -46,6 +45,12 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
+export {
+  createSafeEmptyGeometry,
+  ensureMeshWebGPUCompatibleGeometry,
+  ensureObjectWebGPUCompatibleGeometry,
+  ensureWebGPUCompatibleGeometry,
+} from './lib/safe-geometry'
 export { useItemLightPool } from './store/use-item-light-pool'
 export { default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

@@ -1,4 +1,5 @@
 import { type NodeDefinition, SweepNode as SweepNodeSchema } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { sweepParametrics } from './parametrics'
 import { SweepNode } from './schema'
 
@@ -23,6 +24,8 @@ export const sweepDefinition: NodeDefinition<typeof SweepNode> = {
   },
 
   parametrics: sweepParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

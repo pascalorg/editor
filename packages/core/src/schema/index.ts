@@ -24,6 +24,7 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export { AssemblyNode } from './nodes/assembly'
 export { BoxNode } from './nodes/box'
 export { BuildingNode } from './nodes/building'
 export { CapsuleNode } from './nodes/capsule'
@@ -43,6 +44,7 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export { ConeNode } from './nodes/cone'
 export { CylinderNode } from './nodes/cylinder'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {
@@ -53,8 +55,10 @@ export {
 } from './nodes/elevator'
 export { ExtrudeNode } from './nodes/extrude'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
+export { FrustumNode } from './nodes/frustum'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export { HalfCylinderNode } from './nodes/half-cylinder'
+export { HemisphereNode } from './nodes/hemisphere'
 export type {
   AnimationEffect,
   Asset,
@@ -102,12 +106,15 @@ export {
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SweepNode } from './nodes/sweep'
+export { TorusNode } from './nodes/torus'
+export { TrapezoidPrismNode } from './nodes/trapezoid-prism'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
 export {
   getEffectiveWallSurfaceMaterial,
   getWallSurfaceMaterialSignature,
   WallNode,
 } from './nodes/wall'
+export { WedgeNode } from './nodes/wedge'
 export { WindowNode, WindowType } from './nodes/window'
 export { ZoneNode } from './nodes/zone'
 export type { AnyNodeId, AnyNodeType } from './types'

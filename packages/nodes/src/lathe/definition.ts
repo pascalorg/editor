@@ -1,4 +1,5 @@
-import { type NodeDefinition, LatheNode as LatheNodeSchema } from '@pascal-app/core'
+import { LatheNode as LatheNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { latheParametrics } from './parametrics'
 import { LatheNode } from './schema'
 
@@ -24,6 +25,8 @@ export const latheDefinition: NodeDefinition<typeof LatheNode> = {
 
   parametrics: latheParametrics,
 
+  materialTargets: overallMaterialTarget,
+
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
@@ -31,13 +34,15 @@ export const latheDefinition: NodeDefinition<typeof LatheNode> = {
 
   presentation: {
     label: 'Lathe',
-    description: 'A 2D profile revolved around the Y axis. For vases, bowls, bottles, and radially symmetric curved surfaces.',
+    description:
+      'A 2D profile revolved around the Y axis. For vases, bowls, bottles, and radially symmetric curved surfaces.',
     icon: { kind: 'iconify', name: 'mdi:rotate-3d' },
     paletteSection: 'structure',
     paletteOrder: 118,
   },
 
   mcp: {
-    description: 'A lathe (revolved) primitive. A 2D profile rotated around Y axis for vases, bowls, bottles, and symmetric curved surfaces.',
+    description:
+      'A lathe (revolved) primitive. A 2D profile rotated around Y axis for vases, bowls, bottles, and symmetric curved surfaces.',
   },
 }

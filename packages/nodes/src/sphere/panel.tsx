@@ -5,6 +5,7 @@ import {
   ActionButton,
   ActionGroup,
   MetricControl,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -84,7 +85,6 @@ export default function SpherePanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
@@ -117,6 +117,8 @@ export default function SpherePanel() {
           value={Math.round((node.radius ?? 0.5) * 100) / 100}
         />
       </PanelSection>
+
+      <NodeMaterialSection />
 
       <PanelSection title={S.position()}>
         <div className="flex items-center gap-1.5">

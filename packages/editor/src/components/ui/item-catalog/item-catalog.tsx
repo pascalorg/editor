@@ -2,7 +2,6 @@
 
 import type { AssetInput } from '@pascal-app/core'
 import { resolveCdnUrl } from '@pascal-app/viewer'
-import Image from 'next/image'
 import { useEffect } from 'react'
 import {
   Tooltip,
@@ -86,6 +85,7 @@ export function ItemCatalog({
       {filteredItems.map((item, index) => {
         const isSelected = selectedItem?.src === item?.src
         const attachmentIcon = getAttachmentIcon(item?.attachTo)
+        const isArticraftAsset = item.tags?.includes('articraft')
         return (
           <button
             className={cn(
@@ -115,6 +115,11 @@ export function ItemCatalog({
                     src={attachmentIcon}
                   />
                 </div>
+              )}
+              {isArticraftAsset && (
+                <span className="absolute top-1 left-1 rounded bg-violet-500/90 px-1.5 py-0.5 font-medium text-[9px] text-white shadow-sm">
+                  Articraft
+                </span>
               )}
             </div>
             <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">

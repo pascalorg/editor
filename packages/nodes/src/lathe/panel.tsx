@@ -4,6 +4,7 @@ import { type AnyNode, type LatheNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -61,7 +62,6 @@ export default function LathePanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
@@ -98,6 +98,8 @@ export default function LathePanel() {
           value={Math.round(((node.arc ?? Math.PI * 2) * 180) / Math.PI)}
         />
       </PanelSection>
+
+      <NodeMaterialSection />
 
       <PanelSection title={S.position()}>
         <div className="flex items-center gap-1.5">

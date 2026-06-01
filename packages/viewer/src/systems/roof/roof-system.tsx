@@ -12,7 +12,7 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
-import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
+import { createSafeEmptyGeometry, ensureWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -663,7 +663,7 @@ export function generateRoofSegmentGeometry(node: RoofSegmentNode): THREE.Buffer
 
   resultGeo.computeVertexNormals()
   ensureUv2Attribute(resultGeo)
-  return resultGeo
+  return ensureWebGPUCompatibleGeometry(resultGeo)
 }
 
 // ============================================================================
@@ -1056,7 +1056,7 @@ function createGeometryFromFaces(
   geometry.dispose()
 
   ensureUv2Attribute(mergedGeo)
-  return mergedGeo
+  return ensureWebGPUCompatibleGeometry(mergedGeo)
 }
 
 function pushRoofUv(uvs: number[], point: THREE.Vector3, normal: THREE.Vector3) {

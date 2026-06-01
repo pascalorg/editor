@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildFenceFloorplan } from './floorplan'
 import { fenceMoveEndpointAffordance } from './floorplan-affordances'
 import { buildFenceGeometry } from './geometry'
@@ -58,6 +59,8 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   },
 
   parametrics: fenceParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   // Stage D: kind-owned placement tool. Two-click flow (start → end)
   // with live preview, length / angle HUD, snap to walls / fences /

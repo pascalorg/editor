@@ -1,10 +1,17 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
+import { Icon } from '@iconify/react'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
 import { cn } from '../../../../../lib/utils'
 import { t } from '../../../../../i18n'
+import {
+  type GeneratedGeometryArtifact,
+  placeGeneratedGeometryArtifact,
+  readSavedGeneratedGeometryArtifacts,
+  removeGeneratedGeometryArtifactFromLocalLibrary,
+} from '../../../../../lib/ai-generated-geometry'
 import type { CatalogCategory } from '../../../../../store/use-editor'
 import useEditor from '../../../../../store/use-editor'
 import { furnishTools, getFurnishToolLabel } from '../../../action-menu/furnish-tools'
@@ -12,6 +19,32 @@ import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
+
+const GENERATED_GEOMETRY_CATEGORY_MAP: Partial<Record<string, CatalogCategory>> = {
+  vehicle: 'vehicle',
+  'outdoor-ac': 'hvac',
+  keyboard: 'electronics',
+  monitor: 'electronics',
+  table: 'equipment',
+  shelf: 'equipment',
+  cabinet: 'equipment',
+  chair: 'equipment',
+  sofa: 'equipment',
+  generic: 'equipment',
+}
+
+function getGeneratedGeometryCatalogCategory(artifact: GeneratedGeometryArtifact): CatalogCategory {
+  const sourceCategory = typeof artifact.sourceArgs.category === 'string' ? artifact.sourceArgs.category : ''
+  return GENERATED_GEOMETRY_CATEGORY_MAP[sourceCategory] ?? 'equipment'
+}
+
+function matchesGeneratedGeometrySearch(artifact: GeneratedGeometryArtifact, query: string) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return [artifact.title, artifact.userPrompt, artifact.sourceTool, artifact.shapeDetails]
+    .some((value) => value.toLowerCase().includes(normalized))
+}
+
 
 export function ItemsPanel({
   items,
@@ -49,6 +82,8 @@ export function ItemsPanel({
   // again clears the filter (`null` = show everything).
   const [activeSource, setActiveSource] = useState<AssetInput['source'] | null>('library')
   const [search, setSearch] = useState('')
+  const [generatedItems, setGeneratedItems] = useState<AssetInput[]>([])
+  const [generatedGeometryArtifacts, setGeneratedGeometryArtifacts] = useState<GeneratedGeometryArtifact[]>([])
   const isServerSearch = onSearchChange !== undefined
   // True when server search is active but results haven't come back yet
   const isSearchPending = isServerSearch && search.length > 0 && searchResults === null
@@ -63,6 +98,55 @@ export function ItemsPanel({
   const activeCategory =
     furnishTools.find((c) => c.catalogCategory === catalogCategory) ?? furnishTools[0]!
 
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const responses = await Promise.allSettled([
+          fetch('/api/articraft/assets', { cache: 'no-store' }),
+          fetch('/api/image-to-3d/assets', { cache: 'no-store' }),
+        ])
+        const assets: AssetInput[] = []
+        for (const response of responses) {
+          if (response.status !== 'fulfilled' || !response.value.ok) continue
+          const data = (await response.value.json()) as { assets?: AssetInput[] }
+          if (Array.isArray(data.assets)) assets.push(...data.assets)
+        }
+        if (!cancelled) setGeneratedItems(assets)
+      } catch {
+        if (!cancelled) setGeneratedItems([])
+      }
+    }
+
+    void load()
+    window.addEventListener('articraft:assets-updated', load)
+    window.addEventListener('generated-assets:updated', load)
+    return () => {
+      cancelled = true
+      window.removeEventListener('articraft:assets-updated', load)
+      window.removeEventListener('generated-assets:updated', load)
+    }
+  }, [])
+
+  useEffect(() => {
+    const load = () => setGeneratedGeometryArtifacts(readSavedGeneratedGeometryArtifacts())
+
+    load()
+    window.addEventListener('ai-geometry-assets:updated', load)
+    return () => window.removeEventListener('ai-geometry-assets:updated', load)
+  }, [])
+
+  const placeGeneratedGeometryAsset = (artifact: GeneratedGeometryArtifact) => {
+    const result = placeGeneratedGeometryArtifact(artifact)
+    if (result.nodeIds.length > 0 && mode !== 'build') setMode('build')
+  }
+
+  const removeGeneratedGeometryAsset = (artifact: GeneratedGeometryArtifact) => {
+    removeGeneratedGeometryArtifactFromLocalLibrary(artifact.id)
+    setGeneratedGeometryArtifacts((prev) => prev.filter((item) => item.id !== artifact.id))
+  }
+
+
   function selectCategory(categoryId: CatalogCategory) {
     setCatalogCategory(categoryId)
     setTool('item')
@@ -73,7 +157,7 @@ export function ItemsPanel({
   }
 
   // Compute tags for the current category (for filter chips)
-  const baseItems = items ?? CATALOG_ITEMS
+  const baseItems = [...(items ?? CATALOG_ITEMS), ...generatedItems]
   // Apply the Library/Community/Mine filter before any category/tag work.
   // Items that don't carry a source field (e.g. seeded built-in catalog
   // entries from `CATALOG_ITEMS`) fall under "library".
@@ -97,6 +181,14 @@ export function ItemsPanel({
   const categoryItems = sourceItems.filter(
     (item) => item.category === activeCategory.catalogCategory,
   )
+
+  const aiGeometryArtifacts = activeSource === 'mine' || activeSource === null
+    ? generatedGeometryArtifacts.filter(
+        (artifact) =>
+          getGeneratedGeometryCatalogCategory(artifact) === activeCategory.catalogCategory &&
+          matchesGeneratedGeometrySearch(artifact, search),
+      )
+    : []
 
   // The three source chips are always shown so users can discover the
   // filter even before they own any items. Selecting "Mine" with no
@@ -312,24 +404,92 @@ export function ItemsPanel({
             </div>
           ))
         ) : (
-          <ItemCatalog
-            activeFunctionalTag={isServerSearch ? null : activeFunctionalTag}
-            activePlacementTag={isServerSearch ? null : activePlacementTag}
-            category={activeCategory.catalogCategory}
-            emptyState={emptyState}
-            items={activeSource && items ? items.filter(matchesSource) : items}
-            key={activeCategory.catalogCategory}
-            leadingTile={leadingTile}
-            overrideItems={
-              isServerSearch && search
-                ? activeSource && searchResults
-                  ? searchResults.filter(matchesSource)
-                  : (searchResults ?? undefined)
-                : undefined
-            }
-            search={isServerSearch ? '' : search}
-          />
+          <div className="space-y-3">
+            {aiGeometryArtifacts.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-0.5 text-[11px] text-muted-foreground">
+                  <span>AI 几何体素材</span>
+                  <span>{aiGeometryArtifacts.length}</span>
+                </div>
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}
+                >
+                  {aiGeometryArtifacts.map((artifact) => (
+                    <AiGeometryAssetCard
+                      artifact={artifact}
+                      key={artifact.id}
+                      onPlace={placeGeneratedGeometryAsset}
+                      onRemove={removeGeneratedGeometryAsset}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <ItemCatalog
+              activeFunctionalTag={isServerSearch ? null : activeFunctionalTag}
+              activePlacementTag={isServerSearch ? null : activePlacementTag}
+              category={activeCategory.catalogCategory}
+              emptyState={aiGeometryArtifacts.length > 0 ? undefined : emptyState}
+              items={sourceItems}
+              key={activeCategory.catalogCategory}
+              leadingTile={leadingTile}
+              overrideItems={
+                isServerSearch && search
+                  ? activeSource && searchResults
+                    ? searchResults.filter(matchesSource)
+                    : (searchResults ?? undefined)
+                  : undefined
+              }
+              search={isServerSearch ? '' : search}
+            />
+          </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function AiGeometryAssetCard({
+  artifact,
+  onPlace,
+  onRemove,
+}: {
+  artifact: GeneratedGeometryArtifact
+  onPlace: (artifact: GeneratedGeometryArtifact) => void
+  onRemove: (artifact: GeneratedGeometryArtifact) => void
+}) {
+  const partCount = artifact.createdNames.length || artifact.shapes.length
+
+  return (
+    <div className="group rounded-xl border border-border/60 bg-background/60 p-1.5 transition-colors hover:border-[#a684ff]/50 hover:bg-sidebar-accent/60">
+      <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-[radial-gradient(circle_at_35%_20%,rgba(166,132,255,0.22),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0))]">
+        <Icon className="size-9 text-[#a684ff] opacity-80" icon="mdi:shape-outline" />
+        <span className="absolute top-1 left-1 rounded bg-[#a684ff]/90 px-1.5 py-0.5 font-medium text-[9px] text-white shadow-sm">
+          AI
+        </span>
+      </div>
+      <div className="mt-1.5 truncate px-0.5 font-medium text-[11px] text-muted-foreground group-hover:text-foreground" title={artifact.title}>
+        {artifact.title}
+      </div>
+      <div className="px-0.5 text-[10px] text-muted-foreground/80">
+        {partCount} parts · v{artifact.version}
+      </div>
+      <div className="mt-1 grid grid-cols-2 gap-1">
+        <button
+          className="rounded-md border border-[#a684ff]/45 bg-[#a684ff]/10 px-1.5 py-1 text-[10px] text-foreground transition-colors hover:bg-[#a684ff]/20"
+          onClick={() => onPlace(artifact)}
+          type="button"
+        >
+          放置
+        </button>
+        <button
+          className="rounded-md border border-border/60 px-1.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-red-400/50 hover:text-red-300"
+          onClick={() => onRemove(artifact)}
+          type="button"
+        >
+          删除
+        </button>
       </div>
     </div>
   )

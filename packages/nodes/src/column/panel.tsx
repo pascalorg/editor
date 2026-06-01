@@ -11,6 +11,7 @@ import {
   ActionButton,
   ActionGroup,
   cn,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -21,14 +22,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-import {
-  columnL,
-  columnPresetLabel,
-  columnSupportStyleLabel,
-  L,
-  N,
-  S,
-} from '../i18n/panel-labels'
+import { columnL, columnPresetLabel, columnSupportStyleLabel, L, N, S } from '../i18n/panel-labels'
 
 const SELECT_CLASS =
   'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
@@ -913,6 +907,8 @@ export default function ColumnPanel() {
           )}
         </PanelSection>
       )}
+
+      <NodeMaterialSection />
 
       <PanelSection title={S.transform()}>
         <SliderControl

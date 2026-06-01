@@ -3,7 +3,14 @@ export type Vec3 = [number, number, number]
 export type PrimitiveShapeKind =
   | 'box'
   | 'cylinder'
+  | 'hollow-cylinder'
+  | 'cone'
+  | 'frustum'
   | 'sphere'
+  | 'hemisphere'
+  | 'torus'
+  | 'wedge'
+  | 'trapezoid-prism'
   | 'lathe'
   | 'capsule'
   | 'half-cylinder'
@@ -25,9 +32,30 @@ export interface PrimitiveMaterialInput {
   }
 }
 
+export interface PrimitiveGeometryBrief {
+  category?: string
+  units?: string
+  coordinateConvention?: string
+  coordinateSystem?: string
+  expectedDimensions?: {
+    length?: number
+    width?: number
+    height?: number
+    [key: string]: number | undefined
+  }
+  requiredRoles?: string[]
+  semanticRoles?: string[]
+  validationTargets?: string[]
+  assumptions?: string[]
+}
+
 export interface PrimitiveShapeInput {
   kind: PrimitiveShapeKind | string
   name?: string
+  semanticRole?: string
+  semanticGroup?: string
+  sourcePartKind?: string
+  sourcePartId?: string
   position?: Vec3
   rotation?: Vec3
   scale?: Vec3
@@ -45,6 +73,15 @@ export interface PrimitiveShapeInput {
   tubularSegments?: number
   widthSegments?: number
   heightSegments?: number
+  radiusTop?: number
+  radiusBottom?: number
+  majorRadius?: number
+  tubeRadius?: number
+  topScale?: [number, number]
+  topLengthScale?: number
+  topWidthScale?: number
+  slopeAxis?: 'x' | 'z' | string
+  slopeDirection?: 'positive' | 'negative' | string
   attachTo?: number
   anchor?: PrimitiveAnchor | string
   childAnchor?: PrimitiveAnchor | string
@@ -81,8 +118,14 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
         y: (spec.height ?? 1.0) / 2,
         z: (spec.width ?? 1.0) / 2,
       }
-    case 'cylinder': {
-      const r = spec.radius ?? 0.5
+    case 'cylinder':
+    case 'hollow-cylinder':
+    case 'cone':
+    case 'frustum': {
+      const r =
+        spec.kind === 'frustum'
+          ? Math.max(spec.radiusTop ?? 0.25, spec.radiusBottom ?? 0.5)
+          : (spec.radius ?? 0.5)
       const halfHeight = (spec.height ?? 1.0) / 2
       switch (spec.axis) {
         case 'x':
@@ -119,6 +162,39 @@ function getHalfExtents(spec: PrimitiveShapeInput): HalfExtents {
       const sz = spec.scale?.[2] ?? 1
       return { x: r * sx, y: r * sy, z: r * sz }
     }
+    case 'hemisphere': {
+      const r = spec.radius ?? 0.5
+      const sx = spec.scale?.[0] ?? 1
+      const sy = spec.scale?.[1] ?? 1
+      const sz = spec.scale?.[2] ?? 1
+      switch (spec.axis) {
+        case 'x':
+          return { x: (r * sx) / 2, y: r * sy, z: r * sz }
+        case 'z':
+          return { x: r * sx, y: r * sy, z: (r * sz) / 2 }
+        default:
+          return { x: r * sx, y: (r * sy) / 2, z: r * sz }
+      }
+    }
+    case 'torus': {
+      const ring = (spec.majorRadius ?? spec.radius ?? 0.5) + (spec.tubeRadius ?? 0.08)
+      const tube = spec.tubeRadius ?? 0.08
+      switch (spec.axis) {
+        case 'x':
+          return { x: tube, y: ring, z: ring }
+        case 'y':
+          return { x: ring, y: tube, z: ring }
+        default:
+          return { x: ring, y: ring, z: tube }
+      }
+    }
+    case 'wedge':
+    case 'trapezoid-prism':
+      return {
+        x: (spec.length ?? 1.0) / 2,
+        y: (spec.height ?? 0.5) / 2,
+        z: (spec.width ?? 1.0) / 2,
+      }
     case 'lathe': {
       const profile = spec.profile ?? [
         [0, 0],
@@ -309,7 +385,26 @@ function subtractVec(a: Vec3, b: Vec3): Vec3 {
 }
 
 function getAxisRotation(spec: PrimitiveShapeInput): Vec3 {
-  if (spec.kind !== 'cylinder' && spec.kind !== 'capsule' && spec.kind !== 'half-cylinder') {
+  if (spec.kind === 'torus') {
+    switch (spec.axis) {
+      case 'x':
+        return [0, Math.PI / 2, 0]
+      case 'y':
+        return [-Math.PI / 2, 0, 0]
+      default:
+        return [0, 0, 0]
+    }
+  }
+
+  if (
+    spec.kind !== 'cylinder' &&
+    spec.kind !== 'hollow-cylinder' &&
+    spec.kind !== 'cone' &&
+    spec.kind !== 'frustum' &&
+    spec.kind !== 'hemisphere' &&
+    spec.kind !== 'capsule' &&
+    spec.kind !== 'half-cylinder'
+  ) {
     return [0, 0, 0]
   }
 

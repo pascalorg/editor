@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isPlanDragMovableNode } from '../../lib/plan-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { duplicateNodeSubtree } from '../../lib/subtree-duplication'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from '../editor/node-action-menu'
 
@@ -149,17 +150,27 @@ export function FloorplanRegistryActionMenu() {
     if (!node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
-    const cloned = structuredClone(node) as AnyNode & { id?: AnyNodeId }
-    delete (cloned as { id?: AnyNodeId }).id
-    const prevMeta =
-      cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
-        ? (cloned.metadata as Record<string, unknown>)
-        : {}
-    cloned.metadata = { ...prevMeta, isNew: true }
-    const parsed = def.schema.parse(cloned) as AnyNode
-    useScene.getState().createNode(parsed, node.parentId as AnyNodeId)
-    setMovingNode(parsed as never)
-    useScene.temporal.getState().resume()
+    try {
+      if ('children' in node && Array.isArray(node.children) && node.children.length > 0) {
+        const { root } = duplicateNodeSubtree(selectedId, { markRootNew: true })
+        setMovingNode(root as never)
+      } else {
+        const cloned = structuredClone(node) as AnyNode & { id?: AnyNodeId }
+        delete (cloned as { id?: AnyNodeId }).id
+        const prevMeta =
+          cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
+            ? (cloned.metadata as Record<string, unknown>)
+            : {}
+        cloned.metadata = { ...prevMeta, isNew: true }
+        const parsed = def.schema.parse(cloned) as AnyNode
+        useScene.getState().createNode(parsed, node.parentId as AnyNodeId)
+        setMovingNode(parsed as never)
+      }
+    } catch (error) {
+      console.error('Failed to duplicate registry node', error)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
   }
 
   const handleDelete = () => {

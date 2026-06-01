@@ -25,6 +25,7 @@ import {
   Euler,
   Float32BufferAttribute,
   type Group,
+  LineBasicMaterial,
   type LineSegments,
   type Mesh,
   PlaneGeometry,
@@ -32,7 +33,7 @@ import {
   Vector3,
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
-import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -130,7 +131,9 @@ function getFallbackPreviewBounds(
   }
 }
 
-function createLineGeometry(points: number[] = [0, 0, 0, 0, 0, 0]): BufferGeometry {
+const EMPTY_LINE_SEGMENTS_POINTS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+function createLineGeometry(points: number[] = EMPTY_LINE_SEGMENTS_POINTS): BufferGeometry {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(points, 3))
   return geometry
@@ -240,14 +243,14 @@ function updateLineGeometry(ref: React.RefObject<LineSegments>, points: number[]
 
 // Shared materials for placement cursor - we just change colors, not swap materials
 // Note: EdgesGeometry doesn't work with dashed lines, so using solid lines
-const edgeMaterial = new LineBasicNodeMaterial({
+const edgeMaterial = new LineBasicMaterial({
   color: 0xef_44_44, // red-500 (invalid)
   linewidth: 3,
   depthTest: false,
   depthWrite: false,
 })
 
-const measurementMaterial = new LineBasicNodeMaterial({
+const measurementMaterial = new LineBasicMaterial({
   color: 0x0f_17_2a,
   linewidth: 2,
   depthTest: false,

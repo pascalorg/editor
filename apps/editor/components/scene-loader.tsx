@@ -15,8 +15,9 @@ import { Layers, MessageCircle, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 import { t } from '@/i18n'
+import { ImageTo3DLeadingTile } from './image-to-3d-leading-tile'
+import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
   id: string
@@ -49,7 +50,7 @@ const SIDEBAR_TABS = (): (SidebarTab & { component: React.ComponentType })[] => 
   {
     id: 'items',
     label: t('sidebar.items', 'Items'),
-    component: ItemsPanel,
+    component: () => <ItemsPanel leadingTile={<ImageTo3DLeadingTile />} />,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Package className="h-5 w-5" />,
   },

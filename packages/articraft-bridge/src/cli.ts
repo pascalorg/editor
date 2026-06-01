@@ -1,17 +1,53 @@
 import { type ChildProcess, spawn } from 'node:child_process'
-import { createInterface } from 'node:readline'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import type { ArticraftModelData, GenerateOptions } from './types'
 
 const _dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const DEFAULT_REPO_ROOT = path.resolve(_dirname, '..', '..', '..', 'articraft')
+const BRIDGE_SCRIPT_RELATIVE_PATH = path.join('python', 'bridge.py')
 
-function resolveRepoRoot(repoRoot?: string): string {
-  if (repoRoot) return path.resolve(repoRoot)
-  if (process.env.ARTICRAFT_REPO_ROOT) return path.resolve(process.env.ARTICRAFT_REPO_ROOT)
-  return DEFAULT_REPO_ROOT
+function bridgeScriptPath(repoRoot: string): string {
+  return path.join(repoRoot, BRIDGE_SCRIPT_RELATIVE_PATH)
+}
+
+function isArticraftRepoRoot(repoRoot: string): boolean {
+  return existsSync(bridgeScriptPath(repoRoot))
+}
+
+function candidateRepoRoots(startDir: string): string[] {
+  const candidates: string[] = []
+  let current = path.resolve(startDir)
+  for (let i = 0; i < 8; i += 1) {
+    candidates.push(path.join(current, 'articraft'))
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  candidates.push(DEFAULT_REPO_ROOT)
+  return [...new Set(candidates.map((candidate) => path.resolve(candidate)))]
+}
+
+export function resolveRepoRoot(repoRoot?: string): string {
+  const configuredRoot = repoRoot || process.env.ARTICRAFT_REPO_ROOT
+  if (configuredRoot) {
+    const resolved = path.resolve(configuredRoot)
+    if (isArticraftRepoRoot(resolved)) return resolved
+    throw new Error(
+      `Articraft repo root is invalid: ${resolved}. Expected ${BRIDGE_SCRIPT_RELATIVE_PATH}.`,
+    )
+  }
+
+  for (const candidate of candidateRepoRoots(process.cwd())) {
+    if (isArticraftRepoRoot(candidate)) return candidate
+  }
+
+  throw new Error(
+    `Articraft repo root not found. Set ARTICRAFT_REPO_ROOT to a checkout containing ${BRIDGE_SCRIPT_RELATIVE_PATH}.`,
+  )
 }
 
 function parseBridgeLine(line: string) {
@@ -35,21 +71,15 @@ function parseBridgeLine(line: string) {
  */
 export function generateModel(options: GenerateOptions): Promise<ArticraftModelData> {
   const repoRoot = resolveRepoRoot(options.repoRoot)
-  const bridgeScript = path.join(repoRoot, 'python', 'bridge.py')
+  const bridgeScript = bridgeScriptPath(repoRoot)
   const { signal, onProgress } = options
 
   return new Promise((resolve, reject) => {
-    const args = [
-      bridgeScript,
-      'generate',
-      '--prompt',
-      options.prompt,
-      '--mode',
-      options.mode,
-    ]
+    const args = [bridgeScript, 'generate', '--prompt', options.prompt, '--mode', options.mode]
     if (options.model) args.push('--model', options.model)
     if (options.provider) args.push('--provider', options.provider)
     if (options.maxTurns !== undefined) args.push('--max-turns', String(options.maxTurns))
+    if (options.imagePath) args.push('--image', options.imagePath)
 
     const env = { ...process.env }
     if (!env.ARTICRAFT_REPO_ROOT) {
@@ -66,7 +96,11 @@ export function generateModel(options: GenerateOptions): Promise<ArticraftModelD
         windowsHide: true,
       })
     } catch (err) {
-      reject(new Error(`Failed to spawn articraft bridge: ${err instanceof Error ? err.message : String(err)}`))
+      reject(
+        new Error(
+          `Failed to spawn articraft bridge: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      )
       return
     }
 
@@ -139,7 +173,7 @@ export function regenerateModel(
   options?: { repoRoot?: string; signal?: AbortSignal; onProgress?: (msg: string) => void },
 ): Promise<ArticraftModelData> {
   const repoRoot = resolveRepoRoot(options?.repoRoot)
-  const bridgeScript = path.join(repoRoot, 'python', 'bridge.py')
+  const bridgeScript = bridgeScriptPath(repoRoot)
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -164,7 +198,11 @@ export function regenerateModel(
         windowsHide: true,
       })
     } catch (err) {
-      reject(new Error(`Failed to spawn articraft bridge: ${err instanceof Error ? err.message : String(err)}`))
+      reject(
+        new Error(
+          `Failed to spawn articraft bridge: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      )
       return
     }
 

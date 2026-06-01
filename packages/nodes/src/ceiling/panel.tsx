@@ -4,6 +4,7 @@ import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -13,7 +14,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
-import { L, N, S, ceilingL, slabL } from '../i18n/panel-labels'
+import { ceilingL, L, N, S, slabL } from '../i18n/panel-labels'
 
 /**
  * Phase 5 Stage E — ceiling inspector (kind-owned).
@@ -172,6 +173,8 @@ export function CeilingPanel() {
         </div>
       </PanelSection>
 
+      <NodeMaterialSection />
+
       <PanelSection title={S.info()}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>{L.area()}</span>
@@ -206,7 +209,11 @@ export function CeilingPanel() {
                       {L.holeNamed(index + 1)} {isEditing && L.editing()}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {L.holeMeta(holeArea.toFixed(2), hole.length, isAutoHole ? autoLabel : L.manual())}
+                      {L.holeMeta(
+                        holeArea.toFixed(2),
+                        hole.length,
+                        isAutoHole ? autoLabel : L.manual(),
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -259,7 +266,11 @@ export function CeilingPanel() {
       </PanelSection>
 
       <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
+        <ActionButton
+          icon={<Move className="h-3.5 w-3.5" />}
+          label={L.move()}
+          onClick={handleMove}
+        />
       </ActionGroup>
     </PanelWrapper>
   )

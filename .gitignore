@@ -45,6 +45,14 @@ yarn-error.log*
 /.playwright-mcp
 og-test
 .env*.local
+/.omx/
+
+# Local external checkouts / generated runtime state
+/articraft/
+/apps/editor/public/items/articraft-*/
+/apps/editor/public/items/image-to-3d-*/
+/apps/editor/public/items/articraft-assets.json
+/apps/editor/public/items/generated-assets.json
 
 # Worktrees
 .worktrees

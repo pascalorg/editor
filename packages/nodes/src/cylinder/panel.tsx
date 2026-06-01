@@ -5,6 +5,7 @@ import {
   ActionButton,
   ActionGroup,
   MetricControl,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -84,7 +85,6 @@ export default function CylinderPanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
@@ -130,15 +130,15 @@ export default function CylinderPanel() {
           label="Wall"
           max={Math.max(0.1, (node.radius ?? 0.5) - 0.01)}
           min={0}
-          onChange={(value) =>
-            handleUpdate({ wallThickness: value <= 0.001 ? undefined : value })
-          }
+          onChange={(value) => handleUpdate({ wallThickness: value <= 0.001 ? undefined : value })}
           precision={3}
           step={0.01}
           unit="m"
           value={Math.round((node.wallThickness ?? 0) * 1000) / 1000}
         />
       </PanelSection>
+
+      <NodeMaterialSection />
 
       <PanelSection title={S.position()}>
         <div className="flex items-center gap-1.5">

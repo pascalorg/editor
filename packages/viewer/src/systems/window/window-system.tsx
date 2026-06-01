@@ -8,6 +8,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { baseMaterial, glassMaterial } from '../../lib/materials'
+import { ensureWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshLambertMaterial({ visible: false })
@@ -2614,7 +2615,7 @@ function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      mesh.add(new THREE.Mesh(geometry, baseMaterial))
+      mesh.add(new THREE.Mesh(ensureWebGPUCompatibleGeometry(geometry), baseMaterial))
     }
 
     const center = new THREE.Group()
@@ -2731,7 +2732,7 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      return geometry
+      return ensureWebGPUCompatibleGeometry(geometry)
     }
 
     const createCurvedCap = (centerY: number, thickness: number) => {
@@ -2781,7 +2782,7 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geometry.setIndex(indices)
       geometry.computeVertexNormals()
-      return geometry
+      return ensureWebGPUCompatibleGeometry(geometry)
     }
 
     const addCurvedMesh = (material: THREE.Material, geometry: THREE.BufferGeometry) => {

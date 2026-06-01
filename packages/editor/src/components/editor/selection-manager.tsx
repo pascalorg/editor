@@ -2,10 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
-  type CeilingNode,
-  type ColumnNode,
   emitter,
-  type FenceNode,
   getMaterialPresetByRef,
   getSceneHistoryPauseDepth,
   getSelectableKinds,
@@ -18,8 +15,6 @@ import {
   type RoofSegmentEvent,
   resolveLevelId,
   resolveMaterial,
-  type ShelfNode,
-  type SlabNode,
   type StairEvent,
   type StairNode,
   type StairSegmentEvent,
@@ -35,6 +30,7 @@ import {
   applyMaterialPresetToMaterials,
   createMaterial,
   createMaterialFromPresetRef,
+  ensureMeshWebGPUCompatibleGeometry,
   getRoofMaterialArray,
   getStairBodyMaterials,
   getStairRailingMaterial,
@@ -43,6 +39,7 @@ import {
 } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
+import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
 import {
   type ActivePaintMaterial,
   buildRoofSurfaceMaterialPatch,
@@ -52,13 +49,13 @@ import {
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
-import { sfxEmitter } from '../../lib/sfx-bus'
-import { floorItemDragSuppressClickRef } from '../../lib/floor-item-drag'
+import { supportsWholeSurfaceMaterial } from '../../lib/material-targets'
 import {
   getPlanDrag3DKinds,
   isPlanDragMovableNode,
   PLAN_DRAG_THRESHOLD_PX,
 } from '../../lib/plan-drag'
+import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
@@ -76,6 +73,7 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
 }
 
 type SelectableNodeType =
+  | 'assembly'
   | 'wall'
   | 'fence'
   | 'item'
@@ -242,6 +240,7 @@ function getRegisteredMesh(nodeId: string): Mesh | null {
 
 function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
   const previousMaterial = mesh.material
+  ensureMeshWebGPUCompatibleGeometry(mesh)
   mesh.material = material
   return () => {
     mesh.material = previousMaterial
@@ -349,7 +348,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
+  node: AnyNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -393,50 +392,15 @@ function applySingleSurfacePaintPreview(
     }
   }
 
+  const previewMaterial = getSingleSurfacePreviewMaterial(material)
+  if (!previewMaterial) return null
+
   const registeredObject = getRegisteredNodeObject(node.id)
   const mesh =
     registeredObject && (registeredObject as Mesh).isMesh ? (registeredObject as Mesh) : null
 
-  const previewMaterial = getSingleSurfacePreviewMaterial(material)
-  if (!previewMaterial) return null
-
-  if (node.type === 'column') {
-    if (!registeredObject) return null
-    const restores: PaintPreviewCleanup[] = []
-
-    registeredObject.traverse((object) => {
-      if (!(object as Mesh).isMesh) return
-      restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
-    })
-
-    if (restores.length === 0) return null
-    return () => {
-      for (let index = restores.length - 1; index >= 0; index -= 1) {
-        restores[index]?.()
-      }
-    }
-  }
-
-  if (node.type === 'shelf') {
-    // Shelf is a registered Group, not a Mesh. Traverse children and
-    // preview-swap every child mesh — same approach `column` uses.
-    if (!registeredObject) return null
-    const restores: PaintPreviewCleanup[] = []
-    registeredObject.traverse((object) => {
-      if (!(object as Mesh).isMesh) return
-      restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
-    })
-    if (restores.length === 0) return null
-    return () => {
-      for (let index = restores.length - 1; index >= 0; index -= 1) {
-        restores[index]?.()
-      }
-    }
-  }
-
-  if (!mesh) return null
-
   if (node.type === 'slab') {
+    if (!mesh) return null
     const slabMaterial = previewMaterial.clone()
     applyMaterialPresetToMaterials(slabMaterial, getMaterialPresetByRef(material.materialPreset))
     const previewMeshMaterialInput = slabMaterial as Material & {
@@ -455,7 +419,20 @@ function applySingleSurfacePaintPreview(
     return previewMeshMaterial(mesh, slabMaterial)
   }
 
-  return previewMeshMaterial(mesh, previewMaterial)
+  if (!registeredObject) return null
+
+  const restores: PaintPreviewCleanup[] = []
+  registeredObject.traverse((object) => {
+    if (!(object as Mesh).isMesh) return
+    restores.push(previewMeshMaterial(object as Mesh, previewMaterial))
+  })
+
+  if (restores.length === 0) return null
+  return () => {
+    for (let index = restores.length - 1; index >= 0; index -= 1) {
+      restores[index]?.()
+    }
+  }
 }
 
 function setSelectedMaterialTargetForNode(node: AnyNode, role: MaterialTargetRole | null) {
@@ -578,6 +555,67 @@ const computeNextIds = (
   return [node.id]
 }
 
+function findContainingAssemblyNode(node: AnyNode): AnyNode | null {
+  const nodes = useScene.getState().nodes
+  let parentId = node.parentId as AnyNodeId | null
+  const visited = new Set<string>()
+
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId)
+    const parent = nodes[parentId]
+    if (!parent) break
+    if (parent.type === 'assembly') return parent
+    parentId = parent.parentId as AnyNodeId | null
+  }
+
+  return null
+}
+
+function isNodeInsideAssembly(node: AnyNode, assemblyId: AnyNodeId | string | null): boolean {
+  if (!assemblyId) return false
+  if (node.id === assemblyId) return true
+  return findContainingAssemblyNode(node)?.id === assemblyId
+}
+
+function resolveAssemblySelectionNode(node: AnyNode, nativeEvent?: any): AnyNode {
+  if (node.type === 'assembly') return node
+
+  const assemblyNode = findContainingAssemblyNode(node)
+  if (!assemblyNode) return node
+
+  const editor = useEditor.getState()
+  const isDeepSelect =
+    nativeEvent?.altKey === true || editor.editingAssemblyId === (assemblyNode.id as AnyNodeId)
+
+  if (isDeepSelect) {
+    if (editor.editingAssemblyId !== (assemblyNode.id as AnyNodeId)) {
+      editor.setEditingAssemblyId(assemblyNode.id as AnyNodeId)
+    }
+    return node
+  }
+
+  return assemblyNode
+}
+
+function resolveSelectionNode(node: AnyNode, nativeEvent?: any): AnyNode {
+  const assemblyNode = resolveAssemblySelectionNode(node, nativeEvent)
+  if (assemblyNode !== node) return assemblyNode
+
+  node = assemblyNode
+
+  if (node.type === 'roof-segment' && node.parentId) {
+    const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+    if (parentNode && parentNode.type === 'roof') return parentNode
+  }
+
+  if (node.type === 'stair-segment' && node.parentId) {
+    const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
+    if (parentNode && parentNode.type === 'stair') return parentNode
+  }
+
+  return node
+}
+
 const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   site: {
     types: ['building'],
@@ -592,6 +630,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 
   structure: {
     types: [
+      'assembly',
       'wall',
       'fence',
       'item',
@@ -656,6 +695,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       }
       if (
         node.type === 'wall' ||
+        node.type === 'assembly' ||
         node.type === 'fence' ||
         node.type === 'column' ||
         node.type === 'elevator' ||
@@ -727,6 +767,13 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
 }
 
 const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
+  if (isNodeInsideAssembly(node, useEditor.getState().editingAssemblyId)) {
+    return {
+      phase: 'structure',
+      structureLayer: 'elements',
+    }
+  }
+
   // Item is checked FIRST so its asset.category-driven routing (door/
   // window items land in structure phase, everything else in furnish)
   // beats the generic registry fallback below. Without this, registering
@@ -755,6 +802,7 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 
   if (
     node.type === 'wall' ||
+    node.type === 'assembly' ||
     node.type === 'fence' ||
     node.type === 'column' ||
     node.type === 'elevator' ||
@@ -956,13 +1004,7 @@ export const SelectionManager = () => {
         }
       }
 
-      if (
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'shelf'
-      ) {
+      if (supportsWholeSurfaceMaterial(node)) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
         return {
@@ -975,18 +1017,15 @@ export const SelectionManager = () => {
                   .getState()
                   .updateNode(
                     node.id as AnyNodeId,
-                    buildSingleSurfaceMaterialPatch<
-                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
-                    >(activePaintMaterial.material, activePaintMaterial.materialPreset),
+                    buildSingleSurfaceMaterialPatch(
+                      activePaintMaterial.material,
+                      activePaintMaterial.materialPreset,
+                    ),
                   )
               }
             : null,
           preview: compatible
-            ? () =>
-                applySingleSurfacePaintPreview(
-                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
-                  activePaintMaterial,
-                )
+            ? () => applySingleSurfacePaintPreview(node, activePaintMaterial)
             : () => previewCursor('not-allowed'),
         }
       }
@@ -1064,6 +1103,7 @@ export const SelectionManager = () => {
     }
 
     const allTypes = [
+      'assembly',
       'wall',
       'fence',
       'item',
@@ -1151,7 +1191,7 @@ export const SelectionManager = () => {
     }
 
     const onPointerDown = (event: NodeEvent) => {
-      const node = event.node
+      const node = resolveAssemblySelectionNode(event.node, event.nativeEvent)
       if (!isPlanDragMovableNode(node)) return
       if (event.nativeEvent.shiftKey || event.nativeEvent.metaKey || event.nativeEvent.ctrlKey) {
         return
@@ -1177,7 +1217,8 @@ export const SelectionManager = () => {
 
     const onNodeMove = (event: NodeEvent) => {
       if (!pendingPlanDragRef.current) return
-      if (event.node.id !== pendingPlanDragRef.current.nodeId) return
+      const node = resolveAssemblySelectionNode(event.node, event.nativeEvent)
+      if (node.id !== pendingPlanDragRef.current.nodeId) return
       tryStartDragFromPointer(event.nativeEvent.clientX, event.nativeEvent.clientY)
     }
 
@@ -1222,7 +1263,8 @@ export const SelectionManager = () => {
         return
       }
 
-      const node = event.node
+      const node = resolveSelectionNode(event.node, event.nativeEvent)
+      const activeEditingAssemblyId = useEditor.getState().editingAssemblyId
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
 
@@ -1249,24 +1291,16 @@ export const SelectionManager = () => {
         }
       }
 
+      if (activeEditingAssemblyId && isNodeInsideAssembly(node, activeEditingAssemblyId)) {
+        useEditor.getState().setEditingAssemblyId(activeEditingAssemblyId)
+      }
+
       const activeStrategy = SELECTION_STRATEGIES[currentPhase]
       if (activeStrategy?.isValid(node)) {
         event.stopPropagation()
         clickHandledRef.current = true
 
-        let nodeToSelect = node
-        if (node.type === 'roof-segment' && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-          if (parentNode && parentNode.type === 'roof') {
-            nodeToSelect = parentNode
-          }
-        }
-        if (node.type === 'stair-segment' && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-          if (parentNode && parentNode.type === 'stair') {
-            nodeToSelect = parentNode
-          }
-        }
+        const nodeToSelect = node
 
         activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
 
@@ -1302,13 +1336,7 @@ export const SelectionManager = () => {
           nextMaterialTargetHandled = true
         }
 
-        if (
-          (node.type === 'fence' ||
-            node.type === 'slab' ||
-            node.type === 'ceiling' ||
-            node.type === 'shelf') &&
-          nodeToSelect.type === node.type
-        ) {
+        if (supportsWholeSurfaceMaterial(nodeToSelect)) {
           setSelectedMaterialTargetForNode(nodeToSelect, 'surface')
           nextMaterialTargetHandled = true
         }
@@ -1325,6 +1353,7 @@ export const SelectionManager = () => {
     }
 
     const allTypes = [
+      'assembly',
       'wall',
       'fence',
       'item',
@@ -1360,6 +1389,7 @@ export const SelectionManager = () => {
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
       useEditor.getState().setSelectedMaterialTarget(null)
+      useEditor.getState().setEditingAssemblyId(null)
 
       // When deselecting from zone mode, return to structure select
       if (phase === 'structure' && structureLayer === 'zones') {
@@ -1383,7 +1413,7 @@ export const SelectionManager = () => {
     if (movingNode || curvingWall || curvingFence) return
 
     const onEnter = (event: NodeEvent) => {
-      const node = event.node
+      const node = resolveSelectionNode(event.node, event.nativeEvent)
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1410,15 +1440,33 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
-      const nodeId = event?.node?.id
+      const nodeId = event?.node ? resolveSelectionNode(event.node, event.nativeEvent).id : null
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      const node = event.node
+      const rawNode = event.node
+      const node = resolveAssemblySelectionNode(rawNode, event.nativeEvent)
       const currentPhase = useEditor.getState().phase
+
+      if (node.type === 'assembly') {
+        event.stopPropagation()
+        if (currentPhase !== 'structure') {
+          useEditor.getState().setPhase('structure')
+        }
+        if (useEditor.getState().structureLayer === 'zones') {
+          useEditor.getState().setStructureLayer('elements')
+        }
+        useEditor.getState().setEditingAssemblyId(node.id as AnyNodeId)
+        SELECTION_STRATEGIES.structure?.handleSelect(
+          node,
+          event.nativeEvent,
+          modifierKeysRef.current,
+        )
+        return
+      }
 
       let targetPhase: 'site' | 'structure' | 'furnish' | null = null
       let forceSelect = false
@@ -1446,10 +1494,10 @@ export const SelectionManager = () => {
         node.type === 'door'
       ) {
         targetPhase = 'structure'
-        if (node.type === 'roof-segment' && currentPhase === 'structure') {
+        if (rawNode.type === 'roof-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into roof-segment even if already in structure phase
         }
-        if (node.type === 'stair-segment' && currentPhase === 'structure') {
+        if (rawNode.type === 'stair-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into stair-segment even if already in structure phase
         }
       } else if (node.type === 'item') {
@@ -1478,12 +1526,17 @@ export const SelectionManager = () => {
 
         const strategy = SELECTION_STRATEGIES[targetPhase || currentPhase]
         if (strategy) {
-          strategy.handleSelect(node, event.nativeEvent, modifierKeysRef.current)
+          strategy.handleSelect(
+            forceSelect ? rawNode : node,
+            event.nativeEvent,
+            modifierKeysRef.current,
+          )
         }
       }
     }
 
     const allTypes = [
+      'assembly',
       'wall',
       'fence',
       'item',
@@ -1527,7 +1580,7 @@ export const SelectionManager = () => {
     if (mode !== 'delete') return
 
     const onClick = (event: NodeEvent) => {
-      const node = event.node
+      const node = resolveSelectionNode(event.node, event.nativeEvent)
       if (!isNodeInCurrentLevel(node)) return
 
       event.stopPropagation()
@@ -1549,7 +1602,7 @@ export const SelectionManager = () => {
     }
 
     const onEnter = (event: NodeEvent) => {
-      const node = event.node
+      const node = resolveSelectionNode(event.node, event.nativeEvent)
       if (!isNodeInCurrentLevel(node)) return
       if (node.type === 'building' || node.type === 'site') return
       event.stopPropagation()
@@ -1557,13 +1610,14 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
-      const nodeId = event?.node?.id
+      const nodeId = event?.node ? resolveSelectionNode(event.node, event.nativeEvent).id : null
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
     }
 
     const allTypes = [
+      'assembly',
       'wall',
       'fence',
       'item',
@@ -1612,6 +1666,8 @@ export const SelectionManager = () => {
 }
 
 const SelectionStateSync = () => {
+  const editingAssemblyId = useEditor((s) => s.editingAssemblyId)
+  const setEditingAssemblyId = useEditor((s) => s.setEditingAssemblyId)
   const selectedMaterialTarget = useEditor((s) => s.selectedMaterialTarget)
   const setSelectedMaterialTarget = useEditor((s) => s.setSelectedMaterialTarget)
   const singleSelectedId = useViewer((s) =>
@@ -1637,6 +1693,14 @@ const SelectionStateSync = () => {
         return
       }
 
+      const editingAssemblyId = useEditor.getState().editingAssemblyId
+      if (editingAssemblyId) {
+        const editingAssembly = state.nodes[editingAssemblyId]
+        if (!editingAssembly || editingAssembly.type !== 'assembly') {
+          useEditor.getState().setEditingAssemblyId(null)
+        }
+      }
+
       if (selectedIds.length === 0) return
 
       const nextSelectedIds = selectedIds.filter((id) => state.nodes[id as AnyNodeId])
@@ -1645,6 +1709,14 @@ const SelectionStateSync = () => {
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (!editingAssemblyId) return
+    const editingNode = useScene.getState().nodes[editingAssemblyId]
+    if (!editingNode || editingNode.type !== 'assembly') {
+      setEditingAssemblyId(null)
+    }
+  }, [editingAssemblyId, setEditingAssemblyId])
 
   useEffect(() => {
     if (!selectedMaterialTarget) return
@@ -1658,11 +1730,9 @@ const SelectionStateSync = () => {
     if (
       !selectedNode ||
       (selectedNode.type !== 'wall' &&
-        selectedNode.type !== 'fence' &&
-        selectedNode.type !== 'slab' &&
-        selectedNode.type !== 'ceiling' &&
         selectedNode.type !== 'stair' &&
-        selectedNode.type !== 'roof')
+        selectedNode.type !== 'roof' &&
+        !supportsWholeSurfaceMaterial(selectedNode))
     ) {
       setSelectedMaterialTarget(null)
       return
@@ -1713,6 +1783,7 @@ const SelectionMaterialSync = () => {
         }
 
         activeMeshes.add(child)
+        ensureMeshWebGPUCompatibleGeometry(child)
         const existingEntry = highlightedMaterialsRef.current.get(child)
         if (existingEntry) {
           const materialWasOverwritten = child.material !== existingEntry.highlightedMaterial

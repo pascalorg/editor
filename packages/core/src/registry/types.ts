@@ -511,6 +511,17 @@ export type Plugin = {
 
 export type AnyNodeDefinition = NodeDefinition<ZodObject<any>>
 
+export type MaterialTargetKind = 'whole' | 'face' | 'part'
+
+export type MaterialTargetDescriptor = {
+  key: string
+  label: string
+  kind: MaterialTargetKind
+  description?: string
+  materialKey?: string
+  materialPresetKey?: string
+}
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
@@ -523,6 +534,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   capabilities: Capabilities
   relations?: Relations
   parametrics?: ParametricDescriptor<z.infer<S>>
+  materialTargets?: readonly MaterialTargetDescriptor[]
 
   /**
    * Renderer for this kind. Optional under the three-checkbox composition

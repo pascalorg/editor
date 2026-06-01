@@ -10,12 +10,20 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
-import { Move, Trash2 } from 'lucide-react'
-import { type ComponentType, lazy, Suspense, useCallback } from 'react'
+import { Move, Pause, Play, RotateCcw, Save, Trash2 } from 'lucide-react'
+import { type ComponentType, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  buildArticraftJointPatch,
+  formatJointUnit,
+  getArticraftJointMetadata,
+  jointRange,
+  type ArticraftJointMetadata,
+} from '../../../lib/articraft-joints'
 import { isPlanDragMovableNode } from '../../../lib/plan-drag'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { NodeMaterialSection } from '../controls/node-material-section'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -78,7 +86,7 @@ export function ParametricInspector() {
     setSelection({ selectedIds: [] })
   }, [selectedId, setSelection])
 
-  if (!selectedId || !def || !parametrics) return null
+  if (!selectedId || !def) return null
 
   // `parametrics.customPanel` escape hatch — kind owns its panel
   // entirely (loaded lazily so the bundle isn't eager). Used by kinds
@@ -86,7 +94,7 @@ export function ParametricInspector() {
   // height presets, etc.) until per-field `customEditor` + missing
   // field kinds (list/action/computed) graduate the auto-derived
   // panel to cover them.
-  if (parametrics.customPanel) {
+  if (parametrics?.customPanel) {
     const CustomPanel = resolveCustomPanel(parametrics.customPanel)
     return (
       <Suspense fallback={null}>
@@ -104,7 +112,7 @@ export function ParametricInspector() {
 
   return (
     <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
-      {parametrics.groups.map((group, gi) => (
+      {parametrics?.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
             <FieldRenderer
@@ -116,6 +124,8 @@ export function ParametricInspector() {
           ))}
         </PanelSection>
       ))}
+      <NodeMaterialSection nodeId={selectedId} />
+      <ArticraftJointSection nodeId={selectedId} />
       {(canMove || canDelete) && (
         <PanelSection title="Actions">
           <ActionGroup>
@@ -134,6 +144,93 @@ export function ParametricInspector() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+function ArticraftJointSection({ nodeId }: { nodeId: AnyNodeId }) {
+  const joint = useScene((s) => getArticraftJointMetadata(s.nodes[nodeId]))
+  const [previewing, setPreviewing] = useState(false)
+  const [min, max] = useMemo(() => (joint ? jointRange(joint) : [0, 0] as [number, number]), [joint])
+
+  const updateJoint = useCallback(
+    (patch: Partial<ArticraftJointMetadata>) => {
+      const node = useScene.getState().nodes[nodeId]
+      if (!node) return
+      const current = getArticraftJointMetadata(node)
+      if (!current) return
+      useScene.getState().updateNode(nodeId, buildArticraftJointPatch(node, current, patch))
+    },
+    [nodeId],
+  )
+
+  useEffect(() => {
+    if (!previewing || !joint) return
+    const startedAt = performance.now()
+    const interval = window.setInterval(() => {
+      const span = max - min
+      const midpoint = min + span / 2
+      const value = midpoint + Math.sin((performance.now() - startedAt) / 700) * (span / 2)
+      updateJoint({ currentValue: Math.round(value * 1000) / 1000 })
+    }, 80)
+    return () => window.clearInterval(interval)
+  }, [joint, max, min, previewing, updateJoint])
+
+  useEffect(() => {
+    if (!joint) setPreviewing(false)
+  }, [joint])
+
+  if (!joint) return null
+
+  const value = typeof joint.currentValue === 'number' ? joint.currentValue : 0
+  const isMovable = joint.jointType !== 'fixed'
+
+  return (
+    <PanelSection title="Articraft Joint">
+      <div className="space-y-2 px-3 py-1 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate font-mono text-muted-foreground" title={joint.jointName}>
+            {joint.jointName}
+          </span>
+          <span className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {joint.jointType ?? 'joint'}
+          </span>
+        </div>
+        {joint.axis ? (
+          <div className="font-mono text-[10px] text-muted-foreground">
+            axis [{joint.axis.map((item) => Number(item).toFixed(2)).join(', ')}]
+          </div>
+        ) : null}
+      </div>
+      {isMovable ? (
+        <SliderControl
+          label="Current value"
+          max={max}
+          min={min}
+          onChange={(next) => updateJoint({ currentValue: next })}
+          precision={3}
+          step={0.01}
+          unit={formatJointUnit(joint)}
+          value={value}
+        />
+      ) : null}
+      <ActionGroup>
+        <ActionButton
+          icon={<RotateCcw className="h-4 w-4" />}
+          label="Reset Joint"
+          onClick={() => updateJoint({ currentValue: 0 })}
+        />
+        <ActionButton
+          icon={<Save className="h-4 w-4" />}
+          label="Save Pose"
+          onClick={() => updateJoint({ savedValue: value })}
+        />
+        <ActionButton
+          icon={previewing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          label={previewing ? 'Stop Preview' : 'Preview Auto'}
+          onClick={() => setPreviewing((next) => !next)}
+        />
+      </ActionGroup>
+    </PanelSection>
   )
 }
 

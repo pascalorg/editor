@@ -1,4 +1,5 @@
 import { HalfCylinderNode as HalfCylinderNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { halfcylinderParametrics } from './parametrics'
 import { HalfCylinderNode } from './schema'
 
@@ -26,6 +27,8 @@ export const halfCylinderDefinition: NodeDefinition<typeof HalfCylinderNode> = {
   },
 
   parametrics: halfcylinderParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

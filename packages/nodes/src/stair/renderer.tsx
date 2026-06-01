@@ -12,6 +12,7 @@ import {
   createMaterialFromPresetRef,
   createSafeEmptyGeometry,
   DEFAULT_STAIR_MATERIAL,
+  ensureWebGPUCompatibleGeometry,
   getStairBodyMaterials,
   getStairRailingMaterial,
   NodeRenderer,
@@ -777,7 +778,7 @@ function buildCurvedStepGeometry(
   }
   geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
   geometry.computeVertexNormals()
-  return geometry
+  return ensureWebGPUCompatibleGeometry(geometry)
 }
 
 function buildStairRailPaths(

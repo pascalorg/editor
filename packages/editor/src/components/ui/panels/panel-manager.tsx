@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type AssemblyNode,
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
@@ -23,6 +24,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { duplicateNodeSubtree } from '../../../lib/subtree-duplication'
 import useEditor from '../../../store/use-editor'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
@@ -32,6 +34,7 @@ import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 
 type MovableNode =
+  | AssemblyNode
   | ItemNode
   | WindowNode
   | DoorNode
@@ -48,6 +51,7 @@ type MovableNode =
   | BuildingNode
 
 const MOVABLE_TYPES = new Set<string>([
+  'assembly',
   'item',
   'window',
   'door',
@@ -66,6 +70,10 @@ const MOVABLE_TYPES = new Set<string>([
 
 function isMovableNode(node: AnyNode | null): node is MovableNode {
   return !!node && MOVABLE_TYPES.has(node.type)
+}
+
+function hasChildren(node: AnyNode): node is AnyNode & { children: AnyNodeId[] } {
+  return 'children' in node && Array.isArray(node.children) && node.children.length > 0
 }
 
 function panelForType(type: string | null) {
@@ -117,6 +125,20 @@ function MobilePanelLayer({
   const handleDuplicate = useCallback(() => {
     if (!isMovableNode(node)) return
     sfxEmitter.emit('sfx:item-pick')
+
+    if (hasChildren(node)) {
+      try {
+        const { root } = duplicateNodeSubtree(node.id as AnyNodeId, { markRootNew: true })
+        if (isMovableNode(root)) {
+          setMovingNode(root)
+          clearSelection()
+        }
+      } catch (error) {
+        console.error('Failed to duplicate selected subtree', error)
+      }
+      return
+    }
+
     const cloned = structuredClone(node) as MovableNode & { id?: AnyNodeId }
     delete (cloned as { id?: AnyNodeId }).id
     const prevMeta =

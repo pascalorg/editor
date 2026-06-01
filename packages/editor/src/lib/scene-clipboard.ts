@@ -20,6 +20,7 @@ type PasteResult = {
 }
 
 const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
+  'assembly',
   'wall',
   'fence',
   'column',

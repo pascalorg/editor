@@ -1,4 +1,5 @@
 import { ExtrudeNode as ExtrudeNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { extrudeParametrics } from './parametrics'
 import { ExtrudeNode } from './schema'
 
@@ -23,6 +24,8 @@ export const extrudeDefinition: NodeDefinition<typeof ExtrudeNode> = {
   },
 
   parametrics: extrudeParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

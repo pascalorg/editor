@@ -54,6 +54,7 @@ export function focusTreeNode(nodeId: AnyNodeId) {
 }
 
 import { cn } from '../../../../../lib/utils'
+import { AssemblyTreeNode } from './assembly-tree-node'
 import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
@@ -89,6 +90,7 @@ const treeNodeByType: Record<
   string,
   React.ComponentType<{ depth: number; isLast?: boolean; nodeId: AnyNodeId }>
 > = {
+  assembly: AssemblyTreeNode,
   building: BuildingTreeNode as React.ComponentType<{
     depth: number
     isLast?: boolean

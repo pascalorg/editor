@@ -1,16 +1,20 @@
 import z from 'zod'
+import { AssemblyNode } from './nodes/assembly'
 import { BoxNode } from './nodes/box'
 import { BuildingNode } from './nodes/building'
 import { CapsuleNode } from './nodes/capsule'
 import { CeilingNode } from './nodes/ceiling'
 import { ColumnNode } from './nodes/column'
+import { ConeNode } from './nodes/cone'
 import { CylinderNode } from './nodes/cylinder'
 import { DoorNode } from './nodes/door'
 import { ElevatorNode } from './nodes/elevator'
 import { ExtrudeNode } from './nodes/extrude'
 import { FenceNode } from './nodes/fence'
+import { FrustumNode } from './nodes/frustum'
 import { GuideNode } from './nodes/guide'
 import { HalfCylinderNode } from './nodes/half-cylinder'
+import { HemisphereNode } from './nodes/hemisphere'
 import { ItemNode } from './nodes/item'
 import { LatheNode } from './nodes/lathe'
 import { LevelNode } from './nodes/level'
@@ -27,15 +31,25 @@ import { SphereNode } from './nodes/sphere'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { SweepNode } from './nodes/sweep'
+import { TorusNode } from './nodes/torus'
+import { TrapezoidPrismNode } from './nodes/trapezoid-prism'
 import { WallNode } from './nodes/wall'
+import { WedgeNode } from './nodes/wedge'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
 
 export const AnyNode = z.discriminatedUnion('type', [
   SiteNode,
   BuildingNode,
+  AssemblyNode,
   BoxNode,
   CylinderNode,
+  ConeNode,
+  FrustumNode,
+  HemisphereNode,
+  TorusNode,
+  WedgeNode,
+  TrapezoidPrismNode,
   SphereNode,
   LatheNode,
   CapsuleNode,

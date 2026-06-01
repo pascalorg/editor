@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildShelfFloorplan } from './floorplan'
 import { shelfFloorplanMoveTarget } from './floorplan-move'
 import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
@@ -81,6 +82,8 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   },
 
   parametrics: shelfParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   // Three-checkbox composition: shelf needs only pure builder functions.
   // The framework's <ParametricNodeRenderer> + <GeometrySystem> handle 3D

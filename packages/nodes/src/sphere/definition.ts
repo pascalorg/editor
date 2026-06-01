@@ -1,4 +1,5 @@
 import { type NodeDefinition, SphereNode as SphereNodeSchema } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { sphereParametrics } from './parametrics'
 import { SphereNode } from './schema'
 
@@ -23,6 +24,8 @@ export const sphereDefinition: NodeDefinition<typeof SphereNode> = {
   },
 
   parametrics: sphereParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

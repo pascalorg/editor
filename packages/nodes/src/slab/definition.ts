@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -59,6 +60,8 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   },
 
   parametrics: slabParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with axis/45° snap (Shift to defeat).

@@ -1,16 +1,20 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { assemblyDefinition } from './assembly'
 import { boxDefinition } from './box'
 import { buildingDefinition } from './building'
 import { capsuleDefinition } from './capsule'
 import { ceilingDefinition } from './ceiling'
 import { columnDefinition } from './column'
+import { coneDefinition } from './cone'
 import { cylinderDefinition } from './cylinder'
 import { doorDefinition } from './door'
 import { elevatorDefinition } from './elevator'
 import { extrudeDefinition } from './extrude'
 import { fenceDefinition } from './fence'
+import { frustumDefinition } from './frustum'
 import { guideDefinition } from './guide'
 import { halfCylinderDefinition } from './half-cylinder'
+import { hemisphereDefinition } from './hemisphere'
 import { itemDefinition } from './item'
 import { latheDefinition } from './lathe'
 import { levelDefinition } from './level'
@@ -27,7 +31,10 @@ import { sphereDefinition } from './sphere'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
 import { sweepDefinition } from './sweep'
+import { torusDefinition } from './torus'
+import { trapezoidPrismDefinition } from './trapezoid-prism'
 import { wallDefinition } from './wall'
+import { wedgeDefinition } from './wedge'
 import { windowDefinition } from './window'
 import { zoneDefinition } from './zone'
 
@@ -52,6 +59,7 @@ export const builtinPlugin: Plugin = {
   apiVersion: 1,
   nodes: [
     // Stage E-complete (full registry path)
+    assemblyDefinition as unknown as AnyNodeDefinition,
     shelfDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
@@ -66,6 +74,12 @@ export const builtinPlugin: Plugin = {
     // panels / move tools / floorplan branches still serve these.
     boxDefinition as unknown as AnyNodeDefinition,
     cylinderDefinition as unknown as AnyNodeDefinition,
+    coneDefinition as unknown as AnyNodeDefinition,
+    frustumDefinition as unknown as AnyNodeDefinition,
+    hemisphereDefinition as unknown as AnyNodeDefinition,
+    torusDefinition as unknown as AnyNodeDefinition,
+    wedgeDefinition as unknown as AnyNodeDefinition,
+    trapezoidPrismDefinition as unknown as AnyNodeDefinition,
     sphereDefinition as unknown as AnyNodeDefinition,
     latheDefinition as unknown as AnyNodeDefinition,
     capsuleDefinition as unknown as AnyNodeDefinition,
@@ -88,18 +102,22 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export { assemblyDefinition } from './assembly'
 export { boxDefinition } from './box'
 export { buildingDefinition } from './building'
 export { capsuleDefinition } from './capsule'
 export { ceilingDefinition } from './ceiling'
 export { columnDefinition } from './column'
+export { coneDefinition } from './cone'
 export { cylinderDefinition } from './cylinder'
 export { doorDefinition } from './door'
 export { elevatorDefinition } from './elevator'
 export { extrudeDefinition } from './extrude'
 export { fenceDefinition } from './fence'
+export { frustumDefinition } from './frustum'
 export { guideDefinition } from './guide'
 export { halfCylinderDefinition } from './half-cylinder'
+export { hemisphereDefinition } from './hemisphere'
 export { itemDefinition } from './item'
 export { latheDefinition } from './lathe'
 export { levelDefinition } from './level'
@@ -116,6 +134,9 @@ export { sphereDefinition } from './sphere'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
 export { sweepDefinition } from './sweep'
+export { torusDefinition } from './torus'
+export { trapezoidPrismDefinition } from './trapezoid-prism'
 export { wallDefinition } from './wall'
+export { wedgeDefinition } from './wedge'
 export { windowDefinition } from './window'
 export { zoneDefinition } from './zone'

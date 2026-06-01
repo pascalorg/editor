@@ -48,6 +48,7 @@ export const useKeyboard = ({
           const currentStructureLayer = useEditor.getState().structureLayer
 
           useEditor.getState().setEditingHole(null)
+          useEditor.getState().setEditingAssemblyId(null)
 
           // From zone mode, return to structure select
           if (currentPhase === 'structure' && currentStructureLayer === 'zones') {

@@ -1,7 +1,12 @@
 'use client'
 
 import { type HalfCylinderNode, useRegistry, useScene } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useNodeEvents } from '@pascal-app/viewer'
+import {
+  createMaterial,
+  createMaterialFromPresetRef,
+  ensureWebGPUCompatibleGeometry,
+  useNodeEvents,
+} from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 
@@ -59,7 +64,7 @@ function createHalfCylinderGeometry(
   geo.computeVertexNormals()
   geo.computeBoundingBox()
   geo.computeBoundingSphere()
-  return geo
+  return ensureWebGPUCompatibleGeometry(geo)
 }
 
 export const HalfCylinderRenderer = ({ node }: { node: HalfCylinderNode }) => {
@@ -92,7 +97,6 @@ export const HalfCylinderRenderer = ({ node }: { node: HalfCylinderNode }) => {
       createHalfCylinderGeometry(node.radius ?? 0.5, node.height ?? 1, node.radialSegments ?? 24),
     [node.radius, node.height, node.radialSegments],
   )
-
 
   return (
     <group

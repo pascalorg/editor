@@ -10,8 +10,8 @@ import {
   FenceNode,
   generateId,
   getPipeEndpoint3D,
-  isPipeNearlyVertical,
   ItemNode,
+  isPipeNearlyVertical,
   isRegistrySelectable,
   nodeRegistry,
   PipeNode,
@@ -31,11 +31,12 @@ import { useFrame } from '@react-three/fiber'
 import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { t } from '../../i18n'
 import { isPlanDragMovableNode } from '../../lib/plan-drag'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
-import { t } from '../../i18n'
+import { duplicateNodeSubtree } from '../../lib/subtree-duplication'
 import useEditor from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -286,6 +287,25 @@ export function FloatingActionMenu() {
           duplicateRoofSubtree(node.id as AnyNodeId, { mode: 'move' })
         } catch (error) {
           console.error('Failed to duplicate roof', error)
+        }
+        return
+      }
+
+      if (
+        node.type !== 'stair' &&
+        'children' in node &&
+        Array.isArray(node.children) &&
+        node.children.length > 0
+      ) {
+        useScene.temporal.getState().pause()
+        try {
+          const { root } = duplicateNodeSubtree(node.id as AnyNodeId, { markRootNew: true })
+          setMovingNode(root as any)
+          setSelection({ selectedIds: [] })
+        } catch (error) {
+          console.error('Failed to duplicate subtree', error)
+        } finally {
+          useScene.temporal.getState().resume()
         }
         return
       }

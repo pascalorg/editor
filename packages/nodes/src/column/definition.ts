@@ -3,6 +3,7 @@ import {
   type ColumnNode as ColumnNodeType,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { buildColumnFloorplan } from './floorplan'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
@@ -53,6 +54,8 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
 
   parametrics: columnParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

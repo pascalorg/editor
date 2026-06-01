@@ -88,6 +88,8 @@ type WebGPUDeviceLike = {
   removeEventListener?: (type: string, listener: EventListener) => void
 }
 
+const VIEWER_WEBGPU_VALIDATION_ERROR_EVENT = 'pascal:viewer-webgpu-validation-error'
+
 function GPUDeviceWatcher() {
   const gl = useThree((s) => s.gl)
 
@@ -118,7 +120,19 @@ function GPUDeviceWatcher() {
     // Uncaptured errors are normally silent (only console-warned by Chrome at
     // best). Pipe them to console.error so silent mobile crashes show up.
     const onUncapturedError = (event: any) => {
-      console.error('[viewer] WebGPU uncaptured error:', event?.error?.message, event?.error)
+      const message = String(event?.error?.message ?? '')
+      console.error('[viewer] WebGPU uncaptured error:', message, event?.error)
+      if (
+        typeof window !== 'undefined' &&
+        (/Vertex range .*requires a larger buffer/i.test(message) ||
+          /Invalid CommandBuffer/i.test(message))
+      ) {
+        window.dispatchEvent(
+          new CustomEvent(VIEWER_WEBGPU_VALIDATION_ERROR_EVENT, {
+            detail: { message },
+          }),
+        )
+      }
     }
     device.addEventListener?.('uncapturederror', onUncapturedError)
 

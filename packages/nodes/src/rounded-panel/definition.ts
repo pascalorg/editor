@@ -1,4 +1,5 @@
 import { type NodeDefinition, RoundedPanelNode as RoundedPanelNodeSchema } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { roundedpanelParametrics } from './parametrics'
 import { RoundedPanelNode } from './schema'
 
@@ -26,6 +27,8 @@ export const roundedPanelDefinition: NodeDefinition<typeof RoundedPanelNode> = {
   },
 
   parametrics: roundedpanelParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

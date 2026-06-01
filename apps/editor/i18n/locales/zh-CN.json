@@ -206,7 +206,6 @@
     "siteEditingGroundOnly": "场地编辑（仅地面层）",
     "build": "建造",
     "materialPaint": "材质涂刷",
-    "primitive": "散件",
     "furnish": "软装",
     "zone": "区域",
     "toggleTheme": "切换主题",
@@ -262,15 +261,6 @@
       "zone": "区域",
       "spawn": "出生点",
       "shelf": "搁板"
-    },
-    "primitiveShapes": {
-      "box": "立方体",
-      "cylinder": "圆柱",
-      "sphere": "球体",
-      "cone": "圆锥",
-      "capsule": "胶囊",
-      "torus": "圆环",
-      "pyramid": "棱锥"
     },
     "wallMode": {
       "fullHeight": "全高",

@@ -1,4 +1,5 @@
-import { type NodeDefinition, CylinderNode as CylinderNodeSchema } from '@pascal-app/core'
+import { CylinderNode as CylinderNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { cylinderParametrics } from './parametrics'
 import { CylinderNode } from './schema'
 
@@ -24,6 +25,8 @@ export const cylinderDefinition: NodeDefinition<typeof CylinderNode> = {
 
   parametrics: cylinderParametrics,
 
+  materialTargets: overallMaterialTarget,
+
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
@@ -38,6 +41,7 @@ export const cylinderDefinition: NodeDefinition<typeof CylinderNode> = {
   },
 
   mcp: {
-    description: 'A cylindrical primitive with configurable radius, height, and optional wall thickness for hollow tubes.',
+    description:
+      'A cylindrical primitive with configurable radius, height, and optional wall thickness for hollow tubes.',
   },
 }

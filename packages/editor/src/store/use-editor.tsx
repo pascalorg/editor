@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import {
   type AnyNodeId,
+  type AssemblyNode,
   type BoxNode,
   type BuildingNode,
   type CapsuleNode,
@@ -181,7 +182,10 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
+  editingAssemblyId: AnyNodeId | null
+  setEditingAssemblyId: (id: AnyNodeId | null) => void
   movingNode:
+    | AssemblyNode
     | ItemNode
     | WindowNode
     | DoorNode
@@ -210,6 +214,7 @@ type EditorState = {
     | null
   setMovingNode: (
     node:
+      | AssemblyNode
       | ItemNode
       | WindowNode
       | DoorNode
@@ -320,8 +325,6 @@ type EditorState = {
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
   setMobilePanelSheetHeight: (px: number) => void
-  primitivePlacement: string | null
-  setPrimitivePlacement: (kind: string | null) => void
 }
 
 export type PersistedEditorUiState = Pick<
@@ -552,7 +555,7 @@ const useEditor = create<EditorState>()(
         const currentPhase = get().phase
         if (currentPhase === phase) return
 
-        set({ phase })
+        set({ phase, editingAssemblyId: null })
 
         const { mode, structureLayer } = get()
 
@@ -593,7 +596,7 @@ const useEditor = create<EditorState>()(
       },
       mode: DEFAULT_PERSISTED_EDITOR_UI_STATE.mode,
       setMode: (mode) => {
-        set({ mode })
+        set({ mode, ...(mode === 'select' ? {} : { editingAssemblyId: null }) })
 
         const { phase, structureLayer, tool } = get()
 
@@ -620,6 +623,7 @@ const useEditor = create<EditorState>()(
       setTool: (tool) => set({ tool }),
       structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
       setStructureLayer: (layer) => {
+        set({ editingAssemblyId: null })
         const { mode } = get()
 
         if (mode === 'build') {
@@ -639,7 +643,10 @@ const useEditor = create<EditorState>()(
       setCatalogCategory: (category) => set({ catalogCategory: category }),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
+      editingAssemblyId: null,
+      setEditingAssemblyId: (id) => set({ editingAssemblyId: id }),
       movingNode: null as
+        | AssemblyNode
         | ItemNode
         | WindowNode
         | DoorNode
@@ -761,7 +768,13 @@ const useEditor = create<EditorState>()(
       isPreviewMode: false,
       setPreviewMode: (preview) => {
         if (preview) {
-          set({ isPreviewMode: true, mode: 'select', tool: null, catalogCategory: null })
+          set({
+            isPreviewMode: true,
+            mode: 'select',
+            tool: null,
+            catalogCategory: null,
+            editingAssemblyId: null,
+          })
           // Clear zone/item selection for clean viewer drill-down hierarchy
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
@@ -856,8 +869,6 @@ const useEditor = create<EditorState>()(
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
-      primitivePlacement: null,
-      setPrimitivePlacement: (kind) => set({ primitivePlacement: kind }),
     }),
     {
       name: 'pascal-editor-ui-preferences',

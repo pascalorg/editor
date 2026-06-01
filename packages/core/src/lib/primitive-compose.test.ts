@@ -71,6 +71,60 @@ describe('resolvePrimitiveWorldTransforms', () => {
     expectVecClose(halfCylinder!.rotation, [0, 0, -Math.PI / 2])
   })
 
+  test('new tapered and ring primitives expose axis semantics', () => {
+    const [cone, frustum, hemisphere, torus] = resolvePrimitiveWorldTransforms([
+      { kind: 'cone', axis: 'x', position: [0, 0, 0], radius: 0.2, height: 1.2 },
+      {
+        kind: 'frustum',
+        axis: 'z',
+        position: [0, 0, 0],
+        radiusTop: 0.1,
+        radiusBottom: 0.3,
+        height: 1.2,
+      },
+      { kind: 'hemisphere', axis: 'x', position: [0, 0, 0], radius: 0.4 },
+      { kind: 'torus', axis: 'x', position: [0, 0, 0], majorRadius: 0.4, tubeRadius: 0.06 },
+    ])
+
+    expectVecClose(cone!.rotation, [0, 0, -Math.PI / 2])
+    expectVecClose(frustum!.rotation, [Math.PI / 2, 0, 0])
+    expectVecClose(hemisphere!.rotation, [0, 0, -Math.PI / 2])
+    expectVecClose(torus!.rotation, [0, Math.PI / 2, 0])
+  })
+
+  test('trapezoid and wedge primitives use box-like anchor extents', () => {
+    const [, trapezoid, wedge] = resolvePrimitiveWorldTransforms(
+      [
+        { kind: 'box', position: [0, 1, 0], length: 2, width: 2, height: 0.2 },
+        {
+          kind: 'trapezoid-prism',
+          attachTo: 0,
+          anchor: 'top',
+          childAnchor: 'bottom',
+          position: [0, 0, 0],
+          length: 1,
+          width: 1,
+          height: 0.4,
+          topScale: [0.5, 0.7],
+        },
+        {
+          kind: 'wedge',
+          attachTo: 1,
+          anchor: 'top',
+          childAnchor: 'bottom',
+          position: [0, 0, 0],
+          length: 1,
+          width: 1,
+          height: 0.4,
+        },
+      ],
+      { positionMode: 'anchor-offset' },
+    )
+
+    expectVecClose(trapezoid!.position, [0, 1.3, 0])
+    expectVecClose(wedge!.position, [0, 1.7, 0])
+  })
+
   test('new curved primitives expose usable half-extents for anchor snapping', () => {
     const [, child] = resolvePrimitiveWorldTransforms(
       [

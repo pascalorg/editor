@@ -1,4 +1,5 @@
 import { BoxNode as BoxNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import { overallMaterialTarget } from '../shared/material-targets'
 import { boxParametrics } from './parametrics'
 import { BoxNode } from './schema'
 
@@ -23,6 +24,8 @@ export const boxDefinition: NodeDefinition<typeof BoxNode> = {
   },
 
   parametrics: boxParametrics,
+
+  materialTargets: overallMaterialTarget,
 
   renderer: {
     kind: 'parametric',

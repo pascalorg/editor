@@ -4,6 +4,7 @@ import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -178,6 +179,8 @@ export function SlabPanel() {
         </div>
       </PanelSection>
 
+      <NodeMaterialSection />
+
       <PanelSection title={S.info()}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>{L.area()}</span>
@@ -212,7 +215,11 @@ export function SlabPanel() {
                       {L.holeNamed(index + 1)} {isEditing && L.editing()}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {L.holeMeta(holeArea.toFixed(2), hole.length, isAutoHole ? autoLabel : L.manual())}
+                      {L.holeMeta(
+                        holeArea.toFixed(2),
+                        hole.length,
+                        isAutoHole ? autoLabel : L.manual(),
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -264,7 +271,11 @@ export function SlabPanel() {
         </div>
       </PanelSection>
       <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={L.move()} onClick={handleMove} />
+        <ActionButton
+          icon={<Move className="h-3.5 w-3.5" />}
+          label={L.move()}
+          onClick={handleMove}
+        />
       </ActionGroup>
     </PanelWrapper>
   )

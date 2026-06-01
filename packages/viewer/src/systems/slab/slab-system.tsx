@@ -8,7 +8,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
-import { createSafeEmptyGeometry } from '../../lib/safe-geometry'
+import { createSafeEmptyGeometry, ensureWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
@@ -110,7 +110,7 @@ function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry 
   const geometry = new THREE.ExtrudeGeometry(shape, { depth: elevation, bevelEnabled: false })
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
-  return geometry
+  return ensureWebGPUCompatibleGeometry(geometry)
 }
 
 /**
@@ -195,5 +195,5 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   geo.setIndex(indices)
   geo.computeVertexNormals()
-  return geo
+  return ensureWebGPUCompatibleGeometry(geo)
 }

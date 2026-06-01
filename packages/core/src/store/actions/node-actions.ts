@@ -370,8 +370,11 @@ export const applyNodeChangesAction = (
       allIdsToDelete.add(id)
       const node = nextNodes[id]
       if (node && 'children' in node && Array.isArray(node.children)) {
-        for (const childId of node.children) {
-          collectDelete(childId as AnyNodeId)
+        for (const childId of node.children as AnyNodeId[]) {
+          const child = nextNodes[childId]
+          if (child?.parentId === id) {
+            collectDelete(childId)
+          }
         }
       }
     }
@@ -416,7 +419,9 @@ export const applyNodeChangesAction = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
-  nodesToMarkDirty.forEach((id) => get().markDirty(id))
+  nodesToMarkDirty.forEach((id) => {
+    get().markDirty(id)
+  })
   parentsToMarkDirty.forEach((id) => {
     get().markDirty(id)
     const parent = get().nodes[id]
@@ -530,7 +535,10 @@ export const deleteNodesAction = (
       allIds.add(id)
       const node = nextNodes[id]
       if (node && 'children' in node) {
-        for (const cid of node.children as AnyNodeId[]) collect(cid)
+        for (const cid of node.children as AnyNodeId[]) {
+          const child = nextNodes[cid]
+          if (child?.parentId === id) collect(cid)
+        }
       }
     }
     for (const id of ids) collect(id)

@@ -10,6 +10,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import type { Group, Mesh } from 'three'
+import { ensureObjectWebGPUCompatibleGeometry } from '../../lib/safe-geometry'
 
 /**
  * Generic geometry system.
@@ -130,6 +131,7 @@ export const GeometrySystem = () => {
 
       disposeChildren(group)
       for (const child of [...built.children]) {
+        ensureObjectWebGPUCompatibleGeometry(child)
         // Tag every child the builder produced so a subsequent rebuild
         // can dispose only THIS rebuild's outputs and leave React-
         // mounted siblings (hosted items inside a shelf / slab / etc.)

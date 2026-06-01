@@ -1,0 +1,1 @@
+export { trapezoidPrismDefinition } from './definition'

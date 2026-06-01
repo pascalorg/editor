@@ -1,0 +1,1 @@
+export { assemblyDefinition } from './definition'

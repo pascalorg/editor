@@ -42,8 +42,8 @@ export const SSGI_PARAMS = {
   useTemporalFiltering: false,
 }
 
-
 const SESSION_POST_FX_DISABLED_KEY = 'pascal.viewer.postFx.disabled'
+const VIEWER_WEBGPU_VALIDATION_ERROR_EVENT = 'pascal:viewer-webgpu-validation-error'
 
 function readPostFxDisabledForSession() {
   if (typeof window === 'undefined') return false
@@ -143,11 +143,7 @@ function sanitizeOutlineObjects(objects: Object3D[]) {
   objects.length = nextIndex
 }
 
-function resetRendererForDirectRender(
-  renderer: unknown,
-  clearColor: Color,
-  clearAlpha = 1,
-) {
+function resetRendererForDirectRender(renderer: unknown, clearColor: Color, clearAlpha = 1) {
   const r = renderer as {
     autoClear?: boolean
     setClearAlpha?: (alpha: number) => void
@@ -204,6 +200,36 @@ const PostProcessingPasses = ({
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
   const hoverStrength = useMemo(() => uniform(DEFAULT_HOVER_STYLE.strength), [])
   const hoverPulseMix = useMemo(() => uniform(DEFAULT_HOVER_STYLE.pulse ? 0 : 1), [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const onWebGPUValidationError = (event: Event) => {
+      hasPipelineErrorRef.current = true
+      postFxDisabledForSessionRef.current = true
+      disablePostFxForSession()
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
+      renderPipelineRef.current = null
+      resetRendererForDirectRender(renderer, bgCurrent.current, 1)
+      if (!postFxFailureWarnedRef.current) {
+        postFxFailureWarnedRef.current = true
+        console.warn(
+          '[viewer/post-processing] WebGPU validation error detected. Post FX disabled for this browser session.',
+          {
+            error: summarizeError((event as CustomEvent<{ message?: string }>).detail?.message),
+          },
+        )
+      }
+      invalidate()
+    }
+
+    window.addEventListener(VIEWER_WEBGPU_VALIDATION_ERROR_EVENT, onWebGPUValidationError)
+    return () => {
+      window.removeEventListener(VIEWER_WEBGPU_VALIDATION_ERROR_EVENT, onWebGPUValidationError)
+    }
+  }, [invalidate, renderer])
 
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)

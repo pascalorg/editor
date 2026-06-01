@@ -5,6 +5,7 @@ import {
   ActionButton,
   ActionGroup,
   MetricControl,
+  NodeMaterialSection,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -84,7 +85,6 @@ export default function BoxPanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
-
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
     triggerSFX('sfx:item-delete')
@@ -147,6 +147,8 @@ export default function BoxPanel() {
           value={Math.round((node.cornerRadius ?? 0) * 100) / 100}
         />
       </PanelSection>
+
+      <NodeMaterialSection />
 
       <PanelSection title={S.position()}>
         <div className="flex items-center gap-1.5">
