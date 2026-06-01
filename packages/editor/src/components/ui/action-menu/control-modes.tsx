@@ -9,15 +9,7 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
-type ControlId =
-  | 'select'
-  | 'box-select'
-  | 'site-edit'
-  | 'build'
-  | 'material-paint'
-  | 'furnish'
-  | 'zone'
-  | 'delete'
+type ControlId = 'select' | 'box-select' | 'site-edit' | 'zone' | 'delete'
 
 type ControlConfig = {
   id: ControlId
@@ -55,30 +47,6 @@ const controls: ControlConfig[] = [
     activeColor: 'bg-white/10 hover:bg-white/10',
   },
   {
-    id: 'build',
-    imageSrc: '/icons/build.png',
-    label: 'Build',
-    shortcut: 'B',
-    color: 'hover:bg-green-500/20 hover:text-green-400',
-    activeColor: 'bg-green-500/20 text-green-400',
-  },
-  {
-    id: 'material-paint',
-    imageSrc: '/icons/paint.png',
-    label: 'Material Paint',
-    shortcut: 'P',
-    color: 'hover:bg-amber-500/20 hover:text-amber-400',
-    activeColor: 'bg-amber-500/20 text-amber-400',
-  },
-  {
-    id: 'furnish',
-    imageSrc: '/icons/couch.png',
-    label: 'Furnish',
-    shortcut: 'F',
-    color: 'hover:bg-green-500/20 hover:text-green-400',
-    activeColor: 'bg-green-500/20 text-green-400',
-  },
-  {
     id: 'zone',
     imageSrc: '/icons/zone.png',
     label: 'Zone',
@@ -104,9 +72,6 @@ export function ControlModes() {
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-  const primeMaterialPaintFromSelection = useEditor(
-    (state) => state.primeMaterialPaintFromSelection,
-  )
   const levelId = useViewer((s) => s.selection.levelId)
 
   // Only subscribe to the primitive `level` number — when walls are added to
@@ -129,10 +94,6 @@ export function ControlModes() {
     if (id === 'select') return mode === 'select' && selectionTool === 'click'
     if (id === 'box-select') return mode === 'select' && selectionTool === 'marquee'
     if (id === 'site-edit') return false
-    if (id === 'build')
-      return mode === 'build' && phase === 'structure' && structureLayer === 'elements'
-    if (id === 'material-paint') return mode === 'material-paint'
-    if (id === 'furnish') return mode === 'build' && phase === 'furnish'
     if (id === 'zone')
       return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
     return mode === id
@@ -168,33 +129,6 @@ export function ControlModes() {
     } else if (id === 'box-select') {
       setMode('select')
       setSelectionTool('marquee')
-    } else if (id === 'build') {
-      // Toggle: if already in structure build, go back to select
-      if (getIsActive('build')) {
-        setMode('select')
-      } else {
-        setPhase('structure')
-        setStructureLayer('elements')
-        setMode('build')
-      }
-    } else if (id === 'material-paint') {
-      if (getIsActive('material-paint')) {
-        setMode('select')
-      } else {
-        primeMaterialPaintFromSelection()
-        setPhase('structure')
-        setStructureLayer('elements')
-        setMode('material-paint')
-      }
-    } else if (id === 'furnish') {
-      if (getIsActive('furnish')) {
-        setMode('select')
-      } else {
-        setPhase('furnish')
-        setMode('build')
-        // Auto-switch sidebar to the items panel so the user can pick furniture
-        useEditor.getState().setActiveSidebarPanel('items')
-      }
     } else if (id === 'zone') {
       if (getIsActive('zone')) {
         setMode('select')
