@@ -1,6 +1,9 @@
 // Pure TypeScript — no UI, no React, no Node.js-only APIs.
 
 import type { ClosedRegion, CoordsJSON, OpeningRecord, WallRecord } from './dxf-geometry-parser'
+import type { MergedFurniture } from './madori-furniture-converter'
+
+export type { MergedFurniture }
 
 // ─── Channel B input types (SemanticJSON) ─────────────────────────────────────
 
@@ -74,6 +77,7 @@ export type MergeResult = {
   walls: MergedWall[]
   openings: MergedOpening[]
   zones: MergedZone[]
+  furniture: MergedFurniture[]
   warnings: string[]
 }
 
@@ -189,9 +193,10 @@ function regionsToZones(regions: ClosedRegion[]): MergedZone[] {
 
 function buildChannelAOnly(coords: CoordsJSON, warnings: string[]): MergeResult {
   return {
-    walls: aWallsToMerged(coords.walls),
-    openings: aOpeningsToMerged(coords.openings),
-    zones: regionsToZones(coords.closedRegions),
+    walls:     aWallsToMerged(coords.walls),
+    openings:  aOpeningsToMerged(coords.openings),
+    zones:     regionsToZones(coords.closedRegions),
+    furniture: [],
     warnings,
   }
 }
@@ -460,5 +465,5 @@ export function mergeDxf(coords: CoordsJSON, semantic: SemanticJSON | null): Mer
   // RULE 4: Attach room names to zones from Channel B room centres
   const zones = applyRule4(coords.closedRegions, semantic.rooms, convert)
 
-  return { walls, openings, zones, warnings }
+  return { walls, openings, zones, furniture: [], warnings }
 }

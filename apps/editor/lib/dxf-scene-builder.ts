@@ -7,6 +7,7 @@ import {
   BuildingNode,
   DoorNode,
   GuideNode,
+  ItemNode,
   LevelNode,
   SiteNode,
   WallNode,
@@ -14,7 +15,8 @@ import {
   ZoneNode,
 } from '@pascal-app/core/schema'
 import type { AnyNodeId, AnyNode as AnyNodeT } from '@pascal-app/core/schema'
-import type { CoordsJSON, MergeResult, MergedOpening, MergedWall, MergedZone } from '@pascal-app/core/importers'
+import type { CoordsJSON, MergeResult, MergedFurniture, MergedOpening, MergedWall, MergedZone } from '@pascal-app/core/importers'
+import { CATALOG_ITEMS } from '@pascal-app/editor/catalog'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +26,7 @@ export type BuildResult = {
   wallCount: number
   openingCount: number
   zoneCount: number
+  furnitureCount: number
   warnings: string[]
 }
 
@@ -133,6 +136,48 @@ export function buildGraph(
     }
   }
 
+  // Furniture — ItemNodes from Madori furniture conversion
+  let furnitureCount = 0
+  const catalogMap = new Map(CATALOG_ITEMS.map(c => [c.id, c]))
+
+  for (let i = 0; i < (mergeResult.furniture ?? []).length; i++) {
+    const f = mergeResult.furniture[i] as MergedFurniture
+    const catalogItem = catalogMap.get(f.pascalItemId)
+    if (!catalogItem) {
+      warnings.push(`furniture[${i}] catalog item '${f.pascalItemId}' not found — skipped`)
+      continue
+    }
+    try {
+      const item = ItemNode.parse({
+        position: f.position,
+        rotation: [0, f.rotation, 0],
+        asset: {
+          id:          catalogItem.id,
+          category:    catalogItem.category,
+          name:        catalogItem.name,
+          thumbnail:   catalogItem.thumbnail,
+          src:         catalogItem.src,
+          dimensions:  catalogItem.dimensions,
+          offset:      catalogItem.offset   ?? [0, 0, 0],
+          rotation:    catalogItem.rotation ?? [0, 0, 0],
+          scale:       catalogItem.scale    ?? [1, 1, 1],
+          ...(catalogItem.tags         ? { tags:         catalogItem.tags         } : {}),
+          ...(catalogItem.surface      ? { surface:      catalogItem.surface      } : {}),
+          ...(catalogItem.attachTo     ? { attachTo:     catalogItem.attachTo     } : {}),
+          ...(catalogItem.floorPlanUrl ? { floorPlanUrl: catalogItem.floorPlanUrl } : {}),
+        },
+      })
+      const linked: AnyNodeT = { ...(item as AnyNodeT), parentId: levelId }
+      const v = AnyNode.safeParse(linked)
+      if (!v.success) { warnings.push(`furniture[${i}] skipped: ${v.error.message}`); continue }
+      nodes[item.id as AnyNodeId] = v.data as AnyNodeT
+      levelChildren.push(item.id)
+      furnitureCount++
+    } catch (err) {
+      warnings.push(`furniture[${i}] error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   // Guide node (DXF PNG overlay, optional)
   if (guideImageUrl) {
     try {
@@ -166,7 +211,7 @@ export function buildGraph(
     collections: {} as SceneGraph['collections'],
   }
 
-  return { graph, wallCount, openingCount, zoneCount, warnings }
+  return { graph, wallCount, openingCount, zoneCount, furnitureCount, warnings }
 }
 
 // ---------------------------------------------------------------------------
@@ -192,11 +237,12 @@ export async function buildAndSaveScene(
   wallCount: number
   openingCount: number
   zoneCount: number
+  furnitureCount: number
   warnings: string[]
 }> {
   const { name = 'DXF Import', operation = 'dxf_import', guideImageUrl } = options
 
-  const { graph, wallCount, openingCount, zoneCount, warnings } =
+  const { graph, wallCount, openingCount, zoneCount, furnitureCount, warnings } =
     buildGraph(mergeResult, coords, guideImageUrl)
 
   const ops = await getSceneOperations()
@@ -222,5 +268,5 @@ export async function buildAndSaveScene(
     }
   }
 
-  return { sceneId: meta.id, graph, wallCount, openingCount, zoneCount, warnings }
+  return { sceneId: meta.id, graph, wallCount, openingCount, zoneCount, furnitureCount, warnings }
 }

@@ -2,7 +2,8 @@
 // Runs in browser Web Workers and Next.js server routes.
 
 import type { ClosedRegion, CoordsJSON } from './dxf-geometry-parser'
-import type { MergeResult, MergedOpening, MergedWall, MergedZone } from './dxf-merge-engine'
+import type { MergeResult, MergedFurniture, MergedOpening, MergedWall, MergedZone } from './dxf-merge-engine'
+import { DEFAULT_FURNITURE_REGISTRY, type RawFurniture3D } from './madori-furniture-converter'
 
 // ===========================================================================
 // Lightweight XML helpers (no DOMParser dependency)
@@ -88,6 +89,7 @@ function parseXml(xml: string): {
   walls:     RawWall[]
   openings:  RawOpening[]
   texts:     RawText[]
+  furniture: RawFurniture3D[]
 } {
   const sceneHigh      = parseFloat(firstAttr(xml, 'SceneHigh', 'value', '300')) * CM
   const defaultThickCm = parseFloat(firstAttr(xml, 'WallThick',  'value', '20'))
@@ -144,7 +146,20 @@ function parseXml(xml: string): {
     }
   }
 
-  return { sceneHigh, walls, openings, texts }
+  const furniture: RawFurniture3D[] = findElements(xml, 'Furniture3D')
+    .filter(a => (a['source'] ?? '').length > 0)
+    .map(a => ({
+      posX:      R3( fa(a, 'PosX')   * CM),
+      posY:      R3(-fa(a, 'PosY')   * CM),  // Y negated — same convention as walls
+      rotate:    -fa(a, 'Rotate'),            // negate to match Y-flip
+      length:    R3(fa(a, 'Length') * CM),
+      width:     R3(fa(a, 'Width')  * CM),
+      height:    R3(fa(a, 'Height') * CM),
+      source:    a['source'] ?? '',
+      groupName: a['groupName'] ?? '',
+    }))
+
+  return { sceneHigh, walls, openings, texts, furniture }
 }
 
 // ===========================================================================
@@ -367,12 +382,13 @@ export type MadoriParseOutput = {
 export function parseMadori(xmlString: string): MadoriParseOutput {
   const warnings: string[] = []
 
-  const { sceneHigh, walls: rawWalls, openings: rawOpenings, texts } = parseXml(xmlString)
+  DEFAULT_FURNITURE_REGISTRY.resetSeq()
+  const { sceneHigh, walls: rawWalls, openings: rawOpenings, texts, furniture: rawFurniture } = parseXml(xmlString)
 
   if (rawWalls.length === 0) {
     warnings.push('XML missing WallData -- verify XML is from 3dMadori /analyze-dxf')
     return {
-      mergeResult: { walls: [], openings: [], zones: [], warnings },
+      mergeResult: { walls: [], openings: [], zones: [], furniture: [], warnings },
       coords: { unit: 'm', bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 }, walls: [], openings: [], closedRegions: [], confidence: 0, warnings },
       warnings,
     }
@@ -425,6 +441,21 @@ export function parseMadori(xmlString: string): MadoriParseOutput {
   const skipped = rawOpenings.length - mergedOpenings.length
   if (skipped > 0) warnings.push(`${skipped} openings had no matching wall (corridor-side openings on unexported wall segments)`)
 
+  // Step 4a: convert Furniture3D elements via registry
+  const mergedFurniture: MergedFurniture[] = []
+  let furnitureSkipped = 0
+  for (const raw of rawFurniture) {
+    const result = DEFAULT_FURNITURE_REGISTRY.convert(raw)
+    if (result) {
+      mergedFurniture.push(result)
+    } else {
+      furnitureSkipped++
+    }
+  }
+  if (furnitureSkipped > 0) {
+    warnings.push(`${furnitureSkipped} furniture items skipped (no Pascal catalog mapping)`)
+  }
+
   // Step 4: closed region detection -> ZoneNodes
   const closedRegions = findClosedRegions(validWalls)
 
@@ -475,7 +506,7 @@ export function parseMadori(xmlString: string): MadoriParseOutput {
   }
 
   return {
-    mergeResult: { walls: mergedWalls, openings: mergedOpenings, zones: mergedZones, warnings },
+    mergeResult: { walls: mergedWalls, openings: mergedOpenings, zones: mergedZones, furniture: mergedFurniture, warnings },
     coords,
     warnings,
   }
