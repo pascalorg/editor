@@ -37,7 +37,12 @@ export {
   SUBTRACTION,
 } from './lib/csg-utils'
 export type { EdgeMode } from './lib/edge-style'
-export { applyIsolation, clearIsolation, collectIsolationSubtree } from './lib/isolation'
+export {
+  applyIsolation,
+  clearIsolation,
+  collectIsolationSubtree,
+  isIsolationActive,
+} from './lib/isolation'
 export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
