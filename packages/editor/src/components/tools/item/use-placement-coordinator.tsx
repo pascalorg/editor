@@ -1168,9 +1168,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.position.copy(gridPosition.current)
 
-        // Publish live transform for 2D floorplan
+        // Publish live transform for 2D floorplan. The item override in
+        // `floorplan-registry-layer` treats `live.position` as building-local
+        // plan coords (parentId forced to null so the resolver renders it
+        // directly), so publish the building-local cursor — not the
+        // world-space `result.cursorPosition`, which otherwise lands the 2D
+        // visual off the cursor whenever the building isn't at the origin
+        // with zero rotation.
         useLiveTransforms.getState().set(draft.id, {
-          position: result.cursorPosition,
+          position: [cc.x, cc.y, cc.z],
           rotation: cursorGroupRef.current.rotation.y,
         })
       }
@@ -1324,7 +1330,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Keyboard rotation ----
 
-    const ROTATION_STEP = Math.PI / 2
+    // 45° increments — matches the R-key rotation step for already-placed
+    // items (use-keyboard.ts) so the ghost/duplicate rotates the same way.
+    const ROTATION_STEP = Math.PI / 4
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Shift') {
         shiftFreeRef.current = true

@@ -13,6 +13,7 @@ export type {
   FenceEvent,
   GridEvent,
   GuideEvent,
+  GutterEvent,
   ItemEvent,
   LevelEvent,
   NodeEvent,
@@ -105,6 +106,7 @@ export {
   getEffectiveNode,
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'

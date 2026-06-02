@@ -1,4 +1,14 @@
 export {
+  type AlignmentAnchor,
+  type AlignmentGuide,
+  type AlignmentGuideAxis,
+  type AnchorKind,
+  bboxAnchors,
+  resolveAlignment,
+  type ResolveAlignmentInput,
+  type ResolveAlignmentResult,
+} from './alignment'
+export {
   createDragSession,
   type DragSession,
   type DragSessionInput,

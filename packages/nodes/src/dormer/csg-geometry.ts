@@ -57,11 +57,16 @@ export function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeo
   const isFlat = dormer.roofType === 'flat' || roofH === 0
 
   // Body box: foot at y = -skirt, top at y = wallH.
-  const body = new THREE.BoxGeometry(w, wallH + skirt, d)
-  body.translate(0, (wallH - skirt) / 2, 0)
-  const bIdx = body.getIndex()?.count ?? 0
+  // BoxGeometry is indexed; ExtrudeGeometry below is not. mergeGeometries
+  // refuses mixed input ("index attribute exists among all geometries,
+  // or in none of them") — drop the body's index so both inputs match.
+  const indexedBody = new THREE.BoxGeometry(w, wallH + skirt, d)
+  indexedBody.translate(0, (wallH - skirt) / 2, 0)
+  const body = indexedBody.toNonIndexed()
+  indexedBody.dispose()
+  const bVtx = body.getAttribute('position').count
   body.clearGroups()
-  body.addGroup(0, bIdx, 0)
+  body.addGroup(0, bVtx, 0)
 
   if (isFlat) {
     if (!body.getAttribute('normal')) body.computeVertexNormals()
@@ -78,9 +83,9 @@ export function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeo
   const roof = new THREE.ExtrudeGeometry(roofShape, { depth: d, bevelEnabled: false })
   roof.translate(0, wallH, -d / 2)
 
-  const rIdx = roof.getIndex()?.count ?? 0
+  const rVtx = roof.getAttribute('position').count
   roof.clearGroups()
-  roof.addGroup(0, rIdx, 3)
+  roof.addGroup(0, rVtx, 3)
 
   const merged = mergeGeometries([body, roof], true) ?? body
   body.dispose()
@@ -187,11 +192,20 @@ function createDormerWindowCutGeometry(
 }
 
 /**
- * Which faces of a dormer are exposed (not fully buried in the host
- * roof). "front" = mesh-local +Z, "back" = mesh-local −Z (after the
- * +π/2 yaw bake for non-shed roofs). A face is exposed when the
- * dormer's total wall top exceeds the host roof surface at that face's
- * Z position.
+ * Which gable faces of a dormer have a *fully visible window opening*
+ * (not clipped by the host roof slope). "front" = mesh-local +Z,
+ * "back" = mesh-local −Z (after the +π/2 yaw bake for non-shed roofs).
+ *
+ * The criterion is window-bottom-above-slope, not wall-top-above-slope:
+ * the dormer wall extends well below the window into the skirt that's
+ * buried inside the roof, so checking just "does any wall poke above
+ * the slope" is far too lenient — a dormer whose eave barely clears
+ * the roof would pass even though the entire window (which sits inside
+ * the skirt, well below the eave) is buried. Switching to the window
+ * bottom collapses both the CSG window-cut decision (which calls into
+ * this function in `generateDormerGeometry`) and the live render gate
+ * (window-assembly.tsx) onto the right line: the window only renders
+ * where it's actually visible from outside.
  */
 export function getDormerExposedFaces(
   dormer: DormerNode,
@@ -206,7 +220,18 @@ export function getDormerExposedFaces(
   const frontZ = dormerZ + halfDepth * Math.cos(rot)
   const backZ = dormerZ - halfDepth * Math.cos(rot)
 
-  const dormerWallTop = dormerY + dormer.height
+  // Window bottom in dormer-local Y. Mirrors `getDormerSkirtWindowDims`
+  // so both functions read the same window position. The window sits
+  // in the skirt below the eave (dormer-local Y=0), so `centerY` is
+  // typically negative; subtracting half the window height lands us at
+  // the bottom edge.
+  const skirtH = dormerSkirtHeight(dormer)
+  const winH = Math.max(0, dormer.windowHeight ?? 0)
+  const winOffsetY = dormer.windowOffsetY ?? 0
+  const windowCenterDormerY = -(skirtH / 2) + winOffsetY
+  const windowBottomDormerY = windowCenterDormerY - winH / 2
+  // Lift into segment-local Y: dormer-local Y=0 sits at `dormer.position[1]`.
+  const windowBottomSegY = dormerY + windowBottomDormerY
 
   const hostWh = hostSegment.wallHeight ?? 0.5
   const hostRh = getActiveRoofHeight(hostSegment)
@@ -224,15 +249,15 @@ export function getDormerExposedFaces(
     return hostWh + hostRh * (1 - t)
   }
 
-  // A face is "exposed" only if the dormer's wall actually pokes above
-  // the host roof there by a meaningful amount — otherwise the wall is
-  // CSG-buried and any window we render at that face will hover with
-  // no wall behind it. A 5cm threshold suppresses the borderline-cases
-  // where the wall top is essentially level with the slope.
+  // A face is "exposed" only if the *window bottom* clears the host
+  // slope at that face's Z by a meaningful amount — borderline cases
+  // (slope grazing the window bottom) suppress the window so we don't
+  // render a partially-clipped frame poking out of the roof. 5cm
+  // matches the threshold the prior wall-top check used.
   const minPokeOut = 0.05
   return {
-    front: dormerWallTop - roofHeightAtZ(frontZ) > minPokeOut,
-    back: dormerWallTop - roofHeightAtZ(backZ) > minPokeOut,
+    front: windowBottomSegY - roofHeightAtZ(frontZ) > minPokeOut,
+    back: windowBottomSegY - roofHeightAtZ(backZ) > minPokeOut,
   }
 }
 

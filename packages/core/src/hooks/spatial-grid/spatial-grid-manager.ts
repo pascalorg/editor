@@ -1,6 +1,8 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import useScene from '../../store/use-scene'
+import { isCurvedWall, sampleWallCenterline } from '../../systems/wall/wall-curve'
+import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -284,21 +286,82 @@ function segmentsCollinearAndOverlap(
   return a1OnB && a2OnB
 }
 
+type WallOverlapInput = {
+  start: [number, number]
+  end: [number, number]
+  curveOffset?: number
+  thickness?: number
+}
+
 /**
  * Test if a wall segment overlaps with a polygon.
  * A wall is considered to overlap if:
  * - Its midpoint is inside the polygon (wall crosses through)
  * - At least one endpoint is inside (wall partially or fully in slab)
  * - It's collinear with and overlaps a polygon edge (wall on slab boundary)
+ * - (curved walls) any sample along the centerline is inside
  *
  * Note: A wall with just one endpoint touching the edge but the rest outside
  * is NOT considered overlapping (adjacent only).
  */
 export function wallOverlapsPolygon(
-  start: [number, number],
-  end: [number, number],
-  polygon: Array<[number, number]>,
+  startOrWall: [number, number] | WallOverlapInput,
+  endOrPolygon: [number, number] | Array<[number, number]>,
+  polygonArg?: Array<[number, number]>,
 ): boolean {
+  // Two call shapes:
+  //   wallOverlapsPolygon(wallLike, polygon) — preferred; curve-aware
+  //   wallOverlapsPolygon(start, end, polygon) — legacy chord-only
+  let start: [number, number]
+  let end: [number, number]
+  let polygon: Array<[number, number]>
+  let curveOffset = 0
+  let thickness = DEFAULT_WALL_THICKNESS
+  if (Array.isArray(startOrWall)) {
+    start = startOrWall as [number, number]
+    end = endOrPolygon as [number, number]
+    polygon = polygonArg as Array<[number, number]>
+  } else {
+    start = startOrWall.start
+    end = startOrWall.end
+    curveOffset = startOrWall.curveOffset ?? 0
+    thickness = startOrWall.thickness ?? DEFAULT_WALL_THICKNESS
+    polygon = endOrPolygon as Array<[number, number]>
+  }
+  const halfThickness = Math.max(thickness / 2, 0)
+
+  // Curved walls: sample the centerline. The chord-based checks below miss
+  // walls that bow into/out of the slab — e.g. endpoints on the slab
+  // boundary with the curve arcing inward through the slab interior. Without
+  // this, `getSlabElevationForWall` returns 0 (wall drops to floor) and
+  // `markNodesOverlappingSlab` never re-dirties the wall when the slab Y
+  // moves.
+  if (curveOffset !== 0) {
+    const wallLike = { start, end, curveOffset }
+    if (isCurvedWall(wallLike)) {
+      const samples = sampleWallCenterline(wallLike, 16)
+      for (let i = 0; i < samples.length; i++) {
+        const point = samples[i]!
+        if (pointInPolygon(point.x, point.y, polygon)) return true
+        // Also test ±halfThickness perpendicular at each sample so a curve
+        // skirting the slab edge with its centerline just outside still
+        // registers — its body sits inside the slab.
+        if (halfThickness > 0 && i > 0) {
+          const prev = samples[i - 1]!
+          const sx = point.x - prev.x
+          const sz = point.y - prev.y
+          const sl = Math.sqrt(sx * sx + sz * sz)
+          if (sl > 1e-10) {
+            const tnx = (-sz / sl) * halfThickness
+            const tnz = (sx / sl) * halfThickness
+            if (pointInPolygon(point.x + tnx, point.y + tnz, polygon)) return true
+            if (pointInPolygon(point.x - tnx, point.y - tnz, polygon)) return true
+          }
+        }
+      }
+    }
+  }
+
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const len = Math.sqrt(dx * dx + dz * dz)
@@ -330,6 +393,26 @@ export function wallOverlapsPolygon(
       const bz = start[1] + dz * t
       if (pointInPolygon(bx + pnx, bz + pnz, polygon)) return true
       if (pointInPolygon(bx - pnx, bz - pnz, polygon)) return true
+    }
+
+    // Wall-thickness perpendicular test. Walls aren't infinitely thin lines;
+    // a wall whose centerline sits just outside the slab boundary still has
+    // half its body inside the slab and should follow the slab elevation.
+    // Without this, the perimeter walls of a room often miss the slab-overlap
+    // detection (the slab polygon is the room's interior, the wall centerline
+    // sits on or just outside its edge) and stay at Y=0 while the slab moves
+    // up.
+    if (halfThickness > 0) {
+      const ux = dx / len
+      const uz = dz / len
+      const tnx = -uz * halfThickness
+      const tnz = ux * halfThickness
+      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+        const bx = start[0] + dx * t
+        const bz = start[1] + dz * t
+        if (pointInPolygon(bx + tnx, bz + tnz, polygon)) return true
+        if (pointInPolygon(bx - tnx, bz - tnz, polygon)) return true
+      }
     }
   }
 
@@ -762,15 +845,33 @@ export class SpatialGridManager {
    * Get the slab elevation for a wall by checking if it overlaps with any slab polygon (excluding holes).
    * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
+   *
+   * Accepts an optional `curveOffset` so curved walls evaluate overlap
+   * against their actual centerline samples, not just the chord.
    */
-  getSlabElevationForWall(levelId: string, start: [number, number], end: [number, number]): number {
+  getSlabElevationForWall(
+    levelId: string,
+    start: [number, number],
+    end: [number, number],
+    curveOffset = 0,
+    thickness = DEFAULT_WALL_THICKNESS,
+  ): number {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
+
+    const wallLike: WallOverlapInput = { start, end, curveOffset, thickness }
+    const isCurved = curveOffset !== 0 && isCurvedWall(wallLike)
+    const holeSamplePoints: Array<{ x: number; y: number }> = isCurved
+      ? sampleWallCenterline(wallLike, 8)
+      : [0, 0.25, 0.5, 0.75, 1].map((t) => ({
+          x: start[0] + (end[0] - start[0]) * t,
+          y: start[1] + (end[1] - start[1]) * t,
+        }))
 
     let maxElevation = Number.NEGATIVE_INFINITY
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
-      if (!wallOverlapsPolygon(start, end, slab.polygon)) continue
+      if (!wallOverlapsPolygon(wallLike, slab.polygon)) continue
 
       const holes = slab.holes || []
       if (holes.length === 0) {
@@ -783,15 +884,11 @@ export class SpatialGridManager {
       // Sample multiple points along the wall to check whether any portion lies on
       // solid slab (not inside any hole). Checking only the midpoint fails when the
       // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
-      const dx = end[0] - start[0]
-      const dz = end[1] - start[1]
       let hasValidPoint = false
-      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
-        const px = start[0] + dx * t
-        const pz = start[1] + dz * t
+      for (const sample of holeSamplePoints) {
         let inHole = false
         for (const hole of holes) {
-          if (hole.length >= 3 && pointInPolygon(px, pz, hole)) {
+          if (hole.length >= 3 && pointInPolygon(sample.x, sample.y, hole)) {
             inHole = true
             break
           }

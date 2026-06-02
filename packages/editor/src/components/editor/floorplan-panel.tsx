@@ -59,6 +59,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import {
   buildFloorplanItemEntry,
@@ -73,6 +74,7 @@ import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import type { GuideUiState } from '../../store/use-editor'
 import useEditor from '../../store/use-editor'
+import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
@@ -4516,6 +4518,21 @@ export function FloorplanPanel() {
   const displaySlabPolygons = useMemo<SlabPolygonEntry[]>(() => [], [])
   const ceilingPolygons = useMemo<CeilingPolygonEntry[]>(() => [], [])
   const displayCeilingPolygons = useMemo<CeilingPolygonEntry[]>(() => [], [])
+  // Ceilings on the active level, projected to 2D polygons for hit-testing
+  // ceiling-item placement clicks/moves. The legacy `ceilingPolygons` above
+  // is intentionally empty (ceilings render via the registry layer); this
+  // memo is the placement-side counterpart, separate from rendering.
+  const ceilingHitEntries = useMemo(
+    () =>
+      ceilings.map((ceiling) => ({
+        ceiling,
+        polygon: toFloorplanPolygon(ceiling.polygon),
+        holes: (ceiling.holes ?? [])
+          .map((hole) => toFloorplanPolygon(hole))
+          .filter((hole) => hole.length >= 3),
+      })),
+    [ceilings],
+  )
   // Zone fully registry-driven via `def.floorplan`.
   const zonePolygons = useMemo<ZonePolygonEntry[]>(() => [], [])
   const displayZonePolygons = useMemo<ZonePolygonEntry[]>(() => [], [])
@@ -4799,6 +4816,18 @@ export function FloorplanPanel() {
     (mode === 'build' && tool === 'item') || movingNode?.type === 'item'
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
   const isFloorItemMoveActive = movingNode?.type === 'item' && !movingNode.asset.attachTo
+  // Ceiling-attached items (lights, fans). The 3D viewer drives these via
+  // `ceiling:enter/move/click` raycast events on the ceiling mesh; the 2D
+  // floor plan has no such mesh, so we synthesise the same events when the
+  // cursor is over a ceiling polygon. Without this the placement system
+  // never transitions out of `surface: 'floor'` and the draft sits at floor
+  // height while the 2D cursor moves freely — what the user perceived as
+  // "2D and 3D positions are out of sync".
+  const isCeilingItemBuildActive =
+    mode === 'build' && tool === 'item' && selectedItem?.attachTo === 'ceiling'
+  const isCeilingItemMoveActive =
+    movingNode?.type === 'item' && movingNode.asset.attachTo === 'ceiling'
+  const isCeilingItemPlacementActive = isCeilingItemBuildActive || isCeilingItemMoveActive
   // Any registry-driven kind whose tool is currently active. Lets the floor
   // plan emit `grid:click` / `grid:move` events to that kind's placement tool
   // (shelf today; future Phase 5 kinds the moment they register a `tool`).
@@ -7119,6 +7148,7 @@ export function FloorplanPanel() {
   }, [])
 
   const hoveredWallIdRef = useRef<string | null>(null)
+  const hoveredCeilingIdRef = useRef<string | null>(null)
   const floorplanGridLocalY = useMemo(() => {
     if (movingNode?.type === 'item' || movingNode?.type === 'spawn') {
       return movingNode.position[1]
@@ -7169,6 +7199,156 @@ export function FloorplanPanel() {
       return snappedPoint
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
+  )
+
+  // Build a synthetic `CeilingEvent` from a 2D plan point so the placement
+  // coordinator's existing ceiling handlers (which expect the same payload
+  // shape the 3D raycaster produces) can drive a ceiling-attached item
+  // placement from the floor plan. Returns null if the ceiling mesh isn't
+  // registered yet — the placement strategy needs `event.object` for the
+  // ceiling-local↔world transform.
+  const buildFloorplanCeilingEventPayload = useCallback(
+    (
+      ceiling: CeilingNode,
+      planPoint: WallPlanPoint,
+      nativeEvent?: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
+    ) => {
+      const ceilingMesh = sceneRegistry.nodes.get(ceiling.id as AnyNodeId)
+      if (!ceilingMesh) return null
+
+      const cos = Math.cos(buildingRotationY)
+      const sin = Math.sin(buildingRotationY)
+      const worldX = buildingPosition[0] + planPoint[0] * cos + planPoint[1] * sin
+      const worldZ = buildingPosition[2] - planPoint[0] * sin + planPoint[1] * cos
+      const worldY = ceilingMesh.getWorldPosition(new Vector3()).y
+      const localVec = ceilingMesh.worldToLocal(new Vector3(worldX, worldY, worldZ))
+
+      return {
+        node: ceiling,
+        position: [worldX, worldY, worldZ] as [number, number, number],
+        localPosition: [localVec.x, localVec.y, localVec.z] as [number, number, number],
+        normal: [0, -1, 0] as [number, number, number],
+        object: ceilingMesh,
+        stopPropagation: () => {},
+        nativeEvent: nativeEvent?.nativeEvent,
+      }
+    },
+    [buildingPosition, buildingRotationY],
+  )
+
+  const emitFloorplanCeilingLeave = useCallback((ceilingId: string | null) => {
+    if (!ceilingId) return
+    const ceilingNode = useScene.getState().nodes[ceilingId as AnyNodeId]
+    if (!ceilingNode || ceilingNode.type !== 'ceiling') return
+
+    emitter.emit('ceiling:leave', {
+      node: ceilingNode,
+      position: [0, 0, 0],
+      localPosition: [0, 0, 0],
+      normal: [0, -1, 0],
+      stopPropagation: () => {},
+    } as any)
+  }, [])
+
+  // Clear the hovered-ceiling tracker whenever placement mode ends, so we
+  // don't carry a stale ceiling id into the next placement session.
+  useEffect(() => {
+    if (!isCeilingItemPlacementActive && hoveredCeilingIdRef.current) {
+      hoveredCeilingIdRef.current = null
+    }
+  }, [isCeilingItemPlacementActive])
+
+  const findCeilingAtPlanPoint = useCallback(
+    (planPoint: WallPlanPoint): CeilingNode | null => {
+      if (ceilingHitEntries.length === 0) return null
+      const point: Point2D = { x: planPoint[0], y: planPoint[1] }
+      for (const entry of ceilingHitEntries) {
+        if (isPointInsidePolygonWithHoles(point, entry.polygon, entry.holes)) {
+          return entry.ceiling
+        }
+      }
+      return null
+    },
+    [ceilingHitEntries],
+  )
+
+  // Route a 2D plan point through ceiling enter/move/leave events when a
+  // ceiling-attached item is being placed. Returns true when the panel
+  // should stop further pointer-move processing (we either emitted a
+  // ceiling event or are between ceilings).
+  const handleCeilingItemPlacementMove = useCallback(
+    (
+      planPoint: WallPlanPoint,
+      nativeEvent: ReactPointerEvent<SVGSVGElement>,
+    ): boolean => {
+      if (!isCeilingItemPlacementActive) return false
+
+      const ceiling = findCeilingAtPlanPoint(planPoint)
+      if (!ceiling) {
+        if (hoveredCeilingIdRef.current) {
+          emitFloorplanCeilingLeave(hoveredCeilingIdRef.current)
+          hoveredCeilingIdRef.current = null
+        }
+        return true
+      }
+
+      const payload = buildFloorplanCeilingEventPayload(ceiling, planPoint, nativeEvent)
+      if (!payload) return true
+
+      if (hoveredCeilingIdRef.current !== ceiling.id) {
+        if (hoveredCeilingIdRef.current) {
+          emitFloorplanCeilingLeave(hoveredCeilingIdRef.current)
+        }
+        hoveredCeilingIdRef.current = ceiling.id
+        emitter.emit('ceiling:enter', payload as any)
+      } else {
+        emitter.emit('ceiling:move', payload as any)
+      }
+      return true
+    },
+    [
+      buildFloorplanCeilingEventPayload,
+      emitFloorplanCeilingLeave,
+      findCeilingAtPlanPoint,
+      isCeilingItemPlacementActive,
+    ],
+  )
+
+  // Click counterpart — used by the background placement click handler.
+  // Returns true if the click was a valid ceiling-item placement.
+  const handleCeilingItemPlacementClick = useCallback(
+    (
+      planPoint: WallPlanPoint,
+      nativeEvent: ReactMouseEvent<SVGSVGElement>,
+    ): boolean => {
+      if (!isCeilingItemPlacementActive) return false
+      const ceiling = findCeilingAtPlanPoint(planPoint)
+      if (!ceiling) return true
+
+      // Ensure the placement state has entered the ceiling surface; the
+      // user can click without a prior move (e.g. fresh placement after
+      // selecting the asset from the catalog).
+      if (hoveredCeilingIdRef.current !== ceiling.id) {
+        const enterPayload = buildFloorplanCeilingEventPayload(ceiling, planPoint, nativeEvent)
+        if (!enterPayload) return true
+        if (hoveredCeilingIdRef.current) {
+          emitFloorplanCeilingLeave(hoveredCeilingIdRef.current)
+        }
+        hoveredCeilingIdRef.current = ceiling.id
+        emitter.emit('ceiling:enter', enterPayload as any)
+      }
+
+      const clickPayload = buildFloorplanCeilingEventPayload(ceiling, planPoint, nativeEvent)
+      if (!clickPayload) return true
+      emitter.emit('ceiling:click', clickPayload as any)
+      return true
+    },
+    [
+      buildFloorplanCeilingEventPayload,
+      emitFloorplanCeilingLeave,
+      findCeilingAtPlanPoint,
+      isCeilingItemPlacementActive,
+    ],
   )
 
   const handlePointerMove = useCallback(
@@ -7357,6 +7537,20 @@ export function FloorplanPanel() {
         return
       }
 
+      // Ceiling-attached item placement. Same shape as the opening branch
+      // above: synthesise the surface events the placement coordinator
+      // already listens for (ceiling:enter / move / leave) instead of
+      // routing through `grid:move`, which would otherwise be processed
+      // by the floor strategy and drop the item to floor height.
+      if (isCeilingItemPlacementActive) {
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        setCursorPoint((previousPoint) =>
+          previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
+        )
+        handleCeilingItemPlacementMove(snappedPoint, event)
+        return
+      }
+
       // Registry-driven catch-all for kinds without bespoke 2D handling
       // (shelf, etc.). Must run AFTER the opening branch above (door /
       // window are also registered kinds, but need wall events — see
@@ -7427,7 +7621,9 @@ export function FloorplanPanel() {
       fittedViewport,
       getPlanPointFromClientPoint,
       activePolygonDraftPoints,
+      handleCeilingItemPlacementMove,
       isCeilingBuildActive,
+      isCeilingItemPlacementActive,
       isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isMarqueeSelectionToolActive,
@@ -7650,11 +7846,13 @@ export function FloorplanPanel() {
     findClosestWallPoint,
     floorplanOpeningLocalY,
     getSnappedFloorplanPoint,
+    handleCeilingItemPlacementClick,
     handleCeilingPlacementPoint,
     handleSlabPlacementPoint,
     handleWallPlacementPoint,
     handleZonePlacementPoint,
     isCeilingBuildActive,
+    isCeilingItemPlacementActive,
     isFenceBuildActive,
     isFloorplanGridInteractionActive,
     isOpeningPlacementActive,
@@ -8936,6 +9134,12 @@ export function FloorplanPanel() {
                   into the floor-plan scene <g> (the data-floorplan-scene
                   attribute below); see floorplan-registry-move-overlay.tsx. */}
               <FloorplanRegistryMoveOverlay />
+
+              {/* Figma-style alignment guides published by the move
+                  overlay during a free-translate drag. Sits above the
+                  registry layer so the red lines and distance pills
+                  paint on top of node geometry. */}
+              <FloorplanAlignmentGuideLayer />
 
               <FloorplanMarqueeLayer
                 bounds={visibleSvgMarqueeBounds}

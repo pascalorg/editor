@@ -464,6 +464,7 @@ export function buildStairFloorplan(
       point: [planX, planY],
       angle: radialAngle,
       affordance: 'stair-rotate',
+      pivot: [cx, cz],
     })
   }
 

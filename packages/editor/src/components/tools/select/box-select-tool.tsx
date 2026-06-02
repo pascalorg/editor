@@ -192,7 +192,14 @@ function objectBoundsIntersectsBounds(nodeId: string, bounds: Bounds): boolean {
   )
 }
 
-function collectNodeIdsInBounds(bounds: Bounds): string[] {
+/**
+ * Collect the ids of selectable nodes on the active level. When `bounds` is a
+ * rectangle, only nodes intersecting it are returned (a box-select hit-test).
+ * When `bounds` is `null`, every selectable node on the level is returned —
+ * the full set the box-select could ever capture — which lets the caller tell
+ * whether a drag selected the entire level.
+ */
+function collectNodeIdsInBounds(bounds: Bounds | null): string[] {
   const { levelId } = useViewer.getState().selection
   const { nodes } = useScene.getState()
   const { phase, structureLayer } = useEditor.getState()
@@ -208,7 +215,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
       const node = nodes[childId as AnyNodeId]
       if (!node || node.type !== 'zone') continue
       const zone = node as ZoneNode
-      if (polygonIntersectsBounds(zone.polygon, bounds)) {
+      if (!bounds || polygonIntersectsBounds(zone.polygon, bounds)) {
         result.push(zone.id)
       }
     }
@@ -221,6 +228,7 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
       if (node.type === 'wall' || node.type === 'fence') {
         const wall = node as WallNode
         if (
+          !bounds ||
           segmentIntersectsBounds(wall.start[0], wall.start[1], wall.end[0], wall.end[1], bounds)
         ) {
           result.push(wall.id)
@@ -237,40 +245,40 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
                 (child as ItemNode).asset.category === 'window'))
           ) {
             const xz = getNodeWorldXZ(child.id)
-            if (xz && pointInBounds(xz[0], xz[1], bounds)) {
+            if (!bounds || (xz && pointInBounds(xz[0], xz[1], bounds))) {
               result.push(child.id)
             }
           }
         }
       } else if (node.type === 'slab') {
         const slab = node as SlabNode
-        if (polygonIntersectsBounds(slab.polygon, bounds)) {
+        if (!bounds || polygonIntersectsBounds(slab.polygon, bounds)) {
           result.push(slab.id)
         }
       } else if (node.type === 'ceiling') {
         const ceiling = node as CeilingNode
-        if (polygonIntersectsBounds(ceiling.polygon, bounds)) {
+        if (!bounds || polygonIntersectsBounds(ceiling.polygon, bounds)) {
           result.push(ceiling.id)
         }
       } else if (node.type === 'roof') {
         const xz = getNodeWorldXZ(node.id)
-        if (xz && pointInBounds(xz[0], xz[1], bounds)) {
+        if (!bounds || (xz && pointInBounds(xz[0], xz[1], bounds))) {
           result.push(node.id)
         }
       } else if (node.type === 'stair') {
-        if (objectBoundsIntersectsBounds(node.id, bounds)) {
+        if (!bounds || objectBoundsIntersectsBounds(node.id, bounds)) {
           result.push(node.id)
         }
       } else if (node.type === 'column') {
         const column = node as ColumnNode
-        if (objectBoundsIntersectsBounds(column.id, bounds)) {
+        if (!bounds || objectBoundsIntersectsBounds(column.id, bounds)) {
           result.push(column.id)
         }
       } else if (node.type === 'item') {
         const item = node as ItemNode
         if (item.asset.category === 'door' || item.asset.category === 'window') continue
         const xz = getNodeWorldXZ(item.id)
-        if (xz && pointInBounds(xz[0], xz[1], bounds)) {
+        if (!bounds || (xz && pointInBounds(xz[0], xz[1], bounds))) {
           result.push(item.id)
         }
       } else if (isRegistrySelectable(node.type)) {
@@ -525,7 +533,17 @@ const BoxSelectToolInner: React.FC = () => {
           const merged = Array.from(new Set([...currentIds, ...ids]))
           useViewer.getState().setSelection({ selectedIds: merged })
         } else {
-          useViewer.getState().setSelection({ selectedIds: ids })
+          // If the box captured every selectable node on the level, promote to
+          // selecting the parent building — same as clicking it in the side menu.
+          const allOnLevel = collectNodeIdsInBounds(null)
+          const { buildingId } = useViewer.getState().selection
+          const selectedEntireLevel = allOnLevel.length > 0 && ids.length === allOnLevel.length
+
+          if (selectedEntireLevel && buildingId) {
+            useViewer.getState().setSelection({ buildingId })
+          } else {
+            useViewer.getState().setSelection({ selectedIds: ids })
+          }
         }
 
         // Prevent the subsequent grid:click from deselecting

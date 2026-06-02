@@ -1,12 +1,13 @@
 'use client'
 
-import { type FenceNode, useScene, type WallNode } from '@pascal-app/core'
+import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  MeasurementPill,
   type MovingFenceEndpoint,
   triggerSFX,
   useDragAction,
@@ -90,6 +91,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       : [target.fence.end[0], target.fence.end[1]]
 
   const [altPressed, setAltPressed] = useState(false)
+  const unit = useViewer((s) => s.unit)
 
   const exitMoveMode = (committed: boolean) => {
     if (committed) triggerSFX('sfx:item-place')
@@ -174,9 +176,34 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
 
   const cursorPos: [number, number, number] = [movingPoint[0], 0, movingPoint[1]]
 
+  // Live segment dimensions for the floating pill. Length tracks the drag;
+  // height + thickness are static during an endpoint move.
+  const liveLength = getWallCurveLength({
+    start: liveStart,
+    end: liveEnd,
+    curveOffset: liveFence?.curveOffset ?? target.fence.curveOffset,
+  })
+  const fenceHeight = target.fence.height ?? 1.8
+  const dimMidX = (liveStart[0] + liveEnd[0]) / 2
+  const dimMidZ = (liveStart[1] + liveEnd[1]) / 2
+
   return (
     <group>
       <CursorSphere position={cursorPos} showTooltip={false} />
+      <Html
+        center
+        position={[dimMidX, fenceHeight + 0.3, dimMidZ]}
+        style={{ pointerEvents: 'none', touchAction: 'none' }}
+        zIndexRange={[100, 0]}
+      >
+        <MeasurementPill
+          height={fenceHeight}
+          length={liveLength}
+          primary="length"
+          thickness={target.fence.thickness ?? 0.08}
+          unit={unit}
+        />
+      </Html>
       <Html
         position={cursorPos}
         style={{ pointerEvents: 'none', touchAction: 'none' }}

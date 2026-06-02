@@ -1,4 +1,4 @@
-import { type AnyNodeId, type RidgeVentNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type GutterNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
@@ -7,20 +7,20 @@ import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
-interface RidgeVentTreeNodeProps {
+interface GutterTreeNodeProps {
   nodeId: AnyNodeId
   depth: number
   isLast?: boolean
 }
 
-export const RidgeVentTreeNode = memo(function RidgeVentTreeNode({
+export const GutterTreeNode = memo(function GutterTreeNode({
   nodeId,
   depth,
   isLast,
-}: RidgeVentTreeNodeProps) {
+}: GutterTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const node = useScene((s) => s.nodes[nodeId] as RidgeVentNode | undefined)
+  const node = useScene((s) => s.nodes[nodeId] as GutterNode | undefined)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -42,7 +42,7 @@ export const RidgeVentTreeNode = memo(function RidgeVentTreeNode({
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Ridge Vent'
+  const defaultName = node?.name || 'Gutter'
 
   return (
     <TreeNodeWrapper

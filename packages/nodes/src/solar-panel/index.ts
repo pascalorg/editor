@@ -1,10 +1,4 @@
+export { getAnalyticalNormal, getSurfaceY, surfaceQuatFromNormal } from '../shared/roof-surface'
 export { solarPanelDefinition } from './definition'
-export {
-  buildSolarPanelGeometry,
-  computeAutoFit,
-  flippedPanelDims,
-  getAnalyticalNormal,
-  getSurfaceY,
-  surfaceQuatFromNormal,
-} from './geometry'
+export { buildSolarPanelGeometry, computeAutoFit, flippedPanelDims } from './geometry'
 export { SolarPanelNode } from './schema'

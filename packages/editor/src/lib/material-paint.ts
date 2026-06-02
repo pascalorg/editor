@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type BoxVentNode,
   type CeilingNode,
   type ChimneyMaterialRole,
   type ChimneyNode,
@@ -19,7 +18,6 @@ import {
   type MaterialSchema,
   type MaterialTarget,
   nodeRegistry,
-  type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
   type RoofSegmentSurfaceMaterialRole,
@@ -46,6 +44,9 @@ export type PaintableMaterialTarget = Extract<
   | 'dormer'
   | 'box-vent'
   | 'ridge-vent'
+  | 'turbine-vent'
+  | 'cupola'
+  | 'eyebrow-vent'
 >
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -221,14 +222,7 @@ export function buildStairSurfaceMaterialPatch(
 }
 
 export function buildSingleSurfaceMaterialPatch<
-  TNode extends
-    | FenceNode
-    | ColumnNode
-    | SlabNode
-    | CeilingNode
-    | ShelfNode
-    | BoxVentNode
-    | RidgeVentNode,
+  TNode extends FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
 >(material: MaterialSchema | undefined, materialPreset: string | undefined): Partial<TNode> {
   return {
     material,
@@ -375,11 +369,11 @@ export function resolveActivePaintMaterialFromSelection(params: {
       selectedNode.type === 'column' ||
       selectedNode.type === 'slab' ||
       selectedNode.type === 'ceiling' ||
-      selectedNode.type === 'shelf' ||
-      selectedNode.type === 'box-vent' ||
-      selectedNode.type === 'ridge-vent') &&
+      selectedNode.type === 'shelf') &&
     selectedMaterialTarget.role === 'surface'
   ) {
+    // Roof vents previously lived here too; they now resolve via the
+    // registry-driven `getEffectiveMaterial` path at the top of this function.
     const target = selectedNode.type
     return hasActivePaintMaterial({
       material: selectedNode.material,
@@ -453,6 +447,18 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'ridge-vent') {
     return 'ridge-vent'
+  }
+
+  if (selectedNode.type === 'turbine-vent') {
+    return 'turbine-vent'
+  }
+
+  if (selectedNode.type === 'cupola') {
+    return 'cupola'
+  }
+
+  if (selectedNode.type === 'eyebrow-vent') {
+    return 'eyebrow-vent'
   }
 
   return null

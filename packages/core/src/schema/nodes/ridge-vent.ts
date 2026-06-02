@@ -18,7 +18,9 @@ export const RidgeVentNode = BaseNode.extend({
 
   length: z.number().default(2.0),
   width: z.number().default(0.3),
-  height: z.number().default(0.08),
+  // Taller default than the old paper-thin shell so the solid body reads
+  // with real presence on the ridge; still adjustable down to 0.03.
+  height: z.number().default(0.1),
 
   style: z.enum(['standard', 'shingled', 'metal']).default('standard'),
   endCaps: z.boolean().default(true),

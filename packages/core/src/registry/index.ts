@@ -12,6 +12,7 @@ export type {
   LinearResizeHandle,
   RadialResizeHandle,
   TapActionHandle,
+  TranslateHandle,
 } from './handles'
 export {
   discoverPlugins,
@@ -82,6 +83,7 @@ export type {
   PaintPatchArgs,
   PaintPreviewArgs,
   PaintResolveArgs,
+  ParamAction,
   ParametricDescriptor,
   ParamField,
   ParamGroup,

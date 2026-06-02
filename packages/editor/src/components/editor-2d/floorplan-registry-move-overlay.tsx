@@ -1,13 +1,17 @@
 'use client'
 
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  bboxAnchors,
   type FloorplanMoveTargetSession,
   nodeRegistry,
   pauseSceneHistory,
+  resolveAlignment,
   resumeSceneHistory,
   snapPointToGrid,
+  useAlignmentGuides,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -19,6 +23,12 @@ import useEditor from '../../store/use-editor'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
 const GRID_STEP = 0.5
+
+// Figma-style alignment snap threshold. Meters in world space; 8cm gives
+// a comfortable "magnetic" pull at default zoom without fighting the
+// grid snap. Held fixed for v1 — a future revision can scale this with
+// the SVG's units-per-pixel so the feel stays constant across zoom.
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 /**
  * Cursor-driven placement for registered kinds in the floor plan.
@@ -374,6 +384,24 @@ export function FloorplanRegistryMoveOverlay() {
       }
     ).position ?? [0, 0, 0]) as [number, number, number]
 
+    // SVG units in this floorplan map 1:1 to world meters, and the
+    // `<g data-node-id>` entry has no transform of its own when at rest,
+    // so its untransformed bbox IS the world-space footprint. Cache the
+    // moving entry's local bbox once (relative to originalPosition) and
+    // derive anchors at any proposed (sx, sz) by translating it.
+    const movingLocalBBox = entry.getBBox()
+    const candidateAnchors: AlignmentAnchor[] = []
+    const allEntries = scene.querySelectorAll('[data-node-id]')
+    for (const el of Array.from(allEntries)) {
+      const otherId = el.getAttribute('data-node-id')
+      if (!otherId || otherId === movingNode.id) continue
+      const b = (el as SVGGraphicsElement).getBBox()
+      if (b.width <= 0 || b.height <= 0) continue
+      candidateAnchors.push(
+        ...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height),
+      )
+    }
+
     let lastSnapped: [number, number] | null = null
 
     const onMove = (event: PointerEvent) => {
@@ -384,11 +412,49 @@ export function FloorplanRegistryMoveOverlay() {
       if (!target?.closest('[data-floorplan-scene]')) return
       const m = toMeters(event.clientX, event.clientY)
       if (!m) return
-      const [sx, sz] = snapPointToGrid([m[0], m[1]], GRID_STEP)
-      const dx = sx - originalPosition[0]
-      const dz = sz - originalPosition[2]
+
+      // 1) Grid snap baseline (unchanged behaviour with Alt held).
+      const [gridX, gridZ] = snapPointToGrid([m[0], m[1]], GRID_STEP)
+
+      // 2) Alignment snap layered on top. Treat the grid-snapped point
+      // as the "proposed" position so alignment competes from a stable
+      // base rather than the raw cursor jitter. Alt bypasses alignment
+      // entirely — same affordance Path 1 advertises in its "No Snap"
+      // hint chip.
+      let finalX = gridX
+      let finalZ = gridZ
+      if (!event.altKey && candidateAnchors.length > 0) {
+        // Translate the cached local bbox to the proposed pos to get the
+        // moving anchors at that location. The entry's untransformed
+        // bbox is in world meters relative to the node's origin, so a
+        // simple translate suffices.
+        const dxProposed = gridX - originalPosition[0]
+        const dzProposed = gridZ - originalPosition[2]
+        const movingAnchors = bboxAnchors(
+          movingNode.id,
+          movingLocalBBox.x + dxProposed,
+          movingLocalBBox.y + dzProposed,
+          movingLocalBBox.x + movingLocalBBox.width + dxProposed,
+          movingLocalBBox.y + movingLocalBBox.height + dzProposed,
+        )
+        const result = resolveAlignment({
+          moving: movingAnchors,
+          candidates: candidateAnchors,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap) {
+          finalX += result.snap.dx
+          finalZ += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      const dx = finalX - originalPosition[0]
+      const dz = finalZ - originalPosition[2]
       entry.setAttribute('transform', `translate(${dx} ${dz})`)
-      lastSnapped = [sx, sz]
+      lastSnapped = [finalX, finalZ]
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -414,12 +480,14 @@ export function FloorplanRegistryMoveOverlay() {
         }
       }
       entry.removeAttribute('transform')
+      useAlignmentGuides.getState().clear()
       setMovingNode(null)
     }
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         entry.removeAttribute('transform')
+        useAlignmentGuides.getState().clear()
         setMovingNode(null)
       }
     }
@@ -432,6 +500,7 @@ export function FloorplanRegistryMoveOverlay() {
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKey)
       entry.removeAttribute('transform')
+      useAlignmentGuides.getState().clear()
     }
   }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])
 

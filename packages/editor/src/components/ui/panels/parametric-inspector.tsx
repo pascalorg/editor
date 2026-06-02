@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type IconRef,
   nodeRegistry,
+  type ParamAction,
   type ParamField,
   useScene,
 } from '@pascal-app/core'
@@ -104,6 +105,10 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
 
+  const TrailingSection = parametrics.trailingSection
+    ? resolveCustomPanel(parametrics.trailingSection)
+    : null
+
   return (
     <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
@@ -118,12 +123,20 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
           ))}
         </PanelSection>
       ))}
-      {(canMove || canDelete) && (
+      {TrailingSection && (
+        <Suspense fallback={null}>
+          <TrailingSection />
+        </Suspense>
+      )}
+      {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
           <ActionGroup>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
+            {parametrics.actions?.map((action, i) => (
+              <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
+            ))}
             {canDelete && (
               <ActionButton
                 className="border-red-500/40 text-red-200 hover:bg-red-500/15"
@@ -136,6 +149,34 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+// One inspector action button. Subscribes to `enabledIf`'s boolean result
+// (same pattern as FieldRenderer's `visible`) so the disabled state stays
+// live as the scene mutates — `===` on the boolean keeps unrelated ticks
+// from re-rendering it. The click handler re-reads the live node so the
+// handler always acts on current state.
+function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; nodeId: AnyNodeId }) {
+  const disabled = useScene((s) => {
+    if (!action.enabledIf) return false
+    const n = s.nodes[nodeId]
+    return n ? !action.enabledIf(n as AnyNode) : false
+  })
+  return (
+    <ActionButton
+      className={disabled ? 'opacity-40 pointer-events-none' : ''}
+      icon={
+        action.iconSrc ? (
+          <img alt="" className="h-4 w-4 shrink-0 object-contain" src={action.iconSrc} />
+        ) : undefined
+      }
+      label={action.label}
+      onClick={() => {
+        const live = useScene.getState().nodes[nodeId]
+        if (live) action.onClick(live as AnyNode)
+      }}
+    />
   )
 }
 

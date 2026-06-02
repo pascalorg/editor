@@ -12,6 +12,7 @@ export { default as Editor } from './components/editor'
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
+export { formatMeasurement, MeasurementPill } from './components/editor/measurement-pill'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -191,7 +192,7 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
-export { duplicateRoofSubtree } from './lib/roof-duplication'
+export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'

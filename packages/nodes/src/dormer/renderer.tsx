@@ -152,29 +152,36 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // dormer-mesh-local with `dormer.position` + `dormer.rotation`
   // already accounted for by `segToMesh`, so we layer them as group
   // transforms here too.
+  //
+  // The registered ref sits on the inner group that applies the
+  // dormer's own position + rotation so the registered Object3D's
+  // local frame is *dormer-local* — that's what `NodeArrowHandles`
+  // reads to place its chevrons. Mirrors chimney's structure.
   return (
     <group
       position={segment.position}
-      ref={ref}
       rotation-y={segment.rotation ?? 0}
       visible={node.visible}
+      {...handlers}
     >
-      <group position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}>
-        <group rotation-y={node.rotation ?? 0} {...handlers}>
-          <mesh
-            castShadow
-            geometry={geometry}
-            material={material}
-            name="dormer-body"
-            receiveShadow
-          />
-          <DormerWindowAssembly
-            frameMaterial={frameSideMat}
-            glassMaterial={glassMat}
-            node={node}
-            segment={segment}
-          />
-        </group>
+      <group
+        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        ref={ref}
+        rotation-y={node.rotation ?? 0}
+      >
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="dormer-body"
+          receiveShadow
+        />
+        <DormerWindowAssembly
+          frameMaterial={frameSideMat}
+          glassMaterial={glassMat}
+          node={node}
+          segment={segment}
+        />
       </group>
     </group>
   )
