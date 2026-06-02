@@ -93,6 +93,13 @@ export function buildShelfGeometry(
       break
   }
 
+  // Boards/brackets cast + receive shadows like the other geometry-driven
+  // kinds (fence, slab). Set once here rather than on every `new Mesh` above.
+  for (const child of group.children) {
+    child.castShadow = true
+    child.receiveShadow = true
+  }
+
   return group
 }
 

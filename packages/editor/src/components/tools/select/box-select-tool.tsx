@@ -8,6 +8,7 @@ import {
   emitter,
   type GridEvent,
   type ItemNode,
+  isRegistrySelectable,
   type LevelNode,
   type SlabNode,
   sceneRegistry,
@@ -271,6 +272,13 @@ function collectNodeIdsInBounds(bounds: Bounds): string[] {
         const xz = getNodeWorldXZ(item.id)
         if (xz && pointInBounds(xz[0], xz[1], bounds)) {
           result.push(item.id)
+        }
+      } else if (isRegistrySelectable(node.type)) {
+        // Registry-driven selectable kinds (shelf + future furnish/structure
+        // kinds) aren't in the hardcoded list above; pick them up by their
+        // rendered bounding box, the same path column/stair use.
+        if (objectBoundsIntersectsBounds(node.id, bounds)) {
+          result.push(node.id)
         }
       }
     }

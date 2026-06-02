@@ -28,7 +28,14 @@ import { useCallback, useEffect, useState } from 'react'
  * dispatcher's `getRegistryAffordanceTool('column', 'move')` lookup
  * picks this up before its legacy chain reaches `<MoveColumnTool>`.
  */
-const roundToHalf = (value: number) => Math.round(value * 2) / 2
+/** Snap to the editor's active grid step (0.5 / 0.25 / 0.1 / 0.05), read live. */
+const snapToGridStep = (value: number) => {
+  const step = useEditor.getState().gridSnapStep
+  return Math.round(value / step) * step
+}
+
+/** 90° steps, matching the GLB item / shelf placement rotation. */
+const ROTATION_STEP = Math.PI / 2
 
 function MoveColumnTool({ node }: { node: ColumnNode }) {
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(node.position)
@@ -40,6 +47,14 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
   useEffect(() => {
     useScene.temporal.getState().pause()
     let committed = false
+    // Ignore a commit before the cursor has moved into place: it's the stray
+    // trailing click of whatever armed this move (e.g. a preset re-arming the
+    // next copy right after a placement click), not a deliberate drop.
+    let hasMoved = false
+    // Live Y-rotation, seeded from the column and bumped by R/T.
+    let rotationY = node.rotation
+    // Latest previewed position, so an R/T press can re-apply at the spot.
+    let lastPosition: [number, number, number] = node.position
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null
         ? (node.metadata as Record<string, unknown>)
@@ -47,23 +62,47 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     const isNew = !!meta.isNew
 
     const applyPreview = (position: [number, number, number]) => {
+      lastPosition = position
       setPreviewPosition(position)
       useLiveTransforms.getState().set(node.id, {
         position,
-        rotation: node.rotation,
+        rotation: rotationY,
       })
-      sceneRegistry.nodes.get(node.id)?.position.set(position[0], position[1], position[2])
+      const m = sceneRegistry.nodes.get(node.id)
+      if (m) {
+        m.position.set(position[0], position[1], position[2])
+        m.rotation.y = rotationY
+      }
     }
 
     const onGridMove = (event: GridEvent) => {
-      applyPreview([roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])])
+      hasMoved = true
+      applyPreview([
+        snapToGridStep(event.localPosition[0]),
+        0,
+        snapToGridStep(event.localPosition[2]),
+      ])
+    }
+
+    // R / T rotate the dragged column about Y in 90° steps (matches the move
+    // HUD's "Rotate" hints), committed on drop.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      let delta = 0
+      if (e.key === 'r' || e.key === 'R') delta = ROTATION_STEP
+      else if (e.key === 't' || e.key === 'T') delta = -ROTATION_STEP
+      else return
+      e.preventDefault()
+      rotationY += delta
+      applyPreview(lastPosition)
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (!hasMoved) return
       const position: [number, number, number] = [
-        roundToHalf(event.localPosition[0]),
+        snapToGridStep(event.localPosition[0]),
         0,
-        roundToHalf(event.localPosition[2]),
+        snapToGridStep(event.localPosition[2]),
       ]
       const nodeId = (node as { id?: ColumnNode['id'] }).id
 
@@ -71,13 +110,16 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
         committed = true
         useLiveTransforms.getState().clear(nodeId)
         useScene.temporal.getState().resume()
-        useScene.getState().updateNode(nodeId, { position, ...(isNew ? { metadata: {} } : {}) })
+        useScene
+          .getState()
+          .updateNode(nodeId, { position, rotation: rotationY, ...(isNew ? { metadata: {} } : {}) })
       } else if (node.parentId) {
         const column = ColumnNodeSchema.parse({
           ...node,
           id: undefined,
           metadata: {},
           position,
+          rotation: rotationY,
         })
         committed = true
         useScene.temporal.getState().resume()
@@ -92,27 +134,33 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
-      sceneRegistry.nodes
-        .get(node.id)
-        ?.position.set(node.position[0], node.position[1], node.position[2])
+      const m = sceneRegistry.nodes.get(node.id)
+      if (m) {
+        m.position.set(node.position[0], node.position[1], node.position[2])
+        m.rotation.y = node.rotation
+      }
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
     }
 
+    window.addEventListener('keydown', onKeyDown)
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      window.removeEventListener('keydown', onKeyDown)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       useLiveTransforms.getState().clear(node.id)
       if (!committed) {
-        sceneRegistry.nodes
-          .get(node.id)
-          ?.position.set(node.position[0], node.position[1], node.position[2])
+        const m = sceneRegistry.nodes.get(node.id)
+        if (m) {
+          m.position.set(node.position[0], node.position[1], node.position[2])
+          m.rotation.y = node.rotation
+        }
         useScene.temporal.getState().resume()
       }
     }

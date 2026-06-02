@@ -34,6 +34,13 @@ const commitRoofPlacement = (
 ): AnyNode['id'] => {
   const { createNode, createNodes, nodes } = useScene.getState()
 
+  // A placed roof preset seeds `toolDefaults.roof` with the flattened
+  // subtree params (roofType, pitch, wallHeight, overhang, materials, …)
+  // before the tool activates. The footprint (width/depth) and placement
+  // come from the drawn rectangle and always win; the segment carries the
+  // shape/material params, the roof container picks up the materials.
+  const defaults = useEditor.getState().toolDefaults.roof ?? {}
+
   const centerX = (corner1[0] + corner2[0]) / 2
   const centerZ = (corner1[2] + corner2[2]) / 2
 
@@ -74,11 +81,12 @@ const commitRoofPlacement = (
     }
 
     const segment = RoofSegmentNode.parse({
-      width,
-      depth,
       wallHeight: DEFAULT_WALL_HEIGHT,
       pitch: DEFAULT_PITCH_DEG,
       roofType: 'gable',
+      ...defaults,
+      width,
+      depth,
       position: [localX, 0, localZ],
     })
 
@@ -93,16 +101,19 @@ const commitRoofPlacement = (
 
   // Create the segment first (centered in its new parent)
   const segment = RoofSegmentNode.parse({
-    width,
-    depth,
     wallHeight: DEFAULT_WALL_HEIGHT,
     pitch: DEFAULT_PITCH_DEG,
     roofType: 'gable',
+    ...defaults,
+    width,
+    depth,
     position: [0, 0, 0],
   })
 
-  // Create the roof container
+  // Create the roof container. Segment-shaped params (roofType, pitch, …) are
+  // dropped by the RoofNode schema; surface materials in `defaults` carry over.
   const roof = RoofNode.parse({
+    ...defaults,
     name,
     position: [centerX, 0, centerZ],
     children: [segment.id],
@@ -137,6 +148,10 @@ export const RoofTool: React.FC = () => {
   useEffect(() => {
     selectedIdsRef.current = selectedIds
   }, [selectedIds])
+
+  // Clear preset-seeded defaults on deactivation so a later manual roof draw
+  // isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('roof', null), [])
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)

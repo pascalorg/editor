@@ -1,7 +1,13 @@
 'use client'
 
 import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, markToolCancelConsumed, triggerSFX } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -46,7 +52,10 @@ function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, n
   const { createNode, nodes } = useScene.getState()
   const ceilingCount = Object.values(nodes).filter((n) => n.type === 'ceiling').length
   const name = `Ceiling ${ceilingCount + 1}`
-  const ceiling = CeilingNode.parse({ name, polygon: points })
+  // A placed ceiling preset seeds `toolDefaults.ceiling` (thickness, height,
+  // material, …) before the tool activates; the drawn polygon always wins.
+  const defaults = useEditor.getState().toolDefaults.ceiling ?? {}
+  const ceiling = CeilingNode.parse({ ...defaults, name, polygon: points })
   createNode(ceiling, levelId)
   triggerSFX('sfx:structure-build')
   return ceiling.id
@@ -69,6 +78,10 @@ export const CeilingTool: React.FC = () => {
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const shiftPressed = useRef(false)
+
+  // Clear preset-seeded defaults on deactivation so a later manual ceiling
+  // draw isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('ceiling', null), [])
 
   const verticalGeo = useMemo(
     () =>

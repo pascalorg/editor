@@ -12,6 +12,17 @@ const ORIGINAL_LAYERS = Symbol('isolation:original-layers')
 
 type IsolationCarrier = Object3D & { [ORIGINAL_LAYERS]?: number }
 
+// Whether a subtree is currently isolated (some objects have SCENE_LAYER
+// disabled). Read by consumers that must not act on the partial view — e.g.
+// the project-thumbnail autosave skips capturing while isolated so it never
+// snapshots a single focused item as the whole project's thumbnail.
+let isolationActive = false
+
+/** True while an isolation filter is applied (see {@link applyIsolation}). */
+export function isIsolationActive(): boolean {
+  return isolationActive
+}
+
 /**
  * Compute the union of every isolated subtree's `Object3D` descendants.
  *
@@ -71,6 +82,7 @@ export function applyIsolation(ids: ReadonlyArray<AnyNodeId> | null): void {
     if (keep.has(obj)) continue
     hideRecursive(obj, keep)
   }
+  isolationActive = true
 }
 
 function hideRecursive(obj: Object3D, keep: Set<Object3D>): void {
@@ -98,4 +110,5 @@ export function clearIsolation(): void {
       }
     })
   }
+  isolationActive = false
 }
