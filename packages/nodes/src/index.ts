@@ -9,6 +9,7 @@ import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
 import { elevatorDefinition } from './elevator'
+import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
@@ -80,6 +81,7 @@ export const builtinPlugin: Plugin = {
     ridgeVentDefinition as unknown as AnyNodeDefinition,
     turbineVentDefinition as unknown as AnyNodeDefinition,
     cupolaDefinition as unknown as AnyNodeDefinition,
+    eyebrowVentDefinition as unknown as AnyNodeDefinition,
     chimneyDefinition as unknown as AnyNodeDefinition,
     solarPanelDefinition as unknown as AnyNodeDefinition,
     skylightDefinition as unknown as AnyNodeDefinition,
@@ -99,6 +101,7 @@ export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'
 export { elevatorDefinition } from './elevator'
+export { eyebrowVentDefinition } from './eyebrow-vent'
 export { fenceDefinition } from './fence'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'

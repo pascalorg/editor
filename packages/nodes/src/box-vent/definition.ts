@@ -5,6 +5,7 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import { buildBoxVentFloorplan } from './floorplan'
+import { surfacePaintCapability } from '../shared/surface-paint'
 import { boxVentParametrics } from './parametrics'
 import { BoxVentNode } from './schema'
 
@@ -189,6 +190,8 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Single painted surface — registry-driven paint dispatch (see chimney).
+    paint: surfacePaintCapability,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // slope — no `buildCut`, just the dirty cascade so the parent
     // roof's merged shell rebuilds when the vent moves / resizes.

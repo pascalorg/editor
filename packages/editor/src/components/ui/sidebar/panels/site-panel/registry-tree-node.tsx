@@ -1,4 +1,4 @@
-import { type AnyNodeId, type TurbineVentNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
@@ -7,24 +7,36 @@ import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
-interface TurbineVentTreeNodeProps {
+interface RegistryTreeNodeProps {
   nodeId: AnyNodeId
   depth: number
   isLast?: boolean
 }
 
-export const TurbineVentTreeNode = memo(function TurbineVentTreeNode({
+/**
+ * Generic, leaf tree-node row driven entirely by the kind's
+ * `def.presentation` (icon + label). Replaces the per-kind boilerplate
+ * components that differed only in their default name and icon — today the
+ * roof vents (box / ridge / turbine / cupola / eyebrow). Register a kind in
+ * `treeNodeByType` against this component instead of authoring another copy.
+ */
+export const RegistryTreeNode = memo(function RegistryTreeNode({
   nodeId,
   depth,
   isLast,
-}: TurbineVentTreeNodeProps) {
+}: RegistryTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const node = useScene((s) => s.nodes[nodeId] as TurbineVentNode | undefined)
+  const node = useScene((s) => s.nodes[nodeId])
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+
+  const presentation = node ? nodeRegistry.get(node.type)?.presentation : undefined
+  const icon = presentation?.icon
+  const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.png'
+  const defaultName = node?.name || presentation?.label || 'Node'
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -42,8 +54,6 @@ export const TurbineVentTreeNode = memo(function TurbineVentTreeNode({
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Turbine Vent'
-
   return (
     <TreeNodeWrapper
       actions={<TreeNodeActions nodeId={nodeId} />}
@@ -55,7 +65,7 @@ export const TurbineVentTreeNode = memo(function TurbineVentTreeNode({
           alt=""
           className="object-contain opacity-60"
           height={14}
-          src="/icons/roof.png"
+          src={iconSrc}
           width={14}
         />
       }

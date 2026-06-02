@@ -52,6 +52,7 @@ export {
 } from './nodes/column'
 export { CupolaNode } from './nodes/cupola'
 export { DoorNode, DoorSegment } from './nodes/door'
+export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export {
   DormerNode,
   type DormerSurfaceMaterialRole,

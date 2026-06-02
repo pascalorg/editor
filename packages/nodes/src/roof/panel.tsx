@@ -228,6 +228,7 @@ export default function RoofPanel() {
         | 'ridge-vent'
         | 'turbine-vent'
         | 'cupola'
+        | 'eyebrow-vent'
         | 'chimney'
         | 'solar-panel'
         | 'skylight'
@@ -484,6 +485,16 @@ export default function RoofPanel() {
                 icon={<Plus className="h-3.5 w-3.5" />}
                 label="Add Cupola"
                 onClick={() => activateTool('cupola')}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Eyebrow Vent"
+                onClick={() => activateTool('eyebrow-vent')}
               />
             </ActionGroup>
           </div>

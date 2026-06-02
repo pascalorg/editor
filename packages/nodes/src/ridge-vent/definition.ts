@@ -5,6 +5,7 @@ import {
   type RidgeVentNode as RidgeVentNodeType,
 } from '@pascal-app/core'
 import { buildRidgeVentFloorplan } from './floorplan'
+import { surfacePaintCapability } from '../shared/surface-paint'
 import { ridgeVentParametrics } from './parametrics'
 import { RidgeVentNode } from './schema'
 
@@ -174,6 +175,8 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Single painted surface — registry-driven paint dispatch (see chimney).
+    paint: surfacePaintCapability,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // ridge — no `buildCut`, just the dirty cascade so the parent
     // roof's merged shell rebuilds when the vent moves / resizes.

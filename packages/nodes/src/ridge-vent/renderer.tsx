@@ -18,6 +18,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { getSurfaceY } from '../shared/roof-surface'
 import { buildRidgeVentGeometry } from './geometry'
 
 // Single white fallback for every style. Paint customisation comes from
@@ -108,10 +109,18 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
   const segPos = segment.position ?? [0, 0, 0]
   const segRotY = segment.rotation ?? 0
 
+  // Seat the vent on the ridge by DERIVING its Y from the segment's current
+  // surface rather than the stored `position[1]`. The ridge height comes from
+  // the segment's pitch (`getActiveRoofHeight`), so when the roof is lowered
+  // the segment updates, this renderer re-runs, and the vent rides the ridge
+  // down automatically — no stale floating cap. X/Z stay as authored (the vent
+  // straddles the ridge line at localZ≈0).
+  const ridgeY = getSurfaceY(node.position[0] ?? 0, node.position[2] ?? 0, segment)
+
   return (
     <group position={segPos} rotation-y={segRotY}>
       <group
-        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        position={[node.position[0] ?? 0, ridgeY, node.position[2] ?? 0]}
         ref={ref}
         rotation-y={node.rotation ?? 0}
         visible={node.visible}

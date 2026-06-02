@@ -1,11 +1,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type BoxVentNode,
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
-  type CupolaNode,
   emitter,
   type FenceNode,
   getEffectiveRoofSurfaceMaterial,
@@ -16,10 +14,8 @@ import {
   isRegistrySelectable,
   type NodeEvent,
   nodeRegistry,
-  type RidgeVentNode,
   type RoofEvent,
   type RoofNode,
-  type TurbineVentNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
   resolveLevelId,
@@ -355,16 +351,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node:
-    | FenceNode
-    | ColumnNode
-    | SlabNode
-    | CeilingNode
-    | ShelfNode
-    | BoxVentNode
-    | RidgeVentNode
-    | TurbineVentNode
-    | CupolaNode,
+  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -432,16 +419,11 @@ function applySingleSurfacePaintPreview(
     }
   }
 
-  if (
-    node.type === 'shelf' ||
-    node.type === 'box-vent' ||
-    node.type === 'ridge-vent' ||
-    node.type === 'turbine-vent' ||
-    node.type === 'cupola'
-  ) {
-    // These kinds register a `<group>` (not a Mesh) with `useRegistry`,
-    // so we walk the subtree and preview-swap every child mesh — same
-    // approach `column` uses.
+  if (node.type === 'shelf') {
+    // Shelf registers a `<group>` (not a Mesh) with `useRegistry`, so we walk
+    // the subtree and preview-swap every child mesh — same approach `column`
+    // uses. (The roof vents previously shared this arm; they now route through
+    // their `capabilities.paint` dispatcher.)
     if (!registeredObject) return null
     const restores: PaintPreviewCleanup[] = []
     registeredObject.traverse((object) => {
@@ -1037,11 +1019,7 @@ export const SelectionManager = () => {
         node.type === 'column' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
-        node.type === 'shelf' ||
-        node.type === 'box-vent' ||
-        node.type === 'ridge-vent' ||
-        node.type === 'turbine-vent' ||
-        node.type === 'cupola'
+        node.type === 'shelf'
       ) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
@@ -1056,15 +1034,7 @@ export const SelectionManager = () => {
                   .updateNode(
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
-                      | FenceNode
-                      | ColumnNode
-                      | SlabNode
-                      | CeilingNode
-                      | ShelfNode
-                      | BoxVentNode
-                      | RidgeVentNode
-                      | TurbineVentNode
-                      | CupolaNode
+                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
                     >(activePaintMaterial.material, activePaintMaterial.materialPreset),
                   )
               }
@@ -1072,16 +1042,7 @@ export const SelectionManager = () => {
           preview: compatible
             ? () =>
                 applySingleSurfacePaintPreview(
-                  node as
-                    | FenceNode
-                    | ColumnNode
-                    | SlabNode
-                    | CeilingNode
-                    | ShelfNode
-                    | BoxVentNode
-                    | RidgeVentNode
-                    | TurbineVentNode
-                    | CupolaNode,
+                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
                   activePaintMaterial,
                 )
             : () => previewCursor('not-allowed'),

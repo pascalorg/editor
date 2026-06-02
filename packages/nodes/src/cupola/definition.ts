@@ -4,6 +4,7 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { surfacePaintCapability } from '../shared/surface-paint'
 import { buildCupolaFloorplan } from './floorplan'
 import { cupolaParametrics } from './parametrics'
 import { CupolaNode } from './schema'
@@ -122,6 +123,8 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Single painted surface — registry-driven paint dispatch (see chimney).
+    paint: surfacePaintCapability,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // slope — no `buildCut`, just the dirty cascade so the parent roof's
     // merged shell rebuilds when the cupola moves / resizes.

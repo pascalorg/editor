@@ -12,6 +12,7 @@ import type {
   DormerNode,
   DownspoutNode,
   ElevatorNode,
+  EyebrowVentNode,
   FenceNode,
   GuideNode,
   GutterNode,
@@ -99,6 +100,7 @@ export type BoxVentEvent = NodeEvent<BoxVentNode>
 export type RidgeVentEvent = NodeEvent<RidgeVentNode>
 export type TurbineVentEvent = NodeEvent<TurbineVentNode>
 export type CupolaEvent = NodeEvent<CupolaNode>
+export type EyebrowVentEvent = NodeEvent<EyebrowVentNode>
 export type GutterEvent = NodeEvent<GutterNode>
 export type ChimneyEvent = NodeEvent<ChimneyNode>
 export type SolarPanelEvent = NodeEvent<SolarPanelNode>
@@ -244,6 +246,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'ridge-vent', RidgeVentEvent> &
   NodeEvents<'turbine-vent', TurbineVentEvent> &
   NodeEvents<'cupola', CupolaEvent> &
+  NodeEvents<'eyebrow-vent', EyebrowVentEvent> &
   NodeEvents<'gutter', GutterEvent> &
   NodeEvents<'chimney', ChimneyEvent> &
   NodeEvents<'solar-panel', SolarPanelEvent> &
