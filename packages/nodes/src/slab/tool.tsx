@@ -1,7 +1,13 @@
 'use client'
 
 import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, markToolCancelConsumed, triggerSFX } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -47,7 +53,10 @@ function commitSlabDrawing(levelId: LevelNode['id'], points: Array<[number, numb
   const { createNode, nodes } = useScene.getState()
   const slabCount = Object.values(nodes).filter((n) => n.type === 'slab').length
   const name = `Slab ${slabCount + 1}`
-  const slab = SlabNode.parse({ name, polygon: points })
+  // A placed slab preset seeds `toolDefaults.slab` (thickness, material, …)
+  // before the tool activates; the drawn polygon always wins.
+  const defaults = useEditor.getState().toolDefaults.slab ?? {}
+  const slab = SlabNode.parse({ ...defaults, name, polygon: points })
   createNode(slab, levelId)
   triggerSFX('sfx:structure-build')
   return slab.id
@@ -66,6 +75,10 @@ export const SlabTool: React.FC = () => {
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const shiftPressed = useRef(false)
+
+  // Clear preset-seeded defaults on deactivation so a later manual slab draw
+  // isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('slab', null), [])
 
   useEffect(() => {
     if (!currentLevelId) return

@@ -21,6 +21,7 @@ import {
   type SegmentAngleReference,
   snapWallDraftPoint,
   triggerSFX,
+  useEditor,
   WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -44,9 +45,11 @@ import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3
  */
 const WALL_HEIGHT = 2.5
 const DRAFT_WALL_THICKNESS = 0.1
-const DRAFT_LABEL_Y = WALL_HEIGHT + 0.22
-const DRAFT_ANGLE_LABEL_Y = WALL_HEIGHT + 0.08
-const DRAFT_ANGLE_ARC_Y = WALL_HEIGHT + 0.012
+// HUD label heights are measured from the top of the preview bar, so they
+// track whatever height a seeded preset draws at (`previewHeight`).
+const DRAFT_LABEL_Y_OFFSET = 0.22
+const DRAFT_ANGLE_LABEL_Y_OFFSET = 0.08
+const DRAFT_ANGLE_ARC_Y_OFFSET = 0.012
 const DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
 const DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
 const DRAFT_ANGLE_ARC_SEGMENTS = 24
@@ -259,6 +262,7 @@ function getDraftAngleLabels(
   end: WallPlanPoint,
   walls: WallNode[],
   baseY: number,
+  previewHeight: number,
 ): DraftAngleLabel[] {
   const draftFromStart: WallPlanPoint = [end[0] - start[0], end[1] - start[1]]
   const draftFromEnd: WallPlanPoint = [start[0] - end[0], start[1] - end[1]]
@@ -313,7 +317,7 @@ function getDraftAngleLabels(
       label: formatAngleRadians(angle),
       position: [
         arcCenter[0] + Math.cos(arc.midAngle) * (radius + 0.16),
-        baseY + DRAFT_ANGLE_LABEL_Y,
+        baseY + previewHeight + DRAFT_ANGLE_LABEL_Y_OFFSET,
         arcCenter[1] + Math.sin(arc.midAngle) * (radius + 0.16),
       ],
       arc: {
@@ -321,7 +325,7 @@ function getDraftAngleLabels(
         radius,
         startAngle: arc.startAngle,
         endAngle: arc.endAngle,
-        y: baseY + DRAFT_ANGLE_ARC_Y,
+        y: baseY + previewHeight + DRAFT_ANGLE_ARC_Y_OFFSET,
       },
     })
   }
@@ -335,6 +339,7 @@ function getDraftMeasurementState(
   walls: WallNode[],
   unit: 'metric' | 'imperial',
   baseY: number,
+  previewHeight: number,
 ): DraftMeasurementState {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
@@ -342,12 +347,22 @@ function getDraftMeasurementState(
   if (length < 0.01) return null
   return {
     lengthLabel: formatMeasurement(length, unit),
-    lengthPosition: [(start[0] + end[0]) / 2, baseY + DRAFT_LABEL_Y, (start[1] + end[1]) / 2],
-    angleLabels: getDraftAngleLabels(start, end, walls, baseY),
+    lengthPosition: [
+      (start[0] + end[0]) / 2,
+      baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
+      (start[1] + end[1]) / 2,
+    ],
+    angleLabels: getDraftAngleLabels(start, end, walls, baseY, previewHeight),
   }
 }
 
-function updateWallPreview(mesh: Mesh, start: Vector3, end: Vector3) {
+function updateWallPreview(
+  mesh: Mesh,
+  start: Vector3,
+  end: Vector3,
+  previewHeight: number,
+  previewThickness: number,
+) {
   const direction = new Vector3(end.x - start.x, 0, end.z - start.z)
   const length = direction.length()
   if (length < 0.01) {
@@ -357,10 +372,10 @@ function updateWallPreview(mesh: Mesh, start: Vector3, end: Vector3) {
   mesh.visible = true
   direction.normalize()
 
-  const geometry = new BoxGeometry(length, WALL_HEIGHT, DRAFT_WALL_THICKNESS)
+  const geometry = new BoxGeometry(length, previewHeight, previewThickness)
   const angle = Math.atan2(direction.z, direction.x)
 
-  mesh.position.set((start.x + end.x) / 2, start.y + WALL_HEIGHT / 2, (start.z + end.z) / 2)
+  mesh.position.set((start.x + end.x) / 2, start.y + previewHeight / 2, (start.z + end.z) / 2)
   mesh.rotation.y = -angle
 
   if (mesh.geometry) {
@@ -383,6 +398,19 @@ function getCurrentLevelWalls(): WallNode[] {
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  // A placed wall preset seeds `toolDefaults.wall` (height / thickness …)
+  // before the tool mounts, so the draft preview is drawn at the preset's
+  // dimensions rather than the generic fallbacks — matching the wall that
+  // will be created. Read through refs so the live event handlers below see
+  // the latest values without re-subscribing.
+  const wallDefaults = useEditor((s) => s.toolDefaults.wall)
+  const previewHeight = typeof wallDefaults?.height === 'number' ? wallDefaults.height : WALL_HEIGHT
+  const previewThickness =
+    typeof wallDefaults?.thickness === 'number' ? wallDefaults.thickness : DRAFT_WALL_THICKNESS
+  const previewHeightRef = useRef(previewHeight)
+  previewHeightRef.current = previewHeight
+  const previewThicknessRef = useRef(previewThickness)
+  previewThicknessRef.current = previewThickness
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -392,6 +420,10 @@ export const WallTool: React.FC = () => {
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
+
+  // Clear preset-seeded defaults on deactivation so a later manual wall draw
+  // isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
@@ -434,7 +466,13 @@ export const WallTool: React.FC = () => {
         }
         previousWallEnd = currentWallEnd
 
-        updateWallPreview(wallPreviewRef.current, startingPoint.current, endingPoint.current)
+        updateWallPreview(
+          wallPreviewRef.current,
+          startingPoint.current,
+          endingPoint.current,
+          previewHeightRef.current,
+          previewThicknessRef.current,
+        )
         setDraftMeasurement(
           getDraftMeasurementState(
             [startingPoint.current.x, startingPoint.current.z],
@@ -442,6 +480,7 @@ export const WallTool: React.FC = () => {
             walls,
             unit,
             startingPoint.current.y,
+            previewHeightRef.current,
           ),
         )
       } else {
@@ -538,7 +577,7 @@ export const WallTool: React.FC = () => {
 
   return (
     <group>
-      <CursorSphere ref={cursorRef} />
+      <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
         <meshBasicMaterial
