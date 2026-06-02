@@ -8,6 +8,7 @@ import {
   type ChimneyMaterialRole,
   type ChimneyNode,
   type ColumnNode,
+  type CupolaNode,
   type DormerSurfaceMaterialRole,
   type FenceNode,
   getCatalogMaterialById,
@@ -28,6 +29,7 @@ import {
   type SlabNode,
   type StairNode,
   type StairSurfaceMaterialRole,
+  type TurbineVentNode,
   type WallNode,
   type WallSurfaceSide,
 } from '@pascal-app/core'
@@ -46,6 +48,8 @@ export type PaintableMaterialTarget = Extract<
   | 'dormer'
   | 'box-vent'
   | 'ridge-vent'
+  | 'turbine-vent'
+  | 'cupola'
 >
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -228,7 +232,9 @@ export function buildSingleSurfaceMaterialPatch<
     | CeilingNode
     | ShelfNode
     | BoxVentNode
-    | RidgeVentNode,
+    | RidgeVentNode
+    | TurbineVentNode
+    | CupolaNode,
 >(material: MaterialSchema | undefined, materialPreset: string | undefined): Partial<TNode> {
   return {
     material,
@@ -377,7 +383,9 @@ export function resolveActivePaintMaterialFromSelection(params: {
       selectedNode.type === 'ceiling' ||
       selectedNode.type === 'shelf' ||
       selectedNode.type === 'box-vent' ||
-      selectedNode.type === 'ridge-vent') &&
+      selectedNode.type === 'ridge-vent' ||
+      selectedNode.type === 'turbine-vent' ||
+      selectedNode.type === 'cupola') &&
     selectedMaterialTarget.role === 'surface'
   ) {
     const target = selectedNode.type
@@ -453,6 +461,14 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'ridge-vent') {
     return 'ridge-vent'
+  }
+
+  if (selectedNode.type === 'turbine-vent') {
+    return 'turbine-vent'
+  }
+
+  if (selectedNode.type === 'cupola') {
+    return 'cupola'
   }
 
   return null

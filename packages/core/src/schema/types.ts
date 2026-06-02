@@ -4,6 +4,7 @@ import { BuildingNode } from './nodes/building'
 import { CeilingNode } from './nodes/ceiling'
 import { ChimneyNode } from './nodes/chimney'
 import { ColumnNode } from './nodes/column'
+import { CupolaNode } from './nodes/cupola'
 import { DoorNode } from './nodes/door'
 import { DormerNode } from './nodes/dormer'
 import { DownspoutNode } from './nodes/downspout'
@@ -25,6 +26,7 @@ import { SolarPanelNode } from './nodes/solar-panel'
 import { SpawnNode } from './nodes/spawn'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
+import { TurbineVentNode } from './nodes/turbine-vent'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
@@ -53,6 +55,8 @@ export const AnyNode = z.discriminatedUnion('type', [
   DoorNode,
   BoxVentNode,
   RidgeVentNode,
+  TurbineVentNode,
+  CupolaNode,
   GutterNode,
   ChimneyNode,
   SolarPanelNode,

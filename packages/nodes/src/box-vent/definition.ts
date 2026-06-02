@@ -1,6 +1,6 @@
 import {
-  type BoxVentNode as BoxVentNodeType,
   BoxVentNode as BoxVentNodeSchema,
+  type BoxVentNode as BoxVentNodeType,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -11,7 +11,9 @@ import { BoxVentNode } from './schema'
 // Edge-to-arrow-center offset, matching the chimney / dormer cadence.
 const SIDE_HANDLE_OFFSET = 0.25
 const HEIGHT_HANDLE_OFFSET = 0.2
-const ROTATE_CORNER_OFFSET = 0.25
+// Snug to the vent corner — vents are small (default 0.4 m), so the big
+// chimney/dormer offset floated the rotate icon far off the item.
+const ROTATE_CORNER_OFFSET = 0.1
 // Min sizes — vents are small (default 0.4 × 0.4 × 0.15), so the floor
 // is well below the default values to allow shrinking without locking.
 const MIN_DIM = 0.1
@@ -119,16 +121,30 @@ function boxVentRotateHandle(): HandleDescriptor<BoxVentNodeType> {
       // Aim the two-headed icon along the +X+Z corner bisector.
       rotationY: () => -Math.PI / 4,
     },
+    // Guide ring centred on the vent (drawn at the handle-frame origin),
+    // sized to pass through the corner icon so the icon rides the ring and
+    // the whole control reads as encircling the item — matches solar-panel.
+    decoration: {
+      kind: 'ring',
+      radius: (n) =>
+        Math.hypot(n.width / 2 + ROTATE_CORNER_OFFSET, n.depth / 2 + ROTATE_CORNER_OFFSET),
+      y: (n) => getBodyMidY(n),
+    },
   }
 }
 
+// `portal: 'grandparent'` on every handle: the vent mesh is mounted under
+// the roof's `roof-elements` group (reproducing the segment transform), so
+// the handle rig must ride the roof→segment→node frame chain — same as
+// solar-panel / skylight. Without it the handles (and the rotate arc) mount
+// in the bare segment-mesh frame and render offset from the vent.
 const boxVentHandles: HandleDescriptor<BoxVentNodeType>[] = [
   boxVentWidthHandle('right'),
   boxVentWidthHandle('left'),
   boxVentDepthHandle(),
   boxVentHeightHandle(),
   boxVentRotateHandle(),
-]
+].map((h): HandleDescriptor<BoxVentNodeType> => ({ ...h, portal: 'grandparent' }))
 
 /**
  * Box vent — a small louvered ventilation box that sits on a roof

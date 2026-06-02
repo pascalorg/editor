@@ -86,6 +86,8 @@ export type StructureTool =
   | 'shelf'
   | 'box-vent'
   | 'ridge-vent'
+  | 'turbine-vent'
+  | 'cupola'
   | 'chimney'
   | 'solar-panel'
   | 'skylight'

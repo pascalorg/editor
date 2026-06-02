@@ -5,6 +5,7 @@ import {
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
+  type CupolaNode,
   emitter,
   type FenceNode,
   getEffectiveRoofSurfaceMaterial,
@@ -18,6 +19,7 @@ import {
   type RidgeVentNode,
   type RoofEvent,
   type RoofNode,
+  type TurbineVentNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
   resolveLevelId,
@@ -353,7 +355,16 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode | BoxVentNode | RidgeVentNode,
+  node:
+    | FenceNode
+    | ColumnNode
+    | SlabNode
+    | CeilingNode
+    | ShelfNode
+    | BoxVentNode
+    | RidgeVentNode
+    | TurbineVentNode
+    | CupolaNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -421,7 +432,13 @@ function applySingleSurfacePaintPreview(
     }
   }
 
-  if (node.type === 'shelf' || node.type === 'box-vent' || node.type === 'ridge-vent') {
+  if (
+    node.type === 'shelf' ||
+    node.type === 'box-vent' ||
+    node.type === 'ridge-vent' ||
+    node.type === 'turbine-vent' ||
+    node.type === 'cupola'
+  ) {
     // These kinds register a `<group>` (not a Mesh) with `useRegistry`,
     // so we walk the subtree and preview-swap every child mesh — same
     // approach `column` uses.
@@ -1022,7 +1039,9 @@ export const SelectionManager = () => {
         node.type === 'ceiling' ||
         node.type === 'shelf' ||
         node.type === 'box-vent' ||
-        node.type === 'ridge-vent'
+        node.type === 'ridge-vent' ||
+        node.type === 'turbine-vent' ||
+        node.type === 'cupola'
       ) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
@@ -1044,6 +1063,8 @@ export const SelectionManager = () => {
                       | ShelfNode
                       | BoxVentNode
                       | RidgeVentNode
+                      | TurbineVentNode
+                      | CupolaNode
                     >(activePaintMaterial.material, activePaintMaterial.materialPreset),
                   )
               }
@@ -1058,7 +1079,9 @@ export const SelectionManager = () => {
                     | CeilingNode
                     | ShelfNode
                     | BoxVentNode
-                    | RidgeVentNode,
+                    | RidgeVentNode
+                    | TurbineVentNode
+                    | CupolaNode,
                   activePaintMaterial,
                 )
             : () => previewCursor('not-allowed'),

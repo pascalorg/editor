@@ -59,6 +59,7 @@ import { BuildingTreeNode } from './building-tree-node'
 import { CeilingTreeNode } from './ceiling-tree-node'
 import { ChimneyTreeNode } from './chimney-tree-node'
 import { ColumnTreeNode } from './column-tree-node'
+import { CupolaTreeNode } from './cupola-tree-node'
 import { DoorTreeNode } from './door-tree-node'
 import { DormerTreeNode } from './dormer-tree-node'
 import { ElevatorTreeNode } from './elevator-tree-node'
@@ -73,6 +74,7 @@ import { SlabTreeNode } from './slab-tree-node'
 import { SolarPanelTreeNode } from './solar-panel-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
+import { TurbineVentTreeNode } from './turbine-vent-tree-node'
 import { WallTreeNode } from './wall-tree-node'
 import { WindowTreeNode } from './window-tree-node'
 import { ZoneTreeNode } from './zone-tree-node'
@@ -126,6 +128,8 @@ const treeNodeByType: Record<
   fence: FenceTreeNode,
   gutter: GutterTreeNode,
   'ridge-vent': RidgeVentTreeNode,
+  'turbine-vent': TurbineVentTreeNode,
+  cupola: CupolaTreeNode,
   roof: RoofTreeNode,
   stair: StairTreeNode,
   door: DoorTreeNode,

@@ -60,6 +60,7 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
+import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
@@ -600,6 +601,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isFirstPersonMode && <SelectionManager />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
+      {!(isVersionPreviewMode || isFirstPersonMode) && <GroupRotateHandle />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WallOpeningHighlights />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
       {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}

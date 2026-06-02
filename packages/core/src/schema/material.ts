@@ -57,6 +57,8 @@ export const MaterialTarget = z.enum([
   'dormer',
   'box-vent',
   'ridge-vent',
+  'turbine-vent',
+  'cupola',
   'gutter',
 ])
 export type MaterialTarget = z.infer<typeof MaterialTarget>

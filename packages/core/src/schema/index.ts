@@ -50,6 +50,7 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export { CupolaNode } from './nodes/cupola'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {
   DormerNode,
@@ -135,6 +136,7 @@ export {
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
+export { TurbineVentNode } from './nodes/turbine-vent'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
 export {
   getEffectiveWallSurfaceMaterial,

@@ -160,6 +160,22 @@ export function FloatingActionMenu() {
   const menuScaleRef = useRef<HTMLDivElement>(null)
   const pillHeightRef = useRef<HTMLSpanElement>(null)
 
+  // Cached world anchor. The anchor is derived from `Box3.setFromObject`,
+  // which traverses the selected object's children — so a node with a
+  // continuously-animating child (the spinning turbine-vent head) makes the
+  // AABB wobble a few millimetres every frame, and the menu drifts even with
+  // a still camera. We instead recompute the box only when the selection,
+  // the object's world transform, or its geometry actually changes, and
+  // reuse the cached anchor otherwise. (Also removes a per-frame
+  // `setFromObject` for every selection.)
+  const anchorRef = useRef(new THREE.Vector3())
+  const hasAnchorRef = useRef(false)
+  const lastMatrixRef = useRef(new THREE.Matrix4())
+  const lastAnchorKeyRef = useRef<{ id: string | null; node: AnyNode | null }>({
+    id: null,
+    node: null,
+  })
+
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
 
@@ -237,13 +253,33 @@ export function FloatingActionMenu() {
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
-      // Calculate bounding box in world space
-      const box = new THREE.Box3().setFromObject(obj)
-      if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3())
-        // Position above the object. Per-type offsets clear each kind's
-        // in-world chrome (height-resize arrows, measurement labels).
-        groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
+      // Recompute the anchor only when the object genuinely changes —
+      // reselected, moved (its own world matrix changed), or resized
+      // (a fresh store node on commit, or a live override / handle drag
+      // mid-resize). A spinning child changes the head's matrix, not the
+      // registered group's, so it never triggers a recompute → the menu
+      // holds still.
+      const overrideActive = useLiveNodeOverrides.getState().overrides.get(selectedId) != null
+      const dragActive = activeHandleDrag?.nodeId === selectedId
+      const selectionChanged =
+        lastAnchorKeyRef.current.id !== selectedId || lastAnchorKeyRef.current.node !== node
+      const matrixChanged = !lastMatrixRef.current.equals(obj.matrixWorld)
+
+      if (selectionChanged || matrixChanged || overrideActive || dragActive) {
+        const box = new THREE.Box3().setFromObject(obj)
+        if (!box.isEmpty()) {
+          const center = box.getCenter(new THREE.Vector3())
+          // Position above the object. Per-type offsets clear each kind's
+          // in-world chrome (height-resize arrows, measurement labels).
+          anchorRef.current.set(center.x, box.max.y + getMenuYOffset(node), center.z)
+          hasAnchorRef.current = true
+        }
+        lastMatrixRef.current.copy(obj.matrixWorld)
+        lastAnchorKeyRef.current = { id: selectedId, node }
+      }
+
+      if (hasAnchorRef.current) {
+        groupRef.current.position.copy(anchorRef.current)
       }
     }
   })

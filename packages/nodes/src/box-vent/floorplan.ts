@@ -91,7 +91,9 @@ export function buildBoxVentFloorplan(
   const children: FloorplanGeometry[] = []
 
   if (style === 'dome') {
-    const outer = ellipse(hw, hd)
+    // Outer = the round flange plate (dome radius + flange overhang).
+    const ovh = Math.max(0, node.hoodOverhang ?? 0.04)
+    const outer = ellipse(hw + ovh, hd + ovh)
     children.push({
       kind: 'polygon',
       points: outer,
@@ -110,14 +112,24 @@ export function buildBoxVentFloorplan(
       strokeWidth: lineWidth,
       pointerEvents: 'none',
     })
-    // Inner ring suggests the dome bulge.
+    // Dome footprint inside the flange.
     children.push({
       kind: 'polygon',
-      points: ellipse(hw * 0.55, hd * 0.55),
+      points: ellipse(hw, hd),
       fill: 'none',
       stroke,
       strokeWidth: lineWidth * 0.8,
-      strokeOpacity: 0.6,
+      strokeOpacity: 0.7,
+      pointerEvents: 'none',
+    })
+    // Inner ring suggests the dome bulge.
+    children.push({
+      kind: 'polygon',
+      points: ellipse(hw * 0.5, hd * 0.5),
+      fill: 'none',
+      stroke,
+      strokeWidth: lineWidth * 0.8,
+      strokeOpacity: 0.5,
       pointerEvents: 'none',
     })
   } else if (style === 'cap') {

@@ -49,8 +49,8 @@ import useEditor from '../../store/use-editor'
 import { snapToGrid } from '../tools/item/placement-math'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
 
-const ARROW_SCALE = 0.65
-const ARROW_COLOR = '#8381ed'
+export const ARROW_SCALE = 0.65
+export const ARROW_COLOR = '#8381ed'
 // How far a DOWNWARD tracker's dashed leader pokes past its cube so the
 // dashes visibly thread through it (the cube sits ON the line, not at
 // its end). Upward trackers — wall / chimney height — stop at the cube.
@@ -99,7 +99,7 @@ function DimensionLabel({
     </Html>
   )
 }
-const ARROW_HOVER_COLOR = '#a5b4fc'
+export const ARROW_HOVER_COLOR = '#a5b4fc'
 
 // Two-headed curved-arrow silhouette for whole-node rotation handles
 // (today: the elevator's corner rotate gizmo). Symmetric arc centred on
@@ -108,7 +108,7 @@ const ARROW_HOVER_COLOR = '#a5b4fc'
 // XZ plane — same final-orientation contract as the chevron, so the
 // outer rotation Y and inner-rotation chain in the renderer are reused
 // unchanged.
-function createRotateArrowHandleGeometry() {
+export function createRotateArrowHandleGeometry() {
   const R = 0.2
   const ribbonHalfWidth = 0.02 // ribbon thickness / 2
   const halfSweep = Math.PI / 3 // 60° per side → 120° total arc
@@ -635,7 +635,7 @@ function ArrowHandle({
   return null
 }
 
-function useArrowMaterial(): MeshBasicNodeMaterial {
+export function useArrowMaterial(): MeshBasicNodeMaterial {
   return useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -1035,7 +1035,7 @@ function LinearArrow({
 // e.g. the curved-stair width arrow traces the outer rim, the inner-radius
 // arrow traces the central pillar. Floats at node-local `y`, lies in the
 // XZ plane.
-function GuideRing({ radius, y }: { radius: number; y: number }) {
+export function GuideRing({ radius, y }: { radius: number; y: number }) {
   const safeRadius = Math.max(radius, 0.01)
   const ringGeometry = useMemo(() => {
     const inner = Math.max(safeRadius - 0.015, 0.001)
@@ -1079,7 +1079,7 @@ const NO_RAYCAST = () => null
 // (`endAngle`) around the rotation pivot, plus a degree chip at the wedge's
 // midpoint. All coordinates are world-space — the guide is portalled to the
 // scene root so it stays fixed while the node mesh rotates underneath it.
-type RotationGuideData = {
+export type RotationGuideData = {
   center: [number, number, number]
   startAngle: number
   endAngle: number
@@ -1089,7 +1089,7 @@ type RotationGuideData = {
   sweep: number
 }
 
-function RotationGuide({ data }: { data: RotationGuideData }) {
+export function RotationGuide({ data }: { data: RotationGuideData }) {
   const { center, startAngle, endAngle, radius, labelPos, sweep } = data
   const { outline, fill } = useMemo(() => {
     const span = endAngle - startAngle
@@ -1158,6 +1158,87 @@ function RotationGuideOutline({ geometry }: { geometry: BufferGeometry }) {
   )
 }
 
+// Live whole-node rotation readout for a single-node rotate gizmo, rendered as
+// a CHILD of the node frame (sibling of its guide ring). Because it lives in
+// the node's own frame, it is automatically concentric and coplanar with the
+// ring — on flat ground the frame's XZ is world-horizontal, on a pitched roof
+// it follows the slope, with no world-space basis math.
+//
+// The wedge fills the node-local XZ plane at the ring's height `y`. Its leading
+// edge sits at the rotate handle's bearing `handleAngle` (which is fixed in the
+// node frame, so it tracks the orbiting handle), and it opens BACKWARD by the
+// swept `delta` — so the trailing edge stays pinned to the grab direction in
+// world while the node spins. `orbitRadius` is the handle's in-plane distance
+// from the pivot; the fill is pulled inside it so it reads as the handle
+// swinging around rather than overlapping the icon.
+function RotationWedge({
+  delta,
+  handleAngle,
+  orbitRadius,
+  y,
+}: {
+  delta: number
+  handleAngle: number
+  orbitRadius: number
+  y: number
+}) {
+  const radius = Math.min(Math.max(orbitRadius * 0.72, 0.3), 1.6)
+  const { outline, fill } = useMemo(() => {
+    const start = handleAngle - delta
+    const span = delta
+    const count = Math.max(8, Math.ceil((Math.abs(span) / Math.PI) * ROTATION_GUIDE_SEGMENTS))
+    const arc = Array.from({ length: count + 1 }, (_, index) => {
+      const angle = start + (span * index) / count
+      return new Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius)
+    })
+    const centerV = new Vector3(0, 0, 0)
+    const outlineGeo = new BufferGeometry().setFromPoints([centerV, ...arc, centerV])
+    const positions: number[] = []
+    for (let i = 0; i < arc.length - 1; i++) {
+      const a = arc[i]
+      const b = arc[i + 1]
+      if (!a || !b) continue
+      positions.push(0, 0, 0, a.x, a.y, a.z, b.x, b.y, b.z)
+    }
+    const fillGeo = new BufferGeometry()
+    fillGeo.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    return { outline: outlineGeo, fill: fillGeo }
+  }, [delta, handleAngle, radius])
+  useEffect(() => () => outline.dispose(), [outline])
+  useEffect(() => () => fill.dispose(), [fill])
+
+  const labelRadius = radius + 0.22
+  const midAngle = handleAngle - delta / 2
+  const labelPos: [number, number, number] = [
+    Math.cos(midAngle) * labelRadius,
+    0,
+    Math.sin(midAngle) * labelRadius,
+  ]
+
+  return (
+    <group position={[0, y, 0]}>
+      <mesh
+        frustumCulled={false}
+        geometry={fill}
+        layers={EDITOR_LAYER}
+        raycast={NO_RAYCAST}
+        renderOrder={1008}
+      >
+        <meshBasicMaterial
+          color={ROTATION_GUIDE_COLOR}
+          depthTest={false}
+          depthWrite={false}
+          opacity={0.18}
+          side={DoubleSide}
+          transparent
+        />
+      </mesh>
+      <RotationGuideOutline geometry={outline} />
+      <DimensionLabel position={labelPos} text={formatAngleRadians(Math.abs(delta))} />
+    </group>
+  )
+}
+
 // Angular drag: project pointer to a horizontal plane at the arrow's Y
 // and measure the signed angle around the node's local origin (in world
 // XZ). Pass the normalised delta to `apply` — the descriptor owns the
@@ -1199,16 +1280,16 @@ function ArcArrow({
     [isRotateShape],
   )
   const arrowMaterial = useArrowMaterial()
-  const { camera, raycaster, gl, scene } = useThree()
+  const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   // The rotate icon is denser than the chevron; pump scale a touch so the
   // ribbon reads at the same on-screen size as the other handles.
   const arrowScale = isRotateShape ? ARROW_SCALE * 1.05 : ARROW_SCALE
   const scale = (isHovered ? 1.12 : 1) * zoom * arrowScale
   const dragCleanupRef = useRef<(() => void) | null>(null)
-  // Live rotation readout (wedge + degree chip) — only populated while a
-  // `shape: 'rotate'` gizmo is mid-drag. See RotationGuide.
-  const [rotationGuide, setRotationGuide] = useState<RotationGuideData | null>(null)
+  // Live rotation amount (radians swept since grab) — non-null only while a
+  // `shape: 'rotate'` gizmo is mid-drag. Drives the in-frame wedge readout.
+  const [rotationDelta, setRotationDelta] = useState<number | null>(null)
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -1300,13 +1381,6 @@ function ArcArrow({
       return Math.atan2(d.dot(basisV), d.dot(basisU))
     }
 
-    // Wedge radius tracks the handle's orbit (its horizontal distance from
-    // the pivot), nudged inward so the swept fill reads as "the handle swung
-    // around" rather than overlapping the gizmo itself. Clamped so tiny
-    // footprints (column) and large ones (roof segment) both stay legible.
-    const handleRadius = Math.hypot(arrowWorld.x - centerWorld.x, arrowWorld.z - centerWorld.z)
-    const guideRadius = Math.min(Math.max(handleRadius * 0.72, 0.3), 1.6)
-
     const ndc = new Vector2()
     const setNDC = (clientX: number, clientY: number) => {
       const rect = gl.domElement.getBoundingClientRect()
@@ -1366,30 +1440,13 @@ function ArcArrow({
       useScene.getState().markDirty(nodeId)
 
       // Whole-node rotate gizmos report how far the node has turned since
-      // grab. The wedge sweeps `delta` (the snapped amount, so it tracks the
-      // 15° steps under Shift), and the chip sits at the wedge midpoint just
-      // past its rim. Suppressed below ~0.5° so a fresh grab doesn't flash a
-      // zero-width sliver. The wedge is drawn in the horizontal plane, so it
-      // only applies to horizontal-axis rotation (not the wall-normal spin).
+      // grab. We hand the live `delta` (the snapped amount, so it tracks the
+      // 15° steps under Shift) to a wedge that renders as a CHILD of the node
+      // frame — concentric and coplanar with the guide ring. Suppressed below
+      // ~0.5° so a fresh grab doesn't flash a zero-width sliver. Horizontal-axis
+      // rotation only (the wall-normal spin has no in-plane ring readout).
       if (isRotateShape && !isNodeNormalRot) {
-        if (Math.abs(delta) < 0.0087) {
-          setRotationGuide(null)
-        } else {
-          const midAngle = initialAngle + delta / 2
-          const labelRadius = guideRadius + 0.22
-          setRotationGuide({
-            center: [centerWorld.x, planeY, centerWorld.z],
-            startAngle: initialAngle,
-            endAngle: initialAngle + delta,
-            radius: guideRadius,
-            labelPos: [
-              centerWorld.x + Math.cos(midAngle) * labelRadius,
-              planeY + 0.02,
-              centerWorld.z + Math.sin(midAngle) * labelRadius,
-            ],
-            sweep: Math.abs(delta),
-          })
-        }
+        setRotationDelta(Math.abs(delta) < 0.0087 ? null : delta)
       }
     }
 
@@ -1403,7 +1460,7 @@ function ArcArrow({
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
-      setRotationGuide(null)
+      setRotationDelta(null)
       // Release the active-drag claim — see LinearArrow's onEnd note.
       dragControls.onEnd()
       dragCleanupRef.current = null
@@ -1449,9 +1506,18 @@ function ArcArrow({
           y={decoration.y?.(node as never) ?? 0}
         />
       ) : null}
-      {/* World-space rotation readout, portalled to the scene root so it
-          stays fixed while this gizmo's frame rotates with the node mesh. */}
-      {rotationGuide ? createPortal(<RotationGuide data={rotationGuide} />, scene) : null}
+      {/* Live rotation readout. Rendered HERE (a child of the node frame, the
+          same frame the guide ring lives in) rather than portalled to world
+          space, so the wedge is automatically concentric and coplanar with the
+          ring on any surface — flat ground or a pitched roof. */}
+      {rotationDelta !== null ? (
+        <RotationWedge
+          delta={rotationDelta}
+          handleAngle={Math.atan2(position[2], position[0])}
+          orbitRadius={Math.hypot(position[0], position[2])}
+          y={decoration?.y?.(node as never) ?? 0}
+        />
+      ) : null}
       <group
         position={position}
         // The curved arrow is built flat in XZ. For a wall-normal spin, tilt

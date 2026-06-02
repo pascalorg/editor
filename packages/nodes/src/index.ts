@@ -4,6 +4,7 @@ import { buildingDefinition } from './building'
 import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
+import { cupolaDefinition } from './cupola'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
@@ -25,6 +26,7 @@ import { solarPanelDefinition } from './solar-panel'
 import { spawnDefinition } from './spawn'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
+import { turbineVentDefinition } from './turbine-vent'
 import { wallDefinition } from './wall'
 import { windowDefinition } from './window'
 import { zoneDefinition } from './zone'
@@ -76,6 +78,8 @@ export const builtinPlugin: Plugin = {
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
+    turbineVentDefinition as unknown as AnyNodeDefinition,
+    cupolaDefinition as unknown as AnyNodeDefinition,
     chimneyDefinition as unknown as AnyNodeDefinition,
     solarPanelDefinition as unknown as AnyNodeDefinition,
     skylightDefinition as unknown as AnyNodeDefinition,
@@ -90,6 +94,7 @@ export { buildingDefinition } from './building'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
+export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'
@@ -111,6 +116,7 @@ export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
+export { turbineVentDefinition } from './turbine-vent'
 export { wallDefinition } from './wall'
 export { windowDefinition } from './window'
 export { zoneDefinition } from './zone'

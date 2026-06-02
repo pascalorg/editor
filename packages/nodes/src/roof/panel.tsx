@@ -13,6 +13,7 @@ import {
   RoofSegmentNode as RoofSegmentNodeSchema,
   type SkylightNode,
   type SolarPanelNode,
+  type TurbineVentNode,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -32,7 +33,7 @@ import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 export default function RoofPanel() {
-  const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent'>('box-vent')
+  const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -132,14 +133,14 @@ export default function RoofPanel() {
   const vents = useScene(
     useShallow((s) => {
       if (segmentIdSet.size === 0) return []
-      const out: (BoxVentNode | RidgeVentNode)[] = []
+      const out: (BoxVentNode | RidgeVentNode | TurbineVentNode)[] = []
       for (const n of Object.values(s.nodes)) {
         if (
-          (n?.type === 'box-vent' || n?.type === 'ridge-vent') &&
+          (n?.type === 'box-vent' || n?.type === 'ridge-vent' || n?.type === 'turbine-vent') &&
           n.roofSegmentId &&
           segmentIdSet.has(n.roofSegmentId)
         ) {
-          out.push(n as BoxVentNode | RidgeVentNode)
+          out.push(n as BoxVentNode | RidgeVentNode | TurbineVentNode)
         }
       }
       return out
@@ -225,6 +226,8 @@ export default function RoofPanel() {
       kind:
         | 'box-vent'
         | 'ridge-vent'
+        | 'turbine-vent'
+        | 'cupola'
         | 'chimney'
         | 'solar-panel'
         | 'skylight'
@@ -442,18 +445,27 @@ export default function RoofPanel() {
               >
                 <span className="truncate">
                   {vent.name ||
-                    (vent.type === 'box-vent' ? `Box Vent ${i + 1}` : `Ridge Vent ${i + 1}`)}
+                    (vent.type === 'box-vent'
+                      ? `Box Vent ${i + 1}`
+                      : vent.type === 'ridge-vent'
+                        ? `Ridge Vent ${i + 1}`
+                        : `Turbine Vent ${i + 1}`)}
                 </span>
                 <span className="text-muted-foreground text-xs">
-                  {vent.type === 'box-vent' ? 'box vent' : 'ridge vent'}
+                  {vent.type === 'box-vent'
+                    ? 'box vent'
+                    : vent.type === 'ridge-vent'
+                      ? 'ridge vent'
+                      : 'turbine vent'}
                 </span>
               </button>
             ))}
-            <SegmentedControl<'box-vent' | 'ridge-vent'>
+            <SegmentedControl<'box-vent' | 'ridge-vent' | 'turbine-vent'>
               onChange={setVentType}
               options={[
                 { label: 'Box', value: 'box-vent' },
                 { label: 'Ridge', value: 'ridge-vent' },
+                { label: 'Turbine', value: 'turbine-vent' },
               ]}
               value={ventType}
             />
@@ -462,6 +474,16 @@ export default function RoofPanel() {
                 icon={<Plus className="h-3.5 w-3.5" />}
                 label="Add Vent"
                 onClick={() => activateTool(ventType)}
+              />
+            </ActionGroup>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <ActionGroup>
+              <ActionButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                label="Add Cupola"
+                onClick={() => activateTool('cupola')}
               />
             </ActionGroup>
           </div>

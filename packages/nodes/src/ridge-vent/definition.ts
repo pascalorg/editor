@@ -1,8 +1,8 @@
 import {
   type HandleDescriptor,
   type NodeDefinition,
-  type RidgeVentNode as RidgeVentNodeType,
   RidgeVentNode as RidgeVentNodeSchema,
+  type RidgeVentNode as RidgeVentNodeType,
 } from '@pascal-app/core'
 import { buildRidgeVentFloorplan } from './floorplan'
 import { ridgeVentParametrics } from './parametrics'
@@ -11,7 +11,8 @@ import { RidgeVentNode } from './schema'
 // Edge-to-arrow-center offset, matching the box-vent / chimney cadence.
 const SIDE_HANDLE_OFFSET = 0.25
 const HEIGHT_HANDLE_OFFSET = 0.15
-const ROTATE_CORNER_OFFSET = 0.25
+// Snug to the vent corner — keeps the rotate icon close to the item.
+const ROTATE_CORNER_OFFSET = 0.1
 // Ridge vents are long but thin — minimums let users shrink without
 // collapsing the geometry past the point where the cross-section
 // degenerates. Default length is 2.0, default width 0.3, default
@@ -119,16 +120,27 @@ function ridgeVentRotateHandle(): HandleDescriptor<RidgeVentNodeType> {
       // rotate gesture's swing direction.
       rotationY: () => -Math.PI / 4,
     },
+    // Guide ring centred on the vent, sized to pass through the corner icon
+    // so the icon rides the ring — matches solar-panel / skylight.
+    decoration: {
+      kind: 'ring',
+      radius: (n) =>
+        Math.hypot(n.length / 2 + ROTATE_CORNER_OFFSET, n.width / 2 + ROTATE_CORNER_OFFSET),
+      y: (n) => getBodyMidY(n),
+    },
   }
 }
 
+// `portal: 'grandparent'` on every handle — see box-vent's note. The vent
+// rides the roof→segment→node frame chain, so the handle rig must too, or
+// the handles (and rotate arc) render offset from the vent.
 const ridgeVentHandles: HandleDescriptor<RidgeVentNodeType>[] = [
   ridgeVentLengthHandle('right'),
   ridgeVentLengthHandle('left'),
   ridgeVentWidthHandle(),
   ridgeVentHeightHandle(),
   ridgeVentRotateHandle(),
-]
+].map((h): HandleDescriptor<RidgeVentNodeType> => ({ ...h, portal: 'grandparent' }))
 
 /**
  * Ridge vent — a ventilation strip running along the ridge of a roof
