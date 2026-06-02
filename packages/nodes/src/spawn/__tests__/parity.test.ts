@@ -34,9 +34,9 @@ describe('spawn definition', () => {
     expect(parsed.success).toBe(true)
   })
 
-  test('presentation declares an iconify icon for the palette', () => {
+  test('presentation declares a url palette icon', () => {
     expect(spawnDefinition.presentation?.label).toBe('Spawn Point')
-    expect(spawnDefinition.presentation?.icon.kind).toBe('iconify')
+    expect(spawnDefinition.presentation?.icon.kind).toBe('url')
     expect(spawnDefinition.presentation?.paletteSection).toBe('structure')
   })
 
