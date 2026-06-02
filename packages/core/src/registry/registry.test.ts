@@ -12,6 +12,20 @@ import {
 } from './registry'
 import type { AnyNodeDefinition, Plugin } from './types'
 
+// Re-registering a kind warns + replaces in dev (HMR) but throws in
+// production — see `registry._register`. `bun test` runs with
+// NODE_ENV=test (dev path), so the throw-path tests pin NODE_ENV to
+// 'production' for the duration of the call.
+async function inProduction<T>(fn: () => T | Promise<T>): Promise<T> {
+  const prev = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    return await fn()
+  } finally {
+    process.env.NODE_ENV = prev
+  }
+}
+
 function makeDefinition(
   kind: string,
   overrides: Partial<AnyNodeDefinition> = {},
@@ -47,9 +61,20 @@ describe('nodeRegistry', () => {
     expect(nodeRegistry.get('column')).toBe(def)
   })
 
-  test('registerNode throws on duplicate kind', () => {
-    registerNode(makeDefinition('column'))
-    expect(() => registerNode(makeDefinition('column'))).toThrow(/duplicate node kind/)
+  test('registerNode throws on duplicate kind in production', async () => {
+    await inProduction(() => {
+      registerNode(makeDefinition('column'))
+      expect(() => registerNode(makeDefinition('column'))).toThrow(/duplicate node kind/)
+    })
+  })
+
+  test('registerNode replaces on duplicate kind in dev (HMR)', () => {
+    const first = makeDefinition('column')
+    const second = makeDefinition('column')
+    registerNode(first)
+    registerNode(second)
+    expect(nodeRegistry.size).toBe(1)
+    expect(nodeRegistry.get('column')).toBe(second)
   })
 
   test('registerNode rejects empty kind', () => {
@@ -184,19 +209,21 @@ describe('loadPlugin', () => {
     await expect(loadPlugin(plugin)).rejects.toThrow(/apiVersion/)
   })
 
-  test('propagates duplicate-kind error from a single plugin', async () => {
+  test('propagates duplicate-kind error from a single plugin in production', async () => {
     const plugin: Plugin = {
       id: 'broken',
       apiVersion: 1,
       nodes: [makeDefinition('dup'), makeDefinition('dup')],
     }
-    await expect(loadPlugin(plugin)).rejects.toThrow(/duplicate node kind/)
+    await inProduction(() => expect(loadPlugin(plugin)).rejects.toThrow(/duplicate node kind/))
   })
 
-  test('propagates duplicate-kind error across plugins', async () => {
-    await loadPlugin({ id: 'a', apiVersion: 1, nodes: [makeDefinition('shared')] })
-    await expect(
-      loadPlugin({ id: 'b', apiVersion: 1, nodes: [makeDefinition('shared')] }),
-    ).rejects.toThrow(/duplicate node kind/)
+  test('propagates duplicate-kind error across plugins in production', async () => {
+    await inProduction(async () => {
+      await loadPlugin({ id: 'a', apiVersion: 1, nodes: [makeDefinition('shared')] })
+      await expect(
+        loadPlugin({ id: 'b', apiVersion: 1, nodes: [makeDefinition('shared')] }),
+      ).rejects.toThrow(/duplicate node kind/)
+    })
   })
 })
