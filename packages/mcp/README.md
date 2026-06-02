@@ -227,6 +227,55 @@ console.log(scene)
 See [`examples/embed-in-agent.ts`](./examples/embed-in-agent.ts) for a
 compilable version.
 
+## Coordinate conventions
+
+Pascal is a **right-handed** scene where **X and Z form the ground plane and Y
+is up**. Lengths are in **metres**; rotations are **radians**, stored as Euler
+`[x, y, z]` tuples.
+
+**Plan → world.** Every 2-D point you pass is a ground-plane coordinate
+`[x, z]` — this includes `wall.start` / `wall.end` and the `polygon` / `holes`
+arrays of `slab`, `zone`, and `ceiling`. It maps to world space as:
+
+```
+[x, z]  →  (x, y, z)      // the 2nd component is world Z (depth), not "up"
+```
+
+There is no sign flip. The editor builds plan geometry as
+`new Vector3(point[0], y, point[1])` (see
+`packages/nodes/src/{wall,slab,ceiling}/tool.tsx`). The vertical `y` comes from
+the owning `level`'s elevation (its `level` field, in metres) plus the
+element's own height; slabs additionally carry an absolute `elevation`.
+
+**Heads-up when you compute coordinates outside the editor.** Because the plan
+is the X–Z plane, the second coordinate is **depth**, not a screen-"up" axis.
+If you generate geometry from a source that assumes *"Y = north, viewed from
+the top"* — a land survey with bearings from North, a north-up site plan, or
+most 2-D plotting libraries — the result can arrive **mirrored** relative to
+that source when viewed top-down. Pascal's own 2-D and 3-D tools are
+internally consistent, so this only affects geometry authored programmatically.
+Decide your axis mapping explicitly and verify orientation against a known
+reference (e.g. a scaled guide image) before trusting it; reflect across the
+appropriate axis if it comes in flipped.
+
+**Example — a 6 × 4 m slab rotated 30° about its first corner** (not
+axis-aligned, so the mapping is actually exercised):
+
+```json
+{
+  "op": "create",
+  "parentId": "<levelId>",
+  "node": {
+    "type": "slab",
+    "elevation": 0.0,
+    "polygon": [[0, 0], [5.196, 3.0], [3.196, 6.464], [-2.0, 3.464]]
+  }
+}
+```
+
+This lands flat on the ground (Y = 0), 6 m along a heading 30° off the +X axis
+and 4 m along its perpendicular — i.e. occupying world (x, z) directly.
+
 ## Tools
 
 All tools validate their inputs and outputs with Zod. Mutation tools are
