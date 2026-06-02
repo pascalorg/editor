@@ -54,7 +54,7 @@ export const SFX: Record<string, SFXConfig> = {
     panJitter: 0.15,
   },
   itemRotate: {
-    src: '/audios/sfx/item_rotate.mp3',
+    src: '/audios/sfx/item_rotate.wav',
     rateRange: [0.94, 1.06],
     volumeRange: [0.92, 1.0],
     panJitter: 0.15,
