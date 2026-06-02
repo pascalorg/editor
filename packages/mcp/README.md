@@ -247,16 +247,29 @@ There is no sign flip. The editor builds plan geometry as
 the owning `level`'s elevation (its `level` field, in metres) plus the
 element's own height; slabs additionally carry an absolute `elevation`.
 
-**Heads-up when you compute coordinates outside the editor.** Because the plan
-is the X–Z plane, the second coordinate is **depth**, not a screen-"up" axis.
-If you generate geometry from a source that assumes *"Y = north, viewed from
-the top"* — a land survey with bearings from North, a north-up site plan, or
-most 2-D plotting libraries — the result can arrive **mirrored** relative to
-that source when viewed top-down. Pascal's own 2-D and 3-D tools are
-internally consistent, so this only affects geometry authored programmatically.
-Decide your axis mapping explicitly and verify orientation against a known
-reference (e.g. a scaled guide image) before trusting it; reflect across the
-appropriate axis if it comes in flipped.
+**Heads-up when you compute coordinates outside the editor.** Pascal's
+viewports apply their own rotations on top of the world axes: the 2-D plan
+panel wraps its content in a 90° rotation (see `FLOORPLAN_VIEW_ROTATION_DEG`
+in `packages/editor/src/components/editor/floorplan-panel.tsx`), and the 3-D
+"top-down" snap defaults to a ~45° offset between world and screen axes when
+you snap to it from the iso default position. So a layout authored as if
+*"Y = north, viewed top-down"* — common in land surveys, north-up site plans,
+and 2-D plotting libraries — will arrive **rotated** relative to its source
+when viewed in Pascal (and possibly further reflected, depending on which
+viewport and camera state you're in). The editor's own 2-D and 3-D tools are
+internally consistent with their stored coordinates, so this only affects
+geometry authored programmatically. To verify orientation before trusting
+externally-computed coordinates, place a scaled guide image at known anchor
+points and check alignment; apply whatever rotation (or reflection) your
+authoring side needs to match.
+
+A worked demonstration of all of this — axis-aligned baseline, the rotated
+30° example below, and a paired "page-intent vs world-result" L for the
+external-coordinate gotcha — lives in
+[`examples/coordinate-conventions-demo.md`](./examples/coordinate-conventions-demo.md)
+and [`examples/coordinate-conventions-demo.json`](./examples/coordinate-conventions-demo.json).
+Load the JSON with `pascal-mcp --scene examples/coordinate-conventions-demo.json`
+or import it through any host configured for the package.
 
 **Example — a 6 × 4 m slab rotated 30° about its first corner** (not
 axis-aligned, so the mapping is actually exercised):
