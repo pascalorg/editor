@@ -1,5 +1,6 @@
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { ImportDxfButton } from '@/components/import-dxf-button'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 
@@ -58,7 +59,10 @@ export default async function ScenesPage() {
             <span className="text-muted-foreground">/</span>
             <span className="font-medium text-foreground">Scenes</span>
           </nav>
-          <CreateSceneButton />
+          <div className="flex items-center gap-2">
+            <CreateSceneButton />
+            <ImportDxfButton />
+          </div>
         </div>
       </header>
 

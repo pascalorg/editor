@@ -4,6 +4,10 @@ import { AddCatalogPanel, Editor, ItemsPanel } from '@pascal-app/editor'
 import { Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { AiAssistantBubble } from '@/components/ai-assistant-bubble'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ImportDxfTool } from '@/components/tools/ImportDxfTool'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -43,6 +47,9 @@ const SIDEBAR_TABS = [
 const PROJECT_ID = 'local-editor'
 
 export default function Home() {
+  const [dxfOpen, setDxfOpen] = useState(false)
+  const router = useRouter()
+
   return (
     <div className="relative h-screen w-screen">
       {PROJECT_ID === 'local-editor' && (
@@ -52,20 +59,40 @@ export default function Home() {
             <Link className="font-medium text-foreground hover:underline" href="/scenes">
               Open recent scenes
             </Link>
-            <span aria-hidden className="text-muted-foreground">
-              ·
-            </span>
+            <span aria-hidden className="text-muted-foreground">·</span>
             <Link className="font-medium text-foreground hover:underline" href="/scenes">
               Create new
             </Link>
-            <span aria-hidden className="text-muted-foreground">
-              ·
-            </span>
+            <span aria-hidden className="text-muted-foreground">·</span>
             <Link className="font-medium text-foreground hover:underline" href="/pic-to-3d">
               画像から3D
             </Link>
+            <span aria-hidden className="text-muted-foreground">·</span>
+            <button
+              className="font-medium text-foreground hover:underline"
+              onClick={() => setDxfOpen(true)}
+              type="button"
+            >
+              Import DXF
+            </button>
           </div>
         </div>
+      )}
+
+      {dxfOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/50 pt-16 pb-8 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setDxfOpen(false) }}
+        >
+          <ImportDxfTool
+            onClose={() => setDxfOpen(false)}
+            onDone={({ buildingId }) => {
+              setDxfOpen(false)
+              router.push(`/scene/${buildingId}`)
+            }}
+          />
+        </div>,
+        document.body,
       )}
       <Editor
         layoutVersion="v2"

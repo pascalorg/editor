@@ -26,7 +26,6 @@ import {
   Contrast,
   Eye,
   EyeOff,
-  FileUp,
   Footprints,
   Grid2X2,
   PenLine,
@@ -35,7 +34,6 @@ import {
 } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useCallback, useState } from 'react'
-import { ImportDxfTool } from '@/components/tools/ImportDxfTool'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
@@ -495,43 +493,12 @@ function PreviewButton() {
   )
 }
 
-function ImportDxfButton() {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <>
-      <div className={TOOLBAR_CONTAINER}>
-        <ToolbarTooltip label="导入 DXF">
-          <button
-            aria-label="导入 DXF"
-            aria-pressed={open}
-            className={cn(TOOLBAR_BTN, open && 'bg-white/10 text-foreground/90')}
-            onClick={() => setOpen(true)}
-            type="button"
-          >
-            <FileUp className="h-4 w-4" />
-          </button>
-        </ToolbarTooltip>
-      </div>
-
-      {open && (
-        <div
-          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-black/50 pt-16 pb-8 backdrop-blur-sm"
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
-        >
-          <ImportDxfTool onClose={() => setOpen(false)} onDone={() => setOpen(false)} />
-        </div>
-      )}
-    </>
-  )
-}
 
 export function CommunityViewerToolbarLeft() {
   return (
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
-      <ImportDxfButton />
     </>
   )
 }
