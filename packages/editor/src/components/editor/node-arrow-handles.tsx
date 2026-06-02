@@ -84,7 +84,7 @@ function DimensionLabel({
       center
       position={position as unknown as [number, number, number]}
       style={{ pointerEvents: 'none', userSelect: 'none' }}
-      zIndexRange={[40, 0]}
+      zIndexRange={[25, 0]}
     >
       <div
         className="whitespace-nowrap font-bold font-mono text-[13px]"

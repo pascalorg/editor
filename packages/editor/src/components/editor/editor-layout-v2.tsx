@@ -174,10 +174,12 @@ function RightColumn({
       )}
       {/* Canvas area */}
       <div className="relative flex-1 overflow-hidden">{children}</div>
-      {/* Overlays scoped to the viewer column */}
+      {/* Overlays scoped to the viewer column. `data-viewer-bounds` marks the
+          draggable region the floating inspector clamps itself to. */}
       {overlays && (
         <div
           className="pointer-events-none absolute inset-0 z-30"
+          data-viewer-bounds
           style={{ transform: 'translateZ(0)' }}
         >
           {overlays}

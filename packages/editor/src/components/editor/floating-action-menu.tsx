@@ -542,7 +542,7 @@ export function FloatingActionMenu() {
             pointerEvents: 'auto',
             touchAction: 'none',
           }}
-          zIndexRange={[100, 0]}
+          zIndexRange={[25, 0]}
         >
           <div className="relative" ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
             <NodeActionMenu
