@@ -9,9 +9,12 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
+import { Hammer, Layers } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -32,6 +35,33 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     id: 'site',
     label: 'Scene',
     component: () => null, // Built-in SitePanel handles this
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Layers className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/scene.png"
+        width={32}
+      />
+    ),
+  },
+  {
+    id: 'build',
+    label: 'Build',
+    component: BuildTab,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Hammer className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/build.png"
+        width={32}
+      />
+    ),
   },
 ]
 
