@@ -516,7 +516,7 @@ function ImportDxfButton() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-black/50 pt-16 pb-8 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
         >
           <ImportDxfTool onClose={() => setOpen(false)} onDone={() => setOpen(false)} />

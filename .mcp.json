@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pascal-dev": {
+      "command": "bun",
+      "args": [
+        "/Users/user/github/pascal-editor/packages/mcp/dist/bin/pascal-mcp.js"
+      ]
+    }
+  }
+}

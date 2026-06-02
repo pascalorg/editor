@@ -24,9 +24,10 @@ export const WallTreeNode = memo(function WallTreeNode({
   const [expanded, setExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
-  const needsReview = useScene(
-    (s) => (s.nodes[nodeId as AnyNodeId] as WallNode | undefined)?.metadata?.['needsReview'] === true,
-  )
+  const needsReview = useScene((s) => {
+    const meta = (s.nodes[nodeId as AnyNodeId] as WallNode | undefined)?.metadata
+    return (meta as Record<string, unknown> | undefined)?.['needsReview'] === true
+  })
   const children = useScene(
     useShallow((s) => (s.nodes[nodeId as AnyNodeId] as WallNode | undefined)?.children ?? []),
   )

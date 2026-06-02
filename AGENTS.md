@@ -49,3 +49,67 @@ Invoke the `review-architecture` skill (`.agents/skills/review-architecture/SKIL
 - After two consecutive tool failures, stop and change approach.
 - Don't introduce backwards-compatibility shims, dead code, or speculative abstractions.
 - Don't write new comments unless they explain a non-obvious *why*.
+
+---
+
+## DXF Import Feature — File System Job Queue
+
+All DXF import jobs are stored under PASCAL_DATA_DIR/dxf-imports/.
+
+### Directory structure
+```
+PASCAL_DATA_DIR/
+  dxf-imports/
+    2026-05-28/
+      job_<8位hex>/
+        original.dxf          # 原始上传（只写一次，不可修改）
+        preview.png           # canvas 截图（只写一次）
+        job.json              # job 元数据 + 运行历史
+        coords_<hhmmss>.json  # Channel A 输出（每次运行带时间戳）
+        semantic_<hhmmss>.json # Channel B 输出
+        merged_<hhmmss>.json  # 融合结果
+        coords_latest.json    # 符号链接 → 最新 coords
+        semantic_latest.json  # 符号链接 → 最新 semantic
+        merged_latest.json    # 符号链接 → 最新 merged
+```
+
+### Rules
+- Job ID: `crypto.randomBytes(4).toString('hex')`
+- Timestamps in filenames: `HHmmss` (local time, no date — date is in parent folder)
+- `job.json` must be updated after every step
+- Channel A and B run in parallel; each writes its own file independently
+- MCP importer reads `merged_latest.json` only
+- Never delete job folders — they are the audit trail
+
+### job.json schema
+```json
+{
+  "jobId": "a3f9c2e1",
+  "createdAt": "2026-05-28T14:30:20Z",
+  "status": "pending|validating|processing|merged|imported|failed",
+  "sourceFile": "original.dxf",
+  "sceneId": null,
+  "params": { "wallThicknessMin": 0.08, "wallThicknessMax": 0.40 },
+  "runs": [
+    {
+      "runAt": "2026-05-28T14:30:22Z",
+      "coordsFile": "coords_143022.json",
+      "semanticFile": "semantic_143028.json",
+      "mergedFile": "merged_143031.json",
+      "channelBSkipped": false,
+      "error": null
+    }
+  ]
+}
+```
+
+### New files for this feature
+- `packages/core/src/lib/importers/job-store.ts`  — job 文件夹创建/读写
+- `packages/core/src/lib/importers/dxf-validator.ts`
+- `packages/core/src/lib/importers/dxf-geometry-parser.ts`
+- `packages/core/src/lib/importers/dxf-merge-engine.ts`
+- `packages/core/src/lib/importers/mcp-importer.ts`
+- `apps/editor/components/tools/ImportDxfTool.tsx`
+- `apps/editor/components/DxfPreview.tsx`
+- `apps/editor/app/api/vision-analyze/route.ts`
+- `apps/editor/app/api/vision-analyze/prompts/floor-plan-analyzer.md`

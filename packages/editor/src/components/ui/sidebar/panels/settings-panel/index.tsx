@@ -1,4 +1,5 @@
 import { emitter, useScene, validateBuildJson } from '@pascal-app/core'
+import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, Save, Trash2, Upload } from 'lucide-react'
@@ -205,6 +206,18 @@ export function SettingsPanel({
 
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
+  const handleExportDxf = () => {
+    const dxfContent = exportSceneToDxf(nodes as Parameters<typeof exportSceneToDxf>[0])
+    const blob = new Blob([dxfContent], { type: 'application/dxf' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const date = new Date().toISOString().split('T')[0]
+    link.download = `floorplan_${date}.dxf`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleSaveBuild = () => {
     const sceneData = { nodes, rootNodeIds }
     const json = JSON.stringify(sceneData, null, 2)
@@ -380,6 +393,14 @@ export function SettingsPanel({
         >
           <Download className="size-4" />
           Export OBJ
+        </Button>
+        <Button
+          className="w-full justify-start gap-2"
+          onClick={handleExportDxf}
+          variant="outline"
+        >
+          <Download className="size-4" />
+          Export DXF
         </Button>
       </div>
 

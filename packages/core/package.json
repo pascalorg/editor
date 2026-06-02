@@ -50,6 +50,21 @@
       "types": "./dist/systems/stair/stair-opening-sync.d.ts",
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
+    },
+    "./importers": {
+      "types": "./dist/lib/importers/index.d.ts",
+      "import": "./dist/lib/importers/index.js",
+      "default": "./dist/lib/importers/index.js"
+    },
+    "./job-store": {
+      "types": "./dist/lib/importers/job-store.d.ts",
+      "import": "./dist/lib/importers/job-store.js",
+      "default": "./dist/lib/importers/job-store.js"
+    },
+    "./exporters/dxf": {
+      "types": "./dist/lib/exporters/dxf-exporter.d.ts",
+      "import": "./dist/lib/exporters/dxf-exporter.js",
+      "default": "./dist/lib/exporters/dxf-exporter.js"
     }
   },
   "files": [
@@ -71,6 +86,7 @@
   },
   "dependencies": {
     "dedent": "^1.7.1",
+    "dxf-parser": "^1.1.2",
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
