@@ -286,15 +286,18 @@ function extractNormalizedSegs(
     if (isSkipLayer(layer)) continue
     if (wallLayerOnly && !isWallLayer(layer)) continue
 
+    // DXF Y-axis is negated so that DXF north (+Y in DXF) becomes screen-up
+    // in Pascal's top-down floor-plan view. User-created scene data is unaffected
+    // because this negation only runs during DXF import.
     if (e.type === 'LINE') {
       const l = e as DxfRawLine
       const s = lineStart(l), en = lineEnd(l)
       if (!s || !en) continue
       out.push({
-        x1: R3(s.x * scale),
-        y1: R3(s.y * scale),
-        x2: R3(en.x * scale),
-        y2: R3(en.y * scale),
+        x1: R3( s.x  * scale),
+        y1: R3(-s.y  * scale),
+        x2: R3( en.x * scale),
+        y2: R3(-en.y * scale),
         layer,
       })
     } else if (e.type === 'LWPOLYLINE') {
@@ -304,10 +307,10 @@ function extractNormalizedSegs(
         const v = p.vertices[i]!,
           w = p.vertices[i + 1]!
         out.push({
-          x1: R3(v.x * scale),
-          y1: R3(v.y * scale),
-          x2: R3(w.x * scale),
-          y2: R3(w.y * scale),
+          x1: R3( v.x * scale),
+          y1: R3(-v.y * scale),
+          x2: R3( w.x * scale),
+          y2: R3(-w.y * scale),
           layer,
         })
       }
@@ -315,10 +318,10 @@ function extractNormalizedSegs(
         const last = p.vertices[p.vertices.length - 1]!,
           first = p.vertices[0]!
         out.push({
-          x1: R3(last.x * scale),
-          y1: R3(last.y * scale),
-          x2: R3(first.x * scale),
-          y2: R3(first.y * scale),
+          x1: R3( last.x  * scale),
+          y1: R3(-last.y  * scale),
+          x2: R3( first.x * scale),
+          y2: R3(-first.y * scale),
           layer,
         })
       }
@@ -580,8 +583,8 @@ function detectOpenings(
     .map(e => {
       const l = e as DxfRawLine
       const s = lineStart(l)!, en = lineEnd(l)!
-      const x1 = s.x * scale, y1 = s.y * scale
-      const x2 = en.x * scale, y2 = en.y * scale
+      const x1 =  s.x  * scale, y1 = -s.y  * scale   // Y negated
+      const x2 =  en.x * scale, y2 = -en.y * scale   // Y negated
       return { x1, y1, x2, y2, len: Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) }
     })
     .filter(l => l.len > 0.05 && l.len < 1.2)
@@ -590,8 +593,8 @@ function detectOpenings(
     if (e.type !== 'ARC') continue
     const arc = e as DxfRawArc
     if (isSkipLayer(arc.layer ?? '')) continue
-    const cx = arc.center.x * scale,
-      cy = arc.center.y * scale
+    const cx =  arc.center.x * scale,
+      cy = -arc.center.y * scale   // Y negated
     const r = arc.radius * scale
     if (r < 0.3 || r > 1.5) continue
 
@@ -620,8 +623,8 @@ function detectOpenings(
     const ins = e as DxfRawInsert
     const name = ins.name.toUpperCase()
     if (!name.includes('WIN') && !name.includes('WINDOW') && !name.includes('窗')) continue
-    const px = ins.position.x * scale,
-      py = ins.position.y * scale
+    const px =  ins.position.x * scale,
+      py = -ins.position.y * scale   // Y negated
     const hit = nearestWall(px, py, walls, 1.0)
     if (!hit) continue
     openings.push({
@@ -716,11 +719,13 @@ export function parseDxfGeometry(dxf: DxfParsed, opts: GeometryParserOptions = {
   const raw = computeRawBbox(dxf.entities)
   const scale = opts.unitScale ?? inferScale(dxf.header?.$INSUNITS, raw.maxDim)
 
+  // Y is negated during import, so DXF minY (most-south raw value) becomes
+  // Pascal maxY (largest negated value). Swap and negate accordingly.
   const bbox = {
-    minX: R3(raw.minX * scale),
-    minY: R3(raw.minY * scale),
-    maxX: R3(raw.maxX * scale),
-    maxY: R3(raw.maxY * scale),
+    minX: R3( raw.minX * scale),
+    minY: R3(-raw.maxY * scale),
+    maxX: R3( raw.maxX * scale),
+    maxY: R3(-raw.minY * scale),
   }
 
   // §3.3.1 – Step 1: layer analysis — prefer wall layers, fall back to all lines
@@ -769,8 +774,8 @@ export function parseDxfGeometry(dxf: DxfParsed, opts: GeometryParserOptions = {
         const u = (e.layer ?? '').toUpperCase()
         const thickness = u.includes('INT') ? 0.12 : 0.24
         wallCandidates.push({
-          start: [R3(s.x * scale), R3(s.y * scale)],
-          end:   [R3(en.x * scale), R3(en.y * scale)],
+          start: [R3( s.x  * scale), R3(-s.y  * scale)],  // Y negated
+          end:   [R3( en.x * scale), R3(-en.y * scale)],  // Y negated
           thickness,
           height: 2.8,
           layerName: e.layer,
@@ -809,7 +814,7 @@ export function parseDxfGeometry(dxf: DxfParsed, opts: GeometryParserOptions = {
       const p = e as DxfRawLwPolyline
       if (!p.vertices || p.vertices.length < 3) continue
       const polygon = p.vertices.map(
-        v => [R3(v.x * scale), R3(v.y * scale)] as [number, number],
+        v => [R3(v.x * scale), R3(-v.y * scale)] as [number, number],  // Y negated
       )
       closedRegions.push({ id: `r_${String(++zoneIdx).padStart(3, '0')}`, polygon })
     }

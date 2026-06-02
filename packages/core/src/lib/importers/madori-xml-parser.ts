@@ -92,11 +92,15 @@ function parseXml(xml: string): {
   const sceneHigh      = parseFloat(firstAttr(xml, 'SceneHigh', 'value', '300')) * CM
   const defaultThickCm = parseFloat(firstAttr(xml, 'WallThick',  'value', '20'))
 
+  // DXF uses Y-up (north = +Y). Pascal's 3D renderer maps start[1] to THREE.js Z,
+  // where +Z = screen-down in the top-down floor-plan view. Negate Y here so that
+  // DXF north (up in DXF viewers) becomes screen-up in Pascal, matching user
+  // expectations without touching any existing user-created scene data.
   const walls: RawWall[] = findElements(xml, 'WallData').map(a => ({
-    startX:   R3(fa(a, 'StartX') * CM),
-    startY:   R3(fa(a, 'StartY') * CM),
-    endX:     R3(fa(a, 'EndX')   * CM),
-    endY:     R3(fa(a, 'EndY')   * CM),
+    startX:   R3( fa(a, 'StartX') * CM),
+    startY:   R3(-fa(a, 'StartY') * CM),  // Y negated: DXF north -> Pascal north
+    endX:     R3( fa(a, 'EndX')   * CM),
+    endY:     R3(-fa(a, 'EndY')   * CM),  // Y negated
     width:    R3(fa(a, 'Width', defaultThickCm) * CM),
     height:   sceneHigh,
     wallType: fa(a, 'Type') === 1 ? 'interior'
@@ -109,25 +113,25 @@ function parseXml(xml: string): {
   for (const a of findElements(xml, 'DoorData')) {
     openings.push({
       kind:   'door',
-      posX:   R3(fa(a, 'PosX')   * CM),
-      posY:   R3(fa(a, 'PosY')   * CM),
+      posX:   R3( fa(a, 'PosX')   * CM),
+      posY:   R3(-fa(a, 'PosY')   * CM),  // Y negated
       length: R3(fa(a, 'Length') * CM),
       // The Height field in source XML has a known unit bug (~23 cm after /10).
       // Use the architectural standard for a hinged interior door.
       height: 2.1,
-      rotate: fa(a, 'Rotate'),
+      rotate: -fa(a, 'Rotate'),            // negate rotation angle to match flipped Y
     })
   }
 
   for (const a of findElements(xml, 'WinData')) {
     openings.push({
       kind:   'window',
-      posX:   R3(fa(a, 'PosX')   * CM),
-      posY:   R3(fa(a, 'PosY')   * CM),
+      posX:   R3( fa(a, 'PosX')   * CM),
+      posY:   R3(-fa(a, 'PosY')   * CM),  // Y negated
       length: R3(fa(a, 'Length') * CM),
       // Same unit bug as doors; use standard residential window height.
       height: 1.2,
-      rotate: fa(a, 'Rotate'),
+      rotate: -fa(a, 'Rotate'),            // negate rotation angle to match flipped Y
     })
   }
 
@@ -136,7 +140,7 @@ function parseXml(xml: string): {
   if (textBlock) {
     for (const a of findElements(textBlock, 'TextData')) {
       const t = (a['Text'] ?? '').trim()
-      if (t) texts.push({ posX: R3(fa(a, 'PosX') * CM), posY: R3(fa(a, 'PosY') * CM), text: t })
+      if (t) texts.push({ posX: R3(fa(a, 'PosX') * CM), posY: R3(-fa(a, 'PosY') * CM), text: t })
     }
   }
 

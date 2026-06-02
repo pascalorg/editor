@@ -184,7 +184,7 @@ function findParallelPairs(segs: Seg[], thicknessMin: number, thicknessMax: numb
 
 /** DFS cycle detection on an endpoint-snapped adjacency graph. A cycle implies a closable region. */
 function hasClosableRegion(segs: Seg[]): boolean {
-  const SNAP = 0.005 // 5 mm
+  const SNAP = 0.05 // 50 mm — permissive for a sanity-check; real snapping happens in the parser
 
   const nodes: Array<{ x: number; y: number }> = []
 
@@ -277,10 +277,16 @@ export function validateDxf(
   const arcCount = entities.filter(e => e.type === 'ARC').length
   const dimCount = entities.filter(e => e.type === 'DIMENSION').length
 
+  // Extract segments early — needed for check 3 onwards.
+  // Each LWPOLYLINE expands into (vertices-1) segments, so segs.length
+  // is a better emptiness signal than entity count.
+  const segs = extractSegs(entities, scale)
+  const pairCount = segs.length >= 2 ? findParallelPairs(segs, thicknessMin, thicknessMax) : 0
+
   // ── Hard reject 3: too few line entities ───────────────────────────────────
-  if (lineCount < 10) {
+  if (segs.length < 6) {
     rejectReasons.push(
-      `LINE + LWPOLYLINE 实体仅 ${lineCount} 个，低于最小值 10（疑似纯注释文件或空文件）`,
+      `LINE + LWPOLYLINE 仅提取到 ${segs.length} 条有效线段（${lineCount} 个实体），低于最小值 6（疑似纯注释文件或空文件）`,
     )
   }
 
@@ -294,10 +300,6 @@ export function validateDxf(
       )
     }
   }
-
-  // Extract segments once for the remaining geometry checks
-  const segs = extractSegs(entities, scale)
-  const pairCount = segs.length >= 2 ? findParallelPairs(segs, thicknessMin, thicknessMax) : 0
 
   // ── Hard reject 5: no parallel line pairs ─────────────────────────────────
   if (segs.length >= 2 && pairCount === 0) {

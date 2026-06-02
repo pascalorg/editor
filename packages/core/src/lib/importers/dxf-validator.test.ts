@@ -227,7 +227,8 @@ describe('validateDxf — edge cases', () => {
   test('rejects empty entity list', () => {
     const result = validateDxf([], { minX: 0, minY: 0, maxX: 10, maxY: 8 })
     expect(result.passed).toBe(false)
-    expect(result.rejectReasons.some(r => r.includes('LINE + LWPOLYLINE'))).toBe(true)
+    // message mentions segment count (0) and LINE + LWPOLYLINE entity type
+    expect(result.rejectReasons.some(r => r.includes('LINE + LWPOLYLINE') && r.includes('0'))).toBe(true)
   })
 
   test('rejects bbox diagonal > 500m', () => {

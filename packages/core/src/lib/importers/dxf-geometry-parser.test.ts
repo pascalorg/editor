@@ -272,10 +272,12 @@ describe('parseDxfGeometry', () => {
 
   test('bbox is in metres and has correct shape', () => {
     const { bbox } = parseDxfGeometry(makeRoomDxf())
-    expect(bbox.minX).toBeCloseTo(0, 3)
-    expect(bbox.minY).toBeCloseTo(0, 3)
-    expect(bbox.maxX).toBeCloseTo(6, 3)
-    expect(bbox.maxY).toBeCloseTo(3.2, 3)
+    // DXF Y is negated on import so north (+Y in DXF) maps to screen-up in Pascal.
+    // Fixture room spans DXF Y [0, 3.2] → Pascal Y [-3.2, 0] after negation.
+    expect(bbox.minX).toBeCloseTo(0,    3)
+    expect(bbox.minY).toBeCloseTo(-3.2, 3)
+    expect(bbox.maxX).toBeCloseTo(6,    3)
+    expect(bbox.maxY).toBeCloseTo(0,    3)
   })
 
   test('wall ids follow "w_NNN" format', () => {
@@ -316,9 +318,10 @@ describe('parseDxfGeometry', () => {
 
   test('mm input is converted to metres (inferred from bbox size)', () => {
     const mmResult = parseDxfGeometry(makeRoomDxfMm())
-    // Bbox should still be in metres (≈ 6m × 3.2m), not 6000 mm
-    expect(mmResult.bbox.maxX).toBeCloseTo(6, 1)
-    expect(mmResult.bbox.maxY).toBeCloseTo(3.2, 1)
+    // Bbox should still be in metres (≈ 6m × 3.2m), not 6000 mm.
+    // After Y-negation: maxX≈6, minY≈-3.2, maxY≈0.
+    expect(mmResult.bbox.maxX).toBeCloseTo(6,    1)
+    expect(mmResult.bbox.minY).toBeCloseTo(-3.2, 1)
   })
 
   test('mm input and m input produce the same number of walls', () => {

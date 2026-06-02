@@ -544,6 +544,25 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
             onChange={setSettings}
             value={settings}
           />
+
+          {/* Pipeline selector */}
+          <div className="flex gap-1.5 rounded-lg border border-border/40 p-1">
+            {(['geo+ai', 'madori'] as const).map(p => (
+              <button
+                className={cn(
+                  'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                  pipeline === p
+                    ? 'bg-blue-600 text-white'
+                    : 'text-muted-foreground hover:bg-muted/40',
+                )}
+                key={p}
+                onClick={() => setPipeline(p)}
+                type="button"
+              >
+                {p === 'geo+ai' ? '自动识别 (AI)' : '建筑CAD (Madori)'}
+              </button>
+            ))}
+          </div>
         </>
       )}
 
