@@ -589,23 +589,28 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  isStudioMode,
   onThumbnailCapture,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  isStudioMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }) {
+  // Studio mode is a clean render/snapshot surface — no selection or editing
+  // affordances. It mirrors version-preview's chrome gating on the canvas.
+  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode
   return (
     <>
-      {!isFirstPersonMode && <SelectionManager />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <BoxSelectTool />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <NodeArrowHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <GroupRotateHandle />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <WallOpeningHighlights />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <WallMoveSideHandles />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingActionMenu />}
-      {!(isVersionPreviewMode || isFirstPersonMode) && <FloatingBuildingActionMenu />}
+      {!(isFirstPersonMode || isStudioMode) && <SelectionManager />}
+      {!noEditing && <BoxSelectTool />}
+      {!noEditing && <NodeArrowHandles />}
+      {!noEditing && <GroupRotateHandle />}
+      {!noEditing && <WallOpeningHighlights />}
+      {!noEditing && <WallMoveSideHandles />}
+      {!noEditing && <FloatingActionMenu />}
+      {!noEditing && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
@@ -614,7 +619,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <RoofEditSystem />
       <StairEditSystem />
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
-      {!(isLoading || isVersionPreviewMode || isFirstPersonMode) && <ToolManager />}
+      {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
@@ -803,6 +808,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isVersionPreviewMode,
   isLoading,
   isFirstPersonMode,
+  isStudioMode,
   hasLoadedInitialScene,
   showLoader,
   onThumbnailCapture,
@@ -810,6 +816,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
+  isStudioMode: boolean
   hasLoadedInitialScene: boolean
   showLoader: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
@@ -921,6 +928,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={isLoading}
+              isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
             />
@@ -958,8 +966,9 @@ export default function Editor({
   commandPaletteEmptyAction,
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+  const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
 
-  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode })
+  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,
@@ -1109,6 +1118,7 @@ export default function Editor({
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
+      isStudioMode={isStudioMode}
       isVersionPreviewMode={isVersionPreviewMode}
       onThumbnailCapture={onThumbnailCapture}
       showLoader={showLoader}
@@ -1163,12 +1173,12 @@ export default function Editor({
               overlays={
                 <>
                   {!isCaptureMode && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
+                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
                     </div>
                   )}
-                  {!(isVersionPreviewMode || isCaptureMode) && (
+                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <PanelManager inspectorFooter={inspectorFooter} />
                     </div>

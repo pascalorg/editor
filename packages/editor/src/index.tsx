@@ -210,6 +210,7 @@ export type {
   SplitOrientation,
   ToolDefaults,
   ViewMode,
+  WorkspaceMode,
 } from './store/use-editor'
 export { default as useEditor } from './store/use-editor'
 export {

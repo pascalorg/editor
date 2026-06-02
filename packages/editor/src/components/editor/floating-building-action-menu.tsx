@@ -57,7 +57,7 @@ export function FloatingBuildingActionMenu() {
           pointerEvents: 'auto',
           touchAction: 'none',
         }}
-        zIndexRange={[100, 0]}
+        zIndexRange={[25, 0]}
       >
         <NodeActionMenu
           onMove={handleMove}

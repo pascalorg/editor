@@ -47,6 +47,7 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
+export type WorkspaceMode = 'edit' | 'studio'
 
 // Snapshot capture is invoked from two surfaces with different policies.
 // `standard` mirrors the existing user-driven UX — pick region / viewport /
@@ -328,6 +329,12 @@ type EditorState = {
   isFirstPersonMode: boolean
   _viewModeBeforeFirstPerson: ViewMode | null
   setFirstPersonMode: (enabled: boolean) => void
+  // Workspace mode: 'edit' is the full editing surface; 'studio' is the
+  // render/snapshot surface (clean canvas, no editing chrome or selection).
+  // Entering studio forces a 3D-only view and restores the prior view on exit.
+  workspaceMode: WorkspaceMode
+  _viewModeBeforeStudio: ViewMode | null
+  setWorkspaceMode: (mode: WorkspaceMode) => void
   activeSidebarPanel: string
   setActiveSidebarPanel: (id: string) => void
   floorplanPaneRatio: number
@@ -847,6 +854,32 @@ const useEditor = create<EditorState>()(
           set({
             isFirstPersonMode: false,
             _viewModeBeforeFirstPerson: null,
+            ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
+          })
+        }
+      },
+      workspaceMode: 'edit' as WorkspaceMode,
+      _viewModeBeforeStudio: null as ViewMode | null,
+      setWorkspaceMode: (mode) => {
+        if (get().workspaceMode === mode) return
+        if (mode === 'studio') {
+          const currentViewMode = get().viewMode
+          set({
+            workspaceMode: 'studio',
+            _viewModeBeforeStudio: currentViewMode,
+            viewMode: '3d',
+            isFloorplanOpen: false,
+            mode: 'select',
+            tool: null,
+            catalogCategory: null,
+          })
+          // Clear selection so no edit affordances bleed into the clean canvas.
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        } else {
+          const prevMode = get()._viewModeBeforeStudio
+          set({
+            workspaceMode: 'edit',
+            _viewModeBeforeStudio: null,
             ...(prevMode ? { viewMode: prevMode, isFloorplanOpen: prevMode !== '3d' } : {}),
           })
         }
