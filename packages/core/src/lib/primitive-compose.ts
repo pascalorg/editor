@@ -89,6 +89,7 @@ export interface PrimitiveShapeInput {
   materialPreset?: string
   material?: PrimitiveMaterialInput
   profile?: [number, number][]
+  holes?: [number, number][][]
   path?: Vec3[]
   segments?: number
   arc?: number

@@ -18,6 +18,16 @@ export const markToolCancelConsumed = () => {
   _toolCancelConsumed = true
 }
 
+function isEditableTarget(target: EventTarget | null) {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true
+  return target instanceof HTMLElement && Boolean(target.closest('[contenteditable="true"]'))
+}
+
+function hasBrowserTextSelection() {
+  const selection = window.getSelection()
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim())
+}
+
 export const useKeyboard = ({
   isVersionPreviewMode = false,
   disabled = false,
@@ -32,7 +42,11 @@ export const useKeyboard = ({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (isEditableTarget(e.target)) {
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && hasBrowserTextSelection()) {
         return
       }
 

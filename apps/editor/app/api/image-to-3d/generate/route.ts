@@ -17,18 +17,20 @@ export const dynamic = 'force-dynamic'
 const ACCEPTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const CATALOG_CATEGORIES = new Set([
   'safety',
-  'electrical',
   'lighting',
   'electronics',
   'equipment',
   'structural',
-  'infrastructure',
   'opening',
   'nature',
   'outdoor',
   'vehicle',
 ])
-const CATALOG_CATEGORY_ALIASES = new Map([['hvac', 'electrical']])
+const CATALOG_CATEGORY_ALIASES = new Map([
+  ['electrical', 'electronics'],
+  ['hvac', 'electronics'],
+  ['infrastructure', 'outdoor'],
+])
 
 const FALLBACK_THUMBNAIL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAGXRFWHRTb2Z0d2FyZQBwYXNjYWwtaW1hZ2UtdG8tM2QbjmzRAAABhUlEQVR4nO3aQU7CQBBA0QfZ+18u8QbYQIoJEYlG0ifhq9OZqgQYmOm1WgAAAAAAAAAA+M9wH/d1rK3bTu9rD+fzlnW9nT5a4vLx1eF8+L4u46bQpSgJgZgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgQgv8FSXYKp+uXyNMAAAAASUVORK5CYII=',
@@ -61,6 +63,10 @@ function readBool(value: FormDataEntryValue | null, fallback: boolean) {
   if (normalized === 'false' || normalized === '0' || normalized === 'no') return false
   if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true
   return fallback
+}
+
+function normalizeApiKey(value: string | undefined) {
+  return value?.trim().replace(/^bearer\s+/i, '') || undefined
 }
 
 function normalizeCatalogCategory(value: string) {
@@ -113,6 +119,53 @@ function dimensionsFromMetadata(metadata: unknown): [number, number, number] {
     : [1, 1, 1]
 }
 
+type Vec3 = [number, number, number]
+
+type GlbAssetTransform = {
+  dimensions: Vec3
+  offset: Vec3
+}
+
+function finitePositiveDimension(value: number) {
+  return Number.isFinite(value) && value > 0 ? Math.max(0.05, value) : null
+}
+
+async function readGlbAssetTransform(modelPath: string): Promise<GlbAssetTransform | null> {
+  try {
+    const [{ Box3, Vector3 }, { GLTFLoader }] = await Promise.all([
+      // @ts-expect-error apps/editor does not ship app-local three declarations.
+      import('three'),
+      // @ts-expect-error apps/editor does not ship app-local three declarations.
+      import('three/examples/jsm/loaders/GLTFLoader.js'),
+    ])
+    ;(globalThis as unknown as { self?: unknown }).self ??= globalThis
+    const buffer = await fs.readFile(modelPath)
+    const arrayBuffer = buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength,
+    ) as ArrayBuffer
+    const loader = new GLTFLoader()
+    const gltf = await new Promise<{ scene: unknown }>((resolve, reject) => {
+      loader.parse(arrayBuffer, '', resolve, reject)
+    })
+    const box = new Box3().setFromObject(gltf.scene)
+    const size = new Vector3()
+    box.getSize(size)
+    const width = finitePositiveDimension(size.x)
+    const height = finitePositiveDimension(size.y)
+    const depth = finitePositiveDimension(size.z)
+    if (!width || !height || !depth || !Number.isFinite(box.min.y)) return null
+
+    return {
+      dimensions: [width, height, depth],
+      offset: [0, -box.min.y, 0],
+    }
+  } catch (error) {
+    console.warn('[image-to-3d] Failed to read GLB bounds for asset placement', error)
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   let form: FormData
   try {
@@ -138,9 +191,28 @@ export async function POST(req: NextRequest) {
   const provider = resolveImageTo3DProvider(
     readText(form.get('provider'), process.env.IMAGE_TO_3D_PROVIDER ?? 'fal'),
   )
-  const apiKey = process.env.FAL_KEY
-  if (provider === 'fal' && !apiKey) {
+  const tripoApiKey = normalizeApiKey(process.env.TRIPO3D_API_KEY ?? process.env.APIKEY)
+  const apiKey =
+    provider === 'tripo' ? tripoApiKey : provider === 'fal' ? process.env.FAL_KEY : undefined
+  if (provider === 'fal' && !process.env.FAL_KEY) {
     return NextResponse.json({ error: 'FAL_KEY is not configured on the server' }, { status: 500 })
+  }
+  if (provider === 'tripo') {
+    if (!tripoApiKey) {
+      return NextResponse.json(
+        { error: 'TRIPO3D_API_KEY is not configured on the server' },
+        { status: 500 },
+      )
+    }
+    if (tripoApiKey.startsWith('tcli_')) {
+      return NextResponse.json(
+        {
+          error:
+            'TRIPO3D_API_KEY must be the Tripo secret key from API Keys, usually starting with tsk_. Do not use the tcli_ client id.',
+        },
+        { status: 500 },
+      )
+    }
   }
   if (
     provider === 'hunyuan3d' &&
@@ -193,12 +265,14 @@ export async function POST(req: NextRequest) {
   const thumbnailPath = path.join(tmpDir, 'thumbnail.png')
   const sourceImagePublicUrl = `/items/${assetId}/source-image.${sourceExt}`
   let thumbnailUrl = `/items/${assetId}/thumbnail.png`
+  let glbAssetTransform: GlbAssetTransform | null = null
 
   try {
     await fs.rm(tmpDir, { force: true, recursive: true })
     await fs.mkdir(tmpDir, { recursive: true })
     await fs.writeFile(sourceImagePath, imageBuffer)
     await downloadFile(generated.modelGlbUrl, modelPath)
+    glbAssetTransform = await readGlbAssetTransform(modelPath)
     if (generated.thumbnailUrl) {
       await downloadFile(generated.thumbnailUrl, thumbnailPath)
     } else if (image.type === 'image/png') {
@@ -219,6 +293,7 @@ export async function POST(req: NextRequest) {
           sourceImageType: image.type,
           createdAt: new Date().toISOString(),
           metadata: generated.metadata,
+          assetTransform: glbAssetTransform,
           providerUrls: {
             modelGlbUrl: generated.modelGlbUrl,
             thumbnailUrl: generated.thumbnailUrl,
@@ -248,7 +323,8 @@ export async function POST(req: NextRequest) {
     floorPlanUrl: thumbnailUrl,
     source: 'mine',
     src: `/items/${assetId}/model.glb`,
-    dimensions: dimensionsFromMetadata(generated.metadata),
+    dimensions: glbAssetTransform?.dimensions ?? dimensionsFromMetadata(generated.metadata),
+    offset: glbAssetTransform?.offset ?? [0, 0, 0],
     tags: ['floor', 'generated', 'image-to-3d', generated.provider],
   }
 

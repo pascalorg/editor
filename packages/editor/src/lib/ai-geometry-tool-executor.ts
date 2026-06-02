@@ -1,17 +1,23 @@
 import {
   applyDimensionSemanticsToObjectInput,
+  applyPrimitiveRevision,
+  assessPrimitiveVisualQuality,
+  type ComposeRecipeInput,
   composeObjectPrimitives,
   composePartPrimitives,
+  composeRecipePrimitives,
   composeRobotArmPrimitives,
+  getPrimitiveRecipeGeometryBrief,
   type ObjectComposeInput,
   type PartComposeInput,
   type PrimitiveGeometryBrief,
   type PrimitiveMaterialInput,
-  validatePrimitiveSemantics,
+  type PrimitiveRevisionOperation,
   type PrimitiveShapeInput,
   type RobotArmComposeInput,
   resolvePrimitiveWorldTransforms,
   type Vec3,
+  validatePrimitiveSemantics,
 } from '@pascal-app/core'
 import {
   computeGeneratedAssemblyPosition,
@@ -30,6 +36,7 @@ export type GeometryToolExecutionContext = {
   revisionOf?: string
   revisionVersion?: number
   replaceNodeIds?: string[]
+  revisionTarget?: GeneratedGeometryArtifact | null
 }
 
 export type GeometryToolExecutionResult = {
@@ -58,10 +65,13 @@ type RawShape = Omit<PrimitiveShapeInput, 'kind' | 'material'> & {
 }
 
 type SemanticValidationSummary = ReturnType<typeof validatePrimitiveSemantics>
+type VisualQualitySummary = ReturnType<typeof assessPrimitiveVisualQuality>
 
 const GEOMETRY_TOOL_NAMES = new Set([
   'compose_primitive',
   'compose_parts',
+  'compose_recipe',
+  'revise_geometry',
   'compose_robot_arm',
   'compose_object',
 ])
@@ -180,8 +190,27 @@ function getRawShapes(
   name: string,
   args: Record<string, unknown>,
   prompt: string,
+  context?: GeometryToolExecutionContext,
 ): RawShape[] | undefined {
   if (name === 'compose_parts') return composePartPrimitives(args as PartComposeInput)
+  if (name === 'compose_recipe') return composeRecipePrimitives(args as ComposeRecipeInput)
+  if (name === 'revise_geometry') {
+    const target = context?.revisionTarget
+    if (!target) return undefined
+    const operations = Array.isArray(args.operations)
+      ? (args.operations as PrimitiveRevisionOperation[])
+      : []
+    const revision = applyPrimitiveRevision({
+      shapes: target.shapes as PrimitiveShapeInput[],
+      operations,
+    })
+    if (revision.issues.length > 0) {
+      ;(args as Record<string, unknown>).__revisionIssues = revision.issues
+      return []
+    }
+    ;(args as Record<string, unknown>).__changedShapeCount = revision.changedShapeCount
+    return revision.shapes as RawShape[]
+  }
   if (name === 'compose_robot_arm') return composeRobotArmPrimitives(args as RobotArmComposeInput)
   if (name === 'compose_object') {
     const dimensionAwareObjectArgs = applyDimensionSemanticsToObjectInput(
@@ -223,8 +252,30 @@ function readGeometryBrief(args: Record<string, unknown>): PrimitiveGeometryBrie
   return normalizeGeometryBrief(metadata?.geometryBrief)
 }
 
+function readExecutionGeometryBrief(
+  name: string,
+  args: Record<string, unknown>,
+  context?: GeometryToolExecutionContext,
+): PrimitiveGeometryBrief | undefined {
+  return (
+    readGeometryBrief(args) ??
+    (name === 'revise_geometry' ? context?.revisionTarget?.geometryBrief : undefined) ??
+    (name === 'compose_recipe'
+      ? getPrimitiveRecipeGeometryBrief(args as ComposeRecipeInput)
+      : undefined)
+  )
+}
+
+function publicSourceArgs(args: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(args).filter(([key]) => !key.startsWith('__')))
+}
+
 function formatSemanticValidationSummary(validation: SemanticValidationSummary): string {
-  if (validation.family === 'unknown' && validation.issues.length === 0 && validation.warnings.length === 0) {
+  if (
+    validation.family === 'unknown' &&
+    validation.issues.length === 0 &&
+    validation.warnings.length === 0
+  ) {
     return ''
   }
 
@@ -233,12 +284,26 @@ function formatSemanticValidationSummary(validation: SemanticValidationSummary):
     .map(([role, count]) => `${role}:${count}`)
     .join(', ')
 
-  const parts = [
-    `Validation: family=${validation.family}, score=${validation.score.toFixed(2)}`,
-  ]
+  const parts = [`Validation: family=${validation.family}, score=${validation.score.toFixed(2)}`]
   if (roleSummary) parts.push(`roles=[${roleSummary}]`)
   if (validation.warnings.length > 0) {
     parts.push(`warnings=[${validation.warnings.join('; ')}]`)
+  }
+  return parts.join(' ')
+}
+
+function formatVisualQualitySummary(quality: VisualQualitySummary): string {
+  if (
+    quality.family === 'unknown' &&
+    quality.issues.length === 0 &&
+    quality.warnings.length === 0
+  ) {
+    return ''
+  }
+
+  const parts = [`Visual quality: family=${quality.family}, score=${quality.score.toFixed(2)}`]
+  if (quality.warnings.length > 0) {
+    parts.push(`warnings=[${quality.warnings.join('; ')}]`)
   }
   return parts.join(' ')
 }
@@ -314,6 +379,7 @@ export function normalizeGeometryToolShapes(rawShapes: RawShape[]): ShapeSpec[] 
       heightSegments: read('heightSegments') as number | undefined,
       wallThickness: read('wallThickness') as number | undefined,
       profile: read('profile') as [number, number][] | undefined,
+      holes: read('holes') as [number, number][][] | undefined,
       path: read('path') as Vec3[] | undefined,
       segments: read('segments') as number | undefined,
       arc: read('arc') as number | undefined,
@@ -436,6 +502,13 @@ export function validateGeometryToolShapes(shapes: ShapeSpec[]): string[] {
         if (!Array.isArray(shape.profile) || shape.profile.length < 3) {
           issues.push(`${label}: extrude.profile needs at least 3 closed outline points.`)
         }
+        if (Array.isArray(shape.holes)) {
+          for (const [holeIndex, hole] of shape.holes.entries()) {
+            if (!Array.isArray(hole) || hole.length < 3) {
+              issues.push(`${label}: extrude.holes[${holeIndex}] needs at least 3 outline points.`)
+            }
+          }
+        }
         if (!isPositiveNumber(shape.depth)) issues.push(`${label}: extrude.depth is required.`)
         break
       case 'sweep':
@@ -463,7 +536,43 @@ export function executeGeometryToolCall(
     }
   }
 
-  const rawShapes = getRawShapes(name, args, context.prompt)
+  if (name === 'revise_geometry') {
+    const target = context.revisionTarget
+    const targetArtifactId =
+      typeof args.targetArtifactId === 'string' ? args.targetArtifactId : undefined
+    if (!target) {
+      return {
+        content: [
+          'Revision could not run. No previous geometry artifact is available.',
+          'Tell the user what happened and generate a fresh object or ask them to select/create one first.',
+        ].join('\n'),
+      }
+    }
+    if (targetArtifactId && targetArtifactId !== target.id) {
+      return {
+        content: [
+          'Revision could not run. The requested targetArtifactId does not match the current artifact.',
+          `- requested: ${targetArtifactId}`,
+          `- current: ${target.id}`,
+          'Use the current artifact id or generate a fresh replacement.',
+        ].join('\n'),
+      }
+    }
+  }
+
+  const rawShapes = getRawShapes(name, args, context.prompt, context)
+  const revisionIssues = Array.isArray(args.__revisionIssues)
+    ? (args.__revisionIssues as string[])
+    : []
+  if (revisionIssues.length > 0) {
+    return {
+      content: [
+        'Revision could not be applied. Nothing was created.',
+        'Explain this to the user and call revise_geometry again with corrected selectors/operations.',
+        ...revisionIssues.map((issue) => `- ${issue}`),
+      ].join('\n'),
+    }
+  }
   if (!rawShapes?.length) {
     return { content: options.messages?.noShapes ?? 'No geometry could be created.' }
   }
@@ -497,12 +606,17 @@ export function executeGeometryToolCall(
   const transforms = resolvePrimitiveWorldTransforms(shapes as PrimitiveShapeInput[], {
     positionMode: 'world-center',
   })
-  const semanticValidation = validatePrimitiveSemantics(shapes as PrimitiveShapeInput[], transforms, {
-    toolName: name,
-    prompt: context.prompt,
-    sourceArgs: args,
-    geometryBrief: readGeometryBrief(args),
-  })
+  const geometryBrief = readExecutionGeometryBrief(name, args, context)
+  const semanticValidation = validatePrimitiveSemantics(
+    shapes as PrimitiveShapeInput[],
+    transforms,
+    {
+      toolName: name,
+      prompt: context.prompt,
+      sourceArgs: args,
+      geometryBrief,
+    },
+  )
 
   if (!semanticValidation.ok) {
     return {
@@ -514,6 +628,27 @@ export function executeGeometryToolCall(
       ].join('\n'),
     }
   }
+  const visualQuality = assessPrimitiveVisualQuality(shapes as PrimitiveShapeInput[], transforms, {
+    prompt: context.prompt,
+    geometryBrief,
+  })
+  if (
+    (visualQuality.family === 'vehicle' || visualQuality.family === 'robot_arm') &&
+    visualQuality.score < 0.65
+  ) {
+    return {
+      content: [
+        'Invalid geometry tool call. Nothing was created.',
+        'Fix the arguments and call exactly one geometry tool again.',
+        `- ${visualQuality.family} visual quality score is too low (${visualQuality.score.toFixed(2)}).`,
+        ...visualQuality.issues.map((issue) => `- ${issue}`),
+        ...visualQuality.warnings.map((warning) => `- Warning: ${warning}`),
+        ...visualQuality.recommendations.map(
+          (recommendation) => `- Recommendation: ${recommendation}`,
+        ),
+      ].join('\n'),
+    }
+  }
 
   const shouldCreateAssembly = shapes.length > 1
   const assemblyPosition = computeGeneratedAssemblyPosition(transforms)
@@ -521,11 +656,13 @@ export function executeGeometryToolCall(
   const created = shapes.map((shape) => shape.name ?? shape.kind)
   const shapeDetails = formatGeneratedShapeDetails(shapes, transforms)
   const title = assemblyName ?? created[0] ?? 'Generated geometry'
+  const semanticSummary = formatSemanticValidationSummary(semanticValidation)
+  const visualQualitySummary = formatVisualQualitySummary(visualQuality)
   const artifact: GeneratedGeometryArtifact = {
     id: createGeneratedGeometryId(),
     title,
     sourceTool: name,
-    sourceArgs: args,
+    sourceArgs: publicSourceArgs(args),
     userPrompt: context.prompt,
     revisionOf: context.revisionOf,
     version:
@@ -537,19 +674,38 @@ export function executeGeometryToolCall(
     assemblyPosition,
     createdNames: created,
     shapeDetails,
+    geometryBrief,
+    semanticSummary,
+    visualQualitySummary,
+    editHistory:
+      name === 'revise_geometry'
+        ? [
+            ...(context.revisionTarget?.editHistory ?? []),
+            {
+              at: new Date().toISOString(),
+              tool: name,
+              feedback: typeof args.feedback === 'string' ? args.feedback : context.prompt,
+              intent: typeof args.intent === 'string' ? args.intent : undefined,
+              summary: typeof args.userVisiblePlan === 'string' ? args.userVisiblePlan : undefined,
+              operations: Array.isArray(args.operations)
+                ? (args.operations as PrimitiveRevisionOperation[])
+                : undefined,
+            },
+          ]
+        : context.revisionTarget?.editHistory,
     replaceNodeIds: context.replaceNodeIds?.length ? context.replaceNodeIds : undefined,
   }
 
   const header = assemblyName
     ? `Created draft assembly "${assemblyName}" with ${created.length} shapes at [${assemblyPosition.join(',')}]:`
     : `Created draft with ${created.length} shapes:`
-  const semanticSummary = formatSemanticValidationSummary(semanticValidation)
 
   return {
     artifact,
     content: `${header}
 ${shapeDetails}
 ${semanticSummary ? `${semanticSummary}\n` : ''}
+${visualQualitySummary ? `${visualQualitySummary}\n` : ''}
 Names: ${created.join(', ')}`,
   }
 }

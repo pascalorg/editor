@@ -8,6 +8,9 @@ export interface RobotArmComposeInput {
   style?: RobotArmStyle | string
   pose?: RobotArmPose | string
   position?: Vec3
+  axisCount?: 3 | 4 | 6 | number
+  baseShape?: 'round' | 'square' | 'pedestal' | string
+  endEffector?: 'gripper' | 'suction' | 'tool-flange' | string
   reach?: number
   baseHeight?: number
   detail?: 'low' | 'medium' | 'high' | string
@@ -39,6 +42,7 @@ function styleMaterial(style: RobotArmComposeInput['style'], materialPreset: str
 export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): PrimitiveShapeInput[] {
   const reach = clamp(input.reach, 2.4, 0.8, 8)
   const baseHeight = clamp(input.baseHeight, reach * 0.16, 0.12, reach * 0.35)
+  const turntableHeight = Math.max(0.05, baseHeight * 0.18)
   const baseRadius = reach * 0.12
   const shoulderRadius = reach * 0.095
   const elbowRadius = reach * 0.08
@@ -57,7 +61,7 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
   const elbowPitch = input.pose === 'reach-forward' ? 0.18 : input.pose === 'work-ready' ? 0.62 : 0.38
   const wristPitch = input.pose === 'work-ready' ? -0.42 : -0.18
 
-  return [
+  const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'cylinder',
       name: `${name} base`,
@@ -67,11 +71,26 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: baseHeight,
       radialSegments: segments,
       materialPreset,
+      semanticRole: 'robot_base',
+    },
+    {
+      kind: 'cylinder',
+      name: `${name} base turntable joint`,
+      attachTo: 0,
+      anchor: 'top',
+      childAnchor: 'bottom',
+      position: [position[0], position[1] + baseHeight + turntableHeight / 2, position[2]],
+      axis: 'y',
+      radius: baseRadius * 0.72,
+      height: turntableHeight,
+      radialSegments: segments,
+      materialPreset,
+      semanticRole: 'base_joint',
     },
     {
       kind: 'sphere',
       name: `${name} shoulder joint`,
-      attachTo: 0,
+      attachTo: 1,
       anchor: 'top',
       childAnchor: 'center',
       position: [0, 0, 0],
@@ -79,11 +98,12 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       widthSegments: segments,
       heightSegments: Math.max(16, Math.round(segments * 0.6)),
       materialPreset,
+      semanticRole: 'shoulder_joint',
     },
     {
       kind: 'cylinder',
       name: `${name} upper arm`,
-      attachTo: 1,
+      attachTo: 2,
       anchor: 'front',
       childAnchor: 'back',
       position: [0, 0, 0],
@@ -93,11 +113,12 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: upperArmLength,
       radialSegments: segments,
       materialPreset,
+      semanticRole: 'upper_arm',
     },
     {
       kind: 'sphere',
       name: `${name} elbow joint`,
-      attachTo: 2,
+      attachTo: 3,
       anchor: 'front',
       childAnchor: 'center',
       position: [0, 0, 0],
@@ -105,11 +126,12 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       widthSegments: segments,
       heightSegments: Math.max(16, Math.round(segments * 0.6)),
       materialPreset,
+      semanticRole: 'elbow_joint',
     },
     {
       kind: 'cylinder',
       name: `${name} forearm`,
-      attachTo: 3,
+      attachTo: 4,
       anchor: 'front',
       childAnchor: 'back',
       position: [0, 0, 0],
@@ -119,11 +141,12 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: forearmLength,
       radialSegments: segments,
       materialPreset,
+      semanticRole: 'forearm',
     },
     {
       kind: 'sphere',
       name: `${name} wrist joint`,
-      attachTo: 4,
+      attachTo: 5,
       anchor: 'front',
       childAnchor: 'center',
       position: [0, 0, 0],
@@ -131,11 +154,12 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       widthSegments: segments,
       heightSegments: Math.max(12, Math.round(segments * 0.5)),
       materialPreset,
+      semanticRole: 'wrist_joint',
     },
     {
       kind: 'cylinder',
       name: `${name} wrist flange`,
-      attachTo: 5,
+      attachTo: 6,
       anchor: 'front',
       childAnchor: 'back',
       position: [0, 0, 0],
@@ -145,11 +169,12 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       height: wristLength,
       radialSegments: segments,
       materialPreset,
+      semanticRole: 'tool_flange',
     },
     {
       kind: 'box',
-      name: `${name} simple gripper`,
-      attachTo: 6,
+      name: `${name} gripper palm`,
+      attachTo: 7,
       anchor: 'front',
       childAnchor: 'back',
       position: [0, 0, 0],
@@ -157,6 +182,40 @@ export function composeRobotArmPrimitives(input: RobotArmComposeInput = {}): Pri
       width: toolLength,
       height: armRadius * 1.5,
       materialPreset,
+      semanticRole: 'end_effector',
     },
   ]
+
+  if (input.endEffector !== 'tool-flange' && input.endEffector !== 'suction') {
+    shapes.push(
+      {
+        kind: 'box',
+        name: `${name} left gripper finger`,
+        attachTo: 8,
+        anchor: 'front',
+        childAnchor: 'back',
+        position: [armRadius * 0.72, 0, 0],
+        length: armRadius * 0.45,
+        width: toolLength * 0.9,
+        height: armRadius * 1.15,
+        materialPreset,
+        semanticRole: 'gripper_finger',
+      },
+      {
+        kind: 'box',
+        name: `${name} right gripper finger`,
+        attachTo: 8,
+        anchor: 'front',
+        childAnchor: 'back',
+        position: [-armRadius * 0.72, 0, 0],
+        length: armRadius * 0.45,
+        width: toolLength * 0.9,
+        height: armRadius * 1.15,
+        materialPreset,
+        semanticRole: 'gripper_finger',
+      },
+    )
+  }
+
+  return shapes
 }

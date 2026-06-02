@@ -1,4 +1,4 @@
-export type ImageTo3DProvider = 'fal' | 'hunyuan3d'
+export type ImageTo3DProvider = 'fal' | 'hunyuan3d' | 'tripo'
 
 export type ProviderFile = {
   url: string

@@ -1,4 +1,10 @@
-import type { PrimitiveMaterialInput, ResolvedPrimitiveTransform, Vec3 } from '@pascal-app/core'
+import type {
+  PrimitiveGeometryBrief,
+  PrimitiveMaterialInput,
+  PrimitiveRevisionOperation,
+  ResolvedPrimitiveTransform,
+  Vec3,
+} from '@pascal-app/core'
 
 export interface GeneratedGeometryShapeSpec {
   kind: string
@@ -35,6 +41,7 @@ export interface GeneratedGeometryShapeSpec {
   slopeAxis?: string
   slopeDirection?: string
   profile?: [number, number][]
+  holes?: [number, number][][]
   path?: Vec3[]
   segments?: number
   arc?: number
@@ -67,12 +74,25 @@ export type GeneratedGeometryArtifact = {
   assemblyPosition: Vec3
   createdNames: string[]
   shapeDetails: string
+  geometryBrief?: PrimitiveGeometryBrief
+  semanticSummary?: string
+  visualQualitySummary?: string
+  editHistory?: GeneratedGeometryEdit[]
   placedNodeIds?: string[]
   placedAt?: string
   savedAt?: string
   supersededBy?: string
   replaceNodeIds?: string[]
   replacedAt?: string
+}
+
+export type GeneratedGeometryEdit = {
+  at: string
+  feedback?: string
+  intent?: string
+  summary?: string
+  tool: string
+  operations?: PrimitiveRevisionOperation[]
 }
 
 export function createGeneratedGeometryId() {
@@ -118,7 +138,10 @@ export function formatGeneratedShapeDetails(
         )
       }
       if (s.kind === 'lathe') parts.push(`profile=${s.profile?.length ?? 0}pts, seg=${s.segments}`)
-      if (s.kind === 'extrude') parts.push(`profile=${s.profile?.length ?? 0}pts, depth=${s.depth}`)
+      if (s.kind === 'extrude')
+        parts.push(
+          `profile=${s.profile?.length ?? 0}pts, holes=${s.holes?.length ?? 0}, depth=${s.depth}`,
+        )
       if (s.kind === 'sweep') parts.push(`path=${s.path?.length ?? 0}pts, r=${s.radius}`)
       if (s.material?.properties?.color) parts.push(`color=${s.material.properties.color}`)
       else if (s.material?.preset) parts.push(`material=${s.material.preset}`)

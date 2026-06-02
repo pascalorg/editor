@@ -7,6 +7,8 @@ import { POST, replaceAssetDir } from './route'
 const originalFalKey = process.env.FAL_KEY
 const originalMaxImageMb = process.env.IMAGE_TO_3D_MAX_IMAGE_MB
 const originalProvider = process.env.IMAGE_TO_3D_PROVIDER
+const originalTripo3DKey = process.env.TRIPO3D_API_KEY
+const originalApiKey = process.env.APIKEY
 const originalTencentSecretId = process.env.TENCENTCLOUD_SECRET_ID
 const originalTencentSecretKey = process.env.TENCENTCLOUD_SECRET_KEY
 
@@ -14,6 +16,8 @@ afterEach(() => {
   process.env.FAL_KEY = originalFalKey
   process.env.IMAGE_TO_3D_MAX_IMAGE_MB = originalMaxImageMb
   process.env.IMAGE_TO_3D_PROVIDER = originalProvider
+  process.env.TRIPO3D_API_KEY = originalTripo3DKey
+  process.env.APIKEY = originalApiKey
   process.env.TENCENTCLOUD_SECRET_ID = originalTencentSecretId
   process.env.TENCENTCLOUD_SECRET_KEY = originalTencentSecretKey
 })
@@ -53,6 +57,32 @@ describe('POST /api/image-to-3d/generate', () => {
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({
       error: 'TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY are not configured on the server',
+    })
+  })
+
+  test('rejects missing Tripo API key for Tripo requests', async () => {
+    delete process.env.TRIPO3D_API_KEY
+    delete process.env.APIKEY
+    const form = new FormData()
+    form.set('provider', 'tripo')
+    form.set('image', new File(['png'], 'item.png', { type: 'image/png' }))
+    const res = await POST(requestWithForm(form))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({
+      error: 'TRIPO3D_API_KEY is not configured on the server',
+    })
+  })
+
+  test('rejects Tripo client id before calling the provider', async () => {
+    process.env.TRIPO3D_API_KEY = 'tcli_not_a_secret'
+    const form = new FormData()
+    form.set('provider', 'tripo')
+    form.set('image', new File(['png'], 'item.png', { type: 'image/png' }))
+    const res = await POST(requestWithForm(form))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({
+      error:
+        'TRIPO3D_API_KEY must be the Tripo secret key from API Keys, usually starting with tsk_. Do not use the tcli_ client id.',
     })
   })
 

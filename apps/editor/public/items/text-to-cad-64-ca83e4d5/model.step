@@ -1,0 +1,9 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Pascal text-to-CAD parametric preview'),'2;1');
+FILE_NAME('生成一个齿轮-64齿-中间挖空.step','2026-06-02T11:33:20.623Z',('pascal'),('pascal'),'cad-worker','pascal','');
+ENDSEC;
+DATA;
+/* Parametric preview intent: {"family":"gear","color":"#C0C0C0","dimensions":{"length":0.3,"width":0.2,"baseThickness":0.03,"wallHeight":0.1,"wallThickness":0.03},"mountingHoles":{"count":0,"diameter":0.02,"marginX":0.05,"marginZ":0.05}} */
+ENDSEC;
+END-ISO-10303-21;

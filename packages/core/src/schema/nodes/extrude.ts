@@ -13,13 +13,22 @@ export const ExtrudeNode = BaseNode.extend({
   profile: z
     .array(z.tuple([z.number(), z.number()]))
     .min(3)
-    .max(64)
+    .max(256)
     .default([
       [-0.5, -0.25],
       [0.5, -0.25],
       [0.5, 0.25],
       [-0.5, 0.25],
     ]),
+  holes: z
+    .array(
+      z
+        .array(z.tuple([z.number(), z.number()]))
+        .min(3)
+        .max(128),
+    )
+    .max(16)
+    .default([]),
   depth: z.number().min(0.005).max(10).default(0.1),
   bevelSize: z.number().min(0).max(1).default(0.01),
   bevelThickness: z.number().min(0).max(1).default(0.01),

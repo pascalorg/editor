@@ -53,6 +53,15 @@ export const ExtrudeRenderer = ({ node }: { node: ExtrudeNode }) => {
     shape.moveTo(first[0], first[1])
     for (const [x, y] of profile.slice(1)) shape.lineTo(x, y)
     shape.closePath()
+    for (const hole of node.holes ?? []) {
+      const holeFirst = hole[0]
+      if (!holeFirst) continue
+      const path = new THREE.Path()
+      path.moveTo(holeFirst[0], holeFirst[1])
+      for (const [x, y] of hole.slice(1)) path.lineTo(x, y)
+      path.closePath()
+      shape.holes.push(path)
+    }
 
     const bevelSize = node.bevelSize ?? 0.01
     const bevelThickness = node.bevelThickness ?? bevelSize
@@ -68,13 +77,13 @@ export const ExtrudeRenderer = ({ node }: { node: ExtrudeNode }) => {
     return geo
   }, [
     node.profile,
+    node.holes,
     node.depth,
     node.bevelSize,
     node.bevelThickness,
     node.bevelSegments,
     node.curveSegments,
   ])
-
 
   return (
     <group

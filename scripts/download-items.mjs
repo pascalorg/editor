@@ -4,7 +4,7 @@
  * Usage: node scripts/download-items.mjs
  *
  * Reads the original catalog-items.tsx from git, filters to industrial +
- * nature items, downloads model.glb / thumbnail / floorPlanUrl for each,
+ * outdoor items, downloads model.glb / thumbnail / floorPlanUrl for each,
  * and saves them under apps/editor/public/items/<id>/.
  */
 
@@ -18,7 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 const PUBLIC_ITEMS = path.join(REPO_ROOT, 'apps', 'editor', 'public', 'items')
 
-// ── Items to KEEP (industrial + nature) ─────────────────────────────
+// ── Items to KEEP (industrial + outdoor) ────────────────────────────
 const KEEP_IDS = new Set([
   // Safety / Fire
   'sprinkler', 'smoke-detector', 'fire-detector', 'fire-alarm', 'fire-extinguisher',
@@ -33,7 +33,7 @@ const KEEP_IDS = new Set([
   // Electronics
   'computer', 'television', 'flat-screen-tv', 'stereo-speaker',
   // Equipment
-  'sewing-machine', 'shelf', 'trash-bin', 'coat-rack',
+  'sewing-machine', 'shelf', 'trash-bin',
   // Structural
   'column', 'pillar', 'stairs',
   // Infrastructure
@@ -43,10 +43,10 @@ const KEEP_IDS = new Set([
   'window-double', 'window-large', 'window-rectangle', 'window-round',
   'window-simple', 'window-small', 'window-small-2', 'window-square',
   'window1-black-open-1731',
-  // Nature
+  // Outdoor / Plants
   'cactus', 'small-indoor-plant', 'indoor-plant', 'bush', 'hedge',
   'palm', 'fir-tree', 'tree', 'ball',
-  // Vehicles
+  // Outdoor / Vehicles
   'tesla', 'scooter',
 ])
 
@@ -120,7 +120,7 @@ async function main() {
   console.log(`Found ${allItems.length} items in original catalog`)
 
   const toDownload = allItems.filter((item) => KEEP_IDS.has(item.id))
-  console.log(`Filtered to ${toDownload.length} items (industrial + nature)\n`)
+  console.log(`Filtered to ${toDownload.length} items (industrial + outdoor)\n`)
 
   let downloaded = 0
   let skipped = 0

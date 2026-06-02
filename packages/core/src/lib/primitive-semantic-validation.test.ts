@@ -3,6 +3,7 @@ import { composePartPrimitives } from './part-compose'
 import type { PrimitiveShapeInput } from './primitive-compose'
 import { resolvePrimitiveWorldTransforms } from './primitive-compose'
 import { validatePrimitiveSemantics } from './primitive-semantic-validation'
+import { composeRobotArmPrimitives } from './robot-arm-compose'
 
 function validate(shapes: PrimitiveShapeInput[], prompt: string, category: string) {
   return validatePrimitiveSemantics(
@@ -156,5 +157,34 @@ describe('validatePrimitiveSemantics', () => {
     )
 
     expect(result.ok).toBe(true)
+  })
+
+  test('accepts compose_robot_arm output with readable semantic roles', () => {
+    const shapes = composeRobotArmPrimitives({
+      name: '3-axis robot arm',
+      axisCount: 3,
+      baseShape: 'round',
+      pose: 'work-ready',
+      endEffector: 'gripper',
+    })
+
+    const result = validatePrimitiveSemantics(
+      shapes,
+      resolvePrimitiveWorldTransforms(shapes, { positionMode: 'world-center' }),
+      {
+        prompt: 'generate a 3-axis robot arm with round base',
+        geometryBrief: { category: 'robot_arm' },
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.family).toBe('robot_arm')
+    expect(result.facts.roles.robot_base).toBe(1)
+    expect(result.facts.roles.base_joint).toBe(1)
+    expect(result.facts.roles.shoulder_joint).toBe(1)
+    expect(result.facts.roles.elbow_joint).toBe(1)
+    expect(result.facts.roles.upper_arm).toBe(1)
+    expect(result.facts.roles.forearm).toBe(1)
+    expect(result.facts.roles.end_effector).toBe(1)
   })
 })

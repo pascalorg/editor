@@ -311,7 +311,10 @@ export const ViewerOverlay = ({
       {/* Controls Panel - Bottom Center */}
       <div className="dark absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-foreground">
         <TooltipProvider delayDuration={0}>
-          <div className="pointer-events-auto flex h-14 flex-row items-center justify-center gap-1.5 rounded-2xl border border-border/40 bg-background/95 p-1.5 shadow-lg backdrop-blur-xl transition-colors duration-200 ease-out">
+          <div
+            className="pointer-events-auto flex h-14 flex-row items-center justify-center gap-1.5 rounded-2xl border border-white/10 p-1.5 shadow-lg transition-colors duration-200 ease-out"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+          >
             {/* Theme Toggle */}
             <button
               aria-label={t('actionMenu.toggleTheme', 'Toggle theme')}

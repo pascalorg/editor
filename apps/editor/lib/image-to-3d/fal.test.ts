@@ -1,38 +1,46 @@
 import { describe, expect, test } from 'bun:test'
-import { normalizeFalSam3DResponse } from './fal'
+import { normalizeFalImageTo3DResponse, normalizeFalSam3DResponse } from './fal'
 
-describe('normalizeFalSam3DResponse', () => {
-  test('reads the combined model_glb output', () => {
+describe('normalizeFalImageTo3DResponse', () => {
+  test('reads Tripo model_mesh and rendered_image outputs', () => {
     expect(
-      normalizeFalSam3DResponse({
-        model_glb: { url: 'https://example.com/model.glb' },
-        metadata: [{ object_index: 0, scale: [[1, 2, 3]] }],
+      normalizeFalImageTo3DResponse({
+        task_id: 'task-1',
+        model_mesh: {
+          url: 'https://example.com/model.glb',
+          file_size: 1234,
+          content_type: 'application/octet-stream',
+        },
+        rendered_image: { url: 'https://example.com/render.webp' },
       }),
     ).toEqual({
       modelGlbUrl: 'https://example.com/model.glb',
-      thumbnailUrl: undefined,
-      metadata: [{ object_index: 0, scale: [[1, 2, 3]] }],
+      thumbnailUrl: 'https://example.com/render.webp',
+      metadata: {
+        taskId: 'task-1',
+        modelFileSize: 1234,
+      },
     })
   })
 
-  test('falls back to individual GLB outputs', () => {
+  test('prefers a GLB file from Tripo outputs', () => {
     expect(
-      normalizeFalSam3DResponse({
+      normalizeFalImageTo3DResponse({
         data: {
-          individual_glbs: [{ url: 'https://example.com/part.glb' }],
-          thumbnail: { url: 'https://example.com/thumb.png' },
+          pbr_model: { url: 'https://example.com/model.fbx' },
+          model_mesh: { url: 'https://example.com/model.glb' },
         },
       }).modelGlbUrl,
-    ).toBe('https://example.com/part.glb')
+    ).toBe('https://example.com/model.glb')
   })
 
-  test('accepts string model URLs', () => {
+  test('keeps compatibility with legacy fal model_glb responses', () => {
     expect(
       normalizeFalSam3DResponse({ model_glb: 'https://example.com/model.glb' }).modelGlbUrl,
     ).toBe('https://example.com/model.glb')
   })
 
   test('throws when no model URL is present', () => {
-    expect(() => normalizeFalSam3DResponse({ metadata: [] })).toThrow('GLB model URL')
+    expect(() => normalizeFalImageTo3DResponse({ metadata: [] })).toThrow('GLB model URL')
   })
 })

@@ -21,8 +21,8 @@ afterEach(async () => {
 describe('generated asset manifest', () => {
   test('sanitizes unsafe asset id segments', () => {
     expect(sanitizeSegment('扶手 chair / v1', 'asset')).toBe('chair-v1')
-    expect(createGeneratedAssetId('image to 3d', '扶手椅')).toMatch(
-      /^image-to-3d-asset-[a-f0-9-]+$/,
+    expect(createGeneratedAssetId('imported glb', '扶手椅')).toMatch(
+      /^imported-glb-asset-[a-f0-9-]+$/,
     )
   })
 

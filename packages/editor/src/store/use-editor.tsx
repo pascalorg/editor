@@ -88,34 +88,34 @@ export type SiteTool = 'property-line'
 // Catalog categories for furnish mode items
 export type CatalogCategory =
   | 'safety'
-  | 'electrical'
   | 'lighting'
   | 'electronics'
   | 'equipment'
   | 'structural'
-  | 'infrastructure'
   | 'opening'
-  | 'nature'
   | 'outdoor'
-  | 'vehicle'
+  | 'mine'
 
 const FURNISH_CATALOG_CATEGORIES: CatalogCategory[] = [
   'safety',
-  'electrical',
   'lighting',
   'electronics',
   'equipment',
   'structural',
-  'infrastructure',
   'opening',
-  'nature',
   'outdoor',
-  'vehicle',
+  'mine',
 ]
 
 function normalizeFurnishCatalogCategory(category: unknown): CatalogCategory {
-  if (category === 'hvac') {
-    return 'electrical'
+  if (category === 'electrical' || category === 'hvac') {
+    return 'electronics'
+  }
+  if (category === 'infrastructure' || category === 'nature') {
+    return 'outdoor'
+  }
+  if (category === 'vehicle') {
+    return 'outdoor'
   }
 
   if (

@@ -3,7 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import { Icon } from '@iconify/react'
 import NextImage from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '../../../../../lib/utils'
 import { t } from '../../../../../i18n'
 import {
@@ -19,27 +19,17 @@ import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
-
-const GENERATED_GEOMETRY_CATEGORY_MAP: Partial<Record<string, CatalogCategory>> = {
-  vehicle: 'vehicle',
-  'outdoor-ac': 'electrical',
-  keyboard: 'electronics',
-  monitor: 'electronics',
-  table: 'equipment',
-  shelf: 'equipment',
-  cabinet: 'equipment',
-  chair: 'equipment',
-  sofa: 'equipment',
-  generic: 'equipment',
-}
+const IMPORTED_ASSETS_UPDATED_EVENT = 'imported-assets:updated'
 
 function itemMatchesCatalogCategory(item: AssetInput, category: CatalogCategory) {
-  return item.category === category || (item.category === 'hvac' && category === 'electrical')
-}
-
-function getGeneratedGeometryCatalogCategory(artifact: GeneratedGeometryArtifact): CatalogCategory {
-  const sourceCategory = typeof artifact.sourceArgs.category === 'string' ? artifact.sourceArgs.category : ''
-  return GENERATED_GEOMETRY_CATEGORY_MAP[sourceCategory] ?? 'equipment'
+  if (category === 'mine') return (item.source ?? 'library') === 'mine'
+  return (
+    item.category === category ||
+    ((item.category === 'electrical' || item.category === 'hvac') && category === 'electronics') ||
+    (item.category === 'infrastructure' && category === 'outdoor') ||
+    (item.category === 'nature' && category === 'outdoor') ||
+    (item.category === 'vehicle' && category === 'outdoor')
+  )
 }
 
 function matchesGeneratedGeometrySearch(artifact: GeneratedGeometryArtifact, query: string) {
@@ -78,19 +68,17 @@ export function ItemsPanel({
   const setMode = useEditor((s) => s.setMode)
   const setTool = useEditor((s) => s.setTool)
   const setCatalogCategory = useEditor((s) => s.setCatalogCategory)
+  const setSelectedItem = useEditor((s) => s.setSelectedItem)
 
   const [activePlacementTag, setActivePlacementTag] = useState<string | null>(null)
   const [activeFunctionalTag, setActiveFunctionalTag] = useState<string | null>(null)
-  // Library / Community / Mine. Default to Library so first-time users see
-  // the curated catalog rather than every uploaded item; clicking the chip
-  // again clears the filter (`null` = show everything).
-  const [activeSource, setActiveSource] = useState<AssetInput['source'] | null>('library')
   const [search, setSearch] = useState('')
   const [generatedItems, setGeneratedItems] = useState<AssetInput[]>([])
   const [generatedGeometryArtifacts, setGeneratedGeometryArtifacts] = useState<GeneratedGeometryArtifact[]>([])
+  const [glbImporting, setGlbImporting] = useState(false)
+  const [glbImportError, setGlbImportError] = useState<string | null>(null)
+  const glbInputRef = useRef<HTMLInputElement>(null)
   const isServerSearch = onSearchChange !== undefined
-  // True when server search is active but results haven't come back yet
-  const isSearchPending = isServerSearch && search.length > 0 && searchResults === null
 
   // Auto-select the first category when the panel mounts without one
   useEffect(() => {
@@ -101,6 +89,54 @@ export function ItemsPanel({
 
   const activeCategory =
     furnishTools.find((c) => c.catalogCategory === catalogCategory) ?? furnishTools[0]!
+  const isMineCategory = activeCategory.catalogCategory === 'mine'
+  // True when server search is active but results haven't come back yet
+  const isSearchPending =
+    !isMineCategory && isServerSearch && search.length > 0 && searchResults === null
+
+  async function handleGlbSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.glb')) {
+      setGlbImportError('请选择 .glb 文件')
+      return
+    }
+
+    setGlbImporting(true)
+    setGlbImportError(null)
+    try {
+      const form = new FormData()
+      form.set('model', file)
+      form.set('name', file.name.replace(/\.glb$/i, ''))
+      form.set('category', isMineCategory ? 'equipment' : activeCategory.catalogCategory)
+      const res = await fetch('/api/imported-glb/assets', {
+        method: 'POST',
+        body: form,
+      })
+      const data = (await res.json().catch(() => ({}))) as { asset?: AssetInput; error?: string }
+      if (!res.ok || !data.asset) {
+        throw new Error(data.error || `导入失败 (${res.status})`)
+      }
+
+      setGeneratedItems((prev) => [
+        data.asset!,
+        ...prev.filter((item) => item.id !== data.asset!.id),
+      ])
+      setSelectedItem(data.asset)
+      setCatalogCategory('mine')
+      setActivePlacementTag(null)
+      setActiveFunctionalTag(null)
+      setSearch('')
+      setTool('item')
+      if (mode !== 'build') setMode('build')
+      window.dispatchEvent(new Event(IMPORTED_ASSETS_UPDATED_EVENT))
+    } catch (error) {
+      setGlbImportError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setGlbImporting(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -108,7 +144,7 @@ export function ItemsPanel({
       try {
         const responses = await Promise.allSettled([
           fetch('/api/articraft/assets', { cache: 'no-store' }),
-          fetch('/api/image-to-3d/assets', { cache: 'no-store' }),
+          fetch('/api/imported-glb/assets', { cache: 'no-store' }),
         ])
         const assets: AssetInput[] = []
         for (const response of responses) {
@@ -125,10 +161,12 @@ export function ItemsPanel({
     void load()
     window.addEventListener('articraft:assets-updated', load)
     window.addEventListener('generated-assets:updated', load)
+    window.addEventListener(IMPORTED_ASSETS_UPDATED_EVENT, load)
     return () => {
       cancelled = true
       window.removeEventListener('articraft:assets-updated', load)
       window.removeEventListener('generated-assets:updated', load)
+      window.removeEventListener(IMPORTED_ASSETS_UPDATED_EVENT, load)
     }
   }, [])
 
@@ -160,48 +198,17 @@ export function ItemsPanel({
     if (mode !== 'build') setMode('build')
   }
 
-  // Compute tags for the current category (for filter chips)
-  const baseItems = [...(items ?? CATALOG_ITEMS), ...generatedItems]
-  // Apply the Library/Community/Mine filter before any category/tag work.
-  // Items that don't carry a source field (e.g. seeded built-in catalog
-  // entries from `CATALOG_ITEMS`) fall under "library".
-  //
-  // Community is broader than just other users' uploads: my own *published*
-  // items show up there too so I can preview my catalog the way other users
-  // see it. My drafts only appear under Mine.
-  const matchesSource = (item: AssetInput) => {
-    if (!activeSource) return true
-    const itemSource = item.source ?? 'library'
-    if (activeSource === 'mine') return itemSource === 'mine'
-    if (activeSource === 'library') return itemSource === 'library'
-    if (activeSource === 'community') {
-      if (itemSource === 'community') return true
-      if (itemSource === 'mine') return !item.isDraft
-      return false
-    }
-    return true
-  }
-  const sourceItems = baseItems.filter(matchesSource)
-  const categoryItems = sourceItems.filter((item) =>
+  const catalogItems = items ?? CATALOG_ITEMS
+  const nonMineItems = catalogItems.filter((item) => (item.source ?? 'library') !== 'mine')
+  const displayItems = isMineCategory ? generatedItems : nonMineItems
+  const categoryItems = displayItems.filter((item) =>
     itemMatchesCatalogCategory(item, activeCategory.catalogCategory),
   )
 
-  const aiGeometryArtifacts = activeSource === 'mine' || activeSource === null
-    ? generatedGeometryArtifacts.filter(
-        (artifact) =>
-          getGeneratedGeometryCatalogCategory(artifact) === activeCategory.catalogCategory &&
-          matchesGeneratedGeometrySearch(artifact, search),
-      )
+  const aiGeometryArtifacts = isMineCategory
+    ? generatedGeometryArtifacts.filter((artifact) => matchesGeneratedGeometrySearch(artifact, search))
     : []
 
-  // The three source chips are always shown so users can discover the
-  // filter even before they own any items. Selecting "Mine" with no
-  // matching items falls through to the empty/no-results state.
-  const sourceChips: Array<{ id: AssetInput['source']; label: string }> = [
-    { id: 'library', label: t('sidebar.library', 'Library') },
-    { id: 'community', label: t('sidebar.community', 'Community') },
-    { id: 'mine', label: t('sidebar.mine', 'Mine') },
-  ]
   const allTags = Array.from(new Set(categoryItems.flatMap((item) => item.tags ?? [])))
   const placementTags = allTags.filter((t) => PLACEMENT_TAGS.has(t))
   const functionalTags = allTags.filter((t) => !PLACEMENT_TAGS.has(t))
@@ -259,41 +266,35 @@ export function ItemsPanel({
       {/* Search + filters (non-scrollable) */}
       <div className="flex shrink-0 flex-col gap-2 border-border/70 border-b p-2">
         <div className="flex items-center gap-1.5">
-          {/* Search and source filter take 50/50 of the row. `min-w-0` on
-              both sides lets each half shrink to fit when the panel narrows. */}
           <input
-            className="w-1/2 min-w-0 shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg bg-muted px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none"
             onChange={(e) => {
               setSearch(e.target.value)
-              onSearchChange?.(e.target.value)
+              if (!isMineCategory) onSearchChange?.(e.target.value)
             }}
             placeholder={t('sidebar.search', 'Search...')}
             type="text"
             value={search}
           />
-          {sourceChips.length > 0 && (
-            <div className="flex w-1/2 min-w-0 shrink-0 rounded-lg bg-muted p-0.5">
-              {sourceChips.map((chip) => {
-                const isActive = activeSource === chip.id
-                return (
-                  <button
-                    className={cn(
-                      'min-w-0 flex-1 truncate rounded-md px-1 py-1 text-center font-medium text-[10px] transition-colors',
-                      isActive
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                    key={chip.id}
-                    onClick={() => setActiveSource(isActive ? null : chip.id)}
-                    type="button"
-                  >
-                    {chip.label}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          <input
+            accept=".glb,model/gltf-binary"
+            className="hidden"
+            disabled={glbImporting}
+            onChange={handleGlbSelected}
+            ref={glbInputRef}
+            type="file"
+          />
+          <button
+            className="shrink-0 rounded-lg border border-border/70 bg-background px-2.5 py-1.5 font-medium text-[10px] text-foreground transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={glbImporting}
+            onClick={() => glbInputRef.current?.click()}
+            type="button"
+          >
+            {glbImporting ? '导入中...' : '导入 GLB'}
+          </button>
         </div>
+
+        {glbImportError ? <div className="text-[10px] text-red-400">{glbImportError}</div> : null}
 
         {hasFilters && !search && !isServerSearch && (
           <div className="flex flex-col gap-1.5">
@@ -398,7 +399,7 @@ export function ItemsPanel({
           <div className="flex h-full items-center justify-center">
             <div className="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground" />
           </div>
-        ) : isServerSearch && search && searchResults?.length === 0 ? (
+        ) : !isMineCategory && isServerSearch && search && searchResults?.length === 0 ? (
           (emptyState ?? (
             <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
               {t('sidebar.noResultsFor', {
@@ -431,21 +432,19 @@ export function ItemsPanel({
               </div>
             ) : null}
             <ItemCatalog
-              activeFunctionalTag={isServerSearch ? null : activeFunctionalTag}
-              activePlacementTag={isServerSearch ? null : activePlacementTag}
+              activeFunctionalTag={!isMineCategory && isServerSearch ? null : activeFunctionalTag}
+              activePlacementTag={!isMineCategory && isServerSearch ? null : activePlacementTag}
               category={activeCategory.catalogCategory}
               emptyState={aiGeometryArtifacts.length > 0 ? undefined : emptyState}
-              items={sourceItems}
+              items={displayItems}
               key={activeCategory.catalogCategory}
-              leadingTile={leadingTile}
+              leadingTile={isMineCategory ? undefined : leadingTile}
               overrideItems={
-                isServerSearch && search
-                  ? activeSource && searchResults
-                    ? searchResults.filter(matchesSource)
-                    : (searchResults ?? undefined)
+                !isMineCategory && isServerSearch && search
+                  ? searchResults?.filter((item) => (item.source ?? 'library') !== 'mine')
                   : undefined
               }
-              search={isServerSearch ? '' : search}
+              search={!isMineCategory && isServerSearch ? '' : search}
             />
           </div>
         )}

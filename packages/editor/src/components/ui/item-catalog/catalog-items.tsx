@@ -117,7 +117,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   // ═══════════════════════════════════════════════════════════════════
   {
     id: 'electric-panel',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Electric Panel',
     tags: ['wall', 'electrical', 'utility'],
     ...supabase('electric-panel'),
@@ -129,7 +129,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'ev-wall-charger',
-    category: 'electrical',
+    category: 'electronics',
     name: 'EV Wall Charger',
     tags: ['wall', 'electric', 'vehicle'],
     ...supabase('ev-wall-charger'),
@@ -141,7 +141,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'thermostat',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Thermostat',
     tags: ['wall', 'climate', 'electrical'],
     ...supabase('thermostat'),
@@ -153,7 +153,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'alarm-keypad',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Alarm Keypad',
     tags: ['wall', 'security', 'electronic'],
     ...supabase('alarm-keypad'),
@@ -165,7 +165,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'factory-electric-box',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Factory Electric Box',
     tags: ['floor', 'electrical', 'industrial', 'factory'],
     ...iconOnly('factory-electric-box', '/icons/appliance.png'),
@@ -180,7 +180,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   // ═══════════════════════════════════════════════════════════════════
   {
     id: 'ac-block',
-    category: 'electrical',
+    category: 'electronics',
     name: 'AC Block',
     tags: ['floor', 'electrical', 'cooling'],
     ...supabase('ac-block'),
@@ -191,7 +191,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'air-conditioning',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Air Conditioning',
     tags: ['wall', 'electrical', 'cooling'],
     ...supabase('air-conditioning'),
@@ -203,7 +203,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'air-conditioner',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Air Conditioner',
     tags: ['wall', 'electrical', 'cooling'],
     ...localOnly('air-conditioner'),
@@ -215,7 +215,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'air-conditioner-block',
-    category: 'electrical',
+    category: 'electronics',
     name: 'AC Condenser',
     tags: ['floor', 'electrical', 'outdoor'],
     ...localOnly('air-conditioner-block'),
@@ -226,7 +226,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'ceiling-fan',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Ceiling Fan',
     tags: ['ceiling', 'electrical', 'ventilation'],
     ...supabase('ceiling-fan'),
@@ -242,7 +242,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'freezer',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Freezer',
     tags: ['floor', 'cold-storage', 'appliance'],
     ...localOnly('freezer'),
@@ -503,17 +503,6 @@ export const CATALOG_ITEMS: AssetInput[] = [
     scale: [1, 1, 1],
   },
   {
-    id: 'coat-rack',
-    category: 'equipment',
-    name: 'Coat Rack',
-    tags: ['floor', 'storage', 'utility'],
-    ...supabase('coat-rack'),
-    dimensions: [0.33, 1.76, 0.33],
-    offset: [0, 0, 0],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-  },
-  {
     id: 'factory-straight-pipe',
     category: 'equipment',
     name: 'Factory Straight Pipe',
@@ -723,14 +712,6 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [0.6, 0.9, 0.6],
   },
   {
-    id: 'toy',
-    category: 'equipment',
-    name: 'Toy',
-    tags: ['floor', 'recreation'],
-    ...localOnly('toy'),
-    dimensions: [0.35, 0.35, 0.35],
-  },
-  {
     id: 'washing-machine',
     category: 'equipment',
     name: 'Washing Machine',
@@ -795,52 +776,12 @@ export const CATALOG_ITEMS: AssetInput[] = [
     dimensions: [1.2, 0.85, 0.85],
   },
   {
-    id: 'cutting-board',
-    category: 'equipment',
-    name: 'Cutting Board',
-    tags: ['countertop', 'kitchen'],
-    ...localOnly('cutting-board'),
-    dimensions: [0.45, 0.04, 0.3],
-  },
-  {
-    id: 'frying-pan',
-    category: 'equipment',
-    name: 'Frying Pan',
-    tags: ['countertop', 'kitchen'],
-    ...localOnly('frying-pan'),
-    dimensions: [0.25, 0.08, 0.45],
-  },
-  {
     id: 'herman-miller-aeron-mo8x36k9',
     category: 'equipment',
     name: 'Herman Miller Aeron',
     tags: ['floor', 'office', 'furniture', 'seating'],
     ...supabase('herman-miller-aeron-mo8x36k9'),
     dimensions: [0.65, 1.16, 0.69],
-  },
-  {
-    id: 'hood',
-    category: 'equipment',
-    name: 'Hood',
-    tags: ['floor', 'kitchen', 'ventilation'],
-    ...localOnly('hood'),
-    dimensions: [0.8, 0.4, 0.5],
-  },
-  {
-    id: 'iron',
-    category: 'equipment',
-    name: 'Iron',
-    tags: ['countertop', 'utility'],
-    ...localOnly('iron'),
-    dimensions: [0.28, 0.15, 0.12],
-  },
-  {
-    id: 'ironing-board',
-    category: 'equipment',
-    name: 'Ironing Board',
-    tags: ['floor', 'utility'],
-    ...localOnly('ironing-board'),
-    dimensions: [1.2, 0.9, 0.35],
   },
   {
     id: 'kettle',
@@ -875,22 +816,6 @@ export const CATALOG_ITEMS: AssetInput[] = [
     ...localOnly('kitchen-shelf'),
     dimensions: [0.8, 0.3, 0.25],
     surface: { height: 0.3 },
-  },
-  {
-    id: 'kitchen-utensils',
-    category: 'equipment',
-    name: 'Kitchen Utensils',
-    tags: ['countertop', 'kitchen'],
-    ...localOnly('kitchen-utensils'),
-    dimensions: [0.35, 0.3, 0.25],
-  },
-  {
-    id: 'laundry-bag',
-    category: 'equipment',
-    name: 'Laundry Bag',
-    tags: ['floor', 'utility'],
-    ...localOnly('laundry-bag'),
-    dimensions: [0.45, 0.7, 0.45],
   },
   {
     id: 'microwave',
@@ -1035,7 +960,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'power-outlet-moa09g0o',
-    category: 'electrical',
+    category: 'electronics',
     name: 'Power Outlet',
     tags: ['wall', 'electrical', 'factory'],
     ...supabase('power-outlet-moa09g0o'),
@@ -1058,15 +983,6 @@ export const CATALOG_ITEMS: AssetInput[] = [
     tags: ['wall', 'bathroom', 'decor'],
     ...localOnly('rectangular-mirror'),
     dimensions: [0.6, 0.9, 0.05],
-    attachTo: 'wall-side',
-  },
-  {
-    id: 'round-mirror',
-    category: 'equipment',
-    name: 'Round Mirror',
-    tags: ['wall', 'bathroom', 'decor'],
-    ...localOnly('round-mirror'),
-    dimensions: [0.6, 0.6, 0.05],
     attachTo: 'wall-side',
   },
   {
@@ -1097,7 +1013,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: '1967-chevrolet-camaro-moa24wsf',
-    category: 'vehicle',
+    category: 'outdoor',
     name: '1967 Chevrolet Camaro',
     tags: ['floor', 'vehicle', 'car'],
     ...supabase('1967-chevrolet-camaro-moa24wsf'),
@@ -1105,7 +1021,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'car-toy',
-    category: 'vehicle',
+    category: 'outdoor',
     name: 'Car Toy',
     tags: ['floor', 'vehicle', 'toy'],
     ...localOnly('car-toy'),
@@ -1121,7 +1037,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'skate',
-    category: 'vehicle',
+    category: 'outdoor',
     name: 'Skate',
     tags: ['floor', 'vehicle', 'recreation'],
     ...localOnly('skate'),
@@ -1175,7 +1091,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   // ═══════════════════════════════════════════════════════════════════
   {
     id: 'parking-spot',
-    category: 'infrastructure',
+    category: 'outdoor',
     name: 'Parking Spot',
     tags: ['floor', 'parking', 'pavement'],
     ...supabase('parking-spot'),
@@ -1187,7 +1103,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'fence',
-    category: 'infrastructure',
+    category: 'outdoor',
     name: 'Fence',
     tags: ['floor', 'fencing', 'boundary'],
     ...localOnly('fence'),
@@ -1198,7 +1114,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'low-fence',
-    category: 'infrastructure',
+    category: 'outdoor',
     name: 'Low Fence',
     tags: ['floor', 'fencing', 'boundary'],
     ...localOnly('low-fence'),
@@ -1209,7 +1125,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'medium-fence',
-    category: 'infrastructure',
+    category: 'outdoor',
     name: 'Medium Fence',
     tags: ['floor', 'fencing', 'boundary'],
     ...localOnly('medium-fence'),
@@ -1220,7 +1136,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'high-fence',
-    category: 'infrastructure',
+    category: 'outdoor',
     name: 'High Fence',
     tags: ['floor', 'fencing', 'security'],
     ...localOnly('high-fence'),
@@ -1398,11 +1314,11 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════════
-  // NATURE / PLANTS
+  // OUTDOOR / PLANTS
   // ═══════════════════════════════════════════════════════════════════
   {
     id: 'cactus',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Cactus',
     tags: ['floor', 'plant', 'cactus', 'green'],
     ...supabase('cactus'),
@@ -1413,7 +1329,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'small-indoor-plant',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Small Plant',
     tags: ['countertop', 'plant', 'vegetation'],
     ...supabase('small-indoor-plant'),
@@ -1424,7 +1340,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'indoor-plant',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Indoor Plant',
     tags: ['floor', 'plant', 'greenery', 'foliage'],
     ...supabase('indoor-plant'),
@@ -1435,7 +1351,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'bush',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Bush',
     tags: ['floor', 'plant', 'shrub', 'landscaping'],
     ...supabase('bush'),
@@ -1446,7 +1362,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'hedge',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Hedge',
     tags: ['floor', 'plant', 'hedge', 'landscaping'],
     ...localOnly('hedge'),
@@ -1457,7 +1373,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'palm',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Palm',
     tags: ['floor', 'tree', 'tropical', 'plant'],
     ...supabase('palm'),
@@ -1468,7 +1384,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'fir-tree',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Fir',
     tags: ['floor', 'tree', 'evergreen', 'conifer'],
     ...supabase('fir-tree'),
@@ -1479,7 +1395,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'tree',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Tree',
     tags: ['floor', 'tree', 'vegetation'],
     ...supabase('tree'),
@@ -1490,7 +1406,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'ball',
-    category: 'nature',
+    category: 'outdoor',
     name: 'Stone Sphere',
     tags: ['floor', 'stone', 'sculpture', 'decor'],
     ...supabase('ball'),
@@ -1549,11 +1465,11 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════════
-  // VEHICLES
+  // OUTDOOR / VEHICLES
   // ═══════════════════════════════════════════════════════════════════
   {
     id: 'tesla',
-    category: 'vehicle',
+    category: 'outdoor',
     name: 'Tesla Model Y',
     tags: ['floor', 'car', 'vehicle', 'electric'],
     ...supabase('tesla'),
@@ -1564,7 +1480,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'scooter',
-    category: 'vehicle',
+    category: 'outdoor',
     name: 'Scooter',
     tags: ['floor', 'scooter', 'transport', 'urban'],
     ...supabase('scooter'),

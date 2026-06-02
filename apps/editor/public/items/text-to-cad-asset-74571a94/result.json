@@ -1,0 +1,12 @@
+{
+  "status": "generated",
+  "name": "生成一个带四个安装孔的电机支架",
+  "sourcePath": "source.py",
+  "stepPath": "model.step",
+  "glbPath": "model.glb",
+  "thumbnailPath": "thumbnail.png",
+  "logPath": "run.log",
+  "warnings": [
+    "CAD worker is running in fixed-output vertical-slice mode."
+  ]
+}

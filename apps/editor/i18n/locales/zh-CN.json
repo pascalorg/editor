@@ -165,15 +165,13 @@
     },
     "furnishCategories": {
       "safety": "安全消防",
-      "electrical": "电气",
       "lighting": "照明",
-      "electronics": "电子设备",
+      "electronics": "常用设备",
       "equipment": "工业设备",
       "structural": "结构",
-      "infrastructure": "基础设施",
       "opening": "门窗",
-      "nature": "自然景观",
-      "vehicle": "车辆"
+      "outdoor": "户外",
+      "mine": "我的"
     }
   },
   "actionMenu": {
@@ -205,7 +203,7 @@
     "siteEditingGroundOnly": "场地编辑（仅地面层）",
     "build": "建造",
     "materialPaint": "材质涂刷",
-    "furnish": "软装",
+    "furnish": "物品",
     "zone": "区域",
     "toggleTheme": "切换主题",
     "untitled": "未命名",

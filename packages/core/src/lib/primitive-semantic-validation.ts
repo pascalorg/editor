@@ -9,7 +9,7 @@ import {
   type PrimitiveShapeFact,
 } from './primitive-facts'
 
-type SemanticFamily = 'vehicle' | 'bicycle' | 'valve' | 'unknown'
+type SemanticFamily = 'vehicle' | 'bicycle' | 'valve' | 'robot_arm' | 'unknown'
 
 export interface PrimitiveSemanticValidationOptions {
   toolName?: string
@@ -65,9 +65,22 @@ function detectFamily(
     .join(' ')
     .toLowerCase()
 
+  if (
+    /tricycle|cargo[_\s-]?trike|cargo[_\s-]?bike|rickshaw|pushcart|handcart|\u4e09\u8f6e\u8f66|\u8d27\u8fd0\u81ea\u884c\u8f66/.test(
+      text,
+    )
+  ) {
+    return 'unknown'
+  }
   if (/bicycle|bike|自行车|單車|单车/.test(text)) return 'bicycle'
-  if (/vehicle|car|sedan|suv|auto|automobile|汽车|小轿车|轿车/.test(text)) return 'vehicle'
+  if (
+    /vehicle|sedan|suv|automobile|(?:^|[\s_-])(?:car|auto)(?:$|[\s_-])|汽车|小轿车|轿车/.test(text)
+  ) {
+    return 'vehicle'
+  }
   if (/valve|gate_valve|gate valve|\u9600\u95e8|\u95f8\u9600/.test(text)) return 'valve'
+  if (/robot[_\s-]?arm|cobot|manipulator|\u673a\u5668\u81c2|\u673a\u68b0\u81c2/.test(text))
+    return 'robot_arm'
   return 'unknown'
 }
 
@@ -166,24 +179,22 @@ function normalizeRequiredRole(role: string): string {
     .replace(/[\s-]+/g, '_')
 
   switch (normalized) {
-    case 'wheel':
-    case 'wheels':
-    case 'wheelset':
-    case 'front_wheel':
-    case 'rear_wheel':
     case 'bicycle_wheel':
     case 'bicycle_wheels':
     case 'bike_wheel':
     case 'bike_wheels':
       return 'bicycle_wheels'
-    case 'frame':
     case 'bicycle_frame':
     case 'bike_frame':
       return 'bicycle_frame'
-    case 'fork':
-    case 'front_fork':
     case 'bicycle_fork':
+    case 'bike_fork':
       return 'bicycle_fork'
+    case 'front_tire':
+      return 'front_wheel'
+    case 'rear_tire':
+    case 'rear_tires':
+      return 'rear_wheels'
     case 'chain':
     case 'bicycle_chain':
     case 'chain_loop':
@@ -259,6 +270,33 @@ function satisfiesRequiredRole(facts: PrimitiveGeometryFacts, role: string): boo
   if ((facts.sourcePartKinds[role] ?? 0) > 0) return true
 
   switch (role) {
+    case 'wheel':
+    case 'wheels':
+    case 'wheelset':
+      return facts.shapes.some((fact) => {
+        const text = `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`
+          .toLowerCase()
+          .trim()
+        return /(wheel|tire|tyre)/.test(text) || fact.kind === 'torus'
+      })
+    case 'front_wheel':
+      return facts.shapes.some((fact) => {
+        const text =
+          `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`.toLowerCase()
+        return /front.*(wheel|tire|tyre)|(wheel|tire|tyre).*front/.test(text)
+      })
+    case 'rear_wheel':
+    case 'rear_wheels':
+      return facts.shapes.some((fact) => {
+        const text =
+          `${fact.semanticRole ?? ''} ${fact.sourcePartKind ?? ''} ${fact.name ?? ''}`.toLowerCase()
+        return /rear.*(wheel|tire|tyre)|(wheel|tire|tyre).*rear/.test(text)
+      })
+    case 'frame':
+      return (facts.roles.bicycle_frame ?? 0) > 0 || (facts.sourcePartKinds.bicycle_frame ?? 0) > 0
+    case 'fork':
+    case 'front_fork':
+      return (facts.roles.bicycle_fork ?? 0) > 0 || (facts.sourcePartKinds.bicycle_fork ?? 0) > 0
     case 'bicycle_wheels':
       return (facts.sourcePartKinds.bicycle_wheels ?? 0) > 0 || (facts.roles.bicycle_tire ?? 0) >= 2
     case 'vehicle_wheels':
@@ -457,6 +495,38 @@ function validateBicycle(facts: PrimitiveGeometryFacts, issues: string[], warnin
   }
 }
 
+function validateRobotArm(facts: PrimitiveGeometryFacts, issues: string[], warnings: string[]) {
+  const requiredRoles = [
+    'robot_base',
+    'base_joint',
+    'shoulder_joint',
+    'upper_arm',
+    'elbow_joint',
+    'forearm',
+    'end_effector',
+  ]
+  for (const role of requiredRoles) {
+    if ((facts.roles[role] ?? 0) === 0) issues.push(`robot arm requires ${role}.`)
+  }
+
+  const base = facts.shapes.find((fact) => hasRole(fact, ['robot_base']))
+  if (base && base.min[1] > 0.04) {
+    warnings.push('robot arm base is floating above the ground plane.')
+  }
+
+  const joints = factsBy(facts, (fact) =>
+    hasRole(fact, ['base_joint', 'shoulder_joint', 'elbow_joint', 'wrist_joint']),
+  )
+  if (joints.length < 3) {
+    issues.push(`robot arm requires at least 3 readable joint housings, got ${joints.length}.`)
+  }
+
+  const links = factsBy(facts, (fact) => hasRole(fact, ['upper_arm', 'forearm']))
+  if (links.length < 2) {
+    issues.push('robot arm requires separate upper_arm and forearm links.')
+  }
+}
+
 export function validatePrimitiveSemantics(
   shapes: readonly PrimitiveShapeInput[],
   transforms: readonly ResolvedPrimitiveTransform[] = [],
@@ -482,6 +552,9 @@ export function validatePrimitiveSemantics(
       break
     case 'bicycle':
       validateBicycle(facts, issues, warnings)
+      break
+    case 'robot_arm':
+      validateRobotArm(facts, issues, warnings)
       break
   }
 

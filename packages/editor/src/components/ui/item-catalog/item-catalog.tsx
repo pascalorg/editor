@@ -13,7 +13,14 @@ import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { CATALOG_ITEMS } from './catalog-items'
 
 function itemMatchesCatalogCategory(item: AssetInput, category: CatalogCategory) {
-  return item.category === category || (item.category === 'hvac' && category === 'electrical')
+  if (category === 'mine') return (item.source ?? 'library') === 'mine'
+  return (
+    item.category === category ||
+    ((item.category === 'electrical' || item.category === 'hvac') && category === 'electronics') ||
+    (item.category === 'infrastructure' && category === 'outdoor') ||
+    (item.category === 'nature' && category === 'outdoor') ||
+    (item.category === 'vehicle' && category === 'outdoor')
+  )
 }
 
 export function ItemCatalog({

@@ -2,6 +2,54 @@ import { describe, expect, test } from 'bun:test'
 import { executeGeometryToolCall, normalizeGeometryToolShapes } from './ai-geometry-tool-executor'
 
 describe('AI geometry tool executor', () => {
+  test('accepts complex extrude profiles with bore and keyway holes', () => {
+    const teeth = 20
+    const profile: [number, number][] = []
+    for (let tooth = 0; tooth < teeth; tooth += 1) {
+      const base = (tooth / teeth) * Math.PI * 2
+      for (const [offset, radius] of [
+        [0, 0.43875],
+        [0.25, 0.495],
+        [0.75, 0.495],
+        [1, 0.43875],
+      ] as const) {
+        const angle = base + (offset / teeth) * Math.PI * 2
+        profile.push([Math.cos(angle) * radius, Math.sin(angle) * radius])
+      }
+    }
+
+    const boreWithKeyway: [number, number][] = []
+    for (let index = 0; index < 40; index += 1) {
+      const angle = (index / 40) * Math.PI * 2
+      boreWithKeyway.push([Math.cos(angle) * 0.125, Math.sin(angle) * 0.125])
+    }
+    boreWithKeyway.push([0.04, 0.125], [0.04, 0.165], [-0.04, 0.165], [-0.04, 0.125])
+
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        shapes: [
+          {
+            kind: 'extrude',
+            name: 'Spur Gear 20T M4.5',
+            semanticRole: 'spur_gear',
+            position: [0, 0.1, 0],
+            rotation: [Math.PI / 2, 0, 0],
+            profile,
+            holes: [boreWithKeyway],
+            depth: 0.2,
+            material: { properties: { color: '#808080', roughness: 0.4, metalness: 0.9 } },
+          },
+        ],
+      },
+      { prompt: '20 tooth spur gear with bore and keyway' },
+    )
+
+    expect(result.content).toContain('Created draft')
+    expect(result.artifact?.shapes[0]?.profile?.length).toBe(80)
+    expect(result.artifact?.shapes[0]?.holes?.[0]?.length).toBe(44)
+  })
+
   test('normalizes legacy primitive fields and material color arrays', () => {
     const result = executeGeometryToolCall(
       'compose_primitive',
@@ -157,6 +205,121 @@ describe('AI geometry tool executor', () => {
     expect(widthWheel).toMatchObject({ height: 0.18 })
   })
 
+  test('accepts custom tricycle required roles without forcing bicycle or car validators', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        name: '三轮车',
+        geometryBrief: {
+          category: 'tricycle',
+          requiredRoles: [
+            'rear_wheels',
+            'front_wheel',
+            'cargo_bed',
+            'frame',
+            'fork',
+            'handlebar',
+            'saddle',
+            'chain_loop',
+          ],
+        },
+        shapes: [
+          {
+            kind: 'torus',
+            name: 'rear left tire',
+            semanticRole: 'rear_wheels',
+            majorRadius: 0.22,
+            tubeRadius: 0.018,
+            axis: 'z',
+            position: [-0.5, 0.32, 0.3],
+          },
+          {
+            kind: 'torus',
+            name: 'rear right tire',
+            semanticRole: 'rear_wheels',
+            majorRadius: 0.22,
+            tubeRadius: 0.018,
+            axis: 'z',
+            position: [-0.5, 0.32, -0.3],
+          },
+          {
+            kind: 'torus',
+            name: 'front tire',
+            semanticRole: 'front_wheel',
+            majorRadius: 0.22,
+            tubeRadius: 0.018,
+            axis: 'z',
+            position: [0.5, 0.32, 0],
+          },
+          {
+            kind: 'box',
+            name: 'cargo bed',
+            semanticRole: 'cargo_bed',
+            length: 0.55,
+            width: 0.54,
+            height: 0.22,
+            position: [-0.42, 0.55, 0],
+          },
+          {
+            kind: 'cylinder',
+            name: 'tubular frame',
+            semanticRole: 'frame',
+            radius: 0.018,
+            height: 0.48,
+            axis: 'x',
+            position: [0.02, 0.66, 0],
+          },
+          {
+            kind: 'cylinder',
+            name: 'front fork',
+            semanticRole: 'fork',
+            radius: 0.016,
+            height: 0.38,
+            axis: 'x',
+            position: [0.43, 0.42, 0],
+          },
+          {
+            kind: 'cylinder',
+            name: 'handlebar',
+            semanticRole: 'handlebar',
+            radius: 0.016,
+            height: 0.34,
+            axis: 'z',
+            position: [0.48, 0.76, 0],
+          },
+          {
+            kind: 'box',
+            name: 'saddle',
+            semanticRole: 'saddle',
+            length: 0.18,
+            width: 0.12,
+            height: 0.03,
+            position: [-0.16, 0.75, 0],
+          },
+          {
+            kind: 'sweep',
+            name: 'chain loop',
+            semanticRole: 'chain_loop',
+            radius: 0.005,
+            closed: true,
+            path: [
+              [-0.24, 0.37, 0.02],
+              [0.1, 0.42, 0.02],
+              [0.14, 0.34, 0.02],
+              [-0.08, 0.3, 0.02],
+            ],
+          },
+        ],
+      },
+      { prompt: '做个三轮车' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Created draft assembly')
+    expect(result.content).not.toContain('bicycle requires')
+    expect(result.content).not.toContain('vehicle requires')
+  })
+
   test('accepts compose_parts vehicle output after semantic validation', () => {
     const result = executeGeometryToolCall(
       'compose_parts',
@@ -182,10 +345,215 @@ describe('AI geometry tool executor', () => {
 
     expect(result.artifact).toBeDefined()
     expect(result.content).toContain('Validation: family=vehicle')
+    expect(result.content).toContain('Visual quality: family=vehicle')
     expect(result.content).toContain('vehicle_tire:4')
     expect(
       result.artifact?.shapes.filter((shape) => shape.semanticRole === 'vehicle_tire'),
     ).toHaveLength(4)
+  })
+
+  test('accepts compose_recipe vehicle output with registry defaults', () => {
+    const result = executeGeometryToolCall(
+      'compose_recipe',
+      {
+        recipeId: 'vehicle.sedan',
+        params: {
+          color: '#cc0000',
+          size: 'small',
+        },
+      },
+      { prompt: 'generate a small red car' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.artifact?.sourceTool).toBe('compose_recipe')
+    expect(result.content).toContain('Validation: family=vehicle')
+    expect(result.content).toContain('Visual quality: family=vehicle')
+    expect(result.content).toContain('vehicle_tire:4')
+    const body = result.artifact?.shapes.find((shape) => shape.semanticRole === 'vehicle_body')
+    expect(body?.length).toBeCloseTo(3.52)
+    expect(body?.material?.properties?.color).toBe('#cc0000')
+  })
+
+  test('revises a generated vehicle artifact with local geometry operations', () => {
+    const initial = executeGeometryToolCall(
+      'compose_recipe',
+      {
+        recipeId: 'vehicle.sedan',
+        params: {
+          color: '#cc0000',
+          size: 'small',
+        },
+      },
+      { prompt: 'generate a small red car' },
+    )
+
+    const revised = executeGeometryToolCall(
+      'revise_geometry',
+      {
+        targetArtifactId: initial.artifact?.id,
+        feedback: '车顶不像，窗户和车顶分开了',
+        intent:
+          'replace the cabin with an integrated glasshouse and inherit body color for pillars',
+        userVisiblePlan: '保留车身和车轮，只把座舱改成一体玻璃舱并加同色结构柱。',
+        operations: [
+          {
+            op: 'replace',
+            selector: { semanticRole: 'vehicle_cabin' },
+            shapes: [
+              {
+                kind: 'trapezoid-prism',
+                name: 'integrated vehicle glasshouse',
+                semanticRole: 'vehicle_cabin',
+                sourcePartKind: 'vehicle_windows',
+                position: [-0.18, 0.96, 0],
+                length: 1.5,
+                width: 1.02,
+                height: 0.34,
+                topLengthScale: 0.78,
+                topWidthScale: 0.78,
+                material: {
+                  properties: {
+                    color: '#1e3a8a',
+                    opacity: 0.76,
+                    transparent: true,
+                  },
+                },
+              },
+              {
+                kind: 'box',
+                name: 'vehicle A pillar left',
+                semanticRole: 'vehicle_pillar',
+                sourcePartKind: 'vehicle_body',
+                position: [0.42, 0.98, -0.5],
+                length: 0.045,
+                width: 0.045,
+                height: 0.34,
+              },
+              {
+                kind: 'box',
+                name: 'vehicle roof frame',
+                semanticRole: 'vehicle_roof',
+                sourcePartKind: 'vehicle_body',
+                position: [-0.18, 1.14, 0],
+                length: 1.12,
+                width: 0.84,
+                height: 0.035,
+              },
+            ],
+          },
+          {
+            op: 'materialFrom',
+            selector: { semanticRole: 'vehicle_pillar' },
+            from: { semanticRole: 'vehicle_body' },
+          },
+          {
+            op: 'materialFrom',
+            selector: { nameIncludes: 'roof frame' },
+            from: { semanticRole: 'vehicle_body' },
+          },
+        ],
+      },
+      {
+        prompt: '车顶不像，窗户和车顶分开了',
+        revisionOf: initial.artifact?.id,
+        revisionVersion: initial.artifact?.version,
+        revisionTarget: initial.artifact,
+      },
+    )
+
+    expect(revised.artifact).toBeDefined()
+    expect(revised.artifact?.sourceTool).toBe('revise_geometry')
+    expect(revised.artifact?.version).toBe(2)
+    expect(revised.artifact?.revisionOf).toBe(initial.artifact?.id)
+    expect(revised.artifact?.editHistory).toHaveLength(1)
+    expect(revised.content).toContain('Validation: family=vehicle')
+
+    const pillar = revised.artifact?.shapes.find((shape) => shape.semanticRole === 'vehicle_pillar')
+    const roofFrame = revised.artifact?.shapes.find((shape) => shape.name?.includes('roof frame'))
+    expect(pillar?.material?.properties?.color).toBe('#cc0000')
+    expect(roofFrame?.material?.properties?.color).toBe('#cc0000')
+    expect(
+      revised.artifact?.shapes.some((shape) => shape.name === 'Vehicle sedan vehicle cabin frame'),
+    ).toBe(false)
+  })
+
+  test('rejects semantic but blocky primitive cars with visual quality feedback', () => {
+    const result = executeGeometryToolCall(
+      'compose_primitive',
+      {
+        geometryBrief: { category: 'vehicle' },
+        shapes: [
+          {
+            kind: 'box',
+            name: 'block car body',
+            semanticRole: 'vehicle_body',
+            position: [0, 0.95, 0],
+            length: 4,
+            width: 1.8,
+            height: 1.5,
+          },
+          ...[-1.35, 1.35].flatMap((x) =>
+            [-0.82, 0.82].map((z) => ({
+              kind: 'torus',
+              name: 'block car tire',
+              semanticRole: 'vehicle_tire',
+              position: [x, 0.3, z],
+              axis: 'z',
+              majorRadius: 0.25,
+              tubeRadius: 0.06,
+            })),
+          ),
+          {
+            kind: 'rounded-panel',
+            name: 'single car window sticker',
+            semanticRole: 'vehicle_window',
+            position: [0.2, 1.55, 0],
+            length: 0.7,
+            width: 1.1,
+            thickness: 0.02,
+          },
+          {
+            kind: 'sphere',
+            name: 'left headlight',
+            semanticRole: 'headlight',
+            position: [1.95, 0.7, -0.45],
+            radius: 0.05,
+          },
+          {
+            kind: 'sphere',
+            name: 'right headlight',
+            semanticRole: 'headlight',
+            position: [1.95, 0.7, 0.45],
+            radius: 0.05,
+          },
+          {
+            kind: 'box',
+            name: 'front bumper',
+            semanticRole: 'front_bumper',
+            position: [2.05, 0.45, 0],
+            length: 0.06,
+            width: 1.5,
+            height: 0.08,
+          },
+          {
+            kind: 'box',
+            name: 'rear bumper',
+            semanticRole: 'rear_bumper',
+            position: [-2.05, 0.45, 0],
+            length: 0.06,
+            width: 1.5,
+            height: 0.08,
+          },
+        ],
+      },
+      { prompt: 'generate a car' },
+    )
+
+    expect(result.artifact).toBeUndefined()
+    expect(result.content).toContain('vehicle visual quality score is too low')
+    expect(result.content).toContain('vehicle needs a separate cabin/roof mass')
+    expect(result.content).toContain('Recommendation:')
   })
 
   test('rejects unrealistic primitive cars and returns repairable semantic feedback', () => {
@@ -335,6 +703,66 @@ describe('AI geometry tool executor', () => {
     expect(result.content).toContain('flange_inlet:1')
     expect(result.content).toContain('flange_outlet:1')
     expect(result.content).not.toContain('required semantic role')
+  })
+
+  test('accepts compose_recipe valve output with recipe-supplied semantic brief', () => {
+    const result = executeGeometryToolCall(
+      'compose_recipe',
+      {
+        recipeId: 'valve.ball',
+        params: { highFidelity: true },
+      },
+      { prompt: 'generate a ball valve' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=valve')
+    expect(result.content).toContain('valve_ball:1')
+    expect(result.content).toContain('valve_bore:1')
+    expect(result.content).not.toContain('required semantic role')
+  })
+
+  test('accepts compose_robot_arm output with semantic and visual quality summaries', () => {
+    const result = executeGeometryToolCall(
+      'compose_robot_arm',
+      {
+        name: '3-axis robot arm',
+        axisCount: 3,
+        baseShape: 'round',
+        pose: 'work-ready',
+        endEffector: 'gripper',
+        detail: 'medium',
+      },
+      { prompt: 'generate a 3-axis robot arm with round base' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=robot_arm')
+    expect(result.content).toContain('Visual quality: family=robot_arm')
+    expect(result.content).toContain('robot_base:1')
+    expect(result.artifact?.shapes.some((shape) => shape.semanticRole === 'end_effector')).toBe(
+      true,
+    )
+  })
+
+  test('accepts compose_recipe robot arm output', () => {
+    const result = executeGeometryToolCall(
+      'compose_recipe',
+      {
+        recipeId: 'robotArm.threeAxis',
+        params: {
+          baseShape: 'round',
+          endEffector: 'gripper',
+          pose: 'work-ready',
+        },
+      },
+      { prompt: 'generate a 3-axis robot arm with round base' },
+    )
+
+    expect(result.artifact).toBeDefined()
+    expect(result.content).toContain('Validation: family=robot_arm')
+    expect(result.content).toContain('Visual quality: family=robot_arm')
+    expect(result.content).toContain('robot_base:1')
   })
 
   test('accepts smooth hand-built vehicle retries with role aliases and cylinder wheels', () => {

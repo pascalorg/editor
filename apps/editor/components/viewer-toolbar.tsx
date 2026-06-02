@@ -21,10 +21,10 @@ import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
 const TOOLBAR_CONTAINER =
-  'inline-flex h-8 items-stretch overflow-hidden rounded-xl border border-border bg-background/90 shadow-2xl backdrop-blur-md'
+  'inline-flex h-8 items-stretch overflow-hidden rounded-xl border border-border bg-background/80 shadow-2xl backdrop-blur-md'
 
 const TOOLBAR_BTN =
-  'flex w-8 items-center justify-center text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90'
+  'flex w-8 items-center justify-center text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/80'
 
 function ToolbarTooltip({ children, label }: { children: ReactNode; label: string }) {
   return (
@@ -198,7 +198,7 @@ function LevelModeToggle() {
         className={cn(
           TOOLBAR_BTN,
           'w-auto gap-1.5 px-2.5',
-          !isDefault && 'bg-white/10 text-foreground/90',
+          !isDefault && 'bg-white/10 text-foreground/80',
         )}
         onClick={cycle}
         type="button"
@@ -267,7 +267,7 @@ function GridVisibilityToggle() {
           TOOLBAR_BTN,
           'w-auto gap-1.5 px-2.5',
           showGrid
-            ? 'bg-white/10 text-foreground/90'
+            ? 'bg-white/10 text-foreground/80'
             : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
         )}
         onClick={() => setShowGrid(!showGrid)}
@@ -333,7 +333,7 @@ function CameraModeToggle() {
       <button
         className={cn(
           TOOLBAR_BTN,
-          cameraMode === 'orthographic' && 'bg-white/10 text-foreground/90',
+          cameraMode === 'orthographic' && 'bg-white/10 text-foreground/80',
         )}
         onClick={() => setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
         type="button"
@@ -377,7 +377,7 @@ function PreviewButton() {
   return (
     <ToolbarTooltip label={tooltipLabel}>
       <button
-        className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
+        className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/80"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >

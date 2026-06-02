@@ -24,7 +24,6 @@
         "item_ketiyaswru3k7vub",
         "item_8zi2layxh9s8erc1",
         "item_t29aoosaypbiwkq2",
-        "item_ycf4n2wudq423w5g",
         "wall_0j28n7nskm2sst7m",
         "wall_3wwt9bjqrdc5w09s",
         "wall_785y11hb3nztn1ua",
@@ -214,28 +213,6 @@
         "thumbnail": "/items/trash-bin/thumbnail.webp",
         "src": "/items/trash-bin/model.glb",
         "dimensions": [0.5, 0.6, 0.5],
-        "offset": [0, 0, 0],
-        "rotation": [0, 0, 0],
-        "scale": [1, 1, 1]
-      }
-    },
-    "item_ycf4n2wudq423w5g": {
-      "object": "node",
-      "id": "item_ycf4n2wudq423w5g",
-      "type": "item",
-      "name": "toy",
-      "parentId": "level_pojp0mw3qssu110w",
-      "visible": true,
-      "metadata": {},
-      "position": [7.25, 0, 6.75],
-      "rotation": [0, 0, 0],
-      "asset": {
-        "id": "toy",
-        "category": "furniture",
-        "name": "toy",
-        "thumbnail": "/items/toy/thumbnail.webp",
-        "src": "/items/toy/model.glb",
-        "dimensions": [0.5, 0.5, 0.5],
         "offset": [0, 0, 0],
         "rotation": [0, 0, 0],
         "scale": [1, 1, 1]

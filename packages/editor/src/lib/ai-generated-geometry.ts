@@ -105,11 +105,43 @@ export function shouldUseRevisionContext(text: string, artifact: GeneratedGeomet
     '\u4e0d\u6ee1\u610f',
     '\u66f4',
     '\u518d',
+    '放大',
+    '变大',
+    '加大',
+    '扩大',
+    '调大',
+    '改大',
+    '缩小',
+    '变小',
+    '调小',
+    '改小',
+    '太小',
+    '太大',
+    '看不清',
+    '看不到',
+    '不清楚',
+    '缩放',
+    '几倍',
+    '五倍',
+    '倍',
+    '直径',
+    '半径',
     '\u4e1d\u6ed1',
     '\u987a\u6ed1',
     '\u5706\u6da6',
     '\u6d41\u7ebf',
     '\u5e73\u6ed1',
+    '不像',
+    '不对',
+    '不好看',
+    '分开',
+    '脱离',
+    '贴合',
+    '比例',
+    '车顶',
+    '窗户',
+    '座舱',
+    '车厢',
     'smooth',
     'smoother',
     'sleek',
@@ -128,22 +160,102 @@ export function shouldUseRevisionContext(text: string, artifact: GeneratedGeomet
   return revisionTerms.some((term) => normalized.includes(term))
 }
 
+export function summarizeGeneratedGeometryArtifactForRevision(artifact: GeneratedGeometryArtifact) {
+  const roles = new Map<string, number>()
+  const sourceKinds = new Map<string, number>()
+  const materialColors = new Set<string>()
+  for (const shape of artifact.shapes) {
+    if (shape.semanticRole) roles.set(shape.semanticRole, (roles.get(shape.semanticRole) ?? 0) + 1)
+    if (shape.sourcePartKind) {
+      sourceKinds.set(shape.sourcePartKind, (sourceKinds.get(shape.sourcePartKind) ?? 0) + 1)
+    }
+    const color = shape.material?.properties?.color
+    if (color) materialColors.add(color)
+  }
+
+  const roleSummary = [...roles.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([role, count]) => `${role}:${count}`)
+    .join(', ')
+  const sourceSummary = [...sourceKinds.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([kind, count]) => `${kind}:${count}`)
+    .join(', ')
+  const recentEdits = artifact.editHistory
+    ?.slice(-4)
+    .map(
+      (edit, index) => `${index + 1}. ${edit.intent ?? edit.feedback ?? edit.summary ?? edit.tool}`,
+    )
+    .join('\n')
+  const keyShapes = artifact.shapes
+    .filter((shape, index) => {
+      const role = shape.semanticRole ?? ''
+      return (
+        index < 12 ||
+        /body|cabin|roof|window|glass|pillar|tire|wheel|headlight|bumper/.test(role) ||
+        /body|cabin|roof|window|glass|pillar|tire|wheel|headlight|bumper/i.test(shape.name ?? '')
+      )
+    })
+    .slice(0, 24)
+    .map((shape, index) => {
+      const dims = [
+        shape.length != null ? `l=${shape.length}` : undefined,
+        shape.width != null ? `w=${shape.width}` : undefined,
+        shape.height != null ? `h=${shape.height}` : undefined,
+        shape.thickness != null ? `t=${shape.thickness}` : undefined,
+        shape.radius != null ? `r=${shape.radius}` : undefined,
+        shape.majorRadius != null ? `R=${shape.majorRadius}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(',')
+      const color = shape.material?.properties?.color
+      return `${index + 1}. ${shape.name ?? shape.kind} kind=${shape.kind}${
+        shape.semanticRole ? ` role=${shape.semanticRole}` : ''
+      }${shape.sourcePartKind ? ` source=${shape.sourcePartKind}` : ''} pos=[${shape.position.join(
+        ',',
+      )}]${dims ? ` ${dims}` : ''}${color ? ` color=${color}` : ''}`
+    })
+    .join('\n')
+
+  return [
+    `- id: ${artifact.id}`,
+    `- title: ${artifact.title}`,
+    `- version: ${artifact.version}`,
+    `- original prompt: ${artifact.userPrompt}`,
+    `- source tool: ${artifact.sourceTool}`,
+    `- shape count: ${artifact.shapes.length}`,
+    roleSummary ? `- semantic roles: ${roleSummary}` : undefined,
+    sourceSummary ? `- source part kinds: ${sourceSummary}` : undefined,
+    materialColors.size ? `- visible colors: ${[...materialColors].join(', ')}` : undefined,
+    artifact.geometryBrief?.category ? `- category: ${artifact.geometryBrief.category}` : undefined,
+    artifact.semanticSummary ? `- semantic validation: ${artifact.semanticSummary}` : undefined,
+    artifact.visualQualitySummary
+      ? `- visual quality: ${artifact.visualQualitySummary}`
+      : undefined,
+    recentEdits ? `- recent edit history:\n${recentEdits}` : undefined,
+    `- key shape summary:\n${keyShapes}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function truncateForPrompt(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength)}\n...<truncated ${value.length - maxLength} chars>`
+}
 
 export function buildRevisionContext(artifact: GeneratedGeometryArtifact, userRequest: string) {
   return [
     'The user is asking to revise the previous generated geometry.',
-    'Return exactly ONE complete replacement geometry tool call. Do not output a partial patch.',
-    'Prefer the same source tool and blueprint when possible. For vehicle smoothness/style revisions, keep compose_parts vehicle parts and tune vehicle_body cornerRadius/cornerSegments/detail/enhanceVisualDetails instead of rebuilding wheels as raw primitive cylinders.',
+    'Prefer revise_geometry for local feedback so the previous model is patched instead of regenerated.',
+    'Use compose_recipe/compose_parts/compose_primitive only when the user asks for a completely new object or the patch cannot preserve the current artifact.',
+    'In revise_geometry, preserve user-approved traits such as body color, wheels, scale, and existing semantic roles unless the feedback explicitly changes them.',
     `Modification request: ${userRequest}`,
     '',
-    'Previous generated geometry:',
-    `- id: ${artifact.id}`,
-    `- title: ${artifact.title}`,
-    `- original prompt: ${artifact.userPrompt}`,
-    `- tool: ${artifact.sourceTool}`,
-    `- shapes:\n${artifact.shapeDetails}`,
+    'Previous generated geometry summary:',
+    summarizeGeneratedGeometryArtifactForRevision(artifact),
     '',
-    `Previous normalized tool arguments JSON:\n${JSON.stringify(artifact.sourceArgs)}`,
+    `Previous normalized tool arguments JSON (truncated):\n${truncateForPrompt(JSON.stringify(artifact.sourceArgs), 1200)}`,
   ].join('\n')
 }
 
@@ -409,6 +521,7 @@ export function buildGeneratedGeometryNodes(artifact: GeneratedGeometryArtifact)
             position,
             rotation,
             profile: shape.profile as [number, number][] | undefined,
+            holes: shape.holes as [number, number][][] | undefined,
             depth: clampD(shape.depth ?? shape.width, 0.1, 0.005, 10),
             bevelSize: shape.bevelSize != null ? clampD(shape.bevelSize, 0.01, 0, 1) : undefined,
             bevelThickness:

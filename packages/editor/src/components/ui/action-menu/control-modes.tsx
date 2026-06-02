@@ -96,7 +96,7 @@ function getControlLabel(id: ControlId): string {
     'site-edit': 'Edit site',
     build: 'Build',
     'material-paint': 'Material Paint',
-    furnish: 'Furnish',
+    furnish: 'Items',
     zone: 'Zone',
     delete: 'Delete',
   }

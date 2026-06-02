@@ -7,6 +7,7 @@ import type {
 
 type PartAxis = 'x' | 'y' | 'z'
 type PartSide = 'left' | 'right' | 'top' | 'bottom' | 'front' | 'back'
+type VehicleStyle = 'sedan' | 'suv' | 'sports' | 'van' | 'truck'
 
 export type PartComposeKind =
   | 'circular_base'
@@ -71,6 +72,12 @@ export interface PartComposePartInput {
   id?: string
   name?: string
   partName?: string
+  style?: string
+  variant?: string
+  valveStyle?: string
+  handleStyle?: string
+  state?: string
+  vehicleStyle?: VehicleStyle | string
   position?: Vec3
   rotation?: Vec3
   connectTo?: string | number
@@ -87,6 +94,7 @@ export interface PartComposePartInput {
   depth?: number
   domeDepth?: number
   length?: number
+  sizeScale?: number
   cornerRadius?: number
   cornerSegments?: number
   count?: number
@@ -102,6 +110,10 @@ export interface PartComposePartInput {
   overallHeight?: number
   bodyHeight?: number
   cabinHeight?: number
+  roofCornerAngle?: number
+  cabinTopScale?: number
+  cabinTopLengthScale?: number
+  cabinTopWidthScale?: number
   bladeRadius?: number
   bladeWidth?: number
   bladePitch?: number
@@ -112,6 +124,11 @@ export interface PartComposePartInput {
   material?: PrimitiveMaterialInput
   materialPreset?: string
   color?: string
+  primaryColor?: string
+  secondaryColor?: string
+  metalColor?: string
+  darkColor?: string
+  accentColor?: string
 }
 
 export interface PartComposeInput {
@@ -342,6 +359,35 @@ function material(
       transparent: opacity < 1,
     },
   }
+}
+
+function textOf(value: unknown): string {
+  if (typeof value === 'string') return value.toLowerCase()
+  if (Array.isArray(value)) return value.map(textOf).join(' ')
+  if (typeof value === 'object' && value !== null) return Object.values(value).map(textOf).join(' ')
+  return ''
+}
+
+function partIntentText(input: PartComposeInput, part?: PartComposePartInput): string {
+  return [
+    input.name,
+    input.geometryBrief,
+    part?.name,
+    part?.partName,
+    part?.style,
+    part?.variant,
+    part?.valveStyle,
+    part?.handleStyle,
+    part?.state,
+  ]
+    .map(textOf)
+    .join(' ')
+}
+
+function isBallValveIntent(input: PartComposeInput, part?: PartComposePartInput): boolean {
+  return /(ball\s*valve|球阀|quarter[-\s]?turn|90\s*°|90\s*degree)/i.test(
+    partIntentText(input, part),
+  )
 }
 
 function partMaterial(
@@ -609,6 +655,126 @@ function normalizedPartKind(part: PartComposePartInput): PartComposeKind | null 
   return normalizePartKind(part.kind ?? part.partType ?? part.type)
 }
 
+function normalizeVehicleStyle(value: unknown): VehicleStyle | undefined {
+  const text = textOf(value).replace(/[\s_-]+/g, '')
+  if (!text) return undefined
+  if (/sport|supercar|coupe|race|racing|跑车|赛车/.test(text)) return 'sports'
+  if (/suv|offroad|offroader|jeep|越野|运动型多用途/.test(text)) return 'suv'
+  if (/van|minivan|mpv|bus|面包车|厢式|商务车/.test(text)) return 'van'
+  if (/truck|pickup|ute|lorry|皮卡|卡车|货车/.test(text)) return 'truck'
+  if (/sedan|saloon|car|auto|轿车|小汽车|汽车/.test(text)) return 'sedan'
+  return undefined
+}
+
+function vehicleStyleFor(input: PartComposeInput, part?: PartComposePartInput): VehicleStyle {
+  return (
+    normalizeVehicleStyle(part?.vehicleStyle) ??
+    normalizeVehicleStyle(part?.style) ??
+    normalizeVehicleStyle(part?.variant) ??
+    normalizeVehicleStyle(partIntentText(input, part)) ??
+    'sedan'
+  )
+}
+
+function vehicleSizeScale(part: PartComposePartInput): number {
+  return clamp(part.sizeScale, 1, 0.2, 2)
+}
+
+const VEHICLE_STYLE_DEFAULTS: Record<
+  VehicleStyle,
+  {
+    length: number
+    width: number
+    heightRatio: number
+    bodyHeightRatio: number
+    cabinHeightRatio: number
+    cabinLengthRatio: number
+    cabinWidthRatio: number
+    cabinXRatio: number
+    cabinTopScale: number
+    wheelRadiusRatio: number
+    wheelbaseRatio: number
+    trackRatio: number
+    groundClearanceRatio: number
+  }
+> = {
+  sedan: {
+    length: 4.4,
+    width: 1.8,
+    heightRatio: 0.31,
+    bodyHeightRatio: 0.36,
+    cabinHeightRatio: 0.3,
+    cabinLengthRatio: 0.42,
+    cabinWidthRatio: 0.74,
+    cabinXRatio: -0.05,
+    cabinTopScale: 0.78,
+    wheelRadiusRatio: 0.078,
+    wheelbaseRatio: 0.72,
+    trackRatio: 0.9,
+    groundClearanceRatio: 0.15,
+  },
+  suv: {
+    length: 4.65,
+    width: 1.95,
+    heightRatio: 0.38,
+    bodyHeightRatio: 0.42,
+    cabinHeightRatio: 0.44,
+    cabinLengthRatio: 0.46,
+    cabinWidthRatio: 0.82,
+    cabinXRatio: -0.04,
+    cabinTopScale: 0.9,
+    wheelRadiusRatio: 0.088,
+    wheelbaseRatio: 0.72,
+    trackRatio: 0.92,
+    groundClearanceRatio: 0.18,
+  },
+  sports: {
+    length: 4.35,
+    width: 1.9,
+    heightRatio: 0.25,
+    bodyHeightRatio: 0.34,
+    cabinHeightRatio: 0.34,
+    cabinLengthRatio: 0.32,
+    cabinWidthRatio: 0.72,
+    cabinXRatio: -0.12,
+    cabinTopScale: 0.62,
+    wheelRadiusRatio: 0.095,
+    wheelbaseRatio: 0.76,
+    trackRatio: 0.94,
+    groundClearanceRatio: 0.11,
+  },
+  van: {
+    length: 4.7,
+    width: 1.9,
+    heightRatio: 0.42,
+    bodyHeightRatio: 0.48,
+    cabinHeightRatio: 0.46,
+    cabinLengthRatio: 0.62,
+    cabinWidthRatio: 0.86,
+    cabinXRatio: -0.04,
+    cabinTopScale: 0.94,
+    wheelRadiusRatio: 0.075,
+    wheelbaseRatio: 0.7,
+    trackRatio: 0.88,
+    groundClearanceRatio: 0.14,
+  },
+  truck: {
+    length: 5.2,
+    width: 1.95,
+    heightRatio: 0.36,
+    bodyHeightRatio: 0.38,
+    cabinHeightRatio: 0.42,
+    cabinLengthRatio: 0.32,
+    cabinWidthRatio: 0.8,
+    cabinXRatio: 0.18,
+    cabinTopScale: 0.86,
+    wheelRadiusRatio: 0.087,
+    wheelbaseRatio: 0.74,
+    trackRatio: 0.92,
+    groundClearanceRatio: 0.18,
+  },
+}
+
 function normalizePartInput(part: PartComposePartInput): PartComposePartInput {
   const kind = normalizedPartKind(part)
   return {
@@ -626,24 +792,32 @@ function normalizePartComposeInput(input: PartComposeInput): PartComposeInput {
   }
 }
 
-function vehicleLength(part: PartComposePartInput): number {
-  return clamp(part.length ?? part.depth, 1.35, 0.3, 5)
+function vehicleLength(part: PartComposePartInput, style: VehicleStyle = 'sedan'): number {
+  return clamp(
+    part.length ?? part.depth,
+    VEHICLE_STYLE_DEFAULTS[style].length * vehicleSizeScale(part),
+    0.3,
+    6,
+  )
 }
 
-function vehicleWidth(part: PartComposePartInput): number {
-  return clamp(part.width, 0.58, 0.12, 2.5)
+function vehicleWidth(part: PartComposePartInput, style: VehicleStyle = 'sedan'): number {
+  return clamp(part.width, VEHICLE_STYLE_DEFAULTS[style].width * vehicleSizeScale(part), 0.12, 2.8)
 }
 
 function vehicleOverallHeight(
   part: PartComposePartInput,
   length = vehicleLength(part),
   width = vehicleWidth(part),
+  style: VehicleStyle = 'sedan',
 ): number {
+  const defaults = VEHICLE_STYLE_DEFAULTS[style]
+  const scale = vehicleSizeScale(part)
   return clamp(
     part.overallHeight ?? part.height,
-    Math.max(width * 0.72, length * 0.26, 0.46),
+    Math.max(width * 0.66, length * defaults.heightRatio, 0.46 * scale),
     0.22,
-    1.8,
+    2.4,
   )
 }
 
@@ -652,25 +826,34 @@ function vehicleWheelRadius(
   length: number,
   width: number,
   overallHeight: number,
+  style: VehicleStyle = 'sedan',
 ): number {
+  const defaults = VEHICLE_STYLE_DEFAULTS[style]
+  const scale = vehicleSizeScale(part)
   return clamp(
     part.radius ?? part.wheelRadius,
-    Math.min(length * 0.08, width * 0.2, overallHeight * 0.24),
-    0.04,
+    Math.min(length * defaults.wheelRadiusRatio, width * 0.22, overallHeight * 0.28),
+    0.04 * scale,
     0.6,
   )
 }
 
-function applyVehicleLayoutDefaults(parts: PartComposePartInput[]): PartComposePartInput[] {
+function applyVehicleLayoutDefaults(
+  parts: PartComposePartInput[],
+  input: PartComposeInput,
+): PartComposePartInput[] {
   const body = parts.find((part) => normalizedPartKind(part) === 'vehicle_body')
   if (!body) return parts
 
-  const bodyLength = vehicleLength(body)
-  const bodyWidth = vehicleWidth(body)
-  const overallHeight = vehicleOverallHeight(body, bodyLength, bodyWidth)
-  const bodyCenter = body.position ?? [0, Math.max(0.34, overallHeight * 0.58), 0]
+  const style = vehicleStyleFor(input, body)
+  const defaults = VEHICLE_STYLE_DEFAULTS[style]
+  const bodyLength = vehicleLength(body, style)
+  const bodyWidth = vehicleWidth(body, style)
+  const overallHeight = vehicleOverallHeight(body, bodyLength, bodyWidth, style)
+  const groundClearance = Math.min(overallHeight * defaults.groundClearanceRatio, bodyWidth * 0.22)
+  const bodyCenter = body.position ?? [0, groundClearance + overallHeight * 0.5, 0]
   const baseY = bodyCenter[1] - overallHeight / 2
-  const wheelRadius = vehicleWheelRadius(body, bodyLength, bodyWidth, overallHeight)
+  const wheelRadius = vehicleWheelRadius(body, bodyLength, bodyWidth, overallHeight, style)
 
   return parts.map((part) => {
     const kind = normalizedPartKind(part)
@@ -678,6 +861,7 @@ function applyVehicleLayoutDefaults(parts: PartComposePartInput[]): PartComposeP
       case 'vehicle_body':
         return {
           ...part,
+          vehicleStyle: style,
           length: bodyLength,
           width: bodyWidth,
           height: overallHeight,
@@ -691,8 +875,10 @@ function applyVehicleLayoutDefaults(parts: PartComposePartInput[]): PartComposeP
         return {
           ...part,
           length:
-            Number.isFinite(longitudinal) && longitudinal > 0 ? longitudinal : bodyLength * 0.72,
-          width: part.width ?? bodyWidth * 0.9,
+            Number.isFinite(longitudinal) && longitudinal > 0
+              ? longitudinal
+              : bodyLength * defaults.wheelbaseRatio,
+          width: part.width ?? bodyWidth * defaults.trackRatio,
           radius: part.radius ?? part.wheelRadius ?? wheelRadius,
           wheelWidth: part.wheelWidth ?? part.depth ?? wheelRadius * 0.55,
           position: [bodyCenter[0], baseY + wheelRadius, bodyCenter[2]] as Vec3,
@@ -701,11 +887,12 @@ function applyVehicleLayoutDefaults(parts: PartComposePartInput[]): PartComposeP
       case 'vehicle_windows':
         return {
           ...part,
-          length: part.length ?? bodyLength * 0.4,
-          width: part.width ?? bodyWidth * 0.78,
+          vehicleStyle: style,
+          length: part.length ?? bodyLength * defaults.cabinLengthRatio,
+          width: part.width ?? bodyWidth * defaults.cabinWidthRatio,
           height: part.height ?? overallHeight * 0.24,
           position: [
-            bodyCenter[0] - bodyLength * 0.04,
+            bodyCenter[0] + bodyLength * defaults.cabinXRatio,
             baseY + overallHeight * 0.72,
             bodyCenter[2],
           ] as Vec3,
@@ -1716,6 +1903,7 @@ function composeValveBody(
   part: PartComposePartInput,
   origin: Vec3,
 ): PrimitiveShapeInput[] {
+  const ballValve = isBallValveIntent(input, part)
   const axis = partAxis(part.axis, 'x')
   const center = add(origin, part.position ?? [0, 0.38, 0])
   const radius = clamp(part.radius, 0.12, 0.03, 0.8)
@@ -1725,6 +1913,68 @@ function composeValveBody(
   const darkMat = material(input.darkColor ?? '#1f2937', 0.42, 0.5)
   const bonnetY = center[1] + radius * 1.16
   const yokeBaseY = center[1] + radius * 1.72
+  const ballValveDetails: PrimitiveShapeInput[] = [
+    {
+      kind: 'sphere',
+      name: `${part.name ?? input.name ?? 'object'} valve ball`,
+      position: center,
+      radius: 1,
+      scale: [radius * 0.68, radius * 0.68, radius * 0.68],
+      widthSegments: ringSegments(input.detail),
+      heightSegments: Math.max(16, Math.round(ringSegments(input.detail) * 0.5)),
+      material: metalMat,
+      semanticRole: 'valve_ball',
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} valve ball bore`,
+      position: center,
+      axis,
+      radius: radius * 0.24,
+      height: length * 0.72,
+      radialSegments: 20,
+      material: darkMat,
+      semanticRole: 'valve_bore',
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} inlet seat ring`,
+      position: offsetAlongAxis(center, axis, -length * 0.28),
+      axis,
+      majorRadius: radius * 0.38,
+      tubeRadius: radius * 0.035,
+      radialSegments: 8,
+      tubularSegments: 32,
+      material: darkMat,
+      semanticRole: 'seat_ring',
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} outlet seat ring`,
+      position: offsetAlongAxis(center, axis, length * 0.28),
+      axis,
+      majorRadius: radius * 0.38,
+      tubeRadius: radius * 0.035,
+      radialSegments: 8,
+      tubularSegments: 32,
+      material: darkMat,
+      semanticRole: 'seat_ring',
+    },
+  ]
+  const gateValveDetails: PrimitiveShapeInput[] = [
+    {
+      kind: 'wedge',
+      name: `${part.name ?? input.name ?? 'object'} valve gate wedge`,
+      position: [center[0], center[1] - radius * 0.1, center[2]],
+      length: radius * 0.8,
+      width: radius * 0.42,
+      height: radius * 0.72,
+      slopeAxis: 'x',
+      slopeDirection: 'positive',
+      material: material(input.secondaryColor ?? '#334155', 0.48, 0.35),
+      semanticRole: 'gate_wedge',
+    },
+  ]
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'cylinder',
@@ -1748,6 +1998,7 @@ function composeValveBody(
       material: mat,
       semanticRole: 'valve_body',
     },
+    ...(ballValve ? ballValveDetails : gateValveDetails),
     {
       kind: 'frustum',
       name: `${part.name ?? input.name ?? 'object'} valve bonnet`,
@@ -1761,18 +2012,6 @@ function composeValveBody(
       semanticRole: 'bonnet',
     },
     {
-      kind: 'wedge',
-      name: `${part.name ?? input.name ?? 'object'} valve gate wedge`,
-      position: [center[0], center[1] - radius * 0.1, center[2]],
-      length: radius * 0.8,
-      width: radius * 0.42,
-      height: radius * 0.72,
-      slopeAxis: 'x',
-      slopeDirection: 'positive',
-      material: material(input.secondaryColor ?? '#334155', 0.48, 0.35),
-      semanticRole: 'gate_wedge',
-    },
-    {
       kind: 'cylinder',
       name: `${part.name ?? input.name ?? 'object'} valve stem`,
       position: [center[0], center[1] + radius * 1.35, center[2]],
@@ -1784,30 +2023,32 @@ function composeValveBody(
       semanticRole: 'stem',
     },
   ]
-  for (const z of [-radius * 0.48, radius * 0.48]) {
+  if (!ballValve) {
+    for (const z of [-radius * 0.48, radius * 0.48]) {
+      shapes.push({
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} valve yoke post`,
+        position: [center[0], yokeBaseY, center[2] + z],
+        axis: 'y',
+        radius: radius * 0.08,
+        height: radius * 0.95,
+        radialSegments: 12,
+        material: metalMat,
+        semanticRole: 'yoke',
+      })
+    }
     shapes.push({
       kind: 'cylinder',
-      name: `${part.name ?? input.name ?? 'object'} valve yoke post`,
-      position: [center[0], yokeBaseY, center[2] + z],
-      axis: 'y',
-      radius: radius * 0.08,
-      height: radius * 0.95,
+      name: `${part.name ?? input.name ?? 'object'} valve yoke bridge`,
+      position: [center[0], yokeBaseY + radius * 0.48, center[2]],
+      axis: 'z',
+      radius: radius * 0.07,
+      height: radius * 1.15,
       radialSegments: 12,
       material: metalMat,
       semanticRole: 'yoke',
     })
   }
-  shapes.push({
-    kind: 'cylinder',
-    name: `${part.name ?? input.name ?? 'object'} valve yoke bridge`,
-    position: [center[0], yokeBaseY + radius * 0.48, center[2]],
-    axis: 'z',
-    radius: radius * 0.07,
-    height: radius * 1.15,
-    radialSegments: 12,
-    material: metalMat,
-    semanticRole: 'yoke',
-  })
   for (let i = 0; i < 6; i += 1) {
     const angle = (i * Math.PI * 2) / 6
     shapes.push({
@@ -1834,12 +2075,49 @@ function composeHandwheel(
   part: PartComposePartInput,
   origin: Vec3,
 ): PrimitiveShapeInput[] {
+  const leverHandle = /lever|handle|bar|手柄|把手/i.test(partIntentText(input, part))
   const axis = partAxis(part.axis, 'y')
   const center = add(origin, part.position ?? [0, 0.62, 0])
   const radius = clamp(part.radius, 0.11, 0.025, 0.6)
   const wire = clamp(part.wireRadius, radius * 0.08, 0.002, 0.04)
   const spokeCount = clampInt(part.spokeCount ?? part.count, 4, 3, 8)
   const mat = partMaterial(part, material(input.darkColor ?? '#1f2937', 0.45, 0.45))
+  if (leverHandle) {
+    const leverLength = clamp(part.length, radius * 2.6, radius * 1.1, radius * 5)
+    return applyPartRotation(
+      [
+        {
+          kind: 'cylinder',
+          name: `${part.name ?? input.name ?? 'object'} handwheel hub`,
+          position: center,
+          axis: 'y',
+          radius: radius * 0.22,
+          height: wire * 3.2,
+          radialSegments: 16,
+          material: mat,
+        },
+        {
+          kind: 'capsule',
+          name: `${part.name ?? input.name ?? 'object'} lever handle`,
+          position: [center[0], center[1], center[2] + leverLength * 0.42] as Vec3,
+          axis: 'z',
+          radius: wire,
+          height: leverLength,
+          radialSegments: 12,
+          material: mat,
+        },
+        {
+          kind: 'sphere',
+          name: `${part.name ?? input.name ?? 'object'} lever end knob`,
+          position: [center[0], center[1], center[2] + leverLength * 0.92] as Vec3,
+          radius: wire * 2.3,
+          material: mat,
+        },
+      ],
+      center,
+      part.rotation,
+    )
+  }
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'torus',
@@ -2164,18 +2442,31 @@ function composeVehicleBody(
   part: PartComposePartInput,
   origin: Vec3,
 ): PrimitiveShapeInput[] {
-  const length = vehicleLength(part)
-  const width = vehicleWidth(part)
-  const overallHeight = vehicleOverallHeight(part, length, width)
+  const style = vehicleStyleFor(input, part)
+  const defaults = VEHICLE_STYLE_DEFAULTS[style]
+  const length = vehicleLength(part, style)
+  const width = vehicleWidth(part, style)
+  const overallHeight = vehicleOverallHeight(part, length, width, style)
   const center = add(origin, part.position ?? [0, Math.max(0.34, overallHeight * 0.58), 0])
   const baseY = center[1] - overallHeight / 2
-  const bodyHeight = clamp(part.bodyHeight, overallHeight * 0.38, 0.08, overallHeight * 0.65)
-  const cabinHeight = clamp(part.cabinHeight, overallHeight * 0.42, 0.06, overallHeight * 0.7)
+  const bodyHeight = clamp(
+    part.bodyHeight,
+    overallHeight * defaults.bodyHeightRatio,
+    0.08,
+    overallHeight * 0.65,
+  )
+  const cabinHeight = clamp(
+    part.cabinHeight,
+    overallHeight * defaults.cabinHeightRatio,
+    0.06,
+    overallHeight * 0.7,
+  )
   const bodyY = baseY + overallHeight * 0.38
-  const deckY = baseY + overallHeight * 0.56
+  const deckY = bodyY + bodyHeight * 0.48
   const cabinY = baseY + overallHeight * 0.72
-  const mat = partMaterial(part, material(input.primaryColor ?? '#ef4444', 0.42, 0.18))
-  const shadowMat = material(input.darkColor ?? '#1f2937', 0.58, 0.16)
+  const bodyColor = part.primaryColor ?? part.color ?? input.primaryColor ?? '#ef4444'
+  const mat = partMaterial(part, material(bodyColor, 0.42, 0.18))
+  const shadowMat = material(part.darkColor ?? input.darkColor ?? '#1f2937', 0.58, 0.16)
   const bodyCornerRadius = clamp(
     part.cornerRadius,
     Math.min(length, width, bodyHeight) * 0.12,
@@ -2183,6 +2474,28 @@ function composeVehicleBody(
     Math.min(length, width, bodyHeight) * 0.45,
   )
   const bodyCornerSegments = clampInt(part.cornerSegments, 6, 1, 12)
+  const roofCornerAngle = clamp(part.roofCornerAngle, 90, 65, 90)
+  const angleTopScale = roofCornerAngle < 90 ? 1 - (90 - roofCornerAngle) * 0.02 : undefined
+  const cabinTopLengthScale = clamp(
+    part.cabinTopLengthScale ?? part.cabinTopScale ?? angleTopScale,
+    defaults.cabinTopScale,
+    0.55,
+    1,
+  )
+  const cabinTopWidthScale = clamp(
+    part.cabinTopWidthScale ?? part.cabinTopScale ?? angleTopScale,
+    defaults.cabinTopScale,
+    0.55,
+    1,
+  )
+  const useTaperedCabin = cabinTopLengthScale < 0.995 || cabinTopWidthScale < 0.995
+  const cabinLength = length * defaults.cabinLengthRatio
+  const cabinWidth = width * defaults.cabinWidthRatio
+  const cabinX = center[0] + length * defaults.cabinXRatio
+  const roofHeight = Math.max(bodyHeight * 0.06, 0.024)
+  const cabinFrameHeight = Math.max(roofHeight * 1.4, cabinHeight * 0.14)
+  const roofLength = cabinLength * cabinTopLengthScale * 0.96
+  const roofWidth = cabinWidth * cabinTopWidthScale * 0.94
   const shapes: PrimitiveShapeInput[] = [
     {
       kind: 'box',
@@ -2196,37 +2509,52 @@ function composeVehicleBody(
       material: mat,
     },
     {
-      kind: 'box',
-      name: `${part.name ?? input.name ?? 'object'} vehicle front deck`,
+      kind: 'wedge',
+      name: `${part.name ?? input.name ?? 'object'} vehicle front deck hood surface`,
       position: [center[0] + length * 0.25, deckY, center[2]],
-      rotation: [-0.02, 0, 0],
-      length: length * 0.34,
-      width: width * 0.88,
-      height: bodyHeight * 0.16,
+      length: length * 0.36,
+      width: width * 0.82,
+      height: bodyHeight * 0.1,
+      slopeAxis: 'x',
+      slopeDirection: 'negative',
       cornerRadius: Math.min(bodyCornerRadius, bodyHeight * 0.08),
       cornerSegments: Math.max(3, bodyCornerSegments - 1),
       material: mat,
     },
     {
-      kind: 'box',
-      name: `${part.name ?? input.name ?? 'object'} vehicle rear deck`,
-      position: [center[0] - length * 0.35, deckY - bodyHeight * 0.03, center[2]],
-      rotation: [0.02, 0, 0],
-      length: length * 0.22,
-      width: width * 0.9,
-      height: bodyHeight * 0.14,
+      kind: 'wedge',
+      name: `${part.name ?? input.name ?? 'object'} vehicle rear deck trunk surface`,
+      position: [center[0] - length * 0.35, deckY - bodyHeight * 0.02, center[2]],
+      length: length * 0.24,
+      width: width * 0.82,
+      height: bodyHeight * 0.085,
+      slopeAxis: 'x',
+      slopeDirection: 'positive',
       cornerRadius: Math.min(bodyCornerRadius, bodyHeight * 0.08),
       cornerSegments: Math.max(3, bodyCornerSegments - 1),
       material: mat,
     },
     {
-      kind: 'box',
+      kind: useTaperedCabin ? 'trapezoid-prism' : 'box',
       name: `${part.name ?? input.name ?? 'object'} vehicle cabin frame`,
-      position: [center[0] - length * 0.08, cabinY, center[2]],
-      length: length * 0.38,
-      width: width * 0.78,
-      height: cabinHeight,
+      position: [cabinX, cabinY - cabinHeight * 0.42, center[2]],
+      length: cabinLength,
+      width: cabinWidth,
+      height: cabinFrameHeight,
       cornerRadius: Math.min(bodyCornerRadius, cabinHeight * 0.12),
+      cornerSegments: Math.max(3, bodyCornerSegments - 1),
+      topLengthScale: cabinTopLengthScale,
+      topWidthScale: cabinTopWidthScale,
+      material: mat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'object'} vehicle roof cap`,
+      position: [cabinX, cabinY + cabinHeight * 0.5 + roofHeight * 0.18, center[2]],
+      length: roofLength,
+      width: roofWidth,
+      thickness: roofHeight,
+      cornerRadius: Math.min(bodyCornerRadius, roofHeight * 0.65),
       cornerSegments: Math.max(3, bodyCornerSegments - 1),
       material: mat,
     },
@@ -2242,6 +2570,96 @@ function composeVehicleBody(
       material: shadowMat,
     },
   ]
+  const pillarHeight = Math.max(cabinHeight * 0.72, 0.08)
+  const pillarY = cabinY + cabinHeight * 0.08
+  const pillarWidth = Math.max(width * 0.022, 0.028)
+  const pillarLength = Math.max(length * 0.012, 0.032)
+  for (const [label, x] of [
+    ['A', cabinX + cabinLength * 0.43],
+    ['B', cabinX],
+    ['C', cabinX - cabinLength * 0.43],
+  ] as const) {
+    for (const [side, z] of [
+      ['left', center[2] - cabinWidth * 0.49],
+      ['right', center[2] + cabinWidth * 0.49],
+    ] as const) {
+      shapes.push({
+        kind: 'box',
+        name: `${part.name ?? input.name ?? 'object'} vehicle ${label} pillar ${side}`,
+        position: [x, pillarY, z],
+        length: pillarLength,
+        width: pillarWidth,
+        height: pillarHeight,
+        cornerRadius: pillarWidth * 0.35,
+        cornerSegments: 3,
+        material: mat,
+      })
+    }
+  }
+  for (const [side, z] of [
+    ['left', center[2] - roofWidth * 0.52],
+    ['right', center[2] + roofWidth * 0.52],
+  ] as const) {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'object'} vehicle roof rail ${side}`,
+      position: [cabinX, cabinY + cabinHeight * 0.44, z],
+      length: roofLength,
+      width: pillarWidth,
+      height: roofHeight * 0.9,
+      cornerRadius: pillarWidth * 0.35,
+      cornerSegments: 3,
+      material: mat,
+    })
+  }
+  for (const [side, z] of [
+    ['left', center[2] - width * 0.515],
+    ['right', center[2] + width * 0.515],
+  ] as const) {
+    shapes.push({
+      kind: 'rounded-panel',
+      name: `${part.name ?? input.name ?? 'object'} vehicle side character line ${side}`,
+      position: [center[0], bodyY + bodyHeight * 0.22, z],
+      rotation: [Math.PI / 2, 0, 0],
+      length: length * 0.78,
+      width: Math.max(bodyHeight * 0.055, 0.02),
+      thickness: width * 0.012,
+      cornerRadius: bodyHeight * 0.03,
+      cornerSegments: 3,
+      material: shadowMat,
+    })
+  }
+  if (style === 'truck') {
+    shapes.push({
+      kind: 'box',
+      name: `${part.name ?? input.name ?? 'object'} truck cargo bed`,
+      position: [center[0] - length * 0.24, deckY - bodyHeight * 0.02, center[2]],
+      length: length * 0.42,
+      width: width * 0.88,
+      height: bodyHeight * 0.2,
+      cornerRadius: Math.min(bodyCornerRadius, bodyHeight * 0.06),
+      cornerSegments: Math.max(3, bodyCornerSegments - 1),
+      material: mat,
+    })
+  }
+  if (input.enhanceVisualDetails === true || input.detail === 'high') {
+    for (const x of [-length * 0.36, length * 0.36]) {
+      for (const z of [-width * 0.515, width * 0.515]) {
+        shapes.push({
+          kind: 'rounded-panel',
+          name: `${part.name ?? input.name ?? 'object'} vehicle wheel arch shadow`,
+          position: [center[0] + x, baseY + overallHeight * 0.31, center[2] + z],
+          rotation: [Math.PI / 2, 0, 0],
+          length: length * 0.11,
+          width: overallHeight * 0.18,
+          thickness: width * 0.014,
+          cornerRadius: Math.min(length * 0.025, overallHeight * 0.06),
+          cornerSegments: 4,
+          material: shadowMat,
+        })
+      }
+    }
+  }
   return applyPartRotation(shapes, center, part.rotation)
 }
 function composeVehicleWheels(
@@ -2291,19 +2709,38 @@ function composeVehicleWindows(
   part: PartComposePartInput,
   origin: Vec3,
 ): PrimitiveShapeInput[] {
+  const style = vehicleStyleFor(input, part)
+  const defaults = VEHICLE_STYLE_DEFAULTS[style]
   const center = add(origin, part.position ?? [0, 0.55, 0])
   const length = clamp(part.length, 0.5, 0.1, 2)
   const width = clamp(part.width, 0.52, 0.08, 1.8)
   const height = clamp(part.height, 0.12, 0.03, 0.6)
-  const glass = partMaterial(part, material(input.accentColor ?? '#93c5fd', 0.18, 0.02, 0.58))
+  const glass = partMaterial(
+    part,
+    material(part.accentColor ?? input.accentColor ?? '#1e3a8a', 0.18, 0.02, 0.68),
+  )
+  const glasshouseHeight = height * 1.22
+  const glasshouseTopScale = clamp(part.cabinTopScale, defaults.cabinTopScale, 0.55, 1)
   const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'trapezoid-prism',
+      name: `${part.name ?? input.name ?? 'object'} integrated vehicle glasshouse`,
+      position: [center[0], center[1] + height * 0.03, center[2]],
+      length: length * 0.94,
+      width: width * 0.94,
+      height: glasshouseHeight,
+      topLengthScale: glasshouseTopScale,
+      topWidthScale: glasshouseTopScale,
+      material: glass,
+      semanticRole: 'vehicle_window',
+    },
     {
       kind: 'rounded-panel',
       name: `${part.name ?? input.name ?? 'object'} windshield`,
-      position: [center[0] + length * 0.44, center[1], center[2]],
-      rotation: [0, 0, Math.PI / 2],
-      length: height,
-      width: width * 0.72,
+      position: [center[0] + length * 0.42, center[1] + height * 0.1, center[2]],
+      rotation: [0, 0, Math.PI / 2 - 0.22],
+      length: height * 1.02,
+      width: width * 0.46,
       thickness: 0.01,
       cornerRadius: height * 0.12,
       cornerSegments: 4,
@@ -2312,10 +2749,10 @@ function composeVehicleWindows(
     {
       kind: 'rounded-panel',
       name: `${part.name ?? input.name ?? 'object'} rear window`,
-      position: [center[0] - length * 0.44, center[1], center[2]],
-      rotation: [0, 0, Math.PI / 2],
-      length: height,
-      width: width * 0.68,
+      position: [center[0] - length * 0.42, center[1] + height * 0.1, center[2]],
+      rotation: [0, 0, Math.PI / 2 + 0.18],
+      length: height * 0.96,
+      width: width * 0.44,
       thickness: 0.01,
       cornerRadius: height * 0.12,
       cornerSegments: 4,
@@ -2324,10 +2761,10 @@ function composeVehicleWindows(
     {
       kind: 'rounded-panel',
       name: `${part.name ?? input.name ?? 'object'} side window left`,
-      position: [center[0], center[1], center[2] - width * 0.47],
+      position: [center[0], center[1] + height * 0.08, center[2] - width * 0.5],
       rotation: [Math.PI / 2, 0, 0],
-      length,
-      width: height,
+      length: length * 0.78,
+      width: height * 0.98,
       thickness: 0.01,
       cornerRadius: height * 0.12,
       cornerSegments: 4,
@@ -2336,17 +2773,17 @@ function composeVehicleWindows(
     {
       kind: 'rounded-panel',
       name: `${part.name ?? input.name ?? 'object'} side window right`,
-      position: [center[0], center[1], center[2] + width * 0.47],
+      position: [center[0], center[1] + height * 0.08, center[2] + width * 0.5],
       rotation: [Math.PI / 2, 0, 0],
-      length,
-      width: height,
+      length: length * 0.78,
+      width: height * 0.98,
       thickness: 0.01,
       cornerRadius: height * 0.12,
       cornerSegments: 4,
       material: glass,
     },
   ]
-  return shapes
+  return applyPartRotation(shapes, center, part.rotation)
 }
 function composeHeadlights(
   input: PartComposeInput,
@@ -3274,6 +3711,10 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
     case 'pipe_run':
     case 'pipe_elbow':
       return [0, 0.55, 0]
+    case 'valve_body':
+      return [0, 0.38, 0]
+    case 'handwheel':
+      return [0, 0.62, 0]
     case 'cable_tray':
       return [0, 0.72, 0]
     default:
@@ -3283,10 +3724,15 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
 
 function partHalfExtents(part: PartComposePartInput, kind: PartComposeKind | null): Vec3 {
   const axis = partAxis(part.axis, kind === 'outlet_port' ? 'x' : 'z')
-  const radius = clamp(part.radius, kind === 'flange_ring' ? 0.12 : 0.08, 0.01, 2)
+  const radius = clamp(
+    part.radius,
+    kind === 'flange_ring' ? 0.12 : kind === 'valve_body' ? 0.12 : 0.08,
+    0.01,
+    2,
+  )
   const length = clamp(
     part.length ?? part.depth ?? part.height,
-    kind === 'flange_ring' ? 0.035 : 0.26,
+    kind === 'flange_ring' ? 0.035 : kind === 'valve_body' ? 0.46 : 0.26,
     0.004,
     6,
   )
@@ -3308,6 +3754,8 @@ function partHalfExtents(part: PartComposePartInput, kind: PartComposeKind | nul
     case 'pipe_port':
     case 'inlet_port':
     case 'outlet_port':
+      return axisExtents(length / 2, radius)
+    case 'valve_body':
       return axisExtents(length / 2, radius)
     case 'volute_casing': {
       const r = clamp(part.radius, 0.28, 0.06, 2)
@@ -3822,7 +4270,12 @@ function familySpecForParts(present: PartComposeKind[]): PartFamilySpec {
       family: 'valve',
       required: [
         group('valve body', ['valve_body'], { kind: 'valve_body' }),
-        group('handwheel', ['handwheel'], { kind: 'handwheel' }),
+        group('handwheel', ['handwheel'], {
+          kind: 'handwheel',
+          connectTo: 'valve_body',
+          connectPoint: 'stem',
+          childPoint: 'center',
+        }),
       ],
       optional: ['flange_ring', 'bolt_pattern'],
       recommendedDetails: [
@@ -4041,8 +4494,25 @@ export function assessPartBlueprint(input: PartComposeInput = {}): PartBlueprint
 function completePartBlueprint(
   parts: PartComposePartInput[],
   autoComplete: boolean | undefined,
+  input: PartComposeInput,
 ): PartComposePartInput[] {
   const completed = dedupeSingletonBlueprintParts(parts)
+  const ballValve =
+    isBallValveIntent(input) || completed.some((part) => isBallValveIntent(input, part))
+  const tuneValveDefaults = () => {
+    if (!ballValve) return
+    for (let i = 0; i < completed.length; i += 1) {
+      const part = completed[i]
+      if (!part) continue
+      const kind = normalizedPartKind(part)
+      if (kind === 'valve_body' && !part.valveStyle && !part.style && !part.variant) {
+        completed[i] = { ...part, valveStyle: 'ball' }
+      }
+      if (kind === 'handwheel' && !part.handleStyle && !part.style && !part.variant) {
+        completed[i] = { ...part, handleStyle: 'lever' }
+      }
+    }
+  }
   if (autoComplete === false) return completed
 
   for (let pass = 0; pass < 2; pass += 1) {
@@ -4054,6 +4524,7 @@ function completePartBlueprint(
       if (!hasAnyPart(present, requirement)) completed.push(requirement.defaultPart)
     }
   }
+  tuneValveDefaults()
 
   const completedKinds = partKinds(completed)
   const completedFlangeCount = completed.filter(
@@ -4107,6 +4578,8 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
     case 'vehicle_body':
       if (name.includes('body shell')) return 'vehicle_body'
       if (name.includes('cabin')) return 'vehicle_cabin'
+      if (name.includes('pillar')) return 'vehicle_pillar'
+      if (name.includes('roof')) return 'vehicle_roof'
       if (name.includes('deck')) return 'vehicle_deck'
       if (name.includes('rocker')) return 'vehicle_rocker'
       return 'vehicle_body_detail'
@@ -4159,6 +4632,9 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       }
       return name.includes('bolt') ? 'flange_bolt' : 'flange_ring'
     case 'valve_body':
+      if (name.includes('seat ring')) return 'seat_ring'
+      if (name.includes('ball bore')) return 'valve_bore'
+      if (name.includes('valve ball')) return 'valve_ball'
       if (name.includes('bonnet bolt')) return 'bonnet_bolts'
       if (name.includes('bonnet')) return 'bonnet'
       if (name.includes('stem')) return 'stem'
@@ -4192,10 +4668,11 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
   input = normalizePartComposeInput(input)
   const origin = input.position ?? [0, 0, 0]
   const completedParts = applyVehicleLayoutDefaults(
-    completePartBlueprint(input.parts ?? [], input.autoComplete),
+    completePartBlueprint(input.parts ?? [], input.autoComplete, input),
+    input,
   )
   const detailedParts = enhancePartBlueprintWithVisualDetails(completedParts, input)
-  const parts = resolveConnectedParts(applyVehicleLayoutDefaults(detailedParts))
+  const parts = resolveConnectedParts(applyVehicleLayoutDefaults(detailedParts, input))
   const shapes: PrimitiveShapeInput[] = []
 
   parts.forEach((part, index) => {

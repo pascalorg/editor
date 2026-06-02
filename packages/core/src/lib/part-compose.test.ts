@@ -186,6 +186,26 @@ describe('composePartPrimitives', () => {
     expect(shapes.some((shape) => shape.semanticRole === 'handwheel')).toBe(true)
   })
 
+  test('parameterizes ball valves without requiring users to list internal parts', () => {
+    const shapes = composePartPrimitives({
+      name: 'Ball Valve',
+      parts: [{ kind: 'valve_body' }],
+    })
+
+    expect(shapes.some((shape) => shape.semanticRole === 'valve_ball')).toBe(true)
+    expect(shapes.some((shape) => shape.semanticRole === 'valve_bore')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'seat_ring')).toHaveLength(2)
+    expect(shapes.some((shape) => shape.semanticRole === 'gate_wedge')).toBe(false)
+    expect(shapes.some((shape) => shape.name?.includes('lever handle'))).toBe(true)
+
+    const inletFlange = shapes.find((shape) => shape.semanticRole === 'flange_inlet')
+    const outletFlange = shapes.find((shape) => shape.semanticRole === 'flange_outlet')
+    expect(inletFlange?.position?.[1]).toBeCloseTo(0.38)
+    expect(outletFlange?.position?.[1]).toBeCloseTo(0.38)
+    expect(inletFlange?.position?.[0]).toBeLessThan(0)
+    expect(outletFlange?.position?.[0]).toBeGreaterThan(0)
+  })
+
   test('composes bicycle and vehicle equipment families', () => {
     const bicycle = composePartPrimitives({
       name: 'Bike',
@@ -299,8 +319,11 @@ describe('composePartPrimitives', () => {
     )
 
     const windshield = car.find((shape) => shape.name?.includes('windshield'))
-    expect(windshield?.rotation?.[2]).toBeCloseTo(Math.PI / 2)
+    expect(windshield?.rotation?.[2]).toBeLessThan(Math.PI / 2)
     expect(windshield?.position?.[2]).toBeCloseTo(0)
+
+    const rearWindow = car.find((shape) => shape.name?.includes('rear window'))
+    expect(rearWindow?.rotation?.[2]).toBeGreaterThan(Math.PI / 2)
 
     const sideWindow = car.find((shape) => shape.name?.includes('side window left'))
     expect(sideWindow?.rotation?.[0]).toBeCloseTo(Math.PI / 2)
@@ -308,6 +331,132 @@ describe('composePartPrimitives', () => {
     const frontBumper = car.find((shape) => shape.name?.includes('front bumper bar'))
     expect(frontBumper?.rotation).toBeUndefined()
     expect(frontBumper?.position?.[0]).toBeGreaterThan(2.2)
+  })
+
+  test('honors compact vehicle size and body-local color aliases', () => {
+    const car = composePartPrimitives({
+      name: 'small red car',
+      parts: [
+        {
+          kind: 'vehicle_body',
+          primaryColor: '#cc0000',
+          vehicleStyle: 'sedan',
+          sizeScale: 0.8,
+        },
+        { kind: 'vehicle_wheels' },
+        { kind: 'vehicle_windows' },
+        { kind: 'headlights' },
+        { kind: 'bumper' },
+      ],
+    })
+
+    const bodyShell = car.find((shape) => shape.name?.includes('vehicle body shell'))
+    expect(bodyShell?.length).toBeCloseTo(3.52)
+    expect(bodyShell?.width).toBeCloseTo(1.44)
+    expect(bodyShell?.material?.properties?.color).toBe('#cc0000')
+
+    const cabin = car.find((shape) => shape.name?.includes('vehicle cabin frame'))
+    expect(cabin?.kind).toBe('trapezoid-prism')
+    expect(cabin?.length).toBeLessThan((bodyShell?.length ?? 0) * 0.45)
+    expect(cabin?.length).toBeGreaterThan((bodyShell?.length ?? 0) * 0.4)
+    expect(cabin?.height).toBeLessThan(0.1)
+
+    const roof = car.find((shape) => shape.name?.includes('vehicle roof cap'))
+    expect(roof?.semanticRole).toBe('vehicle_roof')
+    expect(roof?.kind).toBe('rounded-panel')
+    expect(roof?.thickness).toBeGreaterThan(0.02)
+    expect(roof?.thickness).toBeLessThan(0.05)
+    expect(roof?.width).toBeLessThan(cabin?.width ?? Number.POSITIVE_INFINITY)
+    expect(roof?.position?.[1]).toBeGreaterThan(cabin?.position?.[1] ?? 0)
+
+    const hood = car.find((shape) => shape.name?.includes('front deck hood surface'))
+    expect(hood?.kind).toBe('wedge')
+    expect(hood?.height).toBeLessThan((bodyShell?.height ?? 1) * 0.12)
+
+    const glasshouse = car.find((shape) => shape.name?.includes('integrated vehicle glasshouse'))
+    expect(glasshouse?.kind).toBe('trapezoid-prism')
+    expect(glasshouse?.semanticRole).toBe('vehicle_window')
+    expect(glasshouse?.material?.properties?.transparent).toBe(true)
+    expect(glasshouse?.topLengthScale).toBeLessThan(1)
+
+    const pillars = car.filter((shape) => shape.semanticRole === 'vehicle_pillar')
+    expect(pillars).toHaveLength(6)
+    expect(pillars.every((shape) => shape.material?.properties?.color === '#cc0000')).toBe(true)
+
+    const roofRails = car.filter((shape) => shape.name?.includes('vehicle roof rail'))
+    expect(roofRails).toHaveLength(2)
+
+    const windshield = car.find((shape) => shape.name?.includes('windshield'))
+    expect(windshield?.material?.properties?.transparent).toBe(true)
+    expect(windshield?.material?.properties?.color).toBe('#1e3a8a')
+    expect(windshield?.rotation?.[2]).toBeLessThan(Math.PI / 2)
+
+    const rearWindow = car.find((shape) => shape.name?.includes('rear window'))
+    expect(rearWindow?.rotation?.[2]).toBeGreaterThan(Math.PI / 2)
+
+    const sideWindow = car.find((shape) => shape.name?.includes('side window left'))
+    expect(sideWindow?.length).toBeGreaterThan((cabin?.length ?? 0) * 0.6)
+    expect(sideWindow?.width).toBeGreaterThan((windshield?.length ?? 0) * 0.7)
+
+    expect(car.some((shape) => shape.name?.includes('wheel arch shadow'))).toBe(false)
+  })
+
+  test('uses a tapered trapezoid cabin when vehicle roof corners are requested below 90 degrees', () => {
+    const car = composePartPrimitives({
+      name: 'Red streamlined car',
+      primaryColor: '#cc0000',
+      autoComplete: false,
+      parts: [
+        {
+          kind: 'vehicle_body',
+          length: 4,
+          width: 1.6,
+          height: 1.25,
+          roofCornerAngle: 85,
+          cornerRadius: 0.14,
+          cornerSegments: 10,
+        },
+      ],
+    })
+
+    const cabin = car.find((shape) => shape.name?.includes('vehicle cabin frame'))
+    expect(cabin?.kind).toBe('trapezoid-prism')
+    expect(cabin?.topLengthScale).toBeCloseTo(0.9)
+    expect(cabin?.topWidthScale).toBeCloseTo(0.9)
+    expect(cabin?.semanticRole).toBe('vehicle_cabin')
+  })
+
+  test('derives distinct vehicle style proportions from intent', () => {
+    const sedan = composePartPrimitives({
+      name: 'family sedan',
+      parts: [{ kind: 'vehicle_body' }],
+    })
+    const suv = composePartPrimitives({
+      name: 'offroad SUV',
+      parts: [{ kind: 'vehicle_body' }],
+    })
+    const sports = composePartPrimitives({
+      name: 'red sports car',
+      parts: [{ kind: 'vehicle_body' }],
+    })
+    const truck = composePartPrimitives({
+      name: 'pickup truck',
+      parts: [{ kind: 'vehicle_body' }],
+    })
+
+    const body = (shapes: ReturnType<typeof composePartPrimitives>) =>
+      shapes.find((shape) => shape.name?.includes('vehicle body shell'))
+    const cabin = (shapes: ReturnType<typeof composePartPrimitives>) =>
+      shapes.find((shape) => shape.name?.includes('vehicle cabin frame'))
+    const tireRadius = (shapes: ReturnType<typeof composePartPrimitives>) =>
+      shapes.find((shape) => shape.name?.includes('vehicle tire'))?.majorRadius ?? 0
+
+    expect(body(suv)?.position?.[1]).toBeGreaterThan(body(sedan)?.position?.[1] ?? 0)
+    expect(body(sports)?.position?.[1]).toBeLessThan(body(sedan)?.position?.[1] ?? 0)
+    expect(tireRadius(sports)).toBeGreaterThan(tireRadius(sedan))
+    expect(cabin(sports)?.topLengthScale).toBeLessThan(cabin(sedan)?.topLengthScale ?? 1)
+    expect(cabin(suv)?.length).toBeGreaterThan(cabin(sedan)?.length ?? 0)
+    expect(truck.some((shape) => shape.name?.includes('truck cargo bed'))).toBe(true)
   })
 
   test('composes expanded factory equipment families and visual details', () => {

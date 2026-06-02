@@ -3,6 +3,11 @@
 import { memo, useEffect } from 'react'
 import useEditor from '../../store/use-editor'
 
+function hasBrowserTextSelection() {
+  const selection = window.getSelection()
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim())
+}
+
 type FloorplanSiteKeyHandlerProps = {
   onRestoreGroundLevel: () => void
 }
@@ -61,6 +66,10 @@ export const FloorplanDuplicateHotkey = memo(function FloorplanDuplicateHotkey({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'c') {
+        return
+      }
+
+      if (hasBrowserTextSelection()) {
         return
       }
 

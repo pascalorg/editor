@@ -25,9 +25,10 @@ import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
-import { MathUtils } from 'three'
+import { MathUtils, MeshStandardMaterial } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { getItemColorOverride, isImportedGlbAsset } from './color-metadata'
 
 const getMaterialForOriginal = (original: Material): Material => {
   if (original.name.toLowerCase() === 'glass') {
@@ -47,18 +48,32 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   )
 }
 
+function isTransientItem(node: ItemNode) {
+  return (
+    typeof node.metadata === 'object' &&
+    node.metadata !== null &&
+    !Array.isArray(node.metadata) &&
+    (node.metadata as Record<string, unknown>).isTransient === true
+  )
+}
+
 export const ItemRenderer = ({ node }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
+  const useProxy = isImportedGlbAsset(node) && isTransientItem(node)
 
   useRegistry(node.id, node.type, ref)
 
   return (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
-      <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
-        <Suspense fallback={<PreviewModel node={node} />}>
-          <ModelRenderer node={node} />
-        </Suspense>
-      </ErrorBoundary>
+      {useProxy ? (
+        <PreviewModel node={node} />
+      ) : (
+        <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
+          <Suspense fallback={<PreviewModel node={node} />}>
+            <ModelRenderer node={node} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
       {node.children?.map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
@@ -94,13 +109,20 @@ const multiplyScales = (
 ): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
 const ModelRenderer = ({ node }: { node: ItemNode }) => {
-  const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
+  const importedGlb = isImportedGlbAsset(node)
+  const modelUrl = useMemo(() => {
+    const src = resolveCdnUrl(node.asset.src) || ''
+    if (!(src && importedGlb)) return src
+    return `${src}${src.includes('?') ? '&' : '?'}pascalImportedGlb=1`
+  }, [node.asset.src, importedGlb])
+  const { scene, nodes, animations } = useGLTF(modelUrl)
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
+  const colorOverride = getItemColorOverride(node)
   // Freeze the interactive definition at mount — asset schemas don't change at runtime
   const interactiveRef = useRef(node.asset.interactive)
 
-  if (nodes.cutout) {
+  if (!importedGlb && nodes.cutout) {
     nodes.cutout.visible = false
   }
 
@@ -118,12 +140,37 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     return () => useInteractive.getState().removeItem(node.id)
   }, [node.id])
 
-  useMemo(() => {
-    scene.traverse((child) => {
+  const preparedScene = useMemo(() => {
+    const clonedScene = scene.clone(true)
+    const colorMaterial = colorOverride
+      ? new MeshStandardMaterial({
+          color: colorOverride,
+          metalness: 0.05,
+          roughness: 0.72,
+        })
+      : null
+
+    clonedScene.traverse((child) => {
       if ((child as Mesh).isMesh) {
         const mesh = child as Mesh
-        if (mesh.name === 'cutout') {
+        if (!importedGlb && mesh.name === 'cutout') {
           child.visible = false
+          return
+        }
+
+        if (importedGlb) {
+          if (colorMaterial) {
+            mesh.material = colorMaterial
+          }
+          mesh.castShadow = false
+          mesh.receiveShadow = false
+          return
+        }
+
+        if (colorMaterial) {
+          mesh.material = colorMaterial
+          mesh.castShadow = true
+          mesh.receiveShadow = true
           return
         }
 
@@ -153,7 +200,8 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
         mesh.receiveShadow = !hasGlass
       }
     })
-  }, [scene])
+    return clonedScene
+  }, [scene, importedGlb, colorOverride])
 
   const interactive = interactiveRef.current
   const animEffect =
@@ -167,7 +215,7 @@ const ModelRenderer = ({ node }: { node: ItemNode }) => {
     <>
       <Clone
         dispose={null}
-        object={scene}
+        object={preparedScene}
         position={node.asset.offset}
         ref={ref}
         rotation={node.asset.rotation}

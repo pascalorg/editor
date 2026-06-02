@@ -1,0 +1,48 @@
+{
+  "source": "text-to-cad",
+  "prompt": "生成一个带四个安装孔的电机支架",
+  "cadIntent": {
+    "family": "motor_bracket",
+    "materialColor": "gray",
+    "dimensions": {
+      "length": 0.3,
+      "width": 0.2,
+      "baseThickness": 0.03,
+      "wallHeight": 0.1,
+      "wallThickness": 0.03
+    },
+    "mountingHoles": {
+      "count": 4,
+      "diameter": 0.02,
+      "marginX": 0.05,
+      "marginZ": 0.05
+    },
+    "plannerSource": "llm",
+    "plannerModel": "deepseek-v4-pro"
+  },
+  "name": "生成一个带四个安装孔的电机支架",
+  "createdAt": "2026-06-02T11:31:21.790Z",
+  "worker": {
+    "status": "generated",
+    "name": "生成一个带四个安装孔的电机支架",
+    "sourcePath": "source.py",
+    "stepPath": "model.step",
+    "glbPath": "model.glb",
+    "thumbnailPath": "thumbnail.png",
+    "logPath": "run.log",
+    "warnings": []
+  },
+  "assetTransform": {
+    "dimensions": [
+      0.30000000000000004,
+      0.145,
+      0.2
+    ],
+    "offset": [
+      0,
+      0.005000000000000001,
+      0
+    ]
+  },
+  "mode": "llm-planned-parametric-preview"
+}

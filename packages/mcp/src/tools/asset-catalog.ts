@@ -281,18 +281,6 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
   },
-  {
-    id: 'coat-rack',
-    category: 'furniture',
-    tags: ['floor', 'storage', 'entry'],
-    name: 'Coat Rack',
-    thumbnail: '/items/coat-rack/thumbnail.webp',
-    src: '/items/coat-rack/model.glb',
-    dimensions: [0.5, 1.8, 0.5],
-    offset: [0, 0, 0],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-  },
 ]
 
 export function findCatalogItem(id: string): AssetInput | undefined {

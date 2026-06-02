@@ -4,7 +4,6 @@ import { AiChatPanel, Editor, ItemsPanel } from '@pascal-app/editor'
 import { Layers, MessageCircle, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo } from 'react'
-import { ImageTo3DLeadingTile } from '@/components/image-to-3d-leading-tile'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -12,10 +11,6 @@ import {
 import { t } from '@/i18n'
 
 const PROJECT_ID = 'local-editor'
-
-function ItemsPanelWithImageTo3D() {
-  return <ItemsPanel leadingTile={<ImageTo3DLeadingTile />} />
-}
 
 export default function Home() {
   const sidebarTabs = useMemo(
@@ -37,7 +32,7 @@ export default function Home() {
       {
         id: 'items',
         label: t('sidebar.items', 'Items'),
-        component: ItemsPanelWithImageTo3D,
+        component: ItemsPanel,
         mobileDefaultSnap: 0.5,
         mobileIcon: <Package className="h-5 w-5" />,
       },

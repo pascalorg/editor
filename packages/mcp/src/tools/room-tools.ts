@@ -360,7 +360,6 @@ function buildRoomPlacements(
       break
     case 'entry':
     case 'hallway':
-      if (Math.min(bounds.width, bounds.depth) >= 1.4) addSide('coat-rack', 0.35)
       break
     case 'storage':
       addBack('closet', 0.6)

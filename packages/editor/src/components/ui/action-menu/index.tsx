@@ -89,12 +89,15 @@ export function ActionMenu({ className }: { className?: string }) {
         className={cn(
           'left-1/2 z-50 -translate-x-1/2',
           isMobile ? 'absolute origin-bottom scale-90' : 'fixed bottom-6',
-          'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
+          'rounded-2xl border border-white/10 shadow-2xl',
           'transition-colors duration-200 ease-out',
           className,
         )}
         layout
-        style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
+        style={{
+          ...(isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined),
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        }}
         transition={transition}
       >
         {/* Structure Tools Row - Animated */}

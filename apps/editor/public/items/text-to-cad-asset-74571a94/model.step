@@ -1,0 +1,9 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Pascal text-to-CAD vertical-slice placeholder'),'2;1');
+FILE_NAME('生成一个带四个安装孔的电机支架.step','2026-06-02T11:09:29.687Z',('pascal'),('pascal'),'cad-worker','pascal','');
+ENDSEC;
+DATA;
+/* Placeholder STEP. Phase 2 replaces this with real build123d/CAD output. */
+ENDSEC;
+END-ISO-10303-21;

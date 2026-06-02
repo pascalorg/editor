@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pipe">
+  <defs>
+    <linearGradient id="pipe-main" x1="10" x2="54" y1="14" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#94a3b8" />
+      <stop offset="0.48" stop-color="#dbeafe" />
+      <stop offset="1" stop-color="#64748b" />
+    </linearGradient>
+    <linearGradient id="pipe-edge" x1="16" x2="52" y1="16" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8" />
+      <stop offset="1" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M18 14h18a14 14 0 0 1 14 14v18H38V28a2 2 0 0 0-2-2H18z"
+    fill="url(#pipe-main)"
+    stroke="url(#pipe-edge)"
+    stroke-linejoin="round"
+    stroke-width="4"
+  />
+  <path d="M18 14v12" stroke="#475569" stroke-linecap="round" stroke-width="3" opacity="0.55" />
+  <path d="M38 46h12" stroke="#475569" stroke-linecap="round" stroke-width="3" opacity="0.55" />
+  <rect x="8" y="10" width="14" height="20" rx="4" fill="#e2e8f0" stroke="#2563eb" stroke-width="3" />
+  <rect x="34" y="42" width="20" height="14" rx="4" fill="#e2e8f0" stroke="#2563eb" stroke-width="3" />
+  <circle cx="15" cy="20" r="2" fill="#2563eb" opacity="0.8" />
+  <circle cx="44" cy="49" r="2" fill="#2563eb" opacity="0.8" />
+</svg>

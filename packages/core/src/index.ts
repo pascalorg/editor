@@ -100,6 +100,31 @@ export {
   validatePrimitiveSemantics,
 } from './lib/primitive-semantic-validation'
 export {
+  assessPrimitiveVisualQuality,
+  type PrimitiveVisualQualityFamily,
+  type PrimitiveVisualQualityOptions,
+  type PrimitiveVisualQualityResult,
+} from './lib/primitive-visual-quality'
+export {
+  composeRecipePrimitives,
+  findPrimitiveRecipe,
+  getPrimitiveRecipeGeometryBrief,
+  listPrimitiveRecipes,
+  type ComposeRecipeInput,
+  type PrimitiveRecipeDefinition,
+  type PrimitiveRecipeId,
+  type PrimitiveRecipeParams,
+} from './lib/primitive-recipes'
+export {
+  applyPrimitiveRevision,
+  selectPrimitiveShapeIndexes,
+  type PrimitiveRevisionEdge,
+  type PrimitiveRevisionInput,
+  type PrimitiveRevisionOperation,
+  type PrimitiveRevisionResult,
+  type PrimitiveShapeSelector,
+} from './lib/primitive-revision'
+export {
   composeRobotArmPrimitives,
   type RobotArmComposeInput,
   type RobotArmPose,

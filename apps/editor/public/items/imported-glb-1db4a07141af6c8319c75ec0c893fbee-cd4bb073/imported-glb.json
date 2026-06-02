@@ -1,0 +1,19 @@
+{
+  "sourceFileName": "1db4a07141af6c8319c75ec0c893fbee.glb",
+  "sourceFileType": "application/octet-stream",
+  "sourceFileSize": 19228136,
+  "inspection": {
+    "triangles": 49848,
+    "meshes": 1,
+    "primitives": 1,
+    "materials": 1,
+    "images": 3,
+    "maxTextureSize": 4096,
+    "dimensions": [
+      0.4184730052947998,
+      0.8861609995365143,
+      0.9102920293807983
+    ]
+  },
+  "importedAt": "2026-06-01T12:49:26.158Z"
+}

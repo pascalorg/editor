@@ -4,13 +4,48 @@ This document captures the design intent for the primitive/parts generation flow
 
 ## Current strategy
 
-Geometry generation has three levels:
+Geometry generation has four levels:
 
 1. `compose_object` for supported whole-object templates.
-2. `compose_parts` for reusable mechanical or industrial part blueprints.
-3. `compose_primitive` for fully custom low-level geometry.
+2. `compose_recipe` for built-in deterministic primitive recipe packs.
+3. `compose_parts` for reusable mechanical or industrial part blueprints.
+4. `compose_primitive` for fully custom low-level geometry.
 
-Prefer `compose_parts` when the requested object is a recognizable assembly made of reusable physical components, but not a fixed hard-coded template. A standing fan is not implemented as a one-off fan template; it is built from base, pole, bracket, motor housing, blades, and protective grill parts. The same pattern is used for pumps, blowers, conveyors, tanks, valves, and other equipment.
+Prefer `compose_recipe` for known high-friction families that already have deterministic recipe packs: vehicles, gate/ball valves, and 3-axis robot arms. Prefer `compose_parts` when the requested object is a recognizable assembly made of reusable physical components, but no fixed recipe covers it. A standing fan is not implemented as a one-off fan template; it is built from base, pole, bracket, motor housing, blades, and protective grill parts. The same pattern is used for pumps, blowers, conveyors, tanks, custom valves, and other equipment.
+
+Primitive "high fidelity" means editable, stylized fidelity: stronger proportions,
+clearer silhouettes, rounded/tapered manufactured forms, and stable semantic
+subassemblies. It does not mean Articraft/GLB photorealism. Keep Articraft assets
+separate from primitive repair and recipe flows.
+
+## Internal Recipe Registry
+
+The internal registry lives in:
+
+```txt
+packages/core/src/lib/primitive-recipes.ts
+```
+
+It is not a user-facing plugin system yet. It is a deterministic routing layer that
+lets the model choose `recipeId + params` instead of hand-authoring large schemas
+for families where procedural defaults matter.
+
+Current recipe ids:
+
+```txt
+vehicle.sedan
+vehicle.suv
+vehicle.sports
+vehicle.van
+vehicle.truck
+valve.gate
+valve.ball
+robotArm.threeAxis
+```
+
+The registry expands recipes into existing core builders (`compose_parts` or
+`compose_robot_arm`), then reuses the same semantic validation, visual quality
+scoring, repair memory, and generated assembly output as other primitive tools.
 
 ## Hard rule: no generated motion
 
@@ -180,7 +215,12 @@ The bicycle family is a structural side-view approximation: tires/rims/spokes, t
 
 ### Cars and small vehicles
 
-Recommended blueprint:
+Preferred path: `compose_recipe` with one of `vehicle.sedan`, `vehicle.suv`,
+`vehicle.sports`, `vehicle.van`, or `vehicle.truck`. Use compact params such as
+`color`, `size`, `sizeScale`, `length`, `width`, `height`, and `highFidelity`.
+
+Fallback `compose_parts` blueprint when the recipe does not cover the requested
+vehicle:
 
 ```txt
 vehicle_body
@@ -191,6 +231,43 @@ bumper
 ```
 
 Use extra `nameplate`, `warning_label`, and `seam_ring` only when the prompt asks for industrial labels or panel seams.
+For small cars without exact dimensions, recipe params can use `size:"small"` or
+`sizeScale:0.8`. In fallback `compose_parts`, put `sizeScale` on `vehicle_body` (for example
+`sizeScale: 0.8`) and use either top-level `primaryColor` or `vehicle_body.primaryColor`
+for the body color. The composer accepts these part-local aliases because the model often
+keeps the color and scale with the semantic body part.
+
+Vehicle primitive quality is checked in two layers:
+
+- semantic validation: exactly one body, four tires, windows, headlights, and bumpers
+- visual quality scoring: wheel/body proportions, non-boxy cabin, separated windows,
+  front/rear deck layering, rocker/sill shadow, and subtle wheel-arch/fender hints
+
+For "high fidelity", "好看", "真实", "别太方", or smoothness follow-ups, keep the
+vehicle in `compose_parts`. Tune `vehicle_body.cornerRadius`, `cornerSegments`,
+`cabinTopScale`/`roofCornerAngle`, `detail:"high"`, and
+`enhanceVisualDetails:true`; do not rebuild the car as raw primitive boxes.
+
+Vehicle style presets are supported through `vehicle_body.vehicleStyle` (or
+style/variant intent): `sedan`, `suv`, `sports`, `van`, and `truck`. They change
+default length/width/height, cabin footprint/taper, wheel radius, wheelbase,
+track width, and ground clearance so "SUV", "跑车", "面包车", and "皮卡" do not all
+share the same silhouette.
+
+### Robot arms
+
+Use `compose_recipe({recipeId:"robotArm.threeAxis"})` for 3-axis robot arm
+requests. Use `compose_robot_arm` directly for robot arm, cobot, manipulator,
+FANUC arm, or 6-axis arm requests that are not covered by the 3-axis recipe. Both
+paths produce an editable primitive assembly with semantic
+roles such as `robot_base`, `base_joint`, `shoulder_joint`, `upper_arm`,
+`elbow_joint`, `forearm`, `wrist_joint`, `tool_flange`, and `end_effector`.
+
+For "圆形底盘 / round base" pass `baseShape:"round"`; for "3轴/3-axis" pass
+`axisCount:3`; default to `pose:"work-ready"` and `endEffector:"gripper"` for a
+readable bent silhouette. Robot arms also participate in semantic and visual
+quality checks so missing joints/links are repairable before the result reaches
+the canvas.
 
 ## Connection and self-check
 

@@ -1,0 +1,14 @@
+{
+  "prompt": "生成一个带四个安装孔的电机支架",
+  "name": "生成一个带四个安装孔的电机支架",
+  "units": "mm",
+  "outputs": [
+    "step",
+    "glb",
+    "thumbnail"
+  ],
+  "constraints": {
+    "maxRuntimeMs": 45000,
+    "maxOutputMb": 50
+  }
+}
