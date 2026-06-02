@@ -285,7 +285,7 @@ function collectNodeIdsInBounds(bounds: Bounds | null): string[] {
         // Registry-driven selectable kinds (shelf + future furnish/structure
         // kinds) aren't in the hardcoded list above; pick them up by their
         // rendered bounding box, the same path column/stair use.
-        if (objectBoundsIntersectsBounds(node.id, bounds)) {
+        if (!bounds || objectBoundsIntersectsBounds(node.id, bounds)) {
           result.push(node.id)
         }
       }
