@@ -6,6 +6,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
 import { LevelNode } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
@@ -104,6 +105,11 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
 
   const parsed = StairSegmentNodeSchema.safeParse(sanitized)
   return parsed.success ? parsed.data : null
+}
+
+function normalizeDoorNode(node: Record<string, unknown>) {
+  const parsed = DoorNodeSchema.safeParse(node)
+  return parsed.success ? { ...node, ...parsed.data } : null
 }
 
 function migrateWallSurfaceMaterials(node: Record<string, any>) {
@@ -362,6 +368,13 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
             : 0
         // 40° matches the RoofSegmentNode schema default.
         patchedNodes[id] = { ...rest, pitch: derived > 0 ? derived : 40 }
+      }
+    }
+
+    if (node.type === 'door') {
+      const normalized = normalizeDoorNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
       }
     }
 
