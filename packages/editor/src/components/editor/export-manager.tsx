@@ -76,7 +76,9 @@ function hideCapGeometryForExport(): Array<{ obj: Object3D; visible: boolean }> 
   const hidden: Array<{ obj: Object3D; visible: boolean }> = []
 
   for (const type of EXPORT_OMIT_CAP_TYPES) {
-    for (const id of sceneRegistry.byType[type]) {
+    const ids = sceneRegistry.byType[type]
+    if (!ids) continue
+    for (const id of ids) {
       const obj = sceneRegistry.nodes.get(id)
       if (!obj) continue
       hidden.push({ obj, visible: obj.visible })
