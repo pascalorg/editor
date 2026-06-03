@@ -139,7 +139,7 @@ export interface EditorProps {
 
   // Persistence — defaults to localStorage when omitted
   onLoad?: () => Promise<SceneGraph | null>
-  onSave?: (scene: SceneGraph) => Promise<void>
+  onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
 
