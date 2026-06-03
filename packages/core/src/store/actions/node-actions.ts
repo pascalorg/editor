@@ -416,7 +416,9 @@ export const applyNodeChangesAction = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
-  nodesToMarkDirty.forEach((id) => get().markDirty(id))
+  nodesToMarkDirty.forEach((id) => {
+    get().markDirty(id)
+  })
   parentsToMarkDirty.forEach((id) => {
     get().markDirty(id)
     const parent = get().nodes[id]

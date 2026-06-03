@@ -337,7 +337,6 @@ export function generateDormerGeometry(
 
   const dormerBrushes = getRoofSegmentBrushes(virtualSegment)
   if (!dormerBrushes) {
-    // biome-ignore lint/suspicious/noConsole: keep diagnostic — fallback path.
     console.warn('[dormer] getRoofSegmentBrushes returned null; using fallback silhouette.')
     return buildDormerFallbackGeometry(dormer)
   }
@@ -476,7 +475,6 @@ export function generateDormerGeometry(
     remapRoofShellFaces(resultGeo, virtualSegment)
     splitDormerGableMaterial(resultGeo, dormer.height, DORMER_GABLE_MATERIAL_INDEX)
   } catch (e) {
-    // biome-ignore lint/suspicious/noConsole: dormer CSG can throw; keep diagnostic.
     console.error('[dormer] CSG failed, falling back to silhouette:', e)
     if (dormerSolid) {
       try {
@@ -496,7 +494,6 @@ export function generateDormerGeometry(
   // dormer is at least visible.
   const triCount = resultGeo.getIndex()?.count ?? resultGeo.getAttribute('position')?.count ?? 0
   if (triCount === 0) {
-    // biome-ignore lint/suspicious/noConsole: keep diagnostic — empty CSG.
     console.warn('[dormer] CSG produced empty geometry; using fallback silhouette.')
     return buildDormerFallbackGeometry(dormer)
   }

@@ -110,7 +110,8 @@
       "!**/build",
       "!**/public",
       "!**/components/ui",
-      "!**/next-env.d.ts"
+      "!**/next-env.d.ts",
+      "!packages/mcp"
     ]
   },
   "overrides": [

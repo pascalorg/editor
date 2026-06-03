@@ -71,7 +71,6 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
         })
       }
     }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: capture-on-mount; meta is intentionally not re-read on changes.
   }, [node.id, isNew])
 
   const { activeBuildingId, segmentXform, hitLocal, ghostRotation } = useDormerPlacement({
