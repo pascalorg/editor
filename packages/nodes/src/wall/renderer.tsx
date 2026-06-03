@@ -78,7 +78,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
       ))}
     </mesh>
