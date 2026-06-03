@@ -277,6 +277,10 @@ type EditorState = {
   setActivePaintMaterial: (material: ActivePaintMaterial | null) => void
   activePaintTarget: PaintableMaterialTarget
   setActivePaintTarget: (target: PaintableMaterialTarget) => void
+  // When true, clicking a surface in paint mode clears it back to its
+  // default material instead of applying `activePaintMaterial`.
+  paintEraser: boolean
+  setPaintEraser: (eraser: boolean) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
   hoveredPaintTarget: PaintableMaterialTarget | null
   setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
@@ -723,12 +727,17 @@ const useEditor = create<EditorState>()(
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,
-      setActivePaintMaterial: (material) => set({ activePaintMaterial: material }),
+      // Picking a material implies paint, not erase — clear the eraser so the
+      // next click applies the chosen material.
+      setActivePaintMaterial: (material) =>
+        set({ activePaintMaterial: material, paintEraser: false }),
       activePaintTarget: 'wall',
       setActivePaintTarget: (target) =>
         set((state) =>
           state.activePaintTarget === target ? state : { activePaintTarget: target },
         ),
+      paintEraser: false,
+      setPaintEraser: (eraser) => set({ paintEraser: eraser }),
       primeMaterialPaintFromSelection: () => {
         const selectedId =
           useViewer.getState().selection.selectedIds.length === 1

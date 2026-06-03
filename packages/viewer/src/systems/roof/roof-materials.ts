@@ -91,11 +91,16 @@ export function getRoofMaterialArray(
     return roleArray
   }
 
+  // Each slot resolves to its own role only, then the themed default — never
+  // another role. Cross-role fallback here used to splatter a single painted
+  // surface (e.g. the edge) across the shingle and soffit slots. The legacy
+  // catch-all still fills every role because `getEffectiveRoofSurfaceMaterial`
+  // returns it for top/edge/wall alike.
   const materialArray: RoofMaterialArray = [
-    edgeMaterial ?? wallMaterial ?? topMaterial ?? roofMaterial,
-    wallMaterial ?? edgeMaterial ?? topMaterial ?? ceilingMaterial,
-    wallMaterial ?? edgeMaterial ?? topMaterial ?? ceilingMaterial,
-    topMaterial ?? wallMaterial ?? edgeMaterial ?? roofMaterial,
+    edgeMaterial ?? roofMaterial,
+    wallMaterial ?? ceilingMaterial,
+    wallMaterial ?? ceilingMaterial,
+    topMaterial ?? roofMaterial,
   ]
 
   roofMaterialArrayCache.set(cacheKey, materialArray)

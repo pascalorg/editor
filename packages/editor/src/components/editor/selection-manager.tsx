@@ -45,7 +45,6 @@ import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
   buildRoofSurfaceMaterialPatch,
-  buildRoofSurfaceMaterialUpdates,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
   hasActivePaintMaterial,
@@ -294,12 +293,9 @@ function applyRoofSegmentPaintPreview(
   if (!(edge || wall || top)) return null
   const fallback = parent ? getRoofMaterialArray(parent) : null
   const fb = (n: number) => fallback?.[n] ?? null
-  const arr: Material[] = [
-    edge ?? wall ?? top ?? fb(0)!,
-    wall ?? edge ?? top ?? fb(1)!,
-    wall ?? edge ?? top ?? fb(2)!,
-    top ?? wall ?? edge ?? fb(3)!,
-  ]
+  // Per-role only, then the parent's themed slot — matches the renderer so the
+  // preview never bleeds a painted surface onto the segment's other surfaces.
+  const arr: Material[] = [edge ?? fb(0)!, wall ?? fb(1)!, wall ?? fb(2)!, top ?? fb(3)!]
   if (arr.some((m) => !m)) return null
   return previewMeshMaterial(mesh, arr)
 }
@@ -844,10 +840,30 @@ export const SelectionManager = () => {
       })
 
     const getPaintInteraction = (event: NodeEvent): PaintInteraction | null => {
+      const eraser = useEditor.getState().paintEraser
       const activePaintMaterial = resolveActivePaintMaterial()
       const node = event.node
 
       if (!isNodeInCurrentLevel(node)) return null
+
+      // The eraser clears a surface back to its default by painting with an
+      // empty material — every `build*SurfaceMaterialPatch` interprets
+      // `undefined` material/preset as "reset this role". So a single spec
+      // with both fields undefined drives the same apply/preview paths as a
+      // real material; only the enabled-gate differs (no material required).
+      const paintEnabled = eraser || hasActivePaintMaterial(activePaintMaterial)
+      const paintSpec: ActivePaintMaterial = eraser
+        ? {
+            material: undefined,
+            materialPreset: undefined,
+            sourceTarget:
+              activePaintMaterial?.sourceTarget ?? useEditor.getState().activePaintTarget,
+          }
+        : (activePaintMaterial ?? {
+            material: undefined,
+            materialPreset: undefined,
+            sourceTarget: useEditor.getState().activePaintTarget,
+          })
 
       // Registry-driven paint dispatch — kinds that declare
       // `capabilities.paint` route hover / click / preview through
@@ -864,9 +880,9 @@ export const SelectionManager = () => {
           localPosition: event.localPosition as readonly [number, number, number] | undefined,
           hitObjectName: event.nativeEvent.object?.name,
         })
-        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        const compatible = role !== null && paintEnabled
         return {
-          key: `${node.type}:${node.id}:${role ?? 'unsupported'}`,
+          key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
@@ -877,8 +893,8 @@ export const SelectionManager = () => {
                     paintCap.buildPatch({
                       node,
                       role,
-                      material: activePaintMaterial.material,
-                      materialPreset: activePaintMaterial.materialPreset,
+                      material: paintSpec.material,
+                      materialPreset: paintSpec.materialPreset,
                     }) as Partial<AnyNode>,
                   )
                 }
@@ -891,8 +907,8 @@ export const SelectionManager = () => {
                   return paintCap.applyPreview({
                     node,
                     role,
-                    material: activePaintMaterial.material,
-                    materialPreset: activePaintMaterial.materialPreset,
+                    material: paintSpec.material,
+                    materialPreset: paintSpec.materialPreset,
                     root,
                   })
                 }
@@ -911,7 +927,7 @@ export const SelectionManager = () => {
         if (!roofNode || roofNode.type !== 'roof') return null
 
         const role = resolveRoofMaterialTarget(event as RoofEvent | RoofSegmentEvent)
-        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        const compatible = role !== null && paintEnabled
         // Painting directly on a segment (only possible in segment edit
         // mode, where the per-segment mesh is visible) writes to the
         // segment's own role-specific fields. Painting the merged shell
@@ -920,14 +936,11 @@ export const SelectionManager = () => {
         return {
           key: `${segmentTarget ? 'roof-segment' : 'roof'}:${
             segmentTarget ? segmentTarget.id : roofNode.id
-          }:${role ?? 'unsupported'}`,
+          }:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: (segmentTarget ? segmentTarget.id : roofNode.id) as AnyNodeId,
-          hoverMode:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
-            compatible && hasActivePaintMaterial(activePaintMaterial)
+            compatible && role
               ? () => {
                   const sceneState = useScene.getState()
                   if (segmentTarget) {
@@ -935,35 +948,35 @@ export const SelectionManager = () => {
                       segmentTarget.id as AnyNodeId,
                       buildRoofSegmentSurfaceMaterialPatch(
                         segmentTarget,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
+                        role,
+                        paintSpec.material,
+                        paintSpec.materialPreset,
                       ),
                     )
                   } else {
-                    sceneState.updateNodes(
-                      buildRoofSurfaceMaterialUpdates(
-                        sceneState.nodes,
+                    sceneState.updateNode(
+                      roofNode.id as AnyNodeId,
+                      buildRoofSurfaceMaterialPatch(
                         roofNode as RoofNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
+                        role,
+                        paintSpec.material,
+                        paintSpec.materialPreset,
                       ),
                     )
                   }
                 }
               : null,
           preview:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
+            compatible && role
               ? () =>
                   segmentTarget
                     ? applyRoofSegmentPaintPreview(
                         segmentTarget,
                         roofNode as RoofNode,
                         role,
-                        activePaintMaterial,
+                        paintSpec,
                       )
-                    : applyRoofPaintPreview(roofNode as RoofNode, role, activePaintMaterial)
+                    : applyRoofPaintPreview(roofNode as RoofNode, role, paintSpec)
               : () => previewCursor('not-allowed'),
         }
       }
@@ -978,16 +991,13 @@ export const SelectionManager = () => {
         if (!stairNode || stairNode.type !== 'stair') return null
 
         const role = resolveStairMaterialTarget(event as StairEvent | StairSegmentEvent)
-        const compatible = role !== null && hasActivePaintMaterial(activePaintMaterial)
+        const compatible = role !== null && paintEnabled
         return {
-          key: `stair:${stairNode.id}:${role ?? 'unsupported'}`,
+          key: `stair:${stairNode.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
           hoveredId: stairNode.id as AnyNodeId,
-          hoverMode:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply:
-            compatible && hasActivePaintMaterial(activePaintMaterial)
+            compatible && role
               ? () => {
                   useScene
                     .getState()
@@ -995,16 +1005,16 @@ export const SelectionManager = () => {
                       stairNode.id as AnyNodeId,
                       buildStairSurfaceMaterialPatch(
                         stairNode as StairNode,
-                        role!,
-                        activePaintMaterial.material,
-                        activePaintMaterial.materialPreset,
+                        role,
+                        paintSpec.material,
+                        paintSpec.materialPreset,
                       ),
                     )
                 }
               : null,
           preview:
-            compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? () => applyStairPaintPreview(stairNode as StairNode, role, activePaintMaterial)
+            compatible && role
+              ? () => applyStairPaintPreview(stairNode as StairNode, role, paintSpec)
               : () => previewCursor('not-allowed'),
         }
       }
@@ -1021,10 +1031,10 @@ export const SelectionManager = () => {
         node.type === 'ceiling' ||
         node.type === 'shelf'
       ) {
-        const compatible = hasActivePaintMaterial(activePaintMaterial)
+        const compatible = paintEnabled
 
         return {
-          key: `${node.type}:${node.id}:surface`,
+          key: `${node.type}:${node.id}:surface:${eraser ? 'erase' : 'paint'}`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           apply: compatible
@@ -1035,7 +1045,7 @@ export const SelectionManager = () => {
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
                       FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
-                    >(activePaintMaterial.material, activePaintMaterial.materialPreset),
+                    >(paintSpec.material, paintSpec.materialPreset),
                   )
               }
             : null,
@@ -1043,7 +1053,7 @@ export const SelectionManager = () => {
             ? () =>
                 applySingleSurfacePaintPreview(
                   node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
-                  activePaintMaterial,
+                  paintSpec,
                 )
             : () => previewCursor('not-allowed'),
         }

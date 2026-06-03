@@ -185,6 +185,7 @@ export {
   getFloorplanWallThickness,
 } from './lib/floorplan'
 export {
+  buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
