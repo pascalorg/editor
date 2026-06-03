@@ -14,7 +14,13 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  DragBoundingBox,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 
 /**
@@ -46,6 +52,7 @@ const ALIGNMENT_THRESHOLD_M = 0.08
 
 function MoveColumnTool({ node }: { node: ColumnNode }) {
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(node.position)
+  const [previewRotation, setPreviewRotation] = useState<number>(node.rotation)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -75,6 +82,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     const applyPreview = (position: [number, number, number]) => {
       lastPosition = position
       setPreviewPosition(position)
+      setPreviewRotation(rotationY)
       useLiveTransforms.getState().set(node.id, {
         position,
         rotation: rotationY,
@@ -197,7 +205,17 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     }
   }, [exitMoveMode, node])
 
-  return <CursorSphere color="#a78bfa" height={node.height} position={previewPosition} />
+  return (
+    <>
+      <CursorSphere color="#a78bfa" height={node.height} position={previewPosition} />
+      <DragBoundingBox
+        fallbackSize={[node.width, node.height, node.depth]}
+        nodeId={node.id}
+        position={previewPosition}
+        rotationY={previewRotation}
+      />
+    </>
+  )
 }
 
 export default MoveColumnTool

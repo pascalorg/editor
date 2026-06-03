@@ -1,12 +1,15 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   type GridEvent,
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
+  resolveAlignment,
   sceneRegistry,
+  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -22,6 +25,8 @@ import { CursorSphere } from '../shared/cursor-sphere'
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
+/** Figma-style alignment-snap threshold (meters), matching the move tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 /**
  * Creates a roof group with one default gable segment
@@ -166,6 +171,45 @@ export const RoofTool: React.FC = () => {
 
     outlineRef.current.geometry = new BufferGeometry()
 
+    // Alignment candidates — anchors of every alignable object; refreshed
+    // after each roof commits. Both corners of the rectangle align.
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    // Snap the drafted corner onto another object's nearest real anchor and
+    // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
+    // point: resolving against the grid point would only ever catch anchors
+    // that happen to sit on a grid line, so off-grid items (furniture, angled
+    // walls) would never surface a guide. The matched axis locks exactly to the
+    // candidate's coordinate; the other axis keeps its grid snap. Alt bypasses.
+    const alignPoint = (
+      gridX: number,
+      gridZ: number,
+      rawX: number,
+      rawZ: number,
+      bypass: boolean,
+    ): [number, number] => {
+      if (bypass || alignmentCandidates.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      const ar = resolveAlignment({
+        moving: [{ nodeId: '__roof-draft__', kind: 'corner', x: rawX, z: rawZ }],
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+      if (ar.guides.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      useAlignmentGuides.getState().set(ar.guides)
+      let x = gridX
+      let z = gridZ
+      for (const guide of ar.guides) {
+        if (guide.axis === 'x') x = guide.coord
+        else z = guide.coord
+      }
+      return [x, z]
+    }
+
     const updateOutline = (
       corner1: [number, number, number],
       corner2: [number, number, number],
@@ -188,8 +232,13 @@ export const RoofTool: React.FC = () => {
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
 
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const [gridX, gridZ] = alignPoint(
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent?.altKey === true,
+      )
       const y = event.localPosition[1]
 
       const cursorPosition: [number, number, number] = [gridX, y, gridZ]
@@ -221,8 +270,13 @@ export const RoofTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const [gridX, gridZ] = alignPoint(
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent?.altKey === true,
+      )
       const y = event.localPosition[1]
 
       if (corner1Ref.current) {
@@ -237,6 +291,8 @@ export const RoofTool: React.FC = () => {
 
         corner1Ref.current = null
         outlineRef.current.visible = false
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+        useAlignmentGuides.getState().clear()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
         setPreview((prev) => ({
@@ -253,6 +309,7 @@ export const RoofTool: React.FC = () => {
         outlineRef.current.visible = false
         setPreview((prev) => ({ ...prev, corner1: null }))
       }
+      useAlignmentGuides.getState().clear()
     }
 
     emitter.on('grid:move', onGridMove)
@@ -263,6 +320,7 @@ export const RoofTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      useAlignmentGuides.getState().clear()
 
       corner1Ref.current = null
     }

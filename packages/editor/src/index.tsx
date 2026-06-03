@@ -59,6 +59,7 @@ export {
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
+export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
