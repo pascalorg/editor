@@ -1252,12 +1252,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onShelfMove = (event: ShelfEvent) => {
       has3DPointerDrivenMoveRef.current = true
-      // Guard against null ref. The mitt event listener can fire after the
-      // component unmounts (or before the <group ref> attaches), and the
-      // unguarded `cursorGroupRef.current.rotation.y = ...` write below was
-      // the source of EDITOR-BC (`Cannot read properties of null (reading
-      // 'rotation')`) — 53k+ events. Every other surface-move handler in
-      // this file already has this guard; onShelfMove was missed in #323.
+      // A shelf event can fire before the cursor group mounts or after
+      // teardown, leaving the ref null; bail before dereferencing it below.
       if (!cursorGroupRef.current) return
       const ctx = getContext()
       if (ctx.state.surface !== 'shelf-surface') {
