@@ -2,13 +2,13 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  collectAlignmentAnchors,
   type DragAction,
   type FenceNode,
   resolveAlignment,
   useAlignmentGuides,
   useScene,
   type WallNode,
-  wallSegmentAnchors,
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
@@ -143,12 +143,9 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         else if (node.type === 'fence') levelFences.push(node)
       }
 
-      // Alignment targets — every other wall + fence segment on the level.
-      const alignSegments: { id: string; start: FencePlanPoint; end: FencePlanPoint }[] = [
-        ...levelWalls,
-        ...levelFences.filter((f) => f.id !== fence.id),
-      ]
-      const alignCandidates = alignSegments.flatMap((s) => wallSegmentAnchors(s.id, s.start, s.end))
+      // Alignment targets — anchors of every other alignable object (walls,
+      // fences, items, slabs, ceilings, columns).
+      const alignCandidates = collectAlignmentAnchors(useScene.getState().nodes, fence.id)
 
       return {
         fenceId: fence.id as AnyNodeId,

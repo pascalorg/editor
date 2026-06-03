@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   DEFAULT_WALL_HEIGHT,
   emitter,
   type GridEvent,
@@ -13,7 +14,6 @@ import {
   useAlignmentGuides,
   useScene,
   type WallNode,
-  wallSegmentAnchors,
 } from '@pascal-app/core'
 import {
   CursorSphere,
@@ -214,23 +214,11 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
     )
 
-    // Alignment candidates — endpoints + midpoints of every OTHER wall AND
-    // fence on this level (both share the start/end segment shape), gathered
-    // once (the set is stable during the drag). Coords are building-local,
-    // the same frame as the cursor and the 3D guide layer, so the published
-    // marker lines up.
-    const parentId = target.wall.parentId ?? null
-    const alignSegments: { id: string; start: WallPlanPoint; end: WallPlanPoint }[] = []
-    for (const segment of Object.values(useScene.getState().nodes)) {
-      if (!segment || segment.id === nodeId) continue
-      if ((segment.parentId ?? null) !== parentId) continue
-      if (segment.type === 'wall' || segment.type === 'fence') {
-        alignSegments.push({ id: segment.id, start: segment.start, end: segment.end })
-      }
-    }
-    const wallAlignmentCandidates = alignSegments.flatMap((segment) =>
-      wallSegmentAnchors(segment.id, segment.start, segment.end),
-    )
+    // Alignment candidates — anchors of every OTHER alignable object (walls,
+    // fences, items, slabs, ceilings, columns), gathered once (the set is
+    // stable during the drag). Coords are building-local, the same frame as
+    // the cursor and the 3D guide layer, so the published guide lines up.
+    const wallAlignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, nodeId)
 
     pauseSceneHistory(useScene)
     let wasCommitted = false

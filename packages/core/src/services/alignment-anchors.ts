@@ -65,9 +65,18 @@ function floorFootprint(
   node: AnyNode,
 ): { dimensions: [number, number, number]; rotation: [number, number, number] } | null {
   const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
-  if (!floorPlaced) return null
-  if (floorPlaced.applies && !floorPlaced.applies(node)) return null
-  return floorPlaced.footprint(node)
+  if (floorPlaced) {
+    if (floorPlaced.applies && !floorPlaced.applies(node)) return null
+    return floorPlaced.footprint(node)
+  }
+  // Elevator isn't a `floorPlaced` kind (no slab-elevation coupling) but it
+  // does rest on the floor with a `width × depth` cab — give it a footprint
+  // so it aligns like other boxes (the registry move tool reads this).
+  if (node.type === 'elevator') {
+    const e = node as { width?: number; depth?: number; rotation?: number }
+    return { dimensions: [e.width ?? 1.6, 1, e.depth ?? 1.6], rotation: [0, e.rotation ?? 0, 0] }
+  }
+  return null
 }
 
 /** XZ footprint AABB of a floor-placed node at its current position, or
@@ -91,48 +100,6 @@ export function footprintAABBAt(
   const fp = floorFootprint(node)
   if (!fp) return null
   return footprintAABBFrom([x, 0, z], fp.dimensions, rotationY ?? fp.rotation[1] ?? 0)
-}
-
-/**
- * Footprint AABBs of every floor-placed node except `excludeId`, keyed by
- * node id. The static pool both the resolver (via {@link footprintAnchors})
- * and the gap refinement (via {@link refineGuidesToGap}) draw from. Kinds
- * without a footprint are omitted (bbox-anchors-only, matching v1).
- */
-export function collectFloorFootprints(
-  nodes: Readonly<Record<string, AnyNode>>,
-  excludeId: string,
-): Map<string, FootprintAABB> {
-  const footprints = new Map<string, FootprintAABB>()
-  for (const node of Object.values(nodes)) {
-    if (!node || node.id === excludeId) continue
-    const aabb = footprintAABB(node)
-    if (aabb) footprints.set(node.id, aabb)
-  }
-  return footprints
-}
-
-/** Flatten a footprint map into the corner anchors the resolver matches.
- *  Corners only — alignment locks to item edges, never centrelines. */
-export function footprintAnchors(
-  footprints: ReadonlyMap<string, FootprintAABB>,
-): AlignmentAnchor[] {
-  const anchors: AlignmentAnchor[] = []
-  for (const [id, b] of footprints) {
-    anchors.push(...bboxCornerAnchors(id, b.minX, b.minZ, b.maxX, b.maxZ))
-  }
-  return anchors
-}
-
-/**
- * Convenience: candidate anchors from every other floor-placed node.
- * Equivalent to `footprintAnchors(collectFloorFootprints(nodes, excludeId))`.
- */
-export function collectAlignmentCandidates(
-  nodes: Readonly<Record<string, AnyNode>>,
-  excludeId: string,
-): AlignmentAnchor[] {
-  return footprintAnchors(collectFloorFootprints(nodes, excludeId))
 }
 
 /**
@@ -167,4 +134,49 @@ export function wallSegmentAnchors(
     { nodeId: id, kind: 'corner', x: end[0], z: end[1] },
     { nodeId: id, kind: 'center', x: (start[0] + end[0]) / 2, z: (start[1] + end[1]) / 2 },
   ]
+}
+
+/** Each vertex of a polygon (slab / ceiling footprint) as a `corner` anchor. */
+export function polygonAnchors(
+  id: string,
+  points: readonly (readonly [number, number])[],
+): AlignmentAnchor[] {
+  return points.map(([x, z]) => ({ nodeId: id, kind: 'corner' as const, x, z }))
+}
+
+/**
+ * Alignment anchors a node contributes to the candidate pool, dispatched by
+ * kind: floor-placed footprints → corner anchors; walls / fences → segment
+ * endpoints + midpoint; slabs / ceilings → polygon vertices. Kinds without a
+ * usable footprint contribute nothing.
+ */
+export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
+  if (node.type === 'wall' || node.type === 'fence') {
+    const seg = node as { id: string; start: [number, number]; end: [number, number] }
+    return wallSegmentAnchors(seg.id, seg.start, seg.end)
+  }
+  if (node.type === 'slab' || node.type === 'ceiling') {
+    const poly = (node as { polygon?: [number, number][] }).polygon
+    return poly ? polygonAnchors(node.id, poly) : []
+  }
+  const aabb = footprintAABB(node)
+  return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
+}
+
+/**
+ * Anchors from every alignable node except `excludeId` — the unified
+ * candidate pool every move / placement tool resolves against, so any
+ * draggable object can align to any other (items, walls, fences, slabs,
+ * ceilings, columns).
+ */
+export function collectAlignmentAnchors(
+  nodes: Readonly<Record<string, AnyNode>>,
+  excludeId: string,
+): AlignmentAnchor[] {
+  const anchors: AlignmentAnchor[] = []
+  for (const node of Object.values(nodes)) {
+    if (!node || node.id === excludeId) continue
+    anchors.push(...nodeAlignmentAnchors(node))
+  }
+  return anchors
 }

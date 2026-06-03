@@ -204,6 +204,13 @@ type EditorState = {
     | StairSegmentNode
     | BuildingNode
     | null
+  /**
+   * True while a move was engaged by a press-drag gizmo (the on-canvas move
+   * cross) rather than a click-to-place flow. The placement coordinator reads
+   * this to commit on pointer-release instead of waiting for a click.
+   */
+  placementDragMode: boolean
+  setPlacementDragMode: (dragMode: boolean) => void
   setMovingNode: (
     node:
       | ItemNode
@@ -688,6 +695,8 @@ const useEditor = create<EditorState>()(
         | StairSegmentNode
         | BuildingNode
         | null,
+      placementDragMode: false,
+      setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
       setMovingNode: (node) =>
         set(
           node === null
@@ -695,7 +704,8 @@ const useEditor = create<EditorState>()(
               // non-owning side's effect cleanup — which fires after
               // `setMovingNode(null)` propagates — can still read who
               // finalised. The next non-null `setMovingNode` resets it.
-              { movingNode: null }
+              // Always clear the press-drag flag when a move ends.
+              { movingNode: null, placementDragMode: false }
             : { movingNode: node, movingNodeOrigin: null },
         ),
       movingNodeOrigin: null as '2d' | '3d' | null,

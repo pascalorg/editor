@@ -10,14 +10,14 @@ export {
   resolveAlignment,
 } from './alignment'
 export {
-  collectAlignmentCandidates,
-  collectFloorFootprints,
+  collectAlignmentAnchors,
   type FootprintAABB,
   footprintAABB,
   footprintAABBAt,
   footprintAABBFrom,
-  footprintAnchors,
   movingFootprintAnchors,
+  nodeAlignmentAnchors,
+  polygonAnchors,
   wallSegmentAnchors,
 } from './alignment-anchors'
 export {

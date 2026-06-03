@@ -5,7 +5,7 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
-  collectAlignmentCandidates,
+  collectAlignmentAnchors,
   type EventSuffix,
   emitter,
   type GridEvent,
@@ -174,12 +174,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       })
     }
 
-    // Static alignment candidates — the corner anchors of every OTHER
-    // floor-placed node, gathered once at drag start (the scene graph is
-    // stable during an imperative move). Coords are building-local, the same
-    // frame as `event.localPosition` and the rendered cursor, so the guide
-    // dots line up with the cursor.
-    const alignmentCandidates = collectAlignmentCandidates(useScene.getState().nodes, node.id)
+    // Static alignment candidates — anchors of every OTHER alignable object
+    // (items, walls, fences, slabs, ceilings, columns), gathered once at drag
+    // start (the scene graph is stable during an imperative move). Coords are
+    // building-local, the same frame as `event.localPosition` and the
+    // rendered cursor, so the guide dots line up with the cursor.
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, node.id)
 
     const onGridMove = (event: GridEvent) => {
       let x = snapToGridStep(event.localPosition[0])

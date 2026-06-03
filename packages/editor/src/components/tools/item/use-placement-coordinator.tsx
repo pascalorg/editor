@@ -4,7 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingEvent,
-  collectAlignmentCandidates,
+  collectAlignmentAnchors,
   emitter,
   type GridEvent,
   getScaledDimensions,
@@ -606,11 +606,37 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     revalidate()
 
+    // ---- Press-drag commit-on-release ----
+    // When the move was engaged by the press-drag move cross (vs. click-to-
+    // place), commit on pointer-up instead of waiting for a click. Each surface
+    // move handler records how to commit at the current cursor; the release
+    // replays it. Captured once at setup — a fresh coordinator mounts per move.
+    const dragMode = useEditor.getState().placementDragMode
+    let releaseCommit: (() => void) | null = null
+    // Eat the click the browser fires after pointer-up so the surface
+    // `:click` handlers don't commit a second time.
+    const swallowNextClick = () => {
+      const swallow = (e: Event) => {
+        e.stopPropagation()
+        e.preventDefault()
+      }
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
+    }
+    const onReleaseCommit = () => {
+      if (!releaseCommit) return
+      const commit = releaseCommit
+      releaseCommit = null
+      swallowNextClick()
+      commit()
+    }
+
     // ---- Floor Handlers ----
 
     let previousGridPos: [number, number, number] | null = null
 
     const onGridMove = (event: GridEvent) => {
+      releaseCommit = () => onGridClick(event)
       // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
       if (draftNode.current === null && asset.attachTo === undefined) {
         configRef.current.initDraft(gridPosition.current)
@@ -632,7 +658,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       let alignZ = 0
       const bypassAlign = event.nativeEvent?.altKey === true
       if (!bypassAlign && draft) {
-        alignmentCandidates ??= collectAlignmentCandidates(useScene.getState().nodes, draft.id)
+        alignmentCandidates ??= collectAlignmentAnchors(useScene.getState().nodes, draft.id)
         const ar = resolveAlignment({
           moving: movingFootprintAnchors(
             draft as unknown as AnyNode,
@@ -751,6 +777,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallMove = (event: WallEvent) => {
+      releaseCommit = () => onWallClick(event)
       has3DPointerDrivenMoveRef.current = true
       const ctx = getContext()
 
@@ -965,6 +992,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onItemMove = (event: ItemEvent) => {
       if (event.node.id === draftNode.current?.id) return
+      releaseCommit = () => onItemClick(event)
       has3DPointerDrivenMoveRef.current = true
       const ctx = getContext()
 
@@ -1189,6 +1217,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onCeilingMove = (event: CeilingEvent) => {
+      releaseCommit = () => onCeilingClick(event)
       has3DPointerDrivenMoveRef.current = true
       if (!draftNode.current && placementState.current.surface === 'ceiling') {
         const nodes = useScene.getState().nodes
@@ -1317,6 +1346,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onShelfMove = (event: ShelfEvent) => {
+      releaseCommit = () => onShelfClick(event)
       has3DPointerDrivenMoveRef.current = true
       const ctx = getContext()
       if (ctx.state.surface !== 'shelf-surface') {
@@ -1569,9 +1599,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('shelf:move', onShelfMove)
     emitter.on('shelf:click', onShelfClick)
     emitter.on('shelf:leave', onShelfLeave)
+    if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
 
     return () => {
       tearingDown = true
+      if (dragMode) window.removeEventListener('pointerup', onReleaseCommit)
       unsubDraftWatch()
       useAlignmentGuides.getState().clear()
       // Clear live transform for any remaining draft

@@ -487,6 +487,10 @@ const BoxSelectToolInner: React.FC = () => {
     const onCanvasPointerDown = (e: PointerEvent) => {
       if (e.button !== 0) return
       if (useViewer.getState().cameraDragging) return
+      // A gizmo/handle drag is underway (group rotate/move, resize arrows, …).
+      // Those use raw window listeners too, so without this guard box-select
+      // would run in parallel and clobber the selection on release.
+      if (useViewer.getState().inputDragging) return
 
       const point = raycastToGround(e)
       if (!point) return
@@ -504,6 +508,18 @@ const BoxSelectToolInner: React.FC = () => {
 
     const onCanvasPointerUp = (e: PointerEvent) => {
       if (e.button !== 0) return
+      // If a gizmo/handle drag is in progress, don't let box-select replace the
+      // selection. Canvas listeners fire before the gizmo's window pointer-up
+      // (which clears `inputDragging`), so this still reads true here. Reset our
+      // own state and bail.
+      if (useViewer.getState().inputDragging) {
+        pointerDown.current = false
+        isDragging.current = false
+        if (rectFillRef.current) rectFillRef.current.visible = false
+        if (outlineRef.current) outlineRef.current.visible = false
+        syncPreviewSelectedIds([])
+        return
+      }
       if (!pointerDown.current) return
 
       if (isDragging.current) {
@@ -585,6 +601,8 @@ const BoxSelectToolInner: React.FC = () => {
       }
 
       if (!pointerDown.current) return
+      // A gizmo/handle drag took over — don't draw a selection box underneath it.
+      if (useViewer.getState().inputDragging) return
 
       currentPoint.current.set(snappedX, event.position[1], snappedZ)
 

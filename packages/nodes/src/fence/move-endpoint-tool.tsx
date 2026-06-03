@@ -21,7 +21,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { moveFenceEndpointDragAction } from './actions/move-endpoint'
 
 /**
@@ -124,6 +124,19 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
   const liveStart = liveFence?.start ?? target.fence.start
   const liveEnd = liveFence?.end ?? target.fence.end
   const movingPoint = endpoint === 'start' ? liveStart : liveEnd
+
+  // Ticker SFX on each grid-snap step, mirroring the wall endpoint tool.
+  // The action snaps the point before writing to the scene, so `movingPoint`
+  // only changes in discrete grid steps — the right cadence for the click.
+  // First tick just seeds the ref (no sound on mount).
+  const previousGridPosRef = useRef<FencePlanPoint | null>(null)
+  useEffect(() => {
+    const prev = previousGridPosRef.current
+    if (prev && (prev[0] !== movingPoint[0] || prev[1] !== movingPoint[1])) {
+      triggerSFX('sfx:grid-snap')
+    }
+    previousGridPosRef.current = movingPoint
+  }, [movingPoint])
 
   // Neighbour segments at the parent level — computed once at mount.
   const parentId = target.fence.parentId ?? null

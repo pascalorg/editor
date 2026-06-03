@@ -4,11 +4,11 @@ import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import type { AnyNode } from '../schema/types'
 import {
-  collectAlignmentCandidates,
-  collectFloorFootprints,
+  collectAlignmentAnchors,
   footprintAABB,
   footprintAABBFrom,
   movingFootprintAnchors,
+  polygonAnchors,
   wallSegmentAnchors,
 } from './alignment-anchors'
 
@@ -79,6 +79,13 @@ describe('footprintAABB', () => {
     expect(footprintAABB(node({ id: 'w1', type: 'wall', position: [0, 0, 0] }))).toBeNull()
   })
 
+  test('derives an elevator footprint from its width / depth (no floorPlaced needed)', () => {
+    const aabb = footprintAABB(
+      node({ id: 'e1', type: 'elevator', position: [10, 0, 20], width: 2, depth: 4, rotation: 0 }),
+    )
+    expect(aabb).toEqual({ minX: 9, minZ: 18, maxX: 11, maxZ: 22 })
+  })
+
   test('returns null when the kind predicate excludes the node', () => {
     registerNode(floorPlacedDef('lamp', (n) => !(n as { attached?: boolean }).attached))
     expect(
@@ -87,26 +94,6 @@ describe('footprintAABB', () => {
     expect(
       footprintAABB(node({ id: 'l2', type: 'lamp', position: [0, 0, 0], attached: false })),
     ).not.toBeNull()
-  })
-})
-
-describe('collectAlignmentCandidates', () => {
-  beforeEach(() => nodeRegistry._reset())
-
-  test('excludes the moving node and skips footprintless kinds', () => {
-    registerNode(floorPlacedDef('box'))
-    registerNode(plainDef('wall'))
-    const nodes = {
-      moving: node({ id: 'moving', type: 'box', position: [0, 0, 0], dimensions: [1, 1, 1] }),
-      other: node({ id: 'other', type: 'box', position: [5, 0, 5], dimensions: [1, 1, 1] }),
-      wall: node({ id: 'wall', type: 'wall', position: [2, 0, 2] }),
-    }
-    const anchors = collectAlignmentCandidates(nodes, 'moving')
-    // Only `other` contributes — 4 corner anchors (edges only), none from the
-    // moving node or the wall.
-    expect(anchors).toHaveLength(4)
-    expect(anchors.every((a) => a.nodeId === 'other')).toBe(true)
-    expect(anchors.every((a) => a.kind === 'corner')).toBe(true)
   })
 })
 
@@ -155,23 +142,6 @@ describe('movingFootprintAnchors', () => {
   })
 })
 
-describe('collectFloorFootprints', () => {
-  beforeEach(() => nodeRegistry._reset())
-
-  test('maps floor-placed nodes by id, excluding the moving node and plain kinds', () => {
-    registerNode(floorPlacedDef('box'))
-    registerNode(plainDef('wall'))
-    const nodes = {
-      moving: node({ id: 'moving', type: 'box', position: [0, 0, 0], dimensions: [1, 1, 1] }),
-      other: node({ id: 'other', type: 'box', position: [5, 0, 5], dimensions: [2, 1, 4] }),
-      wall: node({ id: 'wall', type: 'wall', position: [2, 0, 2] }),
-    }
-    const map = collectFloorFootprints(nodes, 'moving')
-    expect([...map.keys()]).toEqual(['other'])
-    expect(map.get('other')).toEqual({ minX: 4, minZ: 3, maxX: 6, maxZ: 7 })
-  })
-})
-
 describe('wallSegmentAnchors', () => {
   test('returns both endpoints as corners and the chord midpoint as center', () => {
     const anchors = wallSegmentAnchors('w', [0, 0], [4, 2])
@@ -180,5 +150,49 @@ describe('wallSegmentAnchors', () => {
       { nodeId: 'w', kind: 'corner', x: 4, z: 2 },
       { nodeId: 'w', kind: 'center', x: 2, z: 1 },
     ])
+  })
+})
+
+describe('polygonAnchors', () => {
+  test('returns each vertex as a corner anchor', () => {
+    expect(
+      polygonAnchors('s', [
+        [0, 0],
+        [2, 0],
+        [2, 3],
+      ]),
+    ).toEqual([
+      { nodeId: 's', kind: 'corner', x: 0, z: 0 },
+      { nodeId: 's', kind: 'corner', x: 2, z: 0 },
+      { nodeId: 's', kind: 'corner', x: 2, z: 3 },
+    ])
+  })
+})
+
+describe('collectAlignmentAnchors', () => {
+  beforeEach(() => nodeRegistry._reset())
+
+  test('unions footprint corners, segment anchors and polygon vertices, excluding the moving node', () => {
+    registerNode(floorPlacedDef('box'))
+    const nodes = {
+      moving: node({ id: 'moving', type: 'box', position: [0, 0, 0], dimensions: [1, 1, 1] }),
+      box: node({ id: 'box', type: 'box', position: [5, 0, 5], dimensions: [2, 1, 2] }),
+      wall: node({ id: 'wall', type: 'wall', start: [0, 0], end: [4, 0] }),
+      slab: node({
+        id: 'slab',
+        type: 'slab',
+        polygon: [
+          [0, 0],
+          [2, 0],
+          [2, 2],
+        ],
+      }),
+    }
+    const anchors = collectAlignmentAnchors(nodes, 'moving')
+    const ids = anchors.map((a) => a.nodeId)
+    expect(ids).not.toContain('moving')
+    expect(ids.filter((id) => id === 'box')).toHaveLength(4) // corner anchors
+    expect(ids.filter((id) => id === 'wall')).toHaveLength(3) // endpoints + midpoint
+    expect(ids.filter((id) => id === 'slab')).toHaveLength(3) // polygon vertices
   })
 })

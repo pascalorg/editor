@@ -33,10 +33,22 @@ export function createEditorApi(): EditorApi {
   return {
     engageMove(node: AnyNode) {
       const editor = useEditor.getState()
+      editor.setPlacementDragMode(false)
       // `setMovingNode` is typed against a narrower union than `AnyNode`
       // (every concrete kind enumerated). Descriptors pass any node; the
       // cast lets registry-driven move kinds through without forcing a
       // schema-level type widening.
+      editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
+      editor.setMovingWallEndpoint(null)
+      editor.setMovingFenceEndpoint(null)
+      editor.setCurvingWall(null)
+      editor.setCurvingFence(null)
+    },
+    engageMoveDrag(node: AnyNode) {
+      const editor = useEditor.getState()
+      // Flag drag mode BEFORE mounting the move tool so the coordinator reads
+      // it at setup and wires its commit-on-release listener.
+      editor.setPlacementDragMode(true)
       editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
       editor.setMovingWallEndpoint(null)
       editor.setMovingFenceEndpoint(null)
