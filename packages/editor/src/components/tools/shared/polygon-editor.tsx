@@ -49,16 +49,16 @@ function createEdgeArrowGeometry() {
   shape.lineTo(-0.04, -0.12)
   shape.lineTo(0.22, 0)
   const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.08,
+    depth: 0.045,
     bevelEnabled: true,
-    bevelThickness: 0.035,
-    bevelSize: 0.03,
+    bevelThickness: 0.018,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 10,
+    bevelSegments: 8,
     curveSegments: 16,
     steps: 1,
   })
-  geometry.translate(0, 0, -0.04)
+  geometry.translate(0, 0, -0.0225)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()

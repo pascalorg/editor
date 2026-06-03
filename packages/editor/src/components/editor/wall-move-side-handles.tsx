@@ -86,12 +86,12 @@ function createArrowHandleGeometry() {
   shape.lineTo(0.22, 0)
 
   const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.08,
+    depth: 0.045,
     bevelEnabled: true,
-    bevelThickness: 0.035,
-    bevelSize: 0.03,
+    bevelThickness: 0.018,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 10,
+    bevelSegments: 8,
     curveSegments: 16,
     steps: 1,
   })
@@ -99,7 +99,7 @@ function createArrowHandleGeometry() {
   // Centre the extruded plate around y=0 and re-orient it so the depth
   // axis points up: the chevron lies flat in the XZ plane, tip along +X,
   // wings spread across ±Z.
-  geometry.translate(0, 0, -0.04)
+  geometry.translate(0, 0, -0.0225)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
