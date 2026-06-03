@@ -10,6 +10,7 @@ import {
   type ItemNode,
   isRegistrySelectable,
   type LevelNode,
+  resolveBuildingForLevel,
   type SlabNode,
   sceneRegistry,
   useScene,
@@ -288,6 +289,25 @@ function collectNodeIdsInBounds(bounds: Bounds | null): string[] {
         if (!bounds || objectBoundsIntersectsBounds(node.id, bounds)) {
           result.push(node.id)
         }
+      }
+    }
+
+    // Building-scoped selectable nodes (e.g. elevator) are siblings of the
+    // level — children of the building, not the level — so the loop above
+    // never reaches them. Walk the active level's building children and
+    // box-test any registry-selectable kind by its rendered bounds, the same
+    // path column/stair/shelf use.
+    const buildingId = resolveBuildingForLevel(levelId as AnyNodeId, nodes)
+    const buildingNode = buildingId ? nodes[buildingId] : undefined
+    const buildingChildren =
+      buildingNode && 'children' in buildingNode && Array.isArray(buildingNode.children)
+        ? (buildingNode.children as AnyNodeId[])
+        : []
+    for (const childId of buildingChildren) {
+      const node = nodes[childId]
+      if (!node || node.type === 'level' || !isRegistrySelectable(node.type)) continue
+      if (!bounds || objectBoundsIntersectsBounds(node.id, bounds)) {
+        result.push(node.id)
       }
     }
   }
