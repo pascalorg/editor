@@ -50,9 +50,6 @@ type RenderableNode = AnyNode & {
 export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   const ref = useRef<Group>(null!)
   const n = node as RenderableNode
-  // biome-ignore lint/suspicious/noExplicitAny: useNodeEvents is keyed by
-  // literal kind; the registry path passes a runtime kind union. Routing
-  // through the type cast is safer than widening the hook signature.
   const handlers = useNodeEvents(node as any, node.type as any)
   const liveTransform = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
   // Registry arrow handles (rotation gizmo, position-affecting patches)
