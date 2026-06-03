@@ -58,8 +58,8 @@ function makeRoomDxfMm(): DxfParsed {
       const l = e as DxfRawLine
       return {
         ...l,
-        start: { x: l.start.x * 1000, y: l.start.y * 1000 },
-        end: { x: l.end.x * 1000, y: l.end.y * 1000 },
+        start: { x: l.start!.x * 1000, y: l.start!.y * 1000 },
+        end: { x: l.end!.x * 1000, y: l.end!.y * 1000 },
       } as DxfRawLine
     }),
   }
@@ -195,7 +195,7 @@ describe('detectWalls — parallel pair detection', () => {
       .filter(e => e.type === 'LINE')
       .map(e => {
         const l = e as DxfRawLine
-        return { x1: l.start.x, y1: l.start.y, x2: l.end.x, y2: l.end.y }
+        return { x1: l.start!.x, y1: l.start!.y, x2: l.end!.x, y2: l.end!.y }
       })
     const walls = detectWalls(segs, MIN, MAX)
     expect(walls.length).toBeGreaterThanOrEqual(4)
