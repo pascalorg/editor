@@ -21,9 +21,7 @@ import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BufferGeometry,
   Euler,
-  Float32BufferAttribute,
   type Group,
   type LineSegments,
   type Mesh,
@@ -36,6 +34,12 @@ import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import {
+  createLineGeometry,
+  getBoxEdgePoints,
+  type PreviewBounds,
+  updateLineGeometry,
+} from '../shared/placement-box-geometry'
 import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
 import {
   ceilingStrategy,
@@ -59,13 +63,6 @@ function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
     return `${wholeFeet}'${inches}"`
   }
   return `${Number.parseFloat(value.toFixed(2))}m`
-}
-
-type PreviewBounds = {
-  min: [number, number, number]
-  max: [number, number, number]
-  dimensions: [number, number, number]
-  center: [number, number, number]
 }
 
 /**
@@ -128,114 +125,6 @@ function getFallbackPreviewBounds(
     dimensions: dims,
     center: [0, dims[1] / 2, attachTo === 'wall-side' ? -dims[2] / 2 : 0],
   }
-}
-
-function createLineGeometry(points: number[] = [0, 0, 0, 0, 0, 0]): BufferGeometry {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute(points, 3))
-  return geometry
-}
-
-function getBoxEdgePoints(bounds: PreviewBounds): number[] {
-  const [width, height, depth] = bounds.dimensions
-  const [centerX, centerY, centerZ] = bounds.center
-  const minX = centerX - width / 2
-  const maxX = centerX + width / 2
-  const minY = centerY - height / 2
-  const maxY = centerY + height / 2
-  const minZ = centerZ - depth / 2
-  const maxZ = centerZ + depth / 2
-
-  return [
-    minX,
-    minY,
-    minZ,
-    maxX,
-    minY,
-    minZ,
-    maxX,
-    minY,
-    minZ,
-    maxX,
-    minY,
-    maxZ,
-    maxX,
-    minY,
-    maxZ,
-    minX,
-    minY,
-    maxZ,
-    minX,
-    minY,
-    maxZ,
-    minX,
-    minY,
-    minZ,
-
-    minX,
-    maxY,
-    minZ,
-    maxX,
-    maxY,
-    minZ,
-    maxX,
-    maxY,
-    minZ,
-    maxX,
-    maxY,
-    maxZ,
-    maxX,
-    maxY,
-    maxZ,
-    minX,
-    maxY,
-    maxZ,
-    minX,
-    maxY,
-    maxZ,
-    minX,
-    maxY,
-    minZ,
-
-    minX,
-    minY,
-    minZ,
-    minX,
-    maxY,
-    minZ,
-    maxX,
-    minY,
-    minZ,
-    maxX,
-    maxY,
-    minZ,
-    maxX,
-    minY,
-    maxZ,
-    maxX,
-    maxY,
-    maxZ,
-    minX,
-    minY,
-    maxZ,
-    minX,
-    maxY,
-    maxZ,
-  ]
-}
-
-function updateLineGeometry(ref: React.RefObject<LineSegments>, points: number[]) {
-  const geometry = ref.current?.geometry
-  if (!geometry) return
-
-  const attribute = geometry.getAttribute('position') as Float32BufferAttribute | undefined
-  if (!attribute || attribute.array.length !== points.length) {
-    geometry.setAttribute('position', new Float32BufferAttribute(points, 3))
-  } else {
-    attribute.set(points)
-    attribute.needsUpdate = true
-  }
-  geometry.computeBoundingSphere()
 }
 
 // Shared materials for placement cursor - we just change colors, not swap materials

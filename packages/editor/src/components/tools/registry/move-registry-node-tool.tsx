@@ -11,14 +11,17 @@ import {
   type NodeEvent,
   nodeRegistry,
   sceneRegistry,
+  spatialGridManager,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { PlacementBox } from '../shared/placement-box'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
@@ -126,6 +129,26 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // and committed to the scene on drop.
   const rotationRef = useRef(originalRotationY)
 
+  // Shelf placement shows the same green/red footprint box GLB items use
+  // (instead of the vertical-arrow cursor) and refuses an invalid drop unless
+  // Shift forces it. The footprint comes from the kind's `floorPlaced`
+  // capability so this stays generic if we ever opt other kinds in.
+  const isShelf = node.type === 'shelf'
+  const boxDimensions = useMemo(
+    () =>
+      isShelf
+        ? (nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.footprint?.(node)?.dimensions ??
+          null)
+        : null,
+    [isShelf, node],
+  )
+  const [valid, setValid] = useState(true)
+  const [cursorRotationY, setCursorRotationY] = useState(originalRotationY)
+  // Mirrors of `valid` / Shift for the event handlers inside the effect, which
+  // can't read React state without stale closures.
+  const validRef = useRef(true)
+  const shiftRef = useRef(false)
+
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
@@ -135,7 +158,47 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     previousSnapRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
+    shiftRef.current = false
+    validRef.current = true
+    // Re-sync the box transform to the (possibly new) node. `node` changes
+    // without this component remounting whenever a positioned preset re-arms a
+    // fresh clone after a drop, or the user picks a different catalog tile —
+    // and `useState` only honours its initial value, so without this the box
+    // would keep the previous clone's rotation/position until the next R/T.
+    setCursorPosition(originalPosition)
+    setCursorRotationY(originalRotationY)
+    lastCursorRef.current = originalPosition
     let committed = false
+
+    // Re-run the floor-collision check at the live cursor + rotation and push
+    // the result to the box colour. Shift forces a valid (green) override so
+    // the user can drop on top of an existing item on purpose. Only shelves
+    // show the box, so this no-ops for every other movable kind.
+    const recomputeValidity = () => {
+      if (!boxDimensions) return
+      if (shiftRef.current) {
+        validRef.current = true
+        setValid(true)
+        return
+      }
+      const levelId = useViewer.getState().selection.levelId ?? node.parentId
+      if (!levelId) {
+        validRef.current = true
+        setValid(true)
+        return
+      }
+      const [x, , z] = lastCursorRef.current
+      const { valid: placeable } = spatialGridManager.canPlaceOnFloor(
+        levelId,
+        [x, 0, z],
+        boxDimensions,
+        [0, rotationRef.current, 0],
+        [node.id],
+      )
+      validRef.current = placeable
+      setValid(placeable)
+    }
+    recomputeValidity()
 
     // The node's rotation shape (tuple vs scalar) is preserved on commit;
     // only the Y angle changes. Most registry kinds use a `[x, y, z]` tuple.
@@ -171,6 +234,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       hasMovedRef.current = true
       setCursorPosition([x, 0, z])
       lastCursorRef.current = [x, 0, z]
+      recomputeValidity()
 
       // Pure imperative: move the mesh via its registered Object3D ref.
       sceneRegistry.nodes.get(node.id)?.position.set(x, 0, z)
@@ -216,6 +280,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // it's the stray trailing click of whatever armed this move, not a
       // deliberate drop. Prevents preset re-arm from double-placing.
       if (!hasMovedRef.current) return
+      // Refuse a drop on an invalid (red) footprint, matching the GLB item
+      // tool — unless Shift is held to force placement. Other kinds carry no
+      // validity box (`validRef` stays true), so they're never blocked.
+      if (!validRef.current && !shiftRef.current) return
       const position: [number, number, number] = [...lastCursorRef.current]
 
       const rotation = toCommitRotation(rotationRef.current)
@@ -276,21 +344,39 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // item placement keys (and the "Rotate" hints the move HUD shows). Applied
     // imperatively + mirrored to the live transform; committed on drop.
     const onKeyDown = (e: KeyboardEvent) => {
+      // Hold Shift to force placement on an invalid (red) footprint, matching
+      // the GLB item tool. Recolour the box to green while held.
+      if (e.key === 'Shift') {
+        shiftRef.current = true
+        recomputeValidity()
+        return
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return
       let delta = 0
       if (e.key === 'r' || e.key === 'R') delta = ROTATION_STEP
       else if (e.key === 't' || e.key === 'T') delta = -ROTATION_STEP
       else return
       e.preventDefault()
+      sfxEmitter.emit('sfx:item-rotate')
       rotationRef.current += delta
+      setCursorRotationY(rotationRef.current)
       const m = sceneRegistry.nodes.get(node.id)
       if (m) m.rotation.y = rotationRef.current
       useLiveTransforms.getState().set(node.id, {
         position: lastCursorRef.current,
         rotation: rotationRef.current,
       })
+      // Rotation changes the footprint's collision span — re-check validity.
+      recomputeValidity()
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftRef.current = false
+        recomputeValidity()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', commitAtCursor)
@@ -320,6 +406,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
       for (const kind of CLICK_TRIGGER_KINDS) {
@@ -338,7 +425,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         useScene.temporal.getState().resume()
       }
     }
-  }, [exitMoveMode, node, originalPosition, originalRotationY])
+  }, [boxDimensions, exitMoveMode, node, originalPosition, originalRotationY])
+
+  if (boxDimensions) {
+    return (
+      <PlacementBox
+        dimensions={boxDimensions}
+        position={cursorPosition}
+        rotationY={cursorRotationY}
+        valid={valid}
+      />
+    )
+  }
 
   return <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
 }
