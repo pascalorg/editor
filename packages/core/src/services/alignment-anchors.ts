@@ -14,7 +14,7 @@
 
 import { nodeRegistry } from '../registry'
 import type { AnyNode } from '../schema/types'
-import { type AlignmentAnchor, type AlignmentGuide, bboxCornerAnchors } from './alignment'
+import { type AlignmentAnchor, bboxCornerAnchors } from './alignment'
 
 export type FootprintAABB = { minX: number; minZ: number; maxX: number; maxZ: number }
 
@@ -167,47 +167,4 @@ export function wallSegmentAnchors(
     { nodeId: id, kind: 'corner', x: end[0], z: end[1] },
     { nodeId: id, kind: 'center', x: (start[0] + end[0]) / 2, z: (start[1] + end[1]) / 2 },
   ]
-}
-
-/** Nearest-edge gap between two 1-D intervals and the two facing edges that
- *  bound it. When the intervals overlap there is no gap: returns the union
- *  span so the alignment line still reads across both, with `gap` 0. */
-function intervalGap(
-  aMin: number,
-  aMax: number,
-  bMin: number,
-  bMax: number,
-): { gap: number; near: number; far: number } {
-  if (aMin >= bMax) return { gap: aMin - bMax, near: bMax, far: aMin } // a after b
-  if (aMax <= bMin) return { gap: bMin - aMax, near: aMax, far: bMin } // a before b
-  return { gap: 0, near: Math.min(aMin, bMin), far: Math.max(aMax, bMax) } // overlap
-}
-
-/**
- * Rewrite resolver guides so each spans (and measures) the gap between the
- * NEAREST facing edges of the moving and candidate footprints, rather than
- * the matched anchor-to-anchor span — which could run to the far side of an
- * item. The line stays on the matched axis (`guide.coord`); only its extent
- * along the perpendicular axis and its `distance` change.
- *
- * `movingAABB` should be the moving footprint at its post-snap position.
- * Guides whose candidate isn't in `footprints` pass through unchanged.
- */
-export function refineGuidesToGap(
-  guides: readonly AlignmentGuide[],
-  movingAABB: FootprintAABB,
-  footprints: ReadonlyMap<string, FootprintAABB>,
-): AlignmentGuide[] {
-  return guides.map((g) => {
-    const cb = footprints.get(g.candidateNodeId)
-    if (!cb) return g
-    if (g.axis === 'x') {
-      // Shared X = g.coord; gap measured along Z.
-      const { gap, near, far } = intervalGap(movingAABB.minZ, movingAABB.maxZ, cb.minZ, cb.maxZ)
-      return { ...g, from: { x: g.coord, z: near }, to: { x: g.coord, z: far }, distance: gap }
-    }
-    // Shared Z = g.coord; gap measured along X.
-    const { gap, near, far } = intervalGap(movingAABB.minX, movingAABB.maxX, cb.minX, cb.maxX)
-    return { ...g, from: { x: near, z: g.coord }, to: { x: far, z: g.coord }, distance: gap }
-  })
 }

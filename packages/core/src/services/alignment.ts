@@ -79,11 +79,20 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
   const { moving, candidates, threshold } = input
   if (threshold <= 0 || moving.length === 0 || candidates.length === 0) return EMPTY
 
-  // Best match per axis: smallest |Δ| across all (moving, candidate) pairs.
-  // Tie-break by candidate anchor kind priority (center > edge-mid > corner)
-  // so visually meaningful matches win when |Δ| is equal.
-  let bestX: { delta: number; m: AlignmentAnchor; c: AlignmentAnchor } | null = null
-  let bestZ: { delta: number; m: AlignmentAnchor; c: AlignmentAnchor } | null = null
+  // Best match per axis: smallest |Δ| on the matched axis (tightest
+  // alignment), then — crucially — tie-break to the candidate anchor NEAREST
+  // on the perpendicular axis. Anchors are real points (corners / endpoints /
+  // midpoints), so the guide always connects to the closest actual point of
+  // the candidate, never a far one that merely shares the same coordinate.
+  type Best = {
+    delta: number
+    primary: number
+    perp: number
+    m: AlignmentAnchor
+    c: AlignmentAnchor
+  }
+  let bestX: Best | null = null
+  let bestZ: Best | null = null
 
   for (const m of moving) {
     for (const c of candidates) {
@@ -91,11 +100,17 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
       const dz = c.z - m.z
       const adx = Math.abs(dx)
       const adz = Math.abs(dz)
-      if (adx <= threshold && (bestX === null || adx < Math.abs(bestX.delta))) {
-        bestX = { delta: dx, m, c }
+      if (
+        adx <= threshold &&
+        (bestX === null || adx < bestX.primary || (adx === bestX.primary && adz < bestX.perp))
+      ) {
+        bestX = { delta: dx, primary: adx, perp: adz, m, c }
       }
-      if (adz <= threshold && (bestZ === null || adz < Math.abs(bestZ.delta))) {
-        bestZ = { delta: dz, m, c }
+      if (
+        adz <= threshold &&
+        (bestZ === null || adz < bestZ.primary || (adz === bestZ.primary && adx < bestZ.perp))
+      ) {
+        bestZ = { delta: dz, primary: adz, perp: adx, m, c }
       }
     }
   }
@@ -141,73 +156,6 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
   }
 
   return { guides, snap: { dx: dxSnap, dz: dzSnap } }
-}
-
-export type ResolvePointSnapInput = {
-  /** Anchors of the moving node at its proposed (pre-snap) location. */
-  moving: readonly AlignmentAnchor[]
-  /** Candidate anchors from nearby static objects. */
-  candidates: readonly AlignmentAnchor[]
-  /** Max |Δ| (meters) on EACH axis for two anchors to count as coincident. */
-  threshold: number
-}
-
-export type ResolvePointSnapResult = {
-  /** Delta to add to the moving node so the matched anchor lands exactly on
-   *  the candidate point. */
-  snap: { dx: number; dz: number }
-  /** A degenerate guide marking the coincident point — renders as a single
-   *  dot (no line / distance), since alignment here is point-to-point, not
-   *  along an axis. */
-  guide: AlignmentGuide
-} | null
-
-/**
- * Point-coincidence snap. Unlike {@link resolveAlignment} (which matches a
- * single shared axis and draws a line to a possibly-distant object), this
- * fires ONLY when a moving anchor lands within `threshold` of a candidate
- * anchor on BOTH axes — i.e. the moving point reaches a real anchor point
- * (corner / endpoint). Picks the closest such pair and snaps onto it.
- *
- * Returns `null` when no anchor pair coincides.
- */
-export function resolvePointSnap(input: ResolvePointSnapInput): ResolvePointSnapResult {
-  const { moving, candidates, threshold } = input
-  if (threshold <= 0 || moving.length === 0 || candidates.length === 0) return null
-
-  let best: {
-    score: number
-    dx: number
-    dz: number
-    m: AlignmentAnchor
-    c: AlignmentAnchor
-  } | null = null
-  for (const m of moving) {
-    for (const c of candidates) {
-      const dx = c.x - m.x
-      const dz = c.z - m.z
-      if (Math.abs(dx) > threshold || Math.abs(dz) > threshold) continue
-      const score = Math.hypot(dx, dz)
-      if (best === null || score < best.score) best = { score, dx, dz, m, c }
-    }
-  }
-
-  if (!best) return null
-  const x = best.c.x
-  const z = best.c.z
-  return {
-    snap: { dx: best.dx, dz: best.dz },
-    guide: {
-      axis: 'x',
-      coord: x,
-      from: { x, z },
-      to: { x, z },
-      movingAnchorKind: best.m.kind,
-      candidateAnchorKind: best.c.kind,
-      candidateNodeId: best.c.nodeId,
-      distance: 0,
-    },
-  }
 }
 
 // ─── Anchor extractors (pure) ─────────────────────────────────────────

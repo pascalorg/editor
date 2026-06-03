@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type AlignmentAnchor, bboxAnchors, resolveAlignment, resolvePointSnap } from './alignment'
+import { type AlignmentAnchor, bboxAnchors, resolveAlignment } from './alignment'
 
 function center(nodeId: string, x: number, z: number): AlignmentAnchor {
   return { nodeId, kind: 'center', x, z }
@@ -55,6 +55,17 @@ describe('resolveAlignment', () => {
     expect(result.guides[0]!.candidateNodeId).toBe('b')
   })
 
+  test('ties on the matched axis break toward the nearest perpendicular anchor', () => {
+    const result = resolveAlignment({
+      moving: [corner('m', 0.02, 4)],
+      candidates: [corner('far', 0, 0), corner('near', 0, 5)],
+      threshold: 0.1,
+    })
+    // Both share X (Δx = 0.02); 'near' (z=5) is closer to the moving z=4 than
+    // 'far' (z=0), so the guide connects to the nearest real anchor.
+    expect(result.guides[0]!.candidateNodeId).toBe('near')
+  })
+
   test('threshold = 0 disables alignment', () => {
     const result = resolveAlignment({
       moving: [center('m', 0, 0)],
@@ -73,52 +84,6 @@ describe('resolveAlignment', () => {
     })
     // After snap: moving at (0, 3). X guide runs along x=0 from z=0 to z=3.
     expect(result.guides[0]!.distance).toBeCloseTo(3, 10)
-  })
-})
-
-describe('resolvePointSnap', () => {
-  test('no match when only one axis is within threshold (collinear, not coincident)', () => {
-    // Shares X (Δx = 0.02) but Δz = 5 — "along the line", not a real point.
-    const result = resolvePointSnap({
-      moving: [corner('m', 0.02, 5)],
-      candidates: [corner('a', 0, 0)],
-      threshold: 0.1,
-    })
-    expect(result).toBeNull()
-  })
-
-  test('matches when a candidate is within threshold on BOTH axes', () => {
-    const result = resolvePointSnap({
-      moving: [corner('m', 0.03, 0.04)],
-      candidates: [corner('a', 0, 0)],
-      threshold: 0.1,
-    })
-    expect(result).not.toBeNull()
-    expect(result?.snap.dx).toBeCloseTo(-0.03, 10)
-    expect(result?.snap.dz).toBeCloseTo(-0.04, 10)
-    // Degenerate point guide at the candidate — renders as a dot.
-    expect(result?.guide.from).toEqual({ x: 0, z: 0 })
-    expect(result?.guide.to).toEqual({ x: 0, z: 0 })
-    expect(result?.guide.distance).toBe(0)
-    expect(result?.guide.candidateNodeId).toBe('a')
-  })
-
-  test('picks the closest coincident candidate', () => {
-    const result = resolvePointSnap({
-      moving: [corner('m', 0, 0)],
-      candidates: [corner('far', 0.09, 0.09), corner('near', 0.02, 0.01)],
-      threshold: 0.1,
-    })
-    expect(result?.guide.candidateNodeId).toBe('near')
-  })
-
-  test('threshold = 0 disables snapping', () => {
-    const result = resolvePointSnap({
-      moving: [corner('m', 0, 0)],
-      candidates: [corner('a', 0, 0)],
-      threshold: 0,
-    })
-    expect(result).toBeNull()
   })
 })
 

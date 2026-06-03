@@ -5,16 +5,13 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
-  collectFloorFootprints,
+  collectAlignmentCandidates,
   type EventSuffix,
   emitter,
-  footprintAABBAt,
-  footprintAnchors,
   type GridEvent,
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
-  refineGuidesToGap,
   resolveAlignment,
   sceneRegistry,
   useAlignmentGuides,
@@ -177,14 +174,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       })
     }
 
-    // Static alignment footprints — every OTHER floor-placed node's XZ AABB,
-    // gathered once at drag start (the scene graph is stable during an
-    // imperative move). Coords are building-local, the same frame as
-    // `event.localPosition` and the rendered cursor, so the guides the 3D
-    // layer draws line up with the cursor. The (corner) anchors feed the
-    // resolver; the AABBs feed the nearest-edge gap refinement.
-    const alignmentFootprints = collectFloorFootprints(useScene.getState().nodes, node.id)
-    const alignmentCandidates = footprintAnchors(alignmentFootprints)
+    // Static alignment candidates — the corner anchors of every OTHER
+    // floor-placed node, gathered once at drag start (the scene graph is
+    // stable during an imperative move). Coords are building-local, the same
+    // frame as `event.localPosition` and the rendered cursor, so the guide
+    // dots line up with the cursor.
+    const alignmentCandidates = collectAlignmentCandidates(useScene.getState().nodes, node.id)
 
     const onGridMove = (event: GridEvent) => {
       let x = snapToGridStep(event.localPosition[0])
@@ -192,7 +187,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // moving item's edge lines up (on X or Z) with another item's edge,
-      // snap and publish a guide (line + nearest-edge distance). Alt bypasses.
+      // snap and publish a guide. The guide connects to the nearest real
+      // corner of the candidate (resolver tie-break), so the dot always sits
+      // on an actual point. Alt bypasses.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
@@ -204,16 +201,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           x += result.snap.dx
           z += result.snap.dz
         }
-        // Re-span guides to the gap between nearest footprint edges at the
-        // post-snap position rather than the matched anchor-to-anchor span.
-        const movingAABB = footprintAABBAt(node, x, z, rotationRef.current)
-        useAlignmentGuides
-          .getState()
-          .set(
-            movingAABB
-              ? refineGuidesToGap(result.guides, movingAABB, alignmentFootprints)
-              : result.guides,
-          )
+        useAlignmentGuides.getState().set(result.guides)
       } else {
         useAlignmentGuides.getState().clear()
       }

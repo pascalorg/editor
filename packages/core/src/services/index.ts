@@ -7,10 +7,7 @@ export {
   bboxCornerAnchors,
   type ResolveAlignmentInput,
   type ResolveAlignmentResult,
-  type ResolvePointSnapInput,
-  type ResolvePointSnapResult,
   resolveAlignment,
-  resolvePointSnap,
 } from './alignment'
 export {
   collectAlignmentCandidates,
@@ -21,7 +18,6 @@ export {
   footprintAABBFrom,
   footprintAnchors,
   movingFootprintAnchors,
-  refineGuidesToGap,
   wallSegmentAnchors,
 } from './alignment-anchors'
 export {

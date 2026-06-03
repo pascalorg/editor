@@ -1,18 +1,15 @@
 import type { AssetInput } from '@pascal-app/core'
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
   type CeilingEvent,
-  collectFloorFootprints,
+  collectAlignmentCandidates,
   emitter,
-  type FootprintAABB,
-  footprintAABBAt,
-  footprintAnchors,
   type GridEvent,
   getScaledDimensions,
   type ItemEvent,
   movingFootprintAnchors,
-  refineGuidesToGap,
   resolveAlignment,
   resolveLevelId,
   type ShelfEvent,
@@ -459,13 +456,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
-    // Lazily-gathered alignment footprints — every OTHER floor-placed node's
-    // XZ AABB, excluding the draft. Computed on the first floor move (once
-    // the draft id exists) and reused for the rest of the drag; the scene
-    // graph is stable during placement. Coords are building-local, matching
-    // the draft's grid position and the guide layer's frame. The AABBs drive
-    // the nearest-edge gap; their (corner) anchors feed the resolver.
-    let alignmentFootprints: Map<string, FootprintAABB> | null = null
+    // Lazily-gathered alignment candidates — the corner anchors of every
+    // OTHER floor-placed node, excluding the draft. Computed on the first
+    // floor move (once the draft id exists) and reused for the rest of the
+    // drag; the scene graph is stable during placement. Coords are
+    // building-local, matching the draft's grid position and the guide
+    // layer's frame.
+    let alignmentCandidates: AlignmentAnchor[] | null = null
 
     // Reset placement state
     placementState.current = configRef.current.initialState ?? {
@@ -626,42 +623,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Figma-style alignment snap layered on top of the floor strategy's
       // grid snap: when the draft's edge lines up (on X or Z) with another
-      // item's edge, snap and publish a guide (line + nearest-edge distance).
-      // The delta is applied to BOTH the grid and cursor positions below.
-      // Alt bypasses.
+      // item's edge, snap and publish a guide. The guide connects to the
+      // nearest real corner of the candidate (resolver tie-break), so the dot
+      // always sits on an actual point. The delta is applied to BOTH the grid
+      // and cursor positions below. Alt bypasses.
       const draft = draftNode.current
       let alignX = 0
       let alignZ = 0
       const bypassAlign = event.nativeEvent?.altKey === true
       if (!bypassAlign && draft) {
-        alignmentFootprints ??= collectFloorFootprints(useScene.getState().nodes, draft.id)
-        const draftNodeRef = draft as unknown as AnyNode
-        const rotationY = cursorGroupRef.current.rotation.y
+        alignmentCandidates ??= collectAlignmentCandidates(useScene.getState().nodes, draft.id)
         const ar = resolveAlignment({
           moving: movingFootprintAnchors(
-            draftNodeRef,
+            draft as unknown as AnyNode,
             result.gridPosition[0],
             result.gridPosition[2],
-            rotationY,
+            cursorGroupRef.current.rotation.y,
           ),
-          candidates: footprintAnchors(alignmentFootprints),
+          candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
         if (ar.snap) {
           alignX = ar.snap.dx
           alignZ = ar.snap.dz
         }
-        const movingAABB = footprintAABBAt(
-          draftNodeRef,
-          result.gridPosition[0] + alignX,
-          result.gridPosition[2] + alignZ,
-          rotationY,
-        )
-        useAlignmentGuides
-          .getState()
-          .set(
-            movingAABB ? refineGuidesToGap(ar.guides, movingAABB, alignmentFootprints) : ar.guides,
-          )
+        useAlignmentGuides.getState().set(ar.guides)
       } else {
         useAlignmentGuides.getState().clear()
       }

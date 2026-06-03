@@ -3,15 +3,12 @@ import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import type { AnyNode } from '../schema/types'
-import type { AlignmentGuide } from './alignment'
 import {
   collectAlignmentCandidates,
   collectFloorFootprints,
-  type FootprintAABB,
   footprintAABB,
   footprintAABBFrom,
   movingFootprintAnchors,
-  refineGuidesToGap,
   wallSegmentAnchors,
 } from './alignment-anchors'
 
@@ -172,49 +169,6 @@ describe('collectFloorFootprints', () => {
     const map = collectFloorFootprints(nodes, 'moving')
     expect([...map.keys()]).toEqual(['other'])
     expect(map.get('other')).toEqual({ minX: 4, minZ: 3, maxX: 6, maxZ: 7 })
-  })
-})
-
-describe('refineGuidesToGap', () => {
-  const guideX = (coord: number, candidateNodeId: string): AlignmentGuide => ({
-    axis: 'x',
-    coord,
-    from: { x: coord, z: 0 },
-    to: { x: coord, z: 0 },
-    movingAnchorKind: 'edge-mid',
-    candidateAnchorKind: 'edge-mid',
-    candidateNodeId,
-    distance: 0,
-  })
-
-  test('measures the gap between nearest facing edges, not anchor-to-anchor', () => {
-    // Moving sits past the candidate along Z; gap is moving.minZ − candidate.maxZ.
-    const moving: FootprintAABB = { minX: 0, minZ: 3, maxX: 2, maxZ: 5 }
-    const footprints = new Map<string, FootprintAABB>([
-      ['c', { minX: 0, minZ: 0, maxX: 2, maxZ: 2 }],
-    ])
-    const [g] = refineGuidesToGap([guideX(1, 'c')], moving, footprints)
-    expect(g!.distance).toBeCloseTo(1, 10) // 3 − 2, not center-to-center (4)
-    expect(g!.from.z).toBeCloseTo(2, 10) // candidate near edge
-    expect(g!.to.z).toBeCloseTo(3, 10) // moving near edge
-  })
-
-  test('overlapping footprints have zero gap and span the union', () => {
-    const moving: FootprintAABB = { minX: 0, minZ: 1, maxX: 2, maxZ: 3 }
-    const footprints = new Map<string, FootprintAABB>([
-      ['c', { minX: 0, minZ: 0, maxX: 2, maxZ: 2 }],
-    ])
-    const [g] = refineGuidesToGap([guideX(1, 'c')], moving, footprints)
-    expect(g!.distance).toBe(0)
-    expect(g!.from.z).toBeCloseTo(0, 10)
-    expect(g!.to.z).toBeCloseTo(3, 10)
-  })
-
-  test('passes guides through unchanged when the candidate is absent', () => {
-    const moving: FootprintAABB = { minX: 0, minZ: 0, maxX: 1, maxZ: 1 }
-    const original = guideX(1, 'missing')
-    const [g] = refineGuidesToGap([original], moving, new Map())
-    expect(g).toEqual(original)
   })
 })
 

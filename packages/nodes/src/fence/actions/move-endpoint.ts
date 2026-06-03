@@ -4,8 +4,6 @@ import {
   type AnyNodeId,
   type DragAction,
   type FenceNode,
-  type FootprintAABB,
-  refineGuidesToGap,
   resolveAlignment,
   useAlignmentGuides,
   useScene,
@@ -53,15 +51,6 @@ const LINKED_FENCE_ENDPOINT_EPSILON = 0.025
  *  tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
 
-function segmentAABB(start: FencePlanPoint, end: FencePlanPoint): FootprintAABB {
-  return {
-    minX: Math.min(start[0], end[0]),
-    maxX: Math.max(start[0], end[0]),
-    minZ: Math.min(start[1], end[1]),
-    maxZ: Math.max(start[1], end[1]),
-  }
-}
-
 function samePoint(a: FencePlanPoint, b: FencePlanPoint): boolean {
   return (
     Math.abs(a[0] - b[0]) <= LINKED_FENCE_ENDPOINT_EPSILON &&
@@ -86,11 +75,9 @@ export type MoveFenceEndpointCtx = {
   linkedOriginals: LinkedFenceSnapshot[]
   levelWalls: WallNode[]
   levelFences: FenceNode[]
-  /** Alignment anchors + footprint AABBs of every OTHER wall / fence on the
-   *  level (building-local). Anchors feed the resolver; AABBs let the guide
-   *  re-span to the nearest edge. */
+  /** Alignment anchors (endpoints + midpoints) of every OTHER wall / fence on
+   *  the level (building-local), feeding the resolver. */
   alignCandidates: AlignmentAnchor[]
-  alignFootprints: Map<string, FootprintAABB>
 }
 
 export type MoveFenceEndpointDraft = {
@@ -162,9 +149,6 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         ...levelFences.filter((f) => f.id !== fence.id),
       ]
       const alignCandidates = alignSegments.flatMap((s) => wallSegmentAnchors(s.id, s.start, s.end))
-      const alignFootprints = new Map<string, FootprintAABB>(
-        alignSegments.map((s) => [s.id, segmentAABB(s.start, s.end)]),
-      )
 
       return {
         fenceId: fence.id as AnyNodeId,
@@ -178,7 +162,6 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         levelWalls,
         levelFences,
         alignCandidates,
-        alignFootprints,
       }
     },
 
@@ -197,7 +180,8 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
       // fence endpoint or midpoint axis when within threshold, and publish a
-      // guide (line + nearest-edge distance). Alt is reserved for detach.
+      // guide. The resolver connects to the NEAREST real anchor, so the dot
+      // always sits on an actual point. Alt is reserved for detach.
       let aligned = snapped
       if (ctx.alignCandidates.length > 0) {
         const ar = resolveAlignment({
@@ -208,15 +192,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         if (ar.snap) {
           aligned = [snapped[0] + ar.snap.dx, snapped[1] + ar.snap.dz]
         }
-        const movingAABB: FootprintAABB = {
-          minX: aligned[0],
-          maxX: aligned[0],
-          minZ: aligned[1],
-          maxZ: aligned[1],
-        }
-        useAlignmentGuides
-          .getState()
-          .set(refineGuidesToGap(ar.guides, movingAABB, ctx.alignFootprints))
+        useAlignmentGuides.getState().set(ar.guides)
       }
 
       const nextStart = ctx.endpoint === 'start' ? aligned : ctx.fixedPoint

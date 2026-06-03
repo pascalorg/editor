@@ -4,12 +4,10 @@ import {
   type AnyNodeId,
   DEFAULT_WALL_HEIGHT,
   emitter,
-  type FootprintAABB,
   type GridEvent,
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
-  refineGuidesToGap,
   resolveAlignment,
   resumeSceneHistory,
   useAlignmentGuides,
@@ -233,17 +231,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const wallAlignmentCandidates = alignSegments.flatMap((segment) =>
       wallSegmentAnchors(segment.id, segment.start, segment.end),
     )
-    const wallFootprints = new Map<string, FootprintAABB>(
-      alignSegments.map((segment) => [
-        segment.id,
-        {
-          minX: Math.min(segment.start[0], segment.end[0]),
-          maxX: Math.max(segment.start[0], segment.end[0]),
-          minZ: Math.min(segment.start[1], segment.end[1]),
-          maxZ: Math.max(segment.start[1], segment.end[1]),
-        },
-      ]),
-    )
 
     pauseSceneHistory(useScene)
     let wasCommitted = false
@@ -325,8 +312,10 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
       // fence endpoint or midpoint axis when within threshold, and publish a
-      // guide (line + nearest-edge distance). Layered on top of the grid +
-      // corner snap above; Alt is reserved for corner-detach here.
+      // guide. The resolver connects to the NEAREST real anchor of the
+      // candidate, so the dot always sits on an actual point (endpoint /
+      // midpoint), never an empty-space bbox corner. Layered on top of the
+      // grid + corner snap above; Alt is reserved for corner-detach here.
       let alignedPoint = snappedPoint
       if (wallAlignmentCandidates.length > 0) {
         const ar = resolveAlignment({
@@ -337,13 +326,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         if (ar.snap) {
           alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
         }
-        const movingAABB: FootprintAABB = {
-          minX: alignedPoint[0],
-          maxX: alignedPoint[0],
-          minZ: alignedPoint[1],
-          maxZ: alignedPoint[1],
-        }
-        useAlignmentGuides.getState().set(refineGuidesToGap(ar.guides, movingAABB, wallFootprints))
+        useAlignmentGuides.getState().set(ar.guides)
       }
 
       if (
