@@ -185,6 +185,27 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // system.tsx, no inline floor-plan SVG — see
   // `wiki/architecture/node-definitions.md`.
   geometry: buildShelfGeometry,
+  // Boards/posts/back depend only on these fields — never on hosted
+  // `children`. Lets <GeometrySystem> skip the dispose+rebuild (and the
+  // pointer enter/leave churn it causes) when an item reparents onto a row.
+  geometryKey: (n) => {
+    const s = n as ShelfNodeType
+    return JSON.stringify([
+      s.style,
+      s.width,
+      s.depth,
+      s.thickness,
+      s.height,
+      s.rows,
+      s.columns,
+      s.withBack,
+      s.withSides,
+      s.withBottom,
+      s.bracketStyle,
+      s.material,
+      s.materialPreset,
+    ])
+  },
   floorplan: buildShelfFloorplan,
   // 2D move handler — Path 1 in `FloorplanRegistryMoveOverlay`. Without
   // this the overlay falls through to Path 2 which stomps the SVG

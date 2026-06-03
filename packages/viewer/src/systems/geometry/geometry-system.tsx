@@ -11,7 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { FrontSide, type Group, type Material, type Mesh } from 'three'
 import {
   type ColorPreset,
@@ -58,6 +58,11 @@ export const GeometrySystem = () => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  // Per-node cache of the last-built geometry key (for kinds that declare
+  // `def.geometryKey`). Lets us skip a dispose+rebuild when a node is dirty
+  // but its geometry inputs are unchanged — e.g. an item reparenting onto a
+  // shelf dirties the shelf without altering its boards.
+  const builtGeometryKeyRef = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
@@ -145,6 +150,20 @@ export const GeometrySystem = () => {
       // that drives its mesh through `def.geometry` (fence, shelf, item)
       // now smooths drags through this single line.
       const effectiveNode = getEffectiveNode(node)
+
+      // Skip the rebuild when the geometry inputs are unchanged (kinds that
+      // opt in via `def.geometryKey`). Fold in the global rendering inputs so
+      // a theme / shading change — which re-dirties every geometry node — is
+      // never skipped. This kills the board remount + pointer enter/leave
+      // churn when an item reparents onto a shelf.
+      if (def.geometryKey) {
+        const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}`
+        if (builtGeometryKeyRef.current.get(id) === builtKey) {
+          clearDirty(id as AnyNodeId)
+          continue
+        }
+        builtGeometryKeyRef.current.set(id, builtKey)
+      }
 
       const parentId = (node.parentId ?? null) as AnyNodeId | null
       const key: BatchKey = `${node.type}::${parentId ?? ''}`
