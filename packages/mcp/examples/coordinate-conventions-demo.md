@@ -11,9 +11,7 @@ MCP API.
 pascal-mcp --stdio --scene examples/coordinate-conventions-demo.json
 ```
 
-or, through any MCP host configured for `@pascal-app/mcp`, call
-`load_scene` against the included graph. The scene fits in a 50 m × 50 m
-ground-plane footprint at `level: 0`.
+The scene fits in a 50 m × 50 m ground-plane footprint at `level: 0`.
 
 ## What's in the scene
 
@@ -66,9 +64,5 @@ each claim directly off the geometry:
 
 ## Reproducibility
 
-The driver script and a static (PIL-rendered) two-panel comparison
-image live next to this file as `coordinate-conventions-demo.py` and
-`coordinate-conventions-demo.png` — not committed here because they
-depend on a `PASCAL_API_KEY` and on local Python, but the canonical
-form is the JSON. Anyone with access to a Pascal MCP server can rebuild
-the project from the JSON alone.
+The canonical demo is the JSON file in this directory; load that file to compare
+the geometry against the notes above.
