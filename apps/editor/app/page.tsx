@@ -65,7 +65,7 @@ export default function Home() {
             </Link>
             <span aria-hidden className="text-muted-foreground">·</span>
             <Link className="font-medium text-foreground hover:underline" href="/pic-to-3d">
-              画像から3D
+              Image to 3D
             </Link>
             <span aria-hidden className="text-muted-foreground">·</span>
             <button

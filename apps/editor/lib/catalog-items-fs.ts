@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { AssetInput } from '@pascal-app/core'
 import { formatCatalogEntry } from './format-catalog-entry'
 
-const CATALOG_INSERT_MARKER = '\n]\n\n/** Built-in catalog plus user-added'
+const CATALOG_INSERT_MARKER = /\r?\n]\r?\n\r?\n\/\*\* Built-in catalog plus user-added/
 
 export function getCatalogItemsFilePath(): string {
   return path.join(
@@ -316,7 +316,7 @@ export async function appendCatalogEntryToSource(entry: AssetInput): Promise<{
 }> {
   const filePath = getCatalogItemsFilePath()
   const content = await readFile(filePath, 'utf8')
-  const markerIndex = content.indexOf(CATALOG_INSERT_MARKER)
+  const markerIndex = content.search(CATALOG_INSERT_MARKER)
   if (markerIndex === -1) {
     throw new Error(
       'catalog-items.tsx structure changed; could not find insertion marker.',

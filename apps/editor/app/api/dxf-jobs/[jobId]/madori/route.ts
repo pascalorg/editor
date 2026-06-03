@@ -34,6 +34,7 @@ export const runtime = 'nodejs'
 // Read from env; falls back to localhost for local dev.
 const MADORI_API_URL  = process.env['MADORI_API_URL']  ?? 'http://localhost:8000'
 const MADORI_API_KEY  = process.env['MADORI_API_KEY']  ?? ''
+const MADORI_ANALYZE_DXF_URL = resolveAnalyzeDxfUrl(MADORI_API_URL)
 
 export async function POST(
   request: NextRequest,
@@ -78,7 +79,7 @@ export async function POST(
 
     let analyzeRes: Response
     try {
-      analyzeRes = await fetch(`${MADORI_API_URL}/analyze-dxf`, {
+      analyzeRes = await fetch(MADORI_ANALYZE_DXF_URL, {
         method:  'POST',
         headers: MADORI_API_KEY ? { 'x-api-key': MADORI_API_KEY } : {},
         body:    formData,
@@ -180,4 +181,9 @@ export async function POST(
     zoneCount:    sceneResult.zoneCount,
     warnings:     sceneResult.warnings,
   })
+}
+
+function resolveAnalyzeDxfUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  return trimmed.endsWith('/analyze-dxf') ? trimmed : `${trimmed}/analyze-dxf`
 }

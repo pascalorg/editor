@@ -33,6 +33,18 @@ build
 dist
 *.tsbuildinfo
 
+# .NET / Visual Studio local state
+pascal-reverse-proxy/.vs/
+pascal-reverse-proxy/bin/
+pascal-reverse-proxy/obj/
+pascal-reverse-proxy/*.csproj.user
+
+# Runtime databases
+pascal-reverse-proxy/data/
+pascal-reverse-proxy/*.db
+pascal-reverse-proxy/*.db-shm
+pascal-reverse-proxy/*.db-wal
+
 
 # Debug
 npm-debug.log*
@@ -45,6 +57,7 @@ yarn-error.log*
 /.playwright-mcp
 og-test
 .env*.local
+apps/editor/env.download
 
 # Worktrees
 .worktrees

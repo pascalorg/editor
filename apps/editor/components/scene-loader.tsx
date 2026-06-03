@@ -4,15 +4,20 @@
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
 import {
+  AddCatalogPanel,
   applySceneGraphToEditor,
   Editor,
+  ItemsPanel,
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
+import { Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AiAssistantBubble } from './ai-assistant-bubble'
+import { ImportDxfTool } from './tools/ImportDxfTool'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -33,6 +38,29 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     id: 'site',
     label: 'Scene',
     component: () => null, // Built-in SitePanel handles this
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Layers className="h-5 w-5" />,
+  },
+  {
+    id: 'items',
+    label: 'Items',
+    component: ItemsPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Package className="h-5 w-5" />,
+  },
+  {
+    id: 'add-catalog',
+    label: '霑ｽ蜉',
+    component: AddCatalogPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Plus className="h-5 w-5" />,
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    component: () => null,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Settings className="h-5 w-5" />,
   },
 ]
 
@@ -69,6 +97,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [dxfOpen, setDxfOpen] = useState(false)
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -159,6 +188,53 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   return (
     <div className="relative h-screen w-screen">
+      <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
+        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
+          <Link className="font-medium text-foreground hover:underline" href="/scenes">
+            Open recent scenes
+          </Link>
+          <span aria-hidden className="text-muted-foreground">
+            ﾂｷ
+          </span>
+          <Link className="font-medium text-foreground hover:underline" href="/scenes">
+            Create new
+          </Link>
+          <span aria-hidden className="text-muted-foreground">
+            ﾂｷ
+          </span>
+          <Link className="font-medium text-foreground hover:underline" href="/pic-to-3d">
+            Image to 3D
+          </Link>
+          <span aria-hidden className="text-muted-foreground">
+            ﾂｷ
+          </span>
+          <button
+            className="font-medium text-foreground hover:underline"
+            onClick={() => setDxfOpen(true)}
+            type="button"
+          >
+            Import DXF
+          </button>
+        </div>
+      </div>
+      {dxfOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/50 pt-16 pb-8 backdrop-blur-sm"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setDxfOpen(false)
+            }}
+          >
+            <ImportDxfTool
+              onClose={() => setDxfOpen(false)}
+              onDone={({ buildingId }) => {
+                setDxfOpen(false)
+                router.push(`/scene/${buildingId}`)
+              }}
+            />
+          </div>,
+          document.body,
+        )}
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
           <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>

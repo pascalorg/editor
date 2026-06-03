@@ -369,6 +369,31 @@ static string ResolveProxyDatabasePath(string contentRootPath, ProxyDatabaseOpti
         return Path.GetFullPath(options.Path);
     }
 
+    var proxyDbPath = Environment.GetEnvironmentVariable("PASCAL_PROXY_DB_PATH");
+    if (!string.IsNullOrWhiteSpace(proxyDbPath))
+    {
+        return Path.GetFullPath(proxyDbPath);
+    }
+
+    proxyDbPath = Environment.GetEnvironmentVariable("PROXY_DB_PATH");
+    if (!string.IsNullOrWhiteSpace(proxyDbPath))
+    {
+        return Path.GetFullPath(proxyDbPath);
+    }
+
+    var dotenv = ReadRepositoryDotEnv();
+    if (dotenv.TryGetValue("PASCAL_PROXY_DB_PATH", out var dotenvProxyDbPath) &&
+        !string.IsNullOrWhiteSpace(dotenvProxyDbPath))
+    {
+        return Path.GetFullPath(dotenvProxyDbPath);
+    }
+
+    if (dotenv.TryGetValue("PROXY_DB_PATH", out var dotenvDbPath) &&
+        !string.IsNullOrWhiteSpace(dotenvDbPath))
+    {
+        return Path.GetFullPath(dotenvDbPath);
+    }
+
     return Path.Combine(contentRootPath, "data", "proxy.db");
 }
 

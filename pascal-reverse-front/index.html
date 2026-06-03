@@ -852,9 +852,10 @@
 
         function openProject(id) {
             const project = projects.find(p => p.id === id);
-            const target = project && project.editorUrl
+            const cachedUrl = project && project.editorUrl && project.editorUrl.includes('/scene/')
                 ? project.editorUrl
-                : `/_pascal/scene/${encodeURIComponent(id)}`;
+                : null;
+            const target = cachedUrl || `/_pascal/scene/${encodeURIComponent(id)}`;
             window.location.href = target;
         }
 

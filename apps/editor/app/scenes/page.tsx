@@ -35,11 +35,8 @@ async function fetchScenes(): Promise<SceneMeta[]> {
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
+  const match = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+  return match ? `${match[1]} ${match[2]} UTC` : iso
 }
 
 export default async function ScenesPage() {
