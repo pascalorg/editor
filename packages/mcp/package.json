@@ -42,6 +42,7 @@
   },
   "files": [
     "dist",
+    "examples",
     "README.md",
     "CHANGELOG.md"
   ],
