@@ -4,8 +4,8 @@ import {
   RidgeVentNode as RidgeVentNodeSchema,
   type RidgeVentNode as RidgeVentNodeType,
 } from '@pascal-app/core'
-import { buildRidgeVentFloorplan } from './floorplan'
 import { surfacePaintCapability } from '../shared/surface-paint'
+import { buildRidgeVentFloorplan } from './floorplan'
 import { ridgeVentParametrics } from './parametrics'
 import { RidgeVentNode } from './schema'
 

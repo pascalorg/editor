@@ -4,9 +4,9 @@ export {
   type AlignmentGuideAxis,
   type AnchorKind,
   bboxAnchors,
-  resolveAlignment,
   type ResolveAlignmentInput,
   type ResolveAlignmentResult,
+  resolveAlignment,
 } from './alignment'
 export {
   createDragSession,

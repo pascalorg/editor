@@ -63,14 +63,7 @@ export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuid
 
         return (
           <g key={i}>
-            <line
-              stroke={color}
-              strokeWidth={stroke}
-              x1={from.x}
-              x2={to.x}
-              y1={from.z}
-              y2={to.z}
-            />
+            <line stroke={color} strokeWidth={stroke} x1={from.x} x2={to.x} y1={from.z} y2={to.z} />
             <XCap color={color} size={xCapSize} stroke={stroke} x={from.x} y={from.z} />
             <XCap color={color} size={xCapSize} stroke={stroke} x={to.x} y={to.z} />
             {distMeters > 1e-4 && (
@@ -123,8 +116,22 @@ function XCap({
 }) {
   return (
     <g>
-      <line stroke={color} strokeWidth={stroke} x1={x - size} x2={x + size} y1={y - size} y2={y + size} />
-      <line stroke={color} strokeWidth={stroke} x1={x - size} x2={x + size} y1={y + size} y2={y - size} />
+      <line
+        stroke={color}
+        strokeWidth={stroke}
+        x1={x - size}
+        x2={x + size}
+        y1={y - size}
+        y2={y + size}
+      />
+      <line
+        stroke={color}
+        strokeWidth={stroke}
+        x1={x - size}
+        x2={x + size}
+        y1={y + size}
+        y2={y - size}
+      />
     </g>
   )
 }

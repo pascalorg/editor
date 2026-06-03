@@ -83,7 +83,10 @@ function cloneWorldGeometry(mesh: THREE.Mesh) {
     ? sourceGeometry.toNonIndexed()
     : sourceGeometry.clone()
   const cleanGeometry = new THREE.BufferGeometry()
-  cleanGeometry.setAttribute('position', toFloat32Attribute(workingGeometry.getAttribute('position')))
+  cleanGeometry.setAttribute(
+    'position',
+    toFloat32Attribute(workingGeometry.getAttribute('position')),
+  )
 
   const normal = workingGeometry.getAttribute('normal')
   if (normal) {

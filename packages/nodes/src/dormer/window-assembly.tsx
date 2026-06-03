@@ -140,11 +140,7 @@ const DormerWindowAssembly = ({
   // the sill always extrudes along the group's local +Z, so its position
   // no longer needs to flip per-face.
   const renderFace = (zPos: number, yRot: number, keyPrefix: string) => (
-    <group
-      name={`dormer-window-${keyPrefix}`}
-      position={[winX, winY, zPos]}
-      rotation-y={yRot}
-    >
+    <group name={`dormer-window-${keyPrefix}`} position={[winX, winY, zPos]} rotation-y={yRot}>
       {winGeo.glassPanes.map((pane, i) => (
         <mesh
           geometry={pane.geo}
