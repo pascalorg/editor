@@ -14,7 +14,7 @@ import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/edito
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import RidgeVentPreview from './preview'
 
 /**

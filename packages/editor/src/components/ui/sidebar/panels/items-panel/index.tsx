@@ -9,6 +9,7 @@ import useEditor from '../../../../../store/use-editor'
 import { furnishTools } from '../../../action-menu/furnish-tools'
 import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
+import { type FunctionTreeNode, FunctionTreePanel } from './function-tree-panel'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
 
@@ -18,6 +19,9 @@ export function ItemsPanel({
   searchResults,
   leadingTile,
   emptyState,
+  functionTree,
+  showSourceFilter = true,
+  showTagFilters = true,
 }: {
   items?: AssetInput[]
   /** Called when the search query changes (community edition uses this for server-side search) */
@@ -34,6 +38,64 @@ export function ItemsPanel({
    * or no search results). Replaces the default "No results" message.
    */
   emptyState?: React.ReactNode
+  /**
+   * DB-driven function taxonomy. When provided, the panel renders the
+   * hierarchical tree browse instead of the legacy hardcoded category tabs.
+   */
+  functionTree?: FunctionTreeNode[]
+  /**
+   * Library/Community/Mine source chips. The open-source editor has no
+   * uploaded items (only the built-in catalog), so it hides these.
+   */
+  showSourceFilter?: boolean
+  /**
+   * Placement/functional tag filter chips under the search row. The
+   * open-source editor hides these to keep the panel to plain categories.
+   */
+  showTagFilters?: boolean
+}) {
+  // When the embedder supplies a function taxonomy, the hierarchical browse
+  // replaces the legacy `furnishTools` category tabs entirely.
+  if (functionTree && functionTree.length > 0) {
+    return (
+      <FunctionTreePanel
+        emptyState={emptyState}
+        functionTree={functionTree}
+        items={items}
+        leadingTile={leadingTile}
+        onSearchChange={onSearchChange}
+        searchResults={searchResults}
+      />
+    )
+  }
+
+  return <LegacyItemsPanel
+    emptyState={emptyState}
+    items={items}
+    leadingTile={leadingTile}
+    onSearchChange={onSearchChange}
+    searchResults={searchResults}
+    showSourceFilter={showSourceFilter}
+    showTagFilters={showTagFilters}
+  />
+}
+
+function LegacyItemsPanel({
+  items,
+  onSearchChange,
+  searchResults,
+  leadingTile,
+  emptyState,
+  showSourceFilter = true,
+  showTagFilters = true,
+}: {
+  items?: AssetInput[]
+  onSearchChange?: (query: string) => void
+  searchResults?: AssetInput[] | null
+  leadingTile?: React.ReactNode
+  emptyState?: React.ReactNode
+  showSourceFilter?: boolean
+  showTagFilters?: boolean
 }) {
   const mode = useEditor((s) => s.mode)
   const catalogCategory = useEditor((s) => s.catalogCategory)
@@ -45,8 +107,11 @@ export function ItemsPanel({
   const [activeFunctionalTag, setActiveFunctionalTag] = useState<string | null>(null)
   // Library / Community / Mine. Default to Library so first-time users see
   // the curated catalog rather than every uploaded item; clicking the chip
-  // again clears the filter (`null` = show everything).
-  const [activeSource, setActiveSource] = useState<AssetInput['source'] | null>('library')
+  // again clears the filter (`null` = show everything). With the chips hidden
+  // there is nothing to filter by, so start unfiltered.
+  const [activeSource, setActiveSource] = useState<AssetInput['source'] | null>(
+    showSourceFilter ? 'library' : null,
+  )
   const [search, setSearch] = useState('')
   const isServerSearch = onSearchChange !== undefined
   // True when server search is active but results haven't come back yet
@@ -108,7 +173,7 @@ export function ItemsPanel({
   const allTags = Array.from(new Set(categoryItems.flatMap((item) => item.tags ?? [])))
   const placementTags = allTags.filter((t) => PLACEMENT_TAGS.has(t))
   const functionalTags = allTags.filter((t) => !PLACEMENT_TAGS.has(t))
-  const hasFilters = allTags.length > 1
+  const hasFilters = showTagFilters && allTags.length > 1
 
   const placementCount = (tag: string | null) =>
     categoryItems.filter((item) => {
@@ -129,7 +194,7 @@ export function ItemsPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Category tabs */}
-      <div className="flex shrink-0 gap-1 overflow-x-auto border-border/70 border-b p-2">
+      <div className="flex shrink-0 flex-wrap gap-1 border-border/70 border-b p-2">
         {furnishTools.map((cat) => {
           const isActive = activeCategory.catalogCategory === cat.catalogCategory
           return (
@@ -161,9 +226,13 @@ export function ItemsPanel({
       <div className="flex shrink-0 flex-col gap-2 border-border/70 border-b p-2">
         <div className="flex items-center gap-1.5">
           {/* Search and source filter take 50/50 of the row. `min-w-0` on
-              both sides lets each half shrink to fit when the panel narrows. */}
+              both sides lets each half shrink to fit when the panel narrows.
+              With the source chips hidden, search spans the full row. */}
           <input
-            className="w-1/2 min-w-0 shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none"
+            className={cn(
+              'min-w-0 shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none',
+              showSourceFilter ? 'w-1/2' : 'w-full',
+            )}
             onChange={(e) => {
               setSearch(e.target.value)
               onSearchChange?.(e.target.value)
@@ -172,7 +241,7 @@ export function ItemsPanel({
             type="text"
             value={search}
           />
-          {sourceChips.length > 0 && (
+          {showSourceFilter && sourceChips.length > 0 && (
             <div className="flex w-1/2 min-w-0 shrink-0 rounded-lg bg-muted p-0.5">
               {sourceChips.map((chip) => {
                 const isActive = activeSource === chip.id

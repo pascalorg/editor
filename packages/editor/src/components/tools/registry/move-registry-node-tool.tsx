@@ -20,7 +20,15 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-const roundToHalf = (value: number) => Math.round(value * 2) / 2
+/** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
+ *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
+const snapToGridStep = (value: number) => {
+  const step = useEditor.getState().gridSnapStep
+  return Math.round(value / step) * step
+}
+
+/** 90° steps, matching the GLB item placement rotation. */
+const ROTATION_STEP = Math.PI / 2
 
 /**
  * Generic move tool for any registry-backed kind.
@@ -104,6 +112,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
    * commit position consistent with the visible cursor.
    */
   const lastCursorRef = useRef<[number, number, number]>(originalPosition)
+  /**
+   * Becomes true on the first `grid:move` after this move arms. Commits are
+   * ignored until then so a click that *armed* this move (e.g. the trailing
+   * `click` event of the click that just committed the previous copy, when a
+   * preset placement immediately re-arms the next one) can't auto-drop a
+   * second copy at the spot. Every real placement moves the cursor into
+   * position before the drop click, so this never blocks a legitimate commit.
+   */
+  const hasMovedRef = useRef(false)
+  // Live Y-rotation during the drag, seeded from the node's current rotation
+  // and bumped by R/T. Applied imperatively + mirrored to `useLiveTransforms`,
+  // and committed to the scene on drop.
+  const rotationRef = useRef(originalRotationY)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -112,7 +133,17 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   useEffect(() => {
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
+    hasMovedRef.current = false
+    rotationRef.current = originalRotationY
     let committed = false
+
+    // The node's rotation shape (tuple vs scalar) is preserved on commit;
+    // only the Y angle changes. Most registry kinds use a `[x, y, z]` tuple.
+    const baseRotation = (node as { rotation?: unknown }).rotation
+    const toCommitRotation = (y: number): number | [number, number, number] =>
+      Array.isArray(baseRotation)
+        ? [(baseRotation[0] as number) ?? 0, y, (baseRotation[2] as number) ?? 0]
+        : y
 
     // Disable raycast on the moved node's meshes for the duration of
     // the drag. As the shelf follows the cursor, the cursor ray would
@@ -135,8 +166,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const x = roundToHalf(event.localPosition[0])
-      const z = roundToHalf(event.localPosition[2])
+      const x = snapToGridStep(event.localPosition[0])
+      const z = snapToGridStep(event.localPosition[2])
+      hasMovedRef.current = true
       setCursorPosition([x, 0, z])
       lastCursorRef.current = [x, 0, z]
 
@@ -154,7 +186,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // their floor-plan move-targets handle the override themselves.
       useLiveTransforms.getState().set(node.id, {
         position: [x, 0, z],
-        rotation: originalRotationY,
+        rotation: rotationRef.current,
       })
 
       const prev = previousSnapRef.current
@@ -180,11 +212,17 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
      *  AND scene updated) — never the original.
      */
     const commitAtCursor = (event: ClickTriggerEvent) => {
+      // Ignore a commit that fires before the cursor has moved into place —
+      // it's the stray trailing click of whatever armed this move, not a
+      // deliberate drop. Prevents preset re-arm from double-placing.
+      if (!hasMovedRef.current) return
       const position: [number, number, number] = [...lastCursorRef.current]
+
+      const rotation = toCommitRotation(rotationRef.current)
 
       if (useScene.getState().nodes[node.id]) {
         useScene.temporal.getState().resume()
-        useScene.getState().updateNode(node.id, { position } as Partial<AnyNode>)
+        useScene.getState().updateNode(node.id, { position, rotation } as Partial<AnyNode>)
         useScene.temporal.getState().pause()
         committed = true
       } else if (node.parentId) {
@@ -196,6 +234,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             id: undefined,
             metadata: {},
             position,
+            rotation,
           })
           useScene.temporal.getState().resume()
           useScene.getState().createNode(reparsed as AnyNode, node.parentId as AnyNodeId)
@@ -204,11 +243,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         }
       }
 
-      // Keep mesh.position aligned with the just-committed scene position
-      // so the next R3F frame paints at the right spot even if React's
+      // Keep mesh.position/rotation aligned with the just-committed scene
+      // values so the next R3F frame paints correctly even if React's
       // reconciliation lags by a tick.
       const mesh = sceneRegistry.nodes.get(node.id)
-      if (mesh) mesh.position.set(position[0], position[1], position[2])
+      if (mesh) {
+        mesh.position.set(position[0], position[1], position[2])
+        mesh.rotation.y = rotationRef.current
+      }
 
       // Now safe to clear — node.position is already the new value, so
       // `ParametricNodeRenderer`'s next render lands at `[x, 0, z]`.
@@ -230,6 +272,26 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       if (typeof direct === 'function') direct.call(event)
     }
 
+    // R / T rotate the dragged node about Y in 90° steps — matching the GLB
+    // item placement keys (and the "Rotate" hints the move HUD shows). Applied
+    // imperatively + mirrored to the live transform; committed on drop.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      let delta = 0
+      if (e.key === 'r' || e.key === 'R') delta = ROTATION_STEP
+      else if (e.key === 't' || e.key === 'T') delta = -ROTATION_STEP
+      else return
+      e.preventDefault()
+      rotationRef.current += delta
+      const m = sceneRegistry.nodes.get(node.id)
+      if (m) m.rotation.y = rotationRef.current
+      useLiveTransforms.getState().set(node.id, {
+        position: lastCursorRef.current,
+        rotation: rotationRef.current,
+      })
+    }
+    window.addEventListener('keydown', onKeyDown)
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', commitAtCursor)
 
@@ -244,9 +306,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onCancel = () => {
-      sceneRegistry.nodes
-        .get(node.id)
-        ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
+      const m = sceneRegistry.nodes.get(node.id)
+      if (m) {
+        m.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
+        m.rotation.y = originalRotationY
+      }
       useLiveTransforms.getState().clear(node.id)
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
@@ -255,6 +319,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      window.removeEventListener('keydown', onKeyDown)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
       for (const kind of CLICK_TRIGGER_KINDS) {

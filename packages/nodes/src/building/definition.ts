@@ -28,6 +28,14 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
     duplicable: false,
     deletable: false,
     floorplanLevelContainer: true,
+    presettable: false,
+  },
+
+  // Building-wide drag (whole-building translate + R/T rotation). Routed
+  // through `MoveTool`'s registry-affordance lookup rather than a
+  // hardcoded dispatcher arm.
+  affordanceTools: {
+    move: () => import('./move-tool'),
   },
 
   parametrics: buildingParametrics,

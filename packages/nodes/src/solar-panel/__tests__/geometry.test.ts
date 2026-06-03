@@ -1,12 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
-import {
-  buildSolarPanelGeometry,
-  computeAutoFit,
-  flippedPanelDims,
-  getAnalyticalNormal,
-  getSurfaceY,
-} from '../geometry'
+import { getAnalyticalNormal, getSurfaceY } from '../../shared/roof-surface'
+import { buildSolarPanelGeometry, computeAutoFit, flippedPanelDims } from '../geometry'
 import { SolarPanelNode } from '../schema'
 
 // atan(2 / 3) in degrees — gives `getActiveRoofHeight` ≈ 2.0 on the

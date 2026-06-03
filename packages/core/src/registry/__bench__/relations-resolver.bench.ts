@@ -110,6 +110,8 @@ function makeScene(nodes: Record<string, AnyNode>): SceneApi {
     markDirty: () => {},
     pauseHistory: () => {},
     resumeHistory: () => {},
+    getSubtree: () => null,
+    cloneNodesInto: () => null,
   }
 }
 

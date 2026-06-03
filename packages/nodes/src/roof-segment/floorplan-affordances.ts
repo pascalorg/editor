@@ -154,11 +154,7 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
   // is `[cosRoof, sinRoof; -sinRoof, cosRoof]`. Used to project world cursor
   // back into roof-local coords.
   void roofRot
-  let lastLocal: [number, number, number] = [
-    node.position[0],
-    node.position[1],
-    node.position[2],
-  ]
+  let lastLocal: [number, number, number] = [node.position[0], node.position[1], node.position[2]]
 
   return {
     affectedIds: [segmentId],

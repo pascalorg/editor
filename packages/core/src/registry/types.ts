@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
+import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -409,6 +410,14 @@ export type FloorplanGeometry =
       angle: number
       affordance: string
       payload?: unknown
+      /**
+       * Rotation pivot (plan coords) this handle turns the node around.
+       * When present, the floor-plan layer draws a live angle wedge + degree
+       * readout swept from grab to the current pointer bearing during the
+       * drag — the 2D twin of the 3D rotate gizmo's readout. Emitters that
+       * already compute the pivot to place the handle should pass it through.
+       */
+      pivot?: FloorplanPoint
     }
   /**
    * Centered length / distance label. Renders as a small rounded
@@ -970,6 +979,57 @@ export type Capabilities = {
    * declaring the same flag.
    */
   floorplanLevelContainer?: boolean
+  /**
+   * Names of schema fields on this kind that are *host references* —
+   * values derived from where the node is placed (rather than declared
+   * by the user as part of the kind's parametric configuration). Read
+   * by host apps at preset-save time to strip these from the stored
+   * payload so a placed instance gets fresh host links at the new
+   * placement site (e.g. a door snapshot loses `wallId`/`wallT`; at
+   * placement the auto-attach UX re-derives them from the wall under
+   * the cursor).
+   *
+   * Kinds with no host refs omit this field (default `[]`).
+   *
+   * Examples:
+   *   - door: `['wallId', 'wallT']` (door hosted on a wall)
+   *   - window: `['wallId', 'wallT']`
+   *   - item with `attachTo`: depends on the asset; the kind's
+   *     `defaults()` or the dragging logic populates it dynamically.
+   */
+  hostRefFields?: string[]
+  /**
+   * Whether instances of this kind can be saved as a reusable preset
+   * (unified `items` catalog, `kind='preset'`). The editor itself does
+   * not act on this flag — host apps read it to gate "save as preset"
+   * UI on the selected node. Default resolution (callers should use the
+   * `isPresettable(def)` helper rather than reading this directly):
+   *
+   *   - explicit `true`  → presettable
+   *   - explicit `false` → not presettable
+   *   - undefined        → presettable when `def.parametrics` exists
+   *
+   * Structural / utility kinds (level, building, site, zone, spawn,
+   * guide, scan, item) opt out explicitly because saving them as a
+   * standalone preset has no meaning — items already have their own
+   * catalog, scans/guides carry user-uploaded imagery, and the rest
+   * are non-leaf scene containers.
+   */
+  presettable?: boolean
+  /**
+   * Instances of this kind are created by operating a build tool and
+   * drawing on the grid (clicking points), rather than dropping a
+   * finished instance. The tool id equals the node `type`. Host apps may
+   * seed the tool's starting parameters via
+   * `useEditor.setToolDefaults(type, params)` before activating it — the
+   * tool's create path merges those defaults when minting the node and
+   * clears its own entry on deactivation. Used so placing a saved preset
+   * of a drawn kind contributes its build parameters (a fence's
+   * height / style / post spacing) while the user draws the fresh span,
+   * and so a future "small / medium / large" picker can prime the same
+   * tool. Read via the `isDrawnViaTool(def)` helper. Default `false`.
+   */
+  drawTool?: boolean
 }
 
 /**
@@ -1186,6 +1246,31 @@ export type ParametricDescriptor<N> = {
   invariants?: ReadonlyArray<(n: N) => Issue[]>
   derive?: (n: N) => Partial<N>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
+  /**
+   * Extra buttons rendered in the inspector's Actions section
+   * (below Move/Delete). Lets a kind declare "do this thing to the
+   * current node" affordances without escaping to a full custom
+   * panel. Buttons whose `enabledIf` returns false stay disabled.
+   */
+  actions?: ParamAction<N>[]
+  /**
+   * Lazy-loaded React subsection rendered AFTER the auto-derived
+   * groups and BEFORE the Actions section. Used by kinds that want
+   * to list their child nodes inline — e.g. the gutter's downspout
+   * list with an "Add Downspout" button at the bottom, same shape as
+   * the roof panel's gutter / vent lists. Kind owns the layout; the
+   * inspector just slots it in.
+   */
+  trailingSection?: () => Promise<{ default: ComponentType<{ node: N }> }>
+}
+
+export type ParamAction<N> = {
+  label: string
+  /** Optional asset URL for a leading icon — same shape as palette icons. */
+  iconSrc?: string
+  enabledIf?: (n: N) => boolean
+  /** Click handler. Receives the current node value at click time. */
+  onClick: (n: N) => void
 }
 
 export type ParamGroup<N> = {
@@ -1282,6 +1367,25 @@ export type SceneApi = {
   markDirty: (id: AnyNodeId) => void
   pauseHistory: () => void
   resumeHistory: () => void
+  /**
+   * Collect the subtree of live nodes rooted at `rootId` — `root` plus
+   * every descendant reachable via `children[]` in BFS order. Returns
+   * live node references (no clones); the caller decides whether to
+   * persist by value or pass them straight into {@link cloneNodesInto}.
+   * Returns `null` if `rootId` is missing.
+   */
+  getSubtree: (rootId: AnyNodeId) => Subtree | null
+  /**
+   * Clone a flat array of nodes into the live scene with fresh IDs and
+   * rewired parent / children references. Intentionally generic — see
+   * {@link cloneNodesInto} for the transformations applied. Does NOT
+   * strip or re-derive host references (e.g. `wallId` on a door); the
+   * caller is responsible for that policy (read {@link Capabilities.hostRefFields}
+   * on the relevant definition).
+   *
+   * Returns the new root id, or `null` if insertion failed.
+   */
+  cloneNodesInto: (nodes: ReadonlyArray<AnyNode>, opts: CloneNodesIntoOptions) => AnyNodeId | null
 }
 
 // ─── Registry surface ────────────────────────────────────────────────

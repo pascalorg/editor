@@ -1,10 +1,11 @@
 'use client'
 
-import { StairOpeningSystem } from '@pascal-app/core'
+import { type AnyNodeId, StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
+import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
@@ -130,17 +131,63 @@ interface ViewerProps {
     textures?: boolean
     colorPreset?: ColorPreset
   }
+  /**
+   * Visibility filter on the live canvas. When non-null, every registered
+   * node group whose id is not in `isolate` (or in the isolated set's
+   * ancestor / descendant closure) is hidden. Pass `null` (or omit) to
+   * clear. Powers the unified preset-capture flow (community modal sets
+   * this to the subtree it wants to thumbnail) and is the building block
+   * for a future focus-mode UX.
+   */
+  isolate?: AnyNodeId[] | null
 }
 
-const Viewer: React.FC<ViewerProps> = ({
-  children,
-  hoverStyles = DEFAULT_HOVER_STYLES,
-  selectionManager = 'default',
-  perf = false,
-  useBvh = true,
-  renderContext = 'editor',
-  defaultRender,
-}) => {
+/** Imperative handle exposed via `ref` on `<Viewer>`. */
+export type ViewerHandle = {
+  /**
+   * Apply / clear the same visibility filter as the `isolate` prop. Useful
+   * for transient cases (a temporary hover-to-isolate UX) where holding
+   * the value in React state would be over-engineering. Passing `null`
+   * clears.
+   */
+  setIsolated(ids: AnyNodeId[] | null): void
+}
+
+const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
+  {
+    children,
+    hoverStyles = DEFAULT_HOVER_STYLES,
+    selectionManager = 'default',
+    perf = false,
+    useBvh = true,
+    renderContext = 'editor',
+    defaultRender,
+    isolate,
+  },
+  ref,
+) {
+  useImperativeHandle(
+    ref,
+    () => ({
+      setIsolated: (ids) => applyIsolation(ids),
+    }),
+    [],
+  )
+
+  // Track the most recently-applied isolation so the cleanup path can
+  // restore visibility even if the prop is removed while the component is
+  // still mounted. `clearIsolation()` is a no-op when nothing was applied.
+  const isolateRef = useRef<AnyNodeId[] | null | undefined>(undefined)
+  useEffect(() => {
+    isolateRef.current = isolate ?? null
+    applyIsolation(isolate ?? null)
+    return () => {
+      // Only clear if this effect was the one that applied — protects
+      // against a parent unmount racing with a setIsolated() consumer.
+      if (isolateRef.current === isolate) clearIsolation()
+    }
+  }, [isolate])
+
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   useEffect(() => {
     const ctx = renderContext
@@ -261,7 +308,7 @@ const Viewer: React.FC<ViewerProps> = ({
       </ErrorBoundary>
     </Canvas>
   )
-}
+})
 
 const DebugRenderer = () => {
   useFrame(({ gl, scene, camera }) => {

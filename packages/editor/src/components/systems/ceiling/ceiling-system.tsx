@@ -25,15 +25,19 @@ export const CeilingSystem = () => {
     }
 
     for (const id of selectedIds) {
-      let currentId: string | null = id
-      let isCeilingRelated = false
-      let levelId: string | null = null
+      // Only treat a directly-selected ceiling as "reveal the grid"; a
+      // selected descendant (e.g. a freshly-placed ceiling light) used to
+      // count too, which left the opaque grid overlay covering the room
+      // even after the user moved on. With the grid still in front, every
+      // subsequent click in 3D hit the grid mesh (its `useNodeEvents`
+      // handlers re-selected the ceiling) instead of the items below.
+      const selectedNode = nodes[id as AnyNodeId]
+      if (selectedNode?.type !== 'ceiling') continue
 
+      let currentId: string | null = selectedNode.parentId as string | null
+      let levelId: string | null = null
       while (currentId && nodes[currentId as AnyNodeId]) {
         const node = nodes[currentId as AnyNodeId]
-        if (node?.type === 'ceiling') {
-          isCeilingRelated = true
-        }
         if (node?.type === 'level') {
           levelId = node.id
           break
@@ -41,7 +45,7 @@ export const CeilingSystem = () => {
         currentId = node?.parentId as string | null
       }
 
-      if (isCeilingRelated && levelId) {
+      if (levelId) {
         levelsToShowCeilings.add(levelId)
       }
     }

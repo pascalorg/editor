@@ -37,10 +37,10 @@ export const BoxVentNode = BaseNode.extend({
   // cap's flange. Reads as the ventilation slot on real attic vents.
   // 0 = cap sits flush on the body (the original cap shape).
   capGap: z.number().default(0),
-  // `dome`-only: radial decay of the dome cap. 1 = perfect ellipsoid,
-  // <1 = soft pillow (wider for longer near the apex). Ignored by
-  // `box` / `cap`.
-  domeCurvature: z.number().default(0.65),
+  // `dome`-only: radial decay of the dome cap. 1 = clean ellipsoid
+  // (default — reads as a proper hemispherical dome), <1 = fuller pillow,
+  // >1 = pointier. Ignored by `box` / `cap`.
+  domeCurvature: z.number().default(1.0),
   // `box`-only: how much the lower (smaller) riser is inset from the
   // upper (larger) cover. 0 = same footprint as the cover.
   baseInset: z.number().default(0.06),

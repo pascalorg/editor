@@ -1,7 +1,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type BoxVentNode,
   type BuildingNode,
   type CeilingNode,
   type ColumnNode,
@@ -15,7 +14,6 @@ import {
   isRegistrySelectable,
   type NodeEvent,
   nodeRegistry,
-  type RidgeVentNode,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentEvent,
@@ -353,7 +351,7 @@ function applyStairPaintPreview(
 }
 
 function applySingleSurfacePaintPreview(
-  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode | BoxVentNode | RidgeVentNode,
+  node: FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
   material: ActivePaintMaterial,
 ): PaintPreviewCleanup | null {
   if (node.type === 'ceiling') {
@@ -421,10 +419,11 @@ function applySingleSurfacePaintPreview(
     }
   }
 
-  if (node.type === 'shelf' || node.type === 'box-vent' || node.type === 'ridge-vent') {
-    // These kinds register a `<group>` (not a Mesh) with `useRegistry`,
-    // so we walk the subtree and preview-swap every child mesh — same
-    // approach `column` uses.
+  if (node.type === 'shelf') {
+    // Shelf registers a `<group>` (not a Mesh) with `useRegistry`, so we walk
+    // the subtree and preview-swap every child mesh — same approach `column`
+    // uses. (The roof vents previously shared this arm; they now route through
+    // their `capabilities.paint` dispatcher.)
     if (!registeredObject) return null
     const restores: PaintPreviewCleanup[] = []
     registeredObject.traverse((object) => {
@@ -1020,9 +1019,7 @@ export const SelectionManager = () => {
         node.type === 'column' ||
         node.type === 'slab' ||
         node.type === 'ceiling' ||
-        node.type === 'shelf' ||
-        node.type === 'box-vent' ||
-        node.type === 'ridge-vent'
+        node.type === 'shelf'
       ) {
         const compatible = hasActivePaintMaterial(activePaintMaterial)
 
@@ -1037,13 +1034,7 @@ export const SelectionManager = () => {
                   .updateNode(
                     node.id as AnyNodeId,
                     buildSingleSurfaceMaterialPatch<
-                      | FenceNode
-                      | ColumnNode
-                      | SlabNode
-                      | CeilingNode
-                      | ShelfNode
-                      | BoxVentNode
-                      | RidgeVentNode
+                      FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode
                     >(activePaintMaterial.material, activePaintMaterial.materialPreset),
                   )
               }
@@ -1051,14 +1042,7 @@ export const SelectionManager = () => {
           preview: compatible
             ? () =>
                 applySingleSurfacePaintPreview(
-                  node as
-                    | FenceNode
-                    | ColumnNode
-                    | SlabNode
-                    | CeilingNode
-                    | ShelfNode
-                    | BoxVentNode
-                    | RidgeVentNode,
+                  node as FenceNode | ColumnNode | SlabNode | CeilingNode | ShelfNode,
                   activePaintMaterial,
                 )
             : () => previewCursor('not-allowed'),
@@ -1214,6 +1198,16 @@ export const SelectionManager = () => {
       if (boxSelectHandled) return
 
       const node = event.node
+
+      // A ceiling is selectable only through its corner handles, never via
+      // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
+      // selected, or an item placed beneath it) a top-down click hits the
+      // grid first; selecting the ceiling there both re-selects it as a
+      // no-op and stops propagation, blocking the hosted item below. By
+      // ignoring non-handle ceiling clicks (without stopping propagation)
+      // the click falls through to the item underneath.
+      if (node.type === 'ceiling' && !event.viaHandle) return
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
 

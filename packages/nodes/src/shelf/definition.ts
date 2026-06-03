@@ -1,10 +1,6 @@
-import type {
-  HandleDescriptor,
-  NodeDefinition,
-  ShelfNode as ShelfNodeType,
-} from '@pascal-app/core'
-import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
+import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
 import { buildShelfFloorplan } from './floorplan'
+import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
 import { shelfFloorplanMoveTarget } from './floorplan-move'
 import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
 import { shelfParametrics } from './parametrics'

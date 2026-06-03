@@ -50,13 +50,16 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export { CupolaNode } from './nodes/cupola'
 export { DoorNode, DoorSegment } from './nodes/door'
+export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export {
   DormerNode,
   type DormerSurfaceMaterialRole,
   type DormerSurfaceMaterialSpec,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
+export { DownspoutNode } from './nodes/downspout'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
@@ -65,6 +68,7 @@ export {
 } from './nodes/elevator'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
+export { GutterNode, GutterOutlet } from './nodes/gutter'
 export type {
   AnimationEffect,
   Asset,
@@ -133,6 +137,7 @@ export {
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
+export { TurbineVentNode } from './nodes/turbine-vent'
 export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
 export {
   getEffectiveWallSurfaceMaterial,

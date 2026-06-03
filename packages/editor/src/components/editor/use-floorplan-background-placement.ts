@@ -30,11 +30,16 @@ type UseFloorplanBackgroundPlacementArgs = {
   } | null
   floorplanOpeningLocalY: number
   getSnappedFloorplanPoint: (point: WallPlanPoint) => WallPlanPoint
+  handleCeilingItemPlacementClick: (
+    planPoint: WallPlanPoint,
+    nativeEvent: ReactMouseEvent<SVGSVGElement>,
+  ) => boolean
   handleCeilingPlacementPoint: (point: WallPlanPoint) => void
   handleSlabPlacementPoint: (point: WallPlanPoint) => void
   handleWallPlacementPoint: (point: WallPlanPoint) => void
   handleZonePlacementPoint: (point: WallPlanPoint) => void
   isCeilingBuildActive: boolean
+  isCeilingItemPlacementActive: boolean
   isFenceBuildActive: boolean
   isFloorplanGridInteractionActive: boolean
   isOpeningPlacementActive: boolean
@@ -76,11 +81,13 @@ export function useFloorplanBackgroundPlacement({
   findClosestWallPoint,
   floorplanOpeningLocalY,
   getSnappedFloorplanPoint,
+  handleCeilingItemPlacementClick,
   handleCeilingPlacementPoint,
   handleSlabPlacementPoint,
   handleWallPlacementPoint,
   handleZonePlacementPoint,
   isCeilingBuildActive,
+  isCeilingItemPlacementActive,
   isFenceBuildActive,
   isFloorplanGridInteractionActive,
   isOpeningPlacementActive,
@@ -225,6 +232,15 @@ export function useFloorplanBackgroundPlacement({
         return true
       }
 
+      // Ceiling-attached item placement (lights, fans). Routes the click
+      // through `ceiling:click` instead of `grid:click` so the placement
+      // strategy parents the new item to the ceiling at the correct
+      // height — mirrors the pointer-move handler in `floorplan-panel`.
+      if (isCeilingItemPlacementActive) {
+        handleCeilingItemPlacementClick(planPoint, event)
+        return true
+      }
+
       // Generic catch-all — registry-driven tool whose kind has no
       // local floor-plan draft handler (column / spawn / shelf / etc.).
       // The tool's `grid:click` subscriber owns the placement.
@@ -247,10 +263,12 @@ export function useFloorplanBackgroundPlacement({
       findClosestWallPoint,
       floorplanOpeningLocalY,
       getSnappedFloorplanPoint,
+      handleCeilingItemPlacementClick,
       handleCeilingPlacementPoint,
       handleSlabPlacementPoint,
       handleZonePlacementPoint,
       isCeilingBuildActive,
+      isCeilingItemPlacementActive,
       isFenceBuildActive,
       isFloorplanGridInteractionActive,
       isOpeningPlacementActive,

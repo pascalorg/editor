@@ -97,7 +97,7 @@ export const RoofSegmentNode = BaseNode.extend({
     .max(0.9)
     .default(ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio),
   // Hosted accessories — chimney, dormer, skylight, box-vent,
-  // ridge-vent, solar-panel. Each accessory's `parentId` points back
+  // ridge-vent, solar-panel, gutter. Each accessory's `parentId` points back
   // here; the segment renderer mounts them recursively via
   // `<NodeRenderer>` so they inherit the segment's transform stack.
   // Required for `createNode(child, segmentId)` to append the child

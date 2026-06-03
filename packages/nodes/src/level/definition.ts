@@ -30,6 +30,9 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
     // mirror that.
     duplicable: false,
     deletable: true,
+    // Container kind — saving a level as a standalone preset has no
+    // meaning (its contents make sense only inside a building).
+    presettable: false,
   },
 
   parametrics: levelParametrics,

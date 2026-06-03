@@ -18,14 +18,13 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { buildBoxVentGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.85,
   metalness: 0.1,
-  side: THREE.DoubleSide,
 })
 
 /**
@@ -108,25 +107,31 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   }, [segment, node.position[0], node.position[2]])
 
   // Paint surface: explicit material wins, then preset, then the cached
-  // default. Mirrors the slab / stair / wall pattern. Preset materials
-  // come from the shared cache with `side: FrontSide`; clone + force
-  // DoubleSide locally so back faces of the vent body / hood don't drop
-  // out when the camera looks up at the eaves.
+  // default. FrontSide everywhere — DoubleSide on the role material's
+  // NodeMaterial poisons the MRT scene pass (see `materials.ts` line 77 /
+  // glazing fix 9400f1c5). Earlier this path forced DoubleSide so back
+  // faces of the vent body / hood wouldn't drop out when looking up at the
+  // eaves; that's now a known visual tradeoff — a closed-solid extrude in
+  // `geometry.ts` is the right fix if undersides become noticeable.
   const material = useMemo(() => {
-    // Untextured box vent (and textures-off mode) takes the themed 'roof'
-    // role colour. Request DoubleSide directly so the cached role material
-    // is the right side — no clone/mutation of a shared material.
     if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.DoubleSide, sceneTheme)
+      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
     }
-    const base = node.material
+    return node.material
       ? createMaterial(node.material, shading)
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-    if (base.side === THREE.DoubleSide) return base
-    const cloned = base.clone()
-    cloned.side = THREE.DoubleSide
-    return cloned
   }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+
+  // Compose slope tilt + yaw onto a single quaternion so the registered
+  // ref's local frame is vent-mesh-local. `NodeArrowHandles` reads this
+  // frame to place its chevrons; collapsing the nested-group stack onto
+  // the registered group lets handles use vent-local coords directly,
+  // without per-arrow tilt compensation. Mirrors solar-panel's renderer.
+  const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])
+  const composedQuat = useMemo(() => {
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(yAxis, node.rotation ?? 0)
+    return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
+  }, [surfaceQuat, node.rotation, yAxis])
 
   if (!segment) return null
 
@@ -146,21 +151,18 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     <group position={segPos} rotation-y={segRotY}>
       <group
         position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        quaternion={composedQuat}
         ref={ref}
         visible={node.visible}
       >
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
-              castShadow
-              geometry={geometry}
-              material={material}
-              name="box-vent-surface"
-              receiveShadow
-              {...handlers}
-            />
-          </group>
-        </group>
+        <mesh
+          castShadow
+          geometry={geometry}
+          material={material}
+          name="box-vent-surface"
+          receiveShadow
+          {...handlers}
+        />
       </group>
     </group>
   )

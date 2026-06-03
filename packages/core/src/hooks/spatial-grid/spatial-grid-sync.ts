@@ -166,7 +166,17 @@ function markNodesOverlappingSlab(
     if (node.type === 'wall') {
       const wall = node as WallNode
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      if (wallOverlapsPolygon(wall.start, wall.end, slab.polygon)) {
+      if (
+        wallOverlapsPolygon(
+          {
+            start: wall.start,
+            end: wall.end,
+            curveOffset: wall.curveOffset ?? 0,
+            thickness: wall.thickness,
+          },
+          slab.polygon,
+        )
+      ) {
         markDirty(node.id)
       }
       continue

@@ -79,10 +79,10 @@ describe('syncAutoStairOpenings', () => {
     const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id })
     const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
     const manualOpening: Array<[number, number]> = [
-      [1.2, 0.8],
-      [2.8, 0.8],
-      [2.8, 2.9],
-      [1.2, 2.9],
+      [1.0, 0.0],
+      [3.0, 0.0],
+      [3.0, 3.0],
+      [1.0, 3.0],
     ]
     const sourceCeiling = CeilingNode.parse({
       name: 'Source Ceiling',
@@ -206,10 +206,10 @@ describe('syncAutoStairOpenings', () => {
     const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id })
     const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
     const manualOpening: Array<[number, number]> = [
-      [1.2, 0.8],
-      [2.8, 0.8],
-      [2.8, 2.9],
-      [1.2, 2.9],
+      [1.0, 0.0],
+      [3.0, 0.0],
+      [3.0, 3.0],
+      [1.0, 3.0],
     ]
     const staleAutoOpening: Array<[number, number]> = [
       [1.5, 1],

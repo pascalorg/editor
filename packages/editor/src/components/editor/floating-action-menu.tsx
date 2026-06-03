@@ -5,10 +5,13 @@ import {
   type AnyNodeId,
   type CeilingNode,
   ColumnNode,
+  DEFAULT_WALL_HEIGHT,
   DoorNode,
   ElevatorNode,
   FenceNode,
   generateId,
+  getWallCurveLength,
+  getWallThickness,
   ItemNode,
   isRegistryMovable,
   isRegistrySelectable,
@@ -19,6 +22,7 @@ import {
   StairNode,
   StairSegmentNode,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
   WallNode,
   WindowNode,
@@ -32,6 +36,7 @@ import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
+import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -76,9 +81,10 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   door: 0.6,
   window: 0.6,
   column: 0.6,
-  // Fence: clears the height-resize arrow (sits at fence.height + 0.45)
-  // plus the chevron's own visual size, so the menu floats just above it.
-  fence: 1.05,
+  // Fence: still clears the height-resize arrow (sits at fence.height +
+  // 0.45) plus the chevron's visual size, but kept low so the menu sits
+  // close to the fence rather than floating well above it.
+  fence: 0.7,
   // Elevator: clears the cab-height arrow which sits above the SHAFT
   // top (resolved through level entries), so the menu floats above it.
   elevator: 0.9,
@@ -100,11 +106,35 @@ const MENU_Y_OFFSETS: Record<string, number> = {
 function getMenuYOffset(node: AnyNode | null): number {
   if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
   if (node.type === 'stair-segment') {
-    return (
-      (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
-    )
+    return (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
   }
   return (MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
+}
+
+// Fence schema defaults — mirror packages/nodes/src/fence/definition.ts so the
+// pill reads sensibly before an explicit height / thickness is set.
+const FENCE_DEFAULT_HEIGHT = 1.8
+const FENCE_DEFAULT_THICKNESS = 0.08
+
+// Dimensions for the height-drag pill. Walls and fences both carry
+// start/end/curveOffset, so getWallCurveLength covers length for either.
+function getHeightPillDimensions(node: WallNode | FenceNode): {
+  height: number
+  length: number
+  thickness: number
+} {
+  if (node.type === 'wall') {
+    return {
+      height: node.height ?? DEFAULT_WALL_HEIGHT,
+      length: getWallCurveLength(node),
+      thickness: getWallThickness(node),
+    }
+  }
+  return {
+    height: node.height ?? FENCE_DEFAULT_HEIGHT,
+    length: getWallCurveLength(node),
+    thickness: node.thickness ?? FENCE_DEFAULT_THICKNESS,
+  }
 }
 
 export function FloatingActionMenu() {
@@ -120,9 +150,31 @@ export function FloatingActionMenu() {
   const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
+  const unit = useViewer((s) => s.unit)
+  // Drives the height-drag dimension pill below the menu. `activeHandleDrag`
+  // flips only at drag start / end, so subscribing here is cheap — the live
+  // height value is written imperatively in the useFrame below.
+  const activeHandleDrag = useEditor((s) => s.activeHandleDrag)
 
   const groupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
+  const pillHeightRef = useRef<HTMLSpanElement>(null)
+
+  // Cached world anchor. The anchor is derived from `Box3.setFromObject`,
+  // which traverses the selected object's children — so a node with a
+  // continuously-animating child (the spinning turbine-vent head) makes the
+  // AABB wobble a few millimetres every frame, and the menu drifts even with
+  // a still camera. We instead recompute the box only when the selection,
+  // the object's world transform, or its geometry actually changes, and
+  // reuse the cached anchor otherwise. (Also removes a per-frame
+  // `setFromObject` for every selection.)
+  const anchorRef = useRef(new THREE.Vector3())
+  const hasAnchorRef = useRef(false)
+  const lastMatrixRef = useRef(new THREE.Matrix4())
+  const lastAnchorKeyRef = useRef<{ id: string | null; node: AnyNode | null }>({
+    id: null,
+    node: null,
+  })
 
   // Only show for single selection of specific types
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -136,6 +188,17 @@ export function FloatingActionMenu() {
   const isValidType = node
     ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
     : false
+
+  // Height-drag pill: shown just above the menu only while the selected
+  // wall/fence height arrow is being dragged. Length + thickness are fixed
+  // during a height drag, so they're computed here; the live height value
+  // is updated imperatively in the useFrame (same pattern as the scale).
+  const pillNode = node?.type === 'wall' || node?.type === 'fence' ? node : null
+  const isHeightDragPill =
+    pillNode !== null &&
+    activeHandleDrag?.nodeId === selectedId &&
+    activeHandleDrag?.label === 'height'
+  const pillDims = pillNode ? getHeightPillDimensions(pillNode) : null
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {
@@ -171,17 +234,53 @@ export function FloatingActionMenu() {
       menuScaleRef.current.style.transform = `scale(${scale})`
     }
 
+    // Live height readout for the drag pill. The dragged height lands in
+    // `useLiveNodeOverrides` (not the scene store) each frame, so read it
+    // imperatively here instead of forcing a per-frame React re-render.
+    if (
+      pillHeightRef.current &&
+      (node?.type === 'wall' || node?.type === 'fence') &&
+      activeHandleDrag?.nodeId === selectedId &&
+      activeHandleDrag?.label === 'height'
+    ) {
+      const override = useLiveNodeOverrides.getState().overrides.get(selectedId) as
+        | { height?: number }
+        | undefined
+      const fallbackHeight = node.type === 'wall' ? DEFAULT_WALL_HEIGHT : FENCE_DEFAULT_HEIGHT
+      const liveHeight = override?.height ?? node.height ?? fallbackHeight
+      pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit)}`
+    }
+
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
-      // Calculate bounding box in world space
-      const box = new THREE.Box3().setFromObject(obj)
-      if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3())
-        // Position above the object. Per-type offsets clear each kind's
-        // in-world chrome (height-resize arrows, measurement labels).
-        groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
+      // Recompute the anchor only when the object genuinely changes —
+      // reselected, moved (its own world matrix changed), or resized
+      // (a fresh store node on commit, or a live override / handle drag
+      // mid-resize). A spinning child changes the head's matrix, not the
+      // registered group's, so it never triggers a recompute → the menu
+      // holds still.
+      const overrideActive = useLiveNodeOverrides.getState().overrides.get(selectedId) != null
+      const dragActive = activeHandleDrag?.nodeId === selectedId
+      const selectionChanged =
+        lastAnchorKeyRef.current.id !== selectedId || lastAnchorKeyRef.current.node !== node
+      const matrixChanged = !lastMatrixRef.current.equals(obj.matrixWorld)
+
+      if (selectionChanged || matrixChanged || overrideActive || dragActive) {
+        const box = new THREE.Box3().setFromObject(obj)
+        if (!box.isEmpty()) {
+          const center = box.getCenter(new THREE.Vector3())
+          // Position above the object. Per-type offsets clear each kind's
+          // in-world chrome (height-resize arrows, measurement labels).
+          anchorRef.current.set(center.x, box.max.y + getMenuYOffset(node), center.z)
+          hasAnchorRef.current = true
+        }
+        lastMatrixRef.current.copy(obj.matrixWorld)
+        lastAnchorKeyRef.current = { id: selectedId, node }
       }
 
+      if (hasAnchorRef.current) {
+        groupRef.current.position.copy(anchorRef.current)
+      }
     }
   })
 
@@ -316,15 +415,22 @@ export function FloatingActionMenu() {
           }
 
           // Duplicate children for stair nodes
-        } else if (duplicate.type === 'chimney' || duplicate.type === 'dormer') {
-          // Chimney & dormer use pure drag-to-place: NO node is
-          // inserted into the scene until the user clicks a roof
-          // segment. The `setMovingNode` call below hands the clone
-          // (with `metadata.isNew = true` + no id) to
-          // `MoveChimneyTool` / `MoveDormerTool`, which call
-          // `createNode` on the click that commits the placement.
-          // Skipping the auto-create avoids the "duplicate appears at
-          // +1 offset before drag" UX the other registry kinds use.
+        } else if (
+          duplicate.type === 'item' ||
+          duplicate.type === 'chimney' ||
+          duplicate.type === 'dormer'
+        ) {
+          // Items, chimneys & dormers use pure drag-to-place: NO node is
+          // inserted into the scene until the user clicks to commit. The
+          // `setMovingNode` call below hands the clone (with
+          // `metadata.isNew = true` + no id) to its move tool —
+          // `MoveItemTool` / `MoveChimneyTool` / `MoveDormerTool` — which
+          // create a draft and call `createNode` on the commit click.
+          // Pre-creating here would drop a second copy into the scene
+          // before any click — the furnish-tab "duplicate auto-places an
+          // item without clicking" bug. (Item has its own
+          // draft-committing move tool, so it must skip the generic
+          // registry auto-create branch below.)
         } else if (nodeRegistry.has(duplicate.type)) {
           // Registry-driven kinds: offset the position slightly so the
           // duplicate doesn't overlap exactly, then create + hand to the
@@ -436,9 +542,9 @@ export function FloatingActionMenu() {
             pointerEvents: 'auto',
             touchAction: 'none',
           }}
-          zIndexRange={[100, 0]}
+          zIndexRange={[25, 0]}
         >
-          <div ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
+          <div className="relative" ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
             <NodeActionMenu
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
               onCurve={
@@ -447,12 +553,10 @@ export function FloatingActionMenu() {
                   : undefined
               }
               onMove={
-                // Registry-driven: any kind that declares
+                // Fully registry-driven: any kind that declares
                 // `capabilities.movable`, a `floorplanMoveTarget`, or a
                 // 3D `affordanceTools.move` mover gets the Move button.
-                // Replaces the previous 13-arm `node?.type === '…'`
-                // chain so adding a new movable kind doesn't touch this
-                // file.
+                // Adding a new movable kind never touches this file.
                 node && isRegistryMovable(node.type) ? handleMove : undefined
               }
               onDelete={handleDelete}
@@ -467,6 +571,23 @@ export function FloatingActionMenu() {
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
             />
+            {/* Height-drag dimension pill. Absolutely positioned just above
+                the menu (away from the height arrow below it) so it rides the
+                same scale transform + anchor, never overlaps the menu, and
+                needs no menu lift — which is what caused the click flicker.
+                Non-interactive. */}
+            {isHeightDragPill && pillDims ? (
+              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2">
+                <MeasurementPill
+                  height={pillDims.height}
+                  length={pillDims.length}
+                  primary="height"
+                  ref={pillHeightRef}
+                  thickness={pillDims.thickness}
+                  unit={unit}
+                />
+              </div>
+            ) : null}
           </div>
         </Html>
       </group>

@@ -9,7 +9,7 @@ import {
   generateSlabGeometry,
   type RenderShading,
 } from '@pascal-app/viewer'
-import { DoubleSide, Group, type Material, Mesh, type Texture } from 'three'
+import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
@@ -40,8 +40,12 @@ function getSlabMaterial(
   // Untextured slabs (and everything in textures-off mode) take the themed
   // 'floor' role colour. createSurfaceRoleMaterial returns a shared cached
   // material, so it is returned as-is without the mutation below.
+  // FrontSide — DoubleSide on the role material's NodeMaterial poisons the
+  // MRT scene pass (see `materials.ts` line 77 / glazing fix 9400f1c5).
+  // Slab side faces still render correctly because `generateSlabGeometry`
+  // produces outward-facing normals on the top, bottom, and perimeter.
   if (!textures || (!node.materialPreset && !node.material)) {
-    return createSurfaceRoleMaterial('floor', colorPreset, DoubleSide, sceneTheme)
+    return createSurfaceRoleMaterial('floor', colorPreset, FrontSide, sceneTheme)
   }
 
   const cacheKey = JSON.stringify({
@@ -67,7 +71,10 @@ function getSlabMaterial(
   slabMaterial.transparent = false
   slabMaterial.opacity = 1
   slabMaterial.alphaMap = null
-  slabMaterial.side = DoubleSide
+  // FrontSide — user-supplied materials may be NodeMaterials, and DoubleSide
+  // on any NodeMaterial in the MRT scene pass poisons the render context
+  // (see `materials.ts` line 77 / glazing fix 9400f1c5).
+  slabMaterial.side = FrontSide
   slabMaterial.depthWrite = true
   slabMaterial.needsUpdate = true
 

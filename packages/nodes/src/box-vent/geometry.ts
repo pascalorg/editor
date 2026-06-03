@@ -1,6 +1,5 @@
 import { type BoxVentNode, getActiveRoofHeight, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
  * Pure builder for the box-vent mesh. Models a real attic box vent:
@@ -27,8 +26,6 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 export function buildBoxVentGeometry(node: BoxVentNode): THREE.BufferGeometry {
   if (node.style === 'box') return buildBoxShape(node)
   if (node.style === 'cap') return buildCapShape(node)
-  // `dome` will get its own dedicated builder in Step 3. For now it
-  // keeps the unified dome+skirt shape so the visual doesn't regress.
   return buildDomeStyleShape(node)
 }
 
@@ -374,189 +371,165 @@ function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value
 }
 
-// ─── Dome style (current implementation) ─────────────────────────────
-// Body + dome cap with flange skirt. Drives the `dome` style until
-// Step 3 swaps it for a dedicated builder.
+// ─── Dome style (bullnose vent) ──────────────────────────────────────
+// A stainless bullnose vent: a smooth half-ellipsoid dome that overhangs a
+// short lifted collar — the collar is what gives the vent its visible depth
+// standing off the roof — all seated on a wide round FLANGE plate that
+// mounts to the roof. Every part is a surface of revolution; no square
+// geometry anywhere.
+//
+//        .-""-.        ← dome (overhangs the collar lip)
+//       /      \
+//      |  | |   |       ← lifted collar (the depth above the flange)
+//    __|        |__
+//   |______________|    ← round flange plate on the roof
+//
+// `domeCurvature` shapes the cap; `hoodOverhang` sets how far the flange
+// plate extends past the dome.
 
 function buildDomeStyleShape(node: BoxVentNode): THREE.BufferGeometry {
-  const w = node.width
-  const d = node.depth
+  const rx = node.width / 2
+  const rz = node.depth / 2
   const h = node.height
-  // Dome has no flange — the cap rolls down flush to the body footprint.
-  // `hoodOverhang` is hidden from the panel for this style; we ignore any
-  // stored value so legacy nodes still render flush.
-  const overhang = 0
+  const power = Math.max(0.3, Math.min(1.5, node.domeCurvature ?? 1.0))
+  const lng = 24
+  const lat = 8
 
-  const bodyH = h * 0.32
-  const hoodH = h - bodyH
+  // Wide flange plate (extends past the dome by `hoodOverhang`) + thickness.
+  const brim = Math.max(0, node.hoodOverhang ?? 0.04)
+  const rxF = rx + brim
+  const rzF = rz + brim
+  const brimThk = Math.min(0.015, h * 0.18)
+  // Collar: a touch narrower than the dome so the cap overhangs it, and tall
+  // enough to read as real lift above the flange.
+  const collarRx = rx * 0.9
+  const collarRz = rz * 0.9
+  const collarH = Math.max(0.012, Math.min(h * 0.4, h - brimThk - 0.02))
+  const domeBaseY = brimThk + collarH
+  const domeH = h - domeBaseY
 
-  return (
-    mergeGeometries(
-      [buildBody(w, d, bodyH), buildDomeHood(w, d, overhang, bodyH, hoodH, 'dome')],
-      false,
-    ) ?? buildBody(w, d, bodyH)
-  )
-}
-
-// ─── Body ────────────────────────────────────────────────────────────
-
-function buildBody(w: number, d: number, bodyH: number): THREE.BufferGeometry {
-  const hw = w / 2
-  const hd = d / 2
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
 
-  // +X side
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [hw, 0, -hd],
-    [hw, 0, hd],
-    [hw, bodyH, hd],
-    [hw, bodyH, -hd],
-    [1, 0, 0],
-  )
-  // -X side
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [-hw, 0, hd],
-    [-hw, 0, -hd],
-    [-hw, bodyH, -hd],
-    [-hw, bodyH, hd],
-    [-1, 0, 0],
-  )
-  // +Z side
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [hw, 0, hd],
-    [-hw, 0, hd],
-    [-hw, bodyH, hd],
-    [hw, bodyH, hd],
-    [0, 0, 1],
-  )
-  // -Z side
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [-hw, 0, -hd],
-    [hw, 0, -hd],
-    [hw, bodyH, -hd],
-    [-hw, bodyH, -hd],
-    [0, 0, -1],
-  )
-  // Bottom (closes the body so it reads as solid from below)
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [-hw, 0, -hd],
-    [-hw, 0, hd],
-    [hw, 0, hd],
-    [hw, 0, -hd],
-    [0, -1, 0],
-  )
+  const radial = (a: number[], _b: number[], c: number[]): number[] => {
+    const mx = (a[0]! + c[0]!) / 2
+    const mz = (a[2]! + c[2]!) / 2
+    const l = Math.hypot(mx, mz) || 1
+    return [mx / l, 0, mz / l]
+  }
+  const up = (): number[] => [0, 1, 0]
+  const down = (): number[] => [0, -1, 0]
 
-  return buildBufferGeometry(positions, normals, uvs)
-}
+  const flangeBottom = ringAt(rxF, rzF, 0, lng)
+  const flangeTop = ringAt(rxF, rzF, brimThk, lng)
+  const collarFoot = ringAt(collarRx, collarRz, brimThk, lng)
+  const collarTop = ringAt(collarRx, collarRz, domeBaseY, lng)
+  const domeBase = ringAt(rx, rz, domeBaseY, lng)
+  const center = ringAt(0, 0, 0, lng)
 
-// ─── Dome hood ───────────────────────────────────────────────────────
-// Closed rounded cap (half-ellipsoid sampled on a lat × lng grid) plus
-// a flat skirt that extends past the body by `overhang` — that skirt is
-// what reads as the flashing flange in the reference photo. The cap is
-// fully closed at the apex (single pole vertex), so there's no empty
-// plateau like the old pyramid hood had.
-//
-// `style` shifts the dome shape subtly:
-//  - 'standard'    → moderate dome, gentle roll-off near the apex
-//  - 'low-profile' → very shallow dome (mostly a curved pillow)
-//  - 'dome'        → near-hemisphere with sharper apex curvature
+  // Flange: underside (down), outer rim (radial), top face (up).
+  addBand(positions, normals, uvs, flangeBottom, center, lng, down)
+  addBand(positions, normals, uvs, flangeBottom, flangeTop, lng, radial)
+  addBand(positions, normals, uvs, flangeTop, collarFoot, lng, up)
+  // Lifted collar wall (radial) + the overhanging dome-lip underside (down).
+  addBand(positions, normals, uvs, collarFoot, collarTop, lng, radial)
+  addBand(positions, normals, uvs, collarTop, domeBase, lng, down)
 
-function buildDomeHood(
-  w: number,
-  d: number,
-  overhang: number,
-  bodyH: number,
-  hoodH: number,
-  style: BoxVentNode['style'],
-): THREE.BufferGeometry {
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-
-  const bw = w / 2 + overhang
-  const bd = d / 2 + overhang
-  const y0 = bodyH
-
-  // Skirt underside
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [-bw, y0, -bd],
-    [-bw, y0, bd],
-    [bw, y0, bd],
-    [bw, y0, -bd],
-    [0, -1, 0],
-  )
-
-  // Sample a low-resolution dome on a lat × lng grid. The radial decay
-  // is `cos(phi) ^ radialPower` — `radialPower < 1` keeps the dome wide
-  // longer near the top (soft pillow silhouette, like the reference
-  // photo). `dome` uses a true ellipsoid; `cap` defaults to a softer
-  // pillow until Step 2 swaps it for the pyramid hood.
-  const radialPower = style === 'dome' ? 1.0 : 0.65
-  const lat = 6
-  const lng = 14
-  const points: THREE.Vector3[][] = []
-  for (let i = 0; i <= lat; i++) {
-    const row: THREE.Vector3[] = []
+  // Dome cap, base ring → apex.
+  const domeCenterY = domeBaseY
+  const domeHint = (a: number[], _b: number[], c: number[]): number[] => {
+    const x = (a[0]! + c[0]!) / 2
+    const y = (a[1]! + c[1]!) / 2 - domeCenterY
+    const z = (a[2]! + c[2]!) / 2
+    const l = Math.hypot(x, y, z) || 1
+    return [x / l, y / l, z / l]
+  }
+  let prev = domeBase
+  for (let i = 1; i <= lat; i++) {
     const phi = (Math.PI / 2) * (i / lat)
-    const r = Math.cos(phi) ** radialPower
-    const y = y0 + hoodH * Math.sin(phi)
-    for (let j = 0; j <= lng; j++) {
-      const theta = Math.PI * 2 * (j / lng)
-      const x = bw * r * Math.cos(theta)
-      const z = bd * r * Math.sin(theta)
-      row.push(new THREE.Vector3(x, y, z))
-    }
-    points.push(row)
-  }
-
-  const ab = new THREE.Vector3()
-  const ad = new THREE.Vector3()
-  for (let i = 0; i < lat; i++) {
-    for (let j = 0; j < lng; j++) {
-      const a = points[i]![j]!
-      const b = points[i]![j + 1]!
-      const c = points[i + 1]![j + 1]!
-      const d2 = points[i + 1]![j]!
-      ab.subVectors(b, a)
-      ad.subVectors(d2, a)
-      // Outward dome normal: `ad × ab` matches pushQuad's `(a,c,b)+(a,d,c)`
-      // winding (see note in `pushQuad`). Swapping the cross operands here
-      // keeps the dome lit from the outside, not from inside.
-      const n = new THREE.Vector3().crossVectors(ad, ab).normalize()
-      pushQuad(
-        positions,
-        normals,
-        uvs,
-        [a.x, a.y, a.z],
-        [b.x, b.y, b.z],
-        [c.x, c.y, c.z],
-        [d2.x, d2.y, d2.z],
-        [n.x, n.y, n.z],
-      )
-    }
+    const rf = Math.cos(phi) ** power
+    const y = domeBaseY + domeH * Math.sin(phi)
+    const ring = ringAt(rx * rf, rz * rf, y, lng)
+    addBand(positions, normals, uvs, prev, ring, lng, domeHint)
+    prev = ring
   }
 
   return buildBufferGeometry(positions, normals, uvs)
+}
+
+// One ellipse ring of `lng` segments at height `y`. First and last points
+// coincide (closing the loop) so callers iterate j < lng.
+function ringAt(ax: number, az: number, y: number, lng: number): number[][] {
+  const row: number[][] = []
+  for (let j = 0; j <= lng; j++) {
+    const t = (Math.PI * 2 * j) / lng
+    row.push([ax * Math.cos(t), y, az * Math.sin(t)])
+  }
+  return row
+}
+
+// Connect two rings with a band of quads. `hintFn` returns the outward
+// direction for each quad so pushQuadOriented can orient the face correctly.
+function addBand(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  rA: number[][],
+  rB: number[][],
+  lng: number,
+  hintFn: (a: number[], b: number[], c: number[], d: number[]) => number[],
+): void {
+  for (let j = 0; j < lng; j++) {
+    const a = rA[j]!
+    const b = rA[j + 1]!
+    const c = rB[j + 1]!
+    const d = rB[j]!
+    pushQuadOriented(positions, normals, uvs, a, b, c, d, hintFn(a, b, c, d))
+  }
+}
+
+// Winding-safe quad: triangulates (a,b,c,d) and orients both triangles so
+// the shared flat normal points toward `hint`.
+function pushQuadOriented(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  a: number[],
+  b: number[],
+  c: number[],
+  d: number[],
+  hint: number[],
+) {
+  let nx = (c[1]! - a[1]!) * (b[2]! - a[2]!) - (c[2]! - a[2]!) * (b[1]! - a[1]!)
+  let ny = (c[2]! - a[2]!) * (b[0]! - a[0]!) - (c[0]! - a[0]!) * (b[2]! - a[2]!)
+  let nz = (c[0]! - a[0]!) * (b[1]! - a[1]!) - (c[1]! - a[1]!) * (b[0]! - a[0]!)
+  const flip = nx * hint[0]! + ny * hint[1]! + nz * hint[2]! < 0
+  if (flip) {
+    nx = -nx
+    ny = -ny
+    nz = -nz
+  }
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1
+  nx /= len
+  ny /= len
+  nz /= len
+
+  const u = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
+  const v = Math.hypot(d[0]! - a[0]!, d[1]! - a[1]!, d[2]! - a[2]!)
+
+  if (flip) {
+    positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(0, 0, u, 0, u, v)
+    positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
+    uvs.push(0, 0, u, v, 0, v)
+  } else {
+    positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
+    uvs.push(0, 0, u, v, u, 0)
+    positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(0, 0, 0, v, u, v)
+  }
+  for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────

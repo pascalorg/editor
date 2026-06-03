@@ -27,6 +27,8 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
     duplicable: false, // singleton per level
     deletable: true,
     selectable: { hitVolume: 'bbox' },
+    // Spawn is a singleton anchor — no meaning as a reusable preset.
+    presettable: false,
     // Slab elevation lift via the generic `<FloorElevationSystem>`. The
     // spawn marker is a 1.8m-tall figure with a ~0.6m ring footprint.
     floorPlaced: {

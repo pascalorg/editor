@@ -326,7 +326,12 @@ export function buildElevatorFloorplan(
       { local: [outerHalfW + sideArrowOffset, 0], localAngle: 0, axis: 'x', side: 1 },
       { local: [-(outerHalfW + sideArrowOffset), 0], localAngle: Math.PI, axis: 'x', side: -1 },
       { local: [0, outerHalfD + sideArrowOffset], localAngle: Math.PI / 2, axis: 'z', side: 1 },
-      { local: [0, -(outerHalfD + sideArrowOffset)], localAngle: -Math.PI / 2, axis: 'z', side: -1 },
+      {
+        local: [0, -(outerHalfD + sideArrowOffset)],
+        localAngle: -Math.PI / 2,
+        axis: 'z',
+        side: -1,
+      },
     ]
     for (const side of sides) {
       const [ox, oz] = rotate(side.local[0], side.local[1])
@@ -352,6 +357,7 @@ export function buildElevatorFloorplan(
       point: [cx + cornerX, cz + cornerZ],
       angle: Math.atan2(radialZ, radialX),
       affordance: 'elevator-rotate',
+      pivot: [cx, cz],
     })
   }
 

@@ -143,6 +143,17 @@ export function WallMoveSideHandles() {
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
+  // Merge the in-flight drag override so every handle (side-move arrows,
+  // height arrow, corner leaders) tracks the live height in real time
+  // during a height drag — the scene store stays at the pre-drag value
+  // until commit, so reading `wall` alone would freeze them. Same pattern
+  // as node-arrow-handles.
+  const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(wall.id))
+  const effectiveWall = useMemo(
+    () => (liveOverride ? ({ ...wall, ...liveOverride } as WallNode) : wall),
+    [wall, liveOverride],
+  )
+
   const [levelObject, setLevelObject] = useState<Object3D | null>(() =>
     wall.parentId ? (sceneRegistry.nodes.get(wall.parentId) ?? null) : null,
   )
@@ -175,18 +186,18 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
     }
   }, [wall.parentId])
 
-  const handles = useMemo(() => getWallMoveHandles(wall), [wall])
+  const handles = useMemo(() => getWallMoveHandles(effectiveWall), [effectiveWall])
 
   if (!levelObject || handles.length === 0) return null
 
   return createPortal(
     <group>
       {handles.map((handle) => (
-        <WallMoveArrowHandle handle={handle} key={handle.key} wall={wall} />
+        <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
       ))}
-      <WallHeightArrowHandle wall={wall} />
-      <WallCornerLeaderHandle endpoint="start" wall={wall} />
-      <WallCornerLeaderHandle endpoint="end" wall={wall} />
+      <WallHeightArrowHandle wall={effectiveWall} />
+      <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
+      <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
     </group>,
     levelObject,
   )
@@ -395,6 +406,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const dirX = curveFrame ? curveFrame.tangent.x : wall.end[0] - wall.start[0]
   const dirZ = curveFrame ? curveFrame.tangent.y : wall.end[1] - wall.start[1]
   const wallAngle = Math.atan2(-dirZ, dirX)
+  // `wall` is the override-merged effective wall (see
+  // WallMoveSideHandlesForWall), so this height is already live during a drag.
   const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
@@ -658,7 +671,6 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
         frustumCulled={false}
         geometry={arrowGeometry}
         material={arrowMaterial}
-
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()

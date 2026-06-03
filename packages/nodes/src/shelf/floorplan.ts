@@ -24,10 +24,7 @@ const ROTATE_ARROW_CORNER_OFFSET = 0.22
  * corner. Body move continues to flow through `shelfFloorplanMoveTarget`
  * (engaged from the action-menu Move button, not from these arrows).
  */
-export function buildShelfFloorplan(
-  node: ShelfNode,
-  ctx?: GeometryContext,
-): FloorplanGeometry {
+export function buildShelfFloorplan(node: ShelfNode, ctx?: GeometryContext): FloorplanGeometry {
   const [px, , pz] = node.position
   const ry = node.rotation[1] ?? 0
   // Floor-plan plots at `-ry` so SVG's CW-with-y-down `rotate` direction
@@ -137,6 +134,7 @@ export function buildShelfFloorplan(
     point: [px + cornerPlanX, pz + cornerPlanY],
     angle: Math.atan2(radialPlanY, radialPlanX),
     affordance: 'shelf-rotate',
+    pivot: [px, pz],
   })
 
   return { kind: 'group', children }

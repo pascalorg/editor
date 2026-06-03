@@ -1,6 +1,6 @@
 import {
-  type ElevatorNode as ElevatorNodeType,
   ElevatorNode as ElevatorNodeSchema,
+  type ElevatorNode as ElevatorNodeType,
   getElevatorCabDepth,
   getElevatorCabWidth,
   getElevatorShaftDepth,
@@ -10,11 +10,8 @@ import {
   type NodeDefinition,
   resolveElevatorLevels,
 } from '@pascal-app/core'
-import {
-  elevatorResizeAffordance,
-  elevatorRotateAffordance,
-} from './floorplan-affordances'
 import { buildElevatorFloorplan } from './floorplan'
+import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-affordances'
 import { elevatorParametrics } from './parametrics'
 import { ElevatorNode } from './schema'
 

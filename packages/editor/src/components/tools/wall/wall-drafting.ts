@@ -507,7 +507,12 @@ export function createWallOnCurrentLevel(
   }
 
   const wallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
+  // A placed wall preset seeds `toolDefaults.wall` (thickness, height,
+  // materials, sides) before the tool activates; merge those first so the
+  // drawn wall reproduces the preset. Identity + endpoints always win.
+  const defaults = useEditor.getState().toolDefaults.wall ?? {}
   const wall = WallSchema.parse({
+    ...defaults,
     name: `Wall ${wallCount + 1}`,
     start: resolvedStart,
     end: resolvedEnd,

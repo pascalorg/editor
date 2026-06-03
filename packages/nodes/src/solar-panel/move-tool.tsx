@@ -14,8 +14,8 @@ import { EDITOR_LAYER, markToolCancelConsumed, triggerSFX, useEditor } from '@pa
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from './geometry'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 
 // MeshBasicMaterial: avoids the WebGPU "Color target has no corresponding
 // fragment stage output / writeMask not zero" error that fires when

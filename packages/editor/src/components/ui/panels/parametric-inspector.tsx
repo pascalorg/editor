@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type IconRef,
   nodeRegistry,
+  type ParamAction,
   type ParamField,
   useScene,
 } from '@pascal-app/core'
@@ -19,7 +20,7 @@ import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
-import { PanelWrapper } from './panel-wrapper'
+import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -37,7 +38,7 @@ import { PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector() {
+export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {}) {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
@@ -87,10 +88,14 @@ export function ParametricInspector() {
   // panel to cover them.
   if (parametrics.customPanel) {
     const CustomPanel = resolveCustomPanel(parametrics.customPanel)
+    // Custom panels render their own `<PanelWrapper>` and don't thread a
+    // `footer` prop, so hand the host footer down via context.
     return (
-      <Suspense fallback={null}>
-        <CustomPanel />
-      </Suspense>
+      <InspectorFooterContext.Provider value={footer}>
+        <Suspense fallback={null}>
+          <CustomPanel />
+        </Suspense>
+      </InspectorFooterContext.Provider>
     )
   }
 
@@ -100,8 +105,12 @@ export function ParametricInspector() {
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
 
+  const TrailingSection = parametrics.trailingSection
+    ? resolveCustomPanel(parametrics.trailingSection)
+    : null
+
   return (
-    <PanelWrapper icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
@@ -114,12 +123,20 @@ export function ParametricInspector() {
           ))}
         </PanelSection>
       ))}
-      {(canMove || canDelete) && (
+      {TrailingSection && (
+        <Suspense fallback={null}>
+          <TrailingSection />
+        </Suspense>
+      )}
+      {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
           <ActionGroup>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
+            {parametrics.actions?.map((action, i) => (
+              <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
+            ))}
             {canDelete && (
               <ActionButton
                 className="border-red-500/40 text-red-200 hover:bg-red-500/15"
@@ -132,6 +149,34 @@ export function ParametricInspector() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+// One inspector action button. Subscribes to `enabledIf`'s boolean result
+// (same pattern as FieldRenderer's `visible`) so the disabled state stays
+// live as the scene mutates — `===` on the boolean keeps unrelated ticks
+// from re-rendering it. The click handler re-reads the live node so the
+// handler always acts on current state.
+function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; nodeId: AnyNodeId }) {
+  const disabled = useScene((s) => {
+    if (!action.enabledIf) return false
+    const n = s.nodes[nodeId]
+    return n ? !action.enabledIf(n as AnyNode) : false
+  })
+  return (
+    <ActionButton
+      className={disabled ? 'opacity-40 pointer-events-none' : ''}
+      icon={
+        action.iconSrc ? (
+          <img alt="" className="h-4 w-4 shrink-0 object-contain" src={action.iconSrc} />
+        ) : undefined
+      }
+      label={action.label}
+      onClick={() => {
+        const live = useScene.getState().nodes[nodeId]
+        if (live) action.onClick(live as AnyNode)
+      }}
+    />
   )
 }
 

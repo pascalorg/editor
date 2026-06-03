@@ -40,12 +40,21 @@ export function trimChimneyBodyAgainstRoof(
 ): THREE.BufferGeometry {
   const { shinSlab, wallBrush } = segBrushes
 
-  // Wrap the chimney body in a Brush. The body has `node.position` /
-  // `node.rotation` baked into its vertices via `applyNodeTransform`
-  // in `geometry.ts`, so it's already in segment-local space — the
-  // same frame as the roof brushes from `getRoofSegmentBrushes`.
+  // The body comes in chimney-local frame — `node.position` /
+  // `node.rotation` are applied by the renderer's nested ref'd group
+  // rather than baked into the geometry. Segment brushes from
+  // `getRoofSegmentBrushes` are in segment-local frame, so we move the
+  // chimney brush into segment-local space for the CSG pass, then strip
+  // the same transform back off the result before returning, so the
+  // mesh stays in chimney-local for the renderer to position via the
+  // inner ref group.
   const indexed = mergeVertices(body, 1e-4)
   if (!indexed.getAttribute('normal')) indexed.computeVertexNormals()
+  const hasRotation = Math.abs(node.rotation) > 1e-4
+  const posX = node.position[0] ?? 0
+  const posZ = node.position[2] ?? 0
+  if (hasRotation) indexed.rotateY(node.rotation)
+  indexed.translate(posX, 0, posZ)
   const indexCount = indexed.getIndex()?.count ?? 0
   indexed.clearGroups()
   if (indexCount > 0) indexed.addGroup(0, indexCount, 0)
@@ -70,6 +79,11 @@ export function trimChimneyBodyAgainstRoof(
     const step2 = csgEvaluator.evaluate(step1, shinSlab, SUBTRACTION) as Brush
 
     const out = csgGeometry(step2).clone()
+    // Strip the same node transform we baked onto the input so the
+    // returned geometry is back in chimney-local frame (the renderer's
+    // inner ref'd group applies `node.position` / `node.rotation`).
+    out.translate(-posX, 0, -posZ)
+    if (hasRotation) out.rotateY(-node.rotation)
     const ic = out.getIndex()?.count ?? 0
     out.clearGroups()
     if (ic > 0) out.addGroup(0, ic, 0)

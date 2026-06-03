@@ -187,13 +187,15 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // until the user commits. Batched into a single zustand
       // notification — otherwise each per-wall `.set` would re-render
       // every override subscriber once per linked wall per tick.
-      useLiveNodeOverrides.getState().setMany([
-        [wallId, { start: nextStart, end: nextEnd }],
-        ...linkedUpdates.map(
-          (upd) =>
-            [upd.id, { start: upd.start, end: upd.end }] as [string, Record<string, unknown>],
-        ),
-      ])
+      useLiveNodeOverrides
+        .getState()
+        .setMany([
+          [wallId, { start: nextStart, end: nextEnd }],
+          ...linkedUpdates.map(
+            (upd) =>
+              [upd.id, { start: upd.start, end: upd.end }] as [string, Record<string, unknown>],
+          ),
+        ])
 
       // Surface bridge-wall previews so the floor-plan SVG layer can
       // render dashed outlines of what `commit()` will insert. Mirrors
