@@ -183,12 +183,7 @@ export function buildChimneyFloorplan(
       if (node.flueShape === 'square') {
         children.push({
           kind: 'polygon',
-          points: [
-            toPlan(fx - r, -r),
-            toPlan(fx + r, -r),
-            toPlan(fx + r, r),
-            toPlan(fx - r, r),
-          ],
+          points: [toPlan(fx - r, -r), toPlan(fx + r, -r), toPlan(fx + r, r), toPlan(fx - r, r)],
           fill: 'none',
           stroke: flueStroke,
           strokeWidth: lineWidth * 0.8,

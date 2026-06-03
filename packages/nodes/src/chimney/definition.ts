@@ -1,7 +1,7 @@
 import {
   type AnyNodeId,
-  type ChimneyNode as ChimneyNodeType,
   ChimneyNode as ChimneyNodeSchema,
+  type ChimneyNode as ChimneyNodeType,
   getActiveRoofHeight,
   type HandleDescriptor,
   type NodeDefinition,

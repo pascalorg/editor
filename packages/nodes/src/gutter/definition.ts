@@ -81,11 +81,7 @@ function gutterLengthHandle(side: 'left' | 'right'): HandleDescriptor<GutterNode
       }
     },
     placement: {
-      position: (n) => [
-        sign * (n.length / 2 + SIDE_HANDLE_OFFSET),
-        getBodyMidY(n),
-        getRimZ(n),
-      ],
+      position: (n) => [sign * (n.length / 2 + SIDE_HANDLE_OFFSET), getBodyMidY(n), getRimZ(n)],
       rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
   }

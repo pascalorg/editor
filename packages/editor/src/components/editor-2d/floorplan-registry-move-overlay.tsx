@@ -397,9 +397,7 @@ export function FloorplanRegistryMoveOverlay() {
       if (!otherId || otherId === movingNode.id) continue
       const b = (el as SVGGraphicsElement).getBBox()
       if (b.width <= 0 || b.height <= 0) continue
-      candidateAnchors.push(
-        ...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height),
-      )
+      candidateAnchors.push(...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height))
     }
 
     let lastSnapped: [number, number] | null = null

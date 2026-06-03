@@ -208,6 +208,7 @@ export type {
   MovingFenceEndpoint,
   MovingWallEndpoint,
   SplitOrientation,
+  Tool,
   ToolDefaults,
   ViewMode,
   WorkspaceMode,
