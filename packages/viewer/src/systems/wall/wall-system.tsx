@@ -18,6 +18,7 @@ import {
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -492,9 +493,18 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
-    .map((child) =>
-      child.type === 'door' || child.type === 'window' ? getEffectiveNode(child) : child,
-    )
+    .map((child) => {
+      if (child.type !== 'door' && child.type !== 'window') return child
+      // `getEffectiveNode` folds in resize overrides (width/height arrows).
+      // Position moves publish to `useLiveTransforms` instead, so fold that
+      // in too — otherwise shaped openings (arch/rounded/`opening`), whose
+      // cutout brush is rebuilt from `node.position`, lag the live move
+      // (rectangular cutouts already track via the live mesh matrixWorld).
+      const effective = getEffectiveNode(child)
+      const live = useLiveTransforms.getState().get(child.id)
+      if (!live?.position) return effective
+      return { ...effective, position: live.position }
+    })
 
   const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
 
