@@ -296,17 +296,17 @@ class SceneOperationsFacade implements SceneOperations {
   }
 
   async appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null> {
-    const append = this.requireStore().appendSceneEvent
-    if (!append) return null
-    return append(options)
+    const store = this.requireStore()
+    if (!store.appendSceneEvent) return null
+    return store.appendSceneEvent(options)
   }
 
   async listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]> {
-    const list = this.requireStore().listSceneEvents
-    if (!list) {
+    const store = this.requireStore()
+    if (!store.listSceneEvents) {
       throw new Error('scene_events_unavailable')
     }
-    return list(id, options)
+    return store.listSceneEvents(id, options)
   }
 
   private requireBridge(): SceneBridge {

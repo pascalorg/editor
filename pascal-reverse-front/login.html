@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="logo-web-icon.svg" />
+  <title>MeasureNavi - 登录 / Login / ログイン</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          boxShadow: {
+            'premium': '0 10px 30px -10px rgba(20, 184, 166, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02)',
+            'hover-card': '0 20px 40px -15px rgba(20, 184, 166, 0.2), 0 1px 10px rgba(0, 0, 0, 0.02)',
+            'dropdown': '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+            'btn': '0 4px 14px 0 rgba(20, 184, 166, 0.3)'
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root {
+      --color-primary:        #14b8a6; /* teal-500 */
+      --color-primary-dark:   #0d9488; /* teal-600 */
+      --color-primary-light:  #5eead4; /* teal-300 */
+      --color-secondary:      #22d3ee; /* cyan-400 */
+      --brand-gradient:       linear-gradient(135deg, #14b8a6, #22d3ee);
+      --font-sans:            'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: #f8fafc;
+    }
+
+    /* Input focus custom effect */
+    .premium-input:focus-within {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+    }
+
+    /* Cross-fade Carousel Slide Styles */
+    .carousel-slide {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      background-size: cover;
+      background-position: center;
+    }
+    .carousel-slide.active {
+      opacity: 1;
+    }
+
+    /* Screen transition effect */
+    @keyframes pageIn {
+      from { opacity: 0; transform: scale(0.995) translateY(4px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .page-enter {
+      animation: pageIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+  </style>
+</head>
+<body class="h-screen text-slate-800 flex items-stretch antialiased overflow-hidden">
+
+  <!-- Main Container -->
+  <div class="w-full h-full flex page-enter overflow-hidden">
+    
+    <!-- LEFT PANEL: Brand visual background picture carousel (Hidden on Mobile) -->
+    <!-- Contains smooth automatic transition with dark premium overlay mask to avoid overlapping or text read issues -->
+    <div class="hidden lg:flex lg:w-1/2 h-full relative flex-col justify-between p-10 xl:p-12 overflow-hidden select-none">
+      
+      <!-- Carousel Images Stack -->
+      <div class="absolute inset-0 z-0">
+        <!-- Slide 1: Modern Luxury Lounge and lighting (Perfect for Spatial Interior Mapping representation) -->
+        <div class="carousel-slide active" style="background-image: url('https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80');"></div>
+        <!-- Slide 2: Tech CAD interior layout designer view (Represents Spatial Planning) -->
+        <div class="carousel-slide" style="background-image: url('https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=1200&q=80');"></div>
+        <!-- Slide 3: Beautiful smart architectural house structure -->
+        <div class="carousel-slide" style="background-image: url('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80');"></div>
+      </div>
+
+      <!-- Background Futuristic Overlay Grid & Dark Gradient Mask for pristine text contrast -->
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-slate-950/50 z-10 pointer-events-none"></div>
+
+      <!-- 1. Top Brand Identity Header -->
+      <div class="relative z-20 flex items-center gap-4 shrink-0">
+        <img src="logo.svg" alt="MeasureNavi Logo" class="h-9 w-auto object-contain brightness-0 invert">
+      </div>
+
+      <!-- 2. Middle Spacer (Kept empty to allow the background photo to shine cleanly) -->
+      <div class="relative z-20 flex-1"></div>
+
+      <!-- 3. Bottom Text Block -->
+      <div class="relative z-20 max-w-md shrink-0">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-500/30 text-teal-300 text-xs font-semibold mb-3.5 backdrop-blur-sm">
+          <i class="fa-regular fa-lightbulb"></i> <span data-i18n="tagFeature">AI Smart Renovation</span>
+        </span>
+        <h3 class="text-white font-bold text-2xl leading-snug tracking-tight mb-2" data-i18n="heroTitle">
+          开启智能测绘，让空间设计触手可及
+        </h3>
+        <p class="text-slate-300 text-xs xl:text-sm leading-relaxed" data-i18n="heroSub">
+          集成 AI 空间建模、CAD 智能分析及多端图面协作，帮助您在几分钟内生成精准的翻新设计方案与预算单。
+        </p>
+        
+        <!-- Dot Navigation markers synchronized with current slider image -->
+        <div class="flex gap-2 mt-4" id="carouselIndicators">
+          <span class="indicator-dot h-1.5 w-6 rounded-full bg-teal-500 transition-all duration-300"></span>
+          <span class="indicator-dot h-1.5 w-1.5 rounded-full bg-slate-700 transition-all duration-300"></span>
+          <span class="indicator-dot h-1.5 w-1.5 rounded-full bg-slate-700 transition-all duration-300"></span>
+        </div>
+      </div>
+
+      <!-- Left Panel Footer Copyright Info -->
+      <p class="relative z-20 text-[11px] text-slate-500 font-medium shrink-0 pt-3">
+        &copy;  2025 - LYTech Inc.
+      </p>
+    </div>
+
+    <!-- RIGHT PANEL: Fluent design login card wrapper -->
+    <div class="w-full lg:w-1/2 h-full bg-white flex flex-col justify-between p-6 sm:p-10 xl:p-12 relative overflow-y-auto lg:overflow-hidden">
+      
+      <!-- Top Action Bar: Lang Selector -->
+      <div class="flex items-center justify-between shrink-0">
+        <!-- Logo for Mobile (Invisible on Desktop) -->
+        <div class="flex lg:hidden items-center">
+          <img src="logo.svg" alt="MeasureNavi Logo" class="h-8 w-auto object-contain">
+        </div>
+
+        <div class="hidden lg:block"></div>
+
+        <!-- Language Dropdown selector container -->
+        <div class="relative dropdown-container">
+          <button id="langSelectBtn" onclick="toggleLangDropdown(event)" class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-xs font-semibold text-slate-600 shadow-sm transition duration-150 focus:outline-none">
+            <i class="fa-solid fa-globe text-teal-500"></i>
+            <span id="currentLangLabel">中文 (CN)</span>
+            <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-0.5 transition-transform duration-200" id="langChevron"></i>
+          </button>
+          
+          <!-- Dropdown Choices -->
+          <div id="langDropdown" class="hidden absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-dropdown border border-slate-100 py-1.5 z-30 transform origin-top-right transition-all">
+            <button onclick="selectLanguage('zh')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center justify-between transition">
+              <span>中文 (CN)</span>
+              <i class="fa-solid fa-check text-teal-500 text-[10px] hidden" id="check-zh"></i>
+            </button>
+            <button onclick="selectLanguage('en')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center justify-between transition">
+              <span>English</span>
+              <i class="fa-solid fa-check text-teal-500 text-[10px] hidden" id="check-en"></i>
+            </button>
+            <button onclick="selectLanguage('ja')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center justify-between transition">
+              <span>日本語</span>
+              <i class="fa-solid fa-check text-teal-500 text-[10px] hidden" id="check-ja"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Login Card container -->
+      <div class="w-full max-w-md mx-auto my-auto py-4 sm:py-6 flex flex-col justify-center">
+        <!-- Title block -->
+        <div class="mb-6 xl:mb-8">
+          <h1 class="text-2xl font-bold text-slate-900 tracking-tight" data-i18n="loginTitle">欢迎回来</h1>
+          <p class="text-slate-500 text-xs sm:text-sm mt-1" data-i18n="loginSub">请输入您的凭证以访问空间测绘工作台</p>
+        </div>
+
+        <!-- Login Forms -->
+        <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="space-y-4 sm:space-y-5">
+          
+          <!-- Password Login Block -->
+          <div class="space-y-3.5 sm:space-y-4">
+            <!-- Account / Email field -->
+            <div>
+              <label for="accountInput" class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5" data-i18n="lblAccount">账号</label>
+              <div class="premium-input flex items-center w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl transition duration-150">
+                <i class="fa-regular fa-envelope text-slate-400 text-sm mr-3 shrink-0"></i>
+                <input type="text" id="accountInput" required class="w-full bg-transparent text-sm text-slate-800 focus:outline-none placeholder:text-slate-400" placeholder="账号" />
+              </div>
+            </div>
+
+            <!-- Password field -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label for="passwordInput" class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider" data-i18n="lblPassword">安全密码</label>
+                <a href="javascript:void(0)" onclick="handleForgotPassword()" class="text-xs font-semibold text-teal-600 hover:text-teal-500 transition duration-150" data-i18n="lnkForgot">忘记密码？</a>
+              </div>
+              <div class="premium-input flex items-center w-full px-3.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl transition duration-150 relative">
+                <i class="fa-solid fa-lock text-slate-400 text-sm mr-3 shrink-0"></i>
+                <input type="password" id="passwordInput" required class="w-full bg-transparent text-sm text-slate-800 focus:outline-none placeholder:text-slate-400" placeholder="••••••••" />
+                <button type="button" onclick="togglePasswordVisibility('passwordInput', 'pwdToggleIcon')" class="text-slate-400 hover:text-slate-600 focus:outline-none shrink-0 ml-2">
+                  <i id="pwdToggleIcon" class="fa-regular fa-eye text-sm"></i>
+                </button>
+                <!-- Caps Lock Indicator inside input block -->
+                <div id="capsLockWarning" class="hidden absolute right-12 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-amber-500 bg-amber-50/95 border border-amber-200 px-2 py-1 rounded-md shadow-sm">
+                  <i class="fa-solid fa-arrow-up-z"></i>
+                  <span data-i18n="capsLockOn">大写锁定开启</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Remember Me Checkbox -->
+          <div class="flex items-center justify-between pt-0.5">
+            <label class="flex items-center select-none cursor-pointer group">
+              <input type="checkbox" id="rememberMe" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500/20 h-4 w-4 mr-2" />
+              <span class="text-xs text-slate-500 group-hover:text-slate-700 transition" data-i18n="lblRemember">记住登录状态</span>
+            </label>
+          </div>
+
+          <!-- Demo Accounts quick insertion -->
+          <div class="bg-slate-50/70 border border-slate-100 rounded-xl p-3 mt-3">
+            <div class="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <i class="fa-solid fa-circle-info text-teal-500"></i>
+              <span data-i18n="demoHeader">演示快捷账户</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="fillDemo('admin@measurenavi.com', 'Admin123')" class="px-2.5 py-1 text-[11px] font-semibold text-teal-600 bg-white hover:bg-teal-50/50 border border-slate-200 rounded-lg transition shadow-sm">
+                莫莉 Alex
+              </button>
+              <button type="button" onclick="fillDemo('tanaka@measurenavi.jp', 'Tanaka999')" class="px-2.5 py-1 text-[11px] font-semibold text-cyan-600 bg-white hover:bg-cyan-50/50 border border-slate-200 rounded-lg transition shadow-sm">
+                田中 美咲
+              </button>
+            </div>
+          </div>
+
+          <!-- Login CTA Button -->
+          <button type="submit" id="submitBtn" class="w-full mt-5 flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 shadow-btn hover:shadow-hover-card hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150 focus:outline-none">
+            <span id="submitBtnText" data-i18n="btnSubmit">安全登录 Workspace</span>
+            <i class="fa-solid fa-arrow-right text-xs"></i>
+          </button>
+        </form>
+
+        <!-- Sign Up Link footer -->
+        <p class="text-center text-xs text-slate-500 mt-6 xl:mt-8">
+          <span data-i18n="noAccount">还没有 MeasureNavi 开发者账号？</span>
+          <a href="javascript:void(0)" onclick="handleSignUp()" class="text-teal-600 hover:text-teal-500 font-bold ml-1 transition" data-i18n="lnkRegister">立即免费注册</a>
+        </p>
+
+      </div>
+
+      <!-- Right footer (Legal & Privacy links) -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400 border-t border-slate-100 pt-5 mt-4 shrink-0">
+        <div class="flex items-center gap-4">
+          <a href="javascript:void(0)" class="hover:text-slate-600 transition" data-i18n="footerTerms">服务条款</a>
+          <a href="javascript:void(0)" class="hover:text-slate-600 transition" data-i18n="footerPrivacy">隐私政策</a>
+          <a href="javascript:void(0)" class="hover:text-slate-600 transition" data-i18n="footerContact">技术支持</a>
+        </div>
+        <div class="lg:hidden">
+          <span>&copy; 2026 LYTech Inc.</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Toast Notification Stack Base -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <script>
+    // i18n Multi-lingual Dictionary
+    const dictionary = {
+      zh: {
+        tagFeature: "AI 智能测绘空间",
+        heroTitle: "开启智能测绘，让空间设计触手可及",
+        heroSub: "集成 AI 空间建模、CAD 智能分析及多端图面协作，帮助您在几分钟内生成精准的翻新设计方案与预算单。",
+        loginTitle: "欢迎回来",
+        loginSub: "请输入您的凭证以访问空间测绘工作台",
+        lblAccount: "账号",
+        lblPassword: "安全密码",
+        lblRemember: "记住登录状态",
+        btnSubmit: "安全登录 Workspace",
+        noAccount: "还没有 MeasureNavi 开发者账号？",
+        lnkRegister: "立即免费注册",
+        lnkForgot: "忘记密码？",
+        capsLockOn: "大写锁定开启",
+        demoHeader: "演示快捷账户",
+        footerTerms: "服务条款",
+        footerPrivacy: "隐私政策",
+        footerContact: "技术支持",
+        toastProgress: "正在安全验证登录，请稍候...",
+        toastSuccess: "登录成功！欢迎进入 MeasureNavi。",
+        toastFail: "账号或密码有误，请核对后再试！",
+        toastMissing: "请填写完所有必要的表单项。"
+      },
+      en: {
+        tagFeature: "AI Smart Spatial Measurement",
+        heroTitle: "Empower Your Space with Intelligent Mapping",
+        heroSub: "Integrate AI space modeling, smart CAD analysis, and multi-terminal drafting tools to output detailed renovation concepts and quotes in minutes.",
+        loginTitle: "Welcome Back",
+        loginSub: "Enter your credentials to access your MeasureNavi Workspace",
+        lblAccount: "Account",
+        lblPassword: "Secure Password",
+        lblRemember: "Keep me signed in",
+        btnSubmit: "Securely Sign in to Workspace",
+        noAccount: "New to MeasureNavi Workspace?",
+        lnkRegister: "Create an account",
+        lnkForgot: "Forgot password?",
+        capsLockOn: "Caps Lock is ON",
+        demoHeader: "Quick Demo Accounts",
+        footerTerms: "Terms of Service",
+        footerPrivacy: "Privacy Policy",
+        footerContact: "Contact Support",
+        toastProgress: "Verifying credentials securely...",
+        toastSuccess: "Login Successful! Welcome to MeasureNavi.",
+        toastFail: "Incorrect account or password. Please try again.",
+        toastMissing: "Please fill in all mandatory fields."
+      },
+      ja: {
+        tagFeature: "AI 空间計測システム",
+        heroTitle: "空间計測をよりスマートに、设计をより直感的に",
+        heroSub: "AIによる空间モデリング、CAD解析、そしてマルチデバイスでのクラウド図面共有により、仅か数分で正確な改装提案プランと見積りを自动構築します。",
+        loginTitle: "おかえりなさい",
+        loginSub: "認証情報を入力し、リフォーム支援システムにログインします",
+        lblAccount: "アカウント",
+        lblPassword: "セキュリティパスワード",
+        lblRemember: "ログイン状態を保持する",
+        btnSubmit: "システムに安全にログイン",
+        noAccount: "MeasureNavi アカウントをお持ちでないですか？",
+        lnkRegister: "今すぐ新規登録（無料）",
+        lnkForgot: "パスワードをお忘れですか？",
+        capsLockOn: "Caps Lock がオンになっています",
+        demoHeader: "デモ用クイックアカウント",
+        footerTerms: "利用規約",
+        footerPrivacy: "プライバシーポリシー",
+        footerContact: "サポート窓口",
+        toastProgress: "ログイン検証を実行中、お待ちください...",
+        toastSuccess: "ログイン成功！MeasureNavi へようこそ。",
+        toastFail: "アカウント名またはパスワードが正しくありません。",
+        toastMissing: "必要な項目をすべて入力してください。"
+      }
+    };
+
+    // State Variables
+    let currentLang = localStorage.getItem('measurenavi_lang') || 'zh';
+    let currentSlide = 0;
+    const totalSlides = 3;
+    const AUTH_KEY = 'measurenavi_auth';
+    const USER_KEY = 'measurenavi_user';
+
+    // Page load setup
+    document.addEventListener("DOMContentLoaded", () => {
+      // Sync lang toggle
+      applyLanguage(currentLang);
+
+      // Start picture carousel timer
+      startCarousel();
+
+      // Detect Caps Lock key down on password block
+      const passwordInput = document.getElementById("passwordInput");
+      const capsLockWarning = document.getElementById("capsLockWarning");
+      
+      const checkCapsLock = (event) => {
+        if (event.getModifierState("CapsLock")) {
+          capsLockWarning.classList.remove("hidden");
+        } else {
+          capsLockWarning.classList.add("hidden");
+        }
+      };
+
+      passwordInput.addEventListener("keyup", checkCapsLock);
+      passwordInput.addEventListener("keydown", checkCapsLock);
+
+      window.addEventListener("click", (e) => {
+        if (!e.target.closest('.dropdown-container')) {
+          closeAllDropdowns();
+        }
+      });
+    });
+
+    // Automatic Background Image Slideshow Engine (Smooth Cross-fade)
+    function startCarousel() {
+      setInterval(() => {
+        const slides = document.querySelectorAll('.carousel-slide');
+        const indicators = document.querySelectorAll('.indicator-dot');
+        
+        // Remove active state from current
+        slides[currentSlide].classList.remove('active');
+        indicators[currentSlide].className = "indicator-dot h-1.5 w-1.5 rounded-full bg-slate-700 transition-all duration-300";
+
+        // Increment slide index
+        currentSlide = (currentSlide + 1) % totalSlides;
+
+        // Add active state to next
+        slides[currentSlide].classList.add('active');
+        indicators[currentSlide].className = "indicator-dot h-1.5 w-6 rounded-full bg-teal-500 transition-all duration-300";
+      }, 5000); // Cycles every 5 seconds
+    }
+
+    // Toggle language dropdown
+    function toggleLangDropdown(event) {
+      event.stopPropagation();
+      const langDropdown = document.getElementById('langDropdown');
+      const langChevron = document.getElementById('langChevron');
+      const isCurrentlyHidden = langDropdown.classList.contains('hidden');
+      
+      closeAllDropdowns();
+      
+      if (isCurrentlyHidden) {
+        langDropdown.classList.remove('hidden');
+        langChevron.classList.add('rotate-180');
+      }
+    }
+
+    function closeAllDropdowns() {
+      const langDropdown = document.getElementById('langDropdown');
+      const langChevron = document.getElementById('langChevron');
+      if (langDropdown) langDropdown.classList.add('hidden');
+      if (langChevron) langChevron.classList.remove('rotate-180');
+    }
+
+    // Switch Language dynamic update
+    function selectLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('measurenavi_lang', lang);
+      applyLanguage(lang);
+      closeAllDropdowns();
+      
+      // Flash feedback
+      const noticeText = lang === 'zh' ? '语言已切换为：中文' : lang === 'en' ? 'Language switched to English' : '言語を日本語に切り替えました';
+      showToast(noticeText, 'info');
+    }
+
+    // Process translations in dictionary
+    function applyLanguage(lang) {
+      // Update toggle trigger label
+      const currentLabel = document.getElementById("currentLangLabel");
+      if (lang === 'zh') currentLabel.innerText = '中文 (CN)';
+      if (lang === 'en') currentLabel.innerText = 'English';
+      if (lang === 'ja') currentLabel.innerText = '日本語';
+
+      // Update checks selection highlighters
+      document.getElementById("check-zh").classList.add("hidden");
+      document.getElementById("check-en").classList.add("hidden");
+      document.getElementById("check-ja").classList.add("hidden");
+      document.getElementById(`check-${lang}`).classList.remove("hidden");
+
+      // Dynamic nodes replace
+      const items = document.querySelectorAll("[data-i18n]");
+      items.forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if (dictionary[lang][key]) {
+          el.innerText = dictionary[lang][key];
+        }
+      });
+
+      // Placeholders refresh
+      const accountInput = document.getElementById("accountInput");
+      const passwordInput = document.getElementById("passwordInput");
+      
+      if (lang === 'zh') {
+        accountInput.setAttribute("placeholder", "账号");
+        passwordInput.setAttribute("placeholder", "••••••••");
+      } else if (lang === 'en') {
+        accountInput.setAttribute("placeholder", "Account");
+        passwordInput.setAttribute("placeholder", "••••••••");
+      } else if (lang === 'ja') {
+        accountInput.setAttribute("placeholder", "アカウント");
+        passwordInput.setAttribute("placeholder", "••••••••");
+      }
+    }
+
+    // Toggle Input type visibility eye icon
+    function togglePasswordVisibility(fieldId, iconId) {
+      const field = document.getElementById(fieldId);
+      const icon = document.getElementById(iconId);
+      if (field.type === 'password') {
+        field.type = 'text';
+        icon.className = 'fa-regular fa-eye-slash text-sm';
+      } else {
+        field.type = 'password';
+        icon.className = 'fa-regular fa-eye text-sm';
+      }
+    }
+
+    // Auto load mock user account
+    function fillDemo(email, password) {
+      document.getElementById("accountInput").value = email;
+      document.getElementById("passwordInput").value = password;
+      showToast(currentLang === 'zh' ? "账户凭证已填入！" : currentLang === 'en' ? "Demo account loaded!" : "デモアカウント情報を入力しました！", "success");
+    }
+
+    function handleForgotPassword() {
+      showToast(currentLang === 'zh' ? "重置密码链接已生成，请检查您的注册手机/邮箱！" : currentLang === 'en' ? "Password reset link generated. Check your inbox!" : "パスワード再設定用のURLをお送りしました。受信箱をご確認ください。", "info");
+    }
+
+    function handleSignUp() {
+      showToast(currentLang === 'zh' ? "即将前往 MeasureNavi 注册面板..." : currentLang === 'en' ? "Redirecting to workspace signup..." : "アカウント新規作成ページへ移動します...", "info");
+    }
+
+    // Secure Login submission simulation
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+
+      const submitBtn = document.getElementById("submitBtn");
+      const submitBtnText = document.getElementById("submitBtnText");
+
+      const acc = document.getElementById("accountInput").value.trim();
+      const pas = document.getElementById("passwordInput").value;
+
+      if (!acc || !pas) {
+        showToast(dictionary[currentLang].toastMissing, "error");
+        return;
+      }
+
+      // Show spinner / progress loader
+      submitBtn.disabled = true;
+      submitBtnText.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin text-sm mr-2"></i> ${dictionary[currentLang].toastProgress}`;
+      
+      setTimeout(() => {
+        // Front-end only fake login: any non-empty account and password can enter.
+        if (acc && pas) {
+          showToast(dictionary[currentLang].toastSuccess, "success");
+          
+          const userName = acc.includes('@') ? acc.split('@')[0] : acc;
+          localStorage.setItem(AUTH_KEY, '1');
+          localStorage.setItem(USER_KEY, JSON.stringify({
+            account: acc,
+            name: userName || 'Demo User',
+            role: 'リフォームプランナー',
+            loggedInAt: new Date().toISOString()
+          }));
+
+          setTimeout(() => {
+            submitBtn.disabled = false;
+            submitBtnText.innerText = dictionary[currentLang].btnSubmit;
+            window.location.href = '/';
+          }, 1200);
+
+        } else {
+          showToast(dictionary[currentLang].toastFail, "error");
+          submitBtn.disabled = false;
+          submitBtnText.innerText = dictionary[currentLang].btnSubmit;
+        }
+      }, 1500);
+    }
+
+    // High fidelity beautiful Toast notice component generator
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      
+      let iconClass = "fa-solid fa-circle-check text-emerald-500";
+      let bgBorder = "bg-white border-l-4 border-emerald-500";
+      if (type === 'info') {
+        iconClass = "fa-solid fa-circle-info text-blue-500";
+        bgBorder = "bg-white border-l-4 border-blue-500";
+      } else if (type === 'error') {
+        iconClass = "fa-solid fa-circle-exclamation text-rose-500";
+        bgBorder = "bg-white border-l-4 border-rose-500";
+      }
+
+      toast.className = `${bgBorder} flex items-center gap-3 px-4 py-3 rounded-xl shadow-premium border border-slate-100 max-w-sm transform translate-y-2 opacity-0 transition-all duration-300 ease-out`;
+      toast.innerHTML = `
+        <i class="${iconClass} text-base shrink-0"></i>
+        <span class="text-xs font-semibold text-slate-700 leading-normal">${message}</span>
+      `;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.remove("translate-y-2", "opacity-0");
+      }, 30);
+
+      setTimeout(() => {
+        toast.classList.add("translate-y-2", "opacity-0");
+        setTimeout(() => {
+          toast.remove();
+        }, 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

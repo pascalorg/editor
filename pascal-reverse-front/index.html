@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="logo-web-icon.svg">
+    <title>MeasureNavi - 空間計測・設計・リフォーム支援</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'premium': '0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02)',
+                        'hover-card': '0 20px 40px -15px rgba(20, 184, 166, 0.15), 0 1px 10px rgba(0, 0, 0, 0.02)',
+                        'dropdown': '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts & FontAwesome Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', 'system-ui', '-apple-system', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* Custom scrollbar to keep layout premium */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 99px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 中央主导航：下划线柔和滑入动画 */
+        .main-tab {
+            position: relative;
+            padding: 0.25rem 0; /* 让下划线贴近文字 */
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #64748b; /* slate-500 */
+            transition: color 0.25s ease;
+            outline: none;
+        }
+        .main-tab:hover { color: #1e293b; /* slate-800 */ }
+        .main-tab::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -7px;
+            height: 2px;
+            background: #0d9488; /* teal-600 */
+            border-radius: 9999px;
+            transform: scaleX(0);
+            transform-origin: center;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .main-tab.is-active {
+            color: #0d9488; /* teal-600 */
+            font-weight: 600;
+        }
+        .main-tab.is-active::after { transform: scaleX(1); }
+
+        /* 视图切换：柔和淡入上移 */
+        @keyframes viewFadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .view-anim { animation: viewFadeIn 0.35s ease both; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col antialiased">
+
+    <!-- 顶部 Logo 导航栏 (Sticky Header with Glassmorphism) -->
+    <header class="sticky top-0 z-40 w-full bg-white/85 backdrop-blur-md border-b border-slate-100 transition-all">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative">
+
+            <!-- 左侧 Logo 区域 -->
+            <div class="flex items-center">
+                <img src="logo.svg" alt="MeasureNavi" style="height:36px;width:auto;display:block;">
+            </div>
+
+            <!-- 中央主导航：我的项目 / AI Agent 工具 (下划线式切换) -->
+            <nav class="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-8 h-16">
+                <button id="navProjectsBtn" onclick="switchMainTab('projects')" class="main-tab is-active">
+                    <span data-i18n="navProjects">我的项目</span>
+                </button>
+                <button id="navAgentBtn" onclick="switchMainTab('agent')" class="main-tab">
+                    <span data-i18n="navAgent">AI Agent 工具</span>
+                </button>
+            </nav>
+
+            <!-- 右侧操作栏：多语言选择 + 个人信息 -->
+            <div class="flex items-center gap-4">
+                
+                <!-- 可选择的多语言下拉菜单 (Language Selection Dropdown) -->
+                <div class="relative dropdown-container" id="langDropdownContainer">
+                    <button id="langSelectBtn" onclick="toggleLangDropdown(event)" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-xs font-semibold text-slate-600 shadow-sm transition focus:outline-none">
+                        <i class="fa-solid fa-globe text-teal-500"></i>
+                        <span id="currentLangLabel">中文 (CN)</span>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-0.5 transition-transform duration-200" id="langChevron"></i>
+                    </button>
+                    
+                    <!-- 语言选项卡 -->
+                    <div id="langDropdown" class="hidden absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-dropdown border border-slate-100 py-1.5 z-50 transition-all transform origin-top-right">
+                        <button onclick="selectLanguage('zh')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center justify-between transition">
+                            <span>中文 (CN)</span>
+                            <i class="fa-solid fa-check text-teal-500 text-[10px] hidden" id="check-zh"></i>
+                        </button>
+                        <button onclick="selectLanguage('en')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center justify-between transition">
+                            <span>English</span>
+                            <i class="fa-solid fa-check text-teal-500 text-[10px] hidden" id="check-en"></i>
+                        </button>
+                        <button onclick="selectLanguage('ja')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center justify-between transition">
+                            <span>日本語</span>
+                            <i class="fa-solid fa-check text-teal-500 text-[10px] hidden" id="check-ja"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 分割线 -->
+                <div class="h-6 w-px bg-slate-200"></div>
+
+                <!-- 个人头像与名字展示 -->
+                <div class="flex items-center gap-3">
+                    <div class="text-right hidden sm:block">
+                        <span class="block text-sm font-semibold text-slate-800">田中 美咲</span>
+                        <span class="block text-[11px] text-slate-400 font-medium">リフォームプランナー</span>
+                    </div>
+                    <div class="relative group cursor-pointer">
+                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80" alt="Avatar" class="h-10 w-10 rounded-full object-cover ring-2 ring-teal-500/10 group-hover:ring-teal-500 transition-all">
+                        <div class="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体内容区域 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+      <!-- ===== 视图一：我的项目 ===== -->
+      <section id="viewProjects">
+
+        <!-- 顶部欢迎和动作条 -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                    <span data-i18n="welcome">欢迎回来，</span><span class="text-teal-600">美咲</span>
+                </h1>
+                <p class="text-slate-500 text-sm mt-1" data-i18n="subWelcome">查看最新项目进度，推进您的空间计测与改造施工工作。</p>
+            </div>
+            <!-- 新建项目动作按钮 -->
+            <button onclick="openCreateModal()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 shadow-md shadow-teal-100 hover:shadow-teal-200 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150">
+                <i class="fa-solid fa-plus"></i>
+                <span data-i18n="btnCreate">新建项目</span>
+            </button>
+        </div>
+
+        <!-- 过滤、搜索、排序与视图切换工具条 -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 text-slate-500">
+            
+            <!-- 搜索框 -->
+            <div class="relative w-full sm:max-w-xs group">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 group-focus-within:text-teal-500 transition-colors">
+                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                </span>
+                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="搜索项目..." class="w-full pl-9 pr-4 py-2 bg-slate-100/70 hover:bg-slate-200/50 focus:bg-white border border-transparent focus:border-slate-200 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-slate-100 transition-all" />
+            </div>
+
+            <!-- 控制选项组合 -->
+            <div class="flex items-center gap-4 w-full sm:w-auto justify-end text-xs">
+                
+                <!-- 排序选项 -->
+                <div class="flex items-center gap-1.5 text-slate-400">
+                    <span data-i18n="sortBy" class="hidden md:inline font-medium">排序:</span>
+                    <select id="sortBySelect" onchange="handleSort()" class="bg-transparent hover:bg-slate-200/50 px-2 py-1.5 rounded-lg font-medium text-slate-600 focus:outline-none cursor-pointer transition">
+                        <option value="newest" data-i18n="newest" selected>最近更新优先</option>
+                        <option value="oldest" data-i18n="oldest">最旧更新优先</option>
+                        <option value="name" data-i18n="name">按名称字母</option>
+                    </select>
+                </div>
+
+                <div class="h-4 w-px bg-slate-200"></div>
+
+                <!-- 视图切换 -->
+                <div class="bg-slate-200/50 p-0.5 rounded-lg flex items-center">
+                    <button id="viewGridBtn" onclick="changeView('grid')" class="w-8 p-1.5 rounded-md text-teal-600 bg-white shadow-sm transition-all duration-200" title="网格视图" data-title-i18n="viewGrid">
+                        <i class="fa-solid fa-grip-vertical"></i>
+                    </button>
+                    <button id="viewListBtn" onclick="changeView('list')" class="w-8 p-1.5 rounded-md text-slate-400 hover:text-slate-600 transition-all duration-200" title="列表视图" data-title-i18n="viewList">
+                        <i class="fa-solid fa-list"></i>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 项目文件展示区 (网格/列表渲染) -->
+        <div id="projectGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 transition-all duration-300 relative">
+            <!-- 动态渲染内容 -->
+        </div>
+
+        <!-- 空白缺省状态 -->
+        <div id="emptyState" class="hidden flex-col items-center justify-center py-20 text-center">
+            <div class="h-24 w-24 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-4 animate-pulse">
+                <i class="fa-solid fa-folder-open text-4xl"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-800" data-i18n="emptyTitle">没有找到任何项目文件</h3>
+            <p class="text-slate-400 text-sm max-w-sm mt-1" data-i18n="emptySub">请尝试重新输入搜索关键词，或点击“新建项目”开始创建第一个项目。</p>
+            <button onclick="openCreateModal()" class="mt-4 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-600 text-xs font-semibold rounded-lg transition" data-i18n="btnCreate">新建项目</button>
+        </div>
+
+      </section>
+
+      <!-- ===== 视图二：AI Agent 工具 ===== -->
+      <section id="viewAgent" class="hidden">
+            <div class="mb-8">
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight" data-i18n="agentTitle">AI Agent 工具</h1>
+                <p class="text-slate-500 text-sm mt-1" data-i18n="agentSub">选择合适的 AI 工具，加速你的空间设计与改造提案。</p>
+            </div>
+            <!-- 分类工具区（动态渲染） -->
+            <div id="agentToolGroups" class="space-y-12"></div>
+      </section>
+
+    </main>
+
+    <!-- 底部页脚 -->
+    <footer class="bg-white border-t border-slate-100 py-6 text-center text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <p>&copy; 2025 - LYTech Inc.</p>
+            <p class="flex items-center gap-1">
+                <span data-i18n="designedWith">Measure Navi - 空間計測・設計・リフォーム支援サービス</span> <i class="fa-solid fa-heart text-rose-500 animate-pulse"></i>
+            </p>
+        </div>
+    </footer>
+
+    <!-- 新建项目模态窗 -->
+    <div id="createModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end sm:items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onclick="closeCreateModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="relative inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-slate-100">
+                <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900" id="modalTitleEl">新建项目文件</h3>
+                        <p class="text-xs text-slate-400 mt-1" id="modalSubEl">所有加入的新项目在创建后均保存在您的本地空间。</p>
+                    </div>
+                    <button onclick="closeCreateModal()" class="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-50 rounded-lg transition">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                <form id="projectForm" onsubmit="submitProjectForm(event)" class="p-6 space-y-4">
+                    <input type="hidden" id="editProjectId" />
+                    <div>
+                        <label for="projectName" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="fieldName">项目名称</label>
+                        <input type="text" id="projectName" required placeholder="例：渋谷区マンション全室リフォーム" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400" />
+                    </div>
+                    <div>
+                        <label for="projectTitle" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="fieldTitle">项目副标题/描述</label>
+                        <input type="text" id="projectTitle" required placeholder="例：現地採寸・3D図面作成・施工見積もり一式" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="fieldCover">选择项目封面</label>
+                        <!-- 预设色块 + 上传按钮/预览 同一排 -->
+                        <input type="file" id="projectCoverFile" accept="image/*" class="hidden" onchange="handleCoverUpload(event)" />
+                        <div class="grid grid-cols-6 gap-2" id="presetCovers"></div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                        <button type="button" onclick="closeCreateModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 transition" data-i18n="btnCancel">取消</button>
+                        <button type="submit" id="modalSubmitBtn" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 shadow-md shadow-teal-100 transition">確認作成</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义高级安全删除确认模态窗 -->
+    <div id="deleteConfirmModal" class="fixed inset-0 z-50 overflow-y-auto hidden" role="dialog" aria-modal="true">
+        <div class="flex items-end sm:items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closeDeleteConfirmModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="relative inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full border border-slate-100">
+                <div class="p-6">
+                    <div class="flex items-start gap-4">
+                        <div class="h-10 w-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <h3 class="text-base font-bold text-slate-900" data-i18n="confirmDeleteTitle">确定要删除该项目文件吗？</h3>
+                            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed" data-i18n="confirmDeleteSub">此项操作无法撤销。该项目文件及其包含的所有本地资源和属性信息都将被永久移除。</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                        <button type="button" onclick="closeDeleteConfirmModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 transition" data-i18n="btnCancel">取消</button>
+                        <button type="button" id="confirmDeleteBtn" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 shadow-md shadow-rose-100 transition" data-i18n="menuDelete">删除项目</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 简易通知 Toast 系统 -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        // 多语言资源字典 (i18n)
+        const dictionary = {
+            zh: {
+                logo: "NexusDrive 云盘",
+                role: "装修改造规划师",
+                navProjects: "我的项目",
+                navAgent: "AI Agent 工具",
+                agentTitle: "AI Agent 工具",
+                agentSub: "选择合适的 AI 工具，加速你的空间设计与改造提案。",
+                toastToolWip: "该功能正在开发中，敬请期待！",
+                welcome: "欢迎回来，",
+                subWelcome: "查看最新项目进度，推进您的空间计测与改造施工工作。",
+                btnCreate: "新建项目",
+                sortBy: "排序:",
+                newest: "最近更新优先",
+                oldest: "最旧更新优先",
+                name: "按名称字母",
+                searchPlaceholder: "搜索项目...",
+                toastDeleted: "项目已成功安全删除！",
+                toastCreated: "项目创建成功！",
+                toastRenamed: "项目已成功重命名！",
+                toastExported: "项目数据包导出成功！",
+                modalTitle: "新建项目文件",
+                modalSub: "所有加入的新项目在创建后均保存在您的本地空间。",
+                fieldName: "项目名称",
+                placeholderName: "例如：客厅整体翻新改造工程",
+                fieldTitle: "项目副标题/描述",
+                placeholderTitle: "例如：现场丈量・施工图纸・竣工验收全流程",
+                fieldCover: "选择项目封面",
+                placeholderCoverUrl: "或粘贴自定义封面图 URL...",
+                uploadCover: "上传自定义封面图",
+                btnCancel: "取消",
+                btnSubmit: "确认创建",
+                btnSave: "确认保存",
+                emptyTitle: "没有找到任何项目文件",
+                emptySub: "请尝试重新输入搜索关键词，或点击“新建项目”开始创建第一个项目。",
+                viewGrid: "网格视图",
+                viewList: "列表视图",
+                designedWith: "Measure Navi - 空间计测・设计・翻新支援服务",
+                renameTitle: "重命名项目",
+                renameSub: "更新您项目的视觉标题与副描述。",
+                confirmDeleteTitle: "确定要删除该项目文件吗？",
+                confirmDeleteSub: "此项操作无法撤销。该项目文件及其包含的所有本地数据信息都将被永久移除。",
+                menuRename: "编辑项目",
+                menuExport: "导出 CAD",
+                menuDelete: "安全删除"
+            },
+            en: {
+                logo: "NexusDrive",
+                role: "Renovation Planner",
+                navProjects: "My Projects",
+                navAgent: "AI Agent Tools",
+                agentTitle: "AI Agent Tools",
+                agentSub: "Pick the right AI tool to speed up your design and renovation proposals.",
+                toastToolWip: "This feature is under development. Stay tuned!",
+                welcome: "Welcome back,",
+                subWelcome: "Review your latest project updates and move forward with measurement and renovation work.",
+                btnCreate: "New Project",
+                sortBy: "Sort:",
+                newest: "Recently Updated",
+                oldest: "Oldest First",
+                name: "Alphabetical",
+                searchPlaceholder: "Search projects...",
+                toastDeleted: "Project safely removed!",
+                toastCreated: "Project created successfully!",
+                toastRenamed: "Project renamed successfully!",
+                toastExported: "Project configuration exported!",
+                modalTitle: "New Project File",
+                modalSub: "Any newly created projects are saved directly to your local sandbox.",
+                fieldName: "Project Name",
+                placeholderName: "e.g. Shibuya Apartment Full Renovation",
+                fieldTitle: "Sub-Title / Short Description",
+                placeholderTitle: "e.g. On-site measurement, floor plan & renovation estimate",
+                fieldCover: "Select Project Cover",
+                placeholderCoverUrl: "Or paste custom cover image URL...",
+                uploadCover: "Upload custom cover image",
+                btnCancel: "Cancel",
+                btnSubmit: "Create Project",
+                btnSave: "Save Changes",
+                emptyTitle: "No projects matched your criteria",
+                emptySub: "Try typing a different name or create a fresh new one to get started.",
+                viewGrid: "Grid View",
+                viewList: "List View",
+                designedWith: "Measure Navi - Space Measurement, Design & Renovation Support",
+                renameTitle: "Rename Project",
+                renameSub: "Update the primary header and description tags of your project.",
+                confirmDeleteTitle: "Permanently delete this project?",
+                confirmDeleteSub: "This action cannot be undone. All local configurations and metadata associated with this project will be wiped.",
+                menuRename: "Edit Project",
+                menuExport: "Export CAD",
+                menuDelete: "Delete File"
+            },
+            ja: {
+                logo: "NexusDrive クラウド",
+                role: "リフォームプランナー",
+                navProjects: "マイプロジェクト",
+                navAgent: "AI Agent ツール",
+                agentTitle: "AI Agent ツール",
+                agentSub: "最適な AI ツールを選び、空間デザインと改装提案を加速しましょう。",
+                toastToolWip: "この機能は開発中です。お楽しみに！",
+                welcome: "おかえりなさい、",
+                subWelcome: "最新のプロジェクト進捗を確認し、空間計測・改装工事を着実に進めましょう。",
+                btnCreate: "新規プロジェクト",
+                sortBy: "並べ替え:",
+                newest: "更新日の新しい順",
+                oldest: "更新日の古い順",
+                name: "名前順 (A-Z)",
+                searchPlaceholder: "プロジェクトを検索...",
+                toastDeleted: "プロジェクトが正常に削除されました！",
+                toastCreated: "プロジェクトが正常に作成されました！",
+                toastRenamed: "プロジェクト名が変更されました！",
+                toastExported: "プロジェクトデータがエクスポートされました！",
+                modalTitle: "新規プロジェクト作成",
+                modalSub: "作成された新規プロジェクトはローカルストレージに保存されます。",
+                fieldName: "プロジェクト名",
+                placeholderName: "例：渋谷区マンション全室リフォーム",
+                fieldTitle: "サブタイトル / 説明",
+                placeholderTitle: "例：現地採寸・3D図面作成・施工見積もり一式",
+                fieldCover: "カバー画像を選択",
+                placeholderCoverUrl: "またはカスタムカバー画像のURLを入力...",
+                uploadCover: "カスタムカバー画像をアップロード",
+                btnCancel: "キャンセル",
+                btnSubmit: "作成",
+                btnSave: "保存",
+                emptyTitle: "該当するプロジェクトが見つかりません",
+                emptySub: "別のキーワードを入力するか、新規作成を行ってください。",
+                viewGrid: "グリッド表示",
+                viewList: "リスト表示",
+                designedWith: "Measure Navi - 空間計測・設計・リフォーム支援サービス",
+                renameTitle: "プロジェクトの編集",
+                renameSub: "プロジェクト名とサブタイトルの説明を更新します。",
+                confirmDeleteTitle: "このプロジェクトを削除しますか？",
+                confirmDeleteSub: "この操作は取り消せません。プロジェクトに関連するすべてのローカルデータが完全に削除されます。",
+                menuRename: "編集",
+                menuExport: "CAD 出力",
+                menuDelete: "安全に削除"
+            }
+        };
+
+        // 默认内置极具设计感的 Unsplash 封面预设和渐变预设
+        const coverPresets = [
+            { type: 'gradient', value: 'from-pink-500 to-rose-500', name: 'Pink Rose' },
+            { type: 'gradient', value: 'from-violet-600 to-indigo-600', name: 'Indigo Dream' },
+            { type: 'gradient', value: 'from-cyan-400 to-blue-500', name: 'Ocean Air' },
+            { type: 'gradient', value: 'from-amber-400 to-orange-500', name: 'Neon Sun' },
+            { type: 'gradient', value: 'from-emerald-400 to-teal-600', name: 'Mint Emerald' },
+            { type: 'image', value: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80', name: 'Glassmorphism' },
+            { type: 'gradient', value: 'from-fuchsia-500 to-purple-600', name: 'Fuchsia Purple' },
+            { type: 'gradient', value: 'from-sky-400 to-cyan-500', name: 'Sky Cyan' },
+            { type: 'gradient', value: 'from-lime-400 to-green-500', name: 'Lime Green' },
+            { type: 'gradient', value: 'from-rose-400 to-red-500', name: 'Rose Red' },
+            { type: 'gradient', value: 'from-slate-600 to-slate-800', name: 'Graphite' }
+        ];
+
+        // 初始示例数据
+        const defaultProjects = [
+            {
+                id: "p1",
+                name: "渋谷区マンション全室リフォーム",
+                title: "間取り変更・内装リフォーム・水回り設備更新工事一式",
+                cover: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=600&q=80",
+                coverType: "image",
+                updatedAt: "2026/05/28 09:30"
+            },
+            {
+                id: "p2",
+                name: "キッチン・浴室 現地採寸プロジェクト",
+                title: "現地採寸・3D図面作成・リフォーム見積もり一式",
+                cover: "from-cyan-400 to-blue-500",
+                coverType: "gradient",
+                updatedAt: "2026/05/27 14:15"
+            },
+            {
+                id: "p3",
+                name: "新宿商業施設 内装デザインプロジェクト",
+                title: "商業空間設計・施工図面作成・完工検査サポート",
+                cover: "from-violet-600 to-indigo-600",
+                coverType: "gradient",
+                updatedAt: "2026/05/25 10:00"
+            }
+        ];
+
+        // 状态变量
+        let currentLang = localStorage.getItem('nexus_lang') || 'ja';
+        let currentView = 'grid'; // grid 或 list
+        let projects = [];
+        let selectedCoverIndex = 0;
+        let uploadedCover = null;
+        let uploadedCoverFile = null;
+        let activeDropdownId = null;
+        let projectToDeleteId = null; 
+        const AUTH_KEY = 'measurenavi_auth';
+        const USER_KEY = 'measurenavi_user';
+
+        if (localStorage.getItem(AUTH_KEY) !== '1') {
+            window.location.replace('/login.html');
+        }
+
+        // 页面初始化加载
+        document.addEventListener("DOMContentLoaded", () => {
+            projects = [];
+
+            // 更新多语言设置
+            applyLanguage(currentLang);
+            
+            // 渲染预设封面选项到模态框
+            renderPresetCovers();
+
+            // 渲染项目卡片
+            renderProjects();
+            loadProjectsFromBackend();
+
+            // 渲染 AI Agent 工具卡片
+            renderAgentTools();
+
+            // 全局事件：点击其他地方关闭所有浮动操作和语言选择菜单
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dropdown-container')) {
+                    closeAllDropdowns();
+                }
+            });
+        });
+
+        // 工具封面统一兜底图（加载失败时回退）
+        async function loadProjectsFromBackend() {
+            try {
+                const response = await fetch('/proxy/scenes', {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!response.ok) throw new Error(`Failed to load scenes: ${response.status}`);
+
+                const payload = await response.json();
+                const scenes = Array.isArray(payload) ? payload : (payload.scenes || []);
+                projects = scenes.map(mapSceneToProject);
+                renderProjects();
+            } catch (error) {
+                console.warn('[MeasureNavi] Falling back to local project cache.', error);
+                const cached = localStorage.getItem('nexus_projects');
+                if (cached) {
+                    projects = JSON.parse(cached);
+                    projects.forEach(p => {
+                        p.updatedAt = String(p.updatedAt || '').replace(/-/g, '/');
+                    });
+                } else {
+                    projects = [...defaultProjects];
+                    saveToLocalStorage();
+                }
+                renderProjects();
+            }
+        }
+
+        function mapSceneToProject(scene) {
+            const coverValue = scene.coverValue || scene.thumbnailUrl;
+            const coverType = scene.coverType || (coverValue ? "image" : "gradient");
+            return {
+                id: scene.id,
+                name: scene.name || scene.id,
+                title: scene.description || (scene.projectId
+                    ? `Project ${scene.projectId} · ${scene.nodeCount || 0} nodes`
+                    : `${scene.nodeCount || 0} nodes · version ${scene.version || 0}`),
+                cover: coverValue || "from-teal-600 to-cyan-500",
+                coverType,
+                updatedAt: formatSceneTime(scene.updatedAt),
+                editorUrl: scene.editorUrl || `/_pascal/scene/${encodeURIComponent(scene.id)}`
+            };
+        }
+
+        function formatSceneTime(value) {
+            if (!value) return "";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value).replace(/-/g, '/');
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            const hh = String(date.getHours()).padStart(2, '0');
+            const min = String(date.getMinutes()).padStart(2, '0');
+            return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+        }
+
+        const TOOL_IMG_FALLBACK = "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=600&q=80";
+        const ui = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=600&q=80`;
+
+        // AI Agent 工具分类数据（三语）
+        const agentToolGroups = [
+            {
+                cat: "空间呈现", cat_en: "Spatial Presentation", cat_ja: "空間プレゼン",
+                tools: [
+                    { icon: "fa-solid fa-panorama", img: ui("1567767292278-a4f21aa2d36e"),
+                      name: "全景照片生成", name_en: "360° Panorama", name_ja: "360°パノラマ生成",
+                      desc: "生成 360° 全景图，适合客户沉浸式查看。", desc_en: "Generate 360° panoramas for immersive client viewing.", desc_ja: "360°パノラマを生成し、没入感のある内覧に最適。" },
+                    { icon: "fa-solid fa-video", img: ui("1502005229762-cf1b2da7c5d6"),
+                      name: "漫游视频生成", name_en: "Walkthrough Video", name_ja: "ウォークスルー動画",
+                      desc: "按路径生成室内漫游视频，用于汇报和展示。", desc_en: "Create path-based interior walkthrough videos for reports.", desc_ja: "経路に沿った室内ウォークスルー動画を生成。" },
+                    { icon: "fa-solid fa-palette", img: ui("1721244654195-943615c56ac4"),
+                      name: "彩色平面图", name_en: "Colored Floor Plan", name_ja: "カラー平面図",
+                      desc: "把线稿平面图变成彩色方案图，适合提案展示。", desc_en: "Turn line floor plans into colored scheme drawings.", desc_ja: "線画平面図をカラー提案図に変換。" }
+                ]
+            },
+            {
+                cat: "效果图生成与风格", cat_en: "Rendering & Style", cat_ja: "レンダリング・スタイル",
+                tools: [
+                    { icon: "fa-solid fa-wand-magic-sparkles", img: ui("1484154218962-a197022b5858"),
+                      name: "照片改造 / 毛坯房装修", name_en: "Photo Makeover", name_ja: "写真リフォーム",
+                      desc: "上传真实照片，直接生成装修后的效果图。", desc_en: "Upload real photos to generate post-renovation renders.", desc_ja: "実写をアップして改装後の完成イメージを生成。" },
+                    { icon: "fa-solid fa-brush", img: ui("1586023492125-27b2c045efd7"),
+                      name: "风格迁移", name_en: "Style Transfer", name_ja: "スタイル転送",
+                      desc: "把参考图的风格套用到自己的空间效果图上。", desc_en: "Apply a reference image's style to your own render.", desc_ja: "参考画像のスタイルを自分の空間に適用。" },
+                    { icon: "fa-solid fa-lightbulb", img: ui("1513475382585-d06e58bcb0e0"),
+                      name: "概念意向图 / 灵感配色", name_en: "Concept & Palette", name_ja: "コンセプト・配色",
+                      desc: "根据关键词或参考图生成设计灵感和配色方案。", desc_en: "Generate design inspiration and palettes from keywords.", desc_ja: "キーワードや参考画像から発想と配色を生成。" },
+                    { icon: "fa-solid fa-cloud-sun", img: ui("1505691938895-1758d7feb511"),
+                      name: "日夜场景 / 天气转换", name_en: "Day-Night / Weather", name_ja: "昼夜・天候切替",
+                      desc: "把同一张效果图切换成白天、夜晚或不同天气氛围。", desc_en: "Switch a render between day, night and weather moods.", desc_ja: "同じ完成図を昼・夜・天候の雰囲気に切替。" }
+                ]
+            },
+            {
+                cat: "局部编辑与软装", cat_en: "Editing & Styling", cat_ja: "部分編集・装飾",
+                tools: [
+                    { icon: "fa-solid fa-object-group", img: ui("1524758631624-e2822e304c36"),
+                      name: "局部替换", name_en: "Object Replace", name_ja: "部分置換",
+                      desc: "框选家具、地板、墙面等，替换成新款式或新材质。", desc_en: "Select furniture, floors or walls to swap styles and materials.", desc_ja: "家具・床・壁などを選択し、新しい仕様に置換。" },
+                    { icon: "fa-solid fa-eraser", img: ui("1493809842364-78817add7ffb"),
+                      name: "局部重绘 / 局部消除", name_en: "Inpaint / Remove", name_ja: "部分再描画・消去",
+                      desc: "修改或去掉画面局部内容，让效果图更干净。", desc_en: "Edit or remove parts of the image for a cleaner render.", desc_ja: "画面の一部を修正・除去してより綺麗に。" },
+                    { icon: "fa-solid fa-couch", img: ui("1567016432779-094069958ea5"),
+                      name: "软装设计", name_en: "Soft Furnishing", name_ja: "ソフト装飾",
+                      desc: "添加窗帘、地毯、绿植、摆件等，并生成软装清单。", desc_en: "Add curtains, rugs, plants and generate a furnishing list.", desc_ja: "カーテン・ラグ・植栽等を追加しリストを生成。" },
+                    { icon: "fa-solid fa-person", img: ui("1497366216548-37526070297c"),
+                      name: "人物 / 模特添加", name_en: "Add People", name_ja: "人物追加",
+                      desc: "在效果图里加入人物，帮助体现空间尺度和生活感。", desc_en: "Add people to renders to convey scale and lived-in feel.", desc_ja: "人物を加え、スケール感と生活感を演出。" }
+                ]
+            },
+            {
+                cat: "工程与分析", cat_en: "Engineering & Analysis", cat_ja: "設計・解析",
+                tools: [
+                    { icon: "fa-solid fa-cube", img: ui("1653164579768-ea97833b3b03"),
+                      name: "CAD 导入转 3D", name_en: "CAD to 3D", name_ja: "CAD→3D変換",
+                      desc: "直接读取 CAD 文件，快速生成 3D 室内模型。", desc_en: "Read CAD files to quickly build 3D interior models.", desc_ja: "CADファイルから3D室内モデルを素早く生成。" },
+                    { icon: "fa-solid fa-ruler-combined", img: ui("1721244653580-79577d2822a2"),
+                      name: "图转 CAD / 线稿提取", name_en: "Image to CAD", name_ja: "画像→CAD抽出",
+                      desc: "从图片或扫描件提取线稿，导出可编辑 CAD 文件。", desc_en: "Extract line art from images to export editable CAD.", desc_ja: "画像やスキャンから線画を抽出しCAD出力。" },
+                    { icon: "fa-solid fa-sun", img: ui("1502672260266-1c1ef2d93688"),
+                      name: "日照分析", name_en: "Sunlight Analysis", name_ja: "日照解析",
+                      desc: "根据户型朝向和城市位置，分析房间采光情况。", desc_en: "Analyze room daylighting from orientation and location.", desc_ja: "向きと都市位置から室内の採光を解析。" },
+                    { icon: "fa-solid fa-film", img: ui("1485846234645-a62644f84728"),
+                      name: "AI 分镜生成", name_en: "AI Storyboard", name_ja: "AI絵コンテ",
+                      desc: "自动规划漫游视频的路径、镜头和关键帧。", desc_en: "Auto-plan walkthrough paths, shots and keyframes.", desc_ja: "ウォークスルーの経路・カット・キーフレームを自動計画。" }
+                ]
+            }
+        ];
+
+        // 渲染 AI Agent 工具卡片
+        function renderAgentTools() {
+            const wrap = document.getElementById("agentToolGroups");
+            if (!wrap) return;
+            const pick = (o, f) => currentLang === 'zh' ? o[f] : (o[f + '_' + currentLang] || o[f]);
+
+            wrap.innerHTML = agentToolGroups.map(group => {
+                const cards = group.tools.map(t => `
+                    <button onclick="openAgentTool()" class="text-left bg-white rounded-2xl border border-slate-100 hover:border-slate-200/85 shadow-premium hover:shadow-hover-card hover:-translate-y-1 transition-all duration-300 group flex flex-col overflow-hidden focus:outline-none">
+                        <div class="relative h-44 w-full overflow-hidden bg-slate-100">
+                            <img src="${t.img}" alt="" loading="lazy" onerror="this.src='${TOOL_IMG_FALLBACK}'" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent"></div>
+                            <span class="absolute top-2.5 left-2.5 h-8 w-8 rounded-lg bg-white/85 backdrop-blur-sm flex items-center justify-center text-teal-600 shadow-sm">
+                                <i class="${t.icon} text-sm"></i>
+                            </span>
+                        </div>
+                        <div class="p-4">
+                            <h3 class="font-bold text-slate-800 text-sm line-clamp-1 group-hover:text-teal-600 transition duration-150">${escapeHTML(pick(t, 'name'))}</h3>
+                            <p class="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">${escapeHTML(pick(t, 'desc'))}</p>
+                        </div>
+                    </button>
+                `).join("");
+
+                return `
+                    <div>
+                        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">${escapeHTML(pick(group, 'cat'))}</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">${cards}</div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        // 工具卡点击占位
+        function openAgentTool() {
+            showToast(dictionary[currentLang].toastToolWip, "info");
+        }
+
+        // 中央主导航切换：我的项目 / AI Agent 工具
+        let currentMainTab = 'projects';
+        function switchMainTab(tab) {
+            currentMainTab = tab;
+            const viewProjects = document.getElementById('viewProjects');
+            const viewAgent = document.getElementById('viewAgent');
+            const projectsBtn = document.getElementById('navProjectsBtn');
+            const agentBtn = document.getElementById('navAgentBtn');
+
+            projectsBtn.classList.toggle('is-active', tab === 'projects');
+            agentBtn.classList.toggle('is-active', tab === 'agent');
+
+            // 重新触发淡入动画
+            const replay = (el) => {
+                el.classList.remove('view-anim');
+                void el.offsetWidth; // 强制回流以重启动画
+                el.classList.add('view-anim');
+            };
+
+            if (tab === 'projects') {
+                viewAgent.classList.add('hidden');
+                viewProjects.classList.remove('hidden');
+                replay(viewProjects);
+            } else {
+                viewProjects.classList.add('hidden');
+                viewAgent.classList.remove('hidden');
+                replay(viewAgent);
+            }
+        }
+
+        // 开启和关闭语言选择下拉菜单
+        function toggleLangDropdown(event) {
+            event.stopPropagation();
+            const langDropdown = document.getElementById('langDropdown');
+            const langChevron = document.getElementById('langChevron');
+            const isCurrentlyHidden = langDropdown.classList.contains('hidden');
+            
+            closeAllDropdowns();
+            
+            if (isCurrentlyHidden) {
+                langDropdown.classList.remove('hidden');
+                langChevron.classList.add('rotate-180');
+            }
+        }
+
+        // 直接点选语言
+        function selectLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('nexus_lang', currentLang);
+            applyLanguage(currentLang);
+            renderProjects();
+            renderAgentTools();
+            closeAllDropdowns();
+            
+            // 给予精致过渡提示反馈
+            showToast(currentLang === 'zh' ? '语言已切换为：中文' : currentLang === 'en' ? 'Language switched to English' : '言語を日本語に切り替えました', 'info');
+        }
+
+        // 关闭所有下拉框（包含操作菜单和语言选择菜单）
+        function closeAllDropdowns() {
+            // 项目操作菜单
+            const dropdowns = document.querySelectorAll("[id^='dropdown-']");
+            dropdowns.forEach(d => d.classList.add('hidden'));
+            
+            // 语言下拉菜单
+            const langDropdown = document.getElementById('langDropdown');
+            const langChevron = document.getElementById('langChevron');
+            if (langDropdown) {
+                langDropdown.classList.add('hidden');
+            }
+            if (langChevron) {
+                langChevron.classList.remove('rotate-180');
+            }
+            activeDropdownId = null;
+        }
+
+        // 应用并翻译全局 UI 字符
+        function applyLanguage(lang) {
+            // 更新切换按钮显示当前选择语言
+            const label = document.getElementById("currentLangLabel");
+            if (lang === 'zh') {
+                label.innerText = '中文 (CN)';
+            } else if (lang === 'en') {
+                label.innerText = 'English';
+            } else if (lang === 'ja') {
+                label.innerText = '日本語';
+            }
+
+            // 更新下拉勾选高亮
+            document.getElementById('check-zh').classList.add('hidden');
+            document.getElementById('check-en').classList.add('hidden');
+            document.getElementById('check-ja').classList.add('hidden');
+            document.getElementById(`check-${lang}`).classList.remove('hidden');
+
+            // 更新页面中的普通多语言标记
+            const elements = document.querySelectorAll("[data-i18n]");
+            elements.forEach(el => {
+                const key = el.getAttribute("data-i18n");
+                if (dictionary[lang][key]) {
+                    el.innerText = dictionary[lang][key];
+                }
+            });
+
+            // 针对 placeholder 的多语言处理
+            const searchInput = document.getElementById("searchInput");
+            if (searchInput) {
+                searchInput.setAttribute("placeholder", dictionary[lang].searchPlaceholder);
+            }
+
+            // 对带有 title attribute 的元素进行翻译
+            const titleElements = document.querySelectorAll("[data-title-i18n]");
+            titleElements.forEach(el => {
+                const key = el.getAttribute("data-title-i18n");
+                if (dictionary[lang][key]) {
+                    el.setAttribute("title", dictionary[lang][key]);
+                }
+            });
+
+            // 更换对应输入框的提示文本
+            document.getElementById("projectName").setAttribute("placeholder", dictionary[lang].placeholderName);
+            document.getElementById("projectTitle").setAttribute("placeholder", dictionary[lang].placeholderTitle);
+
+        }
+
+        // 多语言字段取值辅助函数
+        // 仅预设示例（translatable: true）才跟随语言切换；用户添加的项目始终显示原始内容
+        function getLocalizedField(p, field) {
+            if (!p.translatable) return p[field] || '';
+            if (currentLang === 'zh') return p[field] || p[field + '_en'] || '';
+            if (currentLang === 'ja') return p[field + '_ja'] || p[field + '_en'] || p[field] || '';
+            return p[field + '_en'] || p[field] || '';
+        }
+
+        // 保存项目列表至缓存
+        function saveToLocalStorage() {
+            localStorage.setItem('nexus_projects', JSON.stringify(projects));
+        }
+
+        function openProject(id) {
+            const project = projects.find(p => p.id === id);
+            const target = project && project.editorUrl
+                ? project.editorUrl
+                : `/_pascal/scene/${encodeURIComponent(id)}`;
+            window.location.href = target;
+        }
+
+        async function uploadProjectCover(projectId) {
+            if (!uploadedCoverFile) return null;
+
+            const form = new FormData();
+            form.append('file', uploadedCoverFile);
+
+            const response = await fetch(`/proxy/scenes/${encodeURIComponent(projectId)}/cover`, {
+                method: 'POST',
+                body: form
+            });
+
+            if (!response.ok) throw new Error(`Cover upload failed (${response.status})`);
+            const payload = await response.json();
+            return payload.coverUrl;
+        }
+
+        async function saveProjectMetadata(projectId, data) {
+            const response = await fetch(`/proxy/scenes/${encodeURIComponent(projectId)}/metadata`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) throw new Error(`Project metadata save failed (${response.status})`);
+        }
+
+        // 卡片项目渲染流程
+        function renderProjects(filteredProjects = null) {
+            const listToRender = filteredProjects || projects;
+            const container = document.getElementById("projectGrid");
+            const emptyState = document.getElementById("emptyState");
+
+            if (listToRender.length === 0) {
+                container.innerHTML = "";
+                emptyState.classList.remove("hidden");
+                emptyState.classList.add("flex");
+                return;
+            } else {
+                emptyState.classList.remove("flex");
+                emptyState.classList.add("hidden");
+            }
+
+            // 网格视图和列表视图的不同类样式应用
+            if (currentView === 'grid') {
+                container.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6";
+                container.innerHTML = listToRender.map(p => {
+                    const displayCover = getCoverHTML(p);
+                    const name = getLocalizedField(p, 'name');
+                    const title = getLocalizedField(p, 'title');
+                    
+                    return `
+                        <div onclick="openProject('${p.id}')" class="cursor-pointer bg-white rounded-2xl border border-slate-100 hover:border-slate-200/85 shadow-premium hover:shadow-hover-card hover:-translate-y-1 transition-all duration-300 group flex flex-col justify-between relative">
+                            <!-- 封面裁剪放置在顶部容器中 -->
+                            <div class="aspect-[16/10] w-full overflow-hidden bg-slate-50 relative rounded-t-2xl">
+                                ${displayCover}
+                            </div>
+                            
+                            <!-- 卡片具体文字内容 -->
+                            <div class="p-5 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <h3 class="font-bold text-slate-800 text-base line-clamp-1 group-hover:text-teal-600 transition duration-150">${escapeHTML(name)}</h3>
+                                    <p class="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed min-h-[2.5rem]">${escapeHTML(title)}</p>
+                                </div>
+                                
+                                <!-- 卡片信息底栏 (斜杠格式：2026/05/28 09:30) -->
+                                <div class="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-400">
+                                    <div class="flex items-center gap-1.5 font-medium text-slate-400/80">
+                                        <i class="fa-regular fa-clock text-slate-300"></i>
+                                        <span>${p.updatedAt}</span>
+                                    </div>
+                                    
+                                    <!-- 动作控制下拉上下文菜单 -->
+                                    <div class="relative dropdown-container" onclick="event.stopPropagation()">
+                                        <button onclick="toggleDropdown(event, '${p.id}')" class="text-slate-400 hover:text-teal-600 p-1.5 hover:bg-slate-50 rounded-lg transition-all focus:outline-none">
+                                            <i class="fa-solid fa-ellipsis text-sm"></i>
+                                        </button>
+                                        
+                                        <!-- 下拉菜单容器 -->
+                                        <div id="dropdown-${p.id}" class="hidden absolute right-0 bottom-8 w-36 bg-white rounded-xl shadow-dropdown border border-slate-100 py-1.5 z-30 transition-all transform origin-bottom-right">
+                                            <button onclick="openRenameModal('${p.id}')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center gap-2 transition">
+                                                <i class="fa-regular fa-pen-to-square text-slate-400 w-4"></i>
+                                                <span>${dictionary[currentLang].menuRename}</span>
+                                            </button>
+                                            <button onclick="exportProjectData('${p.id}')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center gap-2 transition">
+                                                <i class="fa-solid fa-file-export text-slate-400 w-4"></i>
+                                                <span>${dictionary[currentLang].menuExport}</span>
+                                            </button>
+                                            <div class="h-px bg-slate-100 my-1"></div>
+                                            <button onclick="triggerDeleteProject('${p.id}')" class="w-full text-left px-4 py-2 hover:bg-rose-50 hover:text-rose-600 text-xs text-slate-600 flex items-center gap-2 transition">
+                                                <i class="fa-regular fa-trash-can text-rose-400 w-4"></i>
+                                                <span>${dictionary[currentLang].menuDelete}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+            } else {
+                // 列表视图展示形式
+                container.className = "flex flex-col gap-3";
+                container.innerHTML = listToRender.map(p => {
+                    const displayCoverMini = getCoverMiniHTML(p);
+                    const name = getLocalizedField(p, 'name');
+                    const title = getLocalizedField(p, 'title');
+
+                    return `
+                        <div onclick="openProject('${p.id}')" class="cursor-pointer bg-white p-4 rounded-xl border border-slate-100 hover:border-teal-100 shadow-premium hover:shadow-md flex items-center justify-between gap-4 transition duration-200 group relative">
+                            <!-- 左侧：微型缩略图 + 标题内容 -->
+                            <div class="flex items-center gap-4 flex-grow min-w-0">
+                                <div class="h-12 w-16 rounded-lg overflow-hidden shrink-0 bg-slate-50">
+                                    ${displayCoverMini}
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="font-bold text-slate-800 text-sm line-clamp-1 group-hover:text-teal-600 transition">${escapeHTML(name)}</h3>
+                                    <p class="text-xs text-slate-400 mt-0.5 line-clamp-1">${escapeHTML(title)}</p>
+                                </div>
+                            </div>
+
+                            <!-- 右侧：更新时间与合并式操作菜单 -->
+                            <div class="flex items-center gap-4 shrink-0 text-xs">
+                                <div class="hidden md:block text-slate-400 font-medium">
+                                    <span>${p.updatedAt}</span>
+                                </div>
+                                
+                                <!-- 动作控制下拉上下文菜单 -->
+                                <div class="relative dropdown-container" onclick="event.stopPropagation()">
+                                    <button onclick="toggleDropdown(event, '${p.id}')" class="text-slate-300 hover:text-teal-600 p-1.5 hover:bg-slate-50 rounded-lg transition-all focus:outline-none">
+                                        <i class="fa-solid fa-ellipsis text-sm"></i>
+                                    </button>
+                                    
+                                    <!-- 下拉菜单容器 -->
+                                    <div id="dropdown-${p.id}" class="hidden absolute right-0 top-8 w-36 bg-white rounded-xl shadow-dropdown border border-slate-100 py-1.5 z-30 transition-all transform origin-top-right">
+                                        <button onclick="openRenameModal('${p.id}')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center gap-2 transition">
+                                            <i class="fa-regular fa-pen-to-square text-slate-400 w-4"></i>
+                                            <span>${dictionary[currentLang].menuRename}</span>
+                                        </button>
+                                        <button onclick="exportProjectData('${p.id}')" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs text-slate-600 flex items-center gap-2 transition">
+                                            <i class="fa-solid fa-file-export text-slate-400 w-4"></i>
+                                            <span>${dictionary[currentLang].menuExport}</span>
+                                        </button>
+                                        <div class="h-px bg-slate-100 my-1"></div>
+                                        <button onclick="triggerDeleteProject('${p.id}')" class="w-full text-left px-4 py-2 hover:bg-rose-50 hover:text-rose-600 text-xs text-slate-600 flex items-center gap-2 transition">
+                                            <i class="fa-regular fa-trash-can text-rose-400 w-4"></i>
+                                            <span>${dictionary[currentLang].menuDelete}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+            }
+        }
+
+        // 操作控制下拉框的展示与折叠
+        function toggleDropdown(event, id) {
+            event.stopPropagation();
+            const targetDropdown = document.getElementById(`dropdown-${id}`);
+            const isCurrentlyVisible = !targetDropdown.classList.contains('hidden');
+            
+            closeAllDropdowns();
+            
+            if (!isCurrentlyVisible) {
+                targetDropdown.classList.remove('hidden');
+                activeDropdownId = id;
+            }
+        }
+
+        // 根据图片或渐变生成不同类型的封面 HTML
+        function getCoverHTML(p) {
+            if (p.coverType === 'gradient') {
+                return `<div class="w-full h-full bg-gradient-to-tr ${p.cover} opacity-90 group-hover:scale-105 transition duration-500"></div>`;
+            } else {
+                return `<img src="${p.cover}" alt="Cover Image" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" onerror="this.src='https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=600&q=80'">`;
+            }
+        }
+
+        function getCoverMiniHTML(p) {
+            if (p.coverType === 'gradient') {
+                return `<div class="w-full h-full bg-gradient-to-tr ${p.cover} opacity-90"></div>`;
+            } else {
+                return `<img src="${p.cover}" alt="Cover Mini" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=150&q=80'">`;
+            }
+        }
+
+        // 搜索过滤处理器
+        function handleSearch() {
+            const query = document.getElementById("searchInput").value.toLowerCase().trim();
+            if (!query) {
+                renderProjects();
+                return;
+            }
+
+            const filtered = projects.filter(p => {
+                const name = currentLang === 'zh' ? p.name : (p.name_en || p.name);
+                const title = currentLang === 'zh' ? p.title : (p.title_en || p.title);
+                return name.toLowerCase().includes(query) || title.toLowerCase().includes(query);
+            });
+
+            renderProjects(filtered);
+        }
+
+        // 排序规则改变处理器
+        function handleSort() {
+            const sortVal = document.getElementById("sortBySelect").value;
+            
+            projects.sort((a, b) => {
+                if (sortVal === 'newest') {
+                    return b.updatedAt.localeCompare(a.updatedAt);
+                } else if (sortVal === 'oldest') {
+                    return a.updatedAt.localeCompare(b.updatedAt);
+                } else if (sortVal === 'name') {
+                    const nameA = currentLang === 'zh' ? a.name : (a.name_en || a.name);
+                    const nameB = currentLang === 'zh' ? b.name : (b.name_en || b.name);
+                    return nameA.localeCompare(nameB);
+                }
+            });
+
+            handleSearch();
+        }
+
+        // 切换网格与列表视图样式
+        function changeView(viewType) {
+            currentView = viewType;
+            
+            const gridBtn = document.getElementById("viewGridBtn");
+            const listBtn = document.getElementById("viewListBtn");
+
+            if (viewType === 'grid') {
+                gridBtn.className = "w-8 p-1.5 rounded-md text-teal-600 bg-white shadow-sm transition-all duration-200";
+                listBtn.className = "w-8 p-1.5 rounded-md text-slate-400 hover:text-slate-600 transition-all duration-200";
+            } else {
+                listBtn.className = "w-8 p-1.5 rounded-md text-teal-600 bg-white shadow-sm transition-all duration-200";
+                gridBtn.className = "w-8 p-1.5 rounded-md text-slate-400 hover:text-slate-600 transition-all duration-200";
+            }
+
+            handleSearch();
+        }
+
+        // 渲染新建项目中的预设卡片封面
+        function renderPresetCovers() {
+            const container = document.getElementById("presetCovers");
+            const presetsHtml = coverPresets.map((preset, index) => {
+                const isActive = index === selectedCoverIndex;
+                let bgClass = "";
+                let itemContent = "";
+
+                if (preset.type === 'gradient') {
+                    bgClass = `bg-gradient-to-tr ${preset.value}`;
+                } else {
+                    bgClass = `bg-cover bg-center`;
+                    itemContent = `style="background-image: url('${preset.value}')"`;
+                }
+
+                return `
+                    <button type="button" onclick="selectPresetCover(${index})" ${itemContent} class="${bgClass} aspect-square rounded-xl relative border-2 ${isActive ? 'border-teal-600 ring-2 ring-teal-500/15 scale-105' : 'border-transparent'} hover:scale-105 transition duration-150 group">
+                        <span class="absolute inset-0 flex items-center justify-center bg-black/10 hover:bg-black/0 text-white text-xs ${isActive ? 'opacity-100' : 'opacity-0'} group-hover:opacity-100 transition-opacity">
+                            <i class="fa-solid fa-circle-check text-base"></i>
+                        </span>
+                    </button>
+                `;
+            }).join("");
+
+            // 自定义封面：未上传时显示「上传」占位块，已上传时显示缩略图（与色块同尺寸、同一排）
+            let customHtml = "";
+            if (uploadedCover) {
+                const isActive = selectedCoverIndex === -1;
+                customHtml = `
+                    <div class="aspect-square rounded-xl relative border-2 ${isActive ? 'border-teal-600 ring-2 ring-teal-500/15 scale-105' : 'border-transparent'} bg-cover bg-center overflow-hidden group" style="background-image: url('${uploadedCover}')">
+                        <button type="button" onclick="clearUploadedCover()" class="absolute top-0.5 right-0.5 h-5 w-5 rounded-md bg-black/55 hover:bg-black/75 text-white flex items-center justify-center transition" title="移除">
+                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                customHtml = `
+                    <button type="button" onclick="document.getElementById('projectCoverFile').click()" title="${(dictionary[currentLang] && dictionary[currentLang].uploadCover) || ''}" class="aspect-square rounded-xl flex items-center justify-center bg-slate-50 border-2 border-dashed border-slate-300 text-slate-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-all">
+                        <i class="fa-solid fa-arrow-up-from-bracket text-sm"></i>
+                    </button>
+                `;
+            }
+
+            container.innerHTML = presetsHtml + customHtml;
+        }
+
+        // 选择预置封面动作
+        function selectPresetCover(index) {
+            selectedCoverIndex = index;
+            clearUploadedCover();
+            renderPresetCovers();
+        }
+
+        // 处理用户上传的自定义封面图
+        function handleCoverUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith("image/")) {
+                showToast(dictionary[currentLang].toastInvalidImage || "Invalid image", "error");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedCover = e.target.result;
+                uploadedCoverFile = file;
+                selectedCoverIndex = -1;
+                renderPresetCovers();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 清除已上传的自定义封面图
+        function clearUploadedCover() {
+            const hadUpload = !!uploadedCover;
+            uploadedCover = null;
+            uploadedCoverFile = null;
+            const fileInput = document.getElementById("projectCoverFile");
+            if (fileInput) fileInput.value = "";
+            // 若当前选中的就是自定义封面，移除后回退到第一个预设
+            if (hadUpload && selectedCoverIndex === -1) selectedCoverIndex = 0;
+            renderPresetCovers();
+        }
+
+        // 弹窗标题/副标题/按钮文字 — 根据模式动态更新
+        const modalCopy = {
+            create: {
+                zh: { title: "新建项目文件", sub: "所有加入的新项目在创建后均保存在您的本地空间。", btn: "确认创建" },
+                en: { title: "New Project File", sub: "Newly created projects are saved directly to your local workspace.", btn: "Create Project" },
+                ja: { title: "新規プロジェクト作成", sub: "作成した新しいプロジェクトはローカルスペースに保存されます。", btn: "確認作成" }
+            },
+            edit: {
+                zh: { title: "编辑项目", sub: "修改项目名称、描述及封面图。", btn: "保存修改" },
+                en: { title: "Edit Project", sub: "Update the project name, description and cover image.", btn: "Save Changes" },
+                ja: { title: "プロジェクトを編集", sub: "プロジェクト名・説明・カバー画像を変更できます。", btn: "変更を保存" }
+            }
+        };
+
+        function setModalMode(mode) {
+            const copy = modalCopy[mode][currentLang] || modalCopy[mode]['ja'];
+            document.getElementById("modalTitleEl").innerText = copy.title;
+            document.getElementById("modalSubEl").innerText = copy.sub;
+            document.getElementById("modalSubmitBtn").innerText = copy.btn;
+        }
+
+        // 新建模态框
+        function openCreateModal() {
+            document.getElementById("editProjectId").value = "";
+            document.getElementById("projectForm").reset();
+            selectedCoverIndex = 0;
+            clearUploadedCover();
+            renderPresetCovers();
+            setModalMode('create');
+            document.getElementById("createModal").classList.remove("hidden");
+        }
+
+        function closeCreateModal() {
+            document.getElementById("createModal").classList.add("hidden");
+            document.getElementById("projectForm").reset();
+            document.getElementById("editProjectId").value = "";
+            selectedCoverIndex = 0;
+            clearUploadedCover();
+            renderPresetCovers();
+        }
+
+        // 编辑项目 — 复用新建弹窗，预填内容
+        function openRenameModal(id) {
+            closeAllDropdowns();
+            const project = projects.find(p => p.id === id);
+            if (!project) return;
+
+            document.getElementById("editProjectId").value = project.id;
+            document.getElementById("projectName").value = project.name;
+            document.getElementById("projectTitle").value = project.title;
+
+            // 预选封面
+            clearUploadedCover();
+            if (project.coverType === 'gradient') {
+                const presetIdx = coverPresets.findIndex(c => c.type === 'gradient' && c.value === project.cover);
+                selectedCoverIndex = presetIdx !== -1 ? presetIdx : -1;
+            } else {
+                // 检查是否匹配某个图片预设，否则视为自定义封面
+                const presetIdx = coverPresets.findIndex(c => c.type !== 'gradient' && c.value === project.cover);
+                if (presetIdx !== -1) {
+                    selectedCoverIndex = presetIdx;
+                } else {
+                    selectedCoverIndex = -1;
+                    uploadedCover = project.cover;
+                }
+            }
+            renderPresetCovers();
+
+            setModalMode('edit');
+            document.getElementById("createModal").classList.remove("hidden");
+        }
+
+        // 导出项目数据为 JSON
+        function exportProjectData(id) {
+            closeAllDropdowns();
+            const project = projects.find(p => p.id === id);
+            if (!project) return;
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `${project.name.replace(/\s+/g, '_')}_data.json`);
+            document.body.appendChild(dlAnchorElem);
+            dlAnchorElem.click();
+            dlAnchorElem.remove();
+
+            showToast(dictionary[currentLang].toastExported, "success");
+        }
+
+        // 安全删除模态框控制
+        function triggerDeleteProject(id) {
+            closeAllDropdowns();
+            projectToDeleteId = id;
+
+            // 绑定安全删除按钮事件
+            const confirmBtn = document.getElementById("confirmDeleteBtn");
+            confirmBtn.onclick = executeDeleteProject;
+
+            document.getElementById("deleteConfirmModal").classList.remove("hidden");
+        }
+
+        function closeDeleteConfirmModal() {
+            document.getElementById("deleteConfirmModal").classList.add("hidden");
+            projectToDeleteId = null;
+        }
+
+        function executeDeleteProject() {
+            if (!projectToDeleteId) return;
+
+            projects = projects.filter(p => p.id !== projectToDeleteId);
+            saveToLocalStorage();
+            handleSearch();
+            closeDeleteConfirmModal();
+
+            showToast(dictionary[currentLang].toastDeleted, "info");
+        }
+
+        // 新建 / 编辑 — 统一提交处理
+        async function submitProjectForm(e) {
+            e.preventDefault();
+
+            const nameInput = document.getElementById("projectName").value.trim();
+            const titleInput = document.getElementById("projectTitle").value.trim();
+            const editId = document.getElementById("editProjectId").value;
+
+            let finalCover = "";
+            let coverType = "gradient";
+
+            if (selectedCoverIndex !== -1) {
+                const preset = coverPresets[selectedCoverIndex];
+                finalCover = preset.value;
+                coverType = preset.type;
+            } else if (uploadedCover) {
+                finalCover = uploadedCover;
+                coverType = "image";
+            } else {
+                finalCover = "from-slate-500 to-slate-700";
+                coverType = "gradient";
+            }
+
+            let createdSceneMeta = null;
+            if (!editId) {
+                const response = await fetch('/api/scenes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: nameInput,
+                        graph: { nodes: {}, rootNodeIds: [] }
+                    })
+                });
+                if (!response.ok) throw new Error(`Project create failed (${response.status})`);
+                createdSceneMeta = await response.json();
+
+                if (uploadedCoverFile) {
+                    const uploadedUrl = await uploadProjectCover(createdSceneMeta.id);
+                    if (uploadedUrl) {
+                        finalCover = uploadedUrl;
+                        coverType = "image";
+                    }
+                }
+                await saveProjectMetadata(createdSceneMeta.id, {
+                    name: nameInput,
+                    description: titleInput,
+                    coverType,
+                    coverValue: finalCover
+                });
+            }
+
+            if (editId) {
+                // 编辑模式
+                const project = projects.find(p => p.id === editId);
+                if (project) {
+                    if (uploadedCoverFile) {
+                        const uploadedUrl = await uploadProjectCover(editId);
+                        if (uploadedUrl) {
+                            finalCover = uploadedUrl;
+                            coverType = "image";
+                        }
+                    }
+                    await saveProjectMetadata(editId, {
+                        name: nameInput,
+                        description: titleInput,
+                        coverType,
+                        coverValue: finalCover
+                    });
+                    project.name = nameInput;
+                    project.title = titleInput;
+                    project.cover = finalCover;
+                    project.coverType = coverType;
+                    project.translatable = false;
+                    project.updatedAt = getFormattedCurrentTime();
+                }
+                saveToLocalStorage();
+                handleSearch();
+                closeCreateModal();
+                showToast(dictionary[currentLang].toastRenamed, "success");
+            } else {
+                // 新建模式
+                const newProject = {
+                    id: createdSceneMeta.id,
+                    name: nameInput,
+                    title: titleInput,
+                    cover: finalCover,
+                    coverType: coverType,
+                    updatedAt: getFormattedCurrentTime(),
+                    editorUrl: `/_pascal/scene/${encodeURIComponent(createdSceneMeta.id)}`
+                };
+                projects.unshift(newProject);
+                saveToLocalStorage();
+                handleSearch();
+                closeCreateModal();
+                showToast(dictionary[currentLang].toastCreated, "success");
+            }
+        }
+
+        // 获取格式化当前时间 (YYYY/MM/DD HH:MM)
+        function getFormattedCurrentTime() {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+        }
+
+        // 精美 Toast 通知生成器
+        function showToast(message, type = "success") {
+            const container = document.getElementById("toastContainer");
+            const toast = document.createElement("div");
+            
+            let iconClass = "fa-solid fa-circle-check text-emerald-500";
+            let bgBorder = "bg-white border-l-4 border-emerald-500";
+            if (type === 'info') {
+                iconClass = "fa-solid fa-circle-info text-blue-500";
+                bgBorder = "bg-white border-l-4 border-blue-500";
+            }
+
+            toast.className = `${bgBorder} flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl border border-slate-100 max-w-sm transform translate-y-2 opacity-0 transition-all duration-300 ease-out`;
+            toast.innerHTML = `
+                <i class="${iconClass}"></i>
+                <span class="text-xs font-semibold text-slate-700">${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove("translate-y-2", "opacity-0");
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add("translate-y-2", "opacity-0");
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 2500);
+        }
+
+        // HTML 字符安全过滤器
+        function escapeHTML(str) {
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

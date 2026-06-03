@@ -1,0 +1,1 @@
+{"Version":1,"ManifestType":"Build","Endpoints":[]}

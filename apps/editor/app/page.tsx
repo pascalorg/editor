@@ -3,6 +3,7 @@
 import { AddCatalogPanel, Editor, ItemsPanel } from '@pascal-app/editor'
 import { Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
+import { AiAssistantBubble } from '@/components/ai-assistant-bubble'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -73,6 +74,7 @@ export default function Home() {
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
+      <AiAssistantBubble />
     </div>
   )
 }

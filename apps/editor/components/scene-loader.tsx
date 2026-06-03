@@ -12,6 +12,7 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AiAssistantBubble } from './ai-assistant-bubble'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -205,6 +206,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
+      <AiAssistantBubble />
     </div>
   )
 }
