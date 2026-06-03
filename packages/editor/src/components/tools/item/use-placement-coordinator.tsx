@@ -18,15 +18,19 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Box3,
   Euler,
   type Group,
   type LineSegments,
+  Matrix4,
   type Mesh,
+  type Object3D,
   PlaneGeometry,
   Quaternion,
+  Ray,
   Vector3,
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
@@ -196,7 +200,23 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // the lerp on this flag keeps 3D placement smooth without hijacking
   // 2D drags that share the same draft.
   const has3DPointerDrivenMoveRef = useRef(false)
+  // The draft mesh's raycast is disabled while placing so the cursor ray
+  // passes through it to the surface beneath (grid / item / shelf). Without
+  // this, the ray hits the moving draft first and the surface strategy keeps
+  // re-deriving the host point from the draft's own (just-moved) geometry —
+  // on a multi-row shelf this oscillates the chosen row, jittering the item.
+  // Mirrors MoveRegistryNodeTool. Reconciled per-frame (the draft mesh can be
+  // recreated mid-session) and restored on unmount.
+  const raycastDisabledMeshRef = useRef<Object3D | null>(null)
+  const restoreRaycastsRef = useRef<Array<() => void>>([])
+  const raycastDisabledChildrenRef = useRef(new WeakSet<Object3D>())
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
+
+  // Live camera ref — the shelf-stickiness test reconstructs the cursor world
+  // ray (camera → grid hit) to check it still points at the shelf volume.
+  const camera = useThree((s) => s.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
 
   // Store config callbacks in refs to avoid re-running effect when they change
   const configRef = useRef(config)
@@ -487,6 +507,50 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     let previousGridPos: [number, number, number] | null = null
 
+    // Scratch objects reused by the stickiness test (runs per grid:move).
+    const stickyRay = new Ray()
+    const stickyBox = new Box3()
+    const stickyMat = new Matrix4()
+    const stickyCamPos = new Vector3()
+
+    // True while the cursor ray still points at the active shelf's volume.
+    // Used to keep an item hosted on a shelf "sticky": from an angled camera
+    // the cursor ray slips off the shelf's thin boards / through its gaps and
+    // lands on the floor *behind* the shelf, which would otherwise thrash the
+    // placement between the shelf row and the floor on every micro-move. We
+    // reconstruct the world ray (camera → grid hit point) and test it against
+    // the shelf's bounding box — so a ray that passes *through* the shelf but
+    // lands behind it still counts as "on the shelf". Only a ray that misses
+    // the shelf box entirely means the user genuinely moved off it. A simple
+    // footprint test on the floor hit point can't distinguish those.
+    const cursorRayIntersectsActiveShelf = (gridWorldPoint: [number, number, number]): boolean => {
+      const shelfId = placementState.current.shelfId
+      if (!shelfId) return false
+      const shelfMesh = sceneRegistry.nodes.get(shelfId as AnyNodeId)
+      const shelfNode = useScene.getState().nodes[shelfId as AnyNodeId] as
+        | { width?: number; depth?: number; height?: number }
+        | undefined
+      if (!(shelfMesh && shelfNode?.width && shelfNode?.depth && shelfNode?.height)) return false
+
+      cameraRef.current.getWorldPosition(stickyCamPos)
+      stickyRay.origin.copy(stickyCamPos)
+      stickyRay.direction
+        .set(
+          gridWorldPoint[0] - stickyCamPos.x,
+          gridWorldPoint[1] - stickyCamPos.y,
+          gridWorldPoint[2] - stickyCamPos.z,
+        )
+        .normalize()
+
+      // Into shelf-local space, then test the shelf's local AABB (origin at the
+      // base: y ∈ [0, height]) with a small margin.
+      stickyRay.applyMatrix4(stickyMat.copy(shelfMesh.matrixWorld).invert())
+      const m = 0.08
+      stickyBox.min.set(-shelfNode.width / 2 - m, -m, -shelfNode.depth / 2 - m)
+      stickyBox.max.set(shelfNode.width / 2 + m, shelfNode.height + m, shelfNode.depth / 2 + m)
+      return stickyRay.intersectsBox(stickyBox)
+    }
+
     const onGridMove = (event: GridEvent) => {
       // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
       if (draftNode.current === null && asset.attachTo === undefined) {
@@ -494,6 +558,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       has3DPointerDrivenMoveRef.current = true
+
+      // Shelf stickiness: while hosting on a shelf, ignore floor events while
+      // the cursor ray still points at the shelf volume (the ray merely slipped
+      // off a board / through a gap and hit the floor behind). Detach to the
+      // floor only once the ray misses the shelf entirely — without this the
+      // item oscillates between the shelf row and the floor on every micro-move.
+      if (placementState.current.surface === 'shelf-surface') {
+        if (cursorRayIntersectsActiveShelf(event.position)) return
+        detachItemSurfaceToFloor(event as unknown as ItemEvent)
+      }
+
       lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
       if (!cursorGroupRef.current) return
       const result = floorStrategy.move(getContext(), event)
@@ -774,7 +849,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const wz = Math.round(buildingLocalPoint.z * 2) / 2
       const floorPos: [number, number, number] = [wx, 0, wz]
 
-      Object.assign(placementState.current, { surface: 'floor', surfaceItemId: null })
+      Object.assign(placementState.current, {
+        surface: 'floor',
+        surfaceItemId: null,
+        shelfId: null,
+      })
       gridPosition.current.set(wx, 0, wz)
       if (cursorGroupRef.current) {
         cursorGroupRef.current.position.set(wx, 0, wz)
@@ -1212,11 +1291,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const onShelfLeave = (event: ShelfEvent) => {
       if (placementState.current.surface !== 'shelf-surface') return
       if (event.node.id !== placementState.current.shelfId) return
+      // Intentionally do NOT detach to the floor here. `shelf:leave` fires
+      // constantly while hosting because the cursor ray slips off the shelf's
+      // thin boards and through its gaps — detaching on each of those would
+      // thrash the item between the shelf row and the floor. The grid handler
+      // owns the real shelf→floor transition (see `isOverActiveShelfFootprint`
+      // in `onGridMove`): it detaches only once the cursor is clearly off the
+      // shelf footprint, which is the genuine "left the shelf" signal.
       event.stopPropagation()
-      // Drop back to floor — same pattern as item-leave but without the
-      // detachItemSurfaceToFloor (no scaled rotation hand-off to deal
-      // with since the shelf rotation already composed cleanly).
-      Object.assign(placementState.current, { surface: 'floor', shelfId: null })
     }
 
     const onShelfClick = (event: ShelfEvent) => {
@@ -1496,9 +1578,51 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
   }, [viewerLevelId, draftNode, asset])
 
+  // Disable raycasting on the live draft mesh (and restore it when the draft
+  // changes or goes away) so the cursor ray passes through the item being
+  // moved and lands on the surface beneath it.
+  const reconcileDraftRaycast = useCallback((mesh: Object3D | null) => {
+    if (raycastDisabledMeshRef.current !== mesh) {
+      // New draft root (or cleared): restore the prior mesh and reset tracking.
+      for (const restore of restoreRaycastsRef.current) restore()
+      restoreRaycastsRef.current = []
+      raycastDisabledChildrenRef.current = new WeakSet()
+      raycastDisabledMeshRef.current = mesh
+    }
+    if (!mesh) return
+    // Disable any descendant not handled yet. Item drafts are GLB models whose
+    // child meshes mount asynchronously (Suspense), so a one-shot traverse
+    // misses them — those late children keep intercepting the ray and corrupt
+    // the shelf-row hit the moment the item moves onto a row. Re-walking each
+    // frame is cheap: the WeakSet makes it idempotent, so only new children pay.
+    mesh.traverse((child) => {
+      if (raycastDisabledChildrenRef.current.has(child)) return
+      raycastDisabledChildrenRef.current.add(child)
+      const original = child.raycast
+      child.raycast = () => {}
+      restoreRaycastsRef.current.push(() => {
+        child.raycast = original
+      })
+    })
+  }, [])
+
+  // Restore the draft mesh's raycast when the coordinator unmounts (tool change).
+  useEffect(() => () => reconcileDraftRaycast(null), [reconcileDraftRaycast])
+
   useFrame((_, delta) => {
-    if (!asset) return
-    if (!draftNode.current) return
+    if (!asset) {
+      reconcileDraftRaycast(null)
+      return
+    }
+    if (!draftNode.current) {
+      reconcileDraftRaycast(null)
+      return
+    }
+    const mesh = sceneRegistry.nodes.get(draftNode.current.id) ?? null
+    reconcileDraftRaycast(mesh)
+    // mitt listeners outlive the cursor group's mount; bail if it's gone
+    // (mount/teardown race, #323). Placed after reconcileDraftRaycast so the
+    // draft's raycast is still restored during that window.
     if (!cursorGroupRef.current) return
     // The mesh-position lerp below only makes sense once this coordinator
     // owns the move via a 3D pointer event. Skip until then so that
@@ -1506,7 +1630,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // writing scene.position directly) aren't fought by useFrame pulling
     // the mesh back to its pre-move location.
     if (!has3DPointerDrivenMoveRef.current) return
-    const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
 
     // Hide wall/ceiling-attached items when between surfaces (only cursor visible)
