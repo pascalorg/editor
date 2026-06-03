@@ -1,6 +1,12 @@
 'use client'
 
-import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type FenceNode,
+  getWallCurveLength,
+  useAlignmentGuides,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
@@ -152,6 +158,10 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       neighbourSegments,
     ],
   )
+
+  // Safety net: drop any alignment guides if the tool unmounts without the
+  // action's commit / cancel running (e.g. abrupt teardown).
+  useEffect(() => () => useAlignmentGuides.getState().clear(), [])
 
   // Window-level keystate for the detach badge — independent of grid
   // event modifiers so the badge can toggle without a pointer move.

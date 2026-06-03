@@ -1,15 +1,24 @@
 import type { AssetInput } from '@pascal-app/core'
 import {
+  type AnyNode,
   type AnyNodeId,
   type CeilingEvent,
+  collectFloorFootprints,
   emitter,
+  type FootprintAABB,
+  footprintAABBAt,
+  footprintAnchors,
   type GridEvent,
   getScaledDimensions,
   type ItemEvent,
+  movingFootprintAnchors,
+  refineGuidesToGap,
+  resolveAlignment,
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
   spatialGridManager,
+  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   useSpatialQuery,
@@ -49,6 +58,10 @@ import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
+
+/** Figma-style alignment-snap threshold (meters), matching the 2D
+ *  floor-plan overlay and the 3D registry move tool. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
   if (unit === 'imperial') {
@@ -446,6 +459,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
+    // Lazily-gathered alignment footprints — every OTHER floor-placed node's
+    // XZ AABB, excluding the draft. Computed on the first floor move (once
+    // the draft id exists) and reused for the rest of the drag; the scene
+    // graph is stable during placement. Coords are building-local, matching
+    // the draft's grid position and the guide layer's frame. The AABBs drive
+    // the nearest-edge gap; their (corner) anchors feed the resolver.
+    let alignmentFootprints: Map<string, FootprintAABB> | null = null
+
     // Reset placement state
     placementState.current = configRef.current.initialState ?? {
       surface: 'floor',
@@ -497,6 +518,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const applyTransition = (result: TransitionResult) => {
+      // Alignment guides are floor-only; clear them when the cursor moves
+      // onto a wall / ceiling / item surface (only those paths call this).
+      useAlignmentGuides.getState().clear()
       Object.assign(placementState.current, result.stateUpdate)
       gridPosition.current.set(...result.gridPosition)
 
@@ -600,35 +624,82 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const result = floorStrategy.move(getContext(), event)
       if (!result) return
 
+      // Figma-style alignment snap layered on top of the floor strategy's
+      // grid snap: when the draft's edge lines up (on X or Z) with another
+      // item's edge, snap and publish a guide (line + nearest-edge distance).
+      // The delta is applied to BOTH the grid and cursor positions below.
+      // Alt bypasses.
+      const draft = draftNode.current
+      let alignX = 0
+      let alignZ = 0
+      const bypassAlign = event.nativeEvent?.altKey === true
+      if (!bypassAlign && draft) {
+        alignmentFootprints ??= collectFloorFootprints(useScene.getState().nodes, draft.id)
+        const draftNodeRef = draft as unknown as AnyNode
+        const rotationY = cursorGroupRef.current.rotation.y
+        const ar = resolveAlignment({
+          moving: movingFootprintAnchors(
+            draftNodeRef,
+            result.gridPosition[0],
+            result.gridPosition[2],
+            rotationY,
+          ),
+          candidates: footprintAnchors(alignmentFootprints),
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (ar.snap) {
+          alignX = ar.snap.dx
+          alignZ = ar.snap.dz
+        }
+        const movingAABB = footprintAABBAt(
+          draftNodeRef,
+          result.gridPosition[0] + alignX,
+          result.gridPosition[2] + alignZ,
+          rotationY,
+        )
+        useAlignmentGuides
+          .getState()
+          .set(
+            movingAABB ? refineGuidesToGap(ar.guides, movingAABB, alignmentFootprints) : ar.guides,
+          )
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      const gridPos: [number, number, number] = [
+        result.gridPosition[0] + alignX,
+        result.gridPosition[1],
+        result.gridPosition[2] + alignZ,
+      ]
+      const cursorPos: [number, number, number] = [
+        result.cursorPosition[0] + alignX,
+        result.cursorPosition[1],
+        result.cursorPosition[2] + alignZ,
+      ]
+
       // Play snap sound when grid position changes
       if (
         previousGridPos &&
-        (result.gridPosition[0] !== previousGridPos[0] ||
-          result.gridPosition[2] !== previousGridPos[2])
+        (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
       ) {
         sfxEmitter.emit('sfx:grid-snap')
       }
 
-      previousGridPos = [...result.gridPosition]
-      gridPosition.current.set(...result.gridPosition)
-      cursorGroupRef.current.position.set(
-        result.cursorPosition[0],
-        result.cursorPosition[1],
-        result.cursorPosition[2],
-      )
+      previousGridPos = [...gridPos]
+      gridPosition.current.set(...gridPos)
+      cursorGroupRef.current.position.set(cursorPos[0], cursorPos[1], cursorPos[2])
       // Floor items only rotate on Y; keep the preview box (and the live
       // transform the 2D floorplan mirrors) aligned with the draft's
       // rotation. Without this the box stays at its seed rotation until a
       // manual R/T, so a moved already-rotated item shows an axis-aligned box.
       cursorGroupRef.current.rotation.y = result.cursorRotationY
 
-      const draft = draftNode.current
-      if (draft) draft.position = result.gridPosition
+      if (draft) draft.position = gridPos
 
       // Publish live transform for 2D floorplan
       if (draft) {
         useLiveTransforms.getState().set(draft.id, {
-          position: result.gridPosition,
+          position: gridPos,
           rotation: cursorGroupRef.current.rotation.y,
         })
       }
@@ -637,6 +708,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onGridClick = (event: GridEvent) => {
+      // Drop alignment guides on click — the move commits (guides done) or
+      // placement re-arms (the next move republishes them).
+      useAlignmentGuides.getState().clear()
       const result = floorStrategy.click(getContext(), event, getActiveValidators())
       if (!result) return
 
@@ -1435,6 +1509,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- tool:cancel (Escape / programmatic) ----
     const onCancel = () => {
+      useAlignmentGuides.getState().clear()
       if (configRef.current.onCancel) {
         configRef.current.onCancel()
       }
@@ -1512,6 +1587,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     return () => {
       tearingDown = true
       unsubDraftWatch()
+      useAlignmentGuides.getState().clear()
       // Clear live transform for any remaining draft
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)

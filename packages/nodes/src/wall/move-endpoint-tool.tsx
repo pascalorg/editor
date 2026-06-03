@@ -4,13 +4,18 @@ import {
   type AnyNodeId,
   DEFAULT_WALL_HEIGHT,
   emitter,
+  type FootprintAABB,
   type GridEvent,
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
+  refineGuidesToGap,
+  resolveAlignment,
   resumeSceneHistory,
+  useAlignmentGuides,
   useScene,
   type WallNode,
+  wallSegmentAnchors,
 } from '@pascal-app/core'
 import {
   CursorSphere,
@@ -43,6 +48,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * `wall/definition.ts`. Editor state trigger is
  * `useEditor.movingWallEndpoint`.
  */
+/** Figma-style alignment-snap threshold (meters), matching the item move /
+ *  placement tools. 8 cm gives a magnetic pull without fighting grid snap. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
   return a[0] === b[0] && a[1] === b[1]
 }
@@ -207,6 +216,35 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
     )
 
+    // Alignment candidates — endpoints + midpoints of every OTHER wall AND
+    // fence on this level (both share the start/end segment shape), gathered
+    // once (the set is stable during the drag). Coords are building-local,
+    // the same frame as the cursor and the 3D guide layer, so the published
+    // marker lines up.
+    const parentId = target.wall.parentId ?? null
+    const alignSegments: { id: string; start: WallPlanPoint; end: WallPlanPoint }[] = []
+    for (const segment of Object.values(useScene.getState().nodes)) {
+      if (!segment || segment.id === nodeId) continue
+      if ((segment.parentId ?? null) !== parentId) continue
+      if (segment.type === 'wall' || segment.type === 'fence') {
+        alignSegments.push({ id: segment.id, start: segment.start, end: segment.end })
+      }
+    }
+    const wallAlignmentCandidates = alignSegments.flatMap((segment) =>
+      wallSegmentAnchors(segment.id, segment.start, segment.end),
+    )
+    const wallFootprints = new Map<string, FootprintAABB>(
+      alignSegments.map((segment) => [
+        segment.id,
+        {
+          minX: Math.min(segment.start[0], segment.end[0]),
+          maxX: Math.max(segment.start[0], segment.end[0]),
+          minZ: Math.min(segment.start[1], segment.end[1]),
+          maxZ: Math.max(segment.start[1], segment.end[1]),
+        },
+      ]),
+    )
+
     pauseSceneHistory(useScene)
     let wasCommitted = false
 
@@ -285,20 +323,44 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
       })
 
+      // Figma-style alignment: nudge the dragged endpoint onto another wall /
+      // fence endpoint or midpoint axis when within threshold, and publish a
+      // guide (line + nearest-edge distance). Layered on top of the grid +
+      // corner snap above; Alt is reserved for corner-detach here.
+      let alignedPoint = snappedPoint
+      if (wallAlignmentCandidates.length > 0) {
+        const ar = resolveAlignment({
+          moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
+          candidates: wallAlignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (ar.snap) {
+          alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
+        }
+        const movingAABB: FootprintAABB = {
+          minX: alignedPoint[0],
+          maxX: alignedPoint[0],
+          minZ: alignedPoint[1],
+          maxZ: alignedPoint[1],
+        }
+        useAlignmentGuides.getState().set(refineGuidesToGap(ar.guides, movingAABB, wallFootprints))
+      }
+
       if (
         previousGridPosRef.current &&
-        (snappedPoint[0] !== previousGridPosRef.current[0] ||
-          snappedPoint[1] !== previousGridPosRef.current[1])
+        (alignedPoint[0] !== previousGridPosRef.current[0] ||
+          alignedPoint[1] !== previousGridPosRef.current[1])
       ) {
         triggerSFX('sfx:grid-snap')
       }
-      previousGridPosRef.current = snappedPoint
+      previousGridPosRef.current = alignedPoint
       hasDraggedRef.current = true
 
-      applyPreview(snappedPoint, event.nativeEvent.altKey)
+      applyPreview(alignedPoint, event.nativeEvent.altKey)
     }
 
     const onPointerUp = () => {
+      useAlignmentGuides.getState().clear()
       // Press-release without drag: dismiss the tool without committing.
       if (!hasDraggedRef.current) {
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -345,6 +407,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onCancel = () => {
+      useAlignmentGuides.getState().clear()
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
@@ -390,6 +453,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     window.addEventListener('blur', onWindowBlur)
 
     return () => {
+      useAlignmentGuides.getState().clear()
       if (!wasCommitted) {
         restoreOriginal(false)
       }

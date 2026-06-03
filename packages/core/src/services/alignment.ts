@@ -143,6 +143,73 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
   return { guides, snap: { dx: dxSnap, dz: dzSnap } }
 }
 
+export type ResolvePointSnapInput = {
+  /** Anchors of the moving node at its proposed (pre-snap) location. */
+  moving: readonly AlignmentAnchor[]
+  /** Candidate anchors from nearby static objects. */
+  candidates: readonly AlignmentAnchor[]
+  /** Max |Δ| (meters) on EACH axis for two anchors to count as coincident. */
+  threshold: number
+}
+
+export type ResolvePointSnapResult = {
+  /** Delta to add to the moving node so the matched anchor lands exactly on
+   *  the candidate point. */
+  snap: { dx: number; dz: number }
+  /** A degenerate guide marking the coincident point — renders as a single
+   *  dot (no line / distance), since alignment here is point-to-point, not
+   *  along an axis. */
+  guide: AlignmentGuide
+} | null
+
+/**
+ * Point-coincidence snap. Unlike {@link resolveAlignment} (which matches a
+ * single shared axis and draws a line to a possibly-distant object), this
+ * fires ONLY when a moving anchor lands within `threshold` of a candidate
+ * anchor on BOTH axes — i.e. the moving point reaches a real anchor point
+ * (corner / endpoint). Picks the closest such pair and snaps onto it.
+ *
+ * Returns `null` when no anchor pair coincides.
+ */
+export function resolvePointSnap(input: ResolvePointSnapInput): ResolvePointSnapResult {
+  const { moving, candidates, threshold } = input
+  if (threshold <= 0 || moving.length === 0 || candidates.length === 0) return null
+
+  let best: {
+    score: number
+    dx: number
+    dz: number
+    m: AlignmentAnchor
+    c: AlignmentAnchor
+  } | null = null
+  for (const m of moving) {
+    for (const c of candidates) {
+      const dx = c.x - m.x
+      const dz = c.z - m.z
+      if (Math.abs(dx) > threshold || Math.abs(dz) > threshold) continue
+      const score = Math.hypot(dx, dz)
+      if (best === null || score < best.score) best = { score, dx, dz, m, c }
+    }
+  }
+
+  if (!best) return null
+  const x = best.c.x
+  const z = best.c.z
+  return {
+    snap: { dx: best.dx, dz: best.dz },
+    guide: {
+      axis: 'x',
+      coord: x,
+      from: { x, z },
+      to: { x, z },
+      movingAnchorKind: best.m.kind,
+      candidateAnchorKind: best.c.kind,
+      candidateNodeId: best.c.nodeId,
+      distance: 0,
+    },
+  }
+}
+
 // ─── Anchor extractors (pure) ─────────────────────────────────────────
 
 /**
@@ -172,5 +239,25 @@ export function bboxAnchors(
     { nodeId, kind: 'edge-mid', x: cx, z: maxZ },
     { nodeId, kind: 'edge-mid', x: minX, z: cz },
     { nodeId, kind: 'center', x: cx, z: cz },
+  ]
+}
+
+/**
+ * The 4 corner anchors of a bbox — edges only, no edge-midpoints or center.
+ * Used where alignment should lock to an object's edges (left/right/front/
+ * back), never its centreline.
+ */
+export function bboxCornerAnchors(
+  nodeId: string,
+  minX: number,
+  minZ: number,
+  maxX: number,
+  maxZ: number,
+): AlignmentAnchor[] {
+  return [
+    { nodeId, kind: 'corner', x: minX, z: minZ },
+    { nodeId, kind: 'corner', x: maxX, z: minZ },
+    { nodeId, kind: 'corner', x: maxX, z: maxZ },
+    { nodeId, kind: 'corner', x: minX, z: maxZ },
   ]
 }

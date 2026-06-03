@@ -4,10 +4,26 @@ export {
   type AlignmentGuideAxis,
   type AnchorKind,
   bboxAnchors,
-  resolveAlignment,
+  bboxCornerAnchors,
   type ResolveAlignmentInput,
   type ResolveAlignmentResult,
+  type ResolvePointSnapInput,
+  type ResolvePointSnapResult,
+  resolveAlignment,
+  resolvePointSnap,
 } from './alignment'
+export {
+  collectAlignmentCandidates,
+  collectFloorFootprints,
+  type FootprintAABB,
+  footprintAABB,
+  footprintAABBAt,
+  footprintAABBFrom,
+  footprintAnchors,
+  movingFootprintAnchors,
+  refineGuidesToGap,
+  wallSegmentAnchors,
+} from './alignment-anchors'
 export {
   createDragSession,
   type DragSession,

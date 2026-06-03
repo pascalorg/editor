@@ -1,10 +1,16 @@
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
   type DragAction,
   type FenceNode,
+  type FootprintAABB,
+  refineGuidesToGap,
+  resolveAlignment,
+  useAlignmentGuides,
   useScene,
   type WallNode,
+  wallSegmentAnchors,
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
@@ -43,6 +49,19 @@ import {
 
 const LINKED_FENCE_ENDPOINT_EPSILON = 0.025
 
+/** Figma-style alignment-snap threshold (meters), matching the wall / item
+ *  tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
+function segmentAABB(start: FencePlanPoint, end: FencePlanPoint): FootprintAABB {
+  return {
+    minX: Math.min(start[0], end[0]),
+    maxX: Math.max(start[0], end[0]),
+    minZ: Math.min(start[1], end[1]),
+    maxZ: Math.max(start[1], end[1]),
+  }
+}
+
 function samePoint(a: FencePlanPoint, b: FencePlanPoint): boolean {
   return (
     Math.abs(a[0] - b[0]) <= LINKED_FENCE_ENDPOINT_EPSILON &&
@@ -67,6 +86,11 @@ export type MoveFenceEndpointCtx = {
   linkedOriginals: LinkedFenceSnapshot[]
   levelWalls: WallNode[]
   levelFences: FenceNode[]
+  /** Alignment anchors + footprint AABBs of every OTHER wall / fence on the
+   *  level (building-local). Anchors feed the resolver; AABBs let the guide
+   *  re-span to the nearest edge. */
+  alignCandidates: AlignmentAnchor[]
+  alignFootprints: Map<string, FootprintAABB>
 }
 
 export type MoveFenceEndpointDraft = {
@@ -132,6 +156,16 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         else if (node.type === 'fence') levelFences.push(node)
       }
 
+      // Alignment targets — every other wall + fence segment on the level.
+      const alignSegments: { id: string; start: FencePlanPoint; end: FencePlanPoint }[] = [
+        ...levelWalls,
+        ...levelFences.filter((f) => f.id !== fence.id),
+      ]
+      const alignCandidates = alignSegments.flatMap((s) => wallSegmentAnchors(s.id, s.start, s.end))
+      const alignFootprints = new Map<string, FootprintAABB>(
+        alignSegments.map((s) => [s.id, segmentAABB(s.start, s.end)]),
+      )
+
       return {
         fenceId: fence.id as AnyNodeId,
         endpoint,
@@ -143,6 +177,8 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         linkedOriginals: snapshotLinked(fence.id, parentId, originalMovingPoint),
         levelWalls,
         levelFences,
+        alignCandidates,
+        alignFootprints,
       }
     },
 
@@ -158,14 +194,39 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         ignoreFenceIds: [ctx.fenceId as string],
         step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
       })
-      const nextStart = ctx.endpoint === 'start' ? snapped : ctx.fixedPoint
-      const nextEnd = ctx.endpoint === 'end' ? snapped : ctx.fixedPoint
+
+      // Figma-style alignment: nudge the dragged endpoint onto another wall /
+      // fence endpoint or midpoint axis when within threshold, and publish a
+      // guide (line + nearest-edge distance). Alt is reserved for detach.
+      let aligned = snapped
+      if (ctx.alignCandidates.length > 0) {
+        const ar = resolveAlignment({
+          moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
+          candidates: ctx.alignCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (ar.snap) {
+          aligned = [snapped[0] + ar.snap.dx, snapped[1] + ar.snap.dz]
+        }
+        const movingAABB: FootprintAABB = {
+          minX: aligned[0],
+          maxX: aligned[0],
+          minZ: aligned[1],
+          maxZ: aligned[1],
+        }
+        useAlignmentGuides
+          .getState()
+          .set(refineGuidesToGap(ar.guides, movingAABB, ctx.alignFootprints))
+      }
+
+      const nextStart = ctx.endpoint === 'start' ? aligned : ctx.fixedPoint
+      const nextEnd = ctx.endpoint === 'end' ? aligned : ctx.fixedPoint
       const detached = modifiers.alt
       const linkedUpdates = detached
         ? []
-        : linkedCascade(ctx.linkedOriginals, ctx.originalMovingPoint, snapped)
+        : linkedCascade(ctx.linkedOriginals, ctx.originalMovingPoint, aligned)
       return {
-        movingPoint: snapped,
+        movingPoint: aligned,
         start: nextStart,
         end: nextEnd,
         linkedUpdates,
@@ -190,6 +251,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
     },
 
     commit: (draft, ctx, scene) => {
+      useAlignmentGuides.getState().clear()
       // Min-length rejection still matters — too-short fence is invalid
       // and should bounce back via the cancel path (snapshot restore).
       // But the "no-change" rejection is removed: see
@@ -220,7 +282,8 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
     },
 
     cancel: (_ctx, _scene) => {
-      // No-op — createDragSession.cancel() calls scene.restoreAll()
+      useAlignmentGuides.getState().clear()
+      // No-op otherwise — createDragSession.cancel() calls scene.restoreAll()
       // which puts every touched node back via the snapshot.
     },
   }
