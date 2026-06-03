@@ -18,7 +18,7 @@ export function ImportDxfButton() {
         type="button"
       >
         <FileUp className="h-3.5 w-3.5" />
-        导入 DXF
+        Import DXF
       </button>
 
       {open && createPortal(

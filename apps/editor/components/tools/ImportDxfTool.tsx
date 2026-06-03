@@ -55,7 +55,7 @@ async function importSceneViaServer(
   })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new Error(err.error ?? `导入服务返回 ${res.status}`)
+    throw new Error(err.error ?? `Import service returned ${res.status}`)
   }
   const data = (await res.json()) as {
     sceneId: string
@@ -256,7 +256,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
   // ── File processing ─────────────────────────────────────────────────────────
   const processFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.dxf')) {
-      setErrorMsg('请选择 .dxf 文件')
+      setErrorMsg('Please select a .dxf file.')
       setPhase('error')
       return
     }
@@ -268,7 +268,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
       const mb = (file.size / 1024 / 1024).toFixed(1)
       setValidation({
         passed: false, confidence: 0, warnings: [],
-        rejectReasons: [`文件大小 ${mb}MB，超过最大限制 10MB`],
+        rejectReasons: [`File size ${mb} MB exceeds the 10 MB limit`],
       })
       setPhase('rejected')
       return
@@ -276,7 +276,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
 
     let text: string
     try { text = await file.text() }
-    catch { setErrorMsg('无法读取文件'); setPhase('error'); return }
+    catch { setErrorMsg('Could not read file.'); setPhase('error'); return }
 
     dxfTextRef.current = text
 
@@ -289,7 +289,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
         entities: (dxf?.entities ?? []) as unknown as DxfRawEntity[],
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'DXF 解析失败')
+      setErrorMsg(err instanceof Error ? err.message : 'DXF parse failed.')
       setPhase('error')
       return
     }
@@ -357,7 +357,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
     // ── Madori pipeline: all heavy lifting is server-side ─────────────────────
     if (pipeline === 'madori') {
       if (!jobId) {
-        setErrorMsg('无法创建导入任务，请重试')
+        setErrorMsg('Could not create import job. Please try again.')
         setPhase('error')
         return
       }
@@ -378,7 +378,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
         onDone?.({ buildingId: result.sceneId, levelId: result.sceneId })
       } catch (err) {
         if (abort.signal.aborted) return
-        setErrorMsg(err instanceof Error ? err.message : 'Madori 导入失败')
+        setErrorMsg(err instanceof Error ? err.message : 'Madori import failed.')
         setPhase('error')
       }
       return
@@ -398,7 +398,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
       )
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') return
-      setErrorMsg(err instanceof Error ? err.message : '几何解析失败')
+      setErrorMsg(err instanceof Error ? err.message : 'Geometry parse failed.')
       setPhase('error')
       return
     }
@@ -428,7 +428,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
     try {
       mergeResult = mergeDxf(coordsJSON, semanticJSON)
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : '数据融合失败')
+      setErrorMsg(err instanceof Error ? err.message : 'Data merge failed.')
       setPhase('error')
       return
     }
@@ -462,7 +462,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
       setPhase('done')
       onDone?.({ buildingId: result.sceneId, levelId: result.sceneId })
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : '写入场景失败')
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to write scene.')
       setPhase('error')
     }
   }, [sceneId, onDone, settings, pipeline, parseGeometry, fileName])
@@ -504,11 +504,11 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FileUp className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-semibold text-sm">导入 DXF 平面图</h2>
+          <h2 className="font-semibold text-sm">Import DXF floor plan</h2>
         </div>
         {onClose && (
           <button
-            aria-label="关闭"
+            aria-label="Close"
             className="text-muted-foreground/60 hover:text-foreground"
             onClick={onClose}
             type="button"
@@ -534,8 +534,8 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
           >
             <UploadCloud className="h-8 w-8 text-muted-foreground/50" />
             <div className="text-center">
-              <p className="font-medium text-sm">拖拽 DXF 文件至此</p>
-              <p className="mt-0.5 text-muted-foreground text-xs">或点击选择文件（最大 10 MB）</p>
+              <p className="font-medium text-sm">Drop a DXF file here</p>
+              <p className="mt-0.5 text-muted-foreground text-xs">or click to browse (max 10 MB)</p>
             </div>
             <input accept=".dxf" className="sr-only" onChange={handleFileInput} type="file" />
           </label>
@@ -559,7 +559,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
                 onClick={() => setPipeline(p)}
                 type="button"
               >
-                {p === 'geo+ai' ? '自动识别 (AI)' : '建筑CAD (Madori)'}
+                {p === 'geo+ai' ? 'Auto-detect (AI)' : 'Architectural CAD (Madori)'}
               </button>
             ))}
           </div>
@@ -609,7 +609,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
                 onClick={() => setPipeline(p)}
                 type="button"
               >
-                {p === 'geo+ai' ? '自动识别 (AI)' : '建筑CAD (Madori)'}
+                {p === 'geo+ai' ? 'Auto-detect (AI)' : 'Architectural CAD (Madori)'}
               </button>
             ))}
           </div>
@@ -620,14 +620,14 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
               onClick={handleReset}
               type="button"
             >
-              取消
+              Cancel
             </button>
             <button
               className="rounded-lg bg-blue-600 px-4 py-1.5 font-medium text-sm text-white hover:bg-blue-500"
               onClick={() => void handleConfirmImport()}
               type="button"
             >
-              确认导入
+              Import
             </button>
           </div>
         </>
@@ -668,15 +668,15 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
         <>
           <div className="flex items-center gap-2 rounded-xl border border-green-500/20 bg-green-500/5 p-4 text-green-400">
             <CheckCircle className="h-4 w-4 shrink-0" />
-            <span className="font-medium text-sm">导入完成</span>
+            <span className="font-medium text-sm">Import complete</span>
           </div>
 
           {/* Import stats */}
           {importStats && (
             <div className="grid grid-cols-3 gap-2 text-center">
-              <StatChip label="面墙" value={importStats.wallCount} />
-              <StatChip label="处开口" value={importStats.openingCount} />
-              <StatChip label="个房间" value={importStats.zoneCount} />
+              <StatChip label="walls" value={importStats.wallCount} />
+              <StatChip label="openings" value={importStats.openingCount} />
+              <StatChip label="rooms" value={importStats.zoneCount} />
             </div>
           )}
 
@@ -684,14 +684,14 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
           {importStats && importStats.needsReviewCount > 0 && (
             <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-amber-400 text-xs">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              {importStats.needsReviewCount} 个节点标记为需要检查（黄色徽章）
+              {importStats.needsReviewCount} node{importStats.needsReviewCount !== 1 ? 's' : ''} flagged for review (yellow badge)
             </p>
           )}
 
           {/* Warnings summary */}
           {warnings.length > 0 && (
             <p className="text-muted-foreground text-xs">
-              {warnings.length} 条提示 — 可在场景中查看标记节点
+              {warnings.length} notice{warnings.length !== 1 ? 's' : ''} — see flagged nodes in the scene
             </p>
           )}
 
@@ -701,14 +701,14 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
               onClick={handleReImport}
               type="button"
             >
-              以不同参数重新导入
+              Re-import with different settings
             </button>
             <button
               className="rounded-lg border border-border/60 bg-background px-3 py-1.5 text-sm hover:bg-accent/40"
               onClick={onClose ?? handleReset}
               type="button"
             >
-              关闭
+              Close
             </button>
           </div>
         </>
@@ -718,14 +718,14 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
       {phase === 'error' && (
         <>
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive text-sm">
-            {errorMsg || '发生未知错误'}
+            {errorMsg || 'An unknown error occurred.'}
           </div>
           <button
             className="self-end rounded-md px-3 py-1.5 text-muted-foreground text-sm hover:text-foreground"
             onClick={handleReset}
             type="button"
           >
-            重试
+            Try again
           </button>
         </>
       )}

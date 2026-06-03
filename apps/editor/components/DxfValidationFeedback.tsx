@@ -18,51 +18,49 @@ export function getRejectSuggestions(reasons: string[]): string[] {
 
   const isMechanical =
     joined.includes('CIRCLE + SPLINE') ||
-    (joined.includes('BBox 对角线') && joined.includes('疑似机械零件图'))
+    joined.includes('mechanical drawing')
 
   const isUnitsMismatch =
-    joined.includes('BBox 对角线') && !joined.includes('疑似场地图')
+    joined.includes('BBox diagonal') && !joined.includes('site plan')
 
   const isNoWalls =
-    joined.includes('平行线对') || joined.includes('封闭多边形')
+    joined.includes('parallel line pairs') || joined.includes('closed polygon')
 
-  const isTooFewLines = joined.includes('LINE + LWPOLYLINE 实体仅')
-  const isFileTooLarge = joined.includes('超过最大限制 10MB')
+  const isTooFewLines = joined.includes('LINE + LWPOLYLINE produced only')
+  const isFileTooLarge = joined.includes('exceeds the 10 MB limit')
   const isSiteMap =
-    joined.includes('疑似场地图') || joined.includes('坐标系错误')
+    joined.includes('site plan') || joined.includes('coordinate error')
 
   if (isFileTooLarge) {
-    suggestions.push('请在 DXF 应用中合并图层并导出较小的平面图区域后重试')
+    suggestions.push('Merge layers in your DXF application and export a smaller floor plan area, then retry.')
   }
 
   if (isMechanical) {
-    suggestions.push('请确认上传的是建筑平面图（户型图），而非机械或工业图纸')
+    suggestions.push('Make sure you are uploading an architectural floor plan, not a mechanical or industrial drawing.')
   }
 
   if (isUnitsMismatch) {
     suggestions.push(
-      '如果这是正确的户型图，图纸单位可能被错误识别。请在「高级设置」中手动指定单位（mm / m）后重试',
+      'If this is a valid floor plan, the drawing units may have been misdetected. Try setting units manually (mm / m) in Advanced settings.',
     )
   }
 
   if (isSiteMap) {
-    suggestions.push(
-      '图纸范围超过 500 m，疑似场地总图。请导出单独的楼层平面图后重试',
-    )
+    suggestions.push('Drawing extent exceeds 500 m — this looks like a site plan. Export a single floor plan and retry.')
   }
 
   if (isNoWalls) {
     suggestions.push(
-      '未检测到墙体。请检查图层命名（推荐使用 WALL 或 墙）或在「高级设置」中扩大墙体厚度范围',
+      'No walls detected. Check layer names (recommended: WALL) or increase the wall thickness range in Advanced settings.',
     )
   }
 
   if (isTooFewLines) {
-    suggestions.push('文件中线条元素过少，请确认导出的 DXF 包含完整的建筑平面信息')
+    suggestions.push('Too few line elements found. Make sure the exported DXF contains the full floor plan geometry.')
   }
 
   if (suggestions.length === 0) {
-    suggestions.push('请确认上传的是建筑平面图（户型图）')
+    suggestions.push('Make sure you are uploading an architectural floor plan.')
   }
 
   return suggestions
@@ -72,9 +70,9 @@ export function getRejectSuggestions(reasons: string[]): string[] {
 
 export interface DxfValidationFeedbackProps {
   validation: ValidationResult
-  /** Called when user clicks "重新选择文件" */
+  /** Called when user clicks "Choose another file" */
   onRetry: () => void
-  /** If provided, shows an "调整设置后重试" secondary action */
+  /** If provided, shows an "Adjust settings" secondary action */
   onAdjustSettings?: () => void
   className?: string
 }
@@ -93,7 +91,7 @@ export function DxfValidationFeedback({
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
         <div className="mb-3 flex items-center gap-2 font-semibold text-destructive text-sm">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          无法导入此文件
+          Cannot import this file
         </div>
 
         {/* Reasons */}
@@ -108,7 +106,7 @@ export function DxfValidationFeedback({
       <div className="rounded-lg border border-border/40 bg-muted/20 p-3">
         <div className="mb-1.5 flex items-center gap-1.5 font-medium text-muted-foreground text-xs">
           <Info className="h-3.5 w-3.5" />
-          建议操作
+          Suggestions
         </div>
         <ul className="space-y-1">
           {suggestions.map((s, i) => (
@@ -140,7 +138,7 @@ export function DxfValidationFeedback({
             type="button"
           >
             <Settings2 className="h-3.5 w-3.5" />
-            调整设置
+            Adjust settings
           </button>
         )}
         <button
@@ -149,7 +147,7 @@ export function DxfValidationFeedback({
           type="button"
         >
           <FileSearch className="h-3.5 w-3.5" />
-          重新选择文件
+          Choose another file
         </button>
       </div>
     </div>
@@ -164,7 +162,7 @@ export function DxfValidationFeedback({
  */
 function ReasonItem({ reason }: { reason: string }) {
   // Split on numbers + unit patterns and wrap them with emphasis
-  const parts = reason.split(/(\d+(?:\.\d+)?(?:m|MB|mm|%|个)?)/g)
+  const parts = reason.split(/(\d+(?:\.\d+)?(?:\s?MB|mm|m|%)?)(?=\s|$|,|—|–)/g)
   return (
     <li className="flex gap-2 text-muted-foreground text-xs">
       <span className="mt-0.5 text-destructive/70">•</span>

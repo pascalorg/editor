@@ -14,10 +14,10 @@ interface StageConfig {
 }
 
 const STAGES: StageConfig[] = [
-  { id: 'parsing',   label: '解析中',   detail: '提取线条与几何特征' },
-  { id: 'analyzing', label: '识别中',   detail: 'AI 分析图纸语义' },
-  { id: 'merging',   label: '融合中',   detail: '合并几何与语义结果' },
-  { id: 'building',  label: '生成场景', detail: '写入 Pascal 节点' },
+  { id: 'parsing',   label: 'Parsing',   detail: 'Extracting lines and geometry' },
+  { id: 'analyzing', label: 'Analyzing', detail: 'AI semantic analysis' },
+  { id: 'merging',   label: 'Merging',   detail: 'Combining geometry and semantics' },
+  { id: 'building',  label: 'Building',  detail: 'Writing Pascal nodes' },
 ]
 
 const STAGE_INDEX: Record<ImportStage, number> = {

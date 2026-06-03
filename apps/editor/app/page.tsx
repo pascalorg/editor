@@ -74,7 +74,7 @@ export default function Home() {
               type="button"
             >
               Import DXF
-            </button>
+</button>
           </div>
         </div>
       )}

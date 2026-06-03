@@ -110,11 +110,11 @@ describe('validateDxf — gear drawing (should reject)', () => {
   test('reports BBox diagonal check with the actual measurement', () => {
     const { entities, bbox } = gearDrawing()
     const { rejectReasons } = validateDxf(entities, bbox)
-    const bboxReason = rejectReasons.find(r => r.includes('BBox 对角线'))
+    const bboxReason = rejectReasons.find(r => r.includes('BBox diagonal'))
     expect(bboxReason).toBeDefined()
-    // Must contain the measured diagonal (≈ 0.058m)
-    expect(bboxReason).toMatch(/0\.0\d+m/)
-    expect(bboxReason).toMatch(/3m/)
+    // Must contain the measured diagonal (≈ 0.058 m)
+    expect(bboxReason).toMatch(/0\.0\d+ m/)
+    expect(bboxReason).toMatch(/3 m/)
   })
 
   test('reports mechanical entity dominance with percentages', () => {
@@ -165,7 +165,7 @@ describe('validateDxf — normal residential floor plan (should pass)', () => {
     const { warnings } = validateDxf(entities, bbox)
     // The only possible warning is "low parallel ratio" — wall-layer plan should be clean
     const unexpected = warnings.filter(
-      w => w.includes('图层') && w.includes('识别准确率'),
+      w => w.includes('wall layers') && w.includes('recognition'),
     )
     expect(unexpected).toHaveLength(0)
   })
@@ -181,7 +181,7 @@ describe('validateDxf — no layer names (should warn)', () => {
   test('emits wall-layer warning', () => {
     const { entities, bbox } = residentialFloorPlan('')
     const { warnings } = validateDxf(entities, bbox)
-    const layerWarning = warnings.find(w => w.includes('墙体图层'))
+    const layerWarning = warnings.find(w => w.includes('wall layers found'))
     expect(layerWarning).toBeDefined()
     expect(layerWarning).toContain('WALL')
   })
@@ -204,7 +204,7 @@ describe('validateDxf — file size checks', () => {
     expect(passed).toBe(false)
     const sizeReason = rejectReasons.find(r => r.includes('MB'))
     expect(sizeReason).toBeDefined()
-    expect(sizeReason).toContain('10MB')
+    expect(sizeReason).toContain('10 MB')
   })
 
   test('warns for files between 1 MB and 10 MB', () => {
@@ -213,13 +213,13 @@ describe('validateDxf — file size checks', () => {
       fileSizeBytes: 2 * 1024 * 1024,
     })
     expect(passed).toBe(true)
-    expect(warnings.some(w => w.includes('MB') && w.includes('导入时间'))).toBe(true)
+    expect(warnings.some(w => w.includes('MB') && w.includes('longer'))).toBe(true)
   })
 
   test('no size warning for files under 1 MB', () => {
     const { entities, bbox } = residentialFloorPlan()
     const { warnings } = validateDxf(entities, bbox, { fileSizeBytes: 500 * 1024 })
-    expect(warnings.some(w => w.includes('导入时间'))).toBe(false)
+    expect(warnings.some(w => w.includes('longer'))).toBe(false)
   })
 })
 
@@ -236,7 +236,7 @@ describe('validateDxf — edge cases', () => {
     // Site-plan scale in mm: 600,000 × 400,000 mm = 600m × 400m → diagonal ≈ 721m > 500m
     const wideBbox: BBox = { minX: 0, minY: 0, maxX: 600_000, maxY: 400_000 }
     const { rejectReasons } = validateDxf(entities, wideBbox)
-    expect(rejectReasons.some(r => r.includes('500m'))).toBe(true)
+    expect(rejectReasons.some(r => r.includes('500 m'))).toBe(true)
   })
 
   test('unitScale converts mm coordinates to metres', () => {

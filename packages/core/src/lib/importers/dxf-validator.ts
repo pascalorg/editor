@@ -250,7 +250,7 @@ export function validateDxf(
   // ── Hard reject 1: file too large ──────────────────────────────────────────
   if (fileSizeBytes !== undefined && fileSizeBytes > 10 * 1024 * 1024) {
     const mb = (fileSizeBytes / 1024 / 1024).toFixed(1)
-    rejectReasons.push(`文件大小 ${mb}MB，超过最大限制 10MB`)
+    rejectReasons.push(`File size ${mb} MB exceeds the 10 MB limit`)
   }
 
   // ── Hard reject 2: scale out of range ─────────────────────────────────────
@@ -259,11 +259,11 @@ export function validateDxf(
   const diagonal = Math.sqrt(dx * dx + dy * dy)
   if (diagonal < 3) {
     rejectReasons.push(
-      `BBox 对角线 ${diagonal.toFixed(3)}m，小于最小建筑尺度 3m（疑似机械零件图）`,
+      `BBox diagonal ${diagonal.toFixed(3)} m is smaller than the minimum architectural scale of 3 m (possible mechanical drawing)`,
     )
   } else if (diagonal > 500) {
     rejectReasons.push(
-      `BBox 对角线 ${diagonal.toFixed(1)}m，超过最大建筑尺度 500m（疑似场地图或坐标系错误）`,
+      `BBox diagonal ${diagonal.toFixed(1)} m exceeds the maximum architectural scale of 500 m (possible site plan or coordinate error)`,
     )
   }
 
@@ -286,7 +286,7 @@ export function validateDxf(
   // ── Hard reject 3: too few line entities ───────────────────────────────────
   if (segs.length < 6) {
     rejectReasons.push(
-      `LINE + LWPOLYLINE 仅提取到 ${segs.length} 条有效线段（${lineCount} 个实体），低于最小值 6（疑似纯注释文件或空文件）`,
+      `LINE + LWPOLYLINE produced only ${segs.length} segments (${lineCount} entities) — below the minimum of 6 (possible annotation-only or empty file)`,
     )
   }
 
@@ -296,7 +296,7 @@ export function validateDxf(
     if (mechRatio > 0.6) {
       const pct = Math.round(mechRatio * 100)
       rejectReasons.push(
-        `CIRCLE + SPLINE 实体占比 ${pct}%（${circleCount + splineCount}/${total}），超过 60% 阈值（疑似机械图纸）`,
+        `CIRCLE + SPLINE entities account for ${pct}% (${circleCount + splineCount}/${total}), exceeding the 60% threshold (possible mechanical drawing)`,
       )
     }
   }
@@ -304,14 +304,14 @@ export function validateDxf(
   // ── Hard reject 5: no parallel line pairs ─────────────────────────────────
   if (segs.length >= 2 && pairCount === 0) {
     rejectReasons.push(
-      `在 ${segs.length} 条线段中未发现平行线对（墙体间距 ${thicknessMin * 1000}–${thicknessMax * 1000}mm），缺少墙体特征`,
+      `No parallel line pairs found in ${segs.length} segments (wall spacing ${thicknessMin * 1000}–${thicknessMax * 1000} mm) — no wall features detected`,
     )
   }
 
   // ── Hard reject 6: no closable region ────────────────────────────────────
   if (segs.length > 0 && !hasClosableRegion(segs)) {
     rejectReasons.push(
-      `${segs.length} 条线段中无法形成封闭多边形（线段孤立，无连通区域）`,
+      `${segs.length} segments cannot form a closed polygon (isolated segments, no connected region)`,
     )
   }
 
@@ -322,7 +322,7 @@ export function validateDxf(
     return layer.length > 0 && WALL_KEYWORDS.some(kw => layer.includes(kw.toUpperCase()))
   })
   if (!hasWallLayer) {
-    warnings.push('未找到墙体图层（如 WALL、墙），识别准确率可能降低')
+    warnings.push('No wall layers found (e.g. WALL) — recognition accuracy may be reduced')
   }
 
   // ── Soft warning 2: low parallel pair ratio ───────────────────────────────
@@ -337,7 +337,7 @@ export function validateDxf(
         return NON_WALL_ARCH.some(kw => u.includes(kw))
       })
       if (!hasNonWallArch) {
-        warnings.push(`仅识别到 ${wallLinePct}% 的线段为墙体，建议检查图层命名`)
+        warnings.push(`Only ${wallLinePct}% of segments recognised as walls — check layer names`)
       }
     }
   }
@@ -345,18 +345,18 @@ export function validateDxf(
   // ── Soft warning 3: many arcs ─────────────────────────────────────────────
   if (total > 0 && arcCount / total > 0.2) {
     const pct = Math.round((arcCount / total) * 100)
-    warnings.push(`检测到弧形元素（ARC 占 ${pct}%），弧墙导入需要额外处理`)
+    warnings.push(`Curved elements detected (ARC ${pct}%) — curved walls may require extra processing`)
   }
 
   // ── Soft warning 4: no dimension entities ────────────────────────────────
   if (dimCount === 0) {
-    warnings.push('未找到尺寸标注，请确认图纸单位（mm 或 m）')
+    warnings.push('No dimension entities found — confirm drawing units (mm or m)')
   }
 
   // ── Soft warning 5: file > 1 MB ───────────────────────────────────────────
   if (fileSizeBytes !== undefined && fileSizeBytes > 1024 * 1024) {
     const mb = (fileSizeBytes / 1024 / 1024).toFixed(1)
-    warnings.push(`图纸较复杂（${mb}MB），导入时间可能较长`)
+    warnings.push(`Large file (${mb} MB) — import may take longer`)
   }
 
   // ── Result ────────────────────────────────────────────────────────────────

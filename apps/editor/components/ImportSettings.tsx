@@ -43,10 +43,10 @@ export function isModified(s: ImportSettingsValue): boolean {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const UNIT_OPTIONS: { value: UnitScaleOption; label: string; detail: string }[] = [
-  { value: 'auto', label: '自动检测', detail: '从文件头或图纸尺寸推断' },
-  { value: 'mm',   label: '毫米 (mm)', detail: '1 单位 = 1 mm' },
-  { value: 'cm',   label: '厘米 (cm)', detail: '1 单位 = 1 cm' },
-  { value: 'm',    label: '米 (m)',    detail: '1 单位 = 1 m' },
+  { value: 'auto', label: 'Auto-detect', detail: 'Infer from file header or drawing size' },
+  { value: 'mm',   label: 'Millimetres (mm)', detail: '1 unit = 1 mm' },
+  { value: 'cm',   label: 'Centimetres (cm)', detail: '1 unit = 1 cm' },
+  { value: 'm',    label: 'Metres (m)',        detail: '1 unit = 1 m' },
 ]
 
 export interface ImportSettingsProps {
@@ -94,11 +94,11 @@ export function ImportSettings({ value, onChange, defaultOpen = false, className
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
-          高级设置
+          Advanced settings
         </span>
         {modified && (
           <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-medium text-blue-400 text-[10px]">
-            已修改
+            Modified
           </span>
         )}
       </button>
@@ -109,11 +109,11 @@ export function ImportSettings({ value, onChange, defaultOpen = false, className
           {/* Wall thickness range */}
           <fieldset>
             <legend className="mb-2 font-medium text-muted-foreground text-xs">
-              墙体厚度范围（mm）
+              Wall thickness range (mm)
             </legend>
             <div className="flex items-center gap-3">
               <label className="flex flex-1 flex-col gap-1">
-                <span className="text-muted-foreground/70 text-[10px]">最小</span>
+                <span className="text-muted-foreground/70 text-[10px]">Min</span>
                 <input
                   className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                   max={value.wallThicknessMaxMm - 10}
@@ -126,7 +126,7 @@ export function ImportSettings({ value, onChange, defaultOpen = false, className
               </label>
               <span className="mt-4 text-muted-foreground/50 text-xs">—</span>
               <label className="flex flex-1 flex-col gap-1">
-                <span className="text-muted-foreground/70 text-[10px]">最大</span>
+                <span className="text-muted-foreground/70 text-[10px]">Max</span>
                 <input
                   className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                   max={800}
@@ -139,14 +139,14 @@ export function ImportSettings({ value, onChange, defaultOpen = false, className
               </label>
             </div>
             <p className="mt-1.5 text-muted-foreground/50 text-[10px]">
-              典型值：外墙 200–400 mm，内墙 80–200 mm
+              Typical: exterior walls 200–400 mm, interior 80–200 mm
             </p>
           </fieldset>
 
           {/* Unit scale */}
           <div>
             <label className="mb-2 block font-medium text-muted-foreground text-xs">
-              图纸单位
+              Drawing units
             </label>
             <div className="grid grid-cols-2 gap-1.5">
               {UNIT_OPTIONS.map(opt => (
@@ -176,7 +176,7 @@ export function ImportSettings({ value, onChange, defaultOpen = false, className
               type="button"
             >
               <RotateCcw className="h-3 w-3" />
-              恢复默认值
+              Reset to defaults
             </button>
           )}
         </div>
