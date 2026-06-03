@@ -80,6 +80,7 @@ function makeMergeResult(overrides: Partial<MergeResult> = {}): MergeResult {
         approxAreaM2: 60,
       },
     ],
+    furniture: [],
     warnings: ['来自合并的警告'],
     ...overrides,
   }

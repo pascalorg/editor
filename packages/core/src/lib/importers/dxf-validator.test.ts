@@ -247,8 +247,8 @@ describe('validateDxf — edge cases', () => {
         const l = e as DxfLineEntity
         return {
           ...l,
-          start: { x: l.start.x * 1000, y: l.start.y * 1000 },
-          end: { x: l.end.x * 1000, y: l.end.y * 1000 },
+          start: { x: l.start!.x * 1000, y: l.start!.y * 1000 },
+          end: { x: l.end!.x * 1000, y: l.end!.y * 1000 },
         }
       }
       if (e.type === 'LWPOLYLINE') {
