@@ -7,7 +7,9 @@ import { cn } from '../../../../../lib/utils'
 import type { CatalogCategory } from '../../../../../store/use-editor'
 import useEditor from '../../../../../store/use-editor'
 import { furnishTools } from '../../../action-menu/furnish-tools'
-import { CATALOG_ITEMS } from '../../../item-catalog/catalog-items'
+import { getAllCatalogItems } from '../../../item-catalog/catalog-items'
+import { useCustomCatalog } from '../../../item-catalog/custom-catalog-store'
+import { useDevCatalogOverlay } from '../../../item-catalog/dev-catalog-overlay-store'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
@@ -40,6 +42,13 @@ export function ItemsPanel({
   const setMode = useEditor((s) => s.setMode)
   const setTool = useEditor((s) => s.setTool)
   const setCatalogCategory = useEditor((s) => s.setCatalogCategory)
+  const customCatalogRevision = useCustomCatalog((s) => s.customItems)
+  const devOverlayRevision = useDevCatalogOverlay((s) => s.revision)
+  const reloadDevCatalogOverlay = useDevCatalogOverlay((s) => s.reloadFromServer)
+
+  useEffect(() => {
+    void reloadDevCatalogOverlay()
+  }, [reloadDevCatalogOverlay])
 
   const [activePlacementTag, setActivePlacementTag] = useState<string | null>(null)
   const [activeFunctionalTag, setActiveFunctionalTag] = useState<string | null>(null)
@@ -72,7 +81,9 @@ export function ItemsPanel({
   }
 
   // Compute tags for the current category (for filter chips)
-  const baseItems = items ?? CATALOG_ITEMS
+  const baseItems = items ?? getAllCatalogItems()
+  void customCatalogRevision
+  void devOverlayRevision
   // Apply the Library/Community/Mine filter before any category/tag work.
   // Items that don't carry a source field (e.g. seeded built-in catalog
   // entries from `CATALOG_ITEMS`) fall under "library".

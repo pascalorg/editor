@@ -1,9 +1,8 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
-import { resolveCdnUrl } from '@pascal-app/viewer'
-import Image from 'next/image'
-import { useEffect } from 'react'
+import { resolveAssetUrl, resolveCdnUrl } from '@pascal-app/viewer'
+import { useEffect, useState } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -11,7 +10,37 @@ import {
 } from './../../../components/ui/primitives/tooltip'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
-import { CATALOG_ITEMS } from './catalog-items'
+import { getAllCatalogItems } from './catalog-items'
+import { useCustomCatalog } from './custom-catalog-store'
+import { useDevCatalogOverlay } from './dev-catalog-overlay-store'
+
+function CatalogThumbnail({ alt, url }: { alt: string; url: string }) {
+  const [resolved, setResolved] = useState<string | null>(() =>
+    url.startsWith('asset://') ? null : resolveCdnUrl(url),
+  )
+
+  useEffect(() => {
+    if (!url.startsWith('asset://')) {
+      setResolved(resolveCdnUrl(url))
+      return
+    }
+    let cancelled = false
+    void resolveAssetUrl(url).then((next) => {
+      if (!cancelled) setResolved(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [url])
+
+  if (!resolved) {
+    return <div className="h-full w-full bg-muted" />
+  }
+
+  return (
+    <img alt={alt} className="h-full w-full object-cover" loading="eager" src={resolved} />
+  )
+}
 
 export function ItemCatalog({
   category,
@@ -39,8 +68,12 @@ export function ItemCatalog({
   const setSelectedItem = useEditor((state) => state.setSelectedItem)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
+  const customCatalogRevision = useCustomCatalog((state) => state.customItems)
+  const devOverlayRevision = useDevCatalogOverlay((state) => state.revision)
 
-  const sourceItems = itemsOverride ?? CATALOG_ITEMS
+  const sourceItems = itemsOverride ?? getAllCatalogItems()
+  void customCatalogRevision
+  void devOverlayRevision
   // Server-provided results bypass all local filtering; otherwise filter by category/search/tags
   const filteredItems =
     overrideItems ??
@@ -92,7 +125,7 @@ export function ItemCatalog({
               'group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent',
               isSelected && 'bg-sidebar-accent ring-2 ring-primary-foreground',
             )}
-            key={index}
+            key={item.id}
             onClick={() => {
               setSelectedItem(item)
               setTool('item')
@@ -101,12 +134,7 @@ export function ItemCatalog({
             type="button"
           >
             <div className="relative aspect-square w-full overflow-hidden rounded-lg">
-              <img
-                alt={item.name}
-                className="h-full w-full object-cover"
-                loading="eager"
-                src={resolveCdnUrl(item.thumbnail) || ''}
-              />
+              <CatalogThumbnail alt={item.name} url={item.thumbnail} />
               {attachmentIcon && (
                 <div className="absolute right-1 bottom-1 flex h-4 w-4 items-center justify-center rounded bg-black/60">
                   <img

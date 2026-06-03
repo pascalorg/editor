@@ -147,7 +147,7 @@ type EditorState = {
   catalogCategory: CatalogCategory | null
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
-  setSelectedItem: (item: AssetInput) => void
+  setSelectedItem: (item: AssetInput | null) => void
   movingNode:
     | ItemNode
     | WindowNode

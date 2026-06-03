@@ -1,4 +1,6 @@
 import type { AssetInput } from '@pascal-app/core'
+import { getCustomCatalogItems } from './custom-catalog-store'
+import { getDevCatalogOverlayItems } from './dev-catalog-overlay-runtime'
 
 export const CATALOG_ITEMS: AssetInput[] = [
   {
@@ -2901,9 +2903,26 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
   },
+
 ]
+
+/** Built-in catalog plus user-added items (persisted in IndexedDB). */
+export function getAllCatalogItems(): AssetInput[] {
+  const byId = new Map<string, AssetInput>()
+  for (const item of getCustomCatalogItems()) {
+    byId.set(item.id, item)
+  }
+  for (const item of CATALOG_ITEMS) {
+    byId.set(item.id, item)
+  }
+  // Dev overlay (JSON synced on API write) wins — fixes stale HMR bundle for new entries.
+  for (const item of getDevCatalogOverlayItems()) {
+    byId.set(item.id, item)
+  }
+  return Array.from(byId.values())
+}
 
 export function getDefaultCatalogItem(category: string | null | undefined): AssetInput | null {
   if (!category) return null
-  return CATALOG_ITEMS.find((item) => item.category === category) ?? null
+  return getAllCatalogItems().find((item) => item.category === category) ?? null
 }

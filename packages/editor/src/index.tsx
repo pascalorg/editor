@@ -195,3 +195,4 @@ export {
 } from './store/use-palette-view-registry'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
+export { AddCatalogPanel } from './components/ui/sidebar/panels/add-catalog-panel'

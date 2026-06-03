@@ -1,0 +1,210 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 270168091554485,
+      "steps": 20,
+      "cfg": 8,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [
+        "70",
+        0
+      ],
+      "positive": [
+        "80",
+        0
+      ],
+      "negative": [
+        "80",
+        1
+      ],
+      "latent_image": [
+        "66",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Kサンプラー"
+    }
+  },
+  "51": {
+    "inputs": {
+      "crop": "none",
+      "clip_vision": [
+        "54",
+        1
+      ],
+      "image": [
+        "99",
+        0
+      ]
+    },
+    "class_type": "CLIPVisionEncode",
+    "_meta": {
+      "title": "CLIPビジョンエンコード"
+    }
+  },
+  "54": {
+    "inputs": {
+      "ckpt_name": "hunyuan_3d_v2.1.safetensors"
+    },
+    "class_type": "ImageOnlyCheckpointLoader",
+    "_meta": {
+      "title": "画像のみのチェックポイントローダー（img2vidモデル）"
+    }
+  },
+  "56": {
+    "inputs": {
+      "image": "1780017127211.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "画像を読み込む"
+    }
+  },
+  "61": {
+    "inputs": {
+      "num_chunks": 4000,
+      "octree_resolution": 128,
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "54",
+        2
+      ]
+    },
+    "class_type": "VAEDecodeHunyuan3D",
+    "_meta": {
+      "title": "VAEDecodeHunyuan3D"
+    }
+  },
+  "62": {
+    "inputs": {
+      "threshold": 0.6000000000000001,
+      "voxel": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "VoxelToMeshBasic",
+    "_meta": {
+      "title": "VoxelToMeshBasic"
+    }
+  },
+  "66": {
+    "inputs": {
+      "resolution": 1536,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentHunyuan3Dv2",
+    "_meta": {
+      "title": "EmptyLatentHunyuan3Dv2"
+    }
+  },
+  "70": {
+    "inputs": {
+      "shift": 1.0000000000000002,
+      "model": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "モデルサンプリングオーラフロー"
+    }
+  },
+  "80": {
+    "inputs": {
+      "clip_vision_output": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "Hunyuan3Dv2Conditioning",
+    "_meta": {
+      "title": "Hunyuan3Dv2Conditioning"
+    }
+  },
+  "81": {
+    "inputs": {
+      "algorithm": "surface net",
+      "threshold": 0.6,
+      "voxel": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "VoxelToMesh",
+    "_meta": {
+      "title": "VoxelToMesh"
+    }
+  },
+  "82": {
+    "inputs": {
+      "filename_prefix": "mesh/ComfyUI_lowpoly_500-5k_under1MB",
+      "image": "",
+      "mesh": [
+        "81",
+        0
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "SaveGLB"
+    }
+  },
+  "93": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "99",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "画像を保存"
+    }
+  },
+  "99": {
+    "inputs": {
+      "rem_mode": "Inspyrenet",
+      "image_output": "Preview",
+      "save_prefix": "ComfyUI",
+      "torchscript_jit": false,
+      "add_background": "white",
+      "refine_foreground": false,
+      "images": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "easy imageRemBg",
+    "_meta": {
+      "title": "Image Remove Bg"
+    }
+  },
+  "100": {
+    "inputs": {
+      "seed": 87955604
+    },
+    "class_type": "TencentModelTo3DUVNode",
+    "_meta": {
+      "title": "Hunyuan3D: モデルからUVへ"
+    }
+  },
+  "102": {
+    "inputs": {
+      "seed": 1939050466
+    },
+    "class_type": "TencentModelTo3DUVNode",
+    "_meta": {
+      "title": "Hunyuan3D: モデルからUVへ"
+    }
+  }
+}

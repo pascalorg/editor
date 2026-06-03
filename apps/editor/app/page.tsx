@@ -1,7 +1,7 @@
 'use client'
 
-import { Editor, ItemsPanel } from '@pascal-app/editor'
-import { Layers, Package, Settings } from 'lucide-react'
+import { AddCatalogPanel, Editor, ItemsPanel } from '@pascal-app/editor'
+import { Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import {
   CommunityViewerToolbarLeft,
@@ -22,6 +22,13 @@ const SIDEBAR_TABS = [
     component: ItemsPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Package className="h-5 w-5" />,
+  },
+  {
+    id: 'add-catalog',
+    label: '追加',
+    component: AddCatalogPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Plus className="h-5 w-5" />,
   },
   {
     id: 'settings',
@@ -49,6 +56,12 @@ export default function Home() {
             </span>
             <Link className="font-medium text-foreground hover:underline" href="/scenes">
               Create new
+            </Link>
+            <span aria-hidden className="text-muted-foreground">
+              ·
+            </span>
+            <Link className="font-medium text-foreground hover:underline" href="/pic-to-3d">
+              画像から3D
             </Link>
           </div>
         </div>
