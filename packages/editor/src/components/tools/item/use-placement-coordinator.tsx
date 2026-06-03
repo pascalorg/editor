@@ -1147,6 +1147,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onShelfMove = (event: ShelfEvent) => {
       has3DPointerDrivenMoveRef.current = true
+      // A shelf event can fire before the cursor group mounts or after
+      // teardown, leaving the ref null; bail before dereferencing it below.
+      if (!cursorGroupRef.current) return
       const ctx = getContext()
       if (ctx.state.surface !== 'shelf-surface') {
         // Cursor entered via a move event without an enter — try
