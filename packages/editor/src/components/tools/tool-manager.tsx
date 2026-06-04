@@ -136,7 +136,16 @@ export const ToolManager: React.FC = () => {
     nodeId: AnyNodeId,
     elevatorBuildingId: BuildingNode['id'],
   ) => {
-    setSelection({ buildingId: elevatorBuildingId, selectedIds: [nodeId] })
+    // Preserve the active level. `setSelection`'s hierarchy guard nulls
+    // `levelId` whenever `buildingId` is passed without an explicit
+    // `levelId` — which deselected the current floor plan the moment an
+    // elevator was placed. Pass the current level through so the floor
+    // plan stays selected.
+    setSelection({
+      buildingId: elevatorBuildingId,
+      levelId: activeLevelId ?? null,
+      selectedIds: [nodeId],
+    })
   }
 
   return (

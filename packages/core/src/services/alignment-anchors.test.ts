@@ -151,6 +151,25 @@ describe('wallSegmentAnchors', () => {
       { nodeId: 'w', kind: 'center', x: 2, z: 1 },
     ])
   })
+
+  test('adds ±thickness/2 face corners on each endpoint when thickness is given', () => {
+    // Horizontal wall along +X: perpendicular is ±Z, so faces sit at z = ±0.1.
+    const anchors = wallSegmentAnchors('w', [0, 0], [4, 0], 0.2)
+    expect(anchors).toEqual([
+      { nodeId: 'w', kind: 'corner', x: 0, z: 0 },
+      { nodeId: 'w', kind: 'corner', x: 4, z: 0 },
+      { nodeId: 'w', kind: 'center', x: 2, z: 0 },
+      { nodeId: 'w', kind: 'corner', x: 0, z: 0.1 },
+      { nodeId: 'w', kind: 'corner', x: 0, z: -0.1 },
+      { nodeId: 'w', kind: 'corner', x: 4, z: 0.1 },
+      { nodeId: 'w', kind: 'corner', x: 4, z: -0.1 },
+    ])
+  })
+
+  test('skips face corners for zero/degenerate input', () => {
+    expect(wallSegmentAnchors('w', [0, 0], [4, 0], 0)).toHaveLength(3)
+    expect(wallSegmentAnchors('w', [1, 1], [1, 1], 0.2)).toHaveLength(3)
+  })
 })
 
 describe('polygonAnchors', () => {
@@ -192,7 +211,7 @@ describe('collectAlignmentAnchors', () => {
     const ids = anchors.map((a) => a.nodeId)
     expect(ids).not.toContain('moving')
     expect(ids.filter((id) => id === 'box')).toHaveLength(4) // corner anchors
-    expect(ids.filter((id) => id === 'wall')).toHaveLength(3) // endpoints + midpoint
+    expect(ids.filter((id) => id === 'wall')).toHaveLength(7) // endpoints + midpoint + 4 face corners
     expect(ids.filter((id) => id === 'slab')).toHaveLength(3) // polygon vertices
   })
 })

@@ -183,7 +183,12 @@ export {
 // their own polygon in isolation — the stair (parent) owns the
 // computation and emits the whole stack as one registry entry.
 export {
+  alignFloorplanDraftPoint,
+  applyFloorplanAlignment,
   buildFloorplanStairEntry,
+  FLOORPLAN_ALIGNMENT_THRESHOLD_M,
+  FLOORPLAN_DRAFT_ALIGN_ID,
+  type FloorplanAlignmentResult,
   type FloorplanStairArrowEntry,
   type FloorplanStairEntry,
   type FloorplanStairSegmentEntry,

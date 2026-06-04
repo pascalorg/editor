@@ -11,6 +11,7 @@ import {
   resolveAlignment,
   snapPointToGrid,
   useAlignmentGuides,
+  usePlacementPreview,
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
@@ -93,6 +94,12 @@ const ColumnTool = () => {
 
       cursorRef.current?.position.set(ax, event.localPosition[1], az)
 
+      // Publish a transient, positioned preview node for the 2D floor-plan
+      // ghost (the 3D `ColumnPreview` mesh is hidden in 2D). The floor-plan
+      // placement-preview layer renders this node's footprint at the snapped,
+      // aligned cursor so users see the pillar before they click.
+      usePlacementPreview.getState().set({ ...previewNode, position: [ax, 0, az] })
+
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== ax || prev[1] !== az) {
         triggerSFX('sfx:grid-snap')
@@ -122,9 +129,11 @@ const ColumnTool = () => {
       useViewer.getState().setSelection({ selectedIds: [column.id] })
       triggerSFX('sfx:structure-build')
       // The placed column is now a valid alignment target for the next one;
-      // refresh the candidate pool and drop the guide from this drop.
+      // refresh the candidate pool and drop the guide from this drop. The
+      // 2D ghost re-publishes on the next move.
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
+      usePlacementPreview.getState().clear()
     }
 
     emitter.on('grid:move', onGridMove)
@@ -134,6 +143,7 @@ const ColumnTool = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       useAlignmentGuides.getState().clear()
+      usePlacementPreview.getState().clear()
     }
   }, [activeLevelId, previewNode])
 

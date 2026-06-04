@@ -14,6 +14,7 @@
 
 import { nodeRegistry } from '../registry'
 import type { AnyNode } from '../schema/types'
+import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
 import { type AlignmentAnchor, bboxCornerAnchors } from './alignment'
 
 export type FootprintAABB = { minX: number; minZ: number; maxX: number; maxZ: number }
@@ -119,21 +120,52 @@ export function movingFootprintAnchors(
 }
 
 /**
- * Alignment anchors for a wall segment: both endpoints (as `corner`) and
- * the chord midpoint (as `center`). Curve offset is ignored — endpoints are
- * exact and the midpoint is good enough for v1 alignment. Coordinates are
- * the wall's `start` / `end` (building-local XZ meters).
+ * Alignment anchors for a wall segment: the two centerline endpoints + chord
+ * midpoint, plus — when `thickness` is known — four **face** corner anchors,
+ * each endpoint offset by ±thickness/2 perpendicular to the wall axis.
+ *
+ * The face anchors are what let a footprint align to a wall's *face* rather
+ * than its centerline: for an axis-aligned wall the two same-side face
+ * anchors share a constant X (vertical wall) or Z (horizontal wall) running
+ * the wall's full length, so the point-to-point resolver snaps a moving
+ * corner flush to the face anywhere along the wall (the perpendicular
+ * tie-break connects the guide to the nearer face endpoint). A diagonal wall
+ * gets only its face/centerline endpoints — point-to-point can't represent a
+ * sloped face line; that's an accepted v1 limitation.
+ *
+ * Curve offset is ignored — endpoints are exact and the chord midpoint is
+ * good enough for v1. Coordinates are the wall's `start` / `end`
+ * (building-local XZ meters).
  */
 export function wallSegmentAnchors(
   id: string,
   start: readonly [number, number],
   end: readonly [number, number],
+  thickness?: number,
 ): AlignmentAnchor[] {
-  return [
+  const anchors: AlignmentAnchor[] = [
     { nodeId: id, kind: 'corner', x: start[0], z: start[1] },
     { nodeId: id, kind: 'corner', x: end[0], z: end[1] },
     { nodeId: id, kind: 'center', x: (start[0] + end[0]) / 2, z: (start[1] + end[1]) / 2 },
   ]
+
+  if (thickness && thickness > 0) {
+    const dx = end[0] - start[0]
+    const dz = end[1] - start[1]
+    const len = Math.hypot(dx, dz)
+    if (len > 1e-6) {
+      // Perpendicular to the wall axis, scaled to half-thickness.
+      const half = thickness / 2
+      const px = (-dz / len) * half
+      const pz = (dx / len) * half
+      for (const [bx, bz] of [start, end] as const) {
+        anchors.push({ nodeId: id, kind: 'corner', x: bx + px, z: bz + pz })
+        anchors.push({ nodeId: id, kind: 'corner', x: bx - px, z: bz - pz })
+      }
+    }
+  }
+
+  return anchors
 }
 
 /** Each vertex of a polygon (slab / ceiling footprint) as a `corner` anchor. */
@@ -152,8 +184,15 @@ export function polygonAnchors(
  */
 export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
   if (node.type === 'wall' || node.type === 'fence') {
-    const seg = node as { id: string; start: [number, number]; end: [number, number] }
-    return wallSegmentAnchors(seg.id, seg.start, seg.end)
+    const seg = node as {
+      id: string
+      start: [number, number]
+      end: [number, number]
+      thickness?: number
+    }
+    // Wall thickness is schema-optional (falls back to the geometry default);
+    // fence always carries one. Either way, pass it through so faces align.
+    return wallSegmentAnchors(seg.id, seg.start, seg.end, seg.thickness ?? DEFAULT_WALL_THICKNESS)
   }
   if (node.type === 'slab' || node.type === 'ceiling') {
     const poly = (node as { polygon?: [number, number][] }).polygon

@@ -2,14 +2,16 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   getScaledDimensions,
   type ItemNode,
+  movingFootprintAnchors,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { applyFloorplanAlignment, snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 
 /**
  * 2D floor-plan move handler for item. Branches on `asset.attachTo`:
@@ -34,7 +36,7 @@ import { findClosestWallInPlan } from '../shared/wall-attach-target'
 
 const GRID_STEP = 0.5
 
-export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node }) => {
+export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node, nodes }) => {
   const attachTo = node.asset.attachTo
   const startLevelId: AnyNodeId | null = (() => {
     // Walk to the owning level depending on the item's current parent:
@@ -64,7 +66,7 @@ export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node })
   if (attachTo === 'ceiling') {
     return buildSurfaceItemSession(node, startLevelId, 'ceiling')
   }
-  return buildFloorItemSession(node, startLevelId)
+  return buildFloorItemSession(node, startLevelId, nodes)
 }
 
 function buildWallItemSession(
@@ -83,11 +85,24 @@ function buildWallItemSession(
       const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
       if (!hit) return
 
-      const snappedLocalX = modifiers.shiftKey
-        ? hit.localX
-        : Math.round(hit.localX / GRID_STEP) * GRID_STEP
-
       const [width] = getScaledDimensions(node)
+
+      // Figma-style along-wall alignment (edge-to-edge with other openings /
+      // wall items / wall ends), winning over the 0.5m grid snap; falls back
+      // to grid when nothing aligns. Alt bypasses; Shift drops the grid snap.
+      const neighborX = modifiers.altKey
+        ? null
+        : snapLocalXToNeighbors({
+            wall: hit.wall,
+            localX: hit.localX,
+            width,
+            selfId: node.id as AnyNodeId,
+            nodes,
+          })
+      const snappedLocalX =
+        neighborX ??
+        (modifiers.shiftKey ? hit.localX : Math.round(hit.localX / GRID_STEP) * GRID_STEP)
+
       const halfW = width / 2
       const clampedX = Math.max(halfW, Math.min(hit.wallLength - halfW, snappedLocalX))
 
@@ -125,13 +140,29 @@ function buildWallItemSession(
 function buildFloorItemSession(
   node: ItemNode,
   startLevelId: AnyNodeId | null,
+  nodes: Record<AnyNodeId, AnyNode>,
 ): FloorplanMoveTargetSession {
+  const rotationY = node.rotation[1] ?? 0
+  // Alignment candidates gathered once — scene is stable during the drag.
+  const candidates = collectAlignmentAnchors(nodes, node.id)
   return {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
-      const snapped: WallPlanPoint = modifiers.shiftKey
+      const gridSnapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
         : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+      // Figma-style alignment layered on the grid snap (Alt bypasses).
+      const { point: snapped } = applyFloorplanAlignment(
+        gridSnapped,
+        movingFootprintAnchors(
+          node as unknown as AnyNode,
+          gridSnapped[0],
+          gridSnapped[1],
+          rotationY,
+        ),
+        candidates,
+        { bypass: modifiers.altKey },
+      )
 
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
