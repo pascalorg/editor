@@ -173,7 +173,7 @@ export const RoofTool: React.FC = () => {
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each roof commits. Both corners of the rectangle align.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
     // Snap the drafted corner onto another object's nearest real anchor and
     // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
     // point: resolving against the grid point would only ever catch anchors
@@ -291,7 +291,7 @@ export const RoofTool: React.FC = () => {
 
         corner1Ref.current = null
         outlineRef.current.visible = false
-        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
         useAlignmentGuides.getState().clear()
       } else {
         corner1Ref.current = [gridX, y, gridZ]

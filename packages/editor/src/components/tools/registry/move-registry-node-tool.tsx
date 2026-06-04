@@ -238,11 +238,17 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     // Static alignment candidates — anchors of every OTHER alignable object
-    // (items, walls, fences, slabs, ceilings, columns), gathered once at drag
-    // start (the scene graph is stable during an imperative move). Coords are
-    // building-local, the same frame as `event.localPosition` and the
-    // rendered cursor, so the guide dots line up with the cursor.
-    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, node.id)
+    // (items, walls, fences, slabs, ceilings, columns) ON THE SAME LEVEL,
+    // gathered once at drag start (the scene graph is stable during an
+    // imperative move). Level-scoped so a node directly below on another
+    // floor doesn't snap (alignment is XZ-only). Coords are building-local,
+    // the same frame as `event.localPosition` and the rendered cursor, so
+    // the guide dots line up with the cursor.
+    const alignmentCandidates = collectAlignmentAnchors(
+      useScene.getState().nodes,
+      node.id,
+      useViewer.getState().selection.levelId ?? node.parentId,
+    )
 
     const onGridMove = (event: GridEvent) => {
       let x = snapToGridStep(event.localPosition[0])

@@ -157,7 +157,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each placement. The elevator aligns by its ORIGIN point.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', levelId)
     // Snap the elevator origin onto another object's nearest real anchor and
     // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
     // point: resolving against the grid point would only ever catch anchors
@@ -252,7 +252,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         rotationRef.current,
         onPlaced,
       )
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', levelId)
       useAlignmentGuides.getState().clear()
       // The placed elevator's footprint now renders for real; drop the ghost
       // (the next grid:move re-publishes it for the following placement).

@@ -13,7 +13,14 @@
  */
 
 import { nodeRegistry } from '../registry'
+import type { ElevatorNode, StairNode } from '../schema'
 import type { AnyNode } from '../schema/types'
+import {
+  getElevatorShaftDepth,
+  getElevatorShaftWallThickness,
+  getElevatorShaftWidth,
+} from '../systems/elevator/elevator-geometry'
+import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
 import { type AlignmentAnchor, bboxCornerAnchors } from './alignment'
 
@@ -71,11 +78,23 @@ function floorFootprint(
     return floorPlaced.footprint(node)
   }
   // Elevator isn't a `floorPlaced` kind (no slab-elevation coupling) but it
-  // does rest on the floor with a `width × depth` cab — give it a footprint
-  // so it aligns like other boxes (the registry move tool reads this).
+  // does rest on the floor — give it a footprint so it aligns like other
+  // boxes (the registry move tool reads this). Use the OUTER SHAFT footprint
+  // (shaft + wall, what's drawn in plan and 3D), NOT the cab `width × depth`:
+  // the cab is inset by the shaft wall + clearance, so cab corners sit ~9 cm
+  // inside the visible edge — past the 8 cm snap threshold, which is why the
+  // elevator never surfaced a guide.
   if (node.type === 'elevator') {
-    const e = node as { width?: number; depth?: number; rotation?: number }
-    return { dimensions: [e.width ?? 1.6, 1, e.depth ?? 1.6], rotation: [0, e.rotation ?? 0, 0] }
+    const elevator = node as ElevatorNode
+    const wall = getElevatorShaftWallThickness(elevator)
+    return {
+      dimensions: [
+        getElevatorShaftWidth(elevator) + wall * 2,
+        1,
+        getElevatorShaftDepth(elevator) + wall * 2,
+      ],
+      rotation: [0, elevator.rotation ?? 0, 0],
+    }
   }
   return null
 }
@@ -179,10 +198,17 @@ export function polygonAnchors(
 /**
  * Alignment anchors a node contributes to the candidate pool, dispatched by
  * kind: floor-placed footprints → corner anchors; walls / fences → segment
- * endpoints + midpoint; slabs / ceilings → polygon vertices. Kinds without a
- * usable footprint contribute nothing.
+ * endpoints + midpoint; slabs / ceilings → polygon vertices; stairs → their
+ * (chain / sector) footprint corners. Kinds without a usable footprint
+ * contribute nothing.
+ *
+ * `nodes` is needed only to resolve a straight stair's `stair-segment`
+ * children; every other kind derives its anchors from `node` alone.
  */
-export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
+export function nodeAlignmentAnchors(
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): AlignmentAnchor[] {
   if (node.type === 'wall' || node.type === 'fence') {
     const seg = node as {
       id: string
@@ -198,8 +224,34 @@ export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
     const poly = (node as { polygon?: [number, number][] }).polygon
     return poly ? polygonAnchors(node.id, poly) : []
   }
+  // A stair has no box footprint (straight = a segment chain, curved / spiral
+  // = an annular sector), so it bypasses `floorFootprint` and reduces to its
+  // plan bounding box here. Without this, elevators / spiral / curved stairs
+  // never contributed a guide.
+  if (node.type === 'stair') {
+    const aabb = stairFootprintAABB(node as StairNode, nodes)
+    return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
+  }
   const aabb = footprintAABB(node)
   return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
+}
+
+/**
+ * Resolve the level a node belongs to by walking its `parentId` chain, or
+ * null when it isn't under a level. Inlined here (rather than importing the
+ * spatial-grid `resolveLevelId`) to keep this services module free of
+ * hook / store dependencies.
+ */
+function resolveNodeLevelId(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): string | null {
+  let current: AnyNode | undefined = node
+  while (current) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId] : undefined
+  }
+  return null
 }
 
 /**
@@ -207,15 +259,30 @@ export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
  * candidate pool every move / placement tool resolves against, so any
  * draggable object can align to any other (items, walls, fences, slabs,
  * ceilings, columns).
+ *
+ * When `levelId` is given, nodes that belong to a *different* level are
+ * dropped. Alignment is XZ-only, so without this a node directly below on
+ * another floor (e.g. the ground floor while you place on the first) would
+ * snap and draw a guide even though the two sit at different heights.
+ * Building-/site-scoped nodes with no level ancestor (e.g. an elevator
+ * shaft, which is parented to the building and spans every floor) resolve to
+ * null and stay in the pool so they align on any floor. The 2D floor-plan
+ * deliberately omits the filter — aligning a wall to the one directly below
+ * in plan is the whole point of the reference floor.
  */
 export function collectAlignmentAnchors(
   nodes: Readonly<Record<string, AnyNode>>,
   excludeId: string,
+  levelId?: string | null,
 ): AlignmentAnchor[] {
   const anchors: AlignmentAnchor[] = []
   for (const node of Object.values(nodes)) {
     if (!node || node.id === excludeId) continue
-    anchors.push(...nodeAlignmentAnchors(node))
+    if (levelId) {
+      const nodeLevelId = resolveNodeLevelId(node, nodes)
+      if (nodeLevelId !== null && nodeLevelId !== levelId) continue
+    }
+    anchors.push(...nodeAlignmentAnchors(node, nodes))
   }
   return anchors
 }

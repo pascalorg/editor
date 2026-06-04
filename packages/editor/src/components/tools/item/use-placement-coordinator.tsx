@@ -632,7 +632,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       let alignZ = 0
       const bypassAlign = event.nativeEvent?.altKey === true
       if (!bypassAlign && draft) {
-        alignmentCandidates ??= collectAlignmentAnchors(useScene.getState().nodes, draft.id)
+        alignmentCandidates ??= collectAlignmentAnchors(
+          useScene.getState().nodes,
+          draft.id,
+          useViewer.getState().selection.levelId,
+        )
         const ar = resolveAlignment({
           moving: movingFootprintAnchors(
             draft as unknown as AnyNode,

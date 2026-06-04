@@ -1,9 +1,11 @@
 'use client'
 
-import { type AlignmentGuide, useAlignmentGuides } from '@pascal-app/core'
+import { type AlignmentGuide, sceneRegistry, useAlignmentGuides } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { memo, useMemo } from 'react'
-import { BoxGeometry, CircleGeometry } from 'three'
+import { useFrame } from '@react-three/fiber'
+import { memo, useMemo, useRef } from 'react'
+import { BoxGeometry, CircleGeometry, type Group } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 
@@ -20,7 +22,9 @@ import { EDITOR_LAYER } from '../../lib/constants'
  *
  * Guide coordinates are XZ meters in the building-local frame; this layer is
  * mounted inside ToolManager's building-local group so they render at the
- * right world position (and line up with the cursor).
+ * right world position (and line up with the cursor). The whole ribbon is
+ * lifted to the active level's building-local Y each frame so it lies on the
+ * floor being edited — not the building base — when floors are stacked.
  */
 
 const LINE_COLOR = 0x81_8c_f8 // indigo-400 — matches the editor's selection accent (box-select / wall highlights)
@@ -48,13 +52,28 @@ type Vec3 = [number, number, number]
 
 export const Alignment3DGuideLayer = memo(function Alignment3DGuideLayer() {
   const guides = useAlignmentGuides((s) => s.guides)
+  const levelId = useViewer((s) => s.selection.levelId)
+  const groupRef = useRef<Group>(null)
+
+  // Guides carry only XZ (building-local plan coords); their Y has to track
+  // the active level so the ground ribbon lies on the floor being edited,
+  // not the building base. Read the level mesh's building-local Y each frame
+  // — the same source `grid.tsx` uses, so the ribbon stays locked to the
+  // grid plane (and lerps with it during a level switch).
+  useFrame(() => {
+    const group = groupRef.current
+    if (!group) return
+    const levelMesh = levelId ? sceneRegistry.nodes.get(levelId) : null
+    group.position.y = levelMesh ? levelMesh.position.y : 0
+  })
+
   if (guides.length === 0) return null
   return (
-    <>
+    <group ref={groupRef}>
       {guides.map((guide, i) => (
         <GuideLine guide={guide} key={i} />
       ))}
-    </>
+    </group>
   )
 })
 
