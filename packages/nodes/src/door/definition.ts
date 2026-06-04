@@ -5,6 +5,7 @@ import type {
   NodeDefinition,
   WallNode,
 } from '@pascal-app/core'
+import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
@@ -85,9 +86,12 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
     currentValue: (n) => n.height,
     apply: (initial, newHeight) => {
       const bottom = initial.position[1] - initial.height / 2
+      // Scale the handle so it tracks the door instead of staying glued to a
+      // fixed floor height (shared with the panel's Height slider).
       return {
         height: newHeight,
         position: [initial.position[0], bottom + newHeight / 2, initial.position[2]],
+        handleHeight: scaleHandleHeight(initial.handleHeight, initial.height, newHeight),
       }
     },
     placement: {

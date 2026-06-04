@@ -45,6 +45,12 @@ export type EditorApi = {
    */
   engageMove: (node: AnyNode) => void
   /**
+   * Like {@link engageMove}, but for a press-drag gizmo: the move commits on
+   * pointer-release instead of waiting for a click, so the on-canvas move cross
+   * behaves as press-drag-release while still showing the placement preview.
+   */
+  engageMoveDrag: (node: AnyNode) => void
+  /**
    * Engage endpoint drag for kinds that own start / end anchors (walls,
    * fences). No-ops for kinds without endpoints.
    */
@@ -281,14 +287,25 @@ export type TapActionHandle<N = any> = {
    * trigger the desired action.
    */
   onActivate: (node: N, scene: SceneApi, editor: EditorApi) => void
-  /** Visual override; defaults to the standard chevron arrow. */
-  shape?: 'arrow' | 'corner-picker'
+  /**
+   * Visual override; defaults to the standard chevron arrow. `'move-cross'`
+   * reuses the 4-way move cross — a tap-to-engage grip that hands the node to
+   * its move tool (via `onActivate`) instead of running the generic translate
+   * drag, so the move tool's own preview / ticker feedback shows up.
+   */
+  shape?: 'arrow' | 'corner-picker' | 'move-cross'
   /**
    * Required when `shape: 'corner-picker'` — controls the dashed leader's
    * vertical extent. Pure callback so the descriptor doesn't need to
    * import 3D libs.
    */
   nodeHeight?: (node: N) => number
+  /**
+   * `shape: 'move-cross'` only — tilts the flat cross to lie in the right
+   * plane. `'horizontal'` (default) leaves it flat on the floor; `'node-normal'`
+   * stands it up against the node's facing plane (a wall face).
+   */
+  plane?: 'horizontal' | 'node-normal'
   portal?: HandlePortal
   cursor?: Cursor
 }

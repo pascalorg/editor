@@ -81,25 +81,9 @@ export function getEffectiveRoofSurfaceMaterial(
     }
   }
 
-  if (role === 'edge') {
-    if (node.wallMaterial !== undefined || typeof node.wallMaterialPreset === 'string') {
-      return {
-        material: node.wallMaterial,
-        materialPreset:
-          typeof node.wallMaterialPreset === 'string' ? node.wallMaterialPreset : undefined,
-      }
-    }
-  }
-
-  if (role === 'wall') {
-    if (node.edgeMaterial !== undefined || typeof node.edgeMaterialPreset === 'string') {
-      return {
-        material: node.edgeMaterial,
-        materialPreset:
-          typeof node.edgeMaterialPreset === 'string' ? node.edgeMaterialPreset : undefined,
-      }
-    }
-  }
-
+  // No cross-role fallback: an unset role resolves only to the legacy
+  // catch-all (which covers all three roles for back-compat) and otherwise
+  // to the caller's theme default. Painting one surface must never bleed
+  // onto the others.
   return getLegacyRoofSurfaceMaterial(node)
 }

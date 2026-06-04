@@ -6,6 +6,7 @@ import {
 } from '@pascal-app/core'
 import { buildColumnFloorplan } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
+import { columnFloorplanMoveTarget } from './floorplan-move'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
 
@@ -327,16 +328,28 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   affordanceTools: {
     move: () => import('./move-tool'),
   },
+  // Registry-driven placement tool — renders a translucent `ColumnPreview`
+  // ghost at the cursor (mirroring the shelf build tool) instead of the
+  // bare sphere the legacy editor-side `ColumnTool` showed. `ToolManager`'s
+  // registry-first path mounts this and skips the legacy `<ColumnTool>`.
+  tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Place column' },
+    { key: 'Alt', label: 'No snap' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
   floorplan: buildColumnFloorplan,
+  // 2D body move routes through this kind-specific target so the column
+  // aligns by its footprint *edges* (and snaps flush to wall faces) instead
+  // of the overlay's generic free-translate path, which aligned by bbox
+  // centre and gathered candidates from SVG bounding boxes only. Mirrors the
+  // shelf move target.
+  floorplanMoveTarget: columnFloorplanMoveTarget,
   // 2D drag affordances — `column-resize` handles every dimension arrow
   // the floor-plan builder emits per cross-section / support style (the
   // payload's `dim` field discriminates radius / uniform / width / depth
   // / brace-width / brace-depth / spreads). `column-rotate` powers the
-  // corner rotate-arrow. Body move continues to flow through the
-  // orange move-handle dot via the registry overlay's generic
-  // free-translate path — columns don't need a kind-specific
-  // `floorplanMoveTarget` since they have no linked-cascade
-  // requirements like wall.
+  // corner rotate-arrow.
   floorplanAffordances: {
     'column-resize': columnResizeAffordance,
     'column-rotate': columnRotateAffordance,

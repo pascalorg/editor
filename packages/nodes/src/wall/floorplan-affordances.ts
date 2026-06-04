@@ -6,11 +6,13 @@ import {
   getMaxWallCurveOffset,
   getWallChordFrame,
   normalizeWallCurveOffset,
+  useAlignmentGuides,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
+  alignFloorplanDraftPoint,
   getSegmentGridStep,
   isSegmentLongEnough,
   snapScalarToGrid,
@@ -190,9 +192,16 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           ignoreWallIds: [node.id],
           step: modifiers.shiftKey ? WALL_FINE_GRID_STEP : undefined,
         })
+        // Figma-style alignment on the dragged corner — snaps it onto another
+        // object's edge / wall face and publishes a guide. The dragged wall
+        // and its linked siblings (which cascade with the corner) are excluded
+        // from the candidate pool. Alt is reserved for detach, NOT bypass.
+        const aligned = alignFloorplanDraftPoint(snapped, {
+          excludeIds: [node.id, ...linkedWalls.map((w) => w.id)],
+        }) as WallPlanPoint
 
-        const primaryStart: WallPlanPoint = endpoint === 'start' ? snapped : fixedPoint
-        const primaryEnd: WallPlanPoint = endpoint === 'end' ? snapped : fixedPoint
+        const primaryStart: WallPlanPoint = endpoint === 'start' ? aligned : fixedPoint
+        const primaryEnd: WallPlanPoint = endpoint === 'end' ? aligned : fixedPoint
 
         // ALT detaches: the linked walls keep their original endpoints,
         // and only the dragged wall moves.
@@ -229,6 +238,9 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         }
       },
       canCommit() {
+        // Pointer-up always runs canCommit — drop the alignment guide here
+        // so it doesn't linger after a commit / reject.
+        useAlignmentGuides.getState().clear()
         // The dragged wall must still be long enough at the preview
         // length — checked against `lastPrimary*`, not scene, because
         // scene holds baseline values until commit().

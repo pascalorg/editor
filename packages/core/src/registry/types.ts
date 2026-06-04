@@ -971,6 +971,14 @@ export type Capabilities = {
   selectable?: SelectableConfig
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
+  /**
+   * Plan footprint this kind exposes to the alignment-anchor pool when it
+   * isn't `floorPlaced` and isn't a structural primitive the bridge handles
+   * directly (wall, slab). Lets a kind self-describe where it sits in plan
+   * instead of the core anchor bridge hardcoding it per type. See
+   * `AlignmentFootprintConfig`.
+   */
+  alignmentFootprint?: AlignmentFootprintConfig
   roofAccessory?: RoofAccessoryConfig
   paint?: PaintCapability
   /**
@@ -1243,6 +1251,34 @@ export type FloorPlacedConfig = {
   }
   applies?: (node: AnyNode) => boolean
 }
+
+/**
+ * Plan footprint a kind contributes to the alignment-anchor pool when it is
+ * neither `floorPlaced` (columns / items, whose footprint the bridge already
+ * reads) nor a primitive the bridge knows structurally (walls → segments,
+ * slabs → polygons). Two shapes:
+ *
+ *   - `box`  — a rotatable rectangle centred on the node's `position`. Use
+ *     when the kind also moves by its footprint edges (elevator): the anchor
+ *     bridge relocates the box to the proposed drag point, so one descriptor
+ *     serves both the static candidate and the moving node.
+ *   - `aabb` — an already-resolved XZ bounding box, for kinds whose plan
+ *     shape isn't a centred rectangle (stair: a segment chain or annular
+ *     sector). Static candidates only — these kinds move by their origin, so
+ *     the box's relocation path never needs them.
+ *
+ * `nodes` is supplied only when a kind needs siblings / children to resolve
+ * its footprint (a straight stair walks its `stair-segment` children); box
+ * kinds derive everything from `node` alone.
+ */
+export type AlignmentFootprint =
+  | { shape: 'box'; dimensions: [number, number, number]; rotation: [number, number, number] }
+  | { shape: 'aabb'; minX: number; minZ: number; maxX: number; maxZ: number }
+
+export type AlignmentFootprintConfig = (
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+) => AlignmentFootprint | null
 
 // ─── Relations ───────────────────────────────────────────────────────
 

@@ -2,9 +2,14 @@
 
 import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
 import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
-import { getPlanPointDistance } from '../../lib/floorplan'
+import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
-import { WALL_FINE_GRID_STEP, type WallPlanPoint } from '../tools/wall/wall-drafting'
+import {
+  snapPointToGrid as snapWallPointToGrid,
+  WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
+  type WallPlanPoint,
+} from '../tools/wall/wall-drafting'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
@@ -135,20 +140,28 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isCeilingBuildActive) {
-        emitFloorplanGridEvent('click', planPoint, event)
-
-        const snappedPoint = snapPolygonDraftPoint({
+        // Align the committed vertex the same way the move-preview did, so
+        // the placed point matches what the user saw. Skip when angle snap
+        // owns the vertex (matches the move branch).
+        const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
+        let snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
-          angleSnap: ceilingDraftPoints.length > 0 && !shiftPressed,
+          angleSnap,
         })
+        if (!angleSnap) {
+          snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        }
 
+        emitFloorplanGridEvent('click', snappedPoint, event)
         handleCeilingPlacementPoint(snappedPoint)
         return true
       }
 
       if (isRoofBuildActive) {
-        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
+          bypass: event.altKey,
+        })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
 
@@ -162,16 +175,25 @@ export function useFloorplanBackgroundPlacement({
       }
 
       if (isFenceBuildActive) {
-        emitFloorplanGridEvent('click', planPoint, event)
-
-        // Fence draft: grid snap only; Shift = fine step. See `wall/tool.tsx`.
-        const snappedPoint = snapFenceDraftPoint({
+        // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
+        // Figma alignment — endpoint snap wins (same precedence as move).
+        const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
+        const fenceGridBase = snapWallPointToGrid(
+          planPoint,
+          shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP,
+        )
+        const fenceLocked =
+          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
+        const snappedPoint = fenceLocked
+          ? fenceSnapped
+          : alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey })
 
+        emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
 
         if (!fenceDraftStart) {
@@ -193,11 +215,15 @@ export function useFloorplanBackgroundPlacement({
       // swallow the click and skip local draft state updates — leaving
       // the 2D draft polygon invisible while the 3D tool builds fine).
       if (isPolygonBuildActive) {
-        const snappedPoint = snapPolygonDraftPoint({
+        const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
+        let snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
-          angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
+          angleSnap,
         })
+        if (!angleSnap) {
+          snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
+        }
 
         // Emit the grid event so the registry-driven slab tool also
         // sees the click (parity with ceiling / fence / roof branches
@@ -220,12 +246,22 @@ export function useFloorplanBackgroundPlacement({
       // / draftEnd state in the floor plan would never update, leaving
       // the dashed-line draft preview invisible.
       if (isWallBuildActive) {
-        // Wall draft: grid snap only; Shift = fine step. See `wall/tool.tsx`.
-        const snappedPoint = snapWallDraftPoint({
+        // Wall draft: grid snap (+ existing-wall endpoint/join snap), then
+        // Figma alignment — endpoint/join snap wins (same precedence as the
+        // move-preview branch), so committing onto a corner still works.
+        const wallSnapped = snapWallDraftPoint({
           point: planPoint,
           walls,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
+        const wallGridBase = snapWallPointToGrid(
+          planPoint,
+          shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP,
+        )
+        const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
+        const snappedPoint = wallLocked
+          ? wallSnapped
+          : alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
         handleWallPlacementPoint(snappedPoint)

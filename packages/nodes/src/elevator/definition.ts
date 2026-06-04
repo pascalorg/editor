@@ -166,6 +166,21 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     // 2D body-move flow through `FloorplanRegistryMoveOverlay`'s
     // Path 2 — position[0] / position[2] update with a 0.5m grid snap.
     movable: { axes: ['x', 'z'], gridSnap: true },
+    // Align by the OUTER SHAFT (shaft + wall — what's drawn in plan and 3D),
+    // not the cab `width × depth`: the cab is inset by the shaft wall +
+    // clearance, so cab corners sit ~9 cm inside the visible edge — past the
+    // 8 cm snap, which is why the elevator never surfaced a guide. A `box`
+    // shape (not `aabb`) because the elevator is `movable`, so the anchor
+    // bridge relocates this same footprint to the drag point.
+    alignmentFootprint: (node) => {
+      const e = node as ElevatorNodeType
+      const wall = getElevatorShaftWallThickness(e)
+      return {
+        shape: 'box',
+        dimensions: [getElevatorShaftWidth(e) + wall * 2, 1, getElevatorShaftDepth(e) + wall * 2],
+        rotation: [0, e.rotation ?? 0, 0],
+      }
+    },
     duplicable: true,
     deletable: true,
   },

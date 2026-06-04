@@ -2,13 +2,17 @@
 
 import {
   type AnyNode,
+  collectAlignmentAnchors,
   type EventSuffix,
   emitter,
   type GridEvent,
+  movingFootprintAnchors,
   type NodeEvent,
+  resolveAlignment,
   ShelfNode,
   sceneRegistry,
   snapPointToGrid,
+  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
@@ -20,6 +24,11 @@ import ShelfPreview from './preview'
 
 const worldVector = new Vector3()
 const GRID_STEP = 0.5
+
+/** Figma-style alignment-snap threshold (meters), matching the move tools and
+ *  the 2D floor-plan overlay. 8 cm gives a magnetic pull layered on top of the
+ *  grid snap without fighting it. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 /**
  * Click-trigger kinds: when the user clicks ANY of these during shelf
@@ -107,15 +116,47 @@ const ShelfTool = () => {
      */
     const lastCursorRef: { current: [number, number, number] | null } = { current: null }
 
+    // Alignment candidates — anchors of every OTHER alignable object (items,
+    // walls, fences, slabs, ceilings, columns, other shelves). Gathered once
+    // here and refreshed after each placement so a just-placed shelf becomes a
+    // target for the next one. `previewNode.id` never collides with a scene
+    // node, so nothing real is excluded.
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+
     const onGridMove = (event: GridEvent) => {
       const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
-      cursorRef.current?.position.set(sx, event.localPosition[1], sz)
-      lastCursorRef.current = [sx, event.localPosition[1], sz]
+
+      // Figma-style alignment snap layered on top of grid snap: when the
+      // preview shelf's footprint edge lines up (on X or Z) with another
+      // object's edge, snap there and publish a guide. The probe uses the
+      // shelf's footprint corners at the proposed grid position so it aligns
+      // by its edges, not its centre — matching `MoveRegistryNodeTool`. Alt
+      // bypasses.
+      let ax = sx
+      let az = sz
+      const bypass = event.nativeEvent?.altKey === true
+      if (!bypass && alignmentCandidates.length > 0) {
+        const result = resolveAlignment({
+          moving: movingFootprintAnchors(previewNode, sx, sz, 0),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap) {
+          ax += result.snap.dx
+          az += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      cursorRef.current?.position.set(ax, event.localPosition[1], az)
+      lastCursorRef.current = [ax, event.localPosition[1], az]
 
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (!prev || prev[0] !== ax || prev[1] !== az) {
         triggerSFX('sfx:grid-snap')
-        previousSnapRef.current = [sx, sz]
+        previousSnapRef.current = [ax, az]
       }
     }
 
@@ -134,6 +175,10 @@ const ShelfTool = () => {
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
       triggerSFX('sfx:structure-build')
+      // The placed shelf is now a valid alignment target for the next one;
+      // refresh the candidate pool and drop the guide from this drop.
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+      useAlignmentGuides.getState().clear()
 
       const native = (event as { nativeEvent?: unknown }).nativeEvent
       if (
@@ -162,8 +207,11 @@ const ShelfTool = () => {
         const key = `${kind}:click` as ClickKey
         emitter.off(key, commitAtCursor as never)
       }
+      // Drop any alignment guide left over when the tool deactivates (kind
+      // switch, Esc, unmount) so it doesn't linger over the canvas.
+      useAlignmentGuides.getState().clear()
     }
-  }, [activeLevelId])
+  }, [activeLevelId, previewNode])
 
   if (!activeLevelId) return null
 

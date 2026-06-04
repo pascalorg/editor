@@ -1,4 +1,11 @@
-import { type AnyNode, type AnyNodeId, isCurvedWall, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getScaledDimensions,
+  type ItemNode,
+  isCurvedWall,
+  type WallNode,
+} from '@pascal-app/core'
 
 /**
  * Shared helpers for the kinds whose 2D move snaps onto a wall in plan
@@ -126,4 +133,84 @@ export function findClosestWallInPlan(
   }
 
   return best
+}
+
+/** Figma-style along-wall alignment threshold (meters) — parity with the
+ *  XZ placement / move threshold. */
+const ALONG_WALL_ALIGN_THRESHOLD_M = 0.08
+
+/** The along-wall span of a wall-hosted node (door / window / wall item):
+ *  its centre `localX` and half-width. `null` for kinds with no along-wall
+ *  footprint. */
+function wallAttachmentSpan(node: AnyNode): { center: number; half: number } | null {
+  if (node.type === 'door' || node.type === 'window') {
+    const n = node as { position: [number, number, number]; width: number }
+    return { center: n.position[0], half: n.width / 2 }
+  }
+  if (node.type === 'item') {
+    const item = node as ItemNode
+    const attachTo = item.asset.attachTo
+    if (attachTo !== 'wall' && attachTo !== 'wall-side') return null
+    const [w] = getScaledDimensions(item)
+    return { center: item.position[0], half: w / 2 }
+  }
+  return null
+}
+
+/**
+ * Figma-style alignment for a wall-hosted opening / item, along the wall
+ * axis. Snaps the moving node's edges (or centre) to other attachments'
+ * edges/centres on the same wall, plus the wall ends. Edge-to-edge first,
+ * so two doors line up flush.
+ *
+ * Returns the adjusted `localX` when a neighbour stop is within threshold,
+ * or `null` when nothing aligns — callers treat `null` as "no alignment,
+ * fall back to the grid snap". This lets along-wall alignment COMPETE with
+ * the 0.5m grid (openings have arbitrary widths rarely on the grid, so
+ * layering on top of the grid snap would almost never trigger).
+ *
+ * Snap-only for v1 — no guide is published (the floor-plan guide layer
+ * renders XZ guides; an along-wall guide on a diagonal wall needs extra
+ * projection work, deferred).
+ */
+export function snapLocalXToNeighbors(args: {
+  wall: WallNode
+  localX: number
+  width: number
+  selfId: AnyNodeId
+  nodes: Record<AnyNodeId, AnyNode>
+  threshold?: number
+}): number | null {
+  const { wall, localX, width, selfId, nodes, threshold = ALONG_WALL_ALIGN_THRESHOLD_M } = args
+  const half = width / 2
+  const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+
+  // Candidate stops along the wall: both ends + every other attachment's
+  // edges and centre.
+  const candidateStops: number[] = [0, wallLength]
+  for (const node of Object.values(nodes)) {
+    if (!node || node.id === selfId) continue
+    if ((node as { parentId?: string }).parentId !== wall.id) continue
+    const span = wallAttachmentSpan(node)
+    if (!span) continue
+    candidateStops.push(span.center - span.half, span.center, span.center + span.half)
+  }
+
+  // Moving stops: our two edges (edge-to-edge alignment) + centre.
+  const movingStops = [localX - half, localX, localX + half]
+
+  let bestDelta: number | null = null
+  let bestAbs = threshold
+  for (const ms of movingStops) {
+    for (const cs of candidateStops) {
+      const d = cs - ms
+      const ad = Math.abs(d)
+      if (ad <= bestAbs && (bestDelta === null || ad < bestAbs)) {
+        bestAbs = ad
+        bestDelta = d
+      }
+    }
+  }
+
+  return bestDelta === null ? null : localX + bestDelta
 }

@@ -6,7 +6,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './window-math'
 
 /**
@@ -49,7 +49,19 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
       if (!hit) return
 
-      const snappedLocalX = modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX)
+      // Figma-style along-wall alignment first (edge-to-edge with other
+      // openings / wall ends), winning over the 0.5m grid snap; falls back
+      // to grid when nothing aligns. Alt bypasses; Shift drops the grid snap.
+      const neighborX = modifiers.altKey
+        ? null
+        : snapLocalXToNeighbors({
+            wall: hit.wall,
+            localX: hit.localX,
+            width: node.width,
+            selfId: node.id as AnyNodeId,
+            nodes,
+          })
+      const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(
         hit.wall,
         snappedLocalX,

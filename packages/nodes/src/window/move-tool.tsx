@@ -1,9 +1,11 @@
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   isCurvedWall,
   sceneRegistry,
   spatialGridManager,
+  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallEvent,
@@ -23,6 +25,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -113,7 +116,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      useAlignmentGuides.getState().clear()
     }
+
+    // Alignment candidates — anchors of every OTHER alignable object (the
+    // moving window is excluded so it never aligns to itself). Along-wall only;
+    // the floor-plane guides don't cover sill height.
+    const alignmentCandidates = collectAlignmentAnchors(
+      useScene.getState().nodes,
+      movingWindowNode.id,
+    )
 
     const updateCursor = (
       worldPosition: [number, number, number],
@@ -141,7 +153,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: movingWindowNode.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -205,7 +223,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: movingWindowNode.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -274,7 +298,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: movingWindowNode.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -427,6 +457,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         }
       }
       useLiveTransforms.getState().clear(movingWindowNode.id)
+      useAlignmentGuides.getState().clear()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

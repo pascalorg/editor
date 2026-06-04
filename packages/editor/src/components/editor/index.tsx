@@ -60,6 +60,7 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
+import { GroupMoveHandle } from './group-move-handle'
 import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { SelectionManager } from './selection-manager'
@@ -138,7 +139,7 @@ export interface EditorProps {
 
   // Persistence — defaults to localStorage when omitted
   onLoad?: () => Promise<SceneGraph | null>
-  onSave?: (scene: SceneGraph) => Promise<void>
+  onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
 
@@ -607,6 +608,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
+      {!noEditing && <GroupMoveHandle />}
       {!noEditing && <WallOpeningHighlights />}
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FloatingActionMenu />}

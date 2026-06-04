@@ -2,13 +2,16 @@
 
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   DEFAULT_WALL_HEIGHT,
   emitter,
   type GridEvent,
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
+  resolveAlignment,
   resumeSceneHistory,
+  useAlignmentGuides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -43,6 +46,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * `wall/definition.ts`. Editor state trigger is
  * `useEditor.movingWallEndpoint`.
  */
+/** Figma-style alignment-snap threshold (meters), matching the item move /
+ *  placement tools. 8 cm gives a magnetic pull without fighting grid snap. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
   return a[0] === b[0] && a[1] === b[1]
 }
@@ -207,6 +214,12 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
     )
 
+    // Alignment candidates — anchors of every OTHER alignable object (walls,
+    // fences, items, slabs, ceilings, columns), gathered once (the set is
+    // stable during the drag). Coords are building-local, the same frame as
+    // the cursor and the 3D guide layer, so the published guide lines up.
+    const wallAlignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, nodeId)
+
     pauseSceneHistory(useScene)
     let wasCommitted = false
 
@@ -285,20 +298,40 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
       })
 
+      // Figma-style alignment: nudge the dragged endpoint onto another wall /
+      // fence endpoint or midpoint axis when within threshold, and publish a
+      // guide. The resolver connects to the NEAREST real anchor of the
+      // candidate, so the dot always sits on an actual point (endpoint /
+      // midpoint), never an empty-space bbox corner. Layered on top of the
+      // grid + corner snap above; Alt is reserved for corner-detach here.
+      let alignedPoint = snappedPoint
+      if (wallAlignmentCandidates.length > 0) {
+        const ar = resolveAlignment({
+          moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
+          candidates: wallAlignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (ar.snap) {
+          alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
+        }
+        useAlignmentGuides.getState().set(ar.guides)
+      }
+
       if (
         previousGridPosRef.current &&
-        (snappedPoint[0] !== previousGridPosRef.current[0] ||
-          snappedPoint[1] !== previousGridPosRef.current[1])
+        (alignedPoint[0] !== previousGridPosRef.current[0] ||
+          alignedPoint[1] !== previousGridPosRef.current[1])
       ) {
         triggerSFX('sfx:grid-snap')
       }
-      previousGridPosRef.current = snappedPoint
+      previousGridPosRef.current = alignedPoint
       hasDraggedRef.current = true
 
-      applyPreview(snappedPoint, event.nativeEvent.altKey)
+      applyPreview(alignedPoint, event.nativeEvent.altKey)
     }
 
     const onPointerUp = () => {
+      useAlignmentGuides.getState().clear()
       // Press-release without drag: dismiss the tool without committing.
       if (!hasDraggedRef.current) {
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
@@ -345,6 +378,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onCancel = () => {
+      useAlignmentGuides.getState().clear()
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
@@ -390,6 +424,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     window.addEventListener('blur', onWindowBlur)
 
     return () => {
+      useAlignmentGuides.getState().clear()
       if (!wasCommitted) {
         restoreOriginal(false)
       }

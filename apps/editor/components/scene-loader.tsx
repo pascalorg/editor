@@ -102,7 +102,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
   const handleSave = useCallback(
-    async (graph: SceneGraph) => {
+    async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
       const graphJson = sceneGraphSignature(graph)
       const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
       if (lastRemoteGraphJsonRef.current === graphJson) {
@@ -120,6 +120,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
             'If-Match': String(versionRef.current),
           },
           body: JSON.stringify({ name: meta.name, graph }),
+          // `keepalive` lets the request outlive a page unload (the autosave
+          // flush on refresh/close). Browsers cap keepalive bodies at 64KB, so
+          // only the unload flush opts in — normal debounced saves omit it and
+          // can carry arbitrarily large scenes.
+          keepalive: options?.keepalive,
         })
 
         if (response.status === 409) {

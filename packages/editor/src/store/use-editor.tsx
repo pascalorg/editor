@@ -204,6 +204,13 @@ type EditorState = {
     | StairSegmentNode
     | BuildingNode
     | null
+  /**
+   * True while a move was engaged by a press-drag gizmo (the on-canvas move
+   * cross) rather than a click-to-place flow. The placement coordinator reads
+   * this to commit on pointer-release instead of waiting for a click.
+   */
+  placementDragMode: boolean
+  setPlacementDragMode: (dragMode: boolean) => void
   setMovingNode: (
     node:
       | ItemNode
@@ -270,6 +277,10 @@ type EditorState = {
   setActivePaintMaterial: (material: ActivePaintMaterial | null) => void
   activePaintTarget: PaintableMaterialTarget
   setActivePaintTarget: (target: PaintableMaterialTarget) => void
+  // When true, clicking a surface in paint mode clears it back to its
+  // default material instead of applying `activePaintMaterial`.
+  paintEraser: boolean
+  setPaintEraser: (eraser: boolean) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
   hoveredPaintTarget: PaintableMaterialTarget | null
   setHoveredPaintTarget: (target: PaintableMaterialTarget | null) => void
@@ -688,6 +699,8 @@ const useEditor = create<EditorState>()(
         | StairSegmentNode
         | BuildingNode
         | null,
+      placementDragMode: false,
+      setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
       setMovingNode: (node) =>
         set(
           node === null
@@ -695,7 +708,8 @@ const useEditor = create<EditorState>()(
               // non-owning side's effect cleanup — which fires after
               // `setMovingNode(null)` propagates — can still read who
               // finalised. The next non-null `setMovingNode` resets it.
-              { movingNode: null }
+              // Always clear the press-drag flag when a move ends.
+              { movingNode: null, placementDragMode: false }
             : { movingNode: node, movingNodeOrigin: null },
         ),
       movingNodeOrigin: null as '2d' | '3d' | null,
@@ -713,12 +727,17 @@ const useEditor = create<EditorState>()(
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
       activePaintMaterial: null,
-      setActivePaintMaterial: (material) => set({ activePaintMaterial: material }),
+      // Picking a material implies paint, not erase — clear the eraser so the
+      // next click applies the chosen material.
+      setActivePaintMaterial: (material) =>
+        set({ activePaintMaterial: material, paintEraser: false }),
       activePaintTarget: 'wall',
       setActivePaintTarget: (target) =>
         set((state) =>
           state.activePaintTarget === target ? state : { activePaintTarget: target },
         ),
+      paintEraser: false,
+      setPaintEraser: (eraser) => set({ paintEraser: eraser }),
       primeMaterialPaintFromSelection: () => {
         const selectedId =
           useViewer.getState().selection.selectedIds.length === 1

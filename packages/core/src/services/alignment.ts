@@ -79,11 +79,20 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
   const { moving, candidates, threshold } = input
   if (threshold <= 0 || moving.length === 0 || candidates.length === 0) return EMPTY
 
-  // Best match per axis: smallest |Δ| across all (moving, candidate) pairs.
-  // Tie-break by candidate anchor kind priority (center > edge-mid > corner)
-  // so visually meaningful matches win when |Δ| is equal.
-  let bestX: { delta: number; m: AlignmentAnchor; c: AlignmentAnchor } | null = null
-  let bestZ: { delta: number; m: AlignmentAnchor; c: AlignmentAnchor } | null = null
+  // Best match per axis: smallest |Δ| on the matched axis (tightest
+  // alignment), then — crucially — tie-break to the candidate anchor NEAREST
+  // on the perpendicular axis. Anchors are real points (corners / endpoints /
+  // midpoints), so the guide always connects to the closest actual point of
+  // the candidate, never a far one that merely shares the same coordinate.
+  type Best = {
+    delta: number
+    primary: number
+    perp: number
+    m: AlignmentAnchor
+    c: AlignmentAnchor
+  }
+  let bestX: Best | null = null
+  let bestZ: Best | null = null
 
   for (const m of moving) {
     for (const c of candidates) {
@@ -91,11 +100,17 @@ export function resolveAlignment(input: ResolveAlignmentInput): ResolveAlignment
       const dz = c.z - m.z
       const adx = Math.abs(dx)
       const adz = Math.abs(dz)
-      if (adx <= threshold && (bestX === null || adx < Math.abs(bestX.delta))) {
-        bestX = { delta: dx, m, c }
+      if (
+        adx <= threshold &&
+        (bestX === null || adx < bestX.primary || (adx === bestX.primary && adz < bestX.perp))
+      ) {
+        bestX = { delta: dx, primary: adx, perp: adz, m, c }
       }
-      if (adz <= threshold && (bestZ === null || adz < Math.abs(bestZ.delta))) {
-        bestZ = { delta: dz, m, c }
+      if (
+        adz <= threshold &&
+        (bestZ === null || adz < bestZ.primary || (adz === bestZ.primary && adx < bestZ.perp))
+      ) {
+        bestZ = { delta: dz, primary: adz, perp: adx, m, c }
       }
     }
   }
@@ -172,5 +187,25 @@ export function bboxAnchors(
     { nodeId, kind: 'edge-mid', x: cx, z: maxZ },
     { nodeId, kind: 'edge-mid', x: minX, z: cz },
     { nodeId, kind: 'center', x: cx, z: cz },
+  ]
+}
+
+/**
+ * The 4 corner anchors of a bbox — edges only, no edge-midpoints or center.
+ * Used where alignment should lock to an object's edges (left/right/front/
+ * back), never its centreline.
+ */
+export function bboxCornerAnchors(
+  nodeId: string,
+  minX: number,
+  minZ: number,
+  maxX: number,
+  maxZ: number,
+): AlignmentAnchor[] {
+  return [
+    { nodeId, kind: 'corner', x: minX, z: minZ },
+    { nodeId, kind: 'corner', x: maxX, z: minZ },
+    { nodeId, kind: 'corner', x: maxX, z: maxZ },
+    { nodeId, kind: 'corner', x: minX, z: maxZ },
   ]
 }

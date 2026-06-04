@@ -88,13 +88,10 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
 
     // Some slots have explicit materials; fill the rest from the themed array so
     // an untextured slot still picks up the scene-theme role colour, not blank white.
+    // Per-role only, then the themed parent slot — no cross-role fallback, so
+    // painting one segment surface never bleeds onto its other surfaces.
     const slot = (i: number) => themedArray?.[i] ?? new THREE.MeshStandardMaterial()
-    return [
-      edge ?? wall ?? top ?? slot(0),
-      wall ?? edge ?? top ?? slot(1),
-      wall ?? edge ?? top ?? slot(2),
-      top ?? wall ?? edge ?? slot(3),
-    ] as THREE.Material[]
+    return [edge ?? slot(0), wall ?? slot(1), wall ?? slot(2), top ?? slot(3)] as THREE.Material[]
   }, [
     node.material,
     node.materialPreset,

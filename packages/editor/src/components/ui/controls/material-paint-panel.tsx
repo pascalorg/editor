@@ -1,10 +1,15 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { Eraser, RotateCcw } from 'lucide-react'
 import { useEffect } from 'react'
-import { resolvePaintTargetFromSelection } from './../../../lib/material-paint'
+import {
+  buildResetSurfaceMaterialUpdates,
+  resolvePaintTargetFromSelection,
+} from './../../../lib/material-paint'
 import useEditor from './../../../store/use-editor'
+import { Button } from '../primitives/button'
 import { MaterialPicker } from './material-picker'
 
 /**
@@ -18,9 +23,14 @@ export function MaterialPaintPanel() {
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
   const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
   const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
+  const paintEraser = useEditor((state) => state.paintEraser)
+  const setPaintEraser = useEditor((state) => state.setPaintEraser)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const nodes = useScene((state) => state.nodes)
   const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
+  const selectedNode = selectedId ? nodes[selectedId as AnyNodeId] : null
+  const canResetSelection =
+    selectedNode != null && resolvePaintTargetFromSelection({ nodes, selectedId }) != null
 
   useEffect(() => {
     const selectedPaintTarget = resolvePaintTargetFromSelection({ nodes, selectedId })
@@ -29,8 +39,35 @@ export function MaterialPaintPanel() {
     }
   }, [nodes, selectedId, setActivePaintTarget])
 
+  const resetSelection = () => {
+    if (!selectedNode) return
+    useScene.getState().updateNodes(buildResetSurfaceMaterialUpdates(nodes, selectedNode))
+  }
+
   return (
-    <div className="w-full">
+    <div className="w-full space-y-2">
+      <div className="flex items-center gap-2">
+        <Button
+          aria-pressed={paintEraser}
+          className="flex-1"
+          onClick={() => setPaintEraser(!paintEraser)}
+          size="sm"
+          variant={paintEraser ? 'default' : 'outline'}
+        >
+          <Eraser />
+          Erase
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={!canResetSelection}
+          onClick={resetSelection}
+          size="sm"
+          variant="outline"
+        >
+          <RotateCcw />
+          Reset all
+        </Button>
+      </div>
       <MaterialPicker
         onChange={(material) => {
           setActivePaintMaterial({ material, sourceTarget: activePaintTarget })

@@ -5,6 +5,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   bboxAnchors,
+  bboxCornerAnchors,
   type FloorplanMoveTargetSession,
   nodeRegistry,
   pauseSceneHistory,
@@ -365,6 +366,11 @@ export function FloorplanRegistryMoveOverlay() {
           liveTransforms.clear(id)
           liveOverrides.clear(id)
         }
+        // Sessions that publish Figma-style alignment guides during `apply`
+        // (item / shelf / column) leave them in the store; this cleanup runs
+        // after every terminal path (commit + Esc both unmount via
+        // `setMovingNode(null)`), so clearing here drops any lingering guide.
+        useAlignmentGuides.getState().clear()
         // Same belt-and-suspenders pattern for the wall bridge ghost
         // previews — clear unconditionally so Esc / mid-drag unmount /
         // 3D-takeover paths all end up with no stale ghosts left over.
@@ -428,7 +434,11 @@ export function FloorplanRegistryMoveOverlay() {
         // simple translate suffices.
         const dxProposed = gridX - originalPosition[0]
         const dzProposed = gridZ - originalPosition[2]
-        const movingAnchors = bboxAnchors(
+        // Corner-only for the moving node so it aligns by its edges, never
+        // its centreline — matching the placement tools and Path 1 move
+        // sessions. Candidates keep their full 9-point set (we DO want to
+        // align to a neighbour's centre / edge-midpoints).
+        const movingAnchors = bboxCornerAnchors(
           movingNode.id,
           movingLocalBBox.x + dxProposed,
           movingLocalBBox.y + dzProposed,

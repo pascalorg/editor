@@ -14,6 +14,7 @@ import {
   pauseSceneHistory,
   resolveBuildingForLevel,
   resumeSceneHistory,
+  useAlignmentGuides,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -310,7 +311,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
               rotation: [0, live.rotation, 0] as [number, number, number],
               parentId: null,
             } as AnyNode
-          } else if (node.type === 'slab' || node.type === 'ceiling') {
+          } else if (node.type === 'column') {
+            // Same world-plan override as item/shelf, but column stores its
+            // Y rotation as a scalar (not a tuple).
+            effectiveNode = {
+              ...node,
+              position: live.position,
+              rotation: live.rotation,
+              parentId: null,
+            } as AnyNode
+          } else if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
             const dx = live.position[0]
             const dz = live.position[2]
             if (dx !== 0 || dz !== 0) {
@@ -653,6 +663,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         resumeSceneHistory(useScene)
         drag.historyPaused = false
       }
+      // Affordances that publish Figma alignment guides during `apply`
+      // (fence endpoint) leave them in the store on cancel — `canCommit`
+      // (the pointer-up clear) never runs on a cancel.
+      useAlignmentGuides.getState().clear()
       // Drop any live overrides the session may have published. No-op
       // for affordances whose `apply()` writes straight to scene; the
       // override-routed sessions (wall endpoint, wall curve) rely on
@@ -686,6 +700,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         for (const id of drag.session.affectedIds) overrides.clear(id)
         dragRef.current = null
       }
+      // Clear any alignment guide a session left behind on mid-drag unmount.
+      useAlignmentGuides.getState().clear()
     }
   }, [])
 

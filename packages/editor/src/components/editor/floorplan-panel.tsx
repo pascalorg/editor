@@ -12,6 +12,8 @@ import {
   type ElevatorNode,
   emitter,
   type FenceNode,
+  type FloorplanGeometry,
+  type GeometryContext,
   type GridEvent,
   type GuideNode,
   getRenderableSlabPolygon,
@@ -28,7 +30,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   type SiteNode,
-  SlabNode,
+  type SlabNode,
   type SpawnNode,
   type StairNode,
   StairNode as StairNodeSchema,
@@ -36,6 +38,7 @@ import {
   StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
+  useAlignmentGuides,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -62,6 +65,7 @@ import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import {
+  alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   collectLevelDescendants,
@@ -85,7 +89,9 @@ import {
 } from '../editor-2d/floorplan-render-context'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
+import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
@@ -110,6 +116,7 @@ import {
   createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
+  snapPointToGrid as snapWallPointToGrid,
   WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallPlanPoint,
@@ -524,6 +531,7 @@ type ReferenceFloorData = {
   fenceEntries: FloorplanFenceEntry[]
   itemEntries: FloorplanItemEntry[]
   openingPolygons: OpeningPolygonEntry[]
+  registryEntries: ReferenceFloorRegistryEntry[]
   slabPolygons: SlabPolygonEntry[]
   wallPolygons: WallPolygonEntry[]
 }
@@ -533,6 +541,33 @@ type ReferenceFloorColumnEntry = {
   points: string
   polygon: Point2D[]
 }
+
+type ReferenceFloorRegistryEntry = {
+  geometry: FloorplanGeometry
+  node: AnyNode
+}
+
+// Top-level structural kinds drawn on the *reference* (dimmed, below) floor
+// via their `def.floorplan` builder, so the symbol is identical to the active
+// floor. Walls / columns / slabs / fences / items / openings still have
+// bespoke reference rendering above; these five are the registry-driven kinds
+// that don't.
+//
+// This is a deliberate curation, NOT "every kind with a `def.floorplan`":
+// ~24 kinds expose one, including children (`roof-segment`, `stair-segment`),
+// containers (`level`, `building`), and surfaces (`ceiling`, `zone`) that
+// either render through a parent's builder or shouldn't appear as standalone
+// reference symbols — auto-deriving would double-draw or clutter the floor.
+// The list also can't live on `NodeDefinition`: "reference floor" is an
+// editor 2D-view concept that `packages/core` must stay unaware of (see
+// wiki/architecture/layers.md). New top-level structural kinds opt in here.
+const REFERENCE_REGISTRY_KINDS = new Set<AnyNode['type']>([
+  'stair',
+  'roof',
+  'shelf',
+  'spawn',
+  'elevator',
+])
 
 type FloorplanStairSegmentEntry = {
   centerLine: FloorplanLineSegment | null
@@ -3436,6 +3471,10 @@ const FloorplanReferenceFloorLayer = memo(function FloorplanReferenceFloorLayer(
           vectorEffect="non-scaling-stroke"
         />
       ))}
+
+      {data.registryEntries.map(({ node, geometry }) => (
+        <FloorplanGeometryRenderer geometry={geometry} key={node.id} />
+      ))}
     </g>
   )
 })
@@ -4717,6 +4756,48 @@ export function FloorplanPanel() {
       ]
     })
 
+    // Render reference-floor stairs and roofs through the SAME registry
+    // builders the active level uses (`def.floorplan` → `buildStairFloorplan`
+    // / `buildRoofFloorplan`), so the symbol is pixel-identical to a stair /
+    // roof on the current floor. These are the only registry-driven kinds
+    // the legacy reference layer doesn't already collect manually.
+    // `viewState` is omitted so each builder emits its unselected appearance
+    // (no selection chrome / resize handles). Both the reference layer and
+    // the registry renderer draw in the same plan-meter space
+    // (`toSvgX`/`toSvgY` are identity), so the geometry composes directly.
+    const registryEntries = referenceDescendants.flatMap<ReferenceFloorRegistryEntry>((node) => {
+      if (!REFERENCE_REGISTRY_KINDS.has(node.type)) {
+        return []
+      }
+
+      const builder = nodeRegistry.get(node.type)?.floorplan
+      if (!builder) {
+        return []
+      }
+
+      // Each builder walks its own segment children (stair-segment /
+      // roof-segment) and filters by type. Pass them in stored `children`
+      // order — stair-segment transforms are cumulative, so order matters.
+      const childIds = (node as { children?: AnyNodeId[] }).children ?? []
+      const children = childIds.flatMap((childId) => {
+        const child = referenceDescendantById.get(childId)
+        return child ? [child] : []
+      })
+      const ctx: GeometryContext = {
+        resolve: (rid) => referenceDescendantById.get(rid) as never,
+        children,
+        siblings: [],
+        parent: referenceFloorLevel,
+        viewState: undefined,
+      }
+      const geometry = builder(node, ctx)
+      if (!geometry) {
+        return []
+      }
+
+      return [{ geometry, node }]
+    })
+
     const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
     const itemEntries = referenceDescendants.flatMap((node) => {
       if (
@@ -4755,6 +4836,7 @@ export function FloorplanPanel() {
       fenceEntries,
       itemEntries,
       openingPolygons,
+      registryEntries,
       slabPolygons,
       wallPolygons,
     }
@@ -6315,6 +6397,9 @@ export function FloorplanPanel() {
     clearWallCurveDrag()
     clearSiteBoundaryInteraction()
     setCursorPoint(null)
+    // Drop any Figma-style alignment guide a draft branch left behind so it
+    // doesn't linger after the tool deactivates / Esc / draft reset.
+    useAlignmentGuides.getState().clear()
   }, [
     clearFencePlacementDraft,
     clearCeilingPlacementDraft,
@@ -6352,26 +6437,6 @@ export function FloorplanPanel() {
     }
   }, [clearDraft])
 
-  const createSlabOnCurrentLevel = useCallback(
-    (points: WallPlanPoint[]) => {
-      if (!levelId) {
-        return null
-      }
-
-      const { createNode, nodes } = useScene.getState()
-      const slabCount = Object.values(nodes).filter((node) => node.type === 'slab').length
-      const slab = SlabNode.parse({
-        name: `Slab ${slabCount + 1}`,
-        polygon: points.map(([x, z]) => [x, z] as [number, number]),
-      })
-
-      createNode(slab, levelId)
-      sfxEmitter.emit('sfx:structure-build')
-      setSelection({ selectedIds: [slab.id] })
-      return slab.id
-    },
-    [levelId, setSelection],
-  )
   const createZoneOnCurrentLevel = useCallback(
     (points: WallPlanPoint[]) => {
       if (!levelId) {
@@ -7407,14 +7472,20 @@ export function FloorplanPanel() {
       }
 
       if (isCeilingBuildActive) {
-        emitFloorplanGridEvent('move', planPoint, event)
-
-        const snappedPoint = snapPolygonDraftPoint({
+        // Polygon vertex: grid (snapToHalf) + optional 45° angle snap from
+        // the previous vertex. Alignment runs only when angle snap is OFF
+        // (first vertex, or Shift held) — when the angle is being locked,
+        // pulling the vertex sideways would break it.
+        const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
+        let snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
-          angleSnap: ceilingDraftPoints.length > 0 && !shiftPressed,
+          angleSnap,
         })
+        if (angleSnap) useAlignmentGuides.getState().clear()
+        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
 
+        emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -7422,7 +7493,8 @@ export function FloorplanPanel() {
       }
 
       if (isRoofBuildActive) {
-        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        let snappedPoint = getSnappedFloorplanPoint(planPoint)
+        snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
@@ -7439,18 +7511,25 @@ export function FloorplanPanel() {
       }
 
       if (isFenceBuildActive) {
-        emitFloorplanGridEvent('move', planPoint, event)
-
-        // Fence draft: grid snap only — orthogonal fences fall out of
-        // a grid-aligned start. Shift switches to the fine grid step
-        // for precision. Mirrors `wall/tool.tsx`.
-        const snappedPoint = snapFenceDraftPoint({
+        // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
+        // Figma alignment — same endpoint-wins precedence as the wall branch.
+        const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
+        const fenceGridBase = snapWallPointToGrid(
+          planPoint,
+          shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP,
+        )
+        const fenceLocked =
+          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
+        let snappedPoint = fenceSnapped
+        if (fenceLocked) useAlignmentGuides.getState().clear()
+        else snappedPoint = alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey })
 
+        emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -7469,11 +7548,14 @@ export function FloorplanPanel() {
       // the local polygon-draft state actually updates as the cursor
       // moves (the catch-all would otherwise swallow the move event).
       if (isPolygonBuildActive) {
-        const snappedPoint = snapPolygonDraftPoint({
+        const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
+        let snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
-          angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
+          angleSnap,
         })
+        if (angleSnap) useAlignmentGuides.getState().clear()
+        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
 
         // Emit `grid:move` so the registry-driven slab tool also tracks
         // the cursor (its 3D preview needs it).
@@ -7573,14 +7655,26 @@ export function FloorplanPanel() {
         return
       }
 
-      // Wall draft: grid snap only — orthogonal walls follow naturally
-      // from a grid-aligned start. Shift switches to the fine grid step
-      // (0.05m) for precision.
-      const snappedPoint = snapWallDraftPoint({
+      // Wall draft: grid snap (orthogonal walls follow naturally from a
+      // grid-aligned start; Shift = fine 0.05m step), then Figma-style
+      // alignment layered on top. An existing wall endpoint / join snap
+      // wins outright — never pull the cursor off a corner the user is
+      // closing onto — so alignment runs ONLY when the wall snap left the
+      // point on the plain grid. Alt bypasses alignment.
+      const gridStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+      const wallSnapped = snapWallDraftPoint({
         point: planPoint,
         walls,
         step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
       })
+      const gridBase = snapWallPointToGrid(planPoint, gridStep)
+      const lockedToWall = wallSnapped[0] !== gridBase[0] || wallSnapped[1] !== gridBase[1]
+      let snappedPoint = wallSnapped
+      if (lockedToWall) {
+        useAlignmentGuides.getState().clear()
+      } else {
+        snappedPoint = alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
+      }
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
@@ -7640,6 +7734,11 @@ export function FloorplanPanel() {
     ],
   )
 
+  // Slab creation is owned by the registry-driven slab tool (parity with
+  // ceiling): the click/double-click that closes the polygon is forwarded as
+  // a grid event, and the 3D tool commits the node. These 2D handlers only
+  // maintain the draft-preview state and clear it on close — they must NOT
+  // create a node themselves, or every slab would be built twice.
   const handleSlabPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
       const lastPoint = slabDraftPoints[slabDraftPoints.length - 1]
@@ -7649,7 +7748,6 @@ export function FloorplanPanel() {
 
       const firstPoint = slabDraftPoints[0]
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
-        createSlabOnCurrentLevel(slabDraftPoints)
         clearDraft()
         return
       }
@@ -7657,7 +7755,7 @@ export function FloorplanPanel() {
       setSlabDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
+    [clearDraft, slabDraftPoints],
   )
   const handleSlabPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -7680,10 +7778,9 @@ export function FloorplanPanel() {
         return
       }
 
-      createSlabOnCurrentLevel(nextPoints)
       clearDraft()
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
+    [clearDraft, slabDraftPoints],
   )
   const handleCeilingPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
@@ -8027,6 +8124,9 @@ export function FloorplanPanel() {
       if (isZoneBuildActive) {
         handleZonePlacementConfirm(snappedPoint)
       } else {
+        // Slab is registry-driven: forward the double-click so the 3D tool
+        // commits the node (zone has no registry tool, so it commits locally).
+        emitFloorplanGridEvent('double-click', planPoint, event)
         handleSlabPlacementConfirm(snappedPoint)
       }
     },
@@ -9115,6 +9215,12 @@ export function FloorplanPanel() {
                     would create a measure→fit→measure loop. */}
                 <g ref={floorplanContentRef}>
                   <FloorplanRegistryLayer />
+                  {/* Faint footprint ghost of the node being placed by a
+                      registry placement tool (e.g. column), following the
+                      cursor. The 3D mesh preview is hidden in 2D, so this is
+                      the only placement visual in the floor plan. See
+                      `floorplan-placement-preview-layer.tsx`. */}
+                  <FloorplanPlacementPreviewLayer />
                   {/* Bridge-wall ghost previews painted on top of the
                       registry layer (drag-time only); cleared by the
                       wall move's `commit()` so real bridges replace
