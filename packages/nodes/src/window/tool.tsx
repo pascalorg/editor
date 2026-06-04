@@ -180,6 +180,26 @@ const WindowTool: React.FC = () => {
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
+      // Draft may be null after a successful placement (the click handler
+      // deletes it and relies on the wall rebuild → pointer-enter cascade to
+      // recreate it). Recreate it here on the first subsequent move so the
+      // preview is ready for the next click without requiring a leave/enter.
+      if (!draftRef.current) {
+        const levelId = getLevelId()
+        if (levelId && event.node.parentId === levelId) {
+          const node = WindowNode.parse({
+            position: [clampedX, clampedY, 0],
+            rotation: [0, itemRotation, 0],
+            side,
+            wallId: event.node.id,
+            parentId: event.node.id,
+            metadata: { isTransient: true },
+          })
+          useScene.getState().createNode(node, event.node.id as AnyNodeId)
+          draftRef.current = node
+        }
+      }
+
       if (draftRef.current) {
         // Update the scene store on every move so the 2D floor plan
         // stays in sync (it re-renders from `node.position`). Only
