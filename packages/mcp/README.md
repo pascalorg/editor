@@ -227,6 +227,76 @@ console.log(scene)
 See [`examples/embed-in-agent.ts`](./examples/embed-in-agent.ts) for a
 compilable version.
 
+## Coordinate conventions
+
+Pascal is a **right-handed** scene where **X and Z form the ground plane and Y
+is up**. Lengths are in **metres**; rotations are **radians**, stored as Euler
+`[x, y, z]` tuples.
+
+**Plan → world.** Every 2-D point you pass is a level/building-local
+ground-plane coordinate
+`[x, z]` — this includes `wall.start` / `wall.end` and the `polygon` / `holes`
+arrays of `slab`, `zone`, and `ceiling`. With the default identity building
+transform, it appears in world space as:
+
+```
+[x, z]  →  (x, y, z)      // the 2nd component is world Z (depth), not "up"
+```
+
+There is no sign flip in the stored convention: tooling consumes the second
+component as world Z directly. The vertical `y` starts from the owning level's
+stacked height as computed by the level system from accumulated level heights,
+plus the element's own height; slabs additionally carry an absolute
+`elevation`.
+
+**Heads-up when you compute coordinates outside the editor.** Pascal's
+viewports apply their own rotations on top of the world axes: the 2-D plan
+panel wraps its content in a 90° rotation (`FLOORPLAN_VIEW_ROTATION_DEG`), and
+the 3-D "top-down" snap preserves the camera's current azimuth, so when invoked
+from the iso default position, world and screen axes are offset by ~45° until
+you orbit to an axis-aligned view. So a layout authored as if
+*"Y = north, viewed top-down"* — common in land surveys, north-up site plans,
+and 2-D plotting libraries — will arrive **rotated** relative to its source
+when viewed in Pascal (and possibly further reflected, depending on which
+viewport and camera state you're in). The editor's own 2-D and 3-D tools are
+internally consistent with their stored coordinates, so this only affects
+geometry authored programmatically. To verify orientation before trusting
+externally-computed coordinates, place a scaled guide image at known anchor
+points and check alignment; apply whatever rotation (or reflection) your
+authoring side needs to match.
+
+A worked demonstration of all of this — axis-aligned baseline, the rotated
+30° example below, and a paired "page-intent vs world-result" L for the
+external-coordinate gotcha — lives in
+[`examples/coordinate-conventions-demo.md`](./examples/coordinate-conventions-demo.md)
+and [`examples/coordinate-conventions-demo.json`](./examples/coordinate-conventions-demo.json).
+Load the JSON with
+`pascal-mcp --stdio --scene examples/coordinate-conventions-demo.json`.
+
+**Example — a 6 × 4 m slab rotated 30° about its first corner** (coordinates
+rounded to 3 dp; sides ≈ 6 m / 4 m; not axis-aligned, so the mapping is
+actually exercised):
+
+```json
+{
+  "op": "create",
+  "parentId": "<levelId>",
+  "node": {
+    "type": "slab",
+    "elevation": 0.0,
+    "polygon": [[0, 0], [5.196, 3.0], [3.196, 6.464], [-2.0, 3.464]]
+  }
+}
+```
+
+This lands flat on the ground (Y = 0), about 6 m along a heading 30° off the +X
+axis and 4 m along its perpendicular — i.e. occupying world (x, z) directly.
+
+One separate gotcha: wall-attached coordinates are wall-local, not plan
+coordinates. Stored door/window `position[0]`, and `place_item` `position[0]`
+when the target is a wall, are metres along the wall; wall-attached rotations
+are wall-local too.
+
 ## Tools
 
 All tools validate their inputs and outputs with Zod. Mutation tools are

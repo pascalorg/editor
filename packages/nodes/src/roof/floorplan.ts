@@ -96,7 +96,10 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
   const rot = -(roof.rotation + seg.rotation)
   const cos = Math.cos(rot)
   const sin = Math.sin(rot)
-  const tp = (lx: number, lz: number): Pt => [segCx + lx * cos - lz * sin, segCz + lx * sin + lz * cos]
+  const tp = (lx: number, lz: number): Pt => [
+    segCx + lx * cos - lz * sin,
+    segCz + lx * sin + lz * cos,
+  ]
   const hw = Math.max(seg.width, 0.01) / 2
   const hd = Math.max(seg.depth, 0.01) / 2
   const lw = getRoofSegmentPlanLinework(seg)
@@ -110,7 +113,10 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
     hips: lw.hips.map(mapSeg),
     breaks: lw.breaks.map(mapSeg),
     slope: lw.slope
-      ? { tail: tp(lw.slope.tail[0], lw.slope.tail[1]), head: tp(lw.slope.head[0], lw.slope.head[1]) }
+      ? {
+          tail: tp(lw.slope.tail[0], lw.slope.tail[1]),
+          head: tp(lw.slope.head[0], lw.slope.head[1]),
+        }
       : null,
   }
 }
@@ -133,13 +139,8 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
  * group is decorative (`pointerEvents: 'none'`) — clicks fall through to the
  * segment hit-targets.
  */
-export function buildRoofFloorplan(
-  node: RoofNode,
-  ctx: GeometryContext,
-): FloorplanGeometry | null {
-  const segments = ctx.children.filter(
-    (c): c is RoofSegmentNode => c.type === 'roof-segment',
-  )
+export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): FloorplanGeometry | null {
+  const segments = ctx.children.filter((c): c is RoofSegmentNode => c.type === 'roof-segment')
   if (segments.length === 0) return null
 
   const plans = segments.map((s) => buildSegPlan(node, s))

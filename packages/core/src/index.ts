@@ -88,6 +88,7 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export {
   type ControlValue,
   type DoorAnimationState,
@@ -106,7 +107,6 @@ export {
   getEffectiveNode,
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
-export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'

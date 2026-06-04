@@ -169,13 +169,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
         ref={ref}
         rotation-y={node.rotation ?? 0}
       >
-        <mesh
-          castShadow
-          geometry={geometry}
-          material={material}
-          name="dormer-body"
-          receiveShadow
-        />
+        <mesh castShadow geometry={geometry} material={material} name="dormer-body" receiveShadow />
         <DormerWindowAssembly
           frameMaterial={frameSideMat}
           glassMaterial={glassMat}

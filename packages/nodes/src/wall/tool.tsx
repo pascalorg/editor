@@ -431,7 +431,9 @@ export const WallTool: React.FC = () => {
 
     const stopDrafting = () => {
       buildingState.current = 0
-      wallPreviewRef.current.visible = false
+      if (wallPreviewRef.current) {
+        wallPreviewRef.current.visible = false
+      }
       setDraftMeasurement(null)
     }
 

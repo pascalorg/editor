@@ -18,17 +18,19 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BufferGeometry,
+  Box3,
   Euler,
-  Float32BufferAttribute,
   type Group,
   type LineSegments,
+  Matrix4,
   type Mesh,
+  type Object3D,
   PlaneGeometry,
   Quaternion,
+  Ray,
   Vector3,
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
@@ -36,6 +38,12 @@ import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import {
+  createLineGeometry,
+  getBoxEdgePoints,
+  type PreviewBounds,
+  updateLineGeometry,
+} from '../shared/placement-box-geometry'
 import { getGridAlignedDimensions, snapToGrid, snapUpToGridStep } from './placement-math'
 import {
   ceilingStrategy,
@@ -59,13 +67,6 @@ function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
     return `${wholeFeet}'${inches}"`
   }
   return `${Number.parseFloat(value.toFixed(2))}m`
-}
-
-type PreviewBounds = {
-  min: [number, number, number]
-  max: [number, number, number]
-  dimensions: [number, number, number]
-  center: [number, number, number]
 }
 
 /**
@@ -128,114 +129,6 @@ function getFallbackPreviewBounds(
     dimensions: dims,
     center: [0, dims[1] / 2, attachTo === 'wall-side' ? -dims[2] / 2 : 0],
   }
-}
-
-function createLineGeometry(points: number[] = [0, 0, 0, 0, 0, 0]): BufferGeometry {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute(points, 3))
-  return geometry
-}
-
-function getBoxEdgePoints(bounds: PreviewBounds): number[] {
-  const [width, height, depth] = bounds.dimensions
-  const [centerX, centerY, centerZ] = bounds.center
-  const minX = centerX - width / 2
-  const maxX = centerX + width / 2
-  const minY = centerY - height / 2
-  const maxY = centerY + height / 2
-  const minZ = centerZ - depth / 2
-  const maxZ = centerZ + depth / 2
-
-  return [
-    minX,
-    minY,
-    minZ,
-    maxX,
-    minY,
-    minZ,
-    maxX,
-    minY,
-    minZ,
-    maxX,
-    minY,
-    maxZ,
-    maxX,
-    minY,
-    maxZ,
-    minX,
-    minY,
-    maxZ,
-    minX,
-    minY,
-    maxZ,
-    minX,
-    minY,
-    minZ,
-
-    minX,
-    maxY,
-    minZ,
-    maxX,
-    maxY,
-    minZ,
-    maxX,
-    maxY,
-    minZ,
-    maxX,
-    maxY,
-    maxZ,
-    maxX,
-    maxY,
-    maxZ,
-    minX,
-    maxY,
-    maxZ,
-    minX,
-    maxY,
-    maxZ,
-    minX,
-    maxY,
-    minZ,
-
-    minX,
-    minY,
-    minZ,
-    minX,
-    maxY,
-    minZ,
-    maxX,
-    minY,
-    minZ,
-    maxX,
-    maxY,
-    minZ,
-    maxX,
-    minY,
-    maxZ,
-    maxX,
-    maxY,
-    maxZ,
-    minX,
-    minY,
-    maxZ,
-    minX,
-    maxY,
-    maxZ,
-  ]
-}
-
-function updateLineGeometry(ref: React.RefObject<LineSegments>, points: number[]) {
-  const geometry = ref.current?.geometry
-  if (!geometry) return
-
-  const attribute = geometry.getAttribute('position') as Float32BufferAttribute | undefined
-  if (!attribute || attribute.array.length !== points.length) {
-    geometry.setAttribute('position', new Float32BufferAttribute(points, 3))
-  } else {
-    attribute.set(points)
-    attribute.needsUpdate = true
-  }
-  geometry.computeBoundingSphere()
 }
 
 // Shared materials for placement cursor - we just change colors, not swap materials
@@ -307,7 +200,23 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // the lerp on this flag keeps 3D placement smooth without hijacking
   // 2D drags that share the same draft.
   const has3DPointerDrivenMoveRef = useRef(false)
+  // The draft mesh's raycast is disabled while placing so the cursor ray
+  // passes through it to the surface beneath (grid / item / shelf). Without
+  // this, the ray hits the moving draft first and the surface strategy keeps
+  // re-deriving the host point from the draft's own (just-moved) geometry —
+  // on a multi-row shelf this oscillates the chosen row, jittering the item.
+  // Mirrors MoveRegistryNodeTool. Reconciled per-frame (the draft mesh can be
+  // recreated mid-session) and restored on unmount.
+  const raycastDisabledMeshRef = useRef<Object3D | null>(null)
+  const restoreRaycastsRef = useRef<Array<() => void>>([])
+  const raycastDisabledChildrenRef = useRef(new WeakSet<Object3D>())
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
+
+  // Live camera ref — the shelf-stickiness test reconstructs the cursor world
+  // ray (camera → grid hit) to check it still points at the shelf volume.
+  const camera = useThree((s) => s.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
 
   // Store config callbacks in refs to avoid re-running effect when they change
   const configRef = useRef(config)
@@ -456,7 +365,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
     if (!asset.attachTo && placementState.current.surface === 'floor') {
       gridPosition.current.y = 0
-      cursorGroupRef.current.position.y = 0
+      if (cursorGroupRef.current) {
+        cursorGroupRef.current.position.y = 0
+      }
     }
 
     // ---- Helpers ----
@@ -467,7 +378,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftItem: draftNode.current,
       gridPosition: gridPosition.current,
       state: { ...placementState.current },
-      currentCursorRotationY: cursorGroupRef.current.rotation.y,
+      currentCursorRotationY:
+        cursorGroupRef.current?.rotation.y ?? draftNode.current?.rotation[1] ?? 0,
     })
 
     const getActiveValidators = () =>
@@ -501,11 +413,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       gridPosition.current.set(...result.gridPosition)
 
       const c = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(c.x, c.y, c.z)
-      if (result.cursorRotation) {
-        cursorGroupRef.current.rotation.set(...result.cursorRotation)
-      } else {
-        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+      if (cursorGroupRef.current) {
+        cursorGroupRef.current.position.set(c.x, c.y, c.z)
+        if (result.cursorRotation) {
+          cursorGroupRef.current.rotation.set(...result.cursorRotation)
+        } else {
+          cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+        }
       }
 
       const draft = draftNode.current
@@ -519,11 +433,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const ensureDraft = (result: TransitionResult) => {
       gridPosition.current.set(...result.gridPosition)
       const c = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(c.x, c.y, c.z)
-      if (result.cursorRotation) {
-        cursorGroupRef.current.rotation.set(...result.cursorRotation)
-      } else {
-        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+      if (cursorGroupRef.current) {
+        cursorGroupRef.current.position.set(c.x, c.y, c.z)
+        if (result.cursorRotation) {
+          cursorGroupRef.current.rotation.set(...result.cursorRotation)
+        } else {
+          cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+        }
       }
 
       const initRotation: [number, number, number] = result.cursorRotation ?? [
@@ -564,20 +480,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const worldPos = new Vector3()
         mesh.getWorldPosition(worldPos)
         const localPos = worldToBuildingLocal(worldPos.x, worldPos.y, worldPos.z)
-        cursorGroupRef.current.position.copy(localPos)
-        if (draftNode.current.asset.attachTo) {
-          // Wall/ceiling items: extract world Y rotation (handles wall-parented items correctly)
-          const q = new Quaternion()
-          mesh.getWorldQuaternion(q)
-          cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
-        } else {
-          // Floor items: the cursor group lives in building-local space, so use the
-          // node's local Y rotation — the same value onGridMove applies. The world
-          // quaternion would double-count any building rotation, leaving the initial
-          // box mis-rotated until the first cursor move.
-          cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+        if (cursorGroupRef.current) {
+          cursorGroupRef.current.position.copy(localPos)
+          if (draftNode.current.asset.attachTo) {
+            // Wall/ceiling items: extract world Y rotation (handles wall-parented items correctly)
+            const q = new Quaternion()
+            mesh.getWorldQuaternion(q)
+            cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+          } else {
+            // Floor items: the cursor group lives in building-local space, so use the
+            // node's local Y rotation — the same value onGridMove applies. The world
+            // quaternion would double-count any building rotation, leaving the initial
+            // box mis-rotated until the first cursor move.
+            cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+          }
         }
-      } else {
+      } else if (cursorGroupRef.current) {
         cursorGroupRef.current.position.copy(gridPosition.current)
         cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
       }
@@ -589,6 +507,50 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     let previousGridPos: [number, number, number] | null = null
 
+    // Scratch objects reused by the stickiness test (runs per grid:move).
+    const stickyRay = new Ray()
+    const stickyBox = new Box3()
+    const stickyMat = new Matrix4()
+    const stickyCamPos = new Vector3()
+
+    // True while the cursor ray still points at the active shelf's volume.
+    // Used to keep an item hosted on a shelf "sticky": from an angled camera
+    // the cursor ray slips off the shelf's thin boards / through its gaps and
+    // lands on the floor *behind* the shelf, which would otherwise thrash the
+    // placement between the shelf row and the floor on every micro-move. We
+    // reconstruct the world ray (camera → grid hit point) and test it against
+    // the shelf's bounding box — so a ray that passes *through* the shelf but
+    // lands behind it still counts as "on the shelf". Only a ray that misses
+    // the shelf box entirely means the user genuinely moved off it. A simple
+    // footprint test on the floor hit point can't distinguish those.
+    const cursorRayIntersectsActiveShelf = (gridWorldPoint: [number, number, number]): boolean => {
+      const shelfId = placementState.current.shelfId
+      if (!shelfId) return false
+      const shelfMesh = sceneRegistry.nodes.get(shelfId as AnyNodeId)
+      const shelfNode = useScene.getState().nodes[shelfId as AnyNodeId] as
+        | { width?: number; depth?: number; height?: number }
+        | undefined
+      if (!(shelfMesh && shelfNode?.width && shelfNode?.depth && shelfNode?.height)) return false
+
+      cameraRef.current.getWorldPosition(stickyCamPos)
+      stickyRay.origin.copy(stickyCamPos)
+      stickyRay.direction
+        .set(
+          gridWorldPoint[0] - stickyCamPos.x,
+          gridWorldPoint[1] - stickyCamPos.y,
+          gridWorldPoint[2] - stickyCamPos.z,
+        )
+        .normalize()
+
+      // Into shelf-local space, then test the shelf's local AABB (origin at the
+      // base: y ∈ [0, height]) with a small margin.
+      stickyRay.applyMatrix4(stickyMat.copy(shelfMesh.matrixWorld).invert())
+      const m = 0.08
+      stickyBox.min.set(-shelfNode.width / 2 - m, -m, -shelfNode.depth / 2 - m)
+      stickyBox.max.set(shelfNode.width / 2 + m, shelfNode.height + m, shelfNode.depth / 2 + m)
+      return stickyRay.intersectsBox(stickyBox)
+    }
+
     const onGridMove = (event: GridEvent) => {
       // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
       if (draftNode.current === null && asset.attachTo === undefined) {
@@ -596,7 +558,19 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       has3DPointerDrivenMoveRef.current = true
+
+      // Shelf stickiness: while hosting on a shelf, ignore floor events while
+      // the cursor ray still points at the shelf volume (the ray merely slipped
+      // off a board / through a gap and hit the floor behind). Detach to the
+      // floor only once the ray misses the shelf entirely — without this the
+      // item oscillates between the shelf row and the floor on every micro-move.
+      if (placementState.current.surface === 'shelf-surface') {
+        if (cursorRayIntersectsActiveShelf(event.position)) return
+        detachItemSurfaceToFloor(event as unknown as ItemEvent)
+      }
+
       lastRawPos.current.set(event.localPosition[0], event.localPosition[1], event.localPosition[2])
+      if (!cursorGroupRef.current) return
       const result = floorStrategy.move(getContext(), event)
       if (!result) return
 
@@ -641,7 +615,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       // Preserve cursor rotation for the next draft
-      const currentRotation: [number, number, number] = [0, cursorGroupRef.current.rotation.y, 0]
+      const currentRotation: [number, number, number] = [
+        0,
+        cursorGroupRef.current?.rotation.y ?? draftNode.current?.rotation[1] ?? 0,
+        0,
+      ]
 
       // Clear live transform before commit
       if (draftNode.current) {
@@ -692,6 +670,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onWallMove = (event: WallEvent) => {
       has3DPointerDrivenMoveRef.current = true
+      if (!cursorGroupRef.current) return
       const ctx = getContext()
 
       if (ctx.state.surface !== 'wall') {
@@ -870,9 +849,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const wz = Math.round(buildingLocalPoint.z * 2) / 2
       const floorPos: [number, number, number] = [wx, 0, wz]
 
-      Object.assign(placementState.current, { surface: 'floor', surfaceItemId: null })
+      Object.assign(placementState.current, {
+        surface: 'floor',
+        surfaceItemId: null,
+        shelfId: null,
+      })
       gridPosition.current.set(wx, 0, wz)
-      cursorGroupRef.current.position.set(wx, 0, wz)
+      if (cursorGroupRef.current) {
+        cursorGroupRef.current.position.set(wx, 0, wz)
+      }
 
       const draft = draftNode.current
       if (draft) {
@@ -906,6 +891,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const onItemMove = (event: ItemEvent) => {
       if (event.node.id === draftNode.current?.id) return
       has3DPointerDrivenMoveRef.current = true
+      if (!cursorGroupRef.current) return
       const ctx = getContext()
 
       if (ctx.state.surface !== 'item-surface') {
@@ -1130,6 +1116,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onCeilingMove = (event: CeilingEvent) => {
       has3DPointerDrivenMoveRef.current = true
+      if (!cursorGroupRef.current) return
       if (!draftNode.current && placementState.current.surface === 'ceiling') {
         const nodes = useScene.getState().nodes
         const setup = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
@@ -1258,6 +1245,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onShelfMove = (event: ShelfEvent) => {
       has3DPointerDrivenMoveRef.current = true
+      // A shelf event can fire before the cursor group mounts or after
+      // teardown, leaving the ref null; bail before dereferencing it below.
+      if (!cursorGroupRef.current) return
       const ctx = getContext()
       if (ctx.state.surface !== 'shelf-surface') {
         // Cursor entered via a move event without an enter — try
@@ -1301,11 +1291,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const onShelfLeave = (event: ShelfEvent) => {
       if (placementState.current.surface !== 'shelf-surface') return
       if (event.node.id !== placementState.current.shelfId) return
+      // Intentionally do NOT detach to the floor here. `shelf:leave` fires
+      // constantly while hosting because the cursor ray slips off the shelf's
+      // thin boards and through its gaps — detaching on each of those would
+      // thrash the item between the shelf row and the floor. The grid handler
+      // owns the real shelf→floor transition (see `isOverActiveShelfFootprint`
+      // in `onGridMove`): it detaches only once the cursor is clearly off the
+      // shelf footprint, which is the genuine "left the shelf" signal.
       event.stopPropagation()
-      // Drop back to floor — same pattern as item-leave but without the
-      // detachItemSurfaceToFloor (no scaled rotation hand-off to deal
-      // with since the shelf rotation already composed cleanly).
-      Object.assign(placementState.current, { surface: 'floor', shelfId: null })
     }
 
     const onShelfClick = (event: ShelfEvent) => {
@@ -1362,7 +1355,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
         // Ref + cursor mesh + item mesh — no store update during drag
-        cursorGroupRef.current.rotation.y = newRotationY
+        if (cursorGroupRef.current) {
+          cursorGroupRef.current.rotation.y = newRotationY
+        }
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.rotation.y = newRotationY
 
@@ -1376,8 +1371,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           const z = snapToGrid(lastRawPos.current.z, swapDims ? dimX : dimZ)
           gridPosition.current.set(x, gridPosition.current.y, z)
           draft.position = [x, gridPosition.current.y, z]
-          cursorGroupRef.current.position.x = x
-          cursorGroupRef.current.position.z = z
+          if (cursorGroupRef.current) {
+            cursorGroupRef.current.position.x = x
+            cursorGroupRef.current.position.z = z
+          }
           if (mesh) {
             mesh.position.x = x
             mesh.position.z = z
@@ -1400,7 +1397,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               worldSnapped.y,
               worldSnapped.z,
             )
-            cursorGroupRef.current.position.set(localSnapped.x, localSnapped.y, localSnapped.z)
+            if (cursorGroupRef.current) {
+              cursorGroupRef.current.position.set(localSnapped.x, localSnapped.y, localSnapped.z)
+            }
             if (mesh) mesh.position.set(x, y, z)
           }
         }
@@ -1408,13 +1407,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // Update live transform for 2D floorplan with post-snap position
         const currentLive = useLiveTransforms.getState().get(draft.id)
         if (currentLive) {
+          const livePosition: [number, number, number] = cursorGroupRef.current
+            ? [
+                cursorGroupRef.current.position.x,
+                cursorGroupRef.current.position.y,
+                cursorGroupRef.current.position.z,
+              ]
+            : [draft.position[0], draft.position[1], draft.position[2]]
           useLiveTransforms.getState().set(draft.id, {
             ...currentLive,
-            position: [
-              cursorGroupRef.current.position.x,
-              cursorGroupRef.current.position.y,
-              cursorGroupRef.current.position.z,
-            ] as [number, number, number],
+            position: livePosition,
             rotation: newRotationY,
           })
         }
@@ -1576,16 +1578,58 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
   }, [viewerLevelId, draftNode, asset])
 
+  // Disable raycasting on the live draft mesh (and restore it when the draft
+  // changes or goes away) so the cursor ray passes through the item being
+  // moved and lands on the surface beneath it.
+  const reconcileDraftRaycast = useCallback((mesh: Object3D | null) => {
+    if (raycastDisabledMeshRef.current !== mesh) {
+      // New draft root (or cleared): restore the prior mesh and reset tracking.
+      for (const restore of restoreRaycastsRef.current) restore()
+      restoreRaycastsRef.current = []
+      raycastDisabledChildrenRef.current = new WeakSet()
+      raycastDisabledMeshRef.current = mesh
+    }
+    if (!mesh) return
+    // Disable any descendant not handled yet. Item drafts are GLB models whose
+    // child meshes mount asynchronously (Suspense), so a one-shot traverse
+    // misses them — those late children keep intercepting the ray and corrupt
+    // the shelf-row hit the moment the item moves onto a row. Re-walking each
+    // frame is cheap: the WeakSet makes it idempotent, so only new children pay.
+    mesh.traverse((child) => {
+      if (raycastDisabledChildrenRef.current.has(child)) return
+      raycastDisabledChildrenRef.current.add(child)
+      const original = child.raycast
+      child.raycast = () => {}
+      restoreRaycastsRef.current.push(() => {
+        child.raycast = original
+      })
+    })
+  }, [])
+
+  // Restore the draft mesh's raycast when the coordinator unmounts (tool change).
+  useEffect(() => () => reconcileDraftRaycast(null), [reconcileDraftRaycast])
+
   useFrame((_, delta) => {
-    if (!asset) return
-    if (!draftNode.current) return
+    if (!asset) {
+      reconcileDraftRaycast(null)
+      return
+    }
+    if (!draftNode.current) {
+      reconcileDraftRaycast(null)
+      return
+    }
+    const mesh = sceneRegistry.nodes.get(draftNode.current.id) ?? null
+    reconcileDraftRaycast(mesh)
+    // mitt listeners outlive the cursor group's mount; bail if it's gone
+    // (mount/teardown race, #323). Placed after reconcileDraftRaycast so the
+    // draft's raycast is still restored during that window.
+    if (!cursorGroupRef.current) return
     // The mesh-position lerp below only makes sense once this coordinator
     // owns the move via a 3D pointer event. Skip until then so that
     // external drivers (e.g. the 2D `FloorplanRegistryMoveOverlay`
     // writing scene.position directly) aren't fought by useFrame pulling
     // the mesh back to its pre-move location.
     if (!has3DPointerDrivenMoveRef.current) return
-    const mesh = sceneRegistry.nodes.get(draftNode.current.id)
     if (!mesh) return
 
     // Hide wall/ceiling-attached items when between surfaces (only cursor visible)

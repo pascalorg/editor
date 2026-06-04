@@ -7277,10 +7277,7 @@ export function FloorplanPanel() {
   // should stop further pointer-move processing (we either emitted a
   // ceiling event or are between ceilings).
   const handleCeilingItemPlacementMove = useCallback(
-    (
-      planPoint: WallPlanPoint,
-      nativeEvent: ReactPointerEvent<SVGSVGElement>,
-    ): boolean => {
+    (planPoint: WallPlanPoint, nativeEvent: ReactPointerEvent<SVGSVGElement>): boolean => {
       if (!isCeilingItemPlacementActive) return false
 
       const ceiling = findCeilingAtPlanPoint(planPoint)
@@ -7317,10 +7314,7 @@ export function FloorplanPanel() {
   // Click counterpart — used by the background placement click handler.
   // Returns true if the click was a valid ceiling-item placement.
   const handleCeilingItemPlacementClick = useCallback(
-    (
-      planPoint: WallPlanPoint,
-      nativeEvent: ReactMouseEvent<SVGSVGElement>,
-    ): boolean => {
+    (planPoint: WallPlanPoint, nativeEvent: ReactMouseEvent<SVGSVGElement>): boolean => {
       if (!isCeilingItemPlacementActive) return false
       const ceiling = findCeilingAtPlanPoint(planPoint)
       if (!ceiling) return true

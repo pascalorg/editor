@@ -26,6 +26,7 @@ type BuildToolKind =
   | 'door'
   | 'window'
   | 'column'
+  | 'shelf'
   | 'spawn'
 
 type BuildType = {
@@ -51,6 +52,7 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'door', label: 'Door', iconSrc: '/icons/door.png', kind: 'door' },
   { id: 'window', label: 'Window', iconSrc: '/icons/window.png', kind: 'window' },
   { id: 'column', label: 'Column', iconSrc: '/icons/column.png', kind: 'column' },
+  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.png', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/site.png', kind: 'spawn' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.png', mode: 'material-paint' },
 ]
