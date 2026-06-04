@@ -15,7 +15,7 @@ export const PIC2THREE_NODES = {
 } as const
 
 export type PicTo3DParams = {
-  /** < 0 表示每次随机 */
+  /** Values below 0 use a random seed each time. */
   seed: number
   steps: number
   cfg: number
@@ -25,7 +25,7 @@ export type PicTo3DParams = {
   numChunks: number
   octreeResolution: number
   modelShift: number
-  /** VoxelToMesh（SaveGLB 使用此节点输出） */
+  /** VoxelToMesh output is used by SaveGLB. */
   meshAlgorithm: string
   meshThreshold: number
   meshBasicThreshold: number
@@ -66,14 +66,14 @@ export type PicTo3DPreset = {
 export const PIC_TO3D_PRESETS: PicTo3DPreset[] = [
   {
     id: 'default',
-    label: '標準（低ポリ <1MB）',
-    description: 'ワークフロー pic2threeAPI.json と同じ設定。家具カタログ向け。',
+    label: 'Standard (low poly <1MB)',
+    description: 'Matches the pic2threeAPI.json workflow. Good for the furniture catalog.',
     params: { ...PIC_TO3D_DEFAULT_PARAMS },
   },
   {
     id: 'balanced',
-    label: 'バランス',
-    description: 'ボクセルとステップをやや上げ、ポリゴン数は中程度。',
+    label: 'Balanced',
+    description: 'Slightly higher voxel and step settings with a moderate polygon count.',
     params: {
       ...PIC_TO3D_DEFAULT_PARAMS,
       steps: 24,
@@ -86,8 +86,8 @@ export const PIC_TO3D_PRESETS: PicTo3DPreset[] = [
   },
   {
     id: 'detail',
-    label: '高精細',
-    description: 'オクトリーとステップを上げ、標準より細部が出ます。所要時間は中程度。',
+    label: 'High Detail',
+    description: 'Raises octree resolution and steps for more detail. Medium runtime.',
     params: {
       ...PIC_TO3D_DEFAULT_PARAMS,
       steps: 28,
@@ -102,8 +102,8 @@ export const PIC_TO3D_PRESETS: PicTo3DPreset[] = [
   },
   {
     id: 'ultra',
-    label: '最高精細',
-    description: 'ボクセル・メッシュを最大寄り。最も遅く、ポリゴン・ファイルも最大。最終出力向け。',
+    label: 'Ultra Detail',
+    description: 'Highest voxel and mesh settings. Slowest and largest output; use for final assets.',
     params: {
       ...PIC_TO3D_DEFAULT_PARAMS,
       steps: 32,
@@ -118,8 +118,8 @@ export const PIC_TO3D_PRESETS: PicTo3DPreset[] = [
   },
   {
     id: 'fast',
-    label: 'クイック',
-    description: 'ステップとボクセルを下げ、試作・構図確認用。',
+    label: 'Quick',
+    description: 'Lower step and voxel settings for drafts and composition checks.',
     params: {
       ...PIC_TO3D_DEFAULT_PARAMS,
       steps: 12,
@@ -142,7 +142,7 @@ type ComfyWorkflow = Record<
 
 function requireNode(workflow: ComfyWorkflow, id: string): { inputs: Record<string, unknown> } {
   const node = workflow[id]
-  if (!node) throw new Error(`工作流缺少节点 ${id}`)
+  if (!node) throw new Error(`Workflow is missing node ${id}`)
   return node
 }
 
@@ -241,43 +241,43 @@ export function applyPicTo3DParams(workflow: ComfyWorkflow, params: PicTo3DParam
 export const PIC_TO3D_PARAM_GROUPS = [
   {
     id: 'sampler',
-    title: '采样（节点 3 · KSampler）',
+    title: 'Sampling (node 3 - KSampler)',
     fields: [
-      { key: 'seed', label: 'Seed', hint: '-1 = 每次随机' },
-      { key: 'steps', label: 'Steps', hint: '步数，越大越慢、细节可能更多' },
-      { key: 'cfg', label: 'CFG', hint: '分类器引导强度' },
-      { key: 'denoise', label: 'Denoise', hint: '0–1' },
-      { key: 'samplerName', label: 'Sampler', hint: '如 euler' },
+      { key: 'seed', label: 'Seed', hint: '-1 = random each time' },
+      { key: 'steps', label: 'Steps', hint: 'More steps are slower and may add detail.' },
+      { key: 'cfg', label: 'CFG', hint: 'Classifier-free guidance strength.' },
+      { key: 'denoise', label: 'Denoise', hint: '0 to 1' },
+      { key: 'samplerName', label: 'Sampler', hint: 'For example: euler' },
     ],
   },
   {
     id: 'latent',
-    title: '体素 latent（节点 66 / 61）',
+    title: 'Voxel latent (nodes 66 / 61)',
     fields: [
       { key: 'latentResolution', label: 'Latent resolution', hint: 'EmptyLatentHunyuan3Dv2' },
       { key: 'numChunks', label: 'Num chunks', hint: 'VAEDecodeHunyuan3D' },
-      { key: 'octreeResolution', label: 'Octree resolution', hint: '体素八叉树精度' },
+      { key: 'octreeResolution', label: 'Octree resolution', hint: 'Voxel octree precision.' },
     ],
   },
   {
     id: 'mesh',
-    title: '网格（节点 81 · VoxelToMesh → SaveGLB）',
+    title: 'Mesh (node 81 - VoxelToMesh -> SaveGLB)',
     fields: [
-      { key: 'meshAlgorithm', label: 'Algorithm', hint: '如 surface net' },
-      { key: 'meshThreshold', label: 'Mesh threshold', hint: '越小网格越“满”' },
-      { key: 'meshBasicThreshold', label: 'Mesh basic threshold', hint: '节点 62，与 81 同步调' },
-      { key: 'glbFilenamePrefix', label: 'GLB 文件名前缀', hint: 'SaveGLB 节点 82' },
+      { key: 'meshAlgorithm', label: 'Algorithm', hint: 'For example: surface net' },
+      { key: 'meshThreshold', label: 'Mesh threshold', hint: 'Lower values create a fuller mesh.' },
+      { key: 'meshBasicThreshold', label: 'Mesh basic threshold', hint: 'Node 62, adjusted with node 81.' },
+      { key: 'glbFilenamePrefix', label: 'GLB filename prefix', hint: 'SaveGLB node 82' },
     ],
   },
   {
     id: 'preprocess',
-    title: '预处理与其它',
+    title: 'Preprocessing and Other',
     fields: [
-      { key: 'removeBackground', label: '抠图', hint: '关闭则直接用原图进 CLIP' },
-      { key: 'remBgMode', label: '抠图模式', hint: 'easy imageRemBg' },
-      { key: 'remBgBackground', label: '抠图背景', hint: '如 white' },
-      { key: 'modelShift', label: 'Model shift', hint: '节点 70 AuraFlow' },
-      { key: 'checkpointName', label: 'Checkpoint', hint: '节点 54 权重文件名' },
+      { key: 'removeBackground', label: 'Remove background', hint: 'When disabled, the original image goes directly into CLIP.' },
+      { key: 'remBgMode', label: 'Background removal mode', hint: 'easy imageRemBg' },
+      { key: 'remBgBackground', label: 'Background fill', hint: 'For example: white' },
+      { key: 'modelShift', label: 'Model shift', hint: 'Node 70 AuraFlow' },
+      { key: 'checkpointName', label: 'Checkpoint', hint: 'Node 54 checkpoint file name' },
     ],
   },
 ] as const

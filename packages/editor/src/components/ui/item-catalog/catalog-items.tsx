@@ -2919,6 +2919,21 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
   },
+  {
+    id: 'taideng',
+    category: 'furniture',
+    name: '台灯',
+    tags: [
+      'floor',
+      'custom',
+    ],
+    thumbnail: '/icons/couch.png',
+    src: 'https://madori-navi.jp/glb/tree.glb',
+    dimensions: [1.9964, 2.691, 1.9989],
+    offset: [-0.9982, 0, 0.9995],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  },
 ]
 
 /** Built-in catalog plus user-added items (persisted in IndexedDB). */

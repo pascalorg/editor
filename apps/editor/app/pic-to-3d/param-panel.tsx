@@ -114,7 +114,7 @@ export function PicTo3DParamPanel({
   return (
     <div className="space-y-4 border-border/60 border-t pt-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-sm">ワークフローパラメータ</h2>
+        <h2 className="font-semibold text-sm">Workflow Parameters</h2>
         <button
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground text-xs hover:bg-muted hover:text-foreground disabled:opacity-50"
           disabled={disabled}
@@ -122,15 +122,15 @@ export function PicTo3DParamPanel({
           type="button"
         >
           <RotateCcw className="size-3.5" />
-          デフォルトに戻す
+          Reset defaults
         </button>
       </div>
 
       <p className="text-muted-foreground text-xs leading-relaxed">
-        ComfyUI ノード：KSampler <code className="rounded bg-muted px-0.5">{nodes.ksampler}</code>
-        、VoxelToMesh <code className="rounded bg-muted px-0.5">{nodes.mesh}</code>
-        、SaveGLB <code className="rounded bg-muted px-0.5">{nodes.saveGlb}</code>
-        など。変更後「3Dモデルを生成」を押すと反映されます。
+        ComfyUI nodes: KSampler <code className="rounded bg-muted px-0.5">{nodes.ksampler}</code>,
+        VoxelToMesh <code className="rounded bg-muted px-0.5">{nodes.mesh}</code>, SaveGLB{' '}
+        <code className="rounded bg-muted px-0.5">{nodes.saveGlb}</code>, and related nodes. Changes
+        apply when you press Generate 3D Model.
       </p>
 
       <div className="flex flex-wrap gap-2">

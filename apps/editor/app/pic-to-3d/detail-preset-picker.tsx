@@ -9,15 +9,14 @@ export type DetailPreset = {
   params: PicTo3DParams
 }
 
-/** 精細度プリセット（速い → 高精細） */
 export const DETAIL_PRESET_ORDER = ['fast', 'default', 'balanced', 'detail', 'ultra'] as const
 
 const SHORT_LABELS: Record<string, string> = {
-  fast: 'クイック',
-  default: '標準',
-  balanced: 'バランス',
-  detail: '高精細',
-  ultra: '最高精細',
+  fast: 'Quick',
+  default: 'Standard',
+  balanced: 'Balanced',
+  detail: 'High Detail',
+  ultra: 'Ultra Detail',
 }
 
 export function DetailPresetPicker({
@@ -39,7 +38,7 @@ export function DetailPresetPicker({
 
   return (
     <div className="space-y-2">
-      <p className="font-medium text-xs">精細度</p>
+      <p className="font-medium text-xs">Detail</p>
       <div className="flex flex-wrap gap-2">
         {ordered.map((preset) => {
           const activeBtn = preset.id === selectedId

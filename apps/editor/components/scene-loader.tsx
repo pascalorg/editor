@@ -1,7 +1,7 @@
 'use client'
 
 // Node registry bootstrap is loaded once at the root via
-// `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
+// `<ClientBootstrap>` in `app/layout.tsx` - no per-page side-effect
 // import here.
 import {
   AddCatalogPanel,
@@ -50,7 +50,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'add-catalog',
-    label: '霑ｽ蜉',
+    label: 'Add',
     component: AddCatalogPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Plus className="h-5 w-5" />,
@@ -175,10 +175,10 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const handleThumb = useCallback(
     async (_blob: Blob) => {
       // TODO(phase7): upload thumbnail via POST /api/scenes/[id]/thumbnail.
-      // Stub endpoint is not yet implemented in v0.1 — skip upload for now.
+      // Stub endpoint is not yet implemented in v0.1 - skip upload for now.
       await fetch(`/api/scenes/${meta.id}/thumbnail`, {
         method: 'POST',
-        // Intentionally no body — endpoint is a stub.
+        // Intentionally no body - endpoint is a stub.
       }).catch(() => {
         // Swallow errors silently; thumbnail upload is best-effort.
       })
@@ -194,19 +194,19 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
             Open recent scenes
           </Link>
           <span aria-hidden className="text-muted-foreground">
-            ﾂｷ
+            |
           </span>
           <Link className="font-medium text-foreground hover:underline" href="/scenes">
             Create new
           </Link>
           <span aria-hidden className="text-muted-foreground">
-            ﾂｷ
+            |
           </span>
           <Link className="font-medium text-foreground hover:underline" href="/pic-to-3d">
             Image to 3D
           </Link>
           <span aria-hidden className="text-muted-foreground">
-            ﾂｷ
+            |
           </span>
           <button
             className="font-medium text-foreground hover:underline"
@@ -237,7 +237,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         )}
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
-          <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
+          <h2 className="font-semibold text-sm">Another session saved first - refresh?</h2>
           <p className="mt-1 text-muted-foreground text-xs">
             Your changes haven&apos;t been saved. Reload to pick up the latest version.
           </p>

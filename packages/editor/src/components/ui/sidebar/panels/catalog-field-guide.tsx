@@ -16,99 +16,99 @@ export function FieldExampleList({ items }: { items: string[] }) {
   )
 }
 
-const DEG = '\u00b0'
-
 export function CatalogPlacementFieldGuide() {
   return (
     <details className="rounded-lg border border-border/60 bg-muted/15 px-2.5 py-2 text-xs">
       <summary className="cursor-pointer font-medium text-muted-foreground text-xs select-none">
-        フィールド説明と数値例（展開）
+        Field guide and numeric examples
       </summary>
       <div className="mt-2 space-y-3 border-border/40 border-t pt-2">
         <section className="space-y-1">
-          <p className="font-medium text-[11px]">dimensions（幅 × 高さ × 奥行、メートル）</p>
+          <p className="font-medium text-[11px]">dimensions (width x height x depth, metres)</p>
           <FieldHint>
-            配置時の<strong className="font-medium text-foreground">赤/緑のプレースホルダ</strong>
-            と、配置可否・衝突判定を決めます。<strong className="font-medium text-foreground">GLB 自体は</strong>
-            拡大縮小しません。
+            Controls the red/green placement placeholder, placement checks, and collision checks.
+            It does not scale the GLB model itself.
           </FieldHint>
           <FieldExampleList
             items={[
-              '0.1 × 0.1 × 0.1 — 約 10cm の小物',
-              '0.9 × 2.1 × 0.12 — 単開きドア穴の目安（幅 90cm、高 2.1m、厚 12cm）',
-              '1.0 × 1.0 × 1.0 — 約 1m 立方（椅子・小テーブルなど）',
-              '枠とモデルが合わないときは dimensions を変え、scale で代用しない',
+              '0.1 x 0.1 x 0.1 - about a 10 cm object',
+              '0.9 x 2.1 x 0.12 - typical single-door opening',
+              '1.0 x 1.0 x 1.0 - about a 1 m cube',
+              'If the frame and model do not match, adjust dimensions instead of using scale.',
             ]}
           />
         </section>
 
         <section className="space-y-1">
-          <p className="font-medium text-[11px]">scale（GLB の拡大縮小）</p>
+          <p className="font-medium text-[11px]">scale (GLB visual scale)</p>
           <FieldHint>
-            <strong className="font-medium text-foreground">見た目のモデルサイズ</strong>
-            のみ変更。赤/緑枠は変わりません。
+            Changes only the visible model size. The red/green placement frame does not change.
           </FieldHint>
           <FieldExampleList
             items={[
-              '1 — メートル単位の GLB（組み込み家具は多くが 1）',
-              '0.1 — ファイルが 10 倍大きいとき、表示を約 1/10 に',
-              '0.001 — ミリ単位 CAD（例：900×2100×120 → 約 0.9×2.1×0.12 m）',
-              '3 軸は通常同じ値。scale だけでは「置ける」判定は緑になりません',
+              '1 - GLB already uses metres',
+              '0.1 - file is about 10 times too large',
+              '0.001 - millimetre CAD data',
+              'Usually keep all three axes equal. Scale alone will not make placement valid.',
             ]}
           />
         </section>
 
         <section className="space-y-1">
-          <p className="font-medium text-[11px]">offset（GLB の平行移動、メートル）</p>
+          <p className="font-medium text-[11px]">offset (GLB translation, metres)</p>
           <FieldHint>
-            配置点からモデルを移動。<strong className="font-medium text-foreground">枠は動きません</strong>
-            。底面接地・扉の壁寄せなどの微調整用。
+            Moves the model away from the placement point. The placement frame does not move. Use
+            this for floor contact, wall-mounted parts, and similar fine tuning.
           </FieldHint>
           <FieldExampleList
             items={[
-              '[0, 0, 0] — 追加移動なし（rotation の調整が別途必要なことも）',
-              'y = 0.065 — 約 6.5cm 上へ（壁付け照明など）',
-              'y = -0.05 — 約 5cm 下へ（浮いているとき）',
+              '[0, 0, 0] - no extra movement',
+              'y = 0.065 - move about 6.5 cm up',
+              'y = -0.05 - move about 5 cm down if the model floats',
             ]}
           />
         </section>
 
         <section className="space-y-1">
-          <p className="font-medium text-[11px]">rotation（ラジアン）</p>
+          <p className="font-medium text-[11px]">rotation (radians)</p>
           <FieldHint>
-            <strong className="font-medium text-foreground">GLB のみ</strong>回転。枠は回りません。π ≈ 3.1416、90° = π/2 ≈ 1.5708。
+            Rotates only the GLB. The frame does not rotate. pi is about 3.1416; 90 deg is about
+            1.5708.
           </FieldHint>
           <FieldExampleList
             items={[
-              '[0, 0, 0] — エクスポート向きのまま',
-              `x = -1.5708（約 -90${DEG}、X 軸）— Z-up の CAD 扉・壁部品を立てる例`,
-              `z = 1.5708（約 90${DEG}、Z 軸）— 扉を横にする例`,
+              '[0, 0, 0] - keep exported orientation',
+              'x = -1.5708 - stand up Z-up CAD doors or wall parts',
+              'z = 1.5708 - rotate a door sideways',
             ]}
           />
         </section>
 
         <section className="space-y-1">
-          <p className="font-medium text-[11px]">attachTo（取り付け先）</p>
+          <p className="font-medium text-[11px]">attachTo (placement target)</p>
           <FieldExampleList
             items={[
-              '（空）— 床に配置。カーソルは床',
-              'wall — 壁厚の中央、両面に占有（スイッチ、貫通部品）',
-              'wall-side — 壁の片面（扉、壁付け灯、棚）',
-              'ceiling — 天井',
+              'blank - place on the floor',
+              'wall - centered in wall thickness and occupies both sides',
+              'wall-side - attached to one wall face',
+              'ceiling - attached to the ceiling',
             ]}
           />
         </section>
 
         <section className="space-y-1 rounded-md bg-background/60 p-2">
-          <p className="font-medium text-[11px]">参考：単開きドア（ミリ GLB、壁付け）</p>
+          <p className="font-medium text-[11px]">Example: single door, millimetre GLB, wall side</p>
           <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground leading-relaxed">
             {`dimensions: [0.9, 2.1, 0.12]
 offset: [0, 0, 0]
-rotation: [-1.5708, 0, 0]   // 約 -90° X
+rotation: [-1.5708, 0, 0]   // about -90 deg on X
 scale: [0.001, 0.001, 0.001]
 attachTo: 'wall-side'`}
           </pre>
-          <FieldHint>モデル URL を入力 →「自動入力」→ 上表で微調整。配置時は壁面にカーソルを合わせる。</FieldHint>
+          <FieldHint>
+            Enter the model URL, run auto-fill, then tune these values. For wall objects, move the
+            cursor over the wall face before placing.
+          </FieldHint>
         </section>
       </div>
     </details>
@@ -117,12 +117,14 @@ attachTo: 'wall-side'`}
 
 export const DIMENSIONS_HINT = (
   <>
-    <FieldHint>単位：メートル。赤/緑枠と配置可否を決め、モデルは拡大しません。</FieldHint>
+    <FieldHint>
+      Unit: metres. Controls the red/green frame and placement validity. It does not scale the GLB.
+    </FieldHint>
     <FieldExampleList
       items={[
-        '0.1 — 約 10cm 角（小物）',
-        '1.0 — 約 1m 角（家具の目安）',
-        '0.9 × 2.1 — ドア開口の幅・高の目安',
+        '0.1 - about a 10 cm object',
+        '1.0 - about a 1 m furniture object',
+        '0.9 x 2.1 - typical door opening width and height',
       ]}
     />
   </>
@@ -130,24 +132,25 @@ export const DIMENSIONS_HINT = (
 
 export const SCALE_HINT = (
   <>
-    <FieldHint>見た目の GLB のみ拡大縮小。枠は dimensions で変更。</FieldHint>
-    <FieldExampleList
-      items={['1 — メートル単位', '0.001 — ミリ CAD', '0.1 — ファイルが 10 倍大きいとき']}
-    />
+    <FieldHint>Scales only the visible GLB. Change the frame with dimensions.</FieldHint>
+    <FieldExampleList items={['1 - metre-based GLB', '0.001 - millimetre CAD', '0.1 - file is 10 times too large']} />
   </>
 )
 
 export const OFFSET_HINT = (
   <>
-    <FieldHint>モデルを移動（メートル）。枠は動きません。浮いていれば y、壁付けは z。</FieldHint>
-    <FieldExampleList items={['0 — 移動なし', '0.065 — 約 6.5cm 上へ']} />
+    <FieldHint>
+      Moves the model in metres. The frame does not move. Adjust y for floating models and z for
+      wall-mounted models.
+    </FieldHint>
+    <FieldExampleList items={['0 - no movement', '0.065 - about 6.5 cm up']} />
   </>
 )
 
 export const ROTATION_HINT = (
   <>
-    <FieldHint>ラジアン。モデルのみ回転。90° ≈ 1.5708。</FieldHint>
-    <FieldExampleList items={['0 — 回転なし', '-1.5708 — Z-up CAD を立てる例（X 軸）']} />
+    <FieldHint>Radians. Rotates only the model. 90 deg is about 1.5708.</FieldHint>
+    <FieldExampleList items={['0 - no rotation', '-1.5708 - stand up a Z-up CAD model on X']} />
   </>
 )
 
@@ -155,26 +158,28 @@ export function AttachToHint({ attachTo }: { attachTo: '' | 'wall' | 'wall-side'
   if (attachTo === 'wall') {
     return (
       <FieldHint>
-        壁厚の中央。両面に占有。非対称の扉 GLB では片側だけ把手が見えることがあります。offset / cutout や wall-side の検討を。
+        Centered in the wall thickness and occupied on both sides. For asymmetric door GLBs, a
+        handle may only be visible on one side. Consider offset, cutout settings, or wall-side.
       </FieldHint>
     )
   }
   if (attachTo === 'wall-side') {
     return (
       <FieldHint>
-        壁の片面（背面が壁、室内側へ）。単開き扉・壁付け灯向け。カーソルを壁面に合わせて配置。
+        Attached to one wall face. Best for single doors, wall lamps, and shelves. Place it by
+        hovering over the wall face.
       </FieldHint>
     )
   }
   if (attachTo === 'ceiling') {
-    return <FieldHint>天井下に吊る。カーソルは天井。</FieldHint>
+    return <FieldHint>Hangs below the ceiling. Place it by hovering over the ceiling.</FieldHint>
   }
   if (attachTo === '') {
-    return <FieldHint>床に配置。カーソルは床。赤/緑枠の底辺が床に付きます。</FieldHint>
+    return <FieldHint>Placed on the floor. The cursor is on the floor and the frame sits on it.</FieldHint>
   }
   return (
     <FieldHint>
-      床：床をクリック。wall / wall-side：壁面をクリック。詳細は上の「フィールド説明」。
+      Floor: click the floor. wall / wall-side: click a wall face. See the field guide above.
     </FieldHint>
   )
 }

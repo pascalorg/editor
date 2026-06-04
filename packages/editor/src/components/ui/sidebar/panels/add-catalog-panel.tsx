@@ -7,12 +7,12 @@ import {
   formatCatalogFieldNumber,
   inferCatalogParamsFromGlbUrl,
 } from '../../../../lib/infer-glb-catalog-params'
+import useEditor, { type CatalogCategory } from '../../../../store/use-editor'
 import { getAllCatalogItems } from '../../item-catalog/catalog-items'
 import { useCustomCatalog } from '../../item-catalog/custom-catalog-store'
 import { useDevCatalogOverlay } from '../../item-catalog/dev-catalog-overlay-store'
 import { Button } from '../../primitives/button'
 import { Input } from '../../primitives/input'
-import useEditor, { type CatalogCategory } from '../../../../store/use-editor'
 import {
   AttachToHint,
   CatalogPlacementFieldGuide,
@@ -30,14 +30,14 @@ const CATEGORIES: CatalogCategory[] = [
   'outdoor',
 ]
 
-const CATEGORY_LABELS_JA: Record<CatalogCategory, string> = {
-  furniture: '家具',
-  appliance: '家電',
-  kitchen: 'キッチン',
-  bathroom: 'バスルーム',
-  outdoor: 'アウトドア',
-  window: '窓',
-  door: 'ドア',
+const CATEGORY_LABELS: Record<CatalogCategory, string> = {
+  furniture: 'Furniture',
+  appliance: 'Appliances',
+  kitchen: 'Kitchen',
+  bathroom: 'Bathroom',
+  outdoor: 'Outdoor',
+  window: 'Windows',
+  door: 'Doors',
 }
 
 const isDev = process.env.NODE_ENV === 'development'
@@ -183,8 +183,6 @@ export function AddCatalogPanel() {
 
   const isEditing = editingId !== null
 
-  // Do not memoize: `CATALOG_ITEMS` can change via HMR / manual edits without bumping
-  // `catalogListKey`. Re-read every render; `customCatalogRevision` covers post-write upserts.
   void catalogListKey
   void customCatalogRevision
   void devOverlayRevision
@@ -253,7 +251,7 @@ export function AddCatalogPanel() {
         y: formatCatalogFieldNumber(params.scale[1]),
         z: formatCatalogFieldNumber(params.scale[2]),
       })
-      setSuccess(`GLB からフィールドを自動入力しました。${params.notes.join(' ')}`)
+      setSuccess(`Auto-filled fields from GLB. ${params.notes.join(' ')}`)
     },
     [],
   )
@@ -263,7 +261,7 @@ export function AddCatalogPanel() {
     setSuccess(null)
 
     if (!modelUrl.trim()) {
-      setError('取得可能なモデル URL（.glb / .gltf）を入力してください。')
+      setError('Enter a reachable model URL (.glb / .gltf).')
       return
     }
 
@@ -272,8 +270,8 @@ export function AddCatalogPanel() {
       const params = await inferCatalogParamsFromGlbUrl(modelUrl.trim())
       applyInferredParams(params)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'GLB の読み込みに失敗しました。'
-      setError(`${message}（外部 URL は CORS が許可されている必要があります）`)
+      const message = err instanceof Error ? err.message : 'Failed to load GLB.'
+      setError(`${message} External URLs must allow CORS.`)
     } finally {
       setIsAnalyzingGlb(false)
     }
@@ -321,7 +319,7 @@ export function AddCatalogPanel() {
     setThumbnailUrl(item.thumbnail)
     setFloorPlanUrl(item.floorPlanUrl ?? '')
     setError(null)
-    setSuccess(`「${item.name}」を編集中です。変更後「変更を保存」をクリックしてください。`)
+    setSuccess(`"${item.name}" is ready to edit. Click "Save changes" after editing.`)
   }, [])
 
   const cancelEdit = useCallback(() => {
@@ -332,12 +330,12 @@ export function AddCatalogPanel() {
   const handleDelete = useCallback(
     async (item: AssetInput) => {
       if (!isDev) {
-        setError('カタログ項目の削除はローカル開発（bun dev）時のみ利用できます。')
+        setError('Catalog item deletion is only available during local development (bun dev).')
         return
       }
 
       const confirmed = window.confirm(
-        `catalog-items.tsx から「${item.name}」（id: ${item.id}）を削除しますか？\n存在する場合は public/items/${item.id}/ も削除します。`,
+        `Delete "${item.name}" (id: ${item.id}) from catalog-items.tsx?\nIf present, public/items/${item.id}/ will also be removed.`,
       )
       if (!confirmed) return
 
@@ -352,7 +350,7 @@ export function AddCatalogPanel() {
         const body = (await response.json()) as { ok?: boolean; message?: string; error?: string }
 
         if (!response.ok) {
-          setError(body.error ?? '削除に失敗しました。')
+          setError(body.error ?? 'Delete failed.')
           return
         }
 
@@ -368,9 +366,9 @@ export function AddCatalogPanel() {
           resetForm()
         }
 
-        setSuccess(body.message ?? `「${item.name}」を削除しました。`)
+        setSuccess(body.message ?? `"${item.name}" was deleted.`)
       } catch {
-        setError('削除リクエストに失敗しました。apps/editor の開発サーバーが起動しているか確認してください。')
+        setError('Delete request failed. Make sure the apps/editor dev server is running.')
       } finally {
         setDeletingId(null)
       }
@@ -391,25 +389,25 @@ export function AddCatalogPanel() {
     setSuccess(null)
 
     if (!isDev) {
-      setError('ソースへの書き込みはローカル開発（bun dev）時のみ利用できます。')
+      setError('Writing to source is only available during local development (bun dev).')
       return
     }
 
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('家具名を入力してください。')
+      setError('Enter a furniture name.')
       return
     }
     const trimmedModelUrl = modelUrl.trim()
     const hasModelSource = Boolean(trimmedModelUrl) || Boolean(editingAssets?.src)
     if (!hasModelSource) {
-      setError('モデル URL（.glb / .gltf）を入力してください。')
+      setError('Enter a model URL (.glb / .gltf).')
       return
     }
 
     const dimensions = parseDimensions({ w: dimW, h: dimH, d: dimD })
     if (!dimensions) {
-      setError('寸法は 0 より大きい数値（メートル）にしてください。')
+      setError('Dimensions must be positive numbers in metres.')
       return
     }
 
@@ -417,7 +415,7 @@ export function AddCatalogPanel() {
     const rotationTuple = parseTuple3(rotation)
     const scaleTuple = parseTuple3(scale)
     if (!(offsetTuple && rotationTuple && scaleTuple)) {
-      setError('offset / rotation / scale は有効な数値にしてください。')
+      setError('offset / rotation / scale must be valid numbers.')
       return
     }
 
@@ -425,20 +423,20 @@ export function AddCatalogPanel() {
     if (surfaceHeight.trim()) {
       const parsed = Number.parseFloat(surfaceHeight)
       if (!Number.isFinite(parsed) || parsed <= 0) {
-        setError('天板の高さは 0 より大きい数値にしてください。')
+        setError('Surface height must be a positive number.')
         return
       }
       surfaceHeightValue = parsed
     }
 
     const tags = tagsText
-      .split(/[,，]/)
+      .split(',')
       .map((tag) => tag.trim().toLowerCase())
       .filter(Boolean)
 
     const targetId = editingId ?? previewId
     if (!targetId) {
-      setError('エントリ ID を確定できません。')
+      setError('Could not determine an entry ID.')
       return
     }
 
@@ -484,12 +482,12 @@ export function AddCatalogPanel() {
       }
 
       if (!response.ok) {
-        setError(body.error ?? '書き込みに失敗しました。')
+        setError(body.error ?? 'Write failed.')
         return
       }
 
       if (!body.entry) {
-        setError('サーバーからカタログエントリが返されませんでした。')
+        setError('The server did not return a catalog entry.')
         return
       }
 
@@ -502,7 +500,7 @@ export function AddCatalogPanel() {
       }
 
       if (editingId) {
-        setSuccess(body.message ?? `「${body.entry.name}」を更新しました。`)
+        setSuccess(body.message ?? `"${body.entry.name}" was updated.`)
         setEditingAssets({
           src: body.entry.src,
           thumbnail: body.entry.thumbnail,
@@ -512,15 +510,12 @@ export function AddCatalogPanel() {
         setThumbnailUrl(body.entry.thumbnail)
         setFloorPlanUrl(body.entry.floorPlanUrl ?? '')
       } else {
-        setSuccess(
-          body.message ??
-            `catalog-items.tsx に書き込みました（id: ${body.entry.id}）。`,
-        )
+        setSuccess(body.message ?? `Wrote to catalog-items.tsx (id: ${body.entry.id}).`)
         startPlacement(body.entry)
         resetForm()
       }
     } catch {
-      setError('リクエストに失敗しました。apps/editor の開発サーバーが起動しているか確認してください。')
+      setError('Request failed. Make sure the apps/editor dev server is running.')
     } finally {
       setIsSubmitting(false)
     }
@@ -530,13 +525,14 @@ export function AddCatalogPanel() {
     dimD,
     dimH,
     dimW,
+    editingAssets,
+    editingId,
     floorPlanUrl,
     modelUrl,
     name,
     offset,
-    editingAssets,
-    editingId,
     previewId,
+    reloadDevCatalogOverlay,
     resetForm,
     rotation,
     scale,
@@ -544,25 +540,24 @@ export function AddCatalogPanel() {
     setSelectedItem,
     startPlacement,
     surfaceHeight,
-    upsertCustomCatalogItem,
-    upsertDevCatalogOverlay,
-    reloadDevCatalogOverlay,
     tagsText,
     thumbnailUrl,
+    upsertCustomCatalogItem,
+    upsertDevCatalogOverlay,
   ])
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-3">
       <div className="space-y-1 pb-3">
-        <h2 className="font-semibold text-sm">家具カタログへ書き込み</h2>
+        <h2 className="font-semibold text-sm">Write to Furniture Catalog</h2>
       </div>
 
       <div className="space-y-3">
         {isEditing && (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/5 px-2.5 py-2">
             <p className="text-xs">
-              編集中 <span className="font-medium">{name || editingId}</span>
-              <span className="text-muted-foreground">（{editingId}）</span>
+              Editing <span className="font-medium">{name || editingId}</span>
+              <span className="text-muted-foreground"> ({editingId})</span>
             </p>
             <Button
               className="h-7 shrink-0 gap-1 px-2"
@@ -572,19 +567,19 @@ export function AddCatalogPanel() {
               variant="ghost"
             >
               <X className="size-3.5" />
-              キャンセル
+              Cancel
             </Button>
           </div>
         )}
 
         <label className="block space-y-1">
-          <span className="font-medium text-muted-foreground text-xs">名称 *</span>
-          <Input onChange={(e) => setName(e.target.value)} placeholder="オフィスチェア" value={name} />
+          <span className="font-medium text-muted-foreground text-xs">Name *</span>
+          <Input onChange={(e) => setName(e.target.value)} placeholder="Office Chair" value={name} />
         </label>
 
         <label className="block space-y-1">
           <span className="font-medium text-muted-foreground text-xs">
-            ID{isEditing ? '（編集時は変更不可）' : '（任意）'}
+            ID{isEditing ? ' (cannot be changed while editing)' : ' (optional)'}
           </span>
           <Input
             disabled={isEditing}
@@ -594,13 +589,13 @@ export function AddCatalogPanel() {
           />
           {previewId && (
             <p className="text-muted-foreground text-[10px]">
-              {isEditing ? `エントリ id: ${previewId}` : `書き込み id: ${previewId}`}
+              {isEditing ? `Entry id: ${previewId}` : `Write id: ${previewId}`}
             </p>
           )}
         </label>
 
         <label className="block space-y-1">
-          <span className="font-medium text-muted-foreground text-xs">カテゴリ *</span>
+          <span className="font-medium text-muted-foreground text-xs">Category *</span>
           <select
             className="w-full rounded-lg border border-border bg-muted px-2.5 py-2 text-sm"
             onChange={(e) => setCategory(e.target.value as CatalogCategory)}
@@ -608,30 +603,30 @@ export function AddCatalogPanel() {
           >
             {CATEGORIES.map((value) => (
               <option key={value} value={value}>
-                {CATEGORY_LABELS_JA[value]}
+                {CATEGORY_LABELS[value]}
               </option>
             ))}
           </select>
         </label>
 
         <UrlField
-          label="モデル src *"
+          label="Model src *"
           onChange={setModelUrl}
           placeholder="https://example.com/model.glb"
           value={modelUrl}
         />
 
         <UrlField
-          label="サムネイル thumbnail（任意）"
+          label="Thumbnail thumbnail (optional)"
           onChange={setThumbnailUrl}
-          placeholder="https://…/thumbnail.png（空欄はプレースホルダ）"
+          placeholder="https://example.com/thumbnail.png (blank uses placeholder)"
           value={thumbnailUrl}
         />
 
         <UrlField
-          label="平面図 floorPlanUrl（任意）"
+          label="Floor plan floorPlanUrl (optional)"
           onChange={setFloorPlanUrl}
-          placeholder="https://…/floor-plan.png"
+          placeholder="https://example.com/floor-plan.png"
           value={floorPlanUrl}
         />
 
@@ -648,22 +643,25 @@ export function AddCatalogPanel() {
           ) : (
             <Sparkles className="size-4" />
           )}
-          {isAnalyzingGlb ? '読み込み中…' : 'glb属性自动入力'}
+          {isAnalyzingGlb ? 'Loading...' : 'Auto-fill GLB attributes'}
         </Button>
         <p className="text-muted-foreground text-[10px] leading-relaxed">
-          バウンディングボックスから推定（ミリ scale、Z-up 回転、床接地 offset）。浮く・向きが違う場合は手動で微調整してください。
+          Estimates from the bounding box: millimetre scale, Z-up rotation, and floor contact
+          offset. Adjust manually if the model floats or faces the wrong way.
         </p>
 
         <CatalogPlacementFieldGuide />
 
         <div className="space-y-1">
-          <span className="font-medium text-muted-foreground text-xs">寸法 dimensions（m）*</span>
+          <span className="font-medium text-muted-foreground text-xs">
+            Dimensions dimensions (m) *
+          </span>
           <div className="grid grid-cols-3 gap-2">
             {(
               [
-                ['幅', dimW, setDimW],
-                ['高', dimH, setDimH],
-                ['奥', dimD, setDimD],
+                ['Width', dimW, setDimW],
+                ['Height', dimH, setDimH],
+                ['Depth', dimD, setDimD],
               ] as const
             ).map(([label, value, onChange]) => (
               <label className="block space-y-1" key={label}>
@@ -683,7 +681,7 @@ export function AddCatalogPanel() {
 
         <div className="space-y-1">
           <TupleFields
-            label="offset（位置補正、メートル）"
+            label="offset (position correction, metres)"
             onChange={(axis, value) => setOffset((prev) => ({ ...prev, [axis]: value }))}
             values={offset}
           />
@@ -691,7 +689,7 @@ export function AddCatalogPanel() {
         </div>
         <div className="space-y-1">
           <TupleFields
-            label="rotation（ラジアン）"
+            label="rotation (radians)"
             onChange={(axis, value) => setRotation((prev) => ({ ...prev, [axis]: value }))}
             values={rotation}
           />
@@ -699,7 +697,7 @@ export function AddCatalogPanel() {
         </div>
         <div className="space-y-1">
           <TupleFields
-            label="scale（GLB のみ拡大縮小、枠は変わらない）"
+            label="scale (GLB only; placeholder does not change)"
             onChange={(axis, value) => setScale((prev) => ({ ...prev, [axis]: value }))}
             step="0.1"
             values={scale}
@@ -708,11 +706,13 @@ export function AddCatalogPanel() {
         </div>
 
         <label className="block space-y-1">
-          <span className="font-medium text-muted-foreground text-xs">天板の高さ surface.height（任意）</span>
+          <span className="font-medium text-muted-foreground text-xs">
+            Surface height surface.height (optional)
+          </span>
           <Input
             inputMode="decimal"
             onChange={(e) => setSurfaceHeight(e.target.value)}
-            placeholder="例: 0.35"
+            placeholder="e.g. 0.35"
             step="0.01"
             type="number"
             value={surfaceHeight}
@@ -720,22 +720,24 @@ export function AddCatalogPanel() {
         </label>
 
         <label className="block space-y-1">
-          <span className="font-medium text-muted-foreground text-xs">取り付け attachTo</span>
+          <span className="font-medium text-muted-foreground text-xs">Attach target attachTo</span>
           <select
             className="w-full rounded-lg border border-border bg-muted px-2.5 py-2 text-sm"
             onChange={(e) => setAttachTo(e.target.value as typeof attachTo)}
             value={attachTo}
           >
-            <option value="">床（フロア）</option>
-            <option value="wall">wall — 壁厚の中央・両面占有</option>
-            <option value="wall-side">wall-side — 壁面に貼り付け</option>
-            <option value="ceiling">ceiling — 天井</option>
+            <option value="">Floor</option>
+            <option value="wall">wall - wall center, occupies both sides</option>
+            <option value="wall-side">wall-side - attached to one wall face</option>
+            <option value="ceiling">ceiling - ceiling</option>
           </select>
           <AttachToHint attachTo={attachTo} />
         </label>
 
         <label className="block space-y-1">
-          <span className="font-medium text-muted-foreground text-xs">タグ tags（カンマ区切り）</span>
+          <span className="font-medium text-muted-foreground text-xs">
+            Tags tags (comma-separated)
+          </span>
           <Input
             onChange={(e) => setTagsText(e.target.value)}
             placeholder="floor, chair, custom"
@@ -750,21 +752,21 @@ export function AddCatalogPanel() {
           <FileCode2 className="size-4" />
           {isSubmitting
             ? isEditing
-              ? '保存中…'
-              : '追加中…'
+              ? 'Saving...'
+              : 'Adding...'
             : isEditing
-              ? '変更を保存'
-              : '追加して配置'}
+              ? 'Save changes'
+              : 'Add and place'}
         </Button>
 
         <div className="space-y-2 border-border/60 border-t pt-4">
-          <h3 className="font-semibold text-sm">カスタム家具の管理</h3>
+          <h3 className="font-semibold text-sm">Manage Custom Furniture</h3>
           <p className="text-muted-foreground text-xs leading-relaxed">
-            <code className="rounded bg-muted px-1 text-[10px]">custom</code>{' '}
-            タグ付きのみ表示。編集・削除可能。組み込み CDN 家具は含みません。
+            Only entries tagged <code className="rounded bg-muted px-1 text-[10px]">custom</code>{' '}
+            are shown. They can be edited or deleted. Built-in CDN furniture is not included.
           </p>
           {deletableItems.length === 0 ? (
-            <p className="text-muted-foreground text-xs">カスタムエントリはありません。</p>
+            <p className="text-muted-foreground text-xs">No custom entries.</p>
           ) : (
             <ul className="max-h-48 space-y-1.5 overflow-y-auto">
               {deletableItems.map((item) => (
@@ -779,7 +781,7 @@ export function AddCatalogPanel() {
                   <div className="flex shrink-0 gap-1">
                     <Button
                       aria-label={
-                        editingId === item.id ? `${item.name} の編集を終了` : `${item.name} を編集`
+                        editingId === item.id ? `Finish editing ${item.name}` : `Edit ${item.name}`
                       }
                       disabled={deletingId !== null || isSubmitting}
                       onClick={() => {
@@ -798,10 +800,10 @@ export function AddCatalogPanel() {
                       ) : (
                         <Pencil className="size-3.5" />
                       )}
-                      {editingId === item.id ? '終了' : '編集'}
+                      {editingId === item.id ? 'Finish' : 'Edit'}
                     </Button>
                     <Button
-                      aria-label={`${item.name} を削除`}
+                      aria-label={`Delete ${item.name}`}
                       disabled={deletingId !== null}
                       onClick={() => void handleDelete(item)}
                       size="sm"
@@ -809,7 +811,7 @@ export function AddCatalogPanel() {
                       variant="destructive"
                     >
                       <Trash2 className="size-3.5" />
-                      {deletingId === item.id ? '…' : '削除'}
+                      {deletingId === item.id ? '...' : 'Delete'}
                     </Button>
                   </div>
                 </li>

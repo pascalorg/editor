@@ -88,7 +88,6 @@ export default function PicTo3DPage() {
     }
   }, [clearPoll, previewUrl])
 
-  // ページ全体へのドロップで画像が開かないようにする
   useEffect(() => {
     const preventDefaults = (event: DragEvent) => {
       event.preventDefault()
@@ -120,7 +119,7 @@ export default function PicTo3DPage() {
   const acceptDroppedFile = (candidate: File | undefined) => {
     if (!candidate) return
     if (!candidate.type.startsWith('image/')) {
-      setError('画像ファイル（JPG、PNG、WebP など）を使用してください。')
+      setError('Use an image file such as JPG, PNG, or WebP.')
       return
     }
     applyImageFile(candidate)
@@ -140,11 +139,11 @@ export default function PicTo3DPage() {
           }
 
           if (!response.ok) {
-            throw new Error(body.error ?? 'ステータスの取得に失敗しました')
+            throw new Error(body.error ?? 'Failed to fetch status.')
           }
 
           if (body.state === 'pending') {
-            setStatusText('ComfyUI で3Dモデルを生成中（混元 3D 2.1）…')
+            setStatusText('ComfyUI is generating the 3D model (Hunyuan 3D 2.1)...')
             return
           }
 
@@ -152,7 +151,7 @@ export default function PicTo3DPage() {
 
           if (body.state === 'error') {
             setJobState('error')
-            setError(body.error ?? '生成に失敗しました')
+            setError(body.error ?? 'Generation failed.')
             return
           }
 
@@ -161,12 +160,12 @@ export default function PicTo3DPage() {
             setGlbPreviewVersion((v) => v + 1)
             setDownloadName(body.downloadName ?? 'model.glb')
             setJobState('complete')
-            setStatusText('生成完了。右側でモデルをプレビューできます。')
+            setStatusText('Generation complete. Preview the model on the right.')
           }
         } catch (pollError) {
           clearPoll()
           setJobState('error')
-          setError(pollError instanceof Error ? pollError.message : 'ポーリングに失敗しました')
+          setError(pollError instanceof Error ? pollError.message : 'Polling failed.')
         }
       }, 2000)
     },
@@ -175,11 +174,11 @@ export default function PicTo3DPage() {
 
   const handleGenerate = async () => {
     if (!file) {
-      setError('先に画像を選択してください。')
+      setError('Select an image first.')
       return
     }
     if (!params) {
-      setError('パラメータの読み込みが完了していません。しばらくお待ちください。')
+      setError('Parameters are still loading. Please wait.')
       return
     }
 
@@ -188,7 +187,7 @@ export default function PicTo3DPage() {
     setGlbPreviewVersion(0)
     setPromptId(null)
     setJobState('uploading')
-    setStatusText('ComfyUI に画像をアップロード中…')
+    setStatusText('Uploading image to ComfyUI...')
 
     const form = new FormData()
     form.append('image', file)
@@ -204,16 +203,16 @@ export default function PicTo3DPage() {
       }
 
       if (!response.ok || !body.promptId) {
-        throw new Error(body.error ?? '送信に失敗しました')
+        throw new Error(body.error ?? 'Submit failed.')
       }
 
       setPromptId(body.promptId)
       setJobState('processing')
-      setStatusText(body.message ?? 'キューに入りました。生成を待っています…')
+      setStatusText(body.message ?? 'Queued. Waiting for generation...')
       pollStatus(body.promptId)
     } catch (generateError) {
       setJobState('error')
-      setError(generateError instanceof Error ? generateError.message : '送信に失敗しました')
+      setError(generateError instanceof Error ? generateError.message : 'Submit failed.')
     }
   }
 
@@ -250,10 +249,10 @@ export default function PicTo3DPage() {
               className="text-muted-foreground transition-colors hover:text-foreground"
               href="/"
             >
-              エディター
+              Editor
             </Link>
             <span className="text-muted-foreground">/</span>
-            <span className="font-medium text-foreground">画像から3D</span>
+            <span className="font-medium text-foreground">Image to 3D</span>
           </nav>
         </div>
       </header>
@@ -262,117 +261,119 @@ export default function PicTo3DPage() {
         <div className="mb-6 space-y-2">
           <h1 className="flex items-center gap-2 font-bold text-2xl">
             <Sparkles className="size-6 text-primary" />
-            画像から3D
+            Image to 3D
           </h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            写真から GLB を生成します。精細度を選んで生成し、右側でプレビューできます。ComfyUI：混元 3D 2.1。
+            Generate a GLB from a photo. Choose a detail level, run generation, and preview the
+            model on the right. ComfyUI: Hunyuan 3D 2.1.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_1fr] lg:items-start">
           <div className="space-y-6 rounded-xl border border-border/60 bg-card p-6 shadow-sm">
-          <label
-            className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-10 transition-colors ${
-              dragOver
-                ? 'border-primary bg-primary/10'
-                : 'border-border bg-muted/20 hover:bg-muted/40'
-            }`}
-            htmlFor="pic-input"
-            onDragEnter={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              if (!busy) setDragOver(true)
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              if (e.currentTarget.contains(e.relatedTarget as Node)) return
-              setDragOver(false)
-            }}
-            onDragOver={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onDrop={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setDragOver(false)
-              if (busy) return
-              acceptDroppedFile(e.dataTransfer.files?.[0])
-            }}
-          >
-            {previewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                alt="プレビュー"
-                className="max-h-48 max-w-full rounded-lg object-contain"
-                src={previewUrl}
+            <label
+              className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-10 transition-colors ${
+                dragOver
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border bg-muted/20 hover:bg-muted/40'
+              }`}
+              htmlFor="pic-input"
+              onDragEnter={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (!busy) setDragOver(true)
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                setDragOver(false)
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setDragOver(false)
+                if (busy) return
+                acceptDroppedFile(e.dataTransfer.files?.[0])
+              }}
+            >
+              {previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt="Preview"
+                  className="max-h-48 max-w-full rounded-lg object-contain"
+                  src={previewUrl}
+                />
+              ) : (
+                <>
+                  <ImagePlus className="size-10 text-muted-foreground" />
+                  <span className="text-muted-foreground text-sm">
+                    Click or drag an image to upload (JPG / PNG)
+                  </span>
+                </>
+              )}
+              <input
+                accept="image/*"
+                className="sr-only"
+                disabled={busy}
+                id="pic-input"
+                onChange={(e) => applyImageFile(e.target.files?.[0] ?? null)}
+                type="file"
               />
-            ) : (
-              <>
-                <ImagePlus className="size-10 text-muted-foreground" />
-                <span className="text-muted-foreground text-sm">クリックまたはドラッグで画像をアップロード（JPG / PNG）</span>
-              </>
+            </label>
+
+            {file && (
+              <p className="text-center text-muted-foreground text-xs">
+                {file.name} ({(file.size / 1024).toFixed(1)} KB)
+              </p>
             )}
-            <input
-              accept="image/*"
-              className="sr-only"
-              disabled={busy}
-              id="pic-input"
-              onChange={(e) => applyImageFile(e.target.files?.[0] ?? null)}
-              type="file"
-            />
-          </label>
 
-          {file && (
-            <p className="text-center text-muted-foreground text-xs">
-              {file.name} ({(file.size / 1024).toFixed(1)} KB)
-            </p>
-          )}
-
-          {presets.length > 0 && (
-            <DetailPresetPicker
-              disabled={busy}
-              onSelect={selectPreset}
-              presets={presets}
-              selectedId={selectedPresetId}
-            />
-          )}
-
-          <button
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground text-sm transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!file || busy || !params}
-            onClick={() => void handleGenerate()}
-            type="button"
-          >
-            {busy ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {jobState === 'uploading' ? 'アップロード中…' : '生成中…'}
-              </>
-            ) : (
-              <>
-                <Sparkles className="size-4" />
-                3Dモデルを生成
-              </>
+            {presets.length > 0 && (
+              <DetailPresetPicker
+                disabled={busy}
+                onSelect={selectPreset}
+                presets={presets}
+                selectedId={selectedPresetId}
+              />
             )}
-          </button>
 
-          {statusText && jobState !== 'error' && (
-            <p className="text-center text-muted-foreground text-xs">{statusText}</p>
-          )}
-          {promptId && jobState === 'processing' && (
-            <p className="text-center font-mono text-[10px] text-muted-foreground">
-              タスク: {promptId}
-            </p>
-          )}
+            <button
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground text-sm transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!file || busy || !params}
+              onClick={() => void handleGenerate()}
+              type="button"
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {jobState === 'uploading' ? 'Uploading...' : 'Generating...'}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-4" />
+                  Generate 3D Model
+                </>
+              )}
+            </button>
 
-          {error && (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-              {error}
-            </p>
-          )}
+            {statusText && jobState !== 'error' && (
+              <p className="text-center text-muted-foreground text-xs">{statusText}</p>
+            )}
+            {promptId && jobState === 'processing' && (
+              <p className="text-center font-mono text-[10px] text-muted-foreground">
+                Task: {promptId}
+              </p>
+            )}
 
+            {error && (
+              <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm">
+                {error}
+              </p>
+            )}
           </div>
 
           <div className="lg:sticky lg:top-20">
@@ -387,7 +388,8 @@ export default function PicTo3DPage() {
         </div>
 
         <p className="mt-6 text-muted-foreground text-xs leading-relaxed">
-          精細度はブラウザに保存されます。「最高精細」は時間がかかりファイルも大きくなりますが、最終出力向きです。「クイック」は試作・確認用です。
+          The selected detail preset is saved in the browser. Ultra Detail takes longer and creates
+          larger files, but is better for final output. Quick is intended for drafts and checks.
         </p>
       </main>
     </div>

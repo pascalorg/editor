@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-/** ComfyUI on LAN — default matches pic-to-3D/run_pic2three.py */
+/** ComfyUI on LAN - default matches pic-to-3D/run_pic2three.py */
 export const COMFYUI_BASE_URL = 'http://192.168.100.250:8188'
 
 export const LOAD_IMAGE_NODE_ID = '56'
@@ -198,7 +198,7 @@ export function parseHistoryStatus(record: Record<string, unknown>): {
   }
 
   if (outputs && Object.keys(outputs).length > 0) {
-    return { state: 'error', error: 'タスクは完了しましたが .glb 出力が見つかりません' }
+    return { state: 'error', error: 'Task completed, but no .glb output was found.' }
   }
 
   return { state: 'pending' }
