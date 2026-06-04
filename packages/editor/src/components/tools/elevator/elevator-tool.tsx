@@ -8,13 +8,13 @@ import {
   type LevelNode,
   resolveAlignment,
   useAlignmentGuides,
-  usePlacementPreview,
   useScene,
 } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import usePlacementPreview from '../../../store/use-placement-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
   DEFAULT_ELEVATOR_CAB_HEIGHT,

@@ -111,7 +111,7 @@ The store name suggests a uniform contract; the writes in practice are not. Docu
 | `slab` / `ceiling` / `fence` / polygon-based movers | position **delta** (`[Δx, 0, Δz]`) | unused / 0 |
 | `column` / `roof` / `elevator` / `spawn` / single-position kinds | world plan | world Y |
 
-Anything that subscribes to `useLiveTransforms` to inform 2D rendering needs to handle these frames explicitly. The `FloorplanRegistryLayer` currently narrows its override to `node.type === 'item'` and sets `parentId: null` on the effective node so the resolver treats the live position as world plan coords. Extending the override to other kinds requires either standardising the frame at the writer (preferred long-term) or per-kind handling in the consumer.
+Anything that subscribes to `useLiveTransforms` to inform 2D rendering needs to handle these frames explicitly. The `FloorplanRegistryLayer` override currently branches by kind: `item` / `shelf` / `column` are treated as world-plan (it copies `live.position` onto the effective node and forces `parentId: null` so the resolver skips the parent-chain transform), while `slab` / `ceiling` / `zone` are treated as a polygon **delta** (it translates the polygon vertices by `live.position`). Each kind added to the live-drag path grows this consumer-side switch; the preferred long-term fix is to standardise the frame at the writer so the consumer stops branching by `node.type`.
 
 ## Wall-attached node rotations must be wall-local
 

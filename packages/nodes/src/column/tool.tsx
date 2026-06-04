@@ -11,10 +11,9 @@ import {
   resolveAlignment,
   snapPointToGrid,
   useAlignmentGuides,
-  usePlacementPreview,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'

@@ -6,10 +6,10 @@ import {
   type FloorplanGeometry,
   type GeometryContext,
   nodeRegistry,
-  usePlacementPreview,
   useScene,
 } from '@pascal-app/core'
 import { memo } from 'react'
+import usePlacementPreview from '../../../store/use-placement-preview'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
 /**
@@ -34,9 +34,11 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
 
   // Minimal, unselected context — preview never shows selection chrome
   // (move handles / resize arrows / hatch live behind `viewState.selected`).
-  const nodes = useScene.getState().nodes
+  // `resolve` reads the scene lazily (a builder rarely calls it for a ghost,
+  // and `parent: null` short-circuits the elevator's level walk) so the layer
+  // never subscribes to / bulk-reads the nodes map during render.
   const ctx = {
-    resolve: (id: AnyNodeId) => nodes[id],
+    resolve: (id: AnyNodeId) => useScene.getState().nodes[id],
     children: [],
     siblings: [],
     parent: null,

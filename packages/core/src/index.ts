@@ -108,7 +108,6 @@ export {
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
-export { default as usePlacementPreview } from './store/use-placement-preview'
 export { clearSceneHistory, default as useScene } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
