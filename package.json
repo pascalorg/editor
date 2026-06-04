@@ -12,6 +12,8 @@
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
     "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
+    "clean:cache": "rm -rf apps/*/.next apps/*/.swc apps/*/.turbo packages/*/.turbo tooling/*/.turbo .turbo node_modules/.cache",
+    "restart": "bun kill && bun clean:cache && bun dev",
     "release": "gh workflow run release.yml -f package=all -f bump=patch",
     "release:viewer": "gh workflow run release.yml -f package=viewer -f bump=patch",
     "release:core": "gh workflow run release.yml -f package=core -f bump=patch",

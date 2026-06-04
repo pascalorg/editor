@@ -139,6 +139,10 @@ export {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './components/ui/primitives/dropdown-menu'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
@@ -210,6 +214,7 @@ export type {
   MovingFenceEndpoint,
   MovingWallEndpoint,
   SplitOrientation,
+  Tool,
   ToolDefaults,
   ViewMode,
   WorkspaceMode,

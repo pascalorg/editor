@@ -139,7 +139,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       {/* Render children (buildings and items) */}
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 

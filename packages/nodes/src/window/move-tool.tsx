@@ -73,12 +73,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       metadata: movingWindowNode.metadata,
     }
 
-    // Mark the moving window as transient so it doesn't intercept wall raycasts while repositioning.
-    // Without this, duplicates can block `wall:*` events which breaks the cursor box and can cause
-    // rapid enter/leave churn (triggering expensive wall CSG rebuilds).
-    useScene.getState().updateNode(movingWindowNode.id, {
-      metadata: { ...meta, isTransient: true },
-    })
+    // In move mode (existing window) mark it transient so its mesh skips the live wall CSG
+    // rebuild while repositioning — the editor requests a final rebuild on commit. For a new
+    // placement (preset/duplicate) we must NOT mark it transient: WindowSystem only rebuilds
+    // the host wall's cutout for non-transient windows, so a transient draft shows no live
+    // preview on the wall and can't be placed consecutively without leaving/re-entering. This
+    // mirrors MoveDoorTool.
+    if (!isNew) {
+      useScene.getState().updateNode(movingWindowNode.id, {
+        metadata: { ...meta, isTransient: true },
+      })
+    }
 
     let currentWallId: string | null = movingWindowNode.parentId
 

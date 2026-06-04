@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   clampDoorOperationState,
   type DoorNode,
+  DoorNode as DoorNodeSchema,
   getDoorRenderOpenAmount,
   getEffectiveNode,
   sceneRegistry,
@@ -25,6 +26,20 @@ const defaultRevealMaterial = new THREE.MeshBasicMaterial({ color: '#7f766c' })
 let baseMaterial = getBaseMaterial()
 let revealMaterial: THREE.Material = defaultRevealMaterial
 let glassMaterial: THREE.Material = defaultGlassMaterial
+
+const DOOR_RENDER_DEFAULTS = DoorNodeSchema.parse({ id: 'door_render_default' })
+
+// Legacy/unparsed door nodes can miss schema-defaulted fields (segments,
+// columnRatios, dividerThickness, …) and crash the geometry build. Re-apply the
+// Zod defaults; if the node is structurally invalid (e.g. a segment missing a
+// required field) drop the bad segments, then fall back to defaults entirely.
+function normalizeDoorNodeForRender(node: DoorNode): DoorNode {
+  const parsed = DoorNodeSchema.safeParse(node)
+  if (parsed.success) return parsed.data
+  const retry = DoorNodeSchema.safeParse({ ...node, segments: undefined })
+  if (retry.success) return retry.data
+  return { ...DOOR_RENDER_DEFAULTS, id: node.id, parentId: node.parentId }
+}
 
 export const DoorSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
@@ -1903,7 +1918,9 @@ function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
     : (node.openingShape ?? 'rectangle')
 }
 
-function updateDoorMesh(node: DoorNode, mesh: THREE.Mesh) {
+function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
+  const node = normalizeDoorNodeForRender(rawNode)
+
   // Root mesh is an invisible hitbox; all visuals live in child meshes
   mesh.geometry.dispose()
   mesh.geometry = new THREE.BoxGeometry(node.width, node.height, node.frameDepth)

@@ -676,6 +676,20 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   geometry?: (node: z.infer<S>, ctx: GeometryContext) => Object3D
   /**
+   * Optional cache key over the geometry-relevant inputs of `node`. When
+   * set, `<GeometrySystem>` skips the rebuild (dispose + re-create the
+   * group's children) if the key is unchanged since the last build for
+   * this node — even though the node was marked dirty. Use for kinds whose
+   * geometry depends *only* on their own fields (not on `children`,
+   * `position`, neighbours, or `ctx`): a hosted child reparenting onto a
+   * shelf, say, dirties the shelf but doesn't change its boards, so without
+   * this the boards needlessly remount and any pointer hover churns
+   * (enter/leave) as the meshes are swapped. Must NOT be set for kinds with
+   * neighbour-dependent geometry (e.g. wall/fence miters via `ctx`), whose
+   * inputs aren't captured by the node alone.
+   */
+  geometryKey?: (node: z.infer<S>) => string
+  /**
    * Level-batch precompute hook. Called by `<GeometrySystem>` once per
    * level per frame, **before** the per-node `def.geometry` calls in
    * that batch. The result lands in `ctx.levelData` for every node in

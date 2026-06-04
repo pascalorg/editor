@@ -6,12 +6,12 @@ import {
   SkylightNode as SkylightNodeSchema,
   type SkylightNode as SkylightNodeType,
 } from '@pascal-app/core'
+import { buildSkylightFloorplan } from './floorplan'
 import {
   closeSkylightOpenState,
   isOperableSkylightNode,
   toggleSkylightOpenState,
 } from './interaction'
-import { buildSkylightFloorplan } from './floorplan'
 import { skylightParametrics } from './parametrics'
 import { buildSkylightRoofCut } from './roof-cut'
 import { SkylightNode } from './schema'
@@ -193,11 +193,7 @@ function skylightFrameThicknessHandle(): HandleDescriptor<SkylightNodeType> {
     currentValue: (n) => n.frameThickness ?? 0.05,
     apply: (_n, newValue) => ({ frameThickness: newValue }),
     placement: {
-      position: (n) => [
-        -(n.width / 2) - SIDE_HANDLE_OFFSET,
-        0,
-        n.height / 2 + SIDE_HANDLE_OFFSET,
-      ],
+      position: (n) => [-(n.width / 2) - SIDE_HANDLE_OFFSET, 0, n.height / 2 + SIDE_HANDLE_OFFSET],
       rotationY: () => -Math.PI / 4,
     },
     portal: 'grandparent',

@@ -4,8 +4,8 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
-import { buildBoxVentFloorplan } from './floorplan'
 import { surfacePaintCapability } from '../shared/surface-paint'
+import { buildBoxVentFloorplan } from './floorplan'
 import { boxVentParametrics } from './parametrics'
 import { BoxVentNode } from './schema'
 
