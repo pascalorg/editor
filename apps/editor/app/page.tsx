@@ -1,12 +1,12 @@
 'use client'
 
 import { AddCatalogPanel, Editor, ItemsPanel } from '@pascal-app/editor'
-import { Layers, Package, Plus, Settings } from 'lucide-react'
+import { Bot, Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AiAssistantBubble } from '@/components/ai-assistant-bubble'
+import { AiAssistantPanel } from '@/components/ai-assistant-bubble'
 import { ImportDxfTool } from '@/components/tools/ImportDxfTool'
 import {
   CommunityViewerToolbarLeft,
@@ -34,6 +34,13 @@ const SIDEBAR_TABS = [
     component: AddCatalogPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Plus className="h-5 w-5" />,
+  },
+  {
+    id: 'ai-assistant',
+    label: 'AI',
+    component: AiAssistantPanel,
+    mobileDefaultSnap: 0.8,
+    mobileIcon: <Bot className="h-5 w-5" />,
   },
   {
     id: 'settings',
@@ -110,7 +117,6 @@ export default function Home() {
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
-      <AiAssistantBubble />
     </div>
   )
 }

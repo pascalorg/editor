@@ -11,12 +11,12 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Layers, Package, Plus, Settings } from 'lucide-react'
+import { Bot, Layers, Package, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AiAssistantBubble } from './ai-assistant-bubble'
+import { AiAssistantPanel } from './ai-assistant-bubble'
 import { ImportDxfTool } from './tools/ImportDxfTool'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -54,6 +54,13 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     component: AddCatalogPanel,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Plus className="h-5 w-5" />,
+  },
+  {
+    id: 'ai-assistant',
+    label: 'AI',
+    component: AiAssistantPanel,
+    mobileDefaultSnap: 0.8,
+    mobileIcon: <Bot className="h-5 w-5" />,
   },
   {
     id: 'settings',
@@ -282,7 +289,6 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
-      <AiAssistantBubble />
     </div>
   )
 }
