@@ -3,6 +3,7 @@ import {
   type NodeDefinition,
   StairNode as StairNodeSchema,
   type StairNode as StairNodeType,
+  stairFootprintAABB,
 } from '@pascal-app/core'
 
 const MIN_CURVED_RISE = 0.3
@@ -318,6 +319,15 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    // A stair has no centred box footprint: straight = a cumulative
+    // `stair-segment` chain, curved / spiral = an annular sector. Hand the
+    // alignment bridge the resolved plan `aabb` directly (not a `box`) — the
+    // stair moves by its origin via `affordanceTools.move`, so it only ever
+    // contributes static candidate anchors, never the relocatable box path.
+    alignmentFootprint: (node, nodes) => {
+      const aabb = stairFootprintAABB(node as StairNodeType, nodes)
+      return aabb ? { shape: 'aabb', ...aabb } : null
+    },
     duplicable: true,
     deletable: true,
   },

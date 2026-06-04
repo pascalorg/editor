@@ -48,6 +48,8 @@ export {
 } from './subtree'
 export type {
   Affordance,
+  AlignmentFootprint,
+  AlignmentFootprintConfig,
   AnyNodeDefinition,
   AssetRef,
   Capabilities,

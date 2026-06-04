@@ -4,6 +4,12 @@ import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import type { AnyNode } from '../schema/types'
 import {
+  getElevatorShaftDepth,
+  getElevatorShaftWallThickness,
+  getElevatorShaftWidth,
+} from '../systems/elevator/elevator-geometry'
+import { stairFootprintAABB } from '../systems/stair/stair-footprint'
+import {
   collectAlignmentAnchors,
   footprintAABB,
   footprintAABBFrom,
@@ -28,6 +34,49 @@ function floorPlacedDef(kind: string, applies?: (n: AnyNode) => boolean): AnyNod
           rotation: (n as { rotation?: [number, number, number] }).rotation ?? [0, 0, 0],
         }),
         ...(applies ? { applies } : {}),
+      },
+    },
+    renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+  } as AnyNodeDefinition
+}
+
+// Mirrors the real elevator/stair definitions, which expose their plan
+// footprint via the `alignmentFootprint` capability rather than a hardcoded
+// branch in the anchor bridge. The glue (shaft-outset box / stair AABB) is
+// reproduced here from the same core helpers production uses.
+function elevatorDef(): AnyNodeDefinition {
+  return {
+    kind: 'elevator',
+    schemaVersion: 1,
+    schema: z.object({ type: z.literal('elevator') }) as any,
+    category: 'structure',
+    defaults: () => ({}) as any,
+    capabilities: {
+      alignmentFootprint: (n: AnyNode) => {
+        const e = n as any
+        const wall = getElevatorShaftWallThickness(e)
+        return {
+          shape: 'box',
+          dimensions: [getElevatorShaftWidth(e) + wall * 2, 1, getElevatorShaftDepth(e) + wall * 2],
+          rotation: [0, e.rotation ?? 0, 0],
+        }
+      },
+    },
+    renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+  } as AnyNodeDefinition
+}
+
+function stairDef(): AnyNodeDefinition {
+  return {
+    kind: 'stair',
+    schemaVersion: 1,
+    schema: z.object({ type: z.literal('stair') }) as any,
+    category: 'structure',
+    defaults: () => ({}) as any,
+    capabilities: {
+      alignmentFootprint: (n: AnyNode, nodes?: Readonly<Record<string, AnyNode>>) => {
+        const aabb = stairFootprintAABB(n as any, nodes)
+        return aabb ? { shape: 'aabb', ...aabb } : null
       },
     },
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
@@ -83,6 +132,8 @@ describe('footprintAABB', () => {
     // Aligns to the visible shaft outline: cab 2×4 + 0.09 m wall each side →
     // 2.18 × 4.18, centred at (10, 20). The cab corners alone would sit ~9 cm
     // inside the drawn edge (past the 8 cm snap), so a guide never appeared.
+    // The footprint comes from the elevator's `alignmentFootprint` (box) cap.
+    registerNode(elevatorDef())
     const aabb = footprintAABB(
       node({ id: 'e1', type: 'elevator', position: [10, 0, 20], width: 2, depth: 4, rotation: 0 }),
     )
@@ -220,6 +271,7 @@ describe('collectAlignmentAnchors', () => {
 
   test('levelId filter keeps only nodes resolving to that level (incl. nested)', () => {
     registerNode(floorPlacedDef('box'))
+    registerNode(elevatorDef())
     const nodes = {
       b: node({ id: 'b', type: 'building' }),
       L1: node({ id: 'L1', type: 'level', parentId: 'b' }),
@@ -248,6 +300,7 @@ describe('collectAlignmentAnchors', () => {
   })
 
   test('straight stair contributes its segment-chain footprint corners', () => {
+    registerNode(stairDef())
     const nodes = {
       st: node({
         id: 'st',
@@ -277,6 +330,7 @@ describe('collectAlignmentAnchors', () => {
   })
 
   test('curved stair contributes its sector bounding-box corners', () => {
+    registerNode(stairDef())
     const nodes = {
       cs: node({
         id: 'cs',
@@ -303,6 +357,7 @@ describe('collectAlignmentAnchors', () => {
   })
 
   test('spiral stair contributes a full-circle bounding box', () => {
+    registerNode(stairDef())
     const nodes = {
       sp: node({
         id: 'sp',

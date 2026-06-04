@@ -13,14 +13,7 @@
  */
 
 import { nodeRegistry } from '../registry'
-import type { ElevatorNode, StairNode } from '../schema'
 import type { AnyNode } from '../schema/types'
-import {
-  getElevatorShaftDepth,
-  getElevatorShaftWallThickness,
-  getElevatorShaftWidth,
-} from '../systems/elevator/elevator-geometry'
-import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
 import { type AlignmentAnchor, bboxCornerAnchors } from './alignment'
 
@@ -66,34 +59,52 @@ export function footprintAABBFrom(
   return { minX, minZ, maxX, maxZ }
 }
 
-/** The floor-placed footprint config for a node, or null when it has none
+/** The relocatable box footprint for a node, or null when it has none
  *  (walls / slabs / polygon kinds) or the kind's predicate excludes it
- *  (e.g. a wall-attached item that doesn't rest on the floor). */
+ *  (e.g. a wall-attached item that doesn't rest on the floor).
+ *
+ *  Box footprints come from one of two capabilities: `floorPlaced` (kinds
+ *  whose Y is also slab-lifted — columns, items) or `alignmentFootprint`
+ *  with a `box` shape (kinds that align by their footprint but aren't
+ *  floor-coupled — the elevator's outer shaft). A kind whose
+ *  `alignmentFootprint` is an `aabb` (stair) has no centred box, so it's
+ *  resolved directly in `nodeAlignmentAnchors`, not here. */
 function floorFootprint(
   node: AnyNode,
 ): { dimensions: [number, number, number]; rotation: [number, number, number] } | null {
-  const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+  const capabilities = nodeRegistry.get(node.type)?.capabilities
+  const floorPlaced = capabilities?.floorPlaced
   if (floorPlaced) {
     if (floorPlaced.applies && !floorPlaced.applies(node)) return null
     return floorPlaced.footprint(node)
   }
-  // Elevator isn't a `floorPlaced` kind (no slab-elevation coupling) but it
-  // does rest on the floor — give it a footprint so it aligns like other
-  // boxes (the registry move tool reads this). Use the OUTER SHAFT footprint
-  // (shaft + wall, what's drawn in plan and 3D), NOT the cab `width × depth`:
-  // the cab is inset by the shaft wall + clearance, so cab corners sit ~9 cm
-  // inside the visible edge — past the 8 cm snap threshold, which is why the
-  // elevator never surfaced a guide.
-  if (node.type === 'elevator') {
-    const elevator = node as ElevatorNode
-    const wall = getElevatorShaftWallThickness(elevator)
+  const alignment = capabilities?.alignmentFootprint?.(node)
+  if (alignment?.shape === 'box') {
+    return { dimensions: alignment.dimensions, rotation: alignment.rotation }
+  }
+  return null
+}
+
+/**
+ * XZ bounding box a node occupies in plan, unifying the two non-structural
+ * sources: a relocatable box (`floorFootprint`, covering floor-placed kinds
+ * and the elevator's alignment box) and a kind that hands back an explicit
+ * `aabb` because its plan shape isn't a centred rectangle (stair). Returns
+ * null for kinds with neither.
+ */
+function alignmentAABB(
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): FootprintAABB | null {
+  const box = footprintAABB(node)
+  if (box) return box
+  const alignment = nodeRegistry.get(node.type)?.capabilities?.alignmentFootprint?.(node, nodes)
+  if (alignment?.shape === 'aabb') {
     return {
-      dimensions: [
-        getElevatorShaftWidth(elevator) + wall * 2,
-        1,
-        getElevatorShaftDepth(elevator) + wall * 2,
-      ],
-      rotation: [0, elevator.rotation ?? 0, 0],
+      minX: alignment.minX,
+      minZ: alignment.minZ,
+      maxX: alignment.maxX,
+      maxZ: alignment.maxZ,
     }
   }
   return null
@@ -197,13 +208,15 @@ export function polygonAnchors(
 
 /**
  * Alignment anchors a node contributes to the candidate pool, dispatched by
- * kind: floor-placed footprints → corner anchors; walls / fences → segment
- * endpoints + midpoint; slabs / ceilings → polygon vertices; stairs → their
- * (chain / sector) footprint corners. Kinds without a usable footprint
- * contribute nothing.
+ * kind: walls / fences → segment endpoints + midpoint; slabs / ceilings →
+ * polygon vertices; everything else → the corners of its plan bounding box
+ * (`alignmentAABB`, which covers floor-placed kinds, the elevator's
+ * alignment box, and the stair's chain / sector footprint). Kinds with no
+ * usable footprint contribute nothing.
  *
- * `nodes` is needed only to resolve a straight stair's `stair-segment`
- * children; every other kind derives its anchors from `node` alone.
+ * `nodes` is needed only by kinds whose footprint walks siblings / children
+ * (a straight stair's `stair-segment` chain); every other kind derives its
+ * anchors from `node` alone.
  */
 export function nodeAlignmentAnchors(
   node: AnyNode,
@@ -224,15 +237,7 @@ export function nodeAlignmentAnchors(
     const poly = (node as { polygon?: [number, number][] }).polygon
     return poly ? polygonAnchors(node.id, poly) : []
   }
-  // A stair has no box footprint (straight = a segment chain, curved / spiral
-  // = an annular sector), so it bypasses `floorFootprint` and reduces to its
-  // plan bounding box here. Without this, elevators / spiral / curved stairs
-  // never contributed a guide.
-  if (node.type === 'stair') {
-    const aabb = stairFootprintAABB(node as StairNode, nodes)
-    return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
-  }
-  const aabb = footprintAABB(node)
+  const aabb = alignmentAABB(node, nodes)
   return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
 }
 

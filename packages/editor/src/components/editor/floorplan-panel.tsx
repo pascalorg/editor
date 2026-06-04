@@ -547,10 +547,20 @@ type ReferenceFloorRegistryEntry = {
   node: AnyNode
 }
 
-// Registry-driven kinds the legacy reference-floor layer doesn't collect
-// manually — rendered via their `def.floorplan` builder so they look
-// identical to the active floor. Everything else (walls, columns, slabs,
-// …) still has bespoke reference rendering above.
+// Top-level structural kinds drawn on the *reference* (dimmed, below) floor
+// via their `def.floorplan` builder, so the symbol is identical to the active
+// floor. Walls / columns / slabs / fences / items / openings still have
+// bespoke reference rendering above; these five are the registry-driven kinds
+// that don't.
+//
+// This is a deliberate curation, NOT "every kind with a `def.floorplan`":
+// ~24 kinds expose one, including children (`roof-segment`, `stair-segment`),
+// containers (`level`, `building`), and surfaces (`ceiling`, `zone`) that
+// either render through a parent's builder or shouldn't appear as standalone
+// reference symbols — auto-deriving would double-draw or clutter the floor.
+// The list also can't live on `NodeDefinition`: "reference floor" is an
+// editor 2D-view concept that `packages/core` must stay unaware of (see
+// wiki/architecture/layers.md). New top-level structural kinds opt in here.
 const REFERENCE_REGISTRY_KINDS = new Set<AnyNode['type']>([
   'stair',
   'roof',
