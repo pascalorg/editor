@@ -327,6 +327,16 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   affordanceTools: {
     move: () => import('./move-tool'),
   },
+  // Registry-driven placement tool — renders a translucent `ColumnPreview`
+  // ghost at the cursor (mirroring the shelf build tool) instead of the
+  // bare sphere the legacy editor-side `ColumnTool` showed. `ToolManager`'s
+  // registry-first path mounts this and skips the legacy `<ColumnTool>`.
+  tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Place column' },
+    { key: 'Alt', label: 'No snap' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
   floorplan: buildColumnFloorplan,
   // 2D drag affordances — `column-resize` handles every dimension arrow
   // the floor-plan builder emits per cross-section / support style (the

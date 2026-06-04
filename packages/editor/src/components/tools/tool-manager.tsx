@@ -10,7 +10,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
-import { ColumnTool } from './column/column-tool'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -253,9 +252,6 @@ export const ToolManager: React.FC = () => {
             <RegistryToolComponent />
           </Suspense>
         )}
-        {!movingNode && !useRegistryTool && showBuildTool && tool === 'column' && (
-          <ColumnTool currentLevelId={activeLevelId ?? null} onPlaced={handlePlacedNodeSelected} />
-        )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (
           <ElevatorTool
             buildingId={buildingId as BuildingNode['id'] | null}
@@ -263,9 +259,7 @@ export const ToolManager: React.FC = () => {
             onPlaced={handlePlacedElevatorSelected}
           />
         )}
-        {!movingNode && BuildToolComponent && tool !== 'column' && tool !== 'elevator' ? (
-          <BuildToolComponent />
-        ) : null}
+        {!movingNode && BuildToolComponent && tool !== 'elevator' ? <BuildToolComponent /> : null}
         {/* Figma-style alignment guides published by the move / placement
             tools above. Lives inside the building-local group so the
             building-local guide coords render at the right world position. */}
