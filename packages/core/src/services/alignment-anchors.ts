@@ -59,23 +59,53 @@ export function footprintAABBFrom(
   return { minX, minZ, maxX, maxZ }
 }
 
-/** The floor-placed footprint config for a node, or null when it has none
+/** The relocatable box footprint for a node, or null when it has none
  *  (walls / slabs / polygon kinds) or the kind's predicate excludes it
- *  (e.g. a wall-attached item that doesn't rest on the floor). */
+ *  (e.g. a wall-attached item that doesn't rest on the floor).
+ *
+ *  Box footprints come from one of two capabilities: `floorPlaced` (kinds
+ *  whose Y is also slab-lifted — columns, items) or `alignmentFootprint`
+ *  with a `box` shape (kinds that align by their footprint but aren't
+ *  floor-coupled — the elevator's outer shaft). A kind whose
+ *  `alignmentFootprint` is an `aabb` (stair) has no centred box, so it's
+ *  resolved directly in `nodeAlignmentAnchors`, not here. */
 function floorFootprint(
   node: AnyNode,
 ): { dimensions: [number, number, number]; rotation: [number, number, number] } | null {
-  const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+  const capabilities = nodeRegistry.get(node.type)?.capabilities
+  const floorPlaced = capabilities?.floorPlaced
   if (floorPlaced) {
     if (floorPlaced.applies && !floorPlaced.applies(node)) return null
     return floorPlaced.footprint(node)
   }
-  // Elevator isn't a `floorPlaced` kind (no slab-elevation coupling) but it
-  // does rest on the floor with a `width × depth` cab — give it a footprint
-  // so it aligns like other boxes (the registry move tool reads this).
-  if (node.type === 'elevator') {
-    const e = node as { width?: number; depth?: number; rotation?: number }
-    return { dimensions: [e.width ?? 1.6, 1, e.depth ?? 1.6], rotation: [0, e.rotation ?? 0, 0] }
+  const alignment = capabilities?.alignmentFootprint?.(node)
+  if (alignment?.shape === 'box') {
+    return { dimensions: alignment.dimensions, rotation: alignment.rotation }
+  }
+  return null
+}
+
+/**
+ * XZ bounding box a node occupies in plan, unifying the two non-structural
+ * sources: a relocatable box (`floorFootprint`, covering floor-placed kinds
+ * and the elevator's alignment box) and a kind that hands back an explicit
+ * `aabb` because its plan shape isn't a centred rectangle (stair). Returns
+ * null for kinds with neither.
+ */
+function alignmentAABB(
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): FootprintAABB | null {
+  const box = footprintAABB(node)
+  if (box) return box
+  const alignment = nodeRegistry.get(node.type)?.capabilities?.alignmentFootprint?.(node, nodes)
+  if (alignment?.shape === 'aabb') {
+    return {
+      minX: alignment.minX,
+      minZ: alignment.minZ,
+      maxX: alignment.maxX,
+      maxZ: alignment.maxZ,
+    }
   }
   return null
 }
@@ -178,11 +208,20 @@ export function polygonAnchors(
 
 /**
  * Alignment anchors a node contributes to the candidate pool, dispatched by
- * kind: floor-placed footprints → corner anchors; walls / fences → segment
- * endpoints + midpoint; slabs / ceilings → polygon vertices. Kinds without a
+ * kind: walls / fences → segment endpoints + midpoint; slabs / ceilings →
+ * polygon vertices; everything else → the corners of its plan bounding box
+ * (`alignmentAABB`, which covers floor-placed kinds, the elevator's
+ * alignment box, and the stair's chain / sector footprint). Kinds with no
  * usable footprint contribute nothing.
+ *
+ * `nodes` is needed only by kinds whose footprint walks siblings / children
+ * (a straight stair's `stair-segment` chain); every other kind derives its
+ * anchors from `node` alone.
  */
-export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
+export function nodeAlignmentAnchors(
+  node: AnyNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): AlignmentAnchor[] {
   if (node.type === 'wall' || node.type === 'fence') {
     const seg = node as {
       id: string
@@ -198,8 +237,26 @@ export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
     const poly = (node as { polygon?: [number, number][] }).polygon
     return poly ? polygonAnchors(node.id, poly) : []
   }
-  const aabb = footprintAABB(node)
+  const aabb = alignmentAABB(node, nodes)
   return aabb ? bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ) : []
+}
+
+/**
+ * Resolve the level a node belongs to by walking its `parentId` chain, or
+ * null when it isn't under a level. Inlined here (rather than importing the
+ * spatial-grid `resolveLevelId`) to keep this services module free of
+ * hook / store dependencies.
+ */
+function resolveNodeLevelId(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): string | null {
+  let current: AnyNode | undefined = node
+  while (current) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId] : undefined
+  }
+  return null
 }
 
 /**
@@ -207,15 +264,30 @@ export function nodeAlignmentAnchors(node: AnyNode): AlignmentAnchor[] {
  * candidate pool every move / placement tool resolves against, so any
  * draggable object can align to any other (items, walls, fences, slabs,
  * ceilings, columns).
+ *
+ * When `levelId` is given, nodes that belong to a *different* level are
+ * dropped. Alignment is XZ-only, so without this a node directly below on
+ * another floor (e.g. the ground floor while you place on the first) would
+ * snap and draw a guide even though the two sit at different heights.
+ * Building-/site-scoped nodes with no level ancestor (e.g. an elevator
+ * shaft, which is parented to the building and spans every floor) resolve to
+ * null and stay in the pool so they align on any floor. The 2D floor-plan
+ * deliberately omits the filter — aligning a wall to the one directly below
+ * in plan is the whole point of the reference floor.
  */
 export function collectAlignmentAnchors(
   nodes: Readonly<Record<string, AnyNode>>,
   excludeId: string,
+  levelId?: string | null,
 ): AlignmentAnchor[] {
   const anchors: AlignmentAnchor[] = []
   for (const node of Object.values(nodes)) {
     if (!node || node.id === excludeId) continue
-    anchors.push(...nodeAlignmentAnchors(node))
+    if (levelId) {
+      const nodeLevelId = resolveNodeLevelId(node, nodes)
+      if (nodeLevelId !== null && nodeLevelId !== levelId) continue
+    }
+    anchors.push(...nodeAlignmentAnchors(node, nodes))
   }
   return anchors
 }

@@ -12,6 +12,8 @@ import {
   type ElevatorNode,
   emitter,
   type FenceNode,
+  type FloorplanGeometry,
+  type GeometryContext,
   type GridEvent,
   type GuideNode,
   getRenderableSlabPolygon,
@@ -28,7 +30,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   type SiteNode,
-  SlabNode,
+  type SlabNode,
   type SpawnNode,
   type StairNode,
   StairNode as StairNodeSchema,
@@ -87,6 +89,7 @@ import {
 } from '../editor-2d/floorplan-render-context'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
@@ -528,6 +531,7 @@ type ReferenceFloorData = {
   fenceEntries: FloorplanFenceEntry[]
   itemEntries: FloorplanItemEntry[]
   openingPolygons: OpeningPolygonEntry[]
+  registryEntries: ReferenceFloorRegistryEntry[]
   slabPolygons: SlabPolygonEntry[]
   wallPolygons: WallPolygonEntry[]
 }
@@ -537,6 +541,33 @@ type ReferenceFloorColumnEntry = {
   points: string
   polygon: Point2D[]
 }
+
+type ReferenceFloorRegistryEntry = {
+  geometry: FloorplanGeometry
+  node: AnyNode
+}
+
+// Top-level structural kinds drawn on the *reference* (dimmed, below) floor
+// via their `def.floorplan` builder, so the symbol is identical to the active
+// floor. Walls / columns / slabs / fences / items / openings still have
+// bespoke reference rendering above; these five are the registry-driven kinds
+// that don't.
+//
+// This is a deliberate curation, NOT "every kind with a `def.floorplan`":
+// ~24 kinds expose one, including children (`roof-segment`, `stair-segment`),
+// containers (`level`, `building`), and surfaces (`ceiling`, `zone`) that
+// either render through a parent's builder or shouldn't appear as standalone
+// reference symbols — auto-deriving would double-draw or clutter the floor.
+// The list also can't live on `NodeDefinition`: "reference floor" is an
+// editor 2D-view concept that `packages/core` must stay unaware of (see
+// wiki/architecture/layers.md). New top-level structural kinds opt in here.
+const REFERENCE_REGISTRY_KINDS = new Set<AnyNode['type']>([
+  'stair',
+  'roof',
+  'shelf',
+  'spawn',
+  'elevator',
+])
 
 type FloorplanStairSegmentEntry = {
   centerLine: FloorplanLineSegment | null
@@ -3440,6 +3471,10 @@ const FloorplanReferenceFloorLayer = memo(function FloorplanReferenceFloorLayer(
           vectorEffect="non-scaling-stroke"
         />
       ))}
+
+      {data.registryEntries.map(({ node, geometry }) => (
+        <FloorplanGeometryRenderer geometry={geometry} key={node.id} />
+      ))}
     </g>
   )
 })
@@ -4721,6 +4756,48 @@ export function FloorplanPanel() {
       ]
     })
 
+    // Render reference-floor stairs and roofs through the SAME registry
+    // builders the active level uses (`def.floorplan` → `buildStairFloorplan`
+    // / `buildRoofFloorplan`), so the symbol is pixel-identical to a stair /
+    // roof on the current floor. These are the only registry-driven kinds
+    // the legacy reference layer doesn't already collect manually.
+    // `viewState` is omitted so each builder emits its unselected appearance
+    // (no selection chrome / resize handles). Both the reference layer and
+    // the registry renderer draw in the same plan-meter space
+    // (`toSvgX`/`toSvgY` are identity), so the geometry composes directly.
+    const registryEntries = referenceDescendants.flatMap<ReferenceFloorRegistryEntry>((node) => {
+      if (!REFERENCE_REGISTRY_KINDS.has(node.type)) {
+        return []
+      }
+
+      const builder = nodeRegistry.get(node.type)?.floorplan
+      if (!builder) {
+        return []
+      }
+
+      // Each builder walks its own segment children (stair-segment /
+      // roof-segment) and filters by type. Pass them in stored `children`
+      // order — stair-segment transforms are cumulative, so order matters.
+      const childIds = (node as { children?: AnyNodeId[] }).children ?? []
+      const children = childIds.flatMap((childId) => {
+        const child = referenceDescendantById.get(childId)
+        return child ? [child] : []
+      })
+      const ctx: GeometryContext = {
+        resolve: (rid) => referenceDescendantById.get(rid) as never,
+        children,
+        siblings: [],
+        parent: referenceFloorLevel,
+        viewState: undefined,
+      }
+      const geometry = builder(node, ctx)
+      if (!geometry) {
+        return []
+      }
+
+      return [{ geometry, node }]
+    })
+
     const transformCache = new Map<string, SharedFloorplanNodeTransform | null>()
     const itemEntries = referenceDescendants.flatMap((node) => {
       if (
@@ -4759,6 +4836,7 @@ export function FloorplanPanel() {
       fenceEntries,
       itemEntries,
       openingPolygons,
+      registryEntries,
       slabPolygons,
       wallPolygons,
     }
@@ -6359,26 +6437,6 @@ export function FloorplanPanel() {
     }
   }, [clearDraft])
 
-  const createSlabOnCurrentLevel = useCallback(
-    (points: WallPlanPoint[]) => {
-      if (!levelId) {
-        return null
-      }
-
-      const { createNode, nodes } = useScene.getState()
-      const slabCount = Object.values(nodes).filter((node) => node.type === 'slab').length
-      const slab = SlabNode.parse({
-        name: `Slab ${slabCount + 1}`,
-        polygon: points.map(([x, z]) => [x, z] as [number, number]),
-      })
-
-      createNode(slab, levelId)
-      sfxEmitter.emit('sfx:structure-build')
-      setSelection({ selectedIds: [slab.id] })
-      return slab.id
-    },
-    [levelId, setSelection],
-  )
   const createZoneOnCurrentLevel = useCallback(
     (points: WallPlanPoint[]) => {
       if (!levelId) {
@@ -7676,6 +7734,11 @@ export function FloorplanPanel() {
     ],
   )
 
+  // Slab creation is owned by the registry-driven slab tool (parity with
+  // ceiling): the click/double-click that closes the polygon is forwarded as
+  // a grid event, and the 3D tool commits the node. These 2D handlers only
+  // maintain the draft-preview state and clear it on close — they must NOT
+  // create a node themselves, or every slab would be built twice.
   const handleSlabPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
       const lastPoint = slabDraftPoints[slabDraftPoints.length - 1]
@@ -7685,7 +7748,6 @@ export function FloorplanPanel() {
 
       const firstPoint = slabDraftPoints[0]
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
-        createSlabOnCurrentLevel(slabDraftPoints)
         clearDraft()
         return
       }
@@ -7693,7 +7755,7 @@ export function FloorplanPanel() {
       setSlabDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
+    [clearDraft, slabDraftPoints],
   )
   const handleSlabPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -7716,10 +7778,9 @@ export function FloorplanPanel() {
         return
       }
 
-      createSlabOnCurrentLevel(nextPoints)
       clearDraft()
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints],
+    [clearDraft, slabDraftPoints],
   )
   const handleCeilingPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
@@ -8063,6 +8124,9 @@ export function FloorplanPanel() {
       if (isZoneBuildActive) {
         handleZonePlacementConfirm(snappedPoint)
       } else {
+        // Slab is registry-driven: forward the double-click so the 3D tool
+        // commits the node (zone has no registry tool, so it commits locally).
+        emitFloorplanGridEvent('double-click', planPoint, event)
         handleSlabPlacementConfirm(snappedPoint)
       }
     },

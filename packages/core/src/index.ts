@@ -146,6 +146,7 @@ export {
   resolveElevatorServiceLevelIds,
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
+export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {

@@ -154,7 +154,7 @@ export const StairTool: React.FC = () => {
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each placement. The stair aligns by its ORIGIN point.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
     // Snap the stair origin onto another object's nearest real anchor and
     // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
     // point: resolving against the grid point would only ever catch anchors
@@ -230,7 +230,7 @@ export const StairTool: React.FC = () => {
         event.nativeEvent?.altKey === true,
       )
       commitStairPlacement(currentLevelId, [gridX, 0, gridZ], rotationRef.current)
-      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
       useAlignmentGuides.getState().clear()
     }
 
