@@ -1,10 +1,12 @@
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   DoorNode,
   emitter,
   isCurvedWall,
   sceneRegistry,
   spatialGridManager,
+  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallEvent,
@@ -15,7 +17,6 @@ import {
   EDITOR_LAYER,
   getSideFromNormal,
   isValidWallSideFace,
-  snapToHalf,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -23,6 +24,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -94,7 +96,15 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      useAlignmentGuides.getState().clear()
     }
+
+    // Alignment candidates — anchors of every OTHER alignable object (the
+    // moving door is excluded so it never aligns to itself).
+    const alignmentCandidates = collectAlignmentAnchors(
+      useScene.getState().nodes,
+      movingDoorNode.id,
+    )
 
     const updateCursor = (
       worldPosition: [number, number, number],
@@ -131,7 +141,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: movingDoorNode.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -190,7 +206,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: movingDoorNode.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -255,7 +277,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       const { side, itemRotation } = getPlacementOrientation(event)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: movingDoorNode.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -395,6 +423,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         }
       }
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      useAlignmentGuides.getState().clear()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

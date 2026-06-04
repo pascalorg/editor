@@ -9,12 +9,14 @@ import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemParametrics } from './parametrics'
 import { ItemNode } from './schema'
 
-// Gizmo sits just past the front-right footprint corner; the guide ring
+// The two floor gizmos flank the item at mid-height so they never overlap,
+// even on small items: move sits past the left edge, rotate past the right
+// edge, both floated the same distance in front of the item. Mirrors the
+// wall-item layout below (WALL_SIDE_OFFSET / WALL_GIZMO_LIFT). The guide ring
 // traces a circle slightly outside the footprint's bounding circle.
-const ROTATE_CORNER_OFFSET = 0.25
+const GIZMO_SIDE_OFFSET = 0.3
+const GIZMO_FRONT_OFFSET = 0.3
 const ROTATE_RING_OFFSET = 0.06
-// How far past the item's front edge the move cross floats.
-const MOVE_FRONT_OFFSET = 0.35
 
 // Whole-item rotation handle — the two-headed curved arrow. `arc-resize`
 // does the angular drag math (raycasts a horizontal plane at the gizmo's
@@ -35,12 +37,12 @@ function itemRotateHandle(): HandleDescriptor<ItemNodeType> {
       return { rotation: [rx, ry - delta, rz] }
     },
     placement: {
-      // Front-right corner of the footprint at mid-height. The registered
-      // item mesh carries position + rotation only (scale lives on an
-      // inner mesh), so the scaled footprint maps straight to world.
+      // Past the item's right edge at mid-height, floated in front. The
+      // registered item mesh carries position + rotation only (scale lives on
+      // an inner mesh), so the scaled footprint maps straight to world.
       position: (n) => {
         const [w, h, d] = getScaledDimensions(n)
-        return [w / 2, h / 2, d / 2 + ROTATE_CORNER_OFFSET]
+        return [w / 2 + GIZMO_SIDE_OFFSET, h / 2, d / 2 + GIZMO_FRONT_OFFSET]
       },
       // Fixed −45° tilt leans the curve toward the item's front face.
       rotationY: () => -Math.PI / 4,
@@ -56,26 +58,23 @@ function itemRotateHandle(): HandleDescriptor<ItemNodeType> {
   }
 }
 
-// Free ground-plane move gizmo — the 4-way cross just outside the front edge.
-// Press-drag-release slides the item across the floor (live preview, commit
-// on release). `snapExtents` aligns the item's edges to the grid the same
-// way placement does, swapping width / depth at 90° turns.
+// The 4-way move cross, just past the item's left edge. Press-drag hands the
+// item to its placement coordinator (showing the bounding box, dimension labels
+// and grid-snap ticker) and commits on release — press-drag-release motion with
+// the full placement feedback.
 function itemMoveHandle(): HandleDescriptor<ItemNodeType> {
   return {
-    kind: 'translate',
+    kind: 'tap-action',
+    shape: 'move-cross',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
     placement: {
-      // Sit just outside the item's front edge (centred in X, clear of the
-      // model), low to the floor so it reads as a floor-move grip.
+      // Past the item's left edge at mid-height, mirroring the rotate grip on
+      // the right so the two never overlap on small items.
       position: (n) => {
-        const [, , d] = getScaledDimensions(n)
-        return [0, 0.02, d / 2 + MOVE_FRONT_OFFSET]
+        const [w, h, d] = getScaledDimensions(n)
+        return [-(w / 2 + GIZMO_SIDE_OFFSET), h / 2, d / 2 + GIZMO_FRONT_OFFSET]
       },
-    },
-    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
-    snapExtents: (n) => {
-      const [dimX, , dimZ] = getScaledDimensions(n)
-      const swap = Math.abs(Math.sin(n.rotation[1] ?? 0)) > 0.9
-      return [swap ? dimZ : dimX, swap ? dimX : dimZ]
     },
   }
 }
@@ -113,26 +112,24 @@ function itemWallRotateHandle(): HandleDescriptor<ItemNodeType> {
   }
 }
 
-// Slide the item across the wall face — constrained to the wall plane (along
-// the wall + up/down), depth pinned. Sits just past the item's left edge.
+// Move cross past the item's left edge on the wall face. Tap to hand the item
+// to its placement coordinator (`engageMove`) — same feedback as the floating
+// move button, and the coordinator handles the wall ↔ floor ↔ ceiling
+// transitions the generic translate drag couldn't. `plane: 'node-normal'`
+// stands the cross up against the wall face.
 function itemWallMoveHandle(): HandleDescriptor<ItemNodeType> {
   return {
-    kind: 'translate',
+    kind: 'tap-action',
+    shape: 'move-cross',
     plane: 'node-normal',
     portal: 'grandparent',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
     placement: {
       position: (n) => {
         const [w] = getScaledDimensions(n)
         return [-(w / 2 + WALL_SIDE_OFFSET), 0, WALL_GIZMO_LIFT]
       },
-    },
-    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
-    snapExtents: (n) => {
-      const [dimX, dimY] = getScaledDimensions(n)
-      // A 90° roll about the normal swaps the item's along-wall + vertical
-      // footprint.
-      const swap = Math.abs(Math.sin(n.rotation[2] ?? 0)) > 0.9
-      return [swap ? dimY : dimX, swap ? dimX : dimY]
     },
   }
 }

@@ -1,8 +1,12 @@
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  collectAlignmentAnchors,
   type DragAction,
   type FenceNode,
+  resolveAlignment,
+  useAlignmentGuides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -43,6 +47,10 @@ import {
 
 const LINKED_FENCE_ENDPOINT_EPSILON = 0.025
 
+/** Figma-style alignment-snap threshold (meters), matching the wall / item
+ *  tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function samePoint(a: FencePlanPoint, b: FencePlanPoint): boolean {
   return (
     Math.abs(a[0] - b[0]) <= LINKED_FENCE_ENDPOINT_EPSILON &&
@@ -67,6 +75,9 @@ export type MoveFenceEndpointCtx = {
   linkedOriginals: LinkedFenceSnapshot[]
   levelWalls: WallNode[]
   levelFences: FenceNode[]
+  /** Alignment anchors (endpoints + midpoints) of every OTHER wall / fence on
+   *  the level (building-local), feeding the resolver. */
+  alignCandidates: AlignmentAnchor[]
 }
 
 export type MoveFenceEndpointDraft = {
@@ -132,6 +143,10 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         else if (node.type === 'fence') levelFences.push(node)
       }
 
+      // Alignment targets — anchors of every other alignable object (walls,
+      // fences, items, slabs, ceilings, columns).
+      const alignCandidates = collectAlignmentAnchors(useScene.getState().nodes, fence.id)
+
       return {
         fenceId: fence.id as AnyNodeId,
         endpoint,
@@ -143,6 +158,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         linkedOriginals: snapshotLinked(fence.id, parentId, originalMovingPoint),
         levelWalls,
         levelFences,
+        alignCandidates,
       }
     },
 
@@ -158,14 +174,32 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         ignoreFenceIds: [ctx.fenceId as string],
         step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
       })
-      const nextStart = ctx.endpoint === 'start' ? snapped : ctx.fixedPoint
-      const nextEnd = ctx.endpoint === 'end' ? snapped : ctx.fixedPoint
+
+      // Figma-style alignment: nudge the dragged endpoint onto another wall /
+      // fence endpoint or midpoint axis when within threshold, and publish a
+      // guide. The resolver connects to the NEAREST real anchor, so the dot
+      // always sits on an actual point. Alt is reserved for detach.
+      let aligned = snapped
+      if (ctx.alignCandidates.length > 0) {
+        const ar = resolveAlignment({
+          moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
+          candidates: ctx.alignCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (ar.snap) {
+          aligned = [snapped[0] + ar.snap.dx, snapped[1] + ar.snap.dz]
+        }
+        useAlignmentGuides.getState().set(ar.guides)
+      }
+
+      const nextStart = ctx.endpoint === 'start' ? aligned : ctx.fixedPoint
+      const nextEnd = ctx.endpoint === 'end' ? aligned : ctx.fixedPoint
       const detached = modifiers.alt
       const linkedUpdates = detached
         ? []
-        : linkedCascade(ctx.linkedOriginals, ctx.originalMovingPoint, snapped)
+        : linkedCascade(ctx.linkedOriginals, ctx.originalMovingPoint, aligned)
       return {
-        movingPoint: snapped,
+        movingPoint: aligned,
         start: nextStart,
         end: nextEnd,
         linkedUpdates,
@@ -190,6 +224,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
     },
 
     commit: (draft, ctx, scene) => {
+      useAlignmentGuides.getState().clear()
       // Min-length rejection still matters — too-short fence is invalid
       // and should bounce back via the cancel path (snapshot restore).
       // But the "no-change" rejection is removed: see
@@ -220,7 +255,8 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
     },
 
     cancel: (_ctx, _scene) => {
-      // No-op — createDragSession.cancel() calls scene.restoreAll()
+      useAlignmentGuides.getState().clear()
+      // No-op otherwise — createDragSession.cancel() calls scene.restoreAll()
       // which puts every touched node back via the snapshot.
     },
   }

@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
+import { scaleHandleHeight } from './door-math'
 
 const doorTypeOptions = [
   { label: 'Hinged', value: 'hinged', available: true },
@@ -716,7 +717,13 @@ export default function DoorPanel() {
           max={4}
           min={1.0}
           onChange={(v) =>
-            handleUpdate({ height: v, position: [node.position[0], v / 2, node.position[2]] })
+            handleUpdate({
+              height: v,
+              position: [node.position[0], v / 2, node.position[2]],
+              // Keep the handle at the same relative height as the door resizes,
+              // matching the height-resize arrow.
+              handleHeight: scaleHandleHeight(node.handleHeight, node.height, v),
+            })
           }
           precision={2}
           restoreOnCommit={false}

@@ -5,6 +5,10 @@ function center(nodeId: string, x: number, z: number): AlignmentAnchor {
   return { nodeId, kind: 'center', x, z }
 }
 
+function corner(nodeId: string, x: number, z: number): AlignmentAnchor {
+  return { nodeId, kind: 'corner', x, z }
+}
+
 describe('resolveAlignment', () => {
   test('returns empty when no candidates within threshold', () => {
     const result = resolveAlignment({
@@ -49,6 +53,17 @@ describe('resolveAlignment', () => {
     // |0.1 - 0.08| = 0.02 wins over |0.05 - 0.08| = 0.03 and |0 - 0.08| = 0.08
     expect(result.snap?.dx).toBeCloseTo(0.02, 10)
     expect(result.guides[0]!.candidateNodeId).toBe('b')
+  })
+
+  test('ties on the matched axis break toward the nearest perpendicular anchor', () => {
+    const result = resolveAlignment({
+      moving: [corner('m', 0.02, 4)],
+      candidates: [corner('far', 0, 0), corner('near', 0, 5)],
+      threshold: 0.1,
+    })
+    // Both share X (Δx = 0.02); 'near' (z=5) is closer to the moving z=4 than
+    // 'far' (z=0), so the guide connects to the nearest real anchor.
+    expect(result.guides[0]!.candidateNodeId).toBe('near')
   })
 
   test('threshold = 0 disables alignment', () => {

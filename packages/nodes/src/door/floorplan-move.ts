@@ -6,7 +6,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './door-math'
 
 /**
@@ -55,8 +55,20 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
       if (!hit) return // pointer off any wall — keep door at last valid position
 
-      // Snap the wall-local X to 0.5m grid (Shift bypasses).
-      const snappedLocalX = modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX)
+      // Figma-style along-wall alignment first (edge-to-edge with other
+      // openings / wall ends); it competes with — and wins over — the 0.5m
+      // grid snap. Falls back to the grid snap when nothing aligns. Alt
+      // bypasses; Shift drops the grid snap for fine positioning.
+      const neighborX = modifiers.altKey
+        ? null
+        : snapLocalXToNeighbors({
+            wall: hit.wall,
+            localX: hit.localX,
+            width: node.width,
+            selfId: node.id as AnyNodeId,
+            nodes,
+          })
+      const snappedLocalX = neighborX ?? (modifiers.shiftKey ? hit.localX : snapToHalf(hit.localX))
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
 
       lastValid = {

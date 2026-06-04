@@ -5,13 +5,17 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
+  collectAlignmentAnchors,
   type EventSuffix,
   emitter,
   type GridEvent,
+  movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
+  resolveAlignment,
   sceneRegistry,
   spatialGridManager,
+  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -32,6 +36,11 @@ const snapToGridStep = (value: number) => {
 
 /** 90° steps, matching the GLB item placement rotation. */
 const ROTATION_STEP = Math.PI / 2
+
+/** Figma-style alignment-snap threshold (meters), matching the 2D
+ *  floor-plan overlay's `ALIGNMENT_THRESHOLD_M`. 8 cm gives a magnetic pull
+ *  without fighting grid snap. Fixed for v1 — no zoom-scaling in 3D. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 /**
  * Generic move tool for any registry-backed kind.
@@ -228,9 +237,38 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       })
     }
 
+    // Static alignment candidates — anchors of every OTHER alignable object
+    // (items, walls, fences, slabs, ceilings, columns), gathered once at drag
+    // start (the scene graph is stable during an imperative move). Coords are
+    // building-local, the same frame as `event.localPosition` and the
+    // rendered cursor, so the guide dots line up with the cursor.
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, node.id)
+
     const onGridMove = (event: GridEvent) => {
-      const x = snapToGridStep(event.localPosition[0])
-      const z = snapToGridStep(event.localPosition[2])
+      let x = snapToGridStep(event.localPosition[0])
+      let z = snapToGridStep(event.localPosition[2])
+
+      // Figma-style alignment snap layered on top of grid snap: when the
+      // moving item's edge lines up (on X or Z) with another item's edge,
+      // snap and publish a guide. The guide connects to the nearest real
+      // corner of the candidate (resolver tie-break), so the dot always sits
+      // on an actual point. Alt bypasses.
+      const bypass = event.nativeEvent?.altKey === true
+      if (!bypass && alignmentCandidates.length > 0) {
+        const result = resolveAlignment({
+          moving: movingFootprintAnchors(node, x, z, rotationRef.current),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap) {
+          x += result.snap.dx
+          z += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
       hasMovedRef.current = true
       setCursorPosition([x, 0, z])
       lastCursorRef.current = [x, 0, z]
@@ -323,6 +361,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Now safe to clear — node.position is already the new value, so
       // `ParametricNodeRenderer`'s next render lands at `[x, 0, z]`.
       useLiveTransforms.getState().clear(node.id)
+      useAlignmentGuides.getState().clear()
 
       sfxEmitter.emit('sfx:item-place')
       exitMoveMode()
@@ -398,6 +437,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         m.rotation.y = originalRotationY
       }
       useLiveTransforms.getState().clear(node.id)
+      useAlignmentGuides.getState().clear()
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
@@ -417,6 +457,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Restore the moved meshes' raycast so they're hoverable / selectable
       // again after the drag ends.
       for (const restore of restoreRaycasts) restore()
+      // Drop any alignment guides this drag published — covers Esc / mid-drag
+      // unmount / commit paths uniformly.
+      useAlignmentGuides.getState().clear()
       if (!committed) {
         sceneRegistry.nodes
           .get(node.id)

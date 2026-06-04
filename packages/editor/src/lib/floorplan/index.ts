@@ -1,4 +1,11 @@
 export {
+  alignFloorplanDraftPoint,
+  applyFloorplanAlignment,
+  FLOORPLAN_ALIGNMENT_THRESHOLD_M,
+  FLOORPLAN_DRAFT_ALIGN_ID,
+  type FloorplanAlignmentResult,
+} from './apply-alignment'
+export {
   clampPlanValue,
   doesPolygonIntersectSelectionBounds,
   getDistanceToWallSegment,

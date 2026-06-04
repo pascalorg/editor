@@ -110,9 +110,9 @@ export const ARROW_HOVER_COLOR = '#a5b4fc'
 // unchanged.
 export function createRotateArrowHandleGeometry() {
   const R = 0.2
-  const ribbonHalfWidth = 0.02 // ribbon thickness / 2
+  const ribbonHalfWidth = 0.028 // ribbon thickness / 2
   const halfSweep = Math.PI / 3 // 60° per side → 120° total arc
-  const headHalfWidth = 0.045 // arrowhead wings extend this far past ribbon
+  const headHalfWidth = 0.05 // arrowhead wings extend this far past ribbon
   const headOvershoot = 0.075 // tangential reach of the arrowhead tip
   const rIn = R - ribbonHalfWidth
   const rOut = R + ribbonHalfWidth
@@ -170,16 +170,16 @@ export function createRotateArrowHandleGeometry() {
   shape.closePath()
 
   const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.06,
+    depth: 0.045,
     bevelEnabled: true,
     bevelThickness: 0.018,
-    bevelSize: 0.012,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 6,
+    bevelSegments: 8,
     curveSegments: 24,
     steps: 1,
   })
-  geometry.translate(0, 0, -0.03)
+  geometry.translate(0, 0, -0.0225)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
@@ -200,16 +200,16 @@ function createArrowHandleGeometry() {
   shape.lineTo(-0.04, -0.12)
   shape.lineTo(0.22, 0)
   const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.08,
+    depth: 0.045,
     bevelEnabled: true,
-    bevelThickness: 0.035,
-    bevelSize: 0.03,
+    bevelThickness: 0.018,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 10,
+    bevelSegments: 8,
     curveSegments: 16,
     steps: 1,
   })
-  geometry.translate(0, 0, -0.04)
+  geometry.translate(0, 0, -0.0225)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
@@ -221,8 +221,8 @@ function createArrowHandleGeometry() {
 // merge into the 4-way move cross.
 function createDoubleArrowShape(): Shape {
   const L = 0.36 // half-length to each tip
-  const rw = 0.03 // ribbon half-width
-  const hw = 0.12 // arrowhead half-width
+  const rw = 0.042 // ribbon half-width
+  const hw = 0.13 // arrowhead half-width
   // Long inner ribbon so opposing arrowheads sit well apart rather than
   // meeting in a cramped knot at the centre.
   const hx = 0.2 // where each arrowhead meets the ribbon
@@ -244,20 +244,20 @@ function createDoubleArrowShape(): Shape {
 // 4-way move cross: two double-headed arrows (±X and ±Z) lying flat in the
 // XZ plane. Drawn on top (depthTest off, shared arrow material) so it reads
 // as a floor-move grip centred on the item.
-function createMoveCrossHandleGeometry() {
+export function createMoveCrossHandleGeometry() {
   const shape = createDoubleArrowShape()
   const extrudeOpts = {
-    depth: 0.06,
+    depth: 0.045,
     bevelEnabled: true,
     bevelThickness: 0.018,
-    bevelSize: 0.012,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 6,
+    bevelSegments: 8,
     curveSegments: 8,
     steps: 1,
   }
   const armX = new ExtrudeGeometry(shape, extrudeOpts)
-  armX.translate(0, 0, -0.03)
+  armX.translate(0, 0, -0.0225)
   armX.rotateX(-Math.PI / 2) // lay flat → points along ±X in XZ
   const armZ = armX.clone()
   armZ.rotateY(Math.PI / 2) // second arm → points along ±Z
@@ -275,7 +275,7 @@ function createMoveCrossHandleGeometry() {
   return merged
 }
 
-function swallowNextClick() {
+export function swallowNextClick() {
   const swallow = (clickEvent: Event) => {
     clickEvent.stopPropagation()
     clickEvent.preventDefault()
@@ -750,9 +750,6 @@ function LinearArrow({
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
 
-    // Raycast plane at the handle's world position, perpendicular to the
-    // camera's projected horizontal direction. For axis='y' we need the
-    // plane to be vertical too — projection.y maps directly.
     rideObject.updateMatrixWorld()
     // Freeze the ride frame at drag-start. Some kinds park their mesh
     // position on the field being dragged (ceiling: mesh.position.y =
@@ -762,8 +759,21 @@ function LinearArrow({
     // pose for the duration of the drag.
     const initialFrameInverse = new Matrix4().copy(rideObject.matrixWorld).invert()
     const worldOrigin = new Vector3(...position).applyMatrix4(rideObject.matrixWorld)
-    const planeNormal = new Vector3().subVectors(camera.position, worldOrigin).setY(0)
-    if (planeNormal.lengthSq() === 0) return
+    // Drag plane MUST contain the handle's axis. The resize value is read off
+    // the hit point's component along that axis, so a plane that merely faces
+    // the camera (the old `setY(0)` normal) collapses when the axis points
+    // toward the viewer: the axis lies near the plane normal, screen motion
+    // barely changes the axis component, and the resize crawls / stops
+    // following the cursor. Build the world-space axis from the frozen ride
+    // frame, then take the view direction with its along-axis part removed —
+    // that plane contains the axis yet faces the camera as squarely as
+    // possible for a stable intersection. (For axis='y' this reduces to the
+    // old vertical plane, since the view's vertical component is dropped.)
+    const axisIndex = descriptor.axis === 'x' ? 0 : descriptor.axis === 'y' ? 1 : 2
+    const worldAxis = new Vector3().setFromMatrixColumn(rideObject.matrixWorld, axisIndex).normalize()
+    const viewDir = new Vector3().subVectors(worldOrigin, camera.position)
+    const planeNormal = viewDir.addScaledVector(worldAxis, -viewDir.dot(worldAxis))
+    if (planeNormal.lengthSq() < 1e-10) return
     planeNormal.normalize()
     const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, worldOrigin)
 
@@ -1767,7 +1777,8 @@ function TapActionArrow({
   const position = descriptor.placement.position(node, placementSceneApi)
   const rotationY = descriptor.placement.rotationY?.(node, placementSceneApi) ?? 0
   const shape = descriptor.shape ?? 'arrow'
-  const cursor: Cursor = descriptor.cursor ?? (shape === 'corner-picker' ? 'move' : 'ew-resize')
+  const cursor: Cursor =
+    descriptor.cursor ?? (shape === 'corner-picker' || shape === 'move-cross' ? 'move' : 'ew-resize')
 
   const onActivate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
@@ -1803,6 +1814,20 @@ function TapActionArrow({
     )
   }
 
+  if (shape === 'move-cross') {
+    return (
+      <MoveCrossShape
+        isHovered={isHovered}
+        onActivate={onActivate}
+        onEnter={onEnter}
+        onLeave={onLeave}
+        position={position}
+        tilt={descriptor.plane === 'node-normal'}
+        zoom={zoom}
+      />
+    )
+  }
+
   // Default 'arrow' shape — the standard chevron.
   return (
     <ArrowShape
@@ -1814,6 +1839,51 @@ function TapActionArrow({
       rotationY={rotationY}
       zoom={zoom}
     />
+  )
+}
+
+// 4-way move cross for tap-action handles — same visual as the translate
+// gizmo's cross, but a click target that hands the node to its move tool. The
+// cross is built flat in XZ; `tilt` stands it up into a wall face (XY plane).
+function MoveCrossShape({
+  position,
+  zoom,
+  isHovered,
+  tilt,
+  onActivate,
+  onEnter,
+  onLeave,
+}: {
+  position: readonly [number, number, number]
+  zoom: number
+  isHovered: boolean
+  tilt: boolean
+  onActivate: (event: ThreeEvent<PointerEvent>) => void
+  onEnter: (event: ThreeEvent<PointerEvent>) => void
+  onLeave: (event: ThreeEvent<PointerEvent>) => void
+}) {
+  const arrowGeometry = useMemo(() => createMoveCrossHandleGeometry(), [])
+  const arrowMaterial = useArrowMaterial()
+  useEffect(() => {
+    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [arrowMaterial, isHovered])
+  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
+
+  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const iconRotation: [number, number, number] = tilt ? [Math.PI / 2, 0, 0] : [0, 0, 0]
+  return (
+    <group position={position} rotation={iconRotation} scale={scale}>
+      <mesh
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        onPointerDown={onActivate}
+        onPointerEnter={onEnter}
+        onPointerLeave={onLeave}
+        renderOrder={1010}
+      />
+    </group>
   )
 }
 

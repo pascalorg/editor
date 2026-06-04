@@ -2,12 +2,15 @@
 
 import {
   calculateLevelMiters,
+  collectAlignmentAnchors,
   emitter,
   type FenceNode,
   type GridEvent,
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
+  resolveAlignment,
+  useAlignmentGuides,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -35,6 +38,8 @@ import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
+/** Figma-style alignment-snap threshold (meters), matching the move tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 // HUD label heights are measured from the top of the preview bar, so they
 // track whatever height a seeded preset draws at (`previewHeight`).
 const DRAFT_LABEL_Y_OFFSET = 0.22
@@ -463,10 +468,34 @@ export const FenceTool: React.FC = () => {
   useEffect(() => {
     let previousFenceEnd: FencePlanPoint | null = null
 
+    // Alignment candidates — anchors of every alignable object. Refreshed
+    // after each segment commits (the new fence becomes a candidate too).
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    const refreshAlignmentCandidates = () => {
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    }
+
+    // Align the drafted point onto another object's nearest real anchor and
+    // publish the guide. Alt bypasses. Returns the (possibly snapped) point.
+    const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
+      if (bypass || alignmentCandidates.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return point
+      }
+      const ar = resolveAlignment({
+        moving: [{ nodeId: '__fence-draft__', kind: 'corner', x: point[0], z: point[1] }],
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+      useAlignmentGuides.getState().set(ar.guides)
+      return ar.snap ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz] : point
+    }
+
     const stopDrafting = () => {
       buildingState.current = 0
       previewRef.current.visible = false
       setDraftMeasurement(null)
+      useAlignmentGuides.getState().clear()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -476,14 +505,13 @@ export const FenceTool: React.FC = () => {
       // Default = active grid step; Shift switches to the fine step
       // (0.05m). No 45° angle snap — see `wall/tool.tsx` for rationale.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 1) {
-        const snappedLocal = snapFenceDraftPoint({
-          point: localPoint,
-          walls,
-          fences,
-          step,
-        })
+        const snappedLocal = alignPoint(
+          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
+          bypassAlign,
+        )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
@@ -513,7 +541,10 @@ export const FenceTool: React.FC = () => {
           ),
         )
       } else {
-        const snappedPoint = snapFenceDraftPoint({ point: localPoint, walls, fences, step })
+        const snappedPoint = alignPoint(
+          snapFenceDraftPoint({ point: localPoint, walls, fences, step }),
+          bypassAlign,
+        )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
         setDraftMeasurement(null)
       }
@@ -528,26 +559,23 @@ export const FenceTool: React.FC = () => {
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
       const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 0) {
-        const snappedStart = snapFenceDraftPoint({
-          point: localClick,
-          walls,
-          fences,
-          step: clickStep,
-        })
+        const snappedStart = alignPoint(
+          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
+          bypassAlign,
+        )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {
-        const snappedEnd = snapFenceDraftPoint({
-          point: localClick,
-          walls,
-          fences,
-          step: clickStep,
-        })
+        const snappedEnd = alignPoint(
+          snapFenceDraftPoint({ point: localClick, walls, fences, step: clickStep }),
+          bypassAlign,
+        )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -556,6 +584,11 @@ export const FenceTool: React.FC = () => {
           snappedEnd,
         )
         if (!createdFence) return
+
+        // The new segment is now a real node — make it an alignment target
+        // for the next segment, and drop the just-shown guide.
+        refreshAlignmentCandidates()
+        useAlignmentGuides.getState().clear()
 
         const nextStart = createdFence.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
@@ -594,6 +627,7 @@ export const FenceTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      useAlignmentGuides.getState().clear()
     }
   }, [unit])
 

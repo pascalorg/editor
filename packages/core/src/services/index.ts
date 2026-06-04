@@ -4,10 +4,22 @@ export {
   type AlignmentGuideAxis,
   type AnchorKind,
   bboxAnchors,
+  bboxCornerAnchors,
   type ResolveAlignmentInput,
   type ResolveAlignmentResult,
   resolveAlignment,
 } from './alignment'
+export {
+  collectAlignmentAnchors,
+  type FootprintAABB,
+  footprintAABB,
+  footprintAABBAt,
+  footprintAABBFrom,
+  movingFootprintAnchors,
+  nodeAlignmentAnchors,
+  polygonAnchors,
+  wallSegmentAnchors,
+} from './alignment-anchors'
 export {
   createDragSession,
   type DragSession,

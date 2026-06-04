@@ -160,34 +160,45 @@ export function buildRoofSegmentSurfaceMaterialPatch(
   }
 }
 
-export function buildRoofSurfaceMaterialUpdates(
+/**
+ * Clear every painted material on a node back to its default. Works for any
+ * kind without per-type knowledge: it nulls the catch-all `material` /
+ * `materialPreset` plus any role field (`*Material` / `*MaterialPreset`) that
+ * the node actually carries. For a roof it also resets every child segment, so
+ * a single call defaults the whole roof system. `updateNode` merges patches
+ * shallowly without re-validation, so the `undefined` values land as cleared
+ * fields and the renderer falls back to the theme defaults.
+ */
+export function buildResetSurfaceMaterialUpdates(
   nodes: Record<string, AnyNode>,
-  node: RoofNode,
-  targetRole: RoofSurfaceMaterialRole,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
+  node: AnyNode,
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const clearPatch = (target: AnyNode): Partial<AnyNode> => {
+    const patch: Record<string, undefined> = {}
+    for (const key of Object.keys(target)) {
+      if (
+        key === 'material' ||
+        key === 'materialPreset' ||
+        key.endsWith('Material') ||
+        key.endsWith('MaterialPreset')
+      ) {
+        patch[key] = undefined
+      }
+    }
+    return patch as Partial<AnyNode>
+  }
+
   const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [
-    {
-      id: node.id as AnyNodeId,
-      data: buildRoofSurfaceMaterialPatch(
-        node,
-        targetRole,
-        material,
-        materialPreset,
-      ) as Partial<AnyNode>,
-    },
+    { id: node.id as AnyNodeId, data: clearPatch(node) },
   ]
 
-  if (targetRole !== 'top') return updates
-
-  for (const segmentId of node.children ?? []) {
-    const segment = nodes[segmentId as AnyNodeId]
-    if (segment?.type !== 'roof-segment') continue
-    updates.push({
-      id: segment.id as AnyNodeId,
-      data: { material, materialPreset } as Partial<RoofSegmentNode> as Partial<AnyNode>,
-    })
+  if (node.type === 'roof') {
+    for (const segmentId of (node as RoofNode).children ?? []) {
+      const segment = nodes[segmentId as AnyNodeId]
+      if (segment?.type === 'roof-segment') {
+        updates.push({ id: segment.id as AnyNodeId, data: clearPatch(segment) })
+      }
+    }
   }
 
   return updates

@@ -20,7 +20,7 @@ import {
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { createContext, useContext, useMemo, useRef } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
 
 const ColumnMaterialContext = createContext<Material>(baseMaterial())
@@ -2076,6 +2076,130 @@ function Capital({ node, y, height }: { node: ColumnNode; y: number; height: num
   )
 }
 
+/**
+ * The column's geometry tree — either a fabricated support frame or the
+ * classical base / shaft / capital stack. Extracted from `ColumnRenderer`
+ * so the translucent placement ghost (`ColumnPreview`) renders the exact
+ * same shape without the registry registration, pointer handlers, or
+ * live-transform wiring the real renderer layers on. Material and edge
+ * softness arrive through context, so each caller controls appearance by
+ * wrapping this in its own providers.
+ */
+function ColumnBody({ node }: { node: ColumnNode }) {
+  const shaftLayout = useMemo(() => {
+    const baseHeight = node.baseStyle === 'none' ? 0 : Math.min(node.baseHeight, node.height * 0.4)
+    const capitalHeight =
+      node.capitalStyle === 'none' ? 0 : Math.min(node.capitalHeight, node.height * 0.4)
+    const shaftHeight = Math.max(0.1, node.height - baseHeight - capitalHeight)
+    return { baseHeight, capitalHeight, shaftY: baseHeight, shaftHeight }
+  }, [node.baseHeight, node.baseStyle, node.capitalHeight, node.capitalStyle, node.height])
+
+  return node.supportStyle === 'a-frame' ? (
+    <AFrameSupport node={node} />
+  ) : node.supportStyle === 'y-frame' ? (
+    <YFrameSupport node={node} />
+  ) : node.supportStyle === 'v-frame' ? (
+    <VFrameSupport node={node} />
+  ) : node.supportStyle === 'x-brace' ? (
+    <XBraceSupport node={node} />
+  ) : node.supportStyle === 'k-brace' ? (
+    <KBraceSupport node={node} />
+  ) : node.supportStyle === 'single-strut' ? (
+    <SingleStrutSupport node={node} />
+  ) : node.supportStyle === 'tripod' ? (
+    <TripodSupport node={node} />
+  ) : node.supportStyle === 'trestle' ? (
+    <TrestleSupport node={node} />
+  ) : node.supportStyle === 'portal-frame' ? (
+    <PortalFrameSupport node={node} />
+  ) : node.supportStyle === 'box-frame' ? (
+    <BoxFrameSupport node={node} />
+  ) : (
+    <>
+      <Base height={shaftLayout.baseHeight} node={node} />
+      <BaseCarvings height={shaftLayout.baseHeight} node={node} />
+      <Shaft height={shaftLayout.shaftHeight} node={node} y={shaftLayout.shaftY} />
+      <Rings node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
+      <LatheBands node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
+      <Flutes node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
+      <LowerCarvedBand
+        node={node}
+        shaftHeight={shaftLayout.shaftHeight}
+        shaftY={shaftLayout.shaftY}
+      />
+      <DravidianShaftPanels
+        node={node}
+        shaftHeight={shaftLayout.shaftHeight}
+        shaftY={shaftLayout.shaftY}
+      />
+      <SpiralRibs node={node} shaftHeight={shaftLayout.shaftHeight} shaftY={shaftLayout.shaftY} />
+      <Capital
+        height={shaftLayout.capitalHeight}
+        node={node}
+        y={shaftLayout.baseHeight + shaftLayout.shaftHeight}
+      />
+      <CapitalCarvings
+        capitalHeight={shaftLayout.capitalHeight}
+        capitalY={shaftLayout.baseHeight + shaftLayout.shaftHeight}
+        node={node}
+      />
+    </>
+  )
+}
+
+/**
+ * Translucent, non-interactive ghost of a column — the placement tool's
+ * cursor preview, mirroring `ShelfPreview`. Builds the same geometry tree
+ * as the real renderer via `<ColumnBody>` but:
+ *   - clones the material and makes it transparent (cloning is required:
+ *     `createColumnMaterial` can hand back a shared/cached instance, and
+ *     mutating it would turn every committed column see-through);
+ *   - disables raycast on every mesh so the ghost doesn't intercept the
+ *     placement cursor ray (which would stall `grid:move`);
+ *   - renders at the local origin so the caller's cursor group positions it.
+ */
+export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+  const groupRef = useRef<Group>(null)
+
+  const material = useMemo(() => {
+    const ghost = createColumnMaterial({
+      material: node.material,
+      materialPreset: node.materialPreset,
+      shading,
+      textures,
+      colorPreset,
+    }).clone()
+    ghost.transparent = true
+    ghost.opacity = 0.5
+    ghost.depthWrite = false
+    return ghost
+  }, [shading, textures, colorPreset, node.material, node.materialPreset])
+
+  useEffect(() => () => material.dispose(), [material])
+
+  // Strip pointer events off the freshly-built meshes every render — the
+  // geometry tree rebuilds when the ghost's dimensions change, so a one-shot
+  // effect wouldn't cover later meshes.
+  useEffect(() => {
+    groupRef.current?.traverse((obj) => {
+      ;(obj as unknown as { raycast: () => void }).raycast = () => {}
+    })
+  })
+
+  return (
+    <ColumnMaterialContext.Provider value={material}>
+      <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
+        <group ref={groupRef}>
+          <ColumnBody node={node} />
+        </group>
+      </ColumnEdgeSoftnessContext.Provider>
+    </ColumnMaterialContext.Provider>
+  )
+}
+
 export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
   const ref = useRef<Group>(null!)
   // Merge any live drag override so width / depth / radius / height
@@ -2115,14 +2239,6 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
 
   useRegistry(node.id, node.type, ref)
 
-  const shaftLayout = useMemo(() => {
-    const baseHeight = node.baseStyle === 'none' ? 0 : Math.min(node.baseHeight, node.height * 0.4)
-    const capitalHeight =
-      node.capitalStyle === 'none' ? 0 : Math.min(node.capitalHeight, node.height * 0.4)
-    const shaftHeight = Math.max(0.1, node.height - baseHeight - capitalHeight)
-    return { baseHeight, capitalHeight, shaftY: baseHeight, shaftHeight }
-  }, [node.baseHeight, node.baseStyle, node.capitalHeight, node.capitalStyle, node.height])
-
   return (
     <ColumnMaterialContext.Provider value={material}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
@@ -2133,73 +2249,7 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
           visible={node.visible}
           {...handlers}
         >
-          {node.supportStyle === 'a-frame' ? (
-            <AFrameSupport node={node} />
-          ) : node.supportStyle === 'y-frame' ? (
-            <YFrameSupport node={node} />
-          ) : node.supportStyle === 'v-frame' ? (
-            <VFrameSupport node={node} />
-          ) : node.supportStyle === 'x-brace' ? (
-            <XBraceSupport node={node} />
-          ) : node.supportStyle === 'k-brace' ? (
-            <KBraceSupport node={node} />
-          ) : node.supportStyle === 'single-strut' ? (
-            <SingleStrutSupport node={node} />
-          ) : node.supportStyle === 'tripod' ? (
-            <TripodSupport node={node} />
-          ) : node.supportStyle === 'trestle' ? (
-            <TrestleSupport node={node} />
-          ) : node.supportStyle === 'portal-frame' ? (
-            <PortalFrameSupport node={node} />
-          ) : node.supportStyle === 'box-frame' ? (
-            <BoxFrameSupport node={node} />
-          ) : (
-            <>
-              <Base height={shaftLayout.baseHeight} node={node} />
-              <BaseCarvings height={shaftLayout.baseHeight} node={node} />
-              <Shaft height={shaftLayout.shaftHeight} node={node} y={shaftLayout.shaftY} />
-              <Rings
-                node={node}
-                shaftHeight={shaftLayout.shaftHeight}
-                shaftY={shaftLayout.shaftY}
-              />
-              <LatheBands
-                node={node}
-                shaftHeight={shaftLayout.shaftHeight}
-                shaftY={shaftLayout.shaftY}
-              />
-              <Flutes
-                node={node}
-                shaftHeight={shaftLayout.shaftHeight}
-                shaftY={shaftLayout.shaftY}
-              />
-              <LowerCarvedBand
-                node={node}
-                shaftHeight={shaftLayout.shaftHeight}
-                shaftY={shaftLayout.shaftY}
-              />
-              <DravidianShaftPanels
-                node={node}
-                shaftHeight={shaftLayout.shaftHeight}
-                shaftY={shaftLayout.shaftY}
-              />
-              <SpiralRibs
-                node={node}
-                shaftHeight={shaftLayout.shaftHeight}
-                shaftY={shaftLayout.shaftY}
-              />
-              <Capital
-                height={shaftLayout.capitalHeight}
-                node={node}
-                y={shaftLayout.baseHeight + shaftLayout.shaftHeight}
-              />
-              <CapitalCarvings
-                capitalHeight={shaftLayout.capitalHeight}
-                capitalY={shaftLayout.baseHeight + shaftLayout.shaftHeight}
-                node={node}
-              />
-            </>
-          )}
+          <ColumnBody node={node} />
         </group>
       </ColumnEdgeSoftnessContext.Provider>
     </ColumnMaterialContext.Provider>

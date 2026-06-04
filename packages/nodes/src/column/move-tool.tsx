@@ -4,13 +4,23 @@ import {
   type AnyNodeId,
   type ColumnNode,
   ColumnNode as ColumnNodeSchema,
+  collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  movingFootprintAnchors,
+  resolveAlignment,
   sceneRegistry,
+  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  DragBoundingBox,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 
 /**
@@ -37,8 +47,12 @@ const snapToGridStep = (value: number) => {
 /** 90° steps, matching the GLB item / shelf placement rotation. */
 const ROTATION_STEP = Math.PI / 2
 
+/** Figma-style alignment-snap threshold (meters), matching the other tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function MoveColumnTool({ node }: { node: ColumnNode }) {
   const [previewPosition, setPreviewPosition] = useState<[number, number, number]>(node.position)
+  const [previewRotation, setPreviewRotation] = useState<number>(node.rotation)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -61,9 +75,14 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
         : {}
     const isNew = !!meta.isNew
 
+    // Alignment candidates — every other alignable object's anchors, gathered
+    // once (the scene graph is stable during the imperative drag).
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, node.id)
+
     const applyPreview = (position: [number, number, number]) => {
       lastPosition = position
       setPreviewPosition(position)
+      setPreviewRotation(rotationY)
       useLiveTransforms.getState().set(node.id, {
         position,
         rotation: rotationY,
@@ -77,11 +96,29 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const onGridMove = (event: GridEvent) => {
       hasMoved = true
-      applyPreview([
-        snapToGridStep(event.localPosition[0]),
-        0,
-        snapToGridStep(event.localPosition[2]),
-      ])
+      let x = snapToGridStep(event.localPosition[0])
+      let z = snapToGridStep(event.localPosition[2])
+
+      // Figma-style alignment snap on top of grid snap; Alt bypasses. The
+      // guide connects to the candidate's nearest real anchor (resolver
+      // tie-break), so the dot always sits on an actual point.
+      const bypass = event.nativeEvent?.altKey === true
+      if (!bypass && alignmentCandidates.length > 0) {
+        const result = resolveAlignment({
+          moving: movingFootprintAnchors(node, x, z, rotationY),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap) {
+          x += result.snap.dx
+          z += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      applyPreview([x, 0, z])
     }
 
     // R / T rotate the dragged column about Y in 90° steps (matches the move
@@ -99,11 +136,11 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const onGridClick = (event: GridEvent) => {
       if (!hasMoved) return
-      const position: [number, number, number] = [
-        snapToGridStep(event.localPosition[0]),
-        0,
-        snapToGridStep(event.localPosition[2]),
-      ]
+      useAlignmentGuides.getState().clear()
+      // Commit at the last previewed position so the alignment snap (which
+      // may pull off-grid) is preserved, rather than re-snapping the raw
+      // click to the grid.
+      const position: [number, number, number] = [...lastPosition]
       const nodeId = (node as { id?: ColumnNode['id'] }).id
 
       if (nodeId && useScene.getState().nodes[nodeId]) {
@@ -134,6 +171,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
+      useAlignmentGuides.getState().clear()
       const m = sceneRegistry.nodes.get(node.id)
       if (m) {
         m.position.set(node.position[0], node.position[1], node.position[2])
@@ -155,6 +193,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       useLiveTransforms.getState().clear(node.id)
+      useAlignmentGuides.getState().clear()
       if (!committed) {
         const m = sceneRegistry.nodes.get(node.id)
         if (m) {
@@ -166,7 +205,17 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     }
   }, [exitMoveMode, node])
 
-  return <CursorSphere color="#a78bfa" height={node.height} position={previewPosition} />
+  return (
+    <>
+      <CursorSphere color="#a78bfa" height={node.height} position={previewPosition} />
+      <DragBoundingBox
+        fallbackSize={[node.width, node.height, node.depth]}
+        nodeId={node.id}
+        position={previewPosition}
+        rotationY={previewRotation}
+      />
+    </>
+  )
 }
 
 export default MoveColumnTool

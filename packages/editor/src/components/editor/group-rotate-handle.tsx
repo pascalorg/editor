@@ -1,18 +1,21 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  sceneRegistry,
-  useLiveNodeOverrides,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box3, OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
+import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import {
+  CORNER_OFFSET,
+  classifyParticipant,
+  collectParticipants,
+  computeGroupBox,
+  expandToComponent,
+  type Vec2,
+  type Vec3,
+} from './group-transform-shared'
 import {
   ARROW_COLOR,
   ARROW_HOVER_COLOR,
@@ -21,24 +24,11 @@ import {
   GuideRing,
   RotationGuide,
   type RotationGuideData,
+  swallowNextClick,
   useArrowMaterial,
 } from './node-arrow-handles'
 
 const ROTATE_SNAP = Math.PI / 12 // 15°
-
-type MovableNode = AnyNode & {
-  position: [number, number, number]
-  rotation: [number, number, number]
-}
-
-function isMovable(node: AnyNode | undefined, levelId: string | null): node is MovableNode {
-  if (!node || node.parentId !== levelId) return false
-  const p = (node as { position?: unknown }).position
-  const r = (node as { rotation?: unknown }).rotation
-  const isVec3 = (v: unknown): v is [number, number, number] =>
-    Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number')
-  return isVec3(p) && isVec3(r)
-}
 
 /**
  * Group-rotate gizmo. When 2+ "movable" nodes (position + rotation, sitting
@@ -61,16 +51,24 @@ export function GroupRotateHandle() {
   const nodes = useScene((s) => s.nodes)
 
   const participantIds = useMemo(
-    () => selectedIds.filter((id) => isMovable(nodes[id as AnyNodeId], levelId)),
+    () => selectedIds.filter((id) => classifyParticipant(nodes[id as AnyNodeId], levelId) !== null),
     [selectedIds, levelId, nodes],
+  )
+
+  // Gate on the explicit selection (so a single connected wall still gets the
+  // per-node handles), but transform the full connected wall/fence component so
+  // attached structure rotates rigidly as one piece.
+  const fullIds = useMemo(
+    () => expandToComponent(participantIds, nodes, levelId),
+    [participantIds, levelId, nodes],
   )
 
   const shouldRender =
     participantIds.length >= 2 && mode !== 'delete' && !movingNode && !isFloorplanHovered
 
   if (!shouldRender) return null
-  // Remount when the participant set changes so the rest pivot re-seeds cleanly.
-  return <GroupRotateHandleInner ids={participantIds} key={participantIds.join(',')} />
+  // Remount when the moving set changes so the rest pivot re-seeds cleanly.
+  return <GroupRotateHandleInner ids={fullIds} key={fullIds.join(',')} />
 }
 
 function GroupRotateHandleInner({ ids }: { ids: string[] }) {
@@ -81,7 +79,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
   const [isDragging, setIsDragging] = useState(false)
   const [guide, setGuide] = useState<RotationGuideData | null>(null)
   const dragCleanupRef = useRef<(() => void) | null>(null)
-  const frozenPivot = useRef<Vector3 | null>(null)
+  const frozenRest = useRef<{ pivot: Vector3; corner: Vector3 } | null>(null)
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -93,59 +91,64 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE * 1.05
 
-  // World-space bounding-box center of the selected meshes (XZ), Y at the
-  // group's base. Levels are axis-aligned in XZ, so world XZ coincides with
-  // each node's level-local `position` XZ — letting us rotate `position`
-  // directly against this pivot without per-node frame conversion.
-  const restPivot = useMemo(() => {
-    const box = new Box3()
-    const tmp = new Box3()
-    let found = false
-    for (const id of ids) {
-      const obj = sceneRegistry.nodes.get(id)
-      if (!obj) continue
-      obj.updateWorldMatrix(true, true)
-      tmp.setFromObject(obj)
-      if (tmp.isEmpty()) continue
-      box.union(tmp)
-      found = true
-    }
-    if (!found) return null
-    return new Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2)
+  // World-space bounding box of the selected meshes. Levels are axis-aligned in
+  // XZ, so world XZ coincides with each node's level-local placement — letting
+  // us rotate `position` / `start` / `end` directly against the pivot without
+  // per-node frame conversion.
+  //   - `pivot`  = bbox center (XZ), Y at the group's base → the rotation origin
+  //   - `corner` = front-right bbox corner at mid-height → where the gizmo sits
+  const rest = useMemo(() => {
+    const box = computeGroupBox(ids)
+    if (!box) return null
+    const pivot = new Vector3(
+      (box.min.x + box.max.x) / 2,
+      box.min.y,
+      (box.min.z + box.max.z) / 2,
+    )
+    const corner = new Vector3(
+      box.max.x + CORNER_OFFSET,
+      (box.min.y + box.max.y) / 2,
+      box.max.z + CORNER_OFFSET,
+    )
+    return { pivot, corner }
   }, [ids])
 
-  if (!restPivot) return null
-  const pivot = isDragging && frozenPivot.current ? frozenPivot.current : restPivot
+  if (!rest) return null
+  const active = isDragging && frozenRest.current ? frozenRest.current : rest
+  const corner = active.corner
 
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
 
-    const center = restPivot.clone()
-    frozenPivot.current = center
+    frozenRest.current = { pivot: rest.pivot.clone(), corner: rest.corner.clone() }
+    const center = rest.pivot.clone()
 
-    // Snapshot each participant's pre-drag transform from the store.
-    const sceneNodes = useScene.getState().nodes
-    const starts = ids
-      .map((id) => {
-        const node = sceneNodes[id as AnyNodeId] as MovableNode | undefined
-        if (!node) return null
-        return {
-          id: id as AnyNodeId,
-          position: [...node.position] as [number, number, number],
-          rotation: [...node.rotation] as [number, number, number],
-        }
-      })
-      .filter((s): s is NonNullable<typeof s> => s !== null)
+    // Snapshot the selected participants + connected wall/fence neighbours whose
+    // shared endpoints must follow the rotation (so junctions stay welded).
+    const { starts, links } = collectParticipants(
+      ids,
+      useScene.getState().nodes,
+      useViewer.getState().selection.levelId,
+    )
     if (starts.length === 0) return
 
     // Horizontal drag plane at the pivot; bearing measured around the pivot.
     const plane = new Plane(new Vector3(0, 1, 0), -center.y)
     const angleOf = (p: Vector3) => Math.atan2(p.z - center.z, p.x - center.x)
 
-    // Wedge radius tracks how far the group spreads from the pivot.
+    // Wedge radius tracks how far the group spreads from the pivot — sample each
+    // participant's anchor point(s).
     let spread = 0
+    const reach = (x: number, z: number) => {
+      spread = Math.max(spread, Math.hypot(x - center.x, z - center.z))
+    }
     for (const s of starts) {
-      spread = Math.max(spread, Math.hypot(s.position[0] - center.x, s.position[2] - center.z))
+      if (s.kind === 'endpoint') {
+        reach(s.start[0], s.start[1])
+        reach(s.end[0], s.end[1])
+      } else {
+        reach(s.position[0], s.position[2])
+      }
     }
     const guideRadius = Math.min(Math.max(spread * 0.6, 0.3), 3)
 
@@ -180,27 +183,44 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       while (delta < -Math.PI) delta += 2 * Math.PI
       if (e.shiftKey) delta = Math.round(delta / ROTATE_SNAP) * ROTATE_SNAP
 
-      // Orbit each node's position CCW by `delta` (atan2 x→z sense) and turn
-      // its yaw by `-delta` to match three.js Y-rotation handedness (same
+      // Orbit each node's anchor point(s) CCW by `delta` (atan2 x→z sense) and
+      // turn its yaw by `-delta` to match three.js Y-rotation handedness (same
       // convention as the single-item rotate handle in item/definition.ts).
+      // Endpoint nodes (walls/fences) have no yaw — swinging both endpoints
+      // around the pivot rotates them rigidly; their curveOffset sagitta is
+      // rotation-invariant, so arcs are preserved.
       const cos = Math.cos(delta)
       const sin = Math.sin(delta)
+      const rot = (x: number, z: number): Vec2 => {
+        const dx = x - center.x
+        const dz = z - center.z
+        return [center.x + dx * cos - dz * sin, center.z + dx * sin + dz * cos]
+      }
       const overrides = useLiveNodeOverrides.getState()
       for (const s of starts) {
-        const dx = s.position[0] - center.x
-        const dz = s.position[2] - center.z
-        const position: [number, number, number] = [
-          center.x + dx * cos - dz * sin,
-          s.position[1],
-          center.z + dx * sin + dz * cos,
-        ]
-        const rotation: [number, number, number] = [
-          s.rotation[0],
-          s.rotation[1] - delta,
-          s.rotation[2],
-        ]
-        overrides.set(s.id, { position, rotation })
+        if (s.kind === 'endpoint') {
+          overrides.set(s.id, { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) })
+        } else {
+          const [px, pz] = rot(s.position[0], s.position[2])
+          const position: Vec3 = [px, s.position[1], pz]
+          const rotation =
+            s.kind === 'vec3'
+              ? ([s.rotation[0], s.rotation[1] - delta, s.rotation[2]] as Vec3)
+              : s.rotation - delta
+          overrides.set(s.id, { position, rotation })
+        }
         useScene.getState().markDirty(s.id)
+      }
+
+      // Drag each linked neighbour's shared endpoint to the same rotated spot
+      // (rot is deterministic, so it lands exactly on the selected wall's
+      // rotated endpoint), keeping the junction welded; the far end stays put.
+      for (const l of links) {
+        overrides.set(l.id, {
+          start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
+          end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
+        })
+        useScene.getState().markDirty(l.id)
       }
 
       if (Math.abs(delta) < 0.0087) {
@@ -232,39 +252,44 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
       setGuide(null)
-      frozenPivot.current = null
+      frozenRest.current = null
       dragCleanupRef.current = null
     }
+
+    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
     const commitFromOverrides = () => {
       const overrides = useLiveNodeOverrides.getState()
       const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
-      for (const s of starts) {
-        const patch = overrides.get(s.id)
-        if (patch) updates.push({ id: s.id, data: patch as Partial<AnyNode> })
+      for (const id of affectedIds) {
+        const patch = overrides.get(id)
+        if (patch) updates.push({ id, data: patch as Partial<AnyNode> })
       }
       return updates
     }
 
     const onUp = () => {
+      // Eat the click that follows pointer-up so the selection manager doesn't
+      // treat it as a canvas click and clear the multi-selection.
+      swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
       const updates = commitFromOverrides()
       // Resume before the commit so the single batched `updateNodes` is the
       // one tracked set — collapsing the whole group rotation into one undo.
       useScene.temporal.getState().resume()
       if (updates.length > 0) useScene.getState().updateNodes(updates)
-      for (const s of starts) {
-        useLiveNodeOverrides.getState().clear(s.id)
-        useScene.getState().markDirty(s.id)
+      for (const id of affectedIds) {
+        useLiveNodeOverrides.getState().clear(id)
+        useScene.getState().markDirty(id)
       }
       cleanup()
     }
 
     const onCancel = () => {
       // Revert: drop overrides + mark dirty so renderers rebuild from the store.
-      for (const s of starts) {
-        useLiveNodeOverrides.getState().clear(s.id)
-        useScene.getState().markDirty(s.id)
+      for (const id of affectedIds) {
+        useLiveNodeOverrides.getState().clear(id)
+        useScene.getState().markDirty(id)
       }
       cleanup()
     }
@@ -278,11 +303,11 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
   return createPortal(
     <>
       {(isHovered || isDragging) && (
-        <group position={[pivot.x, pivot.y, pivot.z]}>
+        <group position={[corner.x, corner.y, corner.z]}>
           <GuideRing radius={0.2 * scale} y={0} />
         </group>
       )}
-      <group position={[pivot.x, pivot.y, pivot.z]} scale={scale}>
+      <group position={[corner.x, corner.y, corner.z]} scale={scale}>
         <mesh
           frustumCulled={false}
           geometry={arrowGeometry}

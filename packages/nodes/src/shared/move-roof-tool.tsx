@@ -1,14 +1,17 @@
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   type FenceNode,
   type GridEvent,
   type LevelNode,
   type RoofNode,
   type RoofSegmentNode,
+  resolveAlignment,
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
+  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -24,6 +27,9 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+
+/** Figma-style alignment-snap threshold (meters), matching the other tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
@@ -158,6 +164,29 @@ export const MoveRoofTool: React.FC<{
     const buildingId = useViewer.getState().selection.buildingId
     const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
 
+    // Alignment for top-level stair / roof only. Segments live in parent-local
+    // space (a different frame from the building-local candidate pool / guide
+    // layer), so we leave them on the plain grid+corner snap. The moving node
+    // is aligned by its ORIGIN point (how this tool positions it), snapped to
+    // any other alignable object's anchors.
+    const alignTopLevel = movingNode.type === 'stair' || movingNode.type === 'roof'
+    const alignmentCandidates = alignTopLevel
+      ? collectAlignmentAnchors(useScene.getState().nodes, movingNode.id)
+      : []
+    const alignLocalPoint = (lx: number, lz: number, bypass: boolean): [number, number] => {
+      if (!alignTopLevel || bypass || alignmentCandidates.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [lx, lz]
+      }
+      const ar = resolveAlignment({
+        moving: [{ nodeId: movingNode.id, kind: 'corner', x: lx, z: lz }],
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+      useAlignmentGuides.getState().set(ar.guides)
+      return ar.snap ? [lx + ar.snap.dx, lz + ar.snap.dz] : [lx, lz]
+    }
+
     const localToWorldPoint = (localPoint: WallPlanPoint, y: number): [number, number, number] => {
       if (buildingObj) {
         const worldPoint = buildingObj.localToWorld(
@@ -213,7 +242,15 @@ export const MoveRoofTool: React.FC<{
         walls: levelWalls,
         fences: levelFences,
       })
-      const [gridX, , gridZ] = localToWorldPoint(snappedLocal, y)
+      // Layer alignment snap on top (top-level stair/roof). Recompute the
+      // world point from the aligned building-local point so it stays correct
+      // under building rotation.
+      const [lx, lz] = alignLocalPoint(
+        snappedLocal[0],
+        snappedLocal[1],
+        event.nativeEvent?.altKey === true,
+      )
+      const [gridX, , gridZ] = localToWorldPoint([lx, lz], y)
 
       if (
         previousGridPosRef.current &&
@@ -223,7 +260,6 @@ export const MoveRoofTool: React.FC<{
       }
 
       previousGridPosRef.current = [gridX, gridZ]
-      const [lx, lz] = snappedLocal
       setCursorWorldPos([lx, event.localPosition[1], lz])
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
@@ -249,11 +285,16 @@ export const MoveRoofTool: React.FC<{
         walls: levelWalls,
         fences: levelFences,
       })
-      const [gridX, , gridZ] = localToWorldPoint(snappedLocal, y)
-      const [lx, lz] = snappedLocal
+      const [lx, lz] = alignLocalPoint(
+        snappedLocal[0],
+        snappedLocal[1],
+        event.nativeEvent?.altKey === true,
+      )
+      const [gridX, , gridZ] = localToWorldPoint([lx, lz], y)
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
 
+      useAlignmentGuides.getState().clear()
       wasCommitted = true
 
       // The store still holds the original values (we didn't update during drag).
@@ -286,6 +327,7 @@ export const MoveRoofTool: React.FC<{
     const onCancel = () => {
       wasCancelled = true
       useLiveTransforms.getState().clear(movingNode.id)
+      useAlignmentGuides.getState().clear()
       if (isNew) {
         useScene.getState().deleteNode(movingNode.id)
       } else {
@@ -340,8 +382,9 @@ export const MoveRoofTool: React.FC<{
       if (segmentWrapperGroup) segmentWrapperGroup.visible = false
       if (mergedRoofMesh) mergedRoofMesh.visible = true
 
-      // Clear ephemeral live transform
+      // Clear ephemeral live transform + any alignment guides
       useLiveTransforms.getState().clear(movingNode.id)
+      useAlignmentGuides.getState().clear()
 
       // Skip restore when the 2D floor-plan overlay claimed teardown
       // ownership — same contract `FloorplanRegistryMoveOverlay` uses to

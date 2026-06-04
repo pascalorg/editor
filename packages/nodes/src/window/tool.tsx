@@ -1,9 +1,11 @@
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   isCurvedWall,
   sceneRegistry,
   spatialGridManager,
+  useAlignmentGuides,
   useScene,
   type WallEvent,
   WindowNode,
@@ -21,6 +23,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './window-math'
 
 // Shared edge material — reuse across renders, just toggle color
@@ -70,7 +73,13 @@ const WindowTool: React.FC = () => {
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      useAlignmentGuides.getState().clear()
     }
+
+    // Alignment candidates — anchors of every alignable object; refreshed
+    // after each placement. A window aligns by the plan position of its centre
+    // (along-wall only; the floor-plane guides don't cover sill height).
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
 
     const updateCursor = (
       worldPosition: [number, number, number],
@@ -103,11 +112,16 @@ const WindowTool: React.FC = () => {
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
-      const localY = snapToHalf(event.localPosition[1])
-
       const width = 1.5
       const height = 1.5
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
+      const localY = snapToHalf(event.localPosition[1])
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
 
@@ -153,13 +167,38 @@ const WindowTool: React.FC = () => {
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
-      const localY = snapToHalf(event.localPosition[1])
-
       const width = draftRef.current?.width ?? 1.5
       const height = draftRef.current?.height ?? 1.5
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
+      const localY = snapToHalf(event.localPosition[1])
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, localY, width, height)
+
+      // Draft may be null after a successful placement (the click handler
+      // deletes it and relies on the wall rebuild → pointer-enter cascade to
+      // recreate it). Recreate it here on the first subsequent move so the
+      // preview is ready for the next click without requiring a leave/enter.
+      if (!draftRef.current) {
+        const levelId = getLevelId()
+        if (levelId && event.node.parentId === levelId) {
+          const node = WindowNode.parse({
+            position: [clampedX, clampedY, 0],
+            rotation: [0, itemRotation, 0],
+            side,
+            wallId: event.node.id,
+            parentId: event.node.id,
+            metadata: { isTransient: true },
+          })
+          useScene.getState().createNode(node, event.node.id as AnyNodeId)
+          draftRef.current = node
+        }
+      }
 
       if (draftRef.current) {
         // Update the scene store on every move so the 2D floor plan
@@ -221,7 +260,13 @@ const WindowTool: React.FC = () => {
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: draftRef.current.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const localY = snapToHalf(event.localPosition[1])
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -287,6 +332,8 @@ const WindowTool: React.FC = () => {
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
       triggerSFX('sfx:item-place')
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+      useAlignmentGuides.getState().clear()
 
       event.stopPropagation()
     }
@@ -310,6 +357,7 @@ const WindowTool: React.FC = () => {
     return () => {
       destroyDraft()
       hideCursor()
+      useAlignmentGuides.getState().clear()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

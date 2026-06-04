@@ -1,16 +1,20 @@
 import {
   type AnyNodeId,
   type BuildingNode,
+  collectAlignmentAnchors,
   ElevatorNode,
   emitter,
   type GridEvent,
   type LevelNode,
+  resolveAlignment,
+  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import usePlacementPreview from '../../../store/use-placement-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
   DEFAULT_ELEVATOR_CAB_HEIGHT,
@@ -24,6 +28,8 @@ import {
 } from './elevator-defaults'
 
 const GRID_OFFSET = 0.02
+/** Figma-style alignment-snap threshold (meters), matching the move tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 type ElevatorToolProps = {
   buildingId: BuildingNode['id'] | null
@@ -119,6 +125,25 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
   const previewGeometry = useMemo(() => createElevatorPreviewGeometry(), [])
   const previewEdgeGeometry = useMemo(() => createElevatorPreviewEdgeGeometry(), [])
 
+  // Default-shaped elevator for the 2D floor-plan placement ghost. The 3D
+  // preview meshes below are hidden in 2D (canvas `display:none`), so this
+  // feeds `usePlacementPreview` → `FloorplanPlacementPreviewLayer`, which
+  // renders the elevator's footprint following the cursor.
+  const floorplanPreviewNode = useMemo(
+    () =>
+      ElevatorNode.parse({
+        name: 'Elevator',
+        position: [0, 0, 0],
+        rotation: 0,
+        width: DEFAULT_ELEVATOR_WIDTH,
+        depth: DEFAULT_ELEVATOR_DEPTH,
+        cabHeight: DEFAULT_ELEVATOR_CAB_HEIGHT,
+        doorWidth: DEFAULT_ELEVATOR_DOOR_WIDTH,
+        doorHeight: DEFAULT_ELEVATOR_DOOR_HEIGHT,
+      }),
+    [],
+  )
+
   useEffect(() => {
     const currentBuildingId = resolveCurrentBuildingId({
       buildingId,
@@ -130,9 +155,53 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
     rotationRef.current = 0
     if (previewRef.current) previewRef.current.rotation.y = 0
 
+    // Alignment candidates — anchors of every alignable object; refreshed
+    // after each placement. The elevator aligns by its ORIGIN point.
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+    // Snap the elevator origin onto another object's nearest real anchor and
+    // publish the guide. The probe is the RAW cursor, NOT the 0.5m-grid-snapped
+    // point: resolving against the grid point would only ever catch anchors
+    // that happen to sit on a grid line, so off-grid items (furniture, angled
+    // walls) would never surface a guide. The matched axis locks exactly to the
+    // candidate's coordinate; the other axis keeps its grid snap. Alt bypasses.
+    const alignPoint = (
+      gridX: number,
+      gridZ: number,
+      rawX: number,
+      rawZ: number,
+      bypass: boolean,
+    ): [number, number] => {
+      if (bypass || alignmentCandidates.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      const ar = resolveAlignment({
+        moving: [{ nodeId: '__elevator-draft__', kind: 'corner', x: rawX, z: rawZ }],
+        candidates: alignmentCandidates,
+        threshold: ALIGNMENT_THRESHOLD_M,
+      })
+      if (ar.guides.length === 0) {
+        useAlignmentGuides.getState().clear()
+        return [gridX, gridZ]
+      }
+      useAlignmentGuides.getState().set(ar.guides)
+      let x = gridX
+      let z = gridZ
+      for (const guide of ar.guides) {
+        if (guide.axis === 'x') x = guide.coord
+        else z = guide.coord
+      }
+      return [x, z]
+    }
+
     const onGridMove = (event: GridEvent) => {
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const [gridX, gridZ] = alignPoint(
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent?.altKey === true,
+      )
       const supportY = resolveElevatorSupportY({
         buildingId: currentBuildingId,
         preferredLevelId: levelId as LevelNode['id'] | null,
@@ -142,6 +211,13 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
 
       cursorRef.current?.position.set(gridX, supportY + GRID_OFFSET, gridZ)
       previewRef.current?.position.set(gridX, supportY + DEFAULT_ELEVATOR_CAB_HEIGHT / 2, gridZ)
+
+      // Publish the 2D floor-plan ghost at the snapped/aligned cursor.
+      usePlacementPreview.getState().set({
+        ...floorplanPreviewNode,
+        position: [gridX, supportY, gridZ],
+        rotation: rotationRef.current,
+      })
 
       if (
         previousGridPosRef.current &&
@@ -161,8 +237,13 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
       })
       if (!latestBuildingId) return
 
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const [gridX, gridZ] = alignPoint(
+        Math.round(event.localPosition[0] * 2) / 2,
+        Math.round(event.localPosition[2] * 2) / 2,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent?.altKey === true,
+      )
       commitElevatorPlacement(
         latestBuildingId,
         levelId,
@@ -171,6 +252,11 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         rotationRef.current,
         onPlaced,
       )
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+      useAlignmentGuides.getState().clear()
+      // The placed elevator's footprint now renders for real; drop the ghost
+      // (the next grid:move re-publishes it for the following placement).
+      usePlacementPreview.getState().clear()
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -188,6 +274,16 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         sfxEmitter.emit('sfx:item-rotate')
         rotationRef.current += rotationDelta
         if (previewRef.current) previewRef.current.rotation.y = rotationRef.current
+        // Reflect the rotation in the 2D ghost immediately (no pointer move
+        // needed) by republishing at the last snapped cursor position.
+        const last = previousGridPosRef.current
+        if (last) {
+          usePlacementPreview.getState().set({
+            ...floorplanPreviewNode,
+            position: [last[0], 0, last[1]],
+            rotation: rotationRef.current,
+          })
+        }
       }
     }
 
@@ -199,8 +295,10 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       window.removeEventListener('keydown', onKeyDown)
+      useAlignmentGuides.getState().clear()
+      usePlacementPreview.getState().clear()
     }
-  }, [buildingId, levelId, onPlaced])
+  }, [buildingId, levelId, onPlaced, floorplanPreviewNode])
 
   return (
     <group>

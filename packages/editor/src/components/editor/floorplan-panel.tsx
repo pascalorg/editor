@@ -36,6 +36,7 @@ import {
   StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
+  useAlignmentGuides,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -62,6 +63,7 @@ import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import {
+  alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   collectLevelDescendants,
@@ -86,6 +88,7 @@ import {
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
+import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
 import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
@@ -110,6 +113,7 @@ import {
   createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
+  snapPointToGrid as snapWallPointToGrid,
   WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
   type WallPlanPoint,
@@ -6315,6 +6319,9 @@ export function FloorplanPanel() {
     clearWallCurveDrag()
     clearSiteBoundaryInteraction()
     setCursorPoint(null)
+    // Drop any Figma-style alignment guide a draft branch left behind so it
+    // doesn't linger after the tool deactivates / Esc / draft reset.
+    useAlignmentGuides.getState().clear()
   }, [
     clearFencePlacementDraft,
     clearCeilingPlacementDraft,
@@ -7407,14 +7414,20 @@ export function FloorplanPanel() {
       }
 
       if (isCeilingBuildActive) {
-        emitFloorplanGridEvent('move', planPoint, event)
-
-        const snappedPoint = snapPolygonDraftPoint({
+        // Polygon vertex: grid (snapToHalf) + optional 45° angle snap from
+        // the previous vertex. Alignment runs only when angle snap is OFF
+        // (first vertex, or Shift held) — when the angle is being locked,
+        // pulling the vertex sideways would break it.
+        const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
+        let snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
-          angleSnap: ceilingDraftPoints.length > 0 && !shiftPressed,
+          angleSnap,
         })
+        if (angleSnap) useAlignmentGuides.getState().clear()
+        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
 
+        emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -7422,7 +7435,8 @@ export function FloorplanPanel() {
       }
 
       if (isRoofBuildActive) {
-        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        let snappedPoint = getSnappedFloorplanPoint(planPoint)
+        snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
@@ -7439,18 +7453,25 @@ export function FloorplanPanel() {
       }
 
       if (isFenceBuildActive) {
-        emitFloorplanGridEvent('move', planPoint, event)
-
-        // Fence draft: grid snap only — orthogonal fences fall out of
-        // a grid-aligned start. Shift switches to the fine grid step
-        // for precision. Mirrors `wall/tool.tsx`.
-        const snappedPoint = snapFenceDraftPoint({
+        // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
+        // Figma alignment — same endpoint-wins precedence as the wall branch.
+        const fenceSnapped = snapFenceDraftPoint({
           point: planPoint,
           walls,
           fences,
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
         })
+        const fenceGridBase = snapWallPointToGrid(
+          planPoint,
+          shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP,
+        )
+        const fenceLocked =
+          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
+        let snappedPoint = fenceSnapped
+        if (fenceLocked) useAlignmentGuides.getState().clear()
+        else snappedPoint = alignFloorplanDraftPoint(fenceSnapped, { bypass: event.altKey })
 
+        emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -7469,11 +7490,14 @@ export function FloorplanPanel() {
       // the local polygon-draft state actually updates as the cursor
       // moves (the catch-all would otherwise swallow the move event).
       if (isPolygonBuildActive) {
-        const snappedPoint = snapPolygonDraftPoint({
+        const angleSnap = activePolygonDraftPoints.length > 0 && !shiftPressed
+        let snappedPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
-          angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
+          angleSnap,
         })
+        if (angleSnap) useAlignmentGuides.getState().clear()
+        else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
 
         // Emit `grid:move` so the registry-driven slab tool also tracks
         // the cursor (its 3D preview needs it).
@@ -7573,14 +7597,26 @@ export function FloorplanPanel() {
         return
       }
 
-      // Wall draft: grid snap only — orthogonal walls follow naturally
-      // from a grid-aligned start. Shift switches to the fine grid step
-      // (0.05m) for precision.
-      const snappedPoint = snapWallDraftPoint({
+      // Wall draft: grid snap (orthogonal walls follow naturally from a
+      // grid-aligned start; Shift = fine 0.05m step), then Figma-style
+      // alignment layered on top. An existing wall endpoint / join snap
+      // wins outright — never pull the cursor off a corner the user is
+      // closing onto — so alignment runs ONLY when the wall snap left the
+      // point on the plain grid. Alt bypasses alignment.
+      const gridStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+      const wallSnapped = snapWallDraftPoint({
         point: planPoint,
         walls,
         step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
       })
+      const gridBase = snapWallPointToGrid(planPoint, gridStep)
+      const lockedToWall = wallSnapped[0] !== gridBase[0] || wallSnapped[1] !== gridBase[1]
+      let snappedPoint = wallSnapped
+      if (lockedToWall) {
+        useAlignmentGuides.getState().clear()
+      } else {
+        snappedPoint = alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
+      }
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
@@ -9115,6 +9151,12 @@ export function FloorplanPanel() {
                     would create a measure→fit→measure loop. */}
                 <g ref={floorplanContentRef}>
                   <FloorplanRegistryLayer />
+                  {/* Faint footprint ghost of the node being placed by a
+                      registry placement tool (e.g. column), following the
+                      cursor. The 3D mesh preview is hidden in 2D, so this is
+                      the only placement visual in the floor plan. See
+                      `floorplan-placement-preview-layer.tsx`. */}
+                  <FloorplanPlacementPreviewLayer />
                   {/* Bridge-wall ghost previews painted on top of the
                       registry layer (drag-time only); cleared by the
                       wall move's `commit()` so real bridges replace

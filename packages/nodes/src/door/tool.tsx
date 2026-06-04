@@ -1,10 +1,12 @@
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   DoorNode,
   emitter,
   isCurvedWall,
   sceneRegistry,
   spatialGridManager,
+  useAlignmentGuides,
   useScene,
   type WallEvent,
 } from '@pascal-app/core'
@@ -14,13 +16,13 @@ import {
   EDITOR_LAYER,
   getSideFromNormal,
   isValidWallSideFace,
-  snapToHalf,
   triggerSFX,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { resolveWallSlideAlignment } from '../shared/wall-opening-alignment'
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 
 const edgeMaterial = new LineBasicNodeMaterial({
@@ -68,7 +70,12 @@ const DoorTool: React.FC = () => {
 
     const hideCursor = () => {
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
+      useAlignmentGuides.getState().clear()
     }
+
+    // Alignment candidates — anchors of every alignable object; refreshed
+    // after each placement. A door aligns by the plan position of its centre.
+    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
 
     const updateCursor = (
       worldPosition: [number, number, number],
@@ -100,9 +107,15 @@ const DoorTool: React.FC = () => {
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
       const width = 0.9
       const height = 2.1
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, width, height)
 
@@ -147,11 +160,37 @@ const DoorTool: React.FC = () => {
       const itemRotation = calculateItemRotation(event.normal)
       const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
-      const localX = snapToHalf(event.localPosition[0])
       const width = draftRef.current?.width ?? 0.9
       const height = draftRef.current?.height ?? 2.1
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
 
       const { clampedX, clampedY } = clampToWall(event.node, localX, width, height)
+
+      // Draft may be null after a successful placement (the click handler
+      // deletes it and relies on the wall rebuild → pointer-enter cascade to
+      // recreate it). Recreate it here on the first subsequent move so the
+      // preview is ready for the next click without requiring a leave/enter.
+      if (!draftRef.current) {
+        const levelId = getLevelId()
+        if (levelId && event.node.parentId === levelId) {
+          const node = DoorNode.parse({
+            position: [clampedX, clampedY, 0],
+            rotation: [0, itemRotation, 0],
+            side,
+            wallId: event.node.id,
+            parentId: event.node.id,
+            metadata: { isTransient: true },
+          })
+          useScene.getState().createNode(node, event.node.id as AnyNodeId)
+          draftRef.current = node
+        }
+      }
 
       if (draftRef.current) {
         // Update the scene store on every move so the 2D floor plan
@@ -212,7 +251,13 @@ const DoorTool: React.FC = () => {
       const side = getSideFromNormal(event.normal)
       const itemRotation = calculateItemRotation(event.normal)
 
-      const localX = snapToHalf(event.localPosition[0])
+      const localX = resolveWallSlideAlignment({
+        wallNode: event.node,
+        rawLocalX: event.localPosition[0],
+        width: draftRef.current.width,
+        candidates: alignmentCandidates,
+        bypass: event.nativeEvent?.altKey === true,
+      })
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
@@ -279,6 +324,8 @@ const DoorTool: React.FC = () => {
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
       triggerSFX('sfx:item-place')
+      alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
+      useAlignmentGuides.getState().clear()
 
       event.stopPropagation()
     }
@@ -302,6 +349,7 @@ const DoorTool: React.FC = () => {
     return () => {
       destroyDraft()
       hideCursor()
+      useAlignmentGuides.getState().clear()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
