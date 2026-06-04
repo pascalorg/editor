@@ -223,7 +223,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
   const [settings, setSettings] = useState<ImportSettingsValue>(DEFAULT_SETTINGS)
   const [importStats, setImportStats] = useState<ImportStats | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [pipeline, setPipeline] = useState<PipelineMode>('geo+ai')
+  const [pipeline, setPipeline] = useState<PipelineMode>('madori')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const parsedDxfRef = useRef<ParsedDxf | null>(null)
@@ -547,7 +547,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
 
           {/* Pipeline selector */}
           <div className="flex gap-1.5 rounded-lg border border-border/40 p-1">
-            {(['geo+ai', 'madori'] as const).map(p => (
+            {(['madori', 'geo+ai'] as const).map(p => (
               <button
                 className={cn(
                   'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
@@ -559,7 +559,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
                 onClick={() => setPipeline(p)}
                 type="button"
               >
-                {p === 'geo+ai' ? 'Auto-detect (AI)' : 'Architectural CAD (Madori)'}
+                {p === 'madori' ? 'Architectural CAD (Madori)' : 'Auto-detect (AI)'}
               </button>
             ))}
           </div>
@@ -597,7 +597,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
 
           {/* Pipeline selector */}
           <div className="flex gap-1.5 rounded-lg border border-border/40 p-1">
-            {(['geo+ai', 'madori'] as const).map(p => (
+            {(['madori', 'geo+ai'] as const).map(p => (
               <button
                 className={cn(
                   'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
@@ -609,7 +609,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
                 onClick={() => setPipeline(p)}
                 type="button"
               >
-                {p === 'geo+ai' ? 'Auto-detect (AI)' : 'Architectural CAD (Madori)'}
+                {p === 'madori' ? 'Architectural CAD (Madori)' : 'Auto-detect (AI)'}
               </button>
             ))}
           </div>
