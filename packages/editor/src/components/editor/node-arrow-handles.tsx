@@ -6,6 +6,7 @@ import {
   type ArcResizeHandle,
   type Cursor,
   createSceneApi,
+  emitter,
   type HandleDescriptor,
   type HandlePortal,
   type LinearResizeHandle,
@@ -433,9 +434,25 @@ function NodeArrowHandlesForNode({
   // shader, and it's the reason the wall height arrow (which also stays on
   // SCENE_LAYER) reads as a proper 3D plate with outlined edges. Putting
   // them on EDITOR_LAYER hides them from scenePass and the chevron renders
-  // flat. Arrows are only mounted while a node is selected, so thumbnail
-  // captures (which never have selection) don't need the layer-based
-  // exclusion the wall arrow also goes without.
+  // flat. Because they live on SCENE_LAYER, the thumbnail camera (which only
+  // filters EDITOR_LAYER + GRID_LAYER) would otherwise capture them when a
+  // node is selected at capture time — so the rig hides itself during a
+  // snapshot via the same before/after-capture handshake SelectionManager
+  // uses, then reappears.
+  useEffect(() => {
+    const hide = () => {
+      if (outerRef.current) outerRef.current.visible = false
+    }
+    const show = () => {
+      if (outerRef.current) outerRef.current.visible = true
+    }
+    emitter.on('thumbnail:before-capture', hide)
+    emitter.on('thumbnail:after-capture', show)
+    return () => {
+      emitter.off('thumbnail:before-capture', hide)
+      emitter.off('thumbnail:after-capture', show)
+    }
+  }, [])
 
   useFrame(() => {
     if (outerRef.current && outerRide) {
