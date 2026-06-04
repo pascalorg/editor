@@ -104,7 +104,7 @@ export default function Home() {
               onClose={() => setDxfOpen(false)}
               onDone={({ buildingId }) => {
                 setDxfOpen(false)
-                router.push(`/scene/${buildingId}`)
+                router.push(`/_pascal/scene/${buildingId}`)
               }}
             />
           </div>,

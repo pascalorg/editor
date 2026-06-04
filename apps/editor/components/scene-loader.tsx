@@ -236,7 +236,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
               onClose={() => setDxfOpen(false)}
               onDone={({ buildingId }) => {
                 setDxfOpen(false)
-                router.push(`/scene/${buildingId}`)
+                router.push(`/_pascal/scene/${buildingId}`)
               }}
             />
           </div>,

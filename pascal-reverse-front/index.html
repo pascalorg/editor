@@ -171,10 +171,16 @@
                 <p class="text-slate-500 text-sm mt-1" data-i18n="subWelcome">查看最新项目进度，推进您的空间计测与改造施工工作。</p>
             </div>
             <!-- 新建项目动作按钮 -->
-            <button onclick="openCreateModal()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 shadow-md shadow-teal-100 hover:shadow-teal-200 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150">
-                <i class="fa-solid fa-plus"></i>
-                <span data-i18n="btnCreate">新建项目</span>
-            </button>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <button onclick="openCreateModal()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 shadow-md shadow-teal-100 hover:shadow-teal-200 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150">
+                    <i class="fa-solid fa-plus"></i>
+                    <span data-i18n="btnCreate">新建项目</span>
+                </button>
+                <button type="button" onclick="openImportDxfModal()" class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-teal-200 bg-white text-sm font-semibold text-teal-700 shadow-sm hover:border-teal-300 hover:bg-teal-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span>Import DXF</span>
+                </button>
+            </div>
         </div>
 
         <!-- 过滤、搜索、排序与视图切换工具条 -->
@@ -293,6 +299,10 @@
                 </form>
             </div>
         </div>
+    </div>
+
+    <div id="importDxfModal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+        <iframe id="importDxfFrame" class="h-full w-full border-0 bg-transparent" title="Import DXF"></iframe>
     </div>
 
     <!-- 自定义高级安全删除确认模态窗 -->
@@ -1443,6 +1453,34 @@
         }
 
         // HTML 字符安全过滤器
+        function openImportDxfModal() {
+            const modal = document.getElementById("importDxfModal");
+            const frame = document.getElementById("importDxfFrame");
+            if (!modal || !frame) return;
+            frame.src = "/import-dxf";
+            modal.classList.remove("hidden");
+        }
+
+        function closeImportDxfModal() {
+            const modal = document.getElementById("importDxfModal");
+            const frame = document.getElementById("importDxfFrame");
+            if (modal) modal.classList.add("hidden");
+            if (frame) frame.src = "about:blank";
+        }
+
+        window.addEventListener("message", (event) => {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data || {};
+            if (data.type === "pascal:dxf-import-close") {
+                closeImportDxfModal();
+                return;
+            }
+            if (data.type !== "pascal:dxf-import-complete" || !data.target) return;
+            closeImportDxfModal();
+            window.location.href = data.target;
+        });
+
+        
         function escapeHTML(str) {
             return str
                 .replace(/&/g, "&amp;")
