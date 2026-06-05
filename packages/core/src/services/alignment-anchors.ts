@@ -74,7 +74,10 @@ function floorFootprint(
 ): { dimensions: [number, number, number]; rotation: [number, number, number] } | null {
   const capabilities = nodeRegistry.get(node.type)?.capabilities
   const floorPlaced = capabilities?.floorPlaced
-  if (floorPlaced) {
+  // `footprint` is optional now that floor-placed kinds may instead declare
+  // composite `footprints` (e.g. stairs); those have no single centred box
+  // here, so fall through to `alignmentFootprint`.
+  if (floorPlaced?.footprint) {
     if (floorPlaced.applies && !floorPlaced.applies(node)) return null
     return floorPlaced.footprint(node)
   }

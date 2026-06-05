@@ -21,11 +21,15 @@ import {
   ARROW_HOVER_COLOR,
   ARROW_SCALE,
   createRotateArrowHandleGeometry,
+  createRotateArrowHitAreaGeometry,
   GuideRing,
+  InvisibleHandleHitArea,
+  NO_RAYCAST,
   RotationGuide,
   type RotationGuideData,
   swallowNextClick,
   useArrowMaterial,
+  useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
 
 const ROTATE_SNAP = Math.PI / 12 // 15°
@@ -74,7 +78,9 @@ export function GroupRotateHandle() {
 function GroupRotateHandleInner({ ids }: { ids: string[] }) {
   const { camera, raycaster, gl, scene } = useThree()
   const arrowGeometry = useMemo(() => createRotateArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createRotateArrowHitAreaGeometry(), [])
   const arrowMaterial = useArrowMaterial()
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const [isHovered, setIsHovered] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [guide, setGuide] = useState<RotationGuideData | null>(null)
@@ -85,11 +91,13 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
   }, [arrowMaterial, isHovered])
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE * 1.05
+  const baseScale = zoom * ARROW_SCALE * 1.05
+  const scale = (isHovered ? 1.12 : 1) * baseScale
 
   // World-space bounding box of the selected meshes. Levels are axis-aligned in
   // XZ, so world XZ coincides with each node's level-local placement — letting
@@ -100,11 +108,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
   const rest = useMemo(() => {
     const box = computeGroupBox(ids)
     if (!box) return null
-    const pivot = new Vector3(
-      (box.min.x + box.max.x) / 2,
-      box.min.y,
-      (box.min.z + box.max.z) / 2,
-    )
+    const pivot = new Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2)
     const corner = new Vector3(
       box.max.x + CORNER_OFFSET,
       (box.min.y + box.max.y) / 2,
@@ -307,11 +311,10 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
           <GuideRing radius={0.2 * scale} y={0} />
         </group>
       )}
-      <group position={[corner.x, corner.y, corner.z]} scale={scale}>
-        <mesh
-          frustumCulled={false}
-          geometry={arrowGeometry}
-          material={arrowMaterial}
+      <group position={[corner.x, corner.y, corner.z]}>
+        <InvisibleHandleHitArea
+          geometry={hitGeometry}
+          material={hitMaterial}
           onPointerDown={activate}
           onPointerEnter={(event) => {
             event.stopPropagation()
@@ -323,7 +326,15 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
             setIsHovered(false)
             if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
           }}
+          scale={baseScale}
+        />
+        <mesh
+          frustumCulled={false}
+          geometry={arrowGeometry}
+          material={arrowMaterial}
+          raycast={NO_RAYCAST}
           renderOrder={1010}
+          scale={scale}
         />
       </group>
       {guide ? <RotationGuide data={guide} /> : null}

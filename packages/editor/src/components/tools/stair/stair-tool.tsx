@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
   DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
@@ -73,19 +74,10 @@ function createStairPreviewGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * Creates a stair group with one default stair segment at the given position/rotation.
+ * Creates a default straight stair segment.
  */
-function commitStairPlacement(
-  levelId: LevelNode['id'],
-  position: [number, number, number],
-  rotation: number,
-): void {
-  const { createNodes, nodes } = useScene.getState()
-
-  const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
-  const name = `Staircase ${stairCount + 1}`
-
-  const segment = StairSegmentNode.parse({
+function createDefaultStairSegment() {
+  return StairSegmentNode.parse({
     segmentType: 'stair',
     width: DEFAULT_STAIR_WIDTH,
     length: DEFAULT_STAIR_LENGTH,
@@ -96,14 +88,24 @@ function commitStairPlacement(
     thickness: DEFAULT_STAIR_THICKNESS,
     position: [0, 0, 0],
   })
+}
 
-  const sortedLevels = Object.values(nodes)
-    .filter((node): node is LevelNode => node.type === 'level')
-    .sort((left, right) => left.level - right.level)
-  const currentLevelIndex = sortedLevels.findIndex((level) => level.id === levelId)
-  const nextLevelId = sortedLevels[currentLevelIndex + 1]?.id ?? levelId
-
-  const stair = StairNode.parse({
+function createDefaultStairNode({
+  name,
+  levelId,
+  nextLevelId,
+  position,
+  rotation,
+  segmentId,
+}: {
+  name: string
+  levelId: LevelNode['id']
+  nextLevelId: LevelNode['id']
+  position: [number, number, number]
+  rotation: number
+  segmentId: StairSegmentNode['id']
+}) {
+  return StairNode.parse({
     name,
     position,
     rotation,
@@ -125,7 +127,37 @@ function commitStairPlacement(
     showStepSupports: DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
     railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
     railingMode: DEFAULT_STAIR_RAILING_MODE,
-    children: [segment.id],
+    children: [segmentId],
+  })
+}
+
+/**
+ * Creates a stair group with one default stair segment at the given position/rotation.
+ */
+function commitStairPlacement(
+  levelId: LevelNode['id'],
+  position: [number, number, number],
+  rotation: number,
+): void {
+  const { createNodes, nodes } = useScene.getState()
+
+  const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
+  const name = `Staircase ${stairCount + 1}`
+  const segment = createDefaultStairSegment()
+
+  const sortedLevels = Object.values(nodes)
+    .filter((node): node is LevelNode => node.type === 'level')
+    .sort((left, right) => left.level - right.level)
+  const currentLevelIndex = sortedLevels.findIndex((level) => level.id === levelId)
+  const nextLevelId = sortedLevels[currentLevelIndex + 1]?.id ?? levelId
+
+  const stair = createDefaultStairNode({
+    name,
+    levelId,
+    nextLevelId,
+    position,
+    rotation,
+    segmentId: segment.id,
   })
 
   createNodes([
@@ -141,6 +173,7 @@ export const StairTool: React.FC = () => {
   const previewRef = useRef<THREE.Group>(null)
   const rotationRef = useRef(0)
   const previousGridPosRef = useRef<[number, number] | null>(null)
+  const lastCanonicalPositionRef = useRef<[number, number, number] | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
 
   const previewGeometry = useMemo(() => createStairPreviewGeometry(), [])
@@ -151,6 +184,49 @@ export const StairTool: React.FC = () => {
     // Reset rotation when tool activates
     rotationRef.current = 0
     if (previewRef.current) previewRef.current.rotation.y = 0
+    lastCanonicalPositionRef.current = null
+
+    const getPreviewPosition = (
+      position: [number, number, number],
+      rotation: number,
+    ): [number, number, number] => {
+      const segment = createDefaultStairSegment()
+      const stair = createDefaultStairNode({
+        name: 'Staircase Preview',
+        levelId: currentLevelId,
+        nextLevelId: currentLevelId,
+        position,
+        rotation,
+        segmentId: segment.id,
+      })
+      return getFloorStackPreviewPosition({
+        node: stair,
+        position,
+        rotation,
+        levelId: currentLevelId,
+        nodes: {
+          ...useScene.getState().nodes,
+          [stair.id]: stair,
+          [segment.id]: segment,
+        },
+      })
+    }
+
+    const applyPreview = (position: [number, number, number], rotation: number) => {
+      const visualPosition = getPreviewPosition(position, rotation)
+      if (cursorRef.current) {
+        cursorRef.current.position.set(
+          visualPosition[0],
+          visualPosition[1] + GRID_OFFSET,
+          visualPosition[2],
+        )
+      }
+
+      if (previewRef.current) {
+        previewRef.current.position.set(...visualPosition)
+        previewRef.current.rotation.y = rotation
+      }
+    }
 
     // Alignment candidates — anchors of every alignable object; refreshed
     // after each placement. The stair aligns by its ORIGIN point.
@@ -199,15 +275,9 @@ export const StairTool: React.FC = () => {
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
       )
-      const y = event.localPosition[1]
-
-      if (cursorRef.current) {
-        cursorRef.current.position.set(gridX, y + GRID_OFFSET, gridZ)
-      }
-
-      if (previewRef.current) {
-        previewRef.current.position.set(gridX, y, gridZ)
-      }
+      const position: [number, number, number] = [gridX, 0, gridZ]
+      lastCanonicalPositionRef.current = position
+      applyPreview(position, rotationRef.current)
 
       if (
         previousGridPosRef.current &&
@@ -248,7 +318,9 @@ export const StairTool: React.FC = () => {
         event.preventDefault()
         sfxEmitter.emit('sfx:item-rotate')
         rotationRef.current += rotationDelta
-        if (previewRef.current) {
+        if (lastCanonicalPositionRef.current) {
+          applyPreview(lastCanonicalPositionRef.current, rotationRef.current)
+        } else if (previewRef.current) {
           previewRef.current.rotation.y = rotationRef.current
         }
       }

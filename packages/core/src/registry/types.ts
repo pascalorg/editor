@@ -1235,20 +1235,40 @@ export type SelectableConfig = {
   override?: (ctx: CapabilityCtx) => SelectableConfig | null
 }
 
+export type FloorPlacedFootprint = {
+  dimensions: [number, number, number]
+  rotation: [number, number, number]
+  position?: [number, number, number]
+}
+
+export type FloorPlacedFootprintContext = {
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+}
+
+export type FloorPlacedFootprintResolver = (
+  node: AnyNode,
+  ctx?: FloorPlacedFootprintContext,
+) => FloorPlacedFootprint
+
+export type FloorPlacedFootprintsResolver = (
+  node: AnyNode,
+  ctx?: FloorPlacedFootprintContext,
+) => readonly FloorPlacedFootprint[]
+
 /**
  * Floor-placed kinds rest directly on a level and need their Y lifted by
  * any slab the footprint overlaps. The generic `<FloorElevationSystem>`
  * computes `slabElevation + node.position[1]` and writes it onto the
- * registered mesh on every dirty mark. `footprint` returns the world-space
- * footprint the spatial-grid manager uses to find overlapping slabs;
+ * registered mesh on every dirty mark. `footprint` returns the default
+ * world-space footprint the spatial-grid manager uses to find overlapping
+ * slabs; `footprints` lets composite kinds expose multiple footprint
+ * segments, with the canonical resolver taking the max slab elevation;
  * `applies` is an optional predicate to skip nodes that share a kind but
  * are mounted off-floor (items attached to a wall / ceiling).
  */
 export type FloorPlacedConfig = {
-  footprint: (node: AnyNode) => {
-    dimensions: [number, number, number]
-    rotation: [number, number, number]
-  }
+  footprint?: FloorPlacedFootprintResolver
+  footprints?: FloorPlacedFootprintsResolver
   applies?: (node: AnyNode) => boolean
 }
 

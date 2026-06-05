@@ -13,7 +13,7 @@ import {
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
+import { getFloorStackPreviewPosition, triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'
@@ -91,13 +91,20 @@ const ColumnTool = () => {
         useAlignmentGuides.getState().clear()
       }
 
-      cursorRef.current?.position.set(ax, event.localPosition[1], az)
+      const position: [number, number, number] = [ax, 0, az]
+      const visualPosition = getFloorStackPreviewPosition({
+        node: previewNode,
+        position,
+        rotation: previewNode.rotation,
+        levelId: activeLevelId,
+      })
+      cursorRef.current?.position.set(...visualPosition)
 
       // Publish a transient, positioned preview node for the 2D floor-plan
       // ghost (the 3D `ColumnPreview` mesh is hidden in 2D). The floor-plan
       // placement-preview layer renders this node's footprint at the snapped,
       // aligned cursor so users see the pillar before they click.
-      usePlacementPreview.getState().set({ ...previewNode, position: [ax, 0, az] })
+      usePlacementPreview.getState().set({ ...previewNode, position })
 
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== ax || prev[1] !== az) {

@@ -1,14 +1,42 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getEffectiveNode,
+  getFloorStackedPosition,
   nodeRegistry,
-  resolveLevelId,
   sceneRegistry,
-  spatialGridManager,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import type * as THREE from 'three'
+
+type PositionedNode = AnyNode & {
+  position?: [number, number, number]
+  rotation?: [number, number, number] | number
+}
+
+function withLiveTransform(node: AnyNode, id: string): AnyNode {
+  const liveTransform = useLiveTransforms.getState().get(id)
+  if (!liveTransform) return node
+
+  const currentRotation = (node as PositionedNode).rotation
+  const rotation = Array.isArray(currentRotation)
+    ? ([currentRotation[0] ?? 0, liveTransform.rotation, currentRotation[2] ?? 0] as [
+        number,
+        number,
+        number,
+      ])
+    : typeof currentRotation === 'number'
+      ? liveTransform.rotation
+      : currentRotation
+
+  return {
+    ...(node as Record<string, unknown>),
+    position: liveTransform.position,
+    ...(rotation !== undefined ? { rotation } : {}),
+  } as AnyNode
+}
 
 /**
  * Generic floor-elevation system.
@@ -25,11 +53,12 @@ import type * as THREE from 'three'
  *
  * Runs at priority 1 — before the priority-2 systems (`GeometrySystem`,
  * `ItemSystem`) so the dirty mark survives long enough for those to do
- * their own work. Doesn't clear dirty; the per-kind system (or the
- * generic geometry rebuild) is responsible for that.
+ * their own work. Kinds with no geometry/system have no downstream dirty
+ * consumer, so this system clears their dirty mark after applying the lift.
  */
 export const FloorElevationSystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
+  const clearDirty = useScene((s) => s.clearDirty)
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -43,31 +72,31 @@ export const FloorElevationSystem = () => {
       const floorPlaced = def?.capabilities?.floorPlaced
       if (!floorPlaced) return
 
-      if (floorPlaced.applies && !floorPlaced.applies(node as AnyNode)) return
-
-      // Only nodes parented directly to a level get the lift. Children of
-      // walls / ceilings / other items inherit Y from the parent group.
-      const parentId = node.parentId as AnyNodeId | null
-      const parent = parentId ? nodes[parentId] : null
-      if (parent && parent.type !== 'level') return
-
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D | undefined
       if (!mesh) return
 
-      const position = (node as { position?: [number, number, number] }).position
+      const effectiveNode = withLiveTransform(getEffectiveNode(node as AnyNode), id)
+      const position = (effectiveNode as PositionedNode).position
       if (!position) return
 
-      const levelId = resolveLevelId(node, nodes)
-      if (!levelId) return
-
-      const { dimensions, rotation } = floorPlaced.footprint(node as AnyNode)
-      const slabElevation = spatialGridManager.getSlabElevationForItem(
-        levelId,
+      // This system is the single drag-time authority for floor-stack mesh Y:
+      // tools publish base positions to live stores, renderers may
+      // reconcile that base Y onto the group, then this presentation system
+      // reapplies the resolver-derived visual Y before render. Because the
+      // override/store position remains base-height, the slab lift is never
+      // committed or applied twice.
+      const resolverNodes =
+        effectiveNode === node ? nodes : { ...nodes, [effectiveNode.id]: effectiveNode }
+      const visualPosition = getFloorStackedPosition({
+        node: effectiveNode,
+        nodes: resolverNodes,
         position,
-        dimensions,
-        rotation,
-      )
-      mesh.position.y = slabElevation + position[1]
+      })
+      mesh.position.y = visualPosition[1]
+
+      if (!(def.geometry || def.system)) {
+        clearDirty(id as AnyNodeId)
+      }
     })
   }, 1)
 
