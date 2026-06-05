@@ -33,7 +33,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const result = await buildAndSaveScene(body.mergeResult, body.coords, {
-    name:         body.name,
+    name:          body.name,
     guideImageUrl: body.guideImageUrl,
   })
 

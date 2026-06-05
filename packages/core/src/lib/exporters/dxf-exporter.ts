@@ -66,30 +66,43 @@ function grp(code: number, value: string | number): string {
   return `${String(code).padStart(3, ' ')}\n${value}\n`
 }
 
+// Sequential hex handle generator.
+// AC1015 requires every entity to carry a unique handle (group code 5) and an
+// owner reference (group code 330). AutoCAD may auto-assign handles, but many
+// readers enforce their presence for strict AC1015 compliance.
+function makeHandleGen(start = 1) {
+  let n = start
+  return () => (n++).toString(16).toUpperCase()
+}
+
+// Attach handle + owner to any entity header.
+const hdl = (handle: string, owner = '0') =>
+  grp(5, handle) + grp(330, owner)
+
 // All coordinate arguments are in metres.
-// Y is negated on output: Pascal stores Y = −DXF_Y (the same flip applied during
-// DXF import in madori-xml-parser.ts), so we must negate Y when writing back to
-// DXF to restore the original orientation and prevent mirroring.
+// Y is negated on output: Pascal stores Y = −DXF_Y (same flip applied during
+// DXF import in madori-xml-parser.ts), so we negate Y when writing back to
+// DXF to restore the correct orientation.
 function point2d(x: number, y: number, offset = 0): string {
   return grp(10 + offset, (x * M).toFixed(1)) + grp(20 + offset, (-y * M).toFixed(1))
 }
 
-// DXF R2000 (AC1015) requires subclass markers before entity-specific group codes.
-// Order: 0 entityType → 100 AcDbEntity → 8 layer → 100 AcDb<Type> → geometry
-function dxfLine(layer: string, x1: number, y1: number, x2: number, y2: number): string {
+// Each entity builder accepts a handle string so callers can assign unique IDs.
+// Order per AC1015 spec: 0 type → 5 handle → 330 owner → 100 AcDbEntity →
+//   8 layer → 100 AcDb<Type> → geometry
+
+function dxfLine(layer: string, x1: number, y1: number, x2: number, y2: number, h: string): string {
   return (
-    grp(0, 'LINE') +
+    grp(0, 'LINE') + hdl(h) +
     grp(100, 'AcDbEntity') + grp(8, layer) +
     grp(100, 'AcDbLine') +
     point2d(x1, y1) + point2d(x2, y2, 1)
   )
 }
 
-function dxfPolyline(layer: string, vertices: Vec2[], closed = false): string {
-  // 100 AcDbPolyline must precede group code 90 (vertex count).
-  // Without it AutoCAD raises "group code 90 undefined".
+function dxfPolyline(layer: string, vertices: Vec2[], closed: boolean, h: string): string {
   let s = (
-    grp(0, 'LWPOLYLINE') +
+    grp(0, 'LWPOLYLINE') + hdl(h) +
     grp(100, 'AcDbEntity') + grp(8, layer) +
     grp(100, 'AcDbPolyline') +
     grp(90, vertices.length) + grp(70, closed ? 1 : 0)
@@ -100,9 +113,9 @@ function dxfPolyline(layer: string, vertices: Vec2[], closed = false): string {
   return s
 }
 
-function dxfText(layer: string, x: number, y: number, height: number, text: string): string {
+function dxfText(layer: string, x: number, y: number, height: number, text: string, h: string): string {
   return (
-    grp(0, 'TEXT') +
+    grp(0, 'TEXT') + hdl(h) +
     grp(100, 'AcDbEntity') + grp(8, layer) +
     grp(100, 'AcDbText') +
     point2d(x, y) +
@@ -114,9 +127,9 @@ function dxfText(layer: string, x: number, y: number, height: number, text: stri
 // Arc angles are passed in Pascal convention (CCW from +X, Y-down).
 // After Y-flip, a CCW arc [s→e] becomes CCW [-e→-s] in DXF (Y-up).
 // ARC uses two subclass markers: AcDbCircle owns center+radius, AcDbArc owns angles.
-function dxfArc(layer: string, cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
+function dxfArc(layer: string, cx: number, cy: number, r: number, startDeg: number, endDeg: number, h: string): string {
   return (
-    grp(0, 'ARC') +
+    grp(0, 'ARC') + hdl(h) +
     grp(100, 'AcDbEntity') + grp(8, layer) +
     grp(100, 'AcDbCircle') +
     point2d(cx, cy) +
@@ -222,6 +235,10 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
     const arr = windowsByWall.get(w.wallId) ?? []; arr.push(w); windowsByWall.set(w.wallId, arr)
   }
 
+  // Handle counter — every entity needs a unique hex handle in AC1015.
+  // TABLES boilerplate reserves handles 1–20; entities start from 21.
+  const nextH = makeHandleGen(0x21)
+
   let entities = ''
 
   // ── Walls (broken at door/window openings) ───────────────────────────────
@@ -237,7 +254,6 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
     const wallLen = Math.sqrt(dx * dx + dz * dz)
     if (wallLen < 1e-6) continue
 
-    // Collect opening intervals in parametric wall space [0, 1].
     const gaps: { t0: number; t1: number }[] = []
     for (const d of doorsByWall.get(w.id) ?? []) {
       const lx = d.position?.[0] ?? 0
@@ -253,138 +269,153 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
     for (const [t0, t1] of solidSegments(gaps)) {
       const segStart = lerpWall(w, t0)
       const segEnd   = lerpWall(w, t1)
-
       const verts = wallFaceVertices(segStart, segEnd, thickness)
-      if (verts.length === 4) entities += dxfPolyline(faceLayer, verts, true)
-      entities += dxfLine(clLayer, segStart[0], segStart[1], segEnd[0], segEnd[1])
+      if (verts.length === 4) entities += dxfPolyline(faceLayer, verts, true, nextH())
+      entities += dxfLine(clLayer, segStart[0], segStart[1], segEnd[0], segEnd[1], nextH())
     }
   }
 
   // ── Zones: boundary polygon + name label ─────────────────────────────────
   for (const z of zones) {
-    entities += dxfPolyline('PASCAL_ZONE', z.polygon, true)
+    entities += dxfPolyline('PASCAL_ZONE', z.polygon, true, nextH())
     const cx = z.polygon.reduce((s, v) => s + v[0], 0) / z.polygon.length
     const cy = z.polygon.reduce((s, v) => s + v[1], 0) / z.polygon.length
-    entities += dxfText('PASCAL_ZONE_LABEL', cx, cy, 0.3, z.name)
+    entities += dxfText('PASCAL_ZONE_LABEL', cx, cy, 0.3, z.name, nextH())
   }
 
   // ── Doors: sill line + 90° swing arc, oriented to the wall ───────────────
   for (const d of doors) {
     const wall = wallById.get(d.wallId)
     if (!wall) continue
-
     const lx    = d.position?.[0] ?? 0
     const width = d.width ?? 0.9
     const [cx, cy] = openingCenter(wall, lx)
-
     const wdx = wall.end[0] - wall.start[0]
     const wdz = wall.end[1] - wall.start[1]
     const wLen = Math.sqrt(wdx * wdx + wdz * wdz) || 1
     const ux = wdx / wLen
     const uz = wdz / wLen
     const wallAngleDeg = Math.atan2(wdz, wdx) * (180 / Math.PI)
-
-    // Sill line across the opening
     entities += dxfLine('PASCAL_DOOR',
       cx - ux * width / 2, cy - uz * width / 2,
-      cx + ux * width / 2, cy + uz * width / 2,
-    )
-    // Swing arc centred at the hinge end, sweeping 90° away from the wall
+      cx + ux * width / 2, cy + uz * width / 2, nextH())
     entities += dxfArc('PASCAL_DOOR',
       cx - ux * width / 2, cy - uz * width / 2,
-      width,
-      wallAngleDeg, wallAngleDeg + 90,
-    )
+      width, wallAngleDeg, wallAngleDeg + 90, nextH())
   }
 
-  // ── Windows: two face lines + jamb lines (rectangle in the wall gap) ─────
+  // ── Windows: two face lines + jamb lines ─────────────────────────────────
   for (const win of windows) {
     const wall = wallById.get(win.wallId)
     if (!wall) continue
-
     const lx    = win.position?.[0] ?? 0
     const halfW = (win.width ?? 1.2) / 2
     const [cx, cy] = openingCenter(wall, lx)
-
     const wdx = wall.end[0] - wall.start[0]
     const wdz = wall.end[1] - wall.start[1]
     const wLen = Math.sqrt(wdx * wdx + wdz * wdz) || 1
-    const ux = wdx / wLen
-    const uz = wdz / wLen
-    const nx = -wdz / wLen  // perpendicular (normal) to wall direction
-    const nz =  wdx / wLen
+    const ux = wdx / wLen; const uz = wdz / wLen
+    const nx = -wdz / wLen; const nz = wdx / wLen
     const halfT = (wall.thickness ?? 0.24) / 2
-
-    // Front and back face lines spanning the window width
-    entities += dxfLine('PASCAL_WINDOW',
-      cx - ux * halfW + nx * halfT, cy - uz * halfW + nz * halfT,
-      cx + ux * halfW + nx * halfT, cy + uz * halfW + nz * halfT,
-    )
-    entities += dxfLine('PASCAL_WINDOW',
-      cx - ux * halfW - nx * halfT, cy - uz * halfW - nz * halfT,
-      cx + ux * halfW - nx * halfT, cy + uz * halfW - nz * halfT,
-    )
-    // Jamb lines at each end connecting front and back faces
-    entities += dxfLine('PASCAL_WINDOW',
-      cx - ux * halfW + nx * halfT, cy - uz * halfW + nz * halfT,
-      cx - ux * halfW - nx * halfT, cy - uz * halfW - nz * halfT,
-    )
-    entities += dxfLine('PASCAL_WINDOW',
-      cx + ux * halfW + nx * halfT, cy + uz * halfW + nz * halfT,
-      cx + ux * halfW - nx * halfT, cy + uz * halfW - nz * halfT,
-    )
+    entities += dxfLine('PASCAL_WINDOW', cx - ux*halfW + nx*halfT, cy - uz*halfW + nz*halfT, cx + ux*halfW + nx*halfT, cy + uz*halfW + nz*halfT, nextH())
+    entities += dxfLine('PASCAL_WINDOW', cx - ux*halfW - nx*halfT, cy - uz*halfW - nz*halfT, cx + ux*halfW - nx*halfT, cy + uz*halfW - nz*halfT, nextH())
+    entities += dxfLine('PASCAL_WINDOW', cx - ux*halfW + nx*halfT, cy - uz*halfW + nz*halfT, cx - ux*halfW - nx*halfT, cy - uz*halfW - nz*halfT, nextH())
+    entities += dxfLine('PASCAL_WINDOW', cx + ux*halfW + nx*halfT, cy + uz*halfW + nz*halfT, cx + ux*halfW - nx*halfT, cy + uz*halfW - nz*halfT, nextH())
   }
 
   // ── Furniture: rectangle footprint on the floor plan ─────────────────────
   for (const item of items) {
-    // Wall- and ceiling-attached items use parent-relative coordinates — skip.
     const att = item.asset.attachTo
     if (att === 'wall' || att === 'wall-side' || att === 'ceiling') continue
-
-    const cx = item.position[0]   // level X
-    const cy = item.position[2]   // 3D Z → floor-plan Y
-    const angle = item.rotation[1] // Y-axis rotation in radians
-
+    const cx = item.position[0]
+    const cy = item.position[2]
+    const angle = item.rotation[1]
     const [dw, , dd] = item.asset.dimensions
     const [sx, , sz] = item.scale
-    const hw = (dw * sx) / 2
-    const hd = (dd * sz) / 2
-
-    const cosA = Math.cos(angle)
-    const sinA = Math.sin(angle)
-
+    const hw = (dw * sx) / 2; const hd = (dd * sz) / 2
+    const cosA = Math.cos(angle); const sinA = Math.sin(angle)
     const corners: Vec2[] = (
       [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]] as [number, number][]
-    ).map(([lx, lz]) => [
-      cx + lx * cosA - lz * sinA,
-      cy + lx * sinA + lz * cosA,
-    ])
-
-    entities += dxfPolyline('PASCAL_FURNITURE', corners, true)
+    ).map(([lx, lz]) => [cx + lx*cosA - lz*sinA, cy + lx*sinA + lz*cosA])
+    entities += dxfPolyline('PASCAL_FURNITURE', corners, true, nextH())
   }
 
-  // ── Assemble full DXF ────────────────────────────────────────────────────
-  // AC1015 (R2000) format: HEADER → TABLES → BLOCKS → ENTITIES → OBJECTS → EOF
-  // AutoCAD requires this six-section structure and $ACADVER ≥ AC1015 to
-  // recognise LWPOLYLINE and the 100-subclass-marker convention.
+  // ── Assemble full DXF (AC1015 / R2000) ──────────────────────────────────
+  // AutoCAD requires six sections: HEADER → TABLES → BLOCKS → ENTITIES → OBJECTS → EOF
+  // An empty TABLES or BLOCKS section is invalid — each needs proper sub-entries.
+
   const header =
     grp(0, 'SECTION') + grp(2, 'HEADER') +
     grp(9, '$ACADVER') + grp(1, 'AC1015') +
     grp(9, '$INSUNITS') + grp(70, 4) +   // 4 = mm
     grp(0, 'ENDSEC')
 
-  // Minimal TABLES section (empty tables satisfy the parser without registering layers)
-  const tables = grp(0, 'SECTION') + grp(2, 'TABLES') + grp(0, 'ENDSEC')
+  // TABLES: every TABLE entry needs a handle (5), owner (330), and the
+  // "100 AcDbSymbolTable" subclass marker before the record count (70).
+  // Without AcDbSymbolTable, AC1015 parsers cannot identify the table type.
+  let th = 1  // table handle counter (1-based, separate from entity handles)
+  const tbl = (name: string, count: number, body = '') => {
+    const h = (th++).toString(16).toUpperCase()
+    return (
+      grp(0, 'TABLE') + grp(2, name) +
+      grp(5, h) + grp(330, '0') +
+      grp(100, 'AcDbSymbolTable') +
+      grp(70, count) +
+      body +
+      grp(0, 'ENDTAB')
+    )
+  }
 
-  // BLOCKS section must exist in AC1015; empty is fine for entity-only output
-  const blocks = grp(0, 'SECTION') + grp(2, 'BLOCKS') + grp(0, 'ENDSEC')
+  const tables =
+    grp(0, 'SECTION') + grp(2, 'TABLES') +
+    tbl('VPORT',    0) +
+    tbl('LTYPE',    0) +
+    tbl('LAYER',    0) +
+    tbl('STYLE',    0) +
+    tbl('VIEW',     0) +
+    tbl('UCS',      0) +
+    tbl('APPID', 1,
+      grp(0, 'APPID') +
+      grp(5, (th++).toString(16).toUpperCase()) + grp(330, (th - 2).toString(16).toUpperCase()) +
+      grp(100, 'AcDbSymbolTableRecord') +
+      grp(100, 'AcDbRegAppTableRecord') +
+      grp(2, 'ACAD') + grp(70, 0),
+    ) +
+    tbl('DIMSTYLE', 0) +
+    grp(0, 'ENDSEC')
+
+  // BLOCKS: *Model_Space and *Paper_Space are required.
+  // Each BLOCK/ENDBLK pair needs handles and the AcDbBlockBegin/End subclasses.
+  let bh = th  // continue handle numbering from where tables left off
+  const blk = (name: string) => {
+    const hBlock = (bh++).toString(16).toUpperCase()
+    const hEnd   = (bh++).toString(16).toUpperCase()
+    return (
+      grp(0, 'BLOCK') +
+      grp(5, hBlock) + grp(330, '0') +
+      grp(100, 'AcDbEntity') + grp(8, '0') +
+      grp(100, 'AcDbBlockBegin') +
+      grp(2, name) + grp(70, 0) +
+      grp(10, '0.0') + grp(20, '0.0') + grp(30, '0.0') +
+      grp(3, name) + grp(1, '') +
+      grp(0, 'ENDBLK') +
+      grp(5, hEnd) + grp(330, '0') +
+      grp(100, 'AcDbEntity') + grp(8, '0') +
+      grp(100, 'AcDbBlockEnd')
+    )
+  }
+
+  const blocks =
+    grp(0, 'SECTION') + grp(2, 'BLOCKS') +
+    blk('*Model_Space') +
+    blk('*Paper_Space') +
+    grp(0, 'ENDSEC')
 
   const entitiesSection =
     grp(0, 'SECTION') + grp(2, 'ENTITIES') +
     entities +
     grp(0, 'ENDSEC')
 
-  // OBJECTS section is required by AC1015
   const objects = grp(0, 'SECTION') + grp(2, 'OBJECTS') + grp(0, 'ENDSEC')
 
   return header + tables + blocks + entitiesSection + objects + grp(0, 'EOF')

@@ -301,6 +301,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
 
     if (!vResult.passed) { setPhase('rejected'); return }
 
+    if (vResult.warnings.length > 0) console.warn('[DXF import]', vResult.warnings)
     setWarnings(vResult.warnings)
     setPhase('preview')
   }, [settings, runValidation])
@@ -312,6 +313,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
 
     const vResult = runValidation(dxf, fileSizeBytes, settings)
     setValidation(vResult)
+    if (vResult.passed && vResult.warnings.length > 0) console.warn('[DXF import]', vResult.warnings)
     setWarnings(vResult.passed ? vResult.warnings : [])
     setPhase(vResult.passed ? 'preview' : 'rejected')
   }, [fileSizeBytes, settings, runValidation])
@@ -366,7 +368,10 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
       try {
         const result = await importViaMadori(jobId)
         if (abort.signal.aborted) return
-        if (result.warnings.length > 0) setWarnings(result.warnings)
+        if (result.warnings.length > 0) {
+          console.warn('[DXF import]', result.warnings)
+          setWarnings(result.warnings)
+        }
         setImportStats({
           wallCount:       result.wallCount,
           openingCount:    result.openingCount,
@@ -448,7 +453,10 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
         fileName || 'DXF Import',
         previewDataUrl || undefined,
       )
-      if (result.warnings.length > 0) setWarnings(result.warnings)
+      if (result.warnings.length > 0) {
+        console.warn('[DXF import]', result.warnings)
+        setWarnings(result.warnings)
+      }
       setImportStats({
         wallCount:       result.wallCount,
         openingCount:    result.openingCount,
@@ -578,16 +586,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
 
           <DxfPreview ref={canvasRef} entities={parsedDxfRef.current?.entities ?? []} />
 
-          {warnings.length > 0 && (
-            <ul className="space-y-1 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-              {warnings.map((w, i) => (
-                <li className="flex gap-2 text-amber-400 text-xs" key={i}>
-                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  {w}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* Warnings are logged to the browser console only */}
 
           <ImportSettings
             defaultOpen={settingsOpen}
@@ -688,12 +687,7 @@ export function ImportDxfTool({ sceneId, onClose, onDone }: ImportDxfToolProps) 
             </p>
           )}
 
-          {/* Warnings summary */}
-          {warnings.length > 0 && (
-            <p className="text-muted-foreground text-xs">
-              {warnings.length} notice{warnings.length !== 1 ? 's' : ''} — see flagged nodes in the scene
-            </p>
-          )}
+          {/* Warnings logged to console only */}
 
           <div className="flex items-center justify-end gap-2">
             <button

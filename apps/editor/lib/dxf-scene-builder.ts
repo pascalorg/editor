@@ -42,8 +42,33 @@ export function buildGraph(
   const warnings: string[] = [...mergeResult.warnings]
   const nodes: Record<AnyNodeId, AnyNodeT> = {}
 
+  // Compute wall bounding box so the SiteNode polygon covers the full building.
+  // The default SiteNode is a 30×30m square which is too small for large floor plans.
+  let bboxMinX = -15, bboxMaxX = 15, bboxMinZ = -15, bboxMaxZ = 15
+  if (mergeResult.walls.length > 0) {
+    bboxMinX = Infinity; bboxMaxX = -Infinity; bboxMinZ = Infinity; bboxMaxZ = -Infinity
+    for (const w of mergeResult.walls) {
+      bboxMinX = Math.min(bboxMinX, w.start[0], w.end[0])
+      bboxMaxX = Math.max(bboxMaxX, w.start[0], w.end[0])
+      bboxMinZ = Math.min(bboxMinZ, w.start[1], w.end[1])
+      bboxMaxZ = Math.max(bboxMaxZ, w.start[1], w.end[1])
+    }
+    const pad = 2  // 2m margin around the building footprint
+    bboxMinX -= pad; bboxMaxX += pad; bboxMinZ -= pad; bboxMaxZ += pad
+  }
+
   // Skeleton: Site → Building → Level
-  const site     = SiteNode.parse({})
+  const site = SiteNode.parse({
+    polygon: {
+      type: 'polygon',
+      points: [
+        [bboxMinX, bboxMinZ],
+        [bboxMaxX, bboxMinZ],
+        [bboxMaxX, bboxMaxZ],
+        [bboxMinX, bboxMaxZ],
+      ],
+    },
+  })
   const building = BuildingNode.parse({})
   const level    = LevelNode.parse({ level: 0 })
 
