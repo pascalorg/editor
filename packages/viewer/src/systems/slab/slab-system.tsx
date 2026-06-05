@@ -81,6 +81,20 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   return elevation < 0 ? generatePoolGeometry(slabNode) : generatePositiveSlabGeometry(slabNode)
 }
 
+// Earcut normalizes cap triangulation regardless of input winding, but the side
+// walls below assume a CCW contour (the unflipped quad's right-hand normal faces
+// outward only for CCW). outsetPolygon and the slab tool preserve the drawn
+// winding, so a CW-drawn slab gets inward-facing walls that FrontSide culls and
+// the slab reads as see-through from the front. Normalize to CCW first.
+function ensureCounterClockwisePolygon(polygon: Array<[number, number]>): Array<[number, number]> {
+  let area2 = 0
+  for (let i = 0; i < polygon.length; i++) {
+    const j = (i + 1) % polygon.length
+    area2 += polygon[i]![0] * polygon[j]![1] - polygon[j]![0] * polygon[i]![1]
+  }
+  return area2 < 0 ? [...polygon].reverse() : polygon
+}
+
 /**
  * Standard slab: flat extrusion upward from Y=0 by elevation thickness.
  *
@@ -94,7 +108,7 @@ export function generateSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
  * because exactly one faces the camera under FrontSide culling.
  */
 function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = getRenderableSlabPolygon(slabNode)
+  const polygon = ensureCounterClockwisePolygon(getRenderableSlabPolygon(slabNode))
   const elevation = slabNode.elevation ?? 0.05
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
@@ -187,7 +201,7 @@ function generatePositiveSlabGeometry(slabNode: SlabNode): THREE.BufferGeometry 
  *   - walls from Y=0 to Y=depth, inward-facing normals (visible from inside pool)
  */
 function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
-  const polygon = getRenderableSlabPolygon(slabNode)
+  const polygon = ensureCounterClockwisePolygon(getRenderableSlabPolygon(slabNode))
   const depth = Math.abs(slabNode.elevation ?? 0.05)
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
