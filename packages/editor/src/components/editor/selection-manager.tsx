@@ -1263,6 +1263,13 @@ export const SelectionManager = () => {
           }
         }
 
+        // Clicking any node (e.g. the slab surface outside a hole) exits slab
+        // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
+        // click reaching here means the user clicked outside the hole.
+        if (useEditor.getState().editingHole) {
+          useEditor.getState().setEditingHole(null)
+        }
+
         activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
 
         let nextMaterialTargetHandled = false
