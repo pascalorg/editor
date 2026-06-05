@@ -17,6 +17,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { EDITOR_LAYER } from '../../../lib/constants'
 
 export const ARROW_SCALE = 0.65
 export const ARROW_COLOR = '#8381ed'
@@ -376,6 +377,7 @@ export function InvisibleHandleHitArea({
     <mesh
       frustumCulled={false}
       geometry={geometry}
+      layers={EDITOR_LAYER}
       material={material}
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
