@@ -5,6 +5,13 @@ import { readDevCatalogOverlay, writeDevCatalogOverlay } from '@/lib/catalog-dev
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function canReadCatalogOverlay(): boolean {
+  return (
+    process.env.NODE_ENV === 'development' ||
+    process.env.PASCAL_ALLOW_CATALOG_SOURCE_WRITE === 'true'
+  )
+}
+
 function normalizeCatalogEntry(entry: AssetInput): AssetInput {
   return {
     ...entry,
@@ -15,8 +22,8 @@ function normalizeCatalogEntry(entry: AssetInput): AssetInput {
 }
 
 export async function GET() {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Dev overlay is only available in development.' }, { status: 403 })
+  if (!canReadCatalogOverlay()) {
+    return NextResponse.json({ error: 'Catalog overlay is disabled for this server.' }, { status: 403 })
   }
 
   let items = await readDevCatalogOverlay()

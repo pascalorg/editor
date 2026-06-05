@@ -19,6 +19,8 @@ var proxyDatabasePath = ResolveProxyDatabasePath(app.Environment.ContentRootPath
 var coverRoot = Path.Combine(Path.GetDirectoryName(proxyDatabasePath) ?? app.Environment.ContentRootPath, "covers");
 InitializeProxyDatabase(proxyDatabasePath);
 
+app.UseWebSockets();
+
 app.MapGet("/proxy/health", (IOptions<ProxyAuthOptions> authOptions, IConfiguration configuration) =>
 {
     var destination = configuration["ReverseProxy:Clusters:pascal:Destinations:editor:Address"];

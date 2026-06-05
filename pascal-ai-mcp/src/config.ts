@@ -44,7 +44,7 @@ export function loadConfig(): AppConfig {
       process.env.OPENROUTER_TEMPERATURE || process.env.AI_TEMPERATURE,
       0.2,
     ),
-    host: process.env.AI_MCP_HOST || '127.0.0.1',
+    host: process.env.AI_MCP_HOST || '0.0.0.0',
     port: parsePort(process.env.AI_MCP_PORT, 8788),
     sessionFile,
     mcpMode,

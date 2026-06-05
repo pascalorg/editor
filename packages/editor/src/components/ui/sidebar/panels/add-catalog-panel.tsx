@@ -40,7 +40,9 @@ const CATEGORY_LABELS: Record<CatalogCategory, string> = {
   door: 'Doors',
 }
 
-const isDev = process.env.NODE_ENV === 'development'
+const canWriteCatalogSource =
+  process.env.NODE_ENV === 'development' ||
+  process.env.NEXT_PUBLIC_ALLOW_CATALOG_SOURCE_WRITE === 'true'
 
 function slugifyId(name: string): string {
   const slug = name
@@ -329,8 +331,8 @@ export function AddCatalogPanel() {
 
   const handleDelete = useCallback(
     async (item: AssetInput) => {
-      if (!isDev) {
-        setError('Catalog item deletion is only available during local development (bun dev).')
+      if (!canWriteCatalogSource) {
+        setError('Catalog item deletion is disabled for this server.')
         return
       }
 
@@ -388,8 +390,8 @@ export function AddCatalogPanel() {
     setError(null)
     setSuccess(null)
 
-    if (!isDev) {
-      setError('Writing to source is only available during local development (bun dev).')
+    if (!canWriteCatalogSource) {
+      setError('Writing to source is disabled for this server.')
       return
     }
 

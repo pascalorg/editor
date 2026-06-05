@@ -65,7 +65,7 @@ function validateOrigin(request: Request): NextResponse | null {
 function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
   if (!token) {
-    if (isLoopbackRequest(request)) return null
+    if (isTrustedDevHostRequest(request)) return null
     return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
   }
 
@@ -127,6 +127,7 @@ function isOriginAllowed(request: Request, origin: string): boolean {
   const parsed = parseUrl(origin)
   if (!parsed) return false
   if (isLoopbackHostname(parsed.hostname)) return true
+  if (isPrivateLanHostname(parsed.hostname)) return true
   return configuredOrigins().has(normalizeOrigin(parsed))
 }
 
@@ -149,14 +150,28 @@ function isSameOrigin(request: Request, origin: string): boolean {
   return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
 }
 
-function isLoopbackRequest(request: Request): boolean {
-  const host = request.headers.get('host') ?? new URL(request.url).host
-  return isLoopbackHostname(stripPort(host))
+function isTrustedDevHostRequest(request: Request): boolean {
+  const host = stripPort(request.headers.get('host') ?? new URL(request.url).host)
+  return isLoopbackHostname(host) || isPrivateLanHostname(host)
 }
 
 function isLoopbackHostname(hostname: string): boolean {
   const h = hostname.toLowerCase()
   return h === 'localhost' || h.endsWith('.localhost') || h === '127.0.0.1' || h === '::1'
+}
+
+function isPrivateLanHostname(hostname: string): boolean {
+  const parts = hostname.split('.').map((part) => Number.parseInt(part, 10))
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false
+  }
+  const a = parts[0]
+  const b = parts[1]
+  if (a === undefined || b === undefined) return false
+  if (a === 10) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  return false
 }
 
 function parseUrl(value: string): URL | null {

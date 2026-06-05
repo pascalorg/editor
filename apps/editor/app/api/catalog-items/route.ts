@@ -31,10 +31,17 @@ const metadataSchema = z.object({
   floorPlanUrl: z.string().optional(),
 })
 
+function canWriteCatalogSource(): boolean {
+  return (
+    process.env.NODE_ENV === 'development' ||
+    process.env.PASCAL_ALLOW_CATALOG_SOURCE_WRITE === 'true'
+  )
+}
+
 function devOnly(): NextResponse | null {
-  if (process.env.NODE_ENV !== 'development') {
+  if (!canWriteCatalogSource()) {
     return NextResponse.json(
-      { error: 'カタログのソース書き込みは開発環境でのみ利用できます。' },
+      { error: 'Catalog source writing is disabled for this server.' },
       { status: 403 },
     )
   }
@@ -50,13 +57,13 @@ export async function POST(request: Request) {
 
     const metadataRaw = form.get('metadata')
     if (typeof metadataRaw !== 'string') {
-      return NextResponse.json({ error: 'metadata JSON がありません。' }, { status: 400 })
+      return NextResponse.json({ error: 'metadata JSON is missing.' }, { status: 400 })
     }
 
     const parsed = metadataSchema.safeParse(JSON.parse(metadataRaw))
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'metadata が無効です。', details: parsed.error.flatten() },
+        { error: 'metadata is invalid.', details: parsed.error.flatten() },
         { status: 400 },
       )
     }
@@ -74,7 +81,7 @@ export async function POST(request: Request) {
     if (modelFile) {
       const lower = modelFile.name.toLowerCase()
       if (!(lower.endsWith('.glb') || lower.endsWith('.gltf'))) {
-        return NextResponse.json({ error: 'モデルは .glb または .gltf である必要があります。' }, { status: 400 })
+        return NextResponse.json({ error: 'Model must be a .glb or .gltf file.' }, { status: 400 })
       }
     }
 
@@ -113,14 +120,14 @@ export async function POST(request: Request) {
       entry: result.entry,
       filePath: result.filePath,
       message: usedRemoteUrls
-        ? 'catalog-items.tsx に追加しました（入力 URL を使用、public/ へはコピーしません）。サイドバーにすぐ表示されます。'
-        : 'catalog-items.tsx に追加しました。サイドバーに表示。アセットは apps/editor/public/items/ にあります。',
+        ? 'Added catalog item with remote asset URLs. Refresh the sidebar to see it.'
+        : 'Added catalog item and copied assets into apps/editor/public/items/. Refresh the sidebar to see it.',
     })
   } catch (error) {
     console.error('[catalog-items] write failed:', error)
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'カタログエントリの書き込みに失敗しました。',
+        error: error instanceof Error ? error.message : 'Failed to write catalog item.',
       },
       { status: 500 },
     )
@@ -142,13 +149,13 @@ export async function PATCH(request: Request) {
     const form = await request.formData()
     const metadataRaw = form.get('metadata')
     if (typeof metadataRaw !== 'string') {
-      return NextResponse.json({ error: 'metadata JSON がありません。' }, { status: 400 })
+      return NextResponse.json({ error: 'metadata JSON is missing.' }, { status: 400 })
     }
 
     const parsed = updateMetadataSchema.safeParse(JSON.parse(metadataRaw))
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'metadata が無効です。', details: parsed.error.flatten() },
+        { error: 'metadata is invalid.', details: parsed.error.flatten() },
         { status: 400 },
       )
     }
@@ -166,7 +173,7 @@ export async function PATCH(request: Request) {
     if (modelFile) {
       const lower = modelFile.name.toLowerCase()
       if (!(lower.endsWith('.glb') || lower.endsWith('.gltf'))) {
-        return NextResponse.json({ error: 'モデルは .glb または .gltf である必要があります。' }, { status: 400 })
+        return NextResponse.json({ error: 'Model must be a .glb or .gltf file.' }, { status: 400 })
       }
     }
 
@@ -206,15 +213,13 @@ export async function PATCH(request: Request) {
       ok: true,
       entry: result.entry,
       filePath: result.filePath,
-      message: `catalog-items.tsx の「${entry.name}」を更新しました（id: ${itemId}）。`,
+      message: `Updated catalog item "${entry.name}" (id: ${itemId}).`,
     })
   } catch (error) {
     console.error('[catalog-items] update failed:', error)
-    const message = error instanceof Error ? error.message : 'カタログエントリの更新に失敗しました。'
+    const message = error instanceof Error ? error.message : 'Failed to update catalog item.'
     const status =
-      message.includes('削除できません') ||
-      message.includes('見つかりません') ||
-      message.includes('一致しません')
+      message.includes('Cannot') || message.includes('not found') || message.includes('mismatch')
         ? 400
         : 500
     return NextResponse.json({ error: message }, { status })
@@ -228,7 +233,7 @@ export async function DELETE(request: Request) {
   try {
     const id = new URL(request.url).searchParams.get('id')?.trim()
     if (!id) {
-      return NextResponse.json({ error: 'id クエリパラメータがありません。' }, { status: 400 })
+      return NextResponse.json({ error: 'id query parameter is missing.' }, { status: 400 })
     }
 
     const result = await removeCatalogEntryFromSource(id)
@@ -239,13 +244,12 @@ export async function DELETE(request: Request) {
       ok: true,
       id: result.id,
       filePath: result.filePath,
-      message: `catalog-items.tsx から「${id}」を削除しました。サイドバーを更新しました。`,
+      message: `Deleted catalog item "${id}" and refreshed the sidebar.`,
     })
   } catch (error) {
     console.error('[catalog-items] delete failed:', error)
-    const message = error instanceof Error ? error.message : 'カタログエントリの削除に失敗しました。'
-    const status =
-      message.includes('削除できません') || message.includes('見つかりません') ? 400 : 500
+    const message = error instanceof Error ? error.message : 'Failed to delete catalog item.'
+    const status = message.includes('Cannot') || message.includes('not found') ? 400 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }
