@@ -66,9 +66,12 @@ function grp(code: number, value: string | number): string {
   return `${String(code).padStart(3, ' ')}\n${value}\n`
 }
 
-// All coordinate arguments are in metres; converted to mm here.
+// All coordinate arguments are in metres.
+// Y is negated on output: Pascal stores Y = −DXF_Y (the same flip applied during
+// DXF import in madori-xml-parser.ts), so we must negate Y when writing back to
+// DXF to restore the original orientation and prevent mirroring.
 function point2d(x: number, y: number, offset = 0): string {
-  return grp(10 + offset, (x * M).toFixed(1)) + grp(20 + offset, (y * M).toFixed(1))
+  return grp(10 + offset, (x * M).toFixed(1)) + grp(20 + offset, (-y * M).toFixed(1))
 }
 
 function dxfLine(layer: string, x1: number, y1: number, x2: number, y2: number): string {
@@ -78,7 +81,8 @@ function dxfLine(layer: string, x1: number, y1: number, x2: number, y2: number):
 function dxfPolyline(layer: string, vertices: Vec2[], closed = false): string {
   let s = grp(0, 'LWPOLYLINE') + grp(8, layer) + grp(90, vertices.length) + grp(70, closed ? 1 : 0)
   for (const [x, y] of vertices) {
-    s += grp(10, (x * M).toFixed(1)) + grp(20, (y * M).toFixed(1))
+    // Y negated — same reason as point2d
+    s += grp(10, (x * M).toFixed(1)) + grp(20, (-y * M).toFixed(1))
   }
   return s
 }
@@ -92,13 +96,15 @@ function dxfText(layer: string, x: number, y: number, height: number, text: stri
   )
 }
 
+// Arc angles are passed in Pascal convention (CCW from +X, Y-down).
+// After Y-flip, a CCW arc [s→e] becomes CCW [-e→-s] in DXF (Y-up).
 function dxfArc(layer: string, cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
   return (
     grp(0, 'ARC') + grp(8, layer) +
     point2d(cx, cy) +
     grp(40, (r * M).toFixed(1)) +
-    grp(50, startDeg.toFixed(2)) +
-    grp(51, endDeg.toFixed(2))
+    grp(50, (-endDeg).toFixed(2)) +
+    grp(51, (-startDeg).toFixed(2))
   )
 }
 
