@@ -66,12 +66,11 @@ function grp(code: number, value: string | number): string {
   return `${String(code).padStart(3, ' ')}\n${value}\n`
 }
 
-// Sequential hex handle generator.
-// AC1015 requires every entity to carry a unique handle (group code 5) and an
-// owner reference (group code 330). AutoCAD may auto-assign handles, but many
-// readers enforce their presence for strict AC1015 compliance.
-function makeHandleGen(start = 1) {
-  let n = start
+// Single handle counter — every entity in the DXF must have a globally
+// unique handle (group code 5). Using one counter avoids the eHandleInUse
+// error that occurs when separate counters for tables/blocks/entities overlap.
+function makeHandleGen() {
+  let n = 1
   return () => (n++).toString(16).toUpperCase()
 }
 
@@ -235,9 +234,9 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
     const arr = windowsByWall.get(w.wallId) ?? []; arr.push(w); windowsByWall.set(w.wallId, arr)
   }
 
-  // Handle counter — every entity needs a unique hex handle in AC1015.
-  // TABLES boilerplate reserves handles 1–20; entities start from 21.
-  const nextH = makeHandleGen(0x21)
+  // Single handle counter shared across ALL sections (tables, blocks, entities).
+  // This is the only safe way to guarantee globally unique handles.
+  const nextH = makeHandleGen()
 
   let entities = ''
 
@@ -352,19 +351,36 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
 
   // TABLES: every TABLE entry needs a handle (5), owner (330), and the
   // "100 AcDbSymbolTable" subclass marker before the record count (70).
-  // Without AcDbSymbolTable, AC1015 parsers cannot identify the table type.
-  let th = 1  // table handle counter (1-based, separate from entity handles)
+  // All handles come from the shared nextH counter to guarantee uniqueness.
   const tbl = (name: string, count: number, body = '') => {
-    const h = (th++).toString(16).toUpperCase()
+    const h = nextH()
     return (
       grp(0, 'TABLE') + grp(2, name) +
-      grp(5, h) + grp(330, '0') +
+      hdl(h) +
       grp(100, 'AcDbSymbolTable') +
       grp(70, count) +
       body +
       grp(0, 'ENDTAB')
     )
   }
+
+  // Build APPID table entry separately so the TABLE handle is known before
+  // the entry's owner field is written. JavaScript evaluates function arguments
+  // left-to-right, so `nextH()` inside the body arg would run before the
+  // `tbl()` call increments the counter — causing an incorrect owner.
+  const appidTableH = nextH()
+  const appidEntryH = nextH()
+  const appidTable = (
+    grp(0, 'TABLE') + grp(2, 'APPID') +
+    hdl(appidTableH) +
+    grp(100, 'AcDbSymbolTable') + grp(70, 1) +
+    grp(0, 'APPID') +
+    hdl(appidEntryH, appidTableH) +
+    grp(100, 'AcDbSymbolTableRecord') +
+    grp(100, 'AcDbRegAppTableRecord') +
+    grp(2, 'ACAD') + grp(70, 0) +
+    grp(0, 'ENDTAB')
+  )
 
   const tables =
     grp(0, 'SECTION') + grp(2, 'TABLES') +
@@ -374,32 +390,24 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
     tbl('STYLE',    0) +
     tbl('VIEW',     0) +
     tbl('UCS',      0) +
-    tbl('APPID', 1,
-      grp(0, 'APPID') +
-      grp(5, (th++).toString(16).toUpperCase()) + grp(330, (th - 2).toString(16).toUpperCase()) +
-      grp(100, 'AcDbSymbolTableRecord') +
-      grp(100, 'AcDbRegAppTableRecord') +
-      grp(2, 'ACAD') + grp(70, 0),
-    ) +
+    appidTable +
     tbl('DIMSTYLE', 0) +
     grp(0, 'ENDSEC')
 
   // BLOCKS: *Model_Space and *Paper_Space are required.
-  // Each BLOCK/ENDBLK pair needs handles and the AcDbBlockBegin/End subclasses.
-  let bh = th  // continue handle numbering from where tables left off
   const blk = (name: string) => {
-    const hBlock = (bh++).toString(16).toUpperCase()
-    const hEnd   = (bh++).toString(16).toUpperCase()
+    const hBlock = nextH()
+    const hEnd   = nextH()
     return (
       grp(0, 'BLOCK') +
-      grp(5, hBlock) + grp(330, '0') +
+      hdl(hBlock) +
       grp(100, 'AcDbEntity') + grp(8, '0') +
       grp(100, 'AcDbBlockBegin') +
       grp(2, name) + grp(70, 0) +
       grp(10, '0.0') + grp(20, '0.0') + grp(30, '0.0') +
       grp(3, name) + grp(1, '') +
       grp(0, 'ENDBLK') +
-      grp(5, hEnd) + grp(330, '0') +
+      hdl(hEnd) +
       grp(100, 'AcDbEntity') + grp(8, '0') +
       grp(100, 'AcDbBlockEnd')
     )
