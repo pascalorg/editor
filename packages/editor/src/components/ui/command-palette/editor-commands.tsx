@@ -2,6 +2,7 @@
 
 import type { AnyNodeId } from '@pascal-app/core'
 import { LevelNode, useScene } from '@pascal-app/core'
+import { exportSceneToDxf } from '@pascal-app/core/exporters/dxf'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -27,6 +28,7 @@ import {
   PencilLine,
   Plus,
   Redo2,
+  Ruler,
   Sparkles,
   Square,
   SquareStack,
@@ -366,6 +368,25 @@ export function EditorCommands() {
             Object.assign(document.createElement('a'), {
               href: url,
               download: `scene_${new Date().toISOString().split('T')[0]}.json`,
+            }).click()
+            URL.revokeObjectURL(url)
+          }),
+      },
+      {
+        id: 'editor.export.dxf',
+        label: 'Export AutoCAD (DXF)',
+        group: 'Export & Share',
+        icon: <Ruler className="h-4 w-4" />,
+        keywords: ['export', 'dxf', 'autocad', 'cad', 'floorplan', 'drawing', 'download'],
+        execute: () =>
+          run(() => {
+            const { nodes } = useScene.getState()
+            const dxf = exportSceneToDxf(nodes)
+            const blob = new Blob([dxf], { type: 'application/dxf' })
+            const url = URL.createObjectURL(blob)
+            Object.assign(document.createElement('a'), {
+              href: url,
+              download: `floorplan_${new Date().toISOString().split('T')[0]}.dxf`,
             }).click()
             URL.revokeObjectURL(url)
           }),
