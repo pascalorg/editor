@@ -13,6 +13,7 @@ import {
   computeGroupBox,
   CORNER_OFFSET,
   expandToComponent,
+  levelFrame,
   type Vec2,
 } from './group-transform-shared'
 import {
@@ -107,15 +108,18 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
     const planeY = rest.baseY
 
     // Snapshot selected participants + connected wall/fence neighbours.
-    const { starts, links } = collectParticipants(
-      ids,
-      useScene.getState().nodes,
-      useViewer.getState().selection.levelId,
-    )
+    const levelId = useViewer.getState().selection.levelId
+    const { starts, links } = collectParticipants(ids, useScene.getState().nodes, levelId)
     if (starts.length === 0) return
 
-    // Horizontal drag plane at the group's base; delta measured in world XZ
-    // (= level-local XZ on an axis-aligned level).
+    // Placements are stored in the level frame, so convert each world-space
+    // ground-plane hit into that frame before measuring the delta. Frozen at
+    // drag-start; `frameOrigin` lets us map the local delta back to world for
+    // the gizmo's own travel (it's portalled to the scene root).
+    const { matrix: frame, inverse: frameInv } = levelFrame(levelId)
+    const frameOrigin = new Vector3().applyMatrix4(frame)
+
+    // Horizontal drag plane at the group's base.
     const plane = new Plane(new Vector3(0, 1, 0), -planeY)
     const ndc = new Vector2()
     const setNDC = (clientX: number, clientY: number) => {
@@ -130,7 +134,7 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
     raycaster.setFromCamera(ndc, camera)
     const hit = new Vector3()
     if (!raycaster.ray.intersectPlane(plane, hit)) return
-    const startHit = hit.clone()
+    const startLocal = hit.clone().applyMatrix4(frameInv)
 
     document.body.style.cursor = 'grabbing'
     sfxEmitter.emit('sfx:item-pick')
@@ -149,9 +153,14 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       raycaster.setFromCamera(ndc, camera)
       const moveHit = new Vector3()
       if (!raycaster.ray.intersectPlane(plane, moveHit)) return
+      const moveLocal = moveHit.applyMatrix4(frameInv)
       const snap = !e.shiftKey && step > 0
-      const dx = snap ? Math.round((moveHit.x - startHit.x) / step) * step : moveHit.x - startHit.x
-      const dz = snap ? Math.round((moveHit.z - startHit.z) / step) * step : moveHit.z - startHit.z
+      const dx = snap
+        ? Math.round((moveLocal.x - startLocal.x) / step) * step
+        : moveLocal.x - startLocal.x
+      const dz = snap
+        ? Math.round((moveLocal.z - startLocal.z) / step) * step
+        : moveLocal.z - startLocal.z
 
       // Ticker on each grid-cell crossing, like single-item placement.
       if (snap && (!lastSnap || lastSnap[0] !== dx || lastSnap[1] !== dz)) {
@@ -185,7 +194,9 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
         useScene.getState().markDirty(l.id)
       }
 
-      setLiveDelta([dx, dz])
+      // Gizmo rides the group in world space; map the level-frame delta back out.
+      const worldDelta = new Vector3(dx, 0, dz).applyMatrix4(frame).sub(frameOrigin)
+      setLiveDelta([worldDelta.x, worldDelta.z])
     }
 
     const cleanup = () => {

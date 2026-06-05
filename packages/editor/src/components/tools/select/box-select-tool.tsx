@@ -211,12 +211,29 @@ function collectNodeIdsInBounds(bounds: Bounds | null): string[] {
 
   const result: string[] = []
 
+  // Wall/fence segments and slab/ceiling/zone polygons are stored in the LEVEL's
+  // local frame, but `bounds` comes from a world-space ground-plane raycast. When
+  // the building is rotated those frames diverge, so map these coordinates to
+  // world before hit-testing — otherwise a wall is tested at its un-rotated
+  // (local) position and gets selected from where it used to be. (Items, columns,
+  // roofs, etc. already resolve true world coordinates via the scene registry.)
+  const levelObj = sceneRegistry.nodes.get(levelId)
+  if (levelObj) levelObj.updateWorldMatrix(true, false)
+  const levelMatrix = levelObj ? levelObj.matrixWorld : null
+  const _localToWorld = new Vector3()
+  const toWorldXZ = (x: number, z: number): [number, number] => {
+    if (!levelMatrix) return [x, z]
+    _localToWorld.set(x, 0, z).applyMatrix4(levelMatrix)
+    return [_localToWorld.x, _localToWorld.z]
+  }
+
   if (phase === 'structure' && structureLayer === 'zones') {
     for (const childId of levelNode.children) {
       const node = nodes[childId as AnyNodeId]
       if (!node || node.type !== 'zone') continue
       const zone = node as ZoneNode
-      if (!bounds || polygonIntersectsBounds(zone.polygon, bounds)) {
+      const poly = zone.polygon.map(([x, z]) => toWorldXZ(x, z))
+      if (!bounds || polygonIntersectsBounds(poly, bounds)) {
         result.push(zone.id)
       }
     }
@@ -228,10 +245,9 @@ function collectNodeIdsInBounds(bounds: Bounds | null): string[] {
 
       if (node.type === 'wall' || node.type === 'fence') {
         const wall = node as WallNode
-        if (
-          !bounds ||
-          segmentIntersectsBounds(wall.start[0], wall.start[1], wall.end[0], wall.end[1], bounds)
-        ) {
+        const [sx, sz] = toWorldXZ(wall.start[0], wall.start[1])
+        const [ex, ez] = toWorldXZ(wall.end[0], wall.end[1])
+        if (!bounds || segmentIntersectsBounds(sx, sz, ex, ez, bounds)) {
           result.push(wall.id)
         }
         // Check wall children (doors/windows)
@@ -253,12 +269,14 @@ function collectNodeIdsInBounds(bounds: Bounds | null): string[] {
         }
       } else if (node.type === 'slab') {
         const slab = node as SlabNode
-        if (!bounds || polygonIntersectsBounds(slab.polygon, bounds)) {
+        const poly = slab.polygon.map(([x, z]) => toWorldXZ(x, z))
+        if (!bounds || polygonIntersectsBounds(poly, bounds)) {
           result.push(slab.id)
         }
       } else if (node.type === 'ceiling') {
         const ceiling = node as CeilingNode
-        if (!bounds || polygonIntersectsBounds(ceiling.polygon, bounds)) {
+        const poly = ceiling.polygon.map(([x, z]) => toWorldXZ(x, z))
+        if (!bounds || polygonIntersectsBounds(poly, bounds)) {
           result.push(ceiling.id)
         }
       } else if (node.type === 'roof') {
