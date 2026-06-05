@@ -74,14 +74,27 @@ function point2d(x: number, y: number, offset = 0): string {
   return grp(10 + offset, (x * M).toFixed(1)) + grp(20 + offset, (-y * M).toFixed(1))
 }
 
+// DXF R2000 (AC1015) requires subclass markers before entity-specific group codes.
+// Order: 0 entityType → 100 AcDbEntity → 8 layer → 100 AcDb<Type> → geometry
 function dxfLine(layer: string, x1: number, y1: number, x2: number, y2: number): string {
-  return grp(0, 'LINE') + grp(8, layer) + point2d(x1, y1) + point2d(x2, y2, 1)
+  return (
+    grp(0, 'LINE') +
+    grp(100, 'AcDbEntity') + grp(8, layer) +
+    grp(100, 'AcDbLine') +
+    point2d(x1, y1) + point2d(x2, y2, 1)
+  )
 }
 
 function dxfPolyline(layer: string, vertices: Vec2[], closed = false): string {
-  let s = grp(0, 'LWPOLYLINE') + grp(8, layer) + grp(90, vertices.length) + grp(70, closed ? 1 : 0)
+  // 100 AcDbPolyline must precede group code 90 (vertex count).
+  // Without it AutoCAD raises "group code 90 undefined".
+  let s = (
+    grp(0, 'LWPOLYLINE') +
+    grp(100, 'AcDbEntity') + grp(8, layer) +
+    grp(100, 'AcDbPolyline') +
+    grp(90, vertices.length) + grp(70, closed ? 1 : 0)
+  )
   for (const [x, y] of vertices) {
-    // Y negated — same reason as point2d
     s += grp(10, (x * M).toFixed(1)) + grp(20, (-y * M).toFixed(1))
   }
   return s
@@ -89,7 +102,9 @@ function dxfPolyline(layer: string, vertices: Vec2[], closed = false): string {
 
 function dxfText(layer: string, x: number, y: number, height: number, text: string): string {
   return (
-    grp(0, 'TEXT') + grp(8, layer) +
+    grp(0, 'TEXT') +
+    grp(100, 'AcDbEntity') + grp(8, layer) +
+    grp(100, 'AcDbText') +
     point2d(x, y) +
     grp(40, (height * M).toFixed(1)) +
     grp(1, text)
@@ -98,11 +113,15 @@ function dxfText(layer: string, x: number, y: number, height: number, text: stri
 
 // Arc angles are passed in Pascal convention (CCW from +X, Y-down).
 // After Y-flip, a CCW arc [s→e] becomes CCW [-e→-s] in DXF (Y-up).
+// ARC uses two subclass markers: AcDbCircle owns center+radius, AcDbArc owns angles.
 function dxfArc(layer: string, cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
   return (
-    grp(0, 'ARC') + grp(8, layer) +
+    grp(0, 'ARC') +
+    grp(100, 'AcDbEntity') + grp(8, layer) +
+    grp(100, 'AcDbCircle') +
     point2d(cx, cy) +
     grp(40, (r * M).toFixed(1)) +
+    grp(100, 'AcDbArc') +
     grp(50, (-endDeg).toFixed(2)) +
     grp(51, (-startDeg).toFixed(2))
   )
@@ -345,17 +364,28 @@ export function exportSceneToDxf(nodes: Record<AnyNodeId, AnyNode>): string {
   }
 
   // ── Assemble full DXF ────────────────────────────────────────────────────
+  // AC1015 (R2000) format: HEADER → TABLES → BLOCKS → ENTITIES → OBJECTS → EOF
+  // AutoCAD requires this six-section structure and $ACADVER ≥ AC1015 to
+  // recognise LWPOLYLINE and the 100-subclass-marker convention.
   const header =
-    grp(0, 'SECTION') +
-    grp(2, 'HEADER') +
-    grp(9, '$INSUNITS') + grp(70, 4) +  // 4 = mm
+    grp(0, 'SECTION') + grp(2, 'HEADER') +
+    grp(9, '$ACADVER') + grp(1, 'AC1015') +
+    grp(9, '$INSUNITS') + grp(70, 4) +   // 4 = mm
     grp(0, 'ENDSEC')
 
+  // Minimal TABLES section (empty tables satisfy the parser without registering layers)
+  const tables = grp(0, 'SECTION') + grp(2, 'TABLES') + grp(0, 'ENDSEC')
+
+  // BLOCKS section must exist in AC1015; empty is fine for entity-only output
+  const blocks = grp(0, 'SECTION') + grp(2, 'BLOCKS') + grp(0, 'ENDSEC')
+
   const entitiesSection =
-    grp(0, 'SECTION') +
-    grp(2, 'ENTITIES') +
+    grp(0, 'SECTION') + grp(2, 'ENTITIES') +
     entities +
     grp(0, 'ENDSEC')
 
-  return header + entitiesSection + grp(0, 'EOF')
+  // OBJECTS section is required by AC1015
+  const objects = grp(0, 'SECTION') + grp(2, 'OBJECTS') + grp(0, 'ENDSEC')
+
+  return header + tables + blocks + entitiesSection + objects + grp(0, 'EOF')
 }
