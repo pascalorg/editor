@@ -2,16 +2,16 @@
 
 import { Bot } from 'lucide-react'
 
-const AI_ASSISTANT_PATH = '/#/thread/019e6cd5-8332-76c1-9338-6e20185faea5'
+const DEFAULT_AI_ASSISTANT_PATH = '/'
 
 function aiAssistantUrl(): string {
   if (process.env.NEXT_PUBLIC_AI_ASSISTANT_URL) {
     return process.env.NEXT_PUBLIC_AI_ASSISTANT_URL
   }
   if (typeof window === 'undefined') {
-    return `http://localhost:5900${AI_ASSISTANT_PATH}`
+    return `http://localhost:5900${DEFAULT_AI_ASSISTANT_PATH}`
   }
-  return `${window.location.protocol}//${window.location.hostname}:5900${AI_ASSISTANT_PATH}`
+  return `${window.location.protocol}//${window.location.hostname}:5900${DEFAULT_AI_ASSISTANT_PATH}`
 }
 
 export function AiAssistantPanel() {
