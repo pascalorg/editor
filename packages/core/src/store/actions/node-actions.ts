@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  AnyNode as AnyNodeSchema,
   getEffectiveWallSurfaceMaterial,
   getWallSurfaceMaterialSignature,
   type WallNode,
@@ -20,6 +21,478 @@ type WallMergePlan = {
   mergedEnd: [number, number]
   mergedChildren: WallNode['children']
   attachmentUpdates: WallAttachmentUpdate[]
+}
+
+type ZodCheckLike = {
+  _zod?: {
+    def?: {
+      check?: string
+      value?: unknown
+      inclusive?: boolean
+      format?: string
+    }
+  }
+}
+
+type ZodSchemaDefLike = {
+  type?: string
+  innerType?: ZodSchemaLike
+  shape?: Record<string, ZodSchemaLike>
+  options?: readonly ZodSchemaLike[]
+  items?: readonly ZodSchemaLike[]
+  rest?: ZodSchemaLike | null
+  element?: ZodSchemaLike
+  checks?: readonly ZodCheckLike[]
+  defaultValue?: unknown
+  values?: readonly unknown[]
+  entries?: Record<string, unknown>
+}
+
+type ZodSchemaLike = {
+  _zod?: {
+    def?: ZodSchemaDefLike
+    bag?: {
+      minimum?: number
+      maximum?: number
+      exclusiveMinimum?: number
+      exclusiveMaximum?: number
+    }
+    values?: Set<unknown>
+  }
+  def?: ZodSchemaDefLike
+  shape?: Record<string, ZodSchemaLike>
+  minValue?: number | null
+  maxValue?: number | null
+}
+
+type NumericLimit = {
+  value: number
+  inclusive: boolean
+}
+
+type NumericConstraints = {
+  min?: NumericLimit
+  max?: NumericLimit
+  integer: boolean
+}
+
+type NumericSanitizeIssue = {
+  path: PropertyKey[]
+  from: number
+  to?: number
+  action: 'clamped' | 'dropped' | 'rounded'
+}
+
+type NumericSanitizeResult = {
+  value: unknown
+  issues: NumericSanitizeIssue[]
+  omit?: boolean
+}
+
+const NUMBER_FORMAT_BOUNDS: Record<string, [number, number] | undefined> = {
+  safeint: [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+  int32: [-2147483648, 2147483647],
+  uint32: [0, 4294967295],
+  float32: [-3.4028234663852886e38, 3.4028234663852886e38],
+}
+
+const INTEGER_NUMBER_FORMATS = new Set(['safeint', 'int32', 'uint32'])
+
+function getSchemaDef(schema: ZodSchemaLike | null | undefined): ZodSchemaDefLike | undefined {
+  return schema?._zod?.def ?? schema?.def
+}
+
+function getSchemaDefault(schema: ZodSchemaLike): unknown {
+  const def = getSchemaDef(schema)
+  if (!(def?.type === 'default' || def?.type === 'prefault')) return undefined
+  return def.defaultValue
+}
+
+function unwrapSchema(schema: ZodSchemaLike | null | undefined): ZodSchemaLike | null {
+  let current = schema ?? null
+  while (current) {
+    const def = getSchemaDef(current)
+    if (
+      !(
+        def?.type === 'default' ||
+        def?.type === 'prefault' ||
+        def?.type === 'optional' ||
+        def?.type === 'nullable' ||
+        def?.type === 'catch' ||
+        def?.type === 'readonly' ||
+        def?.type === 'nonoptional'
+      )
+    ) {
+      return current
+    }
+    current = def.innerType ?? null
+  }
+
+  return null
+}
+
+function getObjectShape(schema: ZodSchemaLike | null | undefined) {
+  const unwrapped = unwrapSchema(schema)
+  const def = getSchemaDef(unwrapped)
+  if (def?.type !== 'object') return null
+
+  return unwrapped?.shape ?? def.shape ?? null
+}
+
+function schemaAllowsValue(schema: ZodSchemaLike | null | undefined, value: unknown): boolean {
+  const unwrapped = unwrapSchema(schema)
+  if (!unwrapped) return false
+
+  const def = getSchemaDef(unwrapped)
+  if (unwrapped._zod?.values?.has(value)) return true
+  if (Array.isArray(def?.values) && def.values.includes(value)) return true
+  if (def?.entries && Object.values(def.entries).includes(value)) return true
+
+  return false
+}
+
+function getNodeSchemaForType(type: unknown): ZodSchemaLike | null {
+  const schema = AnyNodeSchema as unknown as ZodSchemaLike
+  const options = getSchemaDef(schema)?.options
+  if (!options) return null
+
+  for (const option of options) {
+    const shape = getObjectShape(option)
+    if (shape?.type && schemaAllowsValue(shape.type, type)) {
+      return option
+    }
+  }
+
+  return null
+}
+
+function applyLowerLimit(current: NumericLimit | undefined, candidate: NumericLimit): NumericLimit {
+  if (!current) return candidate
+  if (candidate.value > current.value) return candidate
+  if (candidate.value === current.value && !candidate.inclusive) return candidate
+  return current
+}
+
+function applyUpperLimit(current: NumericLimit | undefined, candidate: NumericLimit): NumericLimit {
+  if (!current) return candidate
+  if (candidate.value < current.value) return candidate
+  if (candidate.value === current.value && !candidate.inclusive) return candidate
+  return current
+}
+
+function getNumberConstraints(schema: ZodSchemaLike): NumericConstraints {
+  const unwrapped = unwrapSchema(schema) ?? schema
+  const def = getSchemaDef(unwrapped)
+  const constraints: NumericConstraints = { integer: false }
+
+  const minValue = unwrapped.minValue
+  if (typeof minValue === 'number') {
+    constraints.min = applyLowerLimit(constraints.min, { value: minValue, inclusive: true })
+  }
+
+  const maxValue = unwrapped.maxValue
+  if (typeof maxValue === 'number') {
+    constraints.max = applyUpperLimit(constraints.max, { value: maxValue, inclusive: true })
+  }
+
+  for (const check of def?.checks ?? []) {
+    const checkDef = check._zod?.def
+    if (!checkDef) continue
+
+    if (checkDef.check === 'greater_than' && typeof checkDef.value === 'number') {
+      constraints.min = applyLowerLimit(constraints.min, {
+        value: checkDef.value,
+        inclusive: checkDef.inclusive !== false,
+      })
+    } else if (checkDef.check === 'less_than' && typeof checkDef.value === 'number') {
+      constraints.max = applyUpperLimit(constraints.max, {
+        value: checkDef.value,
+        inclusive: checkDef.inclusive !== false,
+      })
+    } else if (checkDef.check === 'number_format' && checkDef.format) {
+      constraints.integer ||= INTEGER_NUMBER_FORMATS.has(checkDef.format)
+      const bounds = NUMBER_FORMAT_BOUNDS[checkDef.format]
+      if (bounds) {
+        constraints.min = applyLowerLimit(constraints.min, {
+          value: bounds[0],
+          inclusive: true,
+        })
+        constraints.max = applyUpperLimit(constraints.max, {
+          value: bounds[1],
+          inclusive: true,
+        })
+      }
+    }
+  }
+
+  const bag = unwrapped._zod?.bag
+  if (typeof bag?.minimum === 'number') {
+    constraints.min = applyLowerLimit(constraints.min, { value: bag.minimum, inclusive: true })
+  }
+  if (typeof bag?.exclusiveMinimum === 'number') {
+    constraints.min = applyLowerLimit(constraints.min, {
+      value: bag.exclusiveMinimum,
+      inclusive: false,
+    })
+  }
+  if (typeof bag?.maximum === 'number') {
+    constraints.max = applyUpperLimit(constraints.max, { value: bag.maximum, inclusive: true })
+  }
+  if (typeof bag?.exclusiveMaximum === 'number') {
+    constraints.max = applyUpperLimit(constraints.max, {
+      value: bag.exclusiveMaximum,
+      inclusive: false,
+    })
+  }
+
+  return constraints
+}
+
+function nextAbove(value: number) {
+  return value === 0 ? Number.EPSILON : value + Math.abs(value) * Number.EPSILON
+}
+
+function nextBelow(value: number) {
+  return value === 0 ? -Number.EPSILON : value - Math.abs(value) * Number.EPSILON
+}
+
+function clampNumber(value: number, constraints: NumericConstraints) {
+  let next = value
+  let rounded = false
+  let clamped = false
+
+  if (constraints.integer && !Number.isInteger(next)) {
+    next = Math.round(next)
+    rounded = true
+  }
+
+  if (constraints.min) {
+    const min = constraints.min.inclusive ? constraints.min.value : nextAbove(constraints.min.value)
+    if (next < min) {
+      next = min
+      clamped = true
+    }
+  }
+
+  if (constraints.max) {
+    const max = constraints.max.inclusive ? constraints.max.value : nextBelow(constraints.max.value)
+    if (next > max) {
+      next = max
+      clamped = true
+    }
+  }
+
+  return {
+    value: next,
+    action: clamped ? 'clamped' : rounded ? 'rounded' : undefined,
+  } satisfies { value: number; action?: NumericSanitizeIssue['action'] }
+}
+
+function getFiniteFallbackNumber(fallback: unknown, constraints: NumericConstraints) {
+  if (typeof fallback !== 'number' || !Number.isFinite(fallback)) return undefined
+  return clampNumber(fallback, constraints).value
+}
+
+function sanitizeNumber(
+  schema: ZodSchemaLike | null,
+  value: number,
+  fallback: unknown,
+  path: PropertyKey[],
+): NumericSanitizeResult {
+  const constraints = schema ? getNumberConstraints(schema) : { integer: false }
+
+  if (!Number.isFinite(value)) {
+    const replacement = getFiniteFallbackNumber(fallback, constraints)
+    if (replacement === undefined) {
+      return {
+        value,
+        omit: true,
+        issues: [{ path, from: value, action: 'dropped' }],
+      }
+    }
+
+    return {
+      value: replacement,
+      issues: [{ path, from: value, to: replacement, action: 'dropped' }],
+    }
+  }
+
+  const clamped = clampNumber(value, constraints)
+  if (!Object.is(clamped.value, value)) {
+    return {
+      value: clamped.value,
+      issues: [
+        {
+          path,
+          from: value,
+          to: clamped.value,
+          action: clamped.action ?? 'clamped',
+        },
+      ],
+    }
+  }
+
+  return { value, issues: [] }
+}
+
+function sanitizeNumericValue(
+  schema: ZodSchemaLike | null,
+  value: unknown,
+  fallback: unknown,
+  path: PropertyKey[],
+): NumericSanitizeResult {
+  const defaultFallback = schema ? getSchemaDefault(schema) : undefined
+  const effectiveFallback = fallback === undefined ? defaultFallback : fallback
+  const unwrapped = unwrapSchema(schema)
+  const def = getSchemaDef(unwrapped)
+
+  if (def?.type === 'number') {
+    if (typeof value !== 'number') return { value, issues: [] }
+    return sanitizeNumber(unwrapped, value, effectiveFallback, path)
+  }
+
+  if (typeof value === 'number') {
+    return sanitizeNumber(null, value, effectiveFallback, path)
+  }
+
+  if (def?.type === 'tuple' && Array.isArray(value)) {
+    const fallbackItems = Array.isArray(effectiveFallback) ? effectiveFallback : []
+    const next = [...value]
+    const issues: NumericSanitizeIssue[] = []
+
+    for (let index = 0; index < next.length; index += 1) {
+      const itemSchema = def.items?.[index] ?? def.rest ?? null
+      const child = sanitizeNumericValue(itemSchema, next[index], fallbackItems[index], [
+        ...path,
+        index,
+      ])
+      issues.push(...child.issues)
+
+      if (child.omit) {
+        return { value, omit: true, issues }
+      }
+
+      next[index] = child.value
+    }
+
+    return { value: issues.length > 0 ? next : value, issues }
+  }
+
+  if (def?.type === 'array' && Array.isArray(value)) {
+    const fallbackItems = Array.isArray(effectiveFallback) ? effectiveFallback : []
+    const next: unknown[] = []
+    const issues: NumericSanitizeIssue[] = []
+    let omitted = false
+
+    for (let index = 0; index < value.length; index += 1) {
+      const child = sanitizeNumericValue(def.element ?? null, value[index], fallbackItems[index], [
+        ...path,
+        index,
+      ])
+      issues.push(...child.issues)
+      if (child.omit) {
+        omitted = true
+        continue
+      }
+      next.push(child.value)
+    }
+
+    return { value: issues.length > 0 || omitted ? next : value, issues }
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const shape = def?.type === 'object' ? (unwrapped?.shape ?? def.shape ?? {}) : {}
+    const fallbackObject =
+      effectiveFallback &&
+      typeof effectiveFallback === 'object' &&
+      !Array.isArray(effectiveFallback)
+        ? (effectiveFallback as Record<string, unknown>)
+        : {}
+    const input = value as Record<string, unknown>
+    const next: Record<string, unknown> = { ...input }
+    const issues: NumericSanitizeIssue[] = []
+
+    for (const key of Object.keys(input)) {
+      const child = sanitizeNumericValue(shape[key] ?? null, input[key], fallbackObject[key], [
+        ...path,
+        key,
+      ])
+      issues.push(...child.issues)
+
+      if (child.omit) {
+        delete next[key]
+      } else {
+        next[key] = child.value
+      }
+    }
+
+    return { value: issues.length > 0 ? next : value, issues }
+  }
+
+  return { value, issues: [] }
+}
+
+function formatNumericValue(value: number) {
+  if (Number.isNaN(value)) return 'NaN'
+  if (value === Infinity) return 'Infinity'
+  if (value === -Infinity) return '-Infinity'
+  return String(value)
+}
+
+function numericSanitizeIssuesToMessage(issues: NumericSanitizeIssue[]): string {
+  return issues
+    .map((issue) => {
+      const path = issue.path.map(String).join('.') || '<root>'
+      const to = issue.to === undefined ? '' : ` -> ${formatNumericValue(issue.to)}`
+      return `${path}: ${formatNumericValue(issue.from)} ${issue.action}${to}`
+    })
+    .join('; ')
+}
+
+function warnSanitizedNodeMutation(
+  mutation: 'create' | 'update',
+  nodeId: AnyNodeId,
+  issues: NumericSanitizeIssue[],
+) {
+  console.warn(
+    `[Scene] Sanitized invalid numeric node ${mutation}`,
+    nodeId,
+    numericSanitizeIssuesToMessage(issues),
+  )
+}
+
+function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
+  const candidate = { ...node, parentId }
+  const parsed = AnyNodeSchema.safeParse(candidate)
+  if (parsed.success) return parsed.data
+
+  const schema = getNodeSchemaForType(candidate.type)
+  const sanitized = sanitizeNumericValue(schema, candidate, undefined, [])
+
+  if (sanitized.issues.length === 0) {
+    return candidate as AnyNode
+  }
+
+  warnSanitizedNodeMutation('create', node.id, sanitized.issues)
+
+  return sanitized.value as AnyNode
+}
+
+function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
+  const candidate = { ...currentNode, ...data }
+  const parsed = AnyNodeSchema.safeParse(candidate)
+  if (parsed.success) return parsed.data
+
+  const schema = getNodeSchemaForType(candidate.type)
+  const sanitized = sanitizeNumericValue(schema, data, currentNode, [])
+
+  if (sanitized.issues.length === 0) {
+    return candidate as AnyNode
+  }
+
+  warnSanitizedNodeMutation('update', currentNode.id, sanitized.issues)
+
+  return { ...currentNode, ...(sanitized.value as Partial<AnyNode>) } as AnyNode
 }
 
 // Track pending RAF for updateNodesAction to prevent multiple queued callbacks
@@ -245,11 +718,7 @@ export const createNodesAction = (
     for (const { node, parentId } of ops) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
 
-      // 1. Assign parentId to the child (Safe because BaseNode has parentId)
-      const newNode = {
-        ...node,
-        parentId: effectiveParentId,
-      }
+      const newNode = parseCreatedNode(node, effectiveParentId)
 
       nextNodes[newNode.id] = newNode
 
@@ -313,6 +782,7 @@ export const applyNodeChangesAction = (
     for (const { id, data } of updateOps) {
       const currentNode = nextNodes[id]
       if (!currentNode) continue
+      const updatedNode = parseUpdatedNode(currentNode, data)
 
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
         const oldParentId = currentNode.parentId as AnyNodeId | null
@@ -336,16 +806,13 @@ export const applyNodeChangesAction = (
         }
       }
 
-      nextNodes[id] = { ...currentNode, ...data } as AnyNode
+      nextNodes[id] = updatedNode
       nodesToMarkDirty.add(id)
     }
 
     for (const { node, parentId } of createOps) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
-      const newNode = {
-        ...node,
-        parentId: effectiveParentId,
-      } as AnyNode
+      const newNode = parseCreatedNode(node, effectiveParentId)
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
@@ -442,6 +909,7 @@ export const updateNodesAction = (
     for (const { id, data } of updates) {
       const currentNode = nextNodes[id]
       if (!currentNode) continue
+      const updatedNode = parseUpdatedNode(currentNode, data)
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
@@ -480,7 +948,7 @@ export const updateNodesAction = (
       }
 
       // Apply the update
-      nextNodes[id] = { ...nextNodes[id], ...data } as AnyNode
+      nextNodes[id] = updatedNode
     }
 
     return { nodes: nextNodes }

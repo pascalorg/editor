@@ -346,8 +346,10 @@ export type TranslateHandle<N = any> = {
    * `[alongX, alongOther]` — `alongOther` is Z for the 'horizontal' plane and
    * Y for 'node-normal'. Used to align the node's edges to the grid (rotation-
    * aware: swap the pair at 90°). Omit / return null for free movement.
+   * `sceneApi` is supplied for composite nodes whose footprint depends on
+   * children, such as straight stairs.
    */
-  snapExtents?: (node: N) => readonly [number, number] | null
+  snapExtents?: (node: N, sceneApi: SceneApi) => readonly [number, number] | null
   portal?: HandlePortal
 }
 

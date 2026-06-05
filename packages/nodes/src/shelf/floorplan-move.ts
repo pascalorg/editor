@@ -10,6 +10,7 @@ import {
 } from '@pascal-app/core'
 import {
   applyFloorplanAlignment,
+  getFloorStackPreviewPosition,
   snapPointToGrid,
   triggerSFX,
   type WallPlanPoint,
@@ -82,6 +83,12 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }
+      const visualPosition = getFloorStackPreviewPosition({
+        node,
+        position: next,
+        rotation: node.rotation,
+        levelId: node.parentId ?? null,
+      })
       // Single source of truth — write the absolute position straight to
       // the scene (history is paused by the overlay). Both the 2D SVG and
       // the 3D group transform read `node.position` reactively, so they
@@ -90,7 +97,7 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
       useScene.getState().updateNodes([
         {
           id: shelfId,
-          data: { position: next },
+          data: { position: visualPosition },
         },
       ])
     },

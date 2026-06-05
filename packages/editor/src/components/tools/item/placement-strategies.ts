@@ -103,12 +103,13 @@ export const floorStrategy = {
     // building-local ToolManager group, so local coords are correct for both data and visuals.
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    const y = ctx.gridPosition.y
 
     return {
-      gridPosition: [x, 0, z],
-      cursorPosition: [x, event.localPosition[1], z],
+      gridPosition: [x, y, z],
+      cursorPosition: [x, y, z],
       cursorRotationY: rotY,
-      nodeUpdate: { position: [x, 0, z] },
+      nodeUpdate: { position: [x, y, z] },
       stopPropagation: false,
       dirtyNodeId: null,
     }
@@ -126,7 +127,11 @@ export const floorStrategy = {
     if (ctx.state.surface !== 'floor') return null
     if (!(ctx.levelId && ctx.draftItem)) return null
 
-    const pos: [number, number, number] = [ctx.gridPosition.x, 0, ctx.gridPosition.z]
+    const pos: [number, number, number] = [
+      ctx.gridPosition.x,
+      ctx.gridPosition.y,
+      ctx.gridPosition.z,
+    ]
     const valid = validators.canPlaceOnFloor(
       ctx.levelId,
       pos,
@@ -793,7 +798,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   // Floor (no attachTo)
   return validators.canPlaceOnFloor(
     ctx.levelId,
-    [ctx.gridPosition.x, 0, ctx.gridPosition.z],
+    [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
     alignedDims,
     ctx.draftItem.rotation,
     [ctx.draftItem.id],

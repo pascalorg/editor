@@ -34,6 +34,13 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import {
+  createArrowHitAreaGeometry,
+  createEndpointHitAreaGeometry,
+  InvisibleHandleHitArea,
+  NO_RAYCAST,
+  useInvisibleHitAreaMaterial,
+} from './node-arrow-handles'
 
 const HANDLE_OFFSET = 0.27
 const HANDLE_MIN_OFFSET = 0.33
@@ -227,7 +234,8 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const billboardRef = useRef<Group>(null)
   const parentWorldQuaternionRef = useRef(new Quaternion())
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.25 : 1) * zoom
+  const baseScale = zoom
+  const visualScale = isHovered ? 1.25 : 1
 
   const corner = endpoint === 'start' ? wall.start : wall.end
   const x = corner[0]
@@ -235,7 +243,10 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
 
   const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
+  const hitGeometry = useMemo(() => createEndpointHitAreaGeometry(CORNER_HEX_RADIUS), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   useEffect(() => () => dashedGeometry.dispose(), [dashedGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
 
   // Node materials matched to the rest of the file — mixing plain
   // `meshBasicMaterial` with WebGPU node materials trips
@@ -332,9 +343,10 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
         position={[x, 0, z]}
         renderOrder={1001}
       />
-      <group position={[x, CORNER_FLOOR_OFFSET, z]} ref={billboardRef} scale={scale}>
-        <mesh
-          material={hexMaterial}
+      <group position={[x, CORNER_FLOOR_OFFSET, z]} ref={billboardRef} scale={baseScale}>
+        <InvisibleHandleHitArea
+          geometry={hitGeometry}
+          material={hitMaterial}
           onPointerDown={activateEndpointMove}
           onPointerEnter={(event) => {
             event.stopPropagation()
@@ -348,13 +360,16 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
               document.body.style.cursor = ''
             }
           }}
-          renderOrder={1003}
-        >
-          <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
-        </mesh>
-        <mesh material={ringMaterial} renderOrder={1002}>
-          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
-        </mesh>
+          scale={1}
+        />
+        <group scale={visualScale}>
+          <mesh material={hexMaterial} raycast={NO_RAYCAST} renderOrder={1003}>
+            <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
+          </mesh>
+          <mesh material={ringMaterial} raycast={NO_RAYCAST} renderOrder={1002}>
+            <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
+          </mesh>
+        </group>
       </group>
     </>
   )
@@ -363,6 +378,8 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
 function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const arrowMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -377,7 +394,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   )
   const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const baseScale = zoom * ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * baseScale
   const dragCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -394,6 +412,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   // Sit on the visual centre of the wall — for curved walls that's the
@@ -509,12 +528,10 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 
   return (
     <group position={[midX, handleY, midZ]} rotation={[0, wallAngle, 0]}>
-      <group rotation={[0, Math.PI / 2, Math.PI / 2]} scale={scale}>
-        <mesh
-          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
-          frustumCulled={false}
-          geometry={arrowGeometry}
-          material={arrowMaterial}
+      <group rotation={[0, Math.PI / 2, Math.PI / 2]}>
+        <InvisibleHandleHitArea
+          geometry={hitGeometry}
+          material={hitMaterial}
           onPointerDown={activateHeightResize}
           onPointerEnter={(event) => {
             event.stopPropagation()
@@ -528,7 +545,16 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
               document.body.style.cursor = ''
             }
           }}
+          scale={baseScale}
+        />
+        <mesh
+          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
+          frustumCulled={false}
+          geometry={arrowGeometry}
+          material={arrowMaterial}
+          raycast={NO_RAYCAST}
           renderOrder={1002}
+          scale={scale}
         />
       </group>
     </group>
@@ -538,6 +564,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const arrowMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -554,7 +582,8 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const baseScale = zoom * ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * baseScale
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -569,6 +598,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
@@ -586,16 +616,10 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   }
 
   return (
-    <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
-      <mesh
-        // Pass geometry as a prop (not `<primitive attach="geometry">`)
-        // so the mesh is never rendered with R3F's default empty
-        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
-        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
-        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
-        frustumCulled={false}
-        geometry={arrowGeometry}
-        material={arrowMaterial}
+    <group position={handle.position} rotation={[0, handle.rotationY, 0]}>
+      <InvisibleHandleHitArea
+        geometry={hitGeometry}
+        material={hitMaterial}
         onPointerDown={activateWallMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -609,7 +633,20 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
             document.body.style.cursor = ''
           }
         }}
+        scale={baseScale}
+      />
+      <mesh
+        // Pass geometry as a prop (not `<primitive attach="geometry">`)
+        // so the mesh is never rendered with R3F's default empty
+        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
+        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
+        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        raycast={NO_RAYCAST}
         renderOrder={1002}
+        scale={scale}
       />
     </group>
   )
@@ -618,6 +655,8 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const arrowMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -633,7 +672,8 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const baseScale = zoom * ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * baseScale
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -648,6 +688,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
@@ -664,13 +705,10 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   }
 
   return (
-    <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
-      <mesh
-        // Pass geometry as a prop — see WallMoveArrowHandle for the
-        // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
-        frustumCulled={false}
-        geometry={arrowGeometry}
-        material={arrowMaterial}
+    <group position={handle.position} rotation={[0, handle.rotationY, 0]}>
+      <InvisibleHandleHitArea
+        geometry={hitGeometry}
+        material={hitMaterial}
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -684,7 +722,17 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
             document.body.style.cursor = ''
           }
         }}
+        scale={baseScale}
+      />
+      <mesh
+        // Pass geometry as a prop — see WallMoveArrowHandle for the
+        // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        raycast={NO_RAYCAST}
         renderOrder={1002}
+        scale={scale}
       />
     </group>
   )

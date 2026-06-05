@@ -13,6 +13,7 @@ import {
   type RoofSegmentNode,
   type RoofType,
 } from '../schema/nodes/roof-segment'
+import { ShelfNode as ShelfNodeSchema } from '../schema/nodes/shelf'
 import { SiteNode } from '../schema/nodes/site'
 import { StairNode as StairNodeSchema } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
@@ -22,6 +23,11 @@ import { resetSceneHistoryPauseDepth } from './history-control'
 
 function getFiniteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function getFiniteNumberInRange(value: unknown, fallback: number, min: number, max: number) {
+  const finite = getFiniteNumber(value, fallback)
+  return Math.min(Math.max(finite, min), max)
 }
 
 function getBoolean(value: unknown, fallback: boolean) {
@@ -110,6 +116,37 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
 function normalizeDoorNode(node: Record<string, unknown>) {
   const parsed = DoorNodeSchema.safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
+}
+
+function normalizeShelfNode(node: Record<string, unknown>) {
+  const sanitized = {
+    ...node,
+    children: getStringArray(node.children),
+    position: getVector3(node.position, [0, 0, 0]),
+    rotation: getVector3(node.rotation, [0, 0, 0]),
+    width: getFiniteNumberInRange(node.width, 1.2, 0.3, 3.0),
+    depth: getFiniteNumberInRange(node.depth, 0.3, 0.1, 1.0),
+    thickness: getFiniteNumberInRange(node.thickness, 0.04, 0.01, 0.1),
+    height: getFiniteNumberInRange(node.height, 0.9, 0.05, 2.5),
+    rows: Math.round(getFiniteNumberInRange(node.rows, 1, 1, 8)),
+    columns: Math.round(getFiniteNumberInRange(node.columns, 1, 1, 6)),
+    style: getEnumValue(
+      node.style,
+      ['wall-shelf', 'bookshelf', 'open-rack', 'cubby'] as const,
+      'wall-shelf',
+    ),
+    withBack: getBoolean(node.withBack, false),
+    withSides: getBoolean(node.withSides, true),
+    withBottom: getBoolean(node.withBottom, false),
+    bracketStyle: getEnumValue(
+      node.bracketStyle,
+      ['minimal', 'industrial', 'hidden'] as const,
+      'minimal',
+    ),
+  }
+
+  const parsed = ShelfNodeSchema.safeParse(sanitized)
+  return parsed.success ? parsed.data : null
 }
 
 function migrateWallSurfaceMaterials(node: Record<string, any>) {
@@ -396,14 +433,11 @@ function migrateNodes(nodes: Record<string, any>): Record<string, AnyNode> {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id])
     }
 
-    // Shelf v2: hosting was added in this migration cycle. Older shelves
-    // (saved before the schema gained `children`) need the field
-    // initialised so `createNode(item, shelfId)` finds an array to
-    // append the child id to — without this the host item ends up
-    // orphaned (parented in scene state but not in the shelf's
-    // children list, so the renderer doesn't mount it).
-    if (node.type === 'shelf' && !Array.isArray(node.children)) {
-      patchedNodes[id] = { ...node, children: [] }
+    if (node.type === 'shelf') {
+      const normalized = normalizeShelfNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
     }
 
     // Roof-segment hosting was added in this migration cycle (the same

@@ -38,6 +38,12 @@ export {
   sceneRegistry,
   useRegistry,
 } from './hooks/scene-registry/scene-registry'
+export {
+  type FloorPlacedElevationArgs,
+  getFloorPlacedElevation,
+  getFloorPlacedFootprints,
+  getFloorStackedPosition,
+} from './hooks/spatial-grid/floor-placed-elevation'
 export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
   initSpatialGridSync,
@@ -79,6 +85,12 @@ export {
   type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
+export type {
+  FloorPlacedFootprint,
+  FloorPlacedFootprintContext,
+  FloorPlacedFootprintResolver,
+  FloorPlacedFootprintsResolver,
+} from './registry'
 export * from './registry'
 export * from './schema'
 export * from './services'
