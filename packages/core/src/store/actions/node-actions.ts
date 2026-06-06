@@ -883,8 +883,10 @@ export const applyNodeChangesAction = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
-  nodesToMarkDirty.forEach((id) => get().markDirty(id))
-  parentsToMarkDirty.forEach((id) => {
+  for (const id of nodesToMarkDirty) {
+    get().markDirty(id)
+  }
+  for (const id of parentsToMarkDirty) {
     get().markDirty(id)
     const parent = get().nodes[id]
     if (parent && 'children' in parent && Array.isArray(parent.children)) {
@@ -892,7 +894,7 @@ export const applyNodeChangesAction = (
         get().markDirty(childId as AnyNodeId)
       }
     }
-  })
+  }
 }
 
 export const updateNodesAction = (
