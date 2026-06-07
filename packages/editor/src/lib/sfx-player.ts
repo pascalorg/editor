@@ -184,6 +184,8 @@ export function updateSFXVolumes() {
   const finalVolume = (masterVolume / 100) * (sfxVolume / 100)
 
   sfxCache.forEach((sounds) => {
-    sounds.forEach((sound) => sound.volume(finalVolume))
+    sounds.forEach((sound) => {
+      sound.volume(finalVolume)
+    })
   })
 }
