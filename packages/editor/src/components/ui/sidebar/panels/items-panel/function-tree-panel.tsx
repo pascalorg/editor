@@ -4,6 +4,7 @@ import type { AssetInput } from '@pascal-app/core'
 import { Root as TooltipRoot } from '@radix-ui/react-tooltip'
 import NextImage from 'next/image'
 import { useMemo, useState } from 'react'
+import { triggerSFX } from '../../../../../lib/sfx-bus'
 import { cn } from '../../../../../lib/utils'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 import {
@@ -132,7 +133,11 @@ export function FunctionTreePanel({
                         ? 'bg-primary/10 ring-1 ring-primary/50'
                         : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
                     )}
-                    onClick={() => selectRoot(root.slug)}
+                    onClick={() => {
+                      triggerSFX('sfx:menu-click')
+                      selectRoot(root.slug)
+                    }}
+                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                     type="button"
                   >
                     {root.iconUrl ? (

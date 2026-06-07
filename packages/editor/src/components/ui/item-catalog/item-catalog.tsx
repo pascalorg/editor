@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from './../../../components/ui/primitives/tooltip'
+import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { CATALOG_ITEMS } from './catalog-items'
@@ -94,10 +95,12 @@ export function ItemCatalog({
             )}
             key={index}
             onClick={() => {
+              triggerSFX('sfx:menu-click')
               setSelectedItem(item)
               setTool('item')
               setMode('build')
             }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
             <div className="relative aspect-square w-full overflow-hidden rounded-lg">

@@ -181,7 +181,7 @@ const ShelfTool = () => {
       })
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
-      triggerSFX('sfx:structure-build')
+      triggerSFX('sfx:item-place')
       // The placed shelf is now a valid alignment target for the next one;
       // refresh the candidate pool and drop the guide from this drop.
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)

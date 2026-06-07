@@ -295,6 +295,7 @@ export const RoofTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
+        sfxEmitter.emit('sfx:structure-build-start')
         setPreview((prev) => ({
           ...prev,
           corner1: corner1Ref.current,
