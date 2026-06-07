@@ -18,9 +18,13 @@ import {
   ActionGroup,
   DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
   duplicateStairSubtree,
+  getStairLevelOptions,
   MetricControl,
   PanelSection,
   PanelWrapper,
+  resolveStairDestinationLevel,
+  resolveStairFromLevelId,
+  resolveStairToLevelId,
   SegmentedControl,
   SliderControl,
   ToggleControl,
@@ -29,7 +33,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
@@ -62,16 +66,14 @@ export default function StairPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const nodes = useScene((s) => s.nodes)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
   )
-  const levels = useScene(
-    useShallow((s) =>
-      Object.values(s.nodes)
-        .filter((entry): entry is LevelNode => entry.type === 'level')
-        .sort((left, right) => left.level - right.level),
-    ),
+  const levels = useMemo<LevelNode[]>(
+    () => (node?.type === 'stair' ? getStairLevelOptions(nodes, node) : []),
+    [node, nodes],
   )
   const segments = useScene(
     useShallow((s) => {
@@ -95,6 +97,41 @@ export default function StairPanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
+
+  const handleAutoCutoutChange = useCallback(
+    (checked: boolean) => {
+      if (!node) return
+      const updates: Partial<StairNode> = {
+        slabOpeningMode: checked ? 'destination' : 'none',
+      }
+      const sceneNodes = useScene.getState().nodes
+      const fromLevelId = resolveStairFromLevelId(sceneNodes, node)
+      if (checked && fromLevelId) updates.fromLevelId = fromLevelId
+      if (checked && (!node.toLevelId || node.toLevelId === fromLevelId)) {
+        const plan = resolveStairDestinationLevel({
+          fromLevelId,
+          nodes: sceneNodes,
+        })
+        if (plan?.toLevel.id) updates.toLevelId = plan.toLevel.id
+      }
+      handleUpdate(updates)
+    },
+    [node, handleUpdate],
+  )
+
+  const handleFromLevelChange = useCallback(
+    (fromLevelId: string) => {
+      const plan = resolveStairDestinationLevel({
+        fromLevelId: fromLevelId as AnyNodeId,
+        nodes: useScene.getState().nodes,
+      })
+      handleUpdate({
+        fromLevelId,
+        toLevelId: plan?.toLevel.id ?? fromLevelId,
+      })
+    },
+    [handleUpdate],
+  )
 
   const getLastSegmentFillDefaults = useCallback(() => {
     if (!node) return { fillToFloor: true }
@@ -184,8 +221,8 @@ export default function StairPanel() {
 
   if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
 
-  const resolvedFromLevelId = node.fromLevelId ?? node.parentId ?? levels[0]?.id ?? null
-  const resolvedToLevelId = node.toLevelId ?? resolvedFromLevelId
+  const resolvedFromLevelId = resolveStairFromLevelId(nodes, node, levels)
+  const resolvedToLevelId = resolveStairToLevelId(nodes, node, resolvedFromLevelId, levels)
 
   return (
     <PanelWrapper
@@ -217,11 +254,7 @@ export default function StairPanel() {
           <ToggleControl
             checked={(node.slabOpeningMode ?? 'none') === 'destination'}
             label="Auto Cutout"
-            onChange={(checked) =>
-              handleUpdate({
-                slabOpeningMode: checked ? 'destination' : 'none',
-              })
-            }
+            onChange={handleAutoCutoutChange}
           />
 
           <div className="space-y-1.5">
@@ -230,7 +263,7 @@ export default function StairPanel() {
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
-              onChange={(event) => handleUpdate({ fromLevelId: event.target.value })}
+              onChange={(event) => handleFromLevelChange(event.target.value)}
               value={resolvedFromLevelId ?? ''}
             >
               {levels.map((level) => (
@@ -259,7 +292,7 @@ export default function StairPanel() {
           </div>
 
           <SegmentedControl
-            onChange={(value) => handleUpdate({ slabOpeningMode: value as StairSlabOpeningMode })}
+            onChange={(value) => handleAutoCutoutChange(value === 'destination')}
             options={STAIR_SLAB_OPENING_OPTIONS}
             value={node.slabOpeningMode ?? 'none'}
           />

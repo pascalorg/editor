@@ -44,6 +44,7 @@ export type HandleDragMoveContext = {
 
 type HandleDragSession = {
   move: (context: HandleDragMoveContext) => Partial<AnyNode> | null
+  markDirty?: boolean
   onBegin?: () => void
   onEnd?: () => void
   overrideId?: AnyNodeId
@@ -122,6 +123,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     if (!session) return
 
     const overrideId = session.overrideId ?? nodeId
+    const markDirty = session.markDirty !== false
     document.body.style.cursor = cursor
     sfxEmitter.emit('sfx:item-pick')
     useViewer.getState().setInputDragging(true)
@@ -137,7 +139,9 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       if (!patch) return
       lastPatch = patch
       useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
-      useScene.getState().markDirty(overrideId)
+      if (markDirty) {
+        useScene.getState().markDirty(overrideId)
+      }
     }
 
     const cleanup = () => {
@@ -157,7 +161,9 @@ export function useHandleDrag(args: UseHandleDragArgs) {
 
     const clearOverride = () => {
       useLiveNodeOverrides.getState().clear(overrideId)
-      useScene.getState().markDirty(overrideId)
+      if (markDirty) {
+        useScene.getState().markDirty(overrideId)
+      }
     }
 
     const onUp = () => {

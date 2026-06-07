@@ -16,7 +16,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  BoxGeometry,
   BufferGeometry,
   DoubleSide,
   Float32BufferAttribute,
@@ -31,7 +30,6 @@ import { swallowNextClick } from './handles/use-handle-drag'
 
 const ACCENT = 0x83_81_ed
 const SURFACE_OFFSET = 0.01
-const HIT_PADDING = 0.08
 const MIN_HIT_HEIGHT = 0.16
 
 const NO_RAYCAST = () => null
@@ -104,24 +102,34 @@ function makeOutlineGeometry(hole: HolePolygon, y: number): BufferGeometry {
 }
 
 function makeHitGeometry(hole: HolePolygon, centerY: number, height: number): BufferGeometry {
-  let minX = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
+  const topY = centerY + height / 2
+  const bottomY = centerY - height / 2
+  const positions: number[] = []
+  const indices: number[] = []
 
-  for (const [x, z] of hole) {
-    minX = Math.min(minX, x)
-    maxX = Math.max(maxX, x)
-    minZ = Math.min(minZ, z)
-    maxZ = Math.max(maxZ, z)
+  for (const [x, z] of hole) positions.push(x, topY, z)
+  for (const [x, z] of hole) positions.push(x, bottomY, z)
+
+  const triangles = ShapeUtils.triangulateShape(
+    hole.map(([x, z]) => new Vector2(x, z)),
+    [],
+  )
+  const bottomOffset = hole.length
+  for (const tri of triangles) {
+    indices.push(tri[0]!, tri[2]!, tri[1]!)
+    indices.push(bottomOffset + tri[0]!, bottomOffset + tri[1]!, bottomOffset + tri[2]!)
   }
 
-  const width = Math.max(maxX - minX + HIT_PADDING * 2, HIT_PADDING * 2)
-  const depth = Math.max(maxZ - minZ + HIT_PADDING * 2, HIT_PADDING * 2)
-  const centerX = (minX + maxX) / 2
-  const centerZ = (minZ + maxZ) / 2
-  const geometry = new BoxGeometry(width, height, depth)
-  geometry.translate(centerX, centerY, centerZ)
+  for (let index = 0; index < hole.length; index += 1) {
+    const nextIndex = (index + 1) % hole.length
+    indices.push(index, nextIndex, bottomOffset + nextIndex)
+    indices.push(index, bottomOffset + nextIndex, bottomOffset + index)
+  }
+
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
   return geometry
 }

@@ -1,5 +1,5 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { SCENE_LAYER } from '@pascal-app/viewer'
+import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -317,6 +317,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const previewPolygonRef = useRef<Array<[number, number]> | null>(null)
+  const previousInputDraggingRef = useRef(false)
 
   const onPolygonPreviewRef = useRef(onPolygonPreview)
   useEffect(() => {
@@ -345,6 +346,20 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const lineRef = useRef<Line>(null!)
   const previousPositionRef = useRef<[number, number] | null>(null)
+
+  const startDrag = useCallback((nextDragState: DragState) => {
+    previousInputDraggingRef.current = useViewer.getState().inputDragging
+    useViewer.getState().setInputDragging(true)
+    setDragState(nextDragState)
+  }, [])
+
+  useEffect(() => {
+    if (!dragState?.isDragging) return
+
+    return () => {
+      useViewer.getState().setInputDragging(previousInputDraggingRef.current)
+    }
+  }, [dragState?.isDragging])
 
   // Track the last polygon prop to detect external changes (undo/redo) or
   // our own post-commit prop update arriving while a preview is still in
@@ -687,7 +702,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               if (e.button !== 0) return
               e.stopPropagation()
               setHoveredEdge(null)
-              setDragState({
+              startDrag({
                 isDragging: true,
                 mode: 'vertex',
                 vertexIndex: index,
@@ -721,7 +736,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             if (e.button !== 0) return
             e.stopPropagation()
             setHoveredEdge(null)
-            setDragState({
+            startDrag({
               isDragging: true,
               mode: 'polygon',
               vertexIndex: null,
@@ -750,7 +765,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             if (!edgeNormal) return
 
             setHoveredEdge(null)
-            setDragState({
+            startDrag({
               isDragging: true,
               mode: 'edge',
               vertexIndex: null,
@@ -835,7 +850,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 e.stopPropagation()
                 const insertedVertex = handleAddVertex(index, [x!, z!])
                 if (insertedVertex.vertexIndex >= 0) {
-                  setDragState({
+                  startDrag({
                     isDragging: true,
                     mode: 'vertex',
                     vertexIndex: insertedVertex.vertexIndex,
