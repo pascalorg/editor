@@ -90,6 +90,11 @@ export {
 } from './store/history-control'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export {
+  type WallSnapKind,
+  type WallSnapPoint,
+  default as useWallSnapIndicator,
+} from './store/use-wall-snap-indicator'
+export {
   type ControlValue,
   type DoorAnimationState,
   type DoorInteractiveState,

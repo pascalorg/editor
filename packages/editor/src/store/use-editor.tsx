@@ -326,6 +326,11 @@ type EditorState = {
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
   setGridSnapStep: (step: GridSnapStep) => void
+  // Magnetic snapping while drafting — snaps wall endpoints onto existing
+  // wall corners / wall bodies (the "magnetic" beacon). Independent of grid
+  // snap. On by default; toggled from the Display menu.
+  magneticSnap: boolean
+  setMagneticSnap: (enabled: boolean) => void
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -368,6 +373,7 @@ type PersistedEditorLayoutState = Pick<
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
+  | 'magneticSnap'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -390,6 +396,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
+  magneticSnap: true,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -502,6 +509,8 @@ function normalizePersistedEditorLayoutState(
     gridSnapStep: GRID_SNAP_STEPS.includes(state?.gridSnapStep as GridSnapStep)
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
+    // Default on: only an explicit persisted `false` disables it.
+    magneticSnap: state?.magneticSnap !== false,
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -842,6 +851,8 @@ const useEditor = create<EditorState>()(
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
       setGridSnapStep: (step) => set({ gridSnapStep: step }),
+      magneticSnap: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.magneticSnap,
+      setMagneticSnap: (enabled) => set({ magneticSnap: enabled }),
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -931,6 +942,7 @@ const useEditor = create<EditorState>()(
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
+        magneticSnap: state.magneticSnap,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

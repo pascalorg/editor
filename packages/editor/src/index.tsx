@@ -99,7 +99,10 @@ export {
   isSegmentLongEnough,
   snapPointToGrid,
   snapScalarToGrid,
+  type WallDraftSnapKind,
+  type WallDraftSnapResult,
   snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
