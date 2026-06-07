@@ -316,7 +316,9 @@ export type TapActionHandle<N = any> = {
  * the hit into the node's parent-local frame, and reports the new local XZ
  * (optionally grid-snapped via `snapExtents`) to `apply`. Press-drag-release
  * with the same live-override → commit-on-release flow as the resize / rotate
- * handles. Rendered as a 4-way cross of double-headed arrows.
+ * handles. Rendered as a 4-way cross of double-headed arrows. Pure translation
+ * does not require geometry dirtying; renderers consume the live position
+ * override directly.
  */
 export type TranslateHandle<N = any> = {
   kind: 'translate'

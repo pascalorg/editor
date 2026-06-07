@@ -1185,6 +1185,7 @@ function TranslateArrow({
         .position ?? [0, 0, 0]
 
       return {
+        markDirty: false,
         move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
           const hit = new Vector3()
           if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null

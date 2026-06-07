@@ -9,6 +9,7 @@ import {
   RoofSegmentNode,
   resolveAlignment,
   sceneRegistry,
+  snapScalar,
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
@@ -27,6 +28,10 @@ const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
+
+function snapToActiveGrid(value: number): number {
+  return snapScalar(value, useEditor.getState().gridSnapStep)
+}
 
 /**
  * Creates a roof group with one default gable segment
@@ -233,8 +238,8 @@ export const RoofTool: React.FC = () => {
       if (!cursorRef.current) return
 
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        snapToActiveGrid(event.localPosition[0]),
+        snapToActiveGrid(event.localPosition[2]),
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
@@ -271,8 +276,8 @@ export const RoofTool: React.FC = () => {
       if (!currentLevelId) return
 
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        snapToActiveGrid(event.localPosition[0]),
+        snapToActiveGrid(event.localPosition[2]),
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
