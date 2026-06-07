@@ -40,6 +40,7 @@ export function MoveElevatorTool({
   const onCommittedRef = useRef(onCommitted)
   const historyPausedRef = useRef(false)
   const previousGridPosRef = useRef<[number, number] | null>(null)
+  const dragAnchorRef = useRef<[number, number] | null>(null)
   const previewPositionRef = useRef<ElevatorNode['position']>([
     movingNode.position[0],
     movingNode.position[1],
@@ -73,6 +74,8 @@ export function MoveElevatorTool({
     }
 
     pauseHistory()
+    dragAnchorRef.current = null
+    previousGridPosRef.current = null
     const movingNodeId = (movingNode as { id?: ElevatorNode['id'] }).id
 
     const meta =
@@ -128,8 +131,12 @@ export function MoveElevatorTool({
     }
 
     const onGridMove = (event: GridEvent) => {
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
+      const rawX = Math.round(event.localPosition[0] * 2) / 2
+      const rawZ = Math.round(event.localPosition[2] * 2) / 2
+      const anchor = dragAnchorRef.current ?? [rawX, rawZ]
+      dragAnchorRef.current = anchor
+      const gridX = movingNode.position[0] + (rawX - anchor[0])
+      const gridZ = movingNode.position[2] + (rawZ - anchor[1])
       const supportY = resolveElevatorSupportY({
         buildingId: supportBuildingId,
         preferredLevelId: supportLevelId,
@@ -151,15 +158,7 @@ export function MoveElevatorTool({
     }
 
     const onGridClick = (event: GridEvent) => {
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const supportY = resolveElevatorSupportY({
-        buildingId: supportBuildingId,
-        preferredLevelId: supportLevelId,
-        x: gridX,
-        z: gridZ,
-      })
-      const nextPosition: ElevatorNode['position'] = [gridX, supportY, gridZ]
+      const nextPosition: ElevatorNode['position'] = [...previewPositionRef.current]
 
       wasCommitted = true
       clearPreview()

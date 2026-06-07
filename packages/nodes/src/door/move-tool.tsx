@@ -66,6 +66,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     let currentWallId: string | null = movingDoorNode.parentId
+    let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
+    let lastTarget: {
+      wallNode: WallEvent['node']
+      wallId: string
+      side: DoorNode['side']
+      itemRotation: number
+      cursorRotation: number
+      clampedX: number
+      clampedY: number
+      valid: boolean
+      event: WallEvent
+    } | null = null
 
     const markWallDirty = (wallId: string | null) => {
       if (wallId) useScene.getState().dirtyNodes.add(wallId as AnyNodeId)
@@ -131,7 +143,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       }
     }
 
-    const onWallEnter = (event: WallEvent) => {
+    const resolveMoveTarget = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) {
         hideCursor()
@@ -141,9 +153,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
 
+      const rawLocalX = event.localPosition[0]
+      if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
+        dragAnchor = {
+          wallId: event.node.id,
+          rawX: rawLocalX,
+          startX: event.node.id === original.parentId ? original.position[0] : rawLocalX,
+        }
+      }
+      const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
-        rawLocalX: event.localPosition[0],
+        rawLocalX: targetLocalX,
         width: movingDoorNode.width,
         candidates: alignmentCandidates,
         bypass: event.nativeEvent?.altKey === true,
@@ -155,24 +176,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         movingDoorNode.height,
       )
 
-      const prevWallId = currentWallId
-      currentWallId = event.node.id
-
-      useScene.getState().updateNode(movingDoorNode.id, {
-        position: [clampedX, clampedY, 0],
-        rotation: [0, itemRotation, 0],
-        side,
-        parentId: event.node.id,
-        wallId: event.node.id,
-      })
-      useLiveTransforms.getState().set(movingDoorNode.id, {
-        position: [clampedX, clampedY, 0],
-        rotation: itemRotation,
-      })
-
-      if (prevWallId && prevWallId !== event.node.id) markWallDirty(prevWallId)
-      markWallDirtyThrottled(event.node.id)
-
       const valid = !hasWallChildOverlap(
         event.node.id,
         clampedX,
@@ -182,17 +185,62 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         movingDoorNode.id,
       )
 
+      return {
+        wallNode: event.node,
+        wallId: event.node.id,
+        side,
+        itemRotation,
+        cursorRotation,
+        clampedX,
+        clampedY,
+        valid,
+        event,
+      }
+    }
+
+    const applyPreview = (target: NonNullable<typeof lastTarget>) => {
+      if (currentWallId !== target.wallId) {
+        useScene.getState().updateNode(movingDoorNode.id, {
+          position: [target.clampedX, target.clampedY, 0],
+          rotation: [0, target.itemRotation, 0],
+          side: target.side,
+          parentId: target.wallId,
+          wallId: target.wallId,
+        })
+        markWallDirty(currentWallId)
+        currentWallId = target.wallId
+      } else {
+        const doorMesh = sceneRegistry.nodes.get(movingDoorNode.id as AnyNodeId)
+        if (doorMesh) {
+          doorMesh.position.set(target.clampedX, target.clampedY, 0)
+          doorMesh.rotation.set(0, target.itemRotation, 0)
+          doorMesh.updateMatrixWorld(true)
+        }
+      }
+      useLiveTransforms.getState().set(movingDoorNode.id, {
+        position: [target.clampedX, target.clampedY, 0],
+        rotation: target.itemRotation,
+      })
+      markWallDirtyThrottled(target.wallId)
+
       updateCursor(
         wallLocalToWorld(
-          event.node,
-          clampedX,
-          clampedY,
+          target.wallNode,
+          target.clampedX,
+          target.clampedY,
           getLevelYOffset(),
-          getSlabElevation(event),
+          getSlabElevation(target.event),
         ),
-        cursorRotation,
-        valid,
+        target.cursorRotation,
+        target.valid,
       )
+    }
+
+    const onWallEnter = (event: WallEvent) => {
+      const target = resolveMoveTarget(event)
+      if (!target) return
+      lastTarget = target
+      applyPreview(target)
       event.stopPropagation()
     }
 
@@ -204,69 +252,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       }
       if (event.node.parentId !== getLevelId()) return
 
-      const { side, itemRotation, cursorRotation } = getPlacementOrientation(event)
-
-      const localX = resolveWallSlideAlignment({
-        wallNode: event.node,
-        rawLocalX: event.localPosition[0],
-        width: movingDoorNode.width,
-        candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
-      })
-      const { clampedX, clampedY } = clampToWall(
-        event.node,
-        localX,
-        movingDoorNode.width,
-        movingDoorNode.height,
-      )
-
-      if (currentWallId !== event.node.id) {
-        // Wall changed mid-move: must updateNode to reparent
-        useScene.getState().updateNode(movingDoorNode.id, {
-          position: [clampedX, clampedY, 0],
-          rotation: [0, itemRotation, 0],
-          side,
-          parentId: event.node.id,
-          wallId: event.node.id,
-        })
-        markWallDirty(currentWallId)
-        currentWallId = event.node.id
-      } else {
-        // Same wall: update Three.js mesh directly to avoid store churn
-        // collectCutoutBrushes reads cutoutMesh.matrixWorld, not scene store positions
-        const doorMesh = sceneRegistry.nodes.get(movingDoorNode.id as AnyNodeId)
-        if (doorMesh) {
-          doorMesh.position.set(clampedX, clampedY, 0)
-          doorMesh.rotation.set(0, itemRotation, 0)
-          doorMesh.updateMatrixWorld(true)
-        }
-      }
-      useLiveTransforms.getState().set(movingDoorNode.id, {
-        position: [clampedX, clampedY, 0],
-        rotation: itemRotation,
-      })
-      markWallDirtyThrottled(event.node.id)
-
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
-        movingDoorNode.id,
-      )
-
-      updateCursor(
-        wallLocalToWorld(
-          event.node,
-          clampedX,
-          clampedY,
-          getLevelYOffset(),
-          getSlabElevation(event),
-        ),
-        cursorRotation,
-        valid,
-      )
+      const target = resolveMoveTarget(event)
+      if (!target) return
+      lastTarget = target
+      applyPreview(target)
       event.stopPropagation()
     }
 
@@ -275,31 +264,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (isCurvedWall(event.node)) return
       if (event.node.parentId !== getLevelId()) return
 
-      const { side, itemRotation } = getPlacementOrientation(event)
-
-      const localX = resolveWallSlideAlignment({
-        wallNode: event.node,
-        rawLocalX: event.localPosition[0],
-        width: movingDoorNode.width,
-        candidates: alignmentCandidates,
-        bypass: event.nativeEvent?.altKey === true,
-      })
-      const { clampedX, clampedY } = clampToWall(
-        event.node,
-        localX,
-        movingDoorNode.width,
-        movingDoorNode.height,
-      )
-
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
-        movingDoorNode.id,
-      )
-      if (!valid) return
+      const target = lastTarget?.wallId === event.node.id ? lastTarget : resolveMoveTarget(event)
+      if (!target?.valid) return
 
       let placedId: string
 
@@ -311,13 +277,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         delete cloned.id
         const node = DoorNode.parse({
           ...cloned,
-          position: [clampedX, clampedY, 0],
-          rotation: [0, itemRotation, 0],
-          side,
-          wallId: event.node.id,
-          parentId: event.node.id,
+          position: [target.clampedX, target.clampedY, 0],
+          rotation: [0, target.itemRotation, 0],
+          side: target.side,
+          wallId: target.wallId,
+          parentId: target.wallId,
         })
-        useScene.getState().createNode(node, event.node.id as AnyNodeId)
+        useScene.getState().createNode(node, target.wallId as AnyNodeId)
         placedId = node.id
       } else {
         useScene.getState().updateNode(movingDoorNode.id, {
@@ -331,21 +297,21 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         useScene.temporal.getState().resume()
 
         useScene.getState().updateNode(movingDoorNode.id, {
-          position: [clampedX, clampedY, 0],
-          rotation: [0, itemRotation, 0],
-          side,
-          parentId: event.node.id,
-          wallId: event.node.id,
+          position: [target.clampedX, target.clampedY, 0],
+          rotation: [0, target.itemRotation, 0],
+          side: target.side,
+          parentId: target.wallId,
+          wallId: target.wallId,
           metadata: {},
         })
 
-        if (original.parentId && original.parentId !== event.node.id) {
+        if (original.parentId && original.parentId !== target.wallId) {
           markWallDirty(original.parentId)
         }
         placedId = movingDoorNode.id
       }
 
-      markWallDirty(event.node.id)
+      markWallDirty(target.wallId)
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useScene.temporal.getState().pause()
 
@@ -359,6 +325,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     const onWallLeave = () => {
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      dragAnchor = null
+      lastTarget = null
       if (isNew) return
       if (currentWallId && currentWallId !== original.parentId) {
         markWallDirty(currentWallId)

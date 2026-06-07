@@ -70,6 +70,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
     let rotationY = node.rotation
     // Latest previewed position, so an R/T press can re-apply at the spot.
     let lastPosition: [number, number, number] = node.position
+    let dragAnchor: [number, number] | null = null
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null
         ? (node.metadata as Record<string, unknown>)
@@ -111,8 +112,11 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const onGridMove = (event: GridEvent) => {
       hasMoved = true
-      let x = snapToGridStep(event.localPosition[0])
-      let z = snapToGridStep(event.localPosition[2])
+      const rawX = event.localPosition[0]
+      const rawZ = event.localPosition[2]
+      dragAnchor ??= [rawX, rawZ]
+      let x = node.position[0] + snapToGridStep(rawX - dragAnchor[0])
+      let z = node.position[2] + snapToGridStep(rawZ - dragAnchor[1])
 
       // Figma-style alignment snap on top of grid snap; Alt bypasses. The
       // guide connects to the candidate's nearest real anchor (resolver

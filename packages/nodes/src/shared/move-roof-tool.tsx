@@ -41,6 +41,7 @@ export const MoveRoofTool: React.FC<{
   }, [])
 
   const previousGridPosRef = useRef<[number, number] | null>(null)
+  const dragAnchorRef = useRef<[number, number] | null>(null)
 
   const [cursorWorldPos, setCursorWorldPos] = useState<[number, number, number]>(() => {
     const obj = sceneRegistry.nodes.get(movingNode.id)
@@ -78,6 +79,8 @@ export const MoveRoofTool: React.FC<{
 
   useEffect(() => {
     useScene.temporal.getState().pause()
+    dragAnchorRef.current = null
+    previousGridPosRef.current = null
 
     const meta =
       typeof movingNode.metadata === 'object' && movingNode.metadata !== null
@@ -255,6 +258,24 @@ export const MoveRoofTool: React.FC<{
       return [buildingLocalX, buildingLocalZ]
     }
 
+    const localPositionToToolLocal = (
+      position: [number, number, number],
+    ): [number, number, number] => {
+      if (
+        (movingNode.type === 'roof-segment' || movingNode.type === 'stair-segment') &&
+        movingNode.parentId
+      ) {
+        const parentObj = sceneRegistry.nodes.get(movingNode.parentId)
+        if (parentObj) {
+          const point = parentObj.localToWorld(new THREE.Vector3(...position))
+          if (buildingObj) buildingObj.worldToLocal(point)
+          return [point.x, point.y, point.z]
+        }
+      }
+
+      return position
+    }
+
     const onGridMove = (event: GridEvent) => {
       const y = event.position[1]
 
@@ -263,29 +284,40 @@ export const MoveRoofTool: React.FC<{
         walls: levelWalls,
         fences: levelFences,
       })
-      // Layer alignment snap on top (top-level stair/roof). Recompute the
-      // world point from the aligned building-local point so it stays correct
-      // under building rotation.
-      const [lx, lz] = alignLocalPoint(
+      const [rawGridX, , rawGridZ] = localToWorldPoint(snappedLocal, y)
+      const [rawLocalX, rawLocalZ] = computeLocal(
+        rawGridX,
+        rawGridZ,
+        y,
         snappedLocal[0],
         snappedLocal[1],
-        event.nativeEvent?.altKey === true,
       )
-      const [gridX, , gridZ] = localToWorldPoint([lx, lz], y)
+      const anchor = dragAnchorRef.current ?? [rawLocalX, rawLocalZ]
+      dragAnchorRef.current = anchor
+
+      let localX = movingNode.position[0] + (rawLocalX - anchor[0])
+      let localZ = movingNode.position[2] + (rawLocalZ - anchor[1])
+
+      if (alignTopLevel) {
+        const aligned = alignLocalPoint(localX, localZ, event.nativeEvent?.altKey === true)
+        localX = aligned[0]
+        localZ = aligned[1]
+      }
 
       if (
         previousGridPosRef.current &&
-        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
+        (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {
         triggerSFX('sfx:grid-snap')
       }
 
-      previousGridPosRef.current = [gridX, gridZ]
+      previousGridPosRef.current = [localX, localZ]
 
-      const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
       lastLocalPosition = [localX, movingNode.position[1], localZ]
       const previewPosition = getPreviewPosition(lastLocalPosition)
-      setCursorWorldPos(isFloorPlaced ? previewPosition : [lx, event.localPosition[1], lz])
+      setCursorWorldPos(
+        isFloorPlaced ? previewPosition : localPositionToToolLocal(lastLocalPosition),
+      )
 
       // Directly update the Three.js mesh — no store update during drag
       const mesh = sceneRegistry.nodes.get(movingNode.id)
@@ -302,26 +334,13 @@ export const MoveRoofTool: React.FC<{
       // Floor-placed parents (stairs) stay in their committed local frame;
       // the lifted Y remains presentation-only in the 3D view.
       useLiveTransforms.getState().set(movingNode.id, {
-        position: isFloorPlaced ? lastLocalPosition : [gridX, y, gridZ],
+        position: lastLocalPosition,
         rotation: pendingRotation,
       })
     }
 
     const onGridClick = (event: GridEvent) => {
-      const y = event.position[1]
-      const snappedLocal = snapFenceDraftPoint({
-        point: [event.localPosition[0], event.localPosition[2]],
-        walls: levelWalls,
-        fences: levelFences,
-      })
-      const [lx, lz] = alignLocalPoint(
-        snappedLocal[0],
-        snappedLocal[1],
-        event.nativeEvent?.altKey === true,
-      )
-      const [gridX, , gridZ] = localToWorldPoint([lx, lz], y)
-
-      const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
+      const [localX, , localZ] = lastLocalPosition
 
       useAlignmentGuides.getState().clear()
       wasCommitted = true

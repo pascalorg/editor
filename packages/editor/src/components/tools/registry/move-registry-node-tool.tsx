@@ -125,6 +125,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
    * commit position consistent with the visible cursor.
    */
   const lastCursorRef = useRef<[number, number, number]>(originalPosition)
+  const dragAnchorRef = useRef<[number, number] | null>(null)
   /**
    * Becomes true on the first `grid:move` after this move arms. Commits are
    * ignored until then so a click that *armed* this move (e.g. the trailing
@@ -166,6 +167,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   useEffect(() => {
     useScene.temporal.getState().pause()
     previousSnapRef.current = null
+    dragAnchorRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
     shiftRef.current = false
@@ -267,8 +269,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     )
 
     const onGridMove = (event: GridEvent) => {
-      let x = snapToGridStep(event.localPosition[0])
-      let z = snapToGridStep(event.localPosition[2])
+      const rawX = event.localPosition[0]
+      const rawZ = event.localPosition[2]
+      const anchor = dragAnchorRef.current ?? [rawX, rawZ]
+      dragAnchorRef.current = anchor
+
+      let x = originalPosition[0] + snapToGridStep(rawX - anchor[0])
+      let z = originalPosition[2] + snapToGridStep(rawZ - anchor[1])
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // moving item's edge lines up (on X or Z) with another item's edge,
