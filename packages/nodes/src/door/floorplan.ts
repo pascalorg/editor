@@ -196,11 +196,20 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   const isSliding = node.doorType === 'sliding'
   const isPocket = node.doorType === 'pocket'
   const isBarn = node.doorType === 'barn'
+  const isGarageSectional = node.doorType === 'garage-sectional'
+  const isGarageRollup = node.doorType === 'garage-rollup'
+  const isGarageTiltup = node.doorType === 'garage-tiltup'
   // Swing doors get the dashed swing arc; garage and any other types
   // fall through to just the opening footprint (the earlier behaviour).
   const isSwingDoor = node.doorType === 'hinged' || isDoubleLeaf
+  // A frameless wall opening — drawn as a bare gap, no leaf / arc / panel
+  // (mirrors the 3D system, which renders only the cutout for openings).
+  const isOpening = node.openingKind === 'opening'
 
-  if (isFolding && width > 1e-3) {
+  if (isOpening) {
+    // Open doorway — a frameless gap in the wall. No leaf, arc, or panel;
+    // the cleared footprint above is the whole symbol.
+  } else if (isFolding && width > 1e-3) {
     // Folding / bifold door: a static accordion of panels drawn as a
     // zigzag that folds toward the hinge side, occupying ~70% of the
     // opening (a real folding door stacks to one side, so it never
@@ -427,6 +436,226 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       strokeLinecap: 'round',
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
+    })
+  } else if (isGarageSectional && width > 1e-3) {
+    // Garage sectional door: an overhead door that rolls up on side
+    // tracks. Drawn as the closed leaf across the opening (just inside
+    // the interior face), two tracks running into the garage, and a
+    // dashed ghost of the door parked at the inner end of the tracks.
+    // `swingDirection` picks the interior side. Static.
+    // Mechanism (tracks / coil) sits on the interior side — matching the
+    // 3D garage builders, which place it on the door-local -z side.
+    const interiorSign = -swingSign
+    const panelHalfThick = Math.min(depth * 0.22, 0.03)
+    const trackLen = Math.max(width * 0.55, 0.6)
+    const aX = dirX * halfWidth
+    const aZ = dirZ * halfWidth
+    const tX = perpX * panelHalfThick
+    const tZ = perpZ * panelHalfThick
+    const leafRect = (perpDist: number): [number, number][] => {
+      const rcx = cx + perpX * perpDist
+      const rcz = cz + perpZ * perpDist
+      return [
+        [rcx - aX + tX, rcz - aZ + tZ],
+        [rcx + aX + tX, rcz + aZ + tZ],
+        [rcx + aX - tX, rcz + aZ - tZ],
+        [rcx - aX - tX, rcz - aZ - tZ],
+      ]
+    }
+    const faceDist = interiorSign * halfDepth
+    const innerDist = interiorSign * (halfDepth + trackLen)
+    // Two side tracks running into the garage interior.
+    for (const edgeSign of [-1, 1]) {
+      const ex = cx + dirX * halfWidth * edgeSign
+      const ez = cz + dirZ * halfWidth * edgeSign
+      children.push({
+        kind: 'line',
+        x1: ex + perpX * faceDist,
+        y1: ez + perpZ * faceDist,
+        x2: ex + perpX * innerDist,
+        y2: ez + perpZ * innerDist,
+        stroke: accentColor,
+        strokeWidth: showSelectedChrome ? 1.4 : 1,
+        strokeOpacity: 0.85,
+        strokeDasharray: '5 4',
+        vectorEffect: 'non-scaling-stroke',
+        strokeLinecap: 'round',
+      })
+    }
+    // Dashed ghost of the door parked at the inner end of the tracks.
+    children.push({
+      kind: 'polygon',
+      points: leafRect(innerDist - interiorSign * panelHalfThick),
+      fill: 'none',
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 1.4 : 1,
+      strokeDasharray: '5 4',
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
+    })
+    // Closed leaf, just inside the interior wall face.
+    children.push({
+      kind: 'polygon',
+      points: leafRect(interiorSign * (halfDepth + panelHalfThick)),
+      fill: fillColor,
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 2 : 1.4,
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
+    })
+  } else if (isGarageRollup && width > 1e-3) {
+    // Roll-up garage door: the curtain coils into a barrel just inside
+    // the opening (rather than running back on tracks like a sectional).
+    // Drawn as the closed leaf across the opening, the coil barrel — a
+    // capsule parallel to the wall — and a small coil hint at its centre.
+    // `swingDirection` picks the interior side. Static.
+    // Mechanism (tracks / coil) sits on the interior side — matching the
+    // 3D garage builders, which place it on the door-local -z side.
+    const interiorSign = -swingSign
+    const panelHalfThick = Math.min(depth * 0.22, 0.03)
+    const aX = dirX * halfWidth
+    const aZ = dirZ * halfWidth
+    const tX = perpX * panelHalfThick
+    const tZ = perpZ * panelHalfThick
+    // Closed leaf, just inside the interior wall face.
+    const leafPerp = interiorSign * (halfDepth + panelHalfThick)
+    const lcx = cx + perpX * leafPerp
+    const lcz = cz + perpZ * leafPerp
+    children.push({
+      kind: 'polygon',
+      points: [
+        [lcx - aX + tX, lcz - aZ + tZ],
+        [lcx + aX + tX, lcz + aZ + tZ],
+        [lcx + aX - tX, lcz + aZ - tZ],
+        [lcx - aX - tX, lcz - aZ - tZ],
+      ],
+      fill: fillColor,
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 2 : 1.4,
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
+    })
+    // Coil barrel — a capsule (stadium) parallel to the wall, just inside
+    // the leaf. Built as a polygon so it's robust to wall orientation.
+    const drumRadius = Math.min(Math.max(width * 0.12, 0.08), halfWidth * 0.5, 0.16)
+    const drumPerp = interiorSign * (halfDepth + 2 * panelHalfThick + drumRadius)
+    const dcx = cx + perpX * drumPerp
+    const dcz = cz + perpZ * drumPerp
+    const capL = Math.max(halfWidth - drumRadius, 0)
+    const SAMPLES = 8
+    const capsule: [number, number][] = []
+    const c2x = dcx + dirX * capL
+    const c2z = dcz + dirZ * capL
+    for (let i = 0; i <= SAMPLES; i++) {
+      const th = Math.PI / 2 - (Math.PI * i) / SAMPLES
+      capsule.push([
+        c2x + drumRadius * (Math.cos(th) * dirX + Math.sin(th) * perpX),
+        c2z + drumRadius * (Math.cos(th) * dirZ + Math.sin(th) * perpZ),
+      ])
+    }
+    const c1x = dcx - dirX * capL
+    const c1z = dcz - dirZ * capL
+    for (let i = 0; i <= SAMPLES; i++) {
+      const ph = -Math.PI / 2 - (Math.PI * i) / SAMPLES
+      capsule.push([
+        c1x + drumRadius * (Math.cos(ph) * dirX + Math.sin(ph) * perpX),
+        c1z + drumRadius * (Math.cos(ph) * dirZ + Math.sin(ph) * perpZ),
+      ])
+    }
+    children.push({
+      kind: 'polygon',
+      points: capsule,
+      fill: fillColor,
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 1.6 : 1.1,
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
+    })
+    // Coil hint — a small circle at the barrel centre.
+    const innerR = drumRadius * 0.45
+    const coil: [number, number][] = []
+    for (let i = 0; i <= 12; i++) {
+      const a = (Math.PI * 2 * i) / 12
+      coil.push([
+        dcx + innerR * (Math.cos(a) * dirX + Math.sin(a) * perpX),
+        dcz + innerR * (Math.cos(a) * dirZ + Math.sin(a) * perpZ),
+      ])
+    }
+    children.push({
+      kind: 'polygon',
+      points: coil,
+      fill: 'none',
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 1.4 : 1,
+      strokeOpacity: 0.85,
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
+    })
+  } else if (isGarageTiltup && width > 1e-3) {
+    // Tilt-up (up-and-over) garage door: one rigid panel that pivots at
+    // the top and swings up to park overhead inside the garage. Drawn as
+    // the closed leaf across the opening, a dashed panel parked into the
+    // interior, and a dashed curved swing path between them.
+    // `swingDirection` is ignored; like the other garage builders the
+    // mechanism is on the door-local -z (interior) side. Static.
+    const interiorSign = -swingSign
+    const panelHalfThick = Math.min(depth * 0.22, 0.03)
+    const projDepth = Math.max(width * 0.5, 0.7)
+    const aX = dirX * halfWidth
+    const aZ = dirZ * halfWidth
+    const tX = perpX * panelHalfThick
+    const tZ = perpZ * panelHalfThick
+    const leafRect = (perpDist: number): [number, number][] => {
+      const rcx = cx + perpX * perpDist
+      const rcz = cz + perpZ * perpDist
+      return [
+        [rcx - aX + tX, rcz - aZ + tZ],
+        [rcx + aX + tX, rcz + aZ + tZ],
+        [rcx + aX - tX, rcz + aZ - tZ],
+        [rcx - aX - tX, rcz - aZ - tZ],
+      ]
+    }
+    const closedPerp = interiorSign * (halfDepth + panelHalfThick)
+    const parkedPerp = interiorSign * (halfDepth + projDepth)
+    // Dashed parked panel, projected overhead into the interior.
+    children.push({
+      kind: 'polygon',
+      points: leafRect(parkedPerp),
+      fill: 'none',
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 1.4 : 1,
+      strokeDasharray: '5 4',
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
+    })
+    // Dashed curved swing path from the closed leaf to the parked panel.
+    const startX = cx + perpX * closedPerp
+    const startZ = cz + perpZ * closedPerp
+    const endX = cx + perpX * parkedPerp
+    const endZ = cz + perpZ * parkedPerp
+    const midPerp = interiorSign * (halfDepth + projDepth * 0.5)
+    const ctrlX = cx + perpX * midPerp + dirX * projDepth * 0.5
+    const ctrlZ = cz + perpZ * midPerp + dirZ * projDepth * 0.5
+    children.push({
+      kind: 'path',
+      d: `M ${startX} ${startZ} Q ${ctrlX} ${ctrlZ} ${endX} ${endZ}`,
+      fill: 'none',
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 1.4 : 1,
+      strokeOpacity: 0.85,
+      strokeDasharray: '5 4',
+      strokeLinecap: 'round',
+      vectorEffect: 'non-scaling-stroke',
+    })
+    // Closed leaf, just inside the interior wall face.
+    children.push({
+      kind: 'polygon',
+      points: leafRect(closedPerp),
+      fill: fillColor,
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 2 : 1.4,
+      vectorEffect: 'non-scaling-stroke',
+      strokeLinejoin: 'round',
     })
   } else if (isSwingDoor && swingAngle > 1e-3 && width > 1e-3) {
     if (isDoubleLeaf) {
