@@ -541,6 +541,8 @@ export type FloorplanAffordance<N> = {
     nodes: Record<AnyNodeId, AnyNode>
     /** Initial pointer position in plan coordinates. */
     initialPlanPoint: FloorplanAffordancePoint
+    /** Active editor grid step in meters. */
+    gridSnapStep: number
   }): FloorplanAffordanceSession
 }
 

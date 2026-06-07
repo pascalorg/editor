@@ -471,6 +471,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         payload,
         nodes: sceneNodes,
         initialPlanPoint,
+        gridSnapStep: useEditor.getState().gridSnapStep,
       })
 
       const snapshots: NodeSnapshot[] = []

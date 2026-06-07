@@ -130,6 +130,8 @@ export type LinearResizeHandle<N> = {
   overrideTarget?: (node: N, sceneApi: SceneApi) => AnyNodeId | undefined
   min?: number | ((node: N, sceneApi: SceneApi) => number)
   max?: number | ((node: N, sceneApi: SceneApi) => number)
+  /** Snap the resized scalar to the editor's active grid step before apply. */
+  gridSnap?: boolean
   placement: HandlePlacement<N>
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor

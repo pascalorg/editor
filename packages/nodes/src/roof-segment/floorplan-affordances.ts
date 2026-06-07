@@ -4,6 +4,7 @@ import {
   type FloorplanMoveTarget,
   type RoofNode,
   type RoofSegmentNode,
+  snapScalar,
   useScene,
 } from '@pascal-app/core'
 
@@ -56,7 +57,7 @@ function resolveSegmentFrame(
  * the math survives any parent-roof rotation.
  */
 export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> = {
-  start({ node, payload, nodes, initialPlanPoint }) {
+  start({ node, payload, nodes, initialPlanPoint, gridSnapStep }) {
     const { axis, side } = payload as RoofSegmentResizePayload
     const segmentId = node.id as AnyNodeId
     const initialValue = axis === 'x' ? node.width : node.depth
@@ -79,7 +80,9 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
       apply({ planPoint }) {
         const currentLocal = projectLocalAxis(planPoint[0], planPoint[1])
         const delta = (currentLocal - initialLocal) * side
-        const newValue = Math.max(MIN_ROOF_DIM, initialValue + 2 * delta)
+        const rawValue = initialValue + 2 * delta
+        const snappedValue = gridSnapStep > 0 ? snapScalar(rawValue, gridSnapStep) : rawValue
+        const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         lastValue = newValue
         useScene
           .getState()

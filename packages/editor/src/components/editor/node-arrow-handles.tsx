@@ -12,6 +12,7 @@ import {
   nodeRegistry,
   type RadialResizeHandle,
   sceneRegistry,
+  snapScalar,
   type TapActionHandle,
   type TranslateHandle,
   useLiveNodeOverrides,
@@ -581,6 +582,10 @@ function LinearArrow({
         descriptor.axis === 'x' ? hitLocal.x : descriptor.axis === 'y' ? hitLocal.y : hitLocal.z
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
+      const gridSnapStep =
+        descriptor.kind === 'linear-resize' && descriptor.gridSnap
+          ? useEditor.getState().gridSnapStep
+          : null
       const factor =
         descriptor.kind === 'radial-resize'
           ? 1
@@ -615,7 +620,10 @@ function LinearArrow({
                 ? intersectionLocal.y
                 : intersectionLocal.z
           const delta = currentPointer - initialPointer
-          const next = Math.min(maxBound, Math.max(minBound, initialValue + delta * factor))
+          const rawNext = initialValue + delta * factor
+          const snappedNext =
+            gridSnapStep && gridSnapStep > 0 ? snapScalar(rawNext, gridSnapStep) : rawNext
+          const next = Math.min(maxBound, Math.max(minBound, snappedNext))
           return descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
         },
       }
