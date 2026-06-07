@@ -7,7 +7,7 @@ import {
   copySelectedNodesToEditorClipboard,
   pasteEditorClipboardToLevel,
 } from '../lib/scene-clipboard'
-import { sfxEmitter } from '../lib/sfx-bus'
+import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
 
@@ -322,11 +322,7 @@ export const useKeyboard = ({
           // Play appropriate SFX based on what's being deleted
           if (selectedNodeIds.length === 1) {
             const node = useScene.getState().nodes[selectedNodeIds[0]!]
-            if (node?.type === 'item') {
-              sfxEmitter.emit('sfx:item-delete')
-            } else {
-              sfxEmitter.emit('sfx:structure-delete')
-            }
+            emitDeleteSFX(node?.type)
           } else {
             sfxEmitter.emit('sfx:structure-delete')
           }

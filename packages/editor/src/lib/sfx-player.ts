@@ -39,7 +39,7 @@ export const SFX: Record<string, SFXConfig> = {
     src: '/audios/sfx/item_delete.mp3',
     rateRange: [0.9, 1.1],
     volumeRange: [0.9, 1.0],
-    panJitter: 0.15,
+    panJitter: 0.05,
   },
   itemPick: {
     src: '/audios/sfx/item_pick.mp3',
@@ -77,7 +77,7 @@ export const SFX: Record<string, SFXConfig> = {
     src: '/audios/sfx/structure_delete.mp3',
     rateRange: [0.9, 1.1],
     volumeRange: [0.9, 1.0],
-    panJitter: 0.15,
+    panJitter: 0.08,
   },
   snapshotCapture: {
     // Shutter should sound consistent — no variation.
