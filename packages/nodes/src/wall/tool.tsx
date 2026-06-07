@@ -538,6 +538,7 @@ export const WallTool: React.FC = () => {
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        triggerSFX('sfx:structure-build-start')
         // Visibility is owned by `updateWallPreview` — it flips
         // `mesh.visible` based on segment length. Setting it here
         // (before any geometry data has been written) draws the

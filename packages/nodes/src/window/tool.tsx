@@ -331,7 +331,7 @@ const WindowTool: React.FC = () => {
       useScene.getState().createNode(node, event.node.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
       useScene.temporal.getState().pause()
-      triggerSFX('sfx:item-place')
+      triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '')
       useAlignmentGuides.getState().clear()
 

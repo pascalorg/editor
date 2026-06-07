@@ -569,6 +569,7 @@ export const FenceTool: React.FC = () => {
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        triggerSFX('sfx:structure-build-start')
         previewRef.current.visible = true
         setDraftMeasurement(null)
       } else {

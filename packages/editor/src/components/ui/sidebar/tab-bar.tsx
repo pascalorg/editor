@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
 
@@ -33,7 +34,11 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
             key={tab.id}
-            onClick={() => onTabChange(tab.id)}
+            onClick={() => {
+              triggerSFX('sfx:menu-click')
+              onTabChange(tab.id)
+            }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
             {tab.label}
@@ -77,7 +82,11 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
                       ? 'bg-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
                       : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
                   )}
-                  onClick={() => onIconClick(tab.id)}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    onIconClick(tab.id)
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                   type="button"
                 >
                   {tab.icon ?? tab.label.charAt(0)}

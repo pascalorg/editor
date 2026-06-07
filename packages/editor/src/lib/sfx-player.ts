@@ -59,8 +59,16 @@ export const SFX: Record<string, SFXConfig> = {
     volumeRange: [0.92, 1.0],
     panJitter: 0.15,
   },
-  structureBuild: {
-    src: '/audios/sfx/structure_build.mp3',
+  // Fired when a structure draft begins (first click of a wall/slab/etc).
+  structureBuildStart: {
+    src: '/audios/sfx/structure_build_start.wav',
+    rateRange: [0.95, 1.05],
+    volumeRange: [0.88, 1.0],
+    panJitter: 0.15,
+  },
+  // Fired when a structure is committed (segment placed / polygon closed).
+  structureBuildEnd: {
+    src: '/audios/sfx/structure_build_end.wav',
     rateRange: [0.95, 1.05],
     volumeRange: [0.88, 1.0],
     panJitter: 0.15,
@@ -74,6 +82,23 @@ export const SFX: Record<string, SFXConfig> = {
   snapshotCapture: {
     // Shutter should sound consistent — no variation.
     src: '/audios/sfx/snapshot_capture.mp3',
+  },
+  // Soft tick when hovering a main category in the Build / Items panels.
+  // Kept quiet and rate-locked so sweeping across the grid reads as texture,
+  // not a melody.
+  menuHover: {
+    src: '/audios/sfx/menu_hover.wav',
+    rateRange: [0.98, 1.02],
+    volumeRange: [0.2, 0.3],
+    panJitter: 0.1,
+    minIntervalMs: 0,
+  },
+  // Fired when a main category in the Build / Items panels is clicked.
+  menuClick: {
+    src: '/audios/sfx/menu_click.wav',
+    rateRange: [0.98, 1.02],
+    volumeRange: [0.5, 0.6],
+    panJitter: 0.1,
   },
 } as const
 

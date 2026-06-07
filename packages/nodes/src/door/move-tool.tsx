@@ -349,7 +349,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       useLiveTransforms.getState().clear(movingDoorNode.id)
       useScene.temporal.getState().pause()
 
-      triggerSFX('sfx:item-place')
+      triggerSFX('sfx:structure-build')
       hideCursor()
       useViewer.getState().setSelection({ selectedIds: [placedId] })
       exitMoveMode()

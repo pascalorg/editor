@@ -1,6 +1,6 @@
 'use client'
 
-import { MaterialPaintPanel, useEditor } from '@pascal-app/editor'
+import { MaterialPaintPanel, triggerSFX, useEditor } from '@pascal-app/editor'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef } from 'react'
 import {
@@ -131,7 +131,11 @@ export function BuildTab() {
                         ? 'bg-primary/10 ring-1 ring-primary/50'
                         : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
                     )}
-                    onClick={() => handleTypeClick(type)}
+                    onClick={() => {
+                      triggerSFX('sfx:menu-click')
+                      handleTypeClick(type)
+                    }}
+                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                     type="button"
                   >
                     <Image
