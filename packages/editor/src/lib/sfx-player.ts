@@ -26,9 +26,9 @@ const DEFAULT_MIN_INTERVAL_MS = 30
 export const SFX: Record<string, SFXConfig> = {
   gridSnap: {
     src: [
-      '/audios/sfx/grid_snap_0.wav',
-      '/audios/sfx/grid_snap_1.wav',
-      '/audios/sfx/grid_snap_2.wav',
+      '/audios/sfx/grid_snap_0.mp3',
+      '/audios/sfx/grid_snap_1.mp3',
+      '/audios/sfx/grid_snap_2.mp3',
     ],
     rateRange: [0.98, 1.02],
     volumeRange: [0.5, 0.6],
@@ -42,33 +42,33 @@ export const SFX: Record<string, SFXConfig> = {
     panJitter: 0.15,
   },
   itemPick: {
-    src: '/audios/sfx/item_pick.wav',
+    src: '/audios/sfx/item_pick.mp3',
     rateRange: [0.95, 1.05],
     volumeRange: [0.92, 1.0],
     panJitter: 0.15,
   },
   itemPlace: {
-    src: '/audios/sfx/item_place.wav',
+    src: '/audios/sfx/item_place.mp3',
     rateRange: [0.98, 1.02],
     volumeRange: [0.9, 1.0],
     panJitter: 0.15,
   },
   itemRotate: {
-    src: '/audios/sfx/item_rotate.wav',
+    src: '/audios/sfx/item_rotate.mp3',
     rateRange: [0.94, 1.06],
     volumeRange: [0.92, 1.0],
     panJitter: 0.15,
   },
   // Fired when a structure draft begins (first click of a wall/slab/etc).
   structureBuildStart: {
-    src: '/audios/sfx/structure_build_start.wav',
+    src: '/audios/sfx/structure_build_start.mp3',
     rateRange: [0.95, 1.05],
     volumeRange: [0.88, 1.0],
     panJitter: 0.15,
   },
   // Fired when a structure is committed (segment placed / polygon closed).
   structureBuildEnd: {
-    src: '/audios/sfx/structure_build_end.wav',
+    src: '/audios/sfx/structure_build_end.mp3',
     rateRange: [0.95, 1.05],
     volumeRange: [0.88, 1.0],
     panJitter: 0.15,
@@ -87,7 +87,7 @@ export const SFX: Record<string, SFXConfig> = {
   // Kept quiet and rate-locked so sweeping across the grid reads as texture,
   // not a melody.
   menuHover: {
-    src: '/audios/sfx/menu_hover.wav',
+    src: '/audios/sfx/menu_hover.mp3',
     rateRange: [0.98, 1.02],
     volumeRange: [0.2, 0.3],
     panJitter: 0.1,
@@ -95,7 +95,7 @@ export const SFX: Record<string, SFXConfig> = {
   },
   // Fired when a main category in the Build / Items panels is clicked.
   menuClick: {
-    src: '/audios/sfx/menu_click.wav',
+    src: '/audios/sfx/menu_click.mp3',
     rateRange: [0.98, 1.02],
     volumeRange: [0.5, 0.6],
     panJitter: 0.1,
