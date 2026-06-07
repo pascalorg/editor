@@ -43,7 +43,7 @@ function getEnumValue<T extends readonly string[]>(
 }
 
 function getNullableString(value: unknown) {
-  return typeof value === 'string' ? value : null
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 function getStringArray(value: unknown) {

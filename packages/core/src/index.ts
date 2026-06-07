@@ -59,6 +59,15 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  type Point2D as PolygonPoint2D,
+  pointInPolygon as pointInPolygon2D,
+  pointOnSegment,
+  polygonContainsPolygon,
+  polygonsIntersect,
+  polygonsOverlap,
+  segmentsIntersect,
+} from './lib/polygon-relations'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
   type AutoCeilingPlanningContext,
@@ -161,6 +170,7 @@ export {
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
+export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
