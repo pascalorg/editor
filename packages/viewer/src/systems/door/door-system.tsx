@@ -2276,6 +2276,22 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
   }
 
   syncDoorCutout(node, mesh)
+
+  // Guard: some degenerate door configs can leave a child mesh with an
+  // empty (0-vertex) geometry — e.g. a zero-area extruded leaf frame.
+  // Submitting such a mesh trips a WebGPU error ("Vertex buffer slot 0
+  // … was not set" on a Draw(0, …)). Hide any empty mesh so it is never
+  // drawn (it would render nothing anyway).
+  hideEmptyGeometryMeshes(mesh)
+}
+
+function hideEmptyGeometryMeshes(root: THREE.Object3D) {
+  root.traverse((obj) => {
+    const child = obj as THREE.Mesh
+    if (!child.isMesh || !child.geometry) return
+    const position = child.geometry.getAttribute('position')
+    if (!position || position.count === 0) child.visible = false
+  })
 }
 
 function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {

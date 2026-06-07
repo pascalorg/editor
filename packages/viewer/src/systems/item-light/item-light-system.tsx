@@ -35,6 +35,19 @@ const _itemPos = new Vector3()
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 type InteractiveState = ReturnType<typeof useInteractive.getState>
 
+function resolveNodeLevelId(nodeId: AnyNodeId, nodes: SceneNodes): string | null {
+  let current = nodes[nodeId]
+  let guard = 0
+
+  while (current && guard < 16) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
+    guard += 1
+  }
+
+  return null
+}
+
 function scoreRegistration(
   reg: import('../../store/use-item-light-pool').LightRegistration,
   nodes: SceneNodes,
@@ -67,8 +80,7 @@ function scoreRegistration(
   const dist = _camPos.distanceTo(_itemPos) / 200
 
   // ── Level factor ──────────────────────────────────────────────────────────
-  const node = nodes[nodeId]
-  const itemLevelId = node?.parentId ?? null
+  const itemLevelId = resolveNodeLevelId(nodeId, nodes)
 
   let levelPenalty = 0
   if (selectedLevelId) {
@@ -135,7 +147,10 @@ export function ItemLightSystem() {
       scored.sort((a, b) => a.score - b.score)
 
       // Build the desired assignment (top POOL_SIZE keys)
-      const desired = scored.slice(0, POOL_SIZE).map((s) => s.key)
+      const desired = scored
+        .filter((s) => Number.isFinite(s.score))
+        .slice(0, POOL_SIZE)
+        .map((s) => s.key)
 
       // Build a map of currently-assigned keys → slot index for hysteresis
       const currentlyAssigned = new Map<string, number>()
@@ -224,9 +239,11 @@ export function ItemLightSystem() {
 
       // Fade-out phase: lerp intensity → 0, then complete the transition
       if (slot.isFadingOut) {
+        light.visible = true
         light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
         if (light.intensity < 0.01) {
           light.intensity = 0
+          light.visible = false
           slot.isFadingOut = false
           slot.key = slot.pendingKey
           slot.pendingKey = null
@@ -245,6 +262,7 @@ export function ItemLightSystem() {
       if (!slot.key) {
         // Idle slot — keep dark
         light.intensity = 0
+        light.visible = false
         continue
       }
 
@@ -252,6 +270,7 @@ export function ItemLightSystem() {
       if (!reg) {
         slot.key = null
         light.intensity = 0
+        light.visible = false
         continue
       }
 
@@ -275,7 +294,14 @@ export function ItemLightSystem() {
         ? MathUtils.lerp(reg.effect.intensityRange[0], reg.effect.intensityRange[1], t)
         : reg.effect.intensityRange[0]
 
+      if (targetIntensity > 0) {
+        light.visible = true
+      }
       light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
+      if (targetIntensity <= 0 && light.intensity < 0.01) {
+        light.intensity = 0
+        light.visible = false
+      }
     }
   })
 
@@ -286,6 +312,7 @@ export function ItemLightSystem() {
           castShadow={false}
           intensity={0}
           key={i}
+          visible={false}
           ref={(el: any) => {
             lightRefs.current[i] = el
           }}

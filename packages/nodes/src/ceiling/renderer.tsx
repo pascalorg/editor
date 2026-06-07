@@ -5,23 +5,21 @@ import {
   getMaterialPresetByRef,
   resolveMaterial,
   useRegistry,
+  useScene,
 } from '@pascal-app/core'
 import {
   createSurfaceRoleMaterial,
   NodeRenderer,
   resolveSurfaceColor,
-  useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute } from 'three'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 
 function createEmptyGeometry() {
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new Float32BufferAttribute([], 3))
-  return geometry
+  return createPlaceholderGeometry()
 }
 
 const gridScale = 5
@@ -69,7 +67,15 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
 
   useRegistry(node.id, 'ceiling', ref)
-  const handlers = useNodeEvents(node, 'ceiling')
+  // Build the real geometry on mount instead of relying on a child item to
+  // mark us dirty (CeilingSystem only rebuilds dirty ceilings). Ceiling-hosted
+  // items are async GLB loads, so without this the ceiling holds its
+  // placeholder geometry until the first child finishes downloading — and a
+  // childless ceiling would never build at all. Mirrors WallRenderer /
+  // RoofRenderer.
+  useLayoutEffect(() => {
+    useScene.getState().markDirty(node.id)
+  }, [node.id])
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
@@ -123,7 +129,6 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
         geometry={gridPlaceholderGeometry}
         material={materials.topMaterial}
         name="ceiling-grid"
-        {...handlers}
         scale={0}
         visible={false}
       />

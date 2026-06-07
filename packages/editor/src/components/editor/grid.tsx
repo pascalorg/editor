@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { MathUtils, type Mesh, PlaneGeometry, Vector2, Vector3 } from 'three'
 import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useCeilingEvents } from '../../hooks/use-ceiling-events'
 import { useGridEvents } from '../../hooks/use-grid-events'
 
 export const Grid = ({
@@ -117,6 +118,10 @@ export const Grid = ({
 
   // Use custom raycasting for grid events (independent of mesh events)
   useGridEvents(gridY)
+  // Same technique for ceiling-item placement: a math-plane raycast per ceiling,
+  // so commits don't depend on hitting the thin, single-sided `ceiling-grid`
+  // overlay mesh (which dropped clicks even with the green box showing).
+  useCeilingEvents()
 
   // Track the last world-space cursor hit. The reveal-fade shader reads
   // `positionLocal.xy` (vertex position on the un-transformed plane), and

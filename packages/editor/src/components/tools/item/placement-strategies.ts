@@ -365,16 +365,19 @@ export const ceilingStrategy = {
     // use the ceiling hit's local position rather than world position.
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    const worldSnapped = event.object.localToWorld(new Vector3(x, -itemHeight, z))
+    // Recessed fixtures seat flush with the ceiling plane (body rising into the
+    // void above); everything else hangs its full height below the ceiling.
+    const seatY = ctx.asset.recessed ? 0 : -itemHeight
+    const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
       stateUpdate: { surface: 'ceiling', ceilingId: event.node.id },
       nodeUpdate: {
-        position: [x, -itemHeight, z],
+        position: [x, seatY, z],
         parentId: event.node.id,
       },
       cursorRotationY: 0,
-      gridPosition: [x, -itemHeight, z],
+      gridPosition: [x, seatY, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       stopPropagation: true,
     }
@@ -396,10 +399,13 @@ export const ceilingStrategy = {
 
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    const worldSnapped = event.object.localToWorld(new Vector3(x, -itemHeight, z))
+    // Recessed fixtures seat flush with the ceiling plane (body rising into the
+    // void above); everything else hangs its full height below the ceiling.
+    const seatY = ctx.draftItem.asset.recessed ? 0 : -itemHeight
+    const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
-      gridPosition: [x, -itemHeight, z],
+      gridPosition: [x, seatY, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       cursorRotationY: 0,
       nodeUpdate: null,

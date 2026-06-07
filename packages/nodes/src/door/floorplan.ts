@@ -196,6 +196,9 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   const isSliding = node.doorType === 'sliding'
   const isPocket = node.doorType === 'pocket'
   const isBarn = node.doorType === 'barn'
+  // Swing doors get the dashed swing arc; garage and any other types
+  // fall through to just the opening footprint (the earlier behaviour).
+  const isSwingDoor = node.doorType === 'hinged' || isDoubleLeaf
 
   if (isFolding && width > 1e-3) {
     // Folding / bifold door: a static accordion of panels drawn as a
@@ -425,7 +428,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
     })
-  } else if (swingAngle > 1e-3 && width > 1e-3) {
+  } else if (isSwingDoor && swingAngle > 1e-3 && width > 1e-3) {
     if (isDoubleLeaf) {
       // Two half-width leaves hinged at the opposite outer ends, each
       // swinging toward the centre. `hingesSide` is irrelevant for a

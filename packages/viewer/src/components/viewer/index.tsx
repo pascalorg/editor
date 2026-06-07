@@ -4,6 +4,7 @@ import { type AnyNodeId, StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three/webgpu'
+import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
@@ -43,6 +44,62 @@ extend(THREE as any)
 // concurrent configure() calls await the same init instead of creating two
 // renderers in parallel and only caching the second.
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
+
+const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+
+/**
+ * Renderer-level safety net against the empty-vertex-buffer crash.
+ *
+ * Wraps the per-object render function so any draw whose geometry has a count-0
+ * `position` attribute is skipped instead of submitted. One such draw leaves
+ * WebGPU vertex buffer slot 0 unbound, which the validator rejects and which
+ * poisons the *whole* command encoder — so a single stray empty mesh (e.g. a
+ * transient placeholder, or a derived edge/outline geometry) flickers the entire
+ * canvas, not just itself. See `hasDrawableGeometry`.
+ *
+ * The custom render-object function is the documented three.js hook for this
+ * (`Renderer.setRenderObjectFunction`); it must call `renderObject()` for
+ * everything it keeps. `MergedOutlineNode` captures and restores this function
+ * around its passes, so the guard survives outline rendering (its own passes
+ * carry the same check inline).
+ */
+function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
+  renderer.setRenderObjectFunction(
+    (
+      object: any,
+      scene: any,
+      camera: any,
+      geometry: any,
+      material: any,
+      group: any,
+      lightsNode: any,
+      clippingContext: any,
+      passId: any,
+    ) => {
+      if (!hasDrawableGeometry(geometry)) {
+        if (warnedEmptyDraw && !warnedEmptyDraw.has(geometry ?? object)) {
+          warnedEmptyDraw.add(geometry ?? object)
+          console.warn(
+            '[viewer] skipped a draw with an empty position buffer (would poison the WebGPU command encoder)',
+            { name: object?.name, type: object?.type, material: material?.name },
+          )
+        }
+        return
+      }
+      ;(renderer as any).renderObject(
+        object,
+        scene,
+        camera,
+        geometry,
+        material,
+        group,
+        lightsNode,
+        clippingContext,
+        passId,
+      )
+    },
+  )
+}
 
 /**
  * Monitors the WebGPU device for loss / uncaptured errors and logs them.
@@ -245,6 +302,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 useViewer.getState().sceneTheme,
               ).toneMappingExposure
               await renderer.init()
+              installEmptyDrawGuard(renderer)
               return renderer
             } catch (err) {
               // Drop the failed promise from the cache so a future Canvas
