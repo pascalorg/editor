@@ -50,7 +50,7 @@ import {
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
-import { sfxEmitter } from '../../lib/sfx-bus'
+import { emitDeleteSFX } from '../../lib/sfx-bus'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
@@ -1555,11 +1555,7 @@ export const SelectionManager = () => {
       event.stopPropagation()
 
       // Play appropriate SFX
-      if (node.type === 'item') {
-        sfxEmitter.emit('sfx:item-delete')
-      } else {
-        sfxEmitter.emit('sfx:structure-delete')
-      }
+      emitDeleteSFX(node.type)
 
       useScene.getState().deleteNode(node.id as AnyNodeId)
       if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)

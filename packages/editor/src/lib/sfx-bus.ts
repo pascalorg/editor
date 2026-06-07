@@ -55,3 +55,19 @@ export function initSFXBus() {
 export function triggerSFX(event: keyof SFXEvents) {
   sfxEmitter.emit(event)
 }
+
+/**
+ * Node types whose deletion should use the lighter item-delete cue rather
+ * than the heavier structure-delete one. Shelves are furniture-like placeable
+ * objects, so they sound like items being removed, not structures demolished.
+ */
+const ITEM_DELETE_NODE_TYPES = new Set(['item', 'shelf'])
+
+/**
+ * Emit the delete SFX appropriate for a deleted node's type.
+ */
+export function emitDeleteSFX(nodeType: string | undefined) {
+  sfxEmitter.emit(
+    nodeType && ITEM_DELETE_NODE_TYPES.has(nodeType) ? 'sfx:item-delete' : 'sfx:structure-delete',
+  )
+}
