@@ -57,7 +57,7 @@ import useEditor, {
   type Phase,
   type StructureLayer,
 } from './../../store/use-editor'
-import { boxSelectHandled } from '../tools/select/box-select-tool'
+import { boxSelectHandled } from '../tools/select/box-select-state'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.

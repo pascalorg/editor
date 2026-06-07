@@ -1,25 +1,12 @@
-import {
-  type AnyNode,
-  type AnyNodeId,
-  isRegistrySelectable,
-  type LevelNode,
-  nodeRegistry,
-  resolveBuildingForLevel,
-  sceneRegistry,
-  useScene,
-  type ZoneNode,
-} from '@pascal-app/core'
+import { sceneRegistry, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { Box3, type Camera, type Object3D, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
-
-/**
- * Module-level flag to prevent the SelectionManager from deselecting
- * on the grid:click that fires right after a box-select drag completes.
- */
-export let boxSelectHandled = false
+import { clearBoxSelectHandled, markBoxSelectHandled } from './box-select-state'
+import { PlaneBoxSelectTool } from './plane-box-select-tool'
+import { collectSelectableCandidateIds } from './select-candidates'
 
 type ScreenRect = { minX: number; minY: number; maxX: number; maxY: number }
 
@@ -193,122 +180,6 @@ function isObjectVisible(object: Object3D): boolean {
   return true
 }
 
-function isFurnishSelectableCandidate(node: AnyNode): boolean {
-  if (node.type === 'item') {
-    return node.asset.category !== 'door' && node.asset.category !== 'window'
-  }
-
-  const def = nodeRegistry.get(node.type)
-  return Boolean(def?.category === 'furnish' && def.capabilities.selectable)
-}
-
-function isStructureSelectableCandidate(node: AnyNode): boolean {
-  if (
-    node.type === 'wall' ||
-    node.type === 'fence' ||
-    node.type === 'column' ||
-    node.type === 'elevator' ||
-    node.type === 'slab' ||
-    node.type === 'ceiling' ||
-    node.type === 'roof' ||
-    node.type === 'stair' ||
-    node.type === 'spawn' ||
-    node.type === 'window' ||
-    node.type === 'door'
-  ) {
-    return true
-  }
-
-  if (node.type === 'item') {
-    return node.asset.category === 'door' || node.asset.category === 'window'
-  }
-
-  const def = nodeRegistry.get(node.type)
-  return Boolean(def && def.category !== 'furnish' && def.capabilities.selectable)
-}
-
-function collectSelectableCandidateIds(): string[] {
-  const { levelId } = useViewer.getState().selection
-  const { nodes } = useScene.getState()
-  const { phase, structureLayer } = useEditor.getState()
-  const result: string[] = []
-  const seen = new Set<string>()
-  const addNode = (node: AnyNode | undefined) => {
-    if (!node || seen.has(node.id)) return
-    seen.add(node.id)
-    result.push(node.id)
-  }
-
-  if (phase === 'site') {
-    for (const node of Object.values(nodes)) {
-      if (node.type === 'building') addNode(node)
-    }
-    return result
-  }
-
-  if (!levelId) return []
-  const levelNode = nodes[levelId as AnyNodeId] as LevelNode | undefined
-  if (!levelNode || levelNode.type !== 'level') return []
-
-  if (phase === 'structure' && structureLayer === 'zones') {
-    for (const childId of levelNode.children) {
-      const node = nodes[childId as AnyNodeId]
-      if (node?.type === 'zone') addNode(node)
-    }
-    return result
-  }
-
-  for (const childId of levelNode.children) {
-    const node = nodes[childId as AnyNodeId]
-    if (!node) continue
-
-    if (phase === 'furnish') {
-      if (isFurnishSelectableCandidate(node)) addNode(node)
-      continue
-    }
-
-    if (node.type === 'wall' || node.type === 'fence') {
-      addNode(node)
-      const hostedChildren = 'children' in node && Array.isArray(node.children) ? node.children : []
-      for (const hostedChildId of hostedChildren) {
-        const child = nodes[hostedChildId as AnyNodeId]
-        if (!child) continue
-        if (
-          child.type === 'window' ||
-          child.type === 'door' ||
-          (child.type === 'item' &&
-            (child.asset.category === 'door' || child.asset.category === 'window'))
-        ) {
-          addNode(child)
-        }
-      }
-      continue
-    }
-
-    if (isStructureSelectableCandidate(node)) {
-      addNode(node)
-    }
-  }
-
-  const buildingId = resolveBuildingForLevel(levelId as AnyNodeId, nodes)
-  const buildingNode = buildingId ? nodes[buildingId] : undefined
-  const buildingChildren =
-    buildingNode && 'children' in buildingNode && Array.isArray(buildingNode.children)
-      ? (buildingNode.children as AnyNodeId[])
-      : []
-  for (const childId of buildingChildren) {
-    const node = nodes[childId]
-    if (!node || node.type === 'level' || !isRegistrySelectable(node.type)) continue
-    if (phase === 'furnish') {
-      if (isFurnishSelectableCandidate(node)) addNode(node)
-    } else if (isStructureSelectableCandidate(node)) {
-      addNode(node)
-    }
-  }
-
-  return result
-}
-
 function collectNodeIdsInScreenRect(
   rect: ScreenRect,
   camera: Camera,
@@ -356,14 +227,19 @@ function commitBoxSelection(ids: string[], event: PointerEvent) {
 export const BoxSelectTool: React.FC = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
+  const selectionTool = useEditor((s) => s.floorplanSelectionTool)
   const isActive = mode === 'select' && (phase === 'structure' || phase === 'furnish')
 
   if (!isActive) return null
 
-  return <BoxSelectToolInner />
+  if (selectionTool === 'marquee') {
+    return <PlaneBoxSelectTool />
+  }
+
+  return <ScreenRectangleSelectTool />
 }
 
-const BoxSelectToolInner: React.FC = () => {
+const ScreenRectangleSelectTool: React.FC = () => {
   const { camera, gl } = useThree()
   const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const elementRef = useRef<HTMLDivElement | null>(null)
@@ -376,19 +252,7 @@ const BoxSelectToolInner: React.FC = () => {
   const startClientYRef = useRef(0)
   const currentClientXRef = useRef(0)
   const currentClientYRef = useRef(0)
-  const handledResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spaceDownRef = useRef(false)
-
-  const markBoxSelectHandled = useCallback(() => {
-    boxSelectHandled = true
-    if (handledResetTimeoutRef.current) {
-      clearTimeout(handledResetTimeoutRef.current)
-    }
-    handledResetTimeoutRef.current = setTimeout(() => {
-      boxSelectHandled = false
-      handledResetTimeoutRef.current = null
-    }, 50)
-  }, [])
 
   const syncPreviewSelectedIds = useCallback(
     (nextIds: string[]) => {
@@ -456,7 +320,7 @@ const BoxSelectToolInner: React.FC = () => {
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [markBoxSelectHandled, resetDrag])
+  }, [resetDrag])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -489,6 +353,9 @@ const BoxSelectToolInner: React.FC = () => {
         ownsInputDraggingRef.current = true
         useViewer.getState().setInputDragging(true)
         markBoxSelectHandled()
+        try {
+          canvas.setPointerCapture(event.pointerId)
+        } catch {}
       }
 
       if (!isDraggingRef.current) return
@@ -565,10 +432,6 @@ const BoxSelectToolInner: React.FC = () => {
       currentClientXRef.current = event.clientX
       currentClientYRef.current = event.clientY
       syncPreviewSelectedIds([])
-
-      try {
-        canvas.setPointerCapture(event.pointerId)
-      } catch {}
     }
 
     const onPointerCancel = (event: PointerEvent) => {
@@ -588,14 +451,11 @@ const BoxSelectToolInner: React.FC = () => {
       window.removeEventListener('pointercancel', onPointerCancel)
       resetDrag()
     }
-  }, [camera, gl, markBoxSelectHandled, resetDrag, syncPreviewSelectedIds])
+  }, [camera, gl, resetDrag, syncPreviewSelectedIds])
 
   useEffect(() => {
     return () => {
-      if (handledResetTimeoutRef.current) {
-        clearTimeout(handledResetTimeoutRef.current)
-      }
-      boxSelectHandled = false
+      clearBoxSelectHandled()
       resetDrag()
     }
   }, [resetDrag])
