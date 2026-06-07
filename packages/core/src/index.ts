@@ -61,6 +61,7 @@ export {
 } from './lib/door-operation'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
+  type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
   detectSpacesForLevel,
@@ -69,6 +70,7 @@ export {
   pauseSpaceDetection,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  projectAutoSlabsForPlan,
   resumeSpaceDetection,
   type Space,
   wallTouchesOthers,
