@@ -42,6 +42,7 @@ export type FirstPersonSpawn = {
 }
 
 type LevelNode = Extract<AnyNode, { type: 'level' }>
+type SiteNode = Extract<AnyNode, { type: 'site' }>
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 
 function isMesh(object: THREE.Object3D): object is THREE.Mesh {
@@ -55,7 +56,12 @@ function isColliderMaterialVisible(material: THREE.Material | THREE.Material[]) 
 function isGenericColliderNode(node: AnyNode) {
   if (node.visible === false) return false
   if (DEDICATED_COLLIDER_NODE_TYPES.has(node.type)) return false
-  return COLLIDER_NODE_CATEGORIES.has(nodeRegistry.get(node.type)?.category ?? '')
+  const def = nodeRegistry.get(node.type)
+  // Ceilings are a transparent mount surface for fixtures (lights, fans), not a
+  // walkable or blocking structure — the walkthrough player must pass through
+  // them rather than be held up as if standing on a floor slab.
+  if (def?.surfaceRole === 'ceiling') return false
+  return COLLIDER_NODE_CATEGORIES.has(def?.category ?? '')
 }
 
 function createBoxColliderGeometry(width: number, height: number, depth: number) {
@@ -112,6 +118,55 @@ function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
     if (node?.type !== 'level') continue
 
     const geometry = createLevelFallbackFloorGeometry(node, nodes)
+    if (geometry) geometries.push(geometry)
+  }
+
+  return geometries
+}
+
+// The visible ground is the site node's ground mesh, but `site` is a `site`
+// category node and therefore excluded from the generic collider sweep. Without
+// a dedicated collider, a spawn on the bare ground (no slab, or not parented to
+// a level that triggers the per-level fallback) has no floor to stand on and the
+// walkthrough player falls through. Derive a thin ground slab from node data (not
+// the rendered mesh) so it exists regardless of geometry-mount timing, sized to
+// cover the whole scene footprint at the site's ground plane.
+function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
+  if (site.visible === false) return null
+
+  const siteObject = sceneRegistry.nodes.get(site.id)
+  if (!siteObject?.visible) return null
+
+  const bounds = computeSceneBoundsXZ(nodes)
+  const [centerX, centerZ] = bounds?.center ?? [0, 0]
+  const [boundsWidth, boundsDepth] = bounds?.size ?? [0, 0]
+  const width = Math.max(
+    boundsWidth + LEVEL_FALLBACK_FLOOR_PADDING * 2,
+    LEVEL_FALLBACK_FLOOR_MIN_SIZE,
+  )
+  const depth = Math.max(
+    boundsDepth + LEVEL_FALLBACK_FLOOR_PADDING * 2,
+    LEVEL_FALLBACK_FLOOR_MIN_SIZE,
+  )
+
+  const geometry = createBoxColliderGeometry(width, LEVEL_FALLBACK_FLOOR_THICKNESS, depth)
+
+  siteObject.updateWorldMatrix(true, false)
+  geometry.applyMatrix4(
+    new THREE.Matrix4().makeTranslation(centerX, -LEVEL_FALLBACK_FLOOR_THICKNESS / 2, centerZ),
+  )
+  geometry.applyMatrix4(siteObject.matrixWorld)
+  return geometry
+}
+
+function collectSiteGroundColliderGeometries(nodes: SceneNodes) {
+  const geometries: THREE.BufferGeometry[] = []
+
+  for (const siteId of sceneRegistry.byType.site ?? []) {
+    const node = nodes[siteId as AnyNodeId]
+    if (node?.type !== 'site') continue
+
+    const geometry = createSiteGroundColliderGeometry(node, nodes)
     if (geometry) geometries.push(geometry)
   }
 
@@ -327,6 +382,7 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
   }
 
   geometries.push(...collectLevelFallbackFloorGeometries(nodes))
+  geometries.push(...collectSiteGroundColliderGeometries(nodes))
 
   if (geometries.length === 0) {
     return null
