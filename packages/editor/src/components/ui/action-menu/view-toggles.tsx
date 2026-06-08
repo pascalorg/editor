@@ -995,7 +995,6 @@ export function SecondaryToggles() {
   return (
     <div className="flex items-center gap-1">
       <ReferencesControl />
-      <ReferenceFloorControl />
     </div>
   )
 }
