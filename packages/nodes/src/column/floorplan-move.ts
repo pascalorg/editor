@@ -10,7 +10,7 @@ import {
 } from '@pascal-app/core'
 import {
   applyFloorplanAlignment,
-  snapPointToGrid,
+  snapBuildingLocalToWorldGrid,
   triggerSFX,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -56,7 +56,10 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
     apply({ planPoint, modifiers }) {
       const gridSnapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : (snapBuildingLocalToWorldGrid(
+            [planPoint[0], planPoint[1]] as WallPlanPoint,
+            GRID_STEP,
+          ) as WallPlanPoint)
       // Figma-style alignment layered on the grid snap (Alt bypasses).
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,

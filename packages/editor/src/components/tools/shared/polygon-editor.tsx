@@ -15,6 +15,7 @@ import {
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import {
   createMoveCrossHandleGeometry,
   ARROW_COLOR as EDGE_ARROW_COLOR,
@@ -522,8 +523,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   // Listen to grid:move events to track cursor position
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
-      const gridX = snapToHalf(event.localPosition[0])
-      const gridZ = snapToHalf(event.localPosition[2])
+      // World-grid snap projected into building-local; without this a
+      // rotated building dragged polygon vertices off the visible grid.
+      const [gridX, gridZ] = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        0.5,
+      ).local
       const newPosition: [number, number] = [gridX, gridZ]
 
       // Play snap sound when cursor moves to a new grid cell during drag

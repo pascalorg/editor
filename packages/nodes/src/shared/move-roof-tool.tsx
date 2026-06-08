@@ -8,7 +8,6 @@ import {
   nodeRegistry,
   type RoofNode,
   type RoofSegmentNode,
-  resolveAlignment,
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
@@ -25,6 +24,7 @@ import {
   triggerSFX,
   useEditor,
   type WallPlanPoint,
+  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -199,7 +199,7 @@ export const MoveRoofTool: React.FC<{
         useAlignmentGuides.getState().clear()
         return [lx, lz]
       }
-      const ar = resolveAlignment({
+      const ar = resolveAlignmentForActiveBuilding({
         moving: [{ nodeId: movingNode.id, kind: 'corner', x: lx, z: lz }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,

@@ -9,7 +9,6 @@ import {
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
-  resolveAlignment,
   resumeSceneHistory,
   useAlignmentGuides,
   useScene,
@@ -24,11 +23,14 @@ import {
   MeasurementPill,
   type MovingWallEndpoint,
   markToolCancelConsumed,
+  snapBuildingLocalToWorldGrid,
   snapWallDraftPoint,
   triggerSFX,
   useEditor,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallPlanPoint,
+  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -291,11 +293,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // for precision placement, so it can land on positions the
       // active grid would skip (e.g. 0.05m increments when the active
       // grid is 0.5m). It does NOT bypass snap.
+      const worldStep = shiftPressedRef.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
       const snappedPoint = snapWallDraftPoint({
         point: planPoint,
         walls: levelWalls,
         ignoreWallIds: [nodeId],
         step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
+        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldStep),
       })
 
       // Figma-style alignment: nudge the dragged endpoint onto another wall /
@@ -306,7 +310,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // grid + corner snap above; Alt is reserved for corner-detach here.
       let alignedPoint = snappedPoint
       if (wallAlignmentCandidates.length > 0) {
-        const ar = resolveAlignment({
+        const ar = resolveAlignmentForActiveBuilding({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
           candidates: wallAlignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

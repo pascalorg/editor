@@ -5,7 +5,6 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
-  resolveAlignment,
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
@@ -15,6 +14,7 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -135,7 +135,7 @@ export const CeilingTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return fallback
       }
-      const ar = resolveAlignment({
+      const ar = resolveAlignmentForActiveBuilding({
         moving: [{ nodeId: '__ceiling-draft__', kind: 'corner', x: raw[0], z: raw[1] }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,

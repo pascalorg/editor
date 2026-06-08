@@ -36,6 +36,53 @@ export function snapVec3ToGrid(point: Vec3, step: number = DEFAULT_GRID_STEP): V
   return [snapScalar(point[0], step), point[1], snapScalar(point[2], step)]
 }
 
+/**
+ * Snap a world XZ point to the grid, then express it in the local frame of
+ * a building positioned at `buildingPosition` with rotation `buildingRotationY`
+ * (radians, around the Y axis). Returns both the snapped world point and its
+ * local-frame equivalent, so callers can render in either frame without
+ * recomputing the rotation.
+ *
+ * Use when a tool needs to keep snapping on the world grid (the grid the
+ * editor renders) even when the active building is rotated. Snapping in the
+ * building's local frame would otherwise chase the rotated axes and miss
+ * the visible grid lines.
+ */
+export function snapWorldXZToBuildingLocal(
+  worldX: number,
+  worldZ: number,
+  buildingPosition: Vec3,
+  buildingRotationY: number,
+  step: number = DEFAULT_GRID_STEP,
+): { world: [number, number]; local: [number, number] } {
+  if (step <= 0) {
+    const dx = worldX - buildingPosition[0]
+    const dz = worldZ - buildingPosition[2]
+    const cos = Math.cos(buildingRotationY)
+    const sin = Math.sin(buildingRotationY)
+    return {
+      world: [worldX, worldZ],
+      local: [dx * cos - dz * sin, dx * sin + dz * cos],
+    }
+  }
+  const snappedWX = Math.round(worldX / step) * step
+  const snappedWZ = Math.round(worldZ / step) * step
+  const dx = snappedWX - buildingPosition[0]
+  const dz = snappedWZ - buildingPosition[2]
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+  // The forward (local → world) rotation used in the editor is
+  //   wx = bx + lx*cos + lz*sin
+  //   wz = bz - lx*sin + lz*cos
+  // so the inverse (orthogonal, so transpose) is
+  //   lx =  dx*cos - dz*sin
+  //   lz =  dx*sin + dz*cos
+  return {
+    world: [snappedWX, snappedWZ],
+    local: [dx * cos - dz * sin, dx * sin + dz * cos],
+  }
+}
+
 // ─── Angle snap ───────────────────────────────────────────────────────
 
 /**

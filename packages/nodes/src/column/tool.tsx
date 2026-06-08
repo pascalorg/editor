@@ -8,14 +8,14 @@ import {
   emitter,
   type GridEvent,
   movingFootprintAnchors,
-  resolveAlignment,
-  snapPointToGrid,
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
   getFloorStackPreviewPosition,
+  resolveAlignmentForActiveBuilding,
+  snapWorldXZForActiveBuilding,
   triggerSFX,
   usePlacementPreview,
 } from '@pascal-app/editor'
@@ -73,7 +73,14 @@ const ColumnTool = () => {
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
 
     const onGridMove = (event: GridEvent) => {
-      const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
+      // Snap on the world XZ grid (the grid the editor renders), then
+      // store in building-local coords. Without this, a rotated building
+      // pulled the snap off the visible grid.
+      const [sx, sz] = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        GRID_STEP,
+      ).local
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // preview column's footprint edge lines up (on X or Z) with another
@@ -82,7 +89,7 @@ const ColumnTool = () => {
       let az = sz
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: movingFootprintAnchors(previewNode, sx, sz, 0),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
@@ -119,12 +126,19 @@ const ColumnTool = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
-      const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
+      // Snap on the world XZ grid (the grid the editor renders), then
+      // store in building-local coords. Without this, a rotated building
+      // pulled the snap off the visible grid.
+      const [sx, sz] = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        GRID_STEP,
+      ).local
       let ax = sx
       let az = sz
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: movingFootprintAnchors(previewNode, sx, sz, 0),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

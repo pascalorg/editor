@@ -12,7 +12,6 @@ import {
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
-  resolveAlignment,
   sceneRegistry,
   spatialGridManager,
   useAlignmentGuides,
@@ -23,6 +22,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import {
+  resolveAlignmentForActiveBuilding,
+  snapWorldXZForActiveBuilding,
+} from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
@@ -267,8 +270,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     )
 
     const onGridMove = (event: GridEvent) => {
-      let x = snapToGridStep(event.localPosition[0])
-      let z = snapToGridStep(event.localPosition[2])
+      // World-grid snap projected back into building-local for storage —
+      // rotated buildings used to drag the snap off the visible grid.
+      const snapped = snapWorldXZForActiveBuilding(
+        event.position[0],
+        event.position[2],
+        useEditor.getState().gridSnapStep,
+      ).local
+      let x = snapped[0]
+      let z = snapped[1]
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // moving item's edge lines up (on X or Z) with another item's edge,
@@ -277,7 +287,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // on an actual point. Alt bypasses.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: movingFootprintAnchors(node, x, z, rotationRef.current),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

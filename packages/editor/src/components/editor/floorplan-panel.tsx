@@ -817,8 +817,42 @@ function toPlanPointFromSvgPoint(svgPoint: SvgPoint): WallPlanPoint {
   return [toSvgX(svgPoint.x), toSvgY(svgPoint.y)]
 }
 
-function getSnappedFloorplanPoint(point: WallPlanPoint): WallPlanPoint {
-  return [snapToHalf(point[0]), snapToHalf(point[1])]
+/**
+ * Snap a building-local plan point so the resulting position sits on the
+ * **world** XZ grid (the grid the floor-plan now renders, since it lives
+ * outside the rotated scene group). The returned point is still in
+ * building-local coords, but it's the local representation of a
+ * world-grid-aligned XZ position — not a local-axis-aligned half-meter
+ * snap. Without this, rotating the building made every snap point chase
+ * the building's rotated axes instead of the visible grid.
+ */
+function snapPlanPointToWorldGrid(
+  point: WallPlanPoint,
+  buildingPosition: readonly [number, number, number],
+  buildingRotationY: number,
+  step: number,
+): WallPlanPoint {
+  if (step <= 0) return [point[0], point[1]]
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+  // local → world XZ (matches the rotation used in emitFloorplanGridEvent)
+  const worldX = buildingPosition[0] + point[0] * cos + point[1] * sin
+  const worldZ = buildingPosition[2] - point[0] * sin + point[1] * cos
+  const snappedWX = Math.round(worldX / step) * step
+  const snappedWZ = Math.round(worldZ / step) * step
+  const dwx = snappedWX - buildingPosition[0]
+  const dwz = snappedWZ - buildingPosition[2]
+  // world → local (inverse of the rotation above; orthogonal matrix → transpose)
+  return [dwx * cos - dwz * sin, dwx * sin + dwz * cos]
+}
+
+function getSnappedFloorplanPoint(
+  point: WallPlanPoint,
+  buildingPosition: readonly [number, number, number],
+  buildingRotationY: number,
+): WallPlanPoint {
+  const step = useEditor.getState().gridSnapStep ?? 0.5
+  return snapPlanPointToWorldGrid(point, buildingPosition, buildingRotationY, step)
 }
 
 function rotateVector([x, y]: WallPlanPoint, angle: number): WallPlanPoint {
@@ -1950,12 +1984,16 @@ function snapPolygonDraftPoint({
   point,
   start,
   angleSnap,
+  buildingPosition,
+  buildingRotationY,
 }: {
   point: WallPlanPoint
   start?: WallPlanPoint
   angleSnap: boolean
+  buildingPosition: readonly [number, number, number]
+  buildingRotationY: number
 }): WallPlanPoint {
-  const snappedPoint: WallPlanPoint = [snapToHalf(point[0]), snapToHalf(point[1])]
+  const snappedPoint = getSnappedFloorplanPoint(point, buildingPosition, buildingRotationY)
 
   if (!(start && angleSnap)) {
     return snappedPoint
@@ -5820,9 +5858,19 @@ export function FloorplanPanel() {
     () => getVisibleGridSteps(viewBox.width, surfaceSize.width),
     [surfaceSize.width, viewBox.width],
   )
+  // Grid bounds track the raw viewBox — the grid lives OUTSIDE the
+  // rotated scene group so it stays world-axis-aligned regardless of
+  // the building's rotation. Alignment is resolved in the matching
+  // (SVG / view) frame via `resolveAlignmentForFloorplanView` so guides
+  // come out parallel to these fixed grid lines.
   const gridBounds = useMemo(
-    () => getRotatedViewBoxBounds(viewBox, floorplanSceneRotationDeg),
-    [floorplanSceneRotationDeg, viewBox],
+    () => ({
+      minX: viewBox.minX,
+      maxX: viewBox.minX + viewBox.width,
+      minY: viewBox.minY,
+      maxY: viewBox.minY + viewBox.height,
+    }),
+    [viewBox],
   )
 
   const minorGridPath = useMemo(
@@ -6468,7 +6516,11 @@ export function FloorplanPanel() {
 
     const handleGridMove = (event: GridEvent) => {
       setStairBuildPreviewPoint(
-        getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]),
+        getSnappedFloorplanPoint(
+          [event.localPosition[0], event.localPosition[2]],
+          buildingPosition,
+          buildingRotationY,
+        ),
       )
     }
 
@@ -6477,7 +6529,7 @@ export function FloorplanPanel() {
     return () => {
       emitter.off('grid:move', handleGridMove)
     }
-  }, [isStairBuildActive])
+  }, [isStairBuildActive, buildingPosition, buildingRotationY])
 
   useEffect(() => {
     if (!isItemPlacementPreviewActive) {
@@ -6781,12 +6833,17 @@ export function FloorplanPanel() {
 
         // Wall endpoint move: grid snap only (no 45° angle snap from the
         // fixed corner — that's draft-only behaviour). Shift switches
-        // to the fine grid step for precision.
+        // to the fine grid step for precision. `gridSnap` aligns to the
+        // world XZ grid so a rotated building doesn't drag the snap off
+        // the visible grid lines.
+        const wallEndpointStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
         const snappedPoint = snapWallDraftPoint({
           point: planPoint,
           walls,
           ignoreWallIds: [dragState.wallId],
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+          gridSnap: (p) =>
+            snapPlanPointToWorldGrid(p, buildingPosition, buildingRotationY, wallEndpointStep),
         })
 
         if (pointsEqual(dragState.currentPoint, snappedPoint)) {
@@ -6848,7 +6905,7 @@ export function FloorplanPanel() {
       const chord = getWallChordFrame(wall)
       const snappedPoint: WallPlanPoint = shiftPressed
         ? planPoint
-        : [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+        : getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
       const rawCurveOffset = -(
         (snappedPoint[0] - chord.midpoint.x) * chord.normal.x +
         (snappedPoint[1] - chord.midpoint.y) * chord.normal.y
@@ -7093,7 +7150,11 @@ export function FloorplanPanel() {
         return
       }
 
-      const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
+      const snappedPoint = getSnappedFloorplanPoint(
+        planPoint,
+        buildingPosition,
+        buildingRotationY,
+      )
       setCursorPoint(snappedPoint)
 
       setSiteBoundaryDraft((currentDraft) => {
@@ -7249,7 +7310,7 @@ export function FloorplanPanel() {
       planPoint: WallPlanPoint,
       nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
-      const snappedPoint = getSnappedFloorplanPoint(planPoint)
+      const snappedPoint = getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
       const cos = Math.cos(buildingRotationY)
       const sin = Math.sin(buildingRotationY)
       const worldX = buildingPosition[0] + snappedPoint[0] * cos + snappedPoint[1] * sin
@@ -7481,6 +7542,8 @@ export function FloorplanPanel() {
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
           angleSnap,
+          buildingPosition,
+          buildingRotationY,
         })
         if (angleSnap) useAlignmentGuides.getState().clear()
         else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
@@ -7493,7 +7556,7 @@ export function FloorplanPanel() {
       }
 
       if (isRoofBuildActive) {
-        let snappedPoint = getSnappedFloorplanPoint(planPoint)
+        let snappedPoint = getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
         snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
         emitFloorplanGridEvent('move', snappedPoint, event)
         setCursorPoint((previousPoint) =>
@@ -7553,6 +7616,8 @@ export function FloorplanPanel() {
           point: planPoint,
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
+          buildingPosition,
+          buildingRotationY,
         })
         if (angleSnap) useAlignmentGuides.getState().clear()
         else snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
@@ -7619,7 +7684,7 @@ export function FloorplanPanel() {
       // routing through `grid:move`, which would otherwise be processed
       // by the floor strategy and drop the item to floor height.
       if (isCeilingItemPlacementActive) {
-        const snappedPoint = getSnappedFloorplanPoint(planPoint)
+        const snappedPoint = getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
@@ -7642,7 +7707,7 @@ export function FloorplanPanel() {
 
       if (isMarqueeSelectionToolActive) {
         setCursorPoint((previousPoint) => {
-          const snappedPoint = getSnappedFloorplanPoint(planPoint)
+          const snappedPoint = getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
           return previousPoint && pointsEqual(previousPoint, snappedPoint)
             ? previousPoint
             : snappedPoint
@@ -7655,19 +7720,26 @@ export function FloorplanPanel() {
         return
       }
 
-      // Wall draft: grid snap (orthogonal walls follow naturally from a
-      // grid-aligned start; Shift = fine 0.05m step), then Figma-style
-      // alignment layered on top. An existing wall endpoint / join snap
-      // wins outright — never pull the cursor off a corner the user is
-      // closing onto — so alignment runs ONLY when the wall snap left the
-      // point on the plain grid. Alt bypasses alignment.
+      // Wall draft: 45° angle snap from the start (straight axes + 45°
+      // diagonals) so the second click lands on a clean angle by
+      // default. Shift drops the angle constraint and switches to the
+      // fine 0.05m grid for free-form placement. Figma-style alignment
+      // is layered on top. An existing wall endpoint / join snap wins
+      // outright — never pull the cursor off a corner the user is
+      // closing onto — so alignment runs ONLY when the wall snap left
+      // the point on the plain grid. Alt bypasses alignment.
       const gridStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+      const worldGridSnap = (p: WallPlanPoint) =>
+        snapPlanPointToWorldGrid(p, buildingPosition, buildingRotationY, gridStep)
       const wallSnapped = snapWallDraftPoint({
         point: planPoint,
         walls,
+        start: draftStart ?? undefined,
+        angleSnap: !!draftStart && !shiftPressed,
         step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+        gridSnap: worldGridSnap,
       })
-      const gridBase = snapWallPointToGrid(planPoint, gridStep)
+      const gridBase = worldGridSnap(planPoint)
       const lockedToWall = wallSnapped[0] !== gridBase[0] || wallSnapped[1] !== gridBase[1]
       let snappedPoint = wallSnapped
       if (lockedToWall) {
@@ -7929,6 +8001,26 @@ export function FloorplanPanel() {
     phase,
     toPoint2D,
   })
+  // Bind the world-grid snap helpers to the current building pose so the
+  // placement hook doesn't have to know about rotation/position. After the
+  // floor-plan grid was pulled out of the rotated scene group, snapping
+  // has to land on the world XZ grid — these closures carry the building
+  // pose into the otherwise pose-agnostic snap signatures.
+  const snapFloorplanPoint = useCallback(
+    (point: WallPlanPoint) =>
+      getSnappedFloorplanPoint(point, buildingPosition, buildingRotationY),
+    [buildingPosition, buildingRotationY],
+  )
+  const snapPolygonDraft = useCallback(
+    (args: { point: WallPlanPoint; start?: WallPlanPoint; angleSnap: boolean }) =>
+      snapPolygonDraftPoint({ ...args, buildingPosition, buildingRotationY }),
+    [buildingPosition, buildingRotationY],
+  )
+  const worldGridSnapAtStep = useCallback(
+    (point: WallPlanPoint, step: number) =>
+      snapPlanPointToWorldGrid(point, buildingPosition, buildingRotationY, step),
+    [buildingPosition, buildingRotationY],
+  )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({
     activePolygonDraftPoints,
     ceilingDraftPoints,
@@ -7939,7 +8031,7 @@ export function FloorplanPanel() {
     fences,
     findClosestWallPoint,
     floorplanOpeningLocalY,
-    getSnappedFloorplanPoint,
+    getSnappedFloorplanPoint: snapFloorplanPoint,
     handleCeilingItemPlacementClick,
     handleCeilingPlacementPoint,
     handleSlabPlacementPoint,
@@ -7961,10 +8053,11 @@ export function FloorplanPanel() {
     setRoofDraftEnd,
     setRoofDraftStart,
     shiftPressed,
-    snapPolygonDraftPoint,
+    snapPolygonDraftPoint: snapPolygonDraft,
     snapWallDraftPoint,
     toPoint2D,
     walls,
+    worldGridSnap: worldGridSnapAtStep,
   })
 
   const handleBackgroundClick = useCallback(
@@ -8116,6 +8209,8 @@ export function FloorplanPanel() {
         point: planPoint,
         start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
         angleSnap: activePolygonDraftPoints.length > 0 && !shiftPressed,
+        buildingPosition,
+        buildingRotationY,
       })
 
       if (isCeilingBuildActive) {
@@ -8527,7 +8622,7 @@ export function FloorplanPanel() {
       if (!planPoint) {
         return
       }
-      const snappedPoint = getSnappedFloorplanPoint(planPoint)
+      const snappedPoint = getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
 
       event.preventDefault()
       event.stopPropagation()
@@ -8572,7 +8667,7 @@ export function FloorplanPanel() {
       if (!planPoint) {
         return
       }
-      const snappedPoint = getSnappedFloorplanPoint(planPoint)
+      const snappedPoint = getSnappedFloorplanPoint(planPoint, buildingPosition, buildingRotationY)
 
       event.preventDefault()
       event.stopPropagation()
@@ -8630,7 +8725,11 @@ export function FloorplanPanel() {
 
       const rawEndPlanPoint =
         getPlanPointFromClientPoint(event.clientX, event.clientY) ?? marqueeState.currentPlanPoint
-      const endPlanPoint = getSnappedFloorplanPoint(rawEndPlanPoint)
+      const endPlanPoint = getSnappedFloorplanPoint(
+        rawEndPlanPoint,
+        buildingPosition,
+        buildingRotationY,
+      )
       const modifierKeys = getSelectionModifierKeys(event)
       const dragDistance = Math.hypot(
         event.clientX - marqueeState.startClientX,
@@ -9085,6 +9184,16 @@ export function FloorplanPanel() {
               y={viewBox.minY}
             />
 
+            {/* Grid sits OUTSIDE the rotated scene group so it stays
+                world-axis-aligned regardless of building rotation.
+                Paths are sized against the raw viewBox (see `gridBounds`). */}
+            <FloorplanGridLayer
+              majorGridPath={majorGridPath}
+              minorGridPath={minorGridPath}
+              palette={palette}
+              showGrid={showGrid}
+            />
+
             <g
               data-floorplan-scene=""
               ref={floorplanSceneRef}
@@ -9092,13 +9201,6 @@ export function FloorplanPanel() {
                 floorplanSceneRotationDeg !== 0 ? `rotate(${floorplanSceneRotationDeg})` : undefined
               }
             >
-              <FloorplanGridLayer
-                majorGridPath={majorGridPath}
-                minorGridPath={minorGridPath}
-                palette={palette}
-                showGrid={showGrid}
-              />
-
               <FloorplanReferenceFloorLayer
                 data={referenceFloorData}
                 opacity={referenceFloorOpacity}
@@ -9239,12 +9341,6 @@ export function FloorplanPanel() {
                   attribute below); see floorplan-registry-move-overlay.tsx. */}
               <FloorplanRegistryMoveOverlay />
 
-              {/* Figma-style alignment guides published by the move
-                  overlay during a free-translate drag. Sits above the
-                  registry layer so the red lines and distance pills
-                  paint on top of node geometry. */}
-              <FloorplanAlignmentGuideLayer />
-
               <FloorplanMarqueeLayer
                 bounds={visibleSvgMarqueeBounds}
                 cursorColor={palette.cursor}
@@ -9347,6 +9443,17 @@ export function FloorplanPanel() {
                 />
               )}
             </g>
+
+            {/* Figma-style alignment guides — rendered OUTSIDE the
+                rotated scene group. Guides are in WORLD XZ (shared
+                frame with the 3D alignment layer); the layer converts
+                world → SVG via a fixed 90° rotation around the
+                building's world position, which keeps lines parallel
+                to the world-axis grid regardless of building rotation. */}
+            <FloorplanAlignmentGuideLayer
+              buildingWorldPos={buildingPosition}
+              unitsPerPixel={floorplanUnitsPerPixel}
+            />
           </svg>
         )}
       </div>

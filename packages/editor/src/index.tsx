@@ -102,6 +102,7 @@ export {
   snapScalarToGrid,
   snapWallDraftPoint,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
@@ -221,6 +222,13 @@ export {
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export {
+  getActiveBuildingPose,
+  resolveAlignmentForActiveBuilding,
+  resolveAlignmentForFloorplanView,
+  snapBuildingLocalToWorldGrid,
+  snapWorldXZForActiveBuilding,
+} from './lib/world-grid-snap'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {

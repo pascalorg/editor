@@ -277,11 +277,12 @@ export const ToolManager: React.FC = () => {
           />
         )}
         {!movingNode && BuildToolComponent && tool !== 'elevator' ? <BuildToolComponent /> : null}
-        {/* Figma-style alignment guides published by the move / placement
-            tools above. Lives inside the building-local group so the
-            building-local guide coords render at the right world position. */}
-        <Alignment3DGuideLayer />
       </group>
+      {/* Figma-style alignment guides — rendered OUTSIDE the building-local
+          group so guide coords are interpreted as world-frame, matching the
+          world-axis grid. Tools now publish world-frame guides via the
+          `resolveAlignmentForActiveBuilding` wrapper. */}
+      <Alignment3DGuideLayer />
     </>
   )
 }

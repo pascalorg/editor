@@ -5,7 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { memo, useMemo, useRef } from 'react'
-import { BoxGeometry, CircleGeometry, type Group } from 'three'
+import { BoxGeometry, CircleGeometry, type Group, Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { formatMeasurement } from './measurement-pill'
@@ -21,11 +21,13 @@ import { formatMeasurement } from './measurement-pill'
  * the design reference — so they're real 3D geometry, not screen billboards.
  * Only the distance pill is screen-space (`<Html>`).
  *
- * Guide coordinates are XZ meters in the building-local frame; this layer is
- * mounted inside ToolManager's building-local group so they render at the
- * right world position (and line up with the cursor). The whole ribbon is
- * lifted to the active level's building-local Y each frame so it lies on the
- * floor being edited — not the building base — when floors are stacked.
+ * Guide coordinates are XZ meters in the WORLD frame — alignment now resolves
+ * on the world axes (via `resolveAlignmentForActiveBuilding`) so the guides
+ * stay parallel to the visible world grid even when the active building is
+ * rotated. This layer is mounted OUTSIDE the building-local ToolManager group
+ * for the same reason. The whole ribbon is lifted to the active level's WORLD
+ * Y each frame so it lies on the floor being edited — not the building base —
+ * when floors are stacked.
  */
 
 const LINE_COLOR = 0x81_8c_f8 // indigo-400 — matches the editor's selection accent (box-select / wall highlights)
@@ -57,16 +59,17 @@ export const Alignment3DGuideLayer = memo(function Alignment3DGuideLayer() {
   const unit = useViewer((s) => s.unit)
   const groupRef = useRef<Group>(null)
 
-  // Guides carry only XZ (building-local plan coords); their Y has to track
-  // the active level so the ground ribbon lies on the floor being edited,
-  // not the building base. Read the level mesh's building-local Y each frame
-  // — the same source `grid.tsx` uses, so the ribbon stays locked to the
-  // grid plane (and lerps with it during a level switch).
+  // Guides carry only XZ in WORLD coords; their Y has to track the active
+  // level's world Y so the ground ribbon lies on the floor being edited,
+  // not the building base. `getWorldPosition` walks the level mesh's
+  // parents (building / site) so it stays correct even if the building has
+  // a Y offset.
+  const worldYWork = useMemo(() => new Vector3(), [])
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
     const levelMesh = levelId ? sceneRegistry.nodes.get(levelId) : null
-    group.position.y = levelMesh ? levelMesh.position.y : 0
+    group.position.y = levelMesh ? levelMesh.getWorldPosition(worldYWork).y : 0
   })
 
   if (guides.length === 0) return null

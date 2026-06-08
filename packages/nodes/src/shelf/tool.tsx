@@ -8,14 +8,13 @@ import {
   type GridEvent,
   movingFootprintAnchors,
   type NodeEvent,
-  resolveAlignment,
   ShelfNode,
   sceneRegistry,
   snapPointToGrid,
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, getFloorStackPreviewPosition, triggerSFX } from '@pascal-app/editor'
+import { CursorSphere, getFloorStackPreviewPosition, resolveAlignmentForActiveBuilding, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
@@ -136,7 +135,7 @@ const ShelfTool = () => {
       let az = sz
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: movingFootprintAnchors(previewNode, sx, sz, 0),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

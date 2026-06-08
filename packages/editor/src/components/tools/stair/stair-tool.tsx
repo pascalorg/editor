@@ -7,7 +7,6 @@ import {
   type GridEvent,
   type LevelNode,
   type NodeEvent,
-  resolveAlignment,
   StairNode,
   StairSegmentNode,
   syncAutoStairOpenings,
@@ -22,6 +21,10 @@ import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
+import {
+  resolveAlignmentForActiveBuilding,
+  snapWorldXZForActiveBuilding,
+} from '../../../lib/world-grid-snap'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -314,7 +317,7 @@ export const StairTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]
       }
-      const ar = resolveAlignment({
+      const ar = resolveAlignmentForActiveBuilding({
         moving: [{ nodeId: '__stair-draft__', kind: 'corner', x: rawX, z: rawZ }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
@@ -334,9 +337,12 @@ export const StairTool: React.FC = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      // World-grid snap projected into building-local; rotated buildings
+      // used to drag the snap off the visible grid.
+      const snapped = snapWorldXZForActiveBuilding(event.position[0], event.position[2], 0.5).local
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        snapped[0],
+        snapped[1],
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,
@@ -356,9 +362,10 @@ export const StairTool: React.FC = () => {
     }
 
     const getAlignedGridPosition = (event: GridEvent): [number, number, number] => {
+      const snapped = snapWorldXZForActiveBuilding(event.position[0], event.position[2], 0.5).local
       const [gridX, gridZ] = alignPoint(
-        Math.round(event.localPosition[0] * 2) / 2,
-        Math.round(event.localPosition[2] * 2) / 2,
+        snapped[0],
+        snapped[1],
         event.localPosition[0],
         event.localPosition[2],
         event.nativeEvent?.altKey === true,

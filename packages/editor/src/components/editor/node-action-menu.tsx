@@ -9,7 +9,9 @@ type NodeActionMenuProps = {
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
-  onRotate?: MouseEventHandler<HTMLButtonElement>
+  /** Pointerdown begins the rotate-drag; the consumer wires window
+   *  pointermove/up to update + commit. Pass undefined to hide the button. */
+  onRotatePointerDown?: PointerEventHandler<HTMLButtonElement>
   onCurve?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
   onPointerUp?: PointerEventHandler<HTMLDivElement>
@@ -22,7 +24,7 @@ export function NodeActionMenu({
   onDelete,
   onDuplicate,
   onMove,
-  onRotate,
+  onRotatePointerDown,
   onCurve,
   onPointerDown,
   onPointerUp,
@@ -48,12 +50,13 @@ export function NodeActionMenu({
           <Move className="h-4 w-4" />
         </button>
       )}
-      {onRotate && (
+      {onRotatePointerDown && (
         <button
           aria-label="Rotate"
           className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          onClick={onRotate}
-          title="Rotate 15°"
+          onPointerDown={onRotatePointerDown}
+          style={{ cursor: 'grab', touchAction: 'none' }}
+          title="Hold and drag to rotate (Shift = 15° snap)"
           type="button"
         >
           <RotateCw className="h-4 w-4" />

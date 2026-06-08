@@ -8,7 +8,6 @@ import {
   emitter,
   type GridEvent,
   movingFootprintAnchors,
-  resolveAlignment,
   sceneRegistry,
   useAlignmentGuides,
   useLiveTransforms,
@@ -21,6 +20,7 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -119,7 +119,7 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       // tie-break), so the dot always sits on an actual point.
       const bypass = event.nativeEvent?.altKey === true
       if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: movingFootprintAnchors(node, x, z, rotationY),
           candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,

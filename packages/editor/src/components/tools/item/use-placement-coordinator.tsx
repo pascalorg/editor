@@ -10,7 +10,6 @@ import {
   getScaledDimensions,
   type ItemEvent,
   movingFootprintAnchors,
-  resolveAlignment,
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
@@ -42,6 +41,7 @@ import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { resolveAlignmentForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -670,7 +670,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           draft.id,
           useViewer.getState().selection.levelId,
         )
-        const ar = resolveAlignment({
+        const ar = resolveAlignmentForActiveBuilding({
           moving: movingFootprintAnchors(
             draft as unknown as AnyNode,
             result.gridPosition[0],

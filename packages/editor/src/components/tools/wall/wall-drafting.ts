@@ -66,6 +66,7 @@ export function snapPointTo45Degrees(
   cursor: WallPlanPoint,
   step = WALL_GRID_STEP,
   angleStep = DEFAULT_WALL_ANGLE_SNAP_STEP,
+  gridSnap?: (point: WallPlanPoint) => WallPlanPoint,
 ): WallPlanPoint {
   const dx = cursor[0] - start[0]
   const dz = cursor[1] - start[1]
@@ -73,10 +74,11 @@ export function snapPointTo45Degrees(
   const snappedAngle = Math.round(angle / angleStep) * angleStep
   const distance = Math.sqrt(dx * dx + dz * dz)
 
-  return snapPointToGrid(
-    [start[0] + Math.cos(snappedAngle) * distance, start[1] + Math.sin(snappedAngle) * distance],
-    step,
-  )
+  const projected: WallPlanPoint = [
+    start[0] + Math.cos(snappedAngle) * distance,
+    start[1] + Math.sin(snappedAngle) * distance,
+  ]
+  return gridSnap ? gridSnap(projected) : snapPointToGrid(projected, step)
 }
 
 export function getWallAngleSnapStep(step = getSegmentGridStep()): number {
@@ -417,8 +419,23 @@ export function snapWallDraftPoint(args: {
   ignoreWallIds?: string[]
   /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
   step?: number
+  /**
+   * Optional grid-snap function. When provided, replaces the default
+   * local-axis `snapPointToGrid(point, step)` — used by the 2D
+   * floor-plan to snap on the world XZ grid even when the building is
+   * rotated. Endpoint / T-snap precedence is preserved.
+   */
+  gridSnap?: (point: WallPlanPoint) => WallPlanPoint
 }): WallPlanPoint {
-  const { point, walls, start, angleSnap = false, ignoreWallIds, step: overrideStep } = args
+  const {
+    point,
+    walls,
+    start,
+    angleSnap = false,
+    ignoreWallIds,
+    step: overrideStep,
+    gridSnap,
+  } = args
 
   // Endpoint of an existing wall wins outright when the cursor is
   // anywhere within `WALL_ENDPOINT_SNAP_RADIUS` — closing a polygon or
@@ -432,8 +449,10 @@ export function snapWallDraftPoint(args: {
   const angleStep = getWallAngleSnapStep(step)
   const basePoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, step, angleStep)
-      : snapPointToGrid(point, step)
+      ? snapPointTo45Degrees(start, point, step, angleStep, gridSnap)
+      : gridSnap
+        ? gridSnap(point)
+        : snapPointToGrid(point, step)
 
   return (
     findWallSnapTarget(basePoint, walls, {

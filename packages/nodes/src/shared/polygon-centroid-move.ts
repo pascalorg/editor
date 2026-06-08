@@ -4,13 +4,12 @@ import {
   collectAlignmentAnchors,
   type FloorplanMoveTargetSession,
   polygonAnchors,
-  resolveAlignment,
   sceneRegistry,
   useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { resolveAlignmentForActiveBuilding, snapBuildingLocalToWorldGrid, type WallPlanPoint } from '@pascal-app/editor'
 import type * as THREE from 'three'
 
 /**
@@ -92,12 +91,15 @@ export function createPolygonCentroidMoveTarget(args: {
       // polygon's vertices and fold its snap into the delta. Alt bypasses.
       const target: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : (snapBuildingLocalToWorldGrid(
+            [planPoint[0], planPoint[1]] as WallPlanPoint,
+            GRID_STEP,
+          ) as WallPlanPoint)
       let dx = target[0] - originalCenter[0]
       let dz = target[1] - originalCenter[1]
 
       if (!modifiers.altKey && candidates.length > 0) {
-        const result = resolveAlignment({
+        const result = resolveAlignmentForActiveBuilding({
           moving: polygonAnchors(id, translatePolygon(originalPolygon, dx, dz)),
           candidates,
           threshold: ALIGNMENT_THRESHOLD_M,

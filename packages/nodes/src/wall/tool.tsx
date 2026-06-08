@@ -6,7 +6,6 @@ import {
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
-  resolveAlignment,
   useAlignmentGuides,
   useScene,
   type WallMiterData,
@@ -22,11 +21,14 @@ import {
   getSegmentAngleReferenceAtPoint,
   markToolCancelConsumed,
   type SegmentAngleReference,
+  snapBuildingLocalToWorldGrid,
   snapWallDraftPoint,
   triggerSFX,
   useEditor,
   WALL_FINE_GRID_STEP,
+  WALL_GRID_STEP,
   type WallPlanPoint,
+  resolveAlignmentForActiveBuilding,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -523,7 +525,7 @@ export const WallTool: React.FC = () => {
         useAlignmentGuides.getState().clear()
         return point
       }
-      const ar = resolveAlignment({
+      const ar = resolveAlignmentForActiveBuilding({
         moving: [{ nodeId: '__wall-draft__', kind: 'corner', x: point[0], z: point[1] }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
@@ -547,14 +549,30 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const localPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Default to the active grid step; Shift switches to the fine
-      // step (0.05m) for precision. No 45° angle snap — we want the
-      // cursor to track grid lines in every direction. Orthogonal
-      // walls fall out of grid snap naturally when the start sits on
-      // a grid intersection.
+      // Default: snap the draft end to a 45° step from the start so a
+      // fresh wall lands on a straight axis or a 45° diagonal. Shift
+      // drops the angle constraint and switches to the fine 0.05m
+      // grid — the existing free-form "precision" behaviour.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
       const bypassAlign = event.nativeEvent?.altKey === true
-      gridPosition = alignPoint(snapWallDraftPoint({ point: localPoint, walls, step }), bypassAlign)
+      // World-grid snap inside the building's local frame — keeps the
+      // cursor on visible grid lines even after the building is rotated.
+      const worldGridStep = shiftPressed.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+      const draftingSecondPoint = buildingState.current === 1
+      const draftStart: WallPlanPoint | undefined = draftingSecondPoint
+        ? [startingPoint.current.x, startingPoint.current.z]
+        : undefined
+      gridPosition = alignPoint(
+        snapWallDraftPoint({
+          point: localPoint,
+          walls,
+          start: draftStart,
+          angleSnap: draftingSecondPoint && !shiftPressed.current,
+          step,
+          gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldGridStep),
+        }),
+        bypassAlign,
+      )
 
       if (buildingState.current === 1) {
         const snappedLocal = gridPosition
@@ -613,11 +631,18 @@ export const WallTool: React.FC = () => {
       const localClick: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
 
       const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
+      const worldClickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
+      const clickGridSnap = (p: WallPlanPoint) => snapBuildingLocalToWorldGrid(p, worldClickStep)
       const bypassAlign = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
-          snapWallDraftPoint({ point: localClick, walls, step: clickStep }),
+          snapWallDraftPoint({
+            point: localClick,
+            walls,
+            step: clickStep,
+            gridSnap: clickGridSnap,
+          }),
           bypassAlign,
         )
         gridPosition = snappedStart
@@ -640,7 +665,14 @@ export const WallTool: React.FC = () => {
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const snappedEnd = alignPoint(
-          snapWallDraftPoint({ point: localClick, walls, step: clickStep }),
+          snapWallDraftPoint({
+            point: localClick,
+            walls,
+            start: [startingPoint.current.x, startingPoint.current.z],
+            angleSnap: !shiftPressed.current,
+            step: clickStep,
+            gridSnap: clickGridSnap,
+          }),
           bypassAlign,
         )
         const dx = snappedEnd[0] - startingPoint.current.x

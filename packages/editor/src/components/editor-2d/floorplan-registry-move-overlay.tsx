@@ -9,7 +9,6 @@ import {
   type FloorplanMoveTargetSession,
   nodeRegistry,
   pauseSceneHistory,
-  resolveAlignment,
   resumeSceneHistory,
   snapPointToGrid,
   useAlignmentGuides,
@@ -20,6 +19,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { resolveAlignmentForActiveBuilding } from '../../lib/world-grid-snap'
 import useEditor from '../../store/use-editor'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
@@ -445,7 +445,11 @@ export function FloorplanRegistryMoveOverlay() {
           movingLocalBBox.x + movingLocalBBox.width + dxProposed,
           movingLocalBBox.y + movingLocalBBox.height + dzProposed,
         )
-        const result = resolveAlignment({
+        // World-frame resolve so the shared `useAlignmentGuides` store
+        // carries one consistent coordinate system across 2D and 3D —
+        // see the matching note in apply-alignment.ts. Snap delta is
+        // returned in building-local for direct add to `originalPosition`.
+        const result = resolveAlignmentForActiveBuilding({
           moving: movingAnchors,
           candidates: candidateAnchors,
           threshold: ALIGNMENT_THRESHOLD_M,

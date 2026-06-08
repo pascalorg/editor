@@ -10,7 +10,11 @@ import {
   movingFootprintAnchors,
   useScene,
 } from '@pascal-app/core'
-import { applyFloorplanAlignment, snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import {
+  applyFloorplanAlignment,
+  snapBuildingLocalToWorldGrid,
+  type WallPlanPoint,
+} from '@pascal-app/editor'
 import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 
 /**
@@ -150,7 +154,10 @@ function buildFloorItemSession(
     apply({ planPoint, modifiers }) {
       const gridSnapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : (snapBuildingLocalToWorldGrid(
+            [planPoint[0], planPoint[1]] as WallPlanPoint,
+            GRID_STEP,
+          ) as WallPlanPoint)
       // Figma-style alignment layered on the grid snap (Alt bypasses).
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
@@ -206,7 +213,10 @@ function buildSurfaceItemSession(
       const nodes = useScene.getState().nodes
       const snapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : (snapBuildingLocalToWorldGrid(
+            [planPoint[0], planPoint[1]] as WallPlanPoint,
+            GRID_STEP,
+          ) as WallPlanPoint)
 
       const surface = findContainingSurface(snapped, nodes, startLevelId, targetKind)
 

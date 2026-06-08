@@ -5,9 +5,12 @@ export {
   type AnchorKind,
   bboxAnchors,
   bboxCornerAnchors,
+  type BuildingPose,
+  type ResolveAlignmentInBuildingResult,
   type ResolveAlignmentInput,
   type ResolveAlignmentResult,
   resolveAlignment,
+  resolveAlignmentInBuildingWorld,
 } from './alignment'
 export {
   collectAlignmentAnchors,
@@ -55,4 +58,5 @@ export {
   snapScalar,
   snapServices,
   snapVec3ToGrid,
+  snapWorldXZToBuildingLocal,
 } from './snap'
