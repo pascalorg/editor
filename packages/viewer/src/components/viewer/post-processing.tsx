@@ -527,6 +527,11 @@ const PostProcessingPasses = ({
         if ((renderer as any).setClearAlpha) {
           ;(renderer as any).setClearAlpha(1)
         }
+        if ((renderer as any).setClearColor) {
+          ;(renderer as any).setClearColor(
+            getSceneTheme(useViewer.getState().sceneTheme).background,
+          )
+        }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)
         if (PERF_OVERLAY_ENABLED) {

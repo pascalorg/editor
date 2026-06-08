@@ -2,7 +2,7 @@
 
 import { type AnyNodeId, StairOpeningSystem } from '@pascal-app/core'
 import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
@@ -119,6 +119,32 @@ function ToneMappingExposure() {
   return null
 }
 
+function CanvasResizeInvalidator() {
+  const gl = useThree((state) => state.gl)
+  const invalidate = useThree((state) => state.invalidate)
+  const setSize = useThree((state) => state.setSize)
+
+  useLayoutEffect(() => {
+    const target = gl.domElement.parentElement
+    if (!target || typeof ResizeObserver === 'undefined') return
+
+    const applySize = () => {
+      const rect = target.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      setSize(rect.width, rect.height)
+      invalidate(3)
+    }
+
+    const observer = new ResizeObserver(applySize)
+    observer.observe(target)
+    applySize()
+
+    return () => observer.disconnect()
+  }, [gl, invalidate, setSize])
+
+  return null
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -227,86 +253,89 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   const maxDpr =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
   return (
-    <Canvas
-      camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
-      dpr={[1, maxDpr]}
-      frameloop="never"
-      gl={
-        ((props: { canvas?: HTMLCanvasElement }) => {
-          const canvas = props.canvas
-          const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
-          if (cached) return cached
-          const promise = (async () => {
-            try {
-              const renderer = new THREE.WebGPURenderer(props as any)
-              renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = getSceneTheme(
-                useViewer.getState().sceneTheme,
-              ).toneMappingExposure
-              await renderer.init()
-              return renderer
-            } catch (err) {
-              // Drop the failed promise from the cache so a future Canvas
-              // mount on the same DOM can retry instead of inheriting the
-              // rejection forever.
-              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
-              console.error('[viewer] WebGPURenderer init failed', err)
-              throw err
-            }
-          })()
-          if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
-          return promise
-        }) as any
-      }
-      resize={{
-        debounce: 100,
-      }}
-      shadows={{
-        type: THREE.PCFShadowMap,
-        enabled: true,
-      }}
-    >
-      <FrameLimiter fps={50} />
-      <ViewerCamera />
-      <GPUDeviceWatcher />
-      <ToneMappingExposure />
+    <div className="relative h-full w-full overflow-hidden">
+      <Canvas
+        camera={{ position: [50, 50, 50], fov: 50 }}
+        className={`absolute inset-0 h-full w-full transition-colors duration-700 ${
+          isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
+        }`}
+        dpr={[1, maxDpr]}
+        frameloop="never"
+        gl={
+          ((props: { canvas?: HTMLCanvasElement }) => {
+            const canvas = props.canvas
+            const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
+            if (cached) return cached
+            const promise = (async () => {
+              try {
+                const renderer = new THREE.WebGPURenderer(props as any)
+                renderer.toneMapping = THREE.ACESFilmicToneMapping
+                renderer.toneMappingExposure = getSceneTheme(
+                  useViewer.getState().sceneTheme,
+                ).toneMappingExposure
+                await renderer.init()
+                return renderer
+              } catch (err) {
+                // Drop the failed promise from the cache so a future Canvas
+                // mount on the same DOM can retry instead of inheriting the
+                // rejection forever.
+                if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
+                console.error('[viewer] WebGPURenderer init failed', err)
+                throw err
+              }
+            })()
+            if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
+            return promise
+          }) as any
+        }
+        resize={{ debounce: 0 }}
+        shadows={{
+          type: THREE.PCFShadowMap,
+          enabled: true,
+        }}
+      >
+        <CanvasResizeInvalidator />
+        <FrameLimiter fps={50} />
+        <ViewerCamera />
+        <GPUDeviceWatcher />
+        <ToneMappingExposure />
 
-      <ErrorBoundary fallback={null} scope="viewer-scene">
-        {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
+        <ErrorBoundary fallback={null} scope="viewer-scene">
+          {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
           /> */}
-        <Lights />
-        {useBvh ? (
-          <SceneBvh>
+          <Lights />
+          {useBvh ? (
+            <SceneBvh>
+              <SceneRenderer />
+            </SceneBvh>
+          ) : (
             <SceneRenderer />
-          </SceneBvh>
-        ) : (
-          <SceneRenderer />
-        )}
+          )}
 
-        {/* Generic slab-elevation lift for any kind that declares
+          {/* Generic slab-elevation lift for any kind that declares
             `capabilities.floorPlaced`. Runs at frame priority 1 so it
             lands its mesh.position.y override before the priority-2
             systems below clear the dirty mark. */}
-        <FloorElevationSystem />
-        {/* Generic geometry rebuild loop for any registered kind that
+          <FloorElevationSystem />
+          {/* Generic geometry rebuild loop for any registered kind that
             ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
             builder, swaps the registered group's children. See
             wiki/architecture/node-definitions.md. */}
-        <GeometrySystem />
-        {/* Automated stair opening sync — updates slab/ceiling cutouts
+          <GeometrySystem />
+          {/* Automated stair opening sync — updates slab/ceiling cutouts
             whenever stairs, slabs, or levels change. */}
-        <StairOpeningSystem />
-        {/* Mounts systems contributed by registry-backed kinds. Each
+          <StairOpeningSystem />
+          {/* Mounts systems contributed by registry-backed kinds. Each
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}
-        <RegisteredSystems />
-        <PostProcessing hoverStyles={hoverStyles} />
-        {selectionManager === 'default' && <SelectionManager />}
-        {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
-        {children}
-      </ErrorBoundary>
-    </Canvas>
+          <RegisteredSystems />
+          <PostProcessing hoverStyles={hoverStyles} />
+          {selectionManager === 'default' && <SelectionManager />}
+          {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+          {children}
+        </ErrorBoundary>
+      </Canvas>
+    </div>
   )
 })
 

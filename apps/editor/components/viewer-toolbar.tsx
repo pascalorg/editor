@@ -145,11 +145,11 @@ function ViewModeControl() {
 
 function CollapseSidebarButton() {
   const isCollapsed = useSidebarStore((state) => state.isCollapsed)
-  const setIsCollapsed = useSidebarStore((state) => state.setIsCollapsed)
 
   const toggle = useCallback(() => {
-    setIsCollapsed(!isCollapsed)
-  }, [isCollapsed, setIsCollapsed])
+    const sidebar = useSidebarStore.getState()
+    sidebar.setIsCollapsed(!sidebar.isCollapsed)
+  }, [])
 
   return (
     <div className={TOOLBAR_CONTAINER}>
