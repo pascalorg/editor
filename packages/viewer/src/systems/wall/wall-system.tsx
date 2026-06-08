@@ -329,8 +329,19 @@ let useFrameNb = 0
 // within ~80ms. Standard CAD-app behavior. Speeds up t-junction drags ~3×,
 // 4-corner-room drags ~4×.
 const DRAG_FLUSH_MS = 80
+const MAX_WALL_REBUILDS_PER_FRAME = 8
+const WALL_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WALL_REBUILDS_PER_FRAME
+const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
 let lastWallDirtyAtMs = 0
 const pendingAdjacentByLevel = new Map<string, Set<string>>()
+
+function getPendingAdjacentCount() {
+  let count = 0
+  for (const ids of pendingAdjacentByLevel.values()) {
+    count += ids.size
+  }
+  return count
+}
 
 export const WallSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
@@ -353,6 +364,7 @@ export const WallSystem = () => {
 
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
+    let dirtyWallCount = 0
 
     useFrameNb += 1
     if (hasDirty) {
@@ -367,6 +379,7 @@ export const WallSystem = () => {
           dirtyWallsByLevel.set(levelId, new Set())
         }
         dirtyWallsByLevel.get(levelId)?.add(id)
+        dirtyWallCount += 1
       })
     }
 
@@ -375,25 +388,53 @@ export const WallSystem = () => {
       lastWallDirtyAtMs = now
     }
 
+    const useProgressiveWallRebuilds = dirtyWallCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
+    let rebuiltWallsThisFrame = 0
+    const rebuildFrameStartedAt = now
+
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
+      if (useProgressiveWallRebuilds && rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
+        break
+      }
+
       const levelWalls = getLevelWalls(levelId)
       const miterData = calculateLevelMiters(levelWalls)
+      const rebuiltWallIds = new Set<string>()
 
       // Update dirty walls — always, no throttling. The dragged wall must
-      // follow the cursor with full fidelity (cutouts and all).
+      // follow the cursor with full fidelity (cutouts and all). Large imports
+      // enter the progressive path so initial load can't lock the tab.
       for (const wallId of dirtyWallIds) {
+        if (useProgressiveWallRebuilds) {
+          if (rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
+            break
+          }
+          if (
+            rebuiltWallsThisFrame > 0 &&
+            performance.now() - rebuildFrameStartedAt >= WALL_PROGRESSIVE_TIME_BUDGET_MS
+          ) {
+            break
+          }
+        }
+
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
           updateWallGeometry(wallId, miterData)
           clearDirty(wallId as AnyNodeId)
+          rebuiltWallIds.add(wallId)
+          rebuiltWallsThisFrame += 1
         }
         // If mesh not found, keep it dirty for next frame
       }
 
+      if (rebuiltWallIds.size === 0) {
+        continue
+      }
+
       // Adjacent walls sharing junctions — *defer* during active drag
       // (dirty arrived this frame), flush on the trailing edge.
-      const adjacentWallIds = getAdjacentWallIds(levelWalls, dirtyWallIds)
+      const adjacentWallIds = getAdjacentWallIds(levelWalls, rebuiltWallIds)
       let pending = pendingAdjacentByLevel.get(levelId)
       if (!pending) {
         pending = new Set()
@@ -411,16 +452,45 @@ export const WallSystem = () => {
     // their correct miter joins.
     const quiet = !hasDirtyWalls && now - lastWallDirtyAtMs >= DRAG_FLUSH_MS
     if (quiet && pendingAdjacentByLevel.size > 0) {
+      const pendingCount = getPendingAdjacentCount()
+      const useProgressiveAdjacentRebuilds = pendingCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
+      let rebuiltAdjacentThisFrame = 0
+      const adjacentFrameStartedAt = performance.now()
+
       for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
         if (pendingIds.size === 0) continue
         const levelWalls = getLevelWalls(levelId)
         const miterData = calculateLevelMiters(levelWalls)
-        for (const wallId of pendingIds) {
+        for (const wallId of Array.from(pendingIds)) {
+          if (useProgressiveAdjacentRebuilds) {
+            if (rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
+              break
+            }
+            if (
+              rebuiltAdjacentThisFrame > 0 &&
+              performance.now() - adjacentFrameStartedAt >= WALL_PROGRESSIVE_TIME_BUDGET_MS
+            ) {
+              break
+            }
+          }
+
           const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
           if (mesh) updateWallGeometry(wallId, miterData)
+          pendingIds.delete(wallId)
+          rebuiltAdjacentThisFrame += 1
+        }
+
+        if (pendingIds.size === 0) {
+          pendingAdjacentByLevel.delete(levelId)
+        }
+
+        if (
+          useProgressiveAdjacentRebuilds &&
+          rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME
+        ) {
+          break
         }
       }
-      pendingAdjacentByLevel.clear()
     }
   }, 4)
 

@@ -141,6 +141,7 @@ import {
 } from '../tools/wall/wall-drafting'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
@@ -425,6 +426,47 @@ type GuideHandleHintAnchor = {
   y: number
   directionX: number
   directionY: number
+}
+
+function FloorplanCompassButton({
+  northRotationDeg,
+  onAlignNorth,
+}: {
+  northRotationDeg: number
+  onAlignNorth: () => void
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          aria-label="Align view to north"
+          className="group absolute bottom-3 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/85 shadow-sm backdrop-blur-md transition hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-neutral-900/85 dark:hover:bg-neutral-900"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onAlignNorth()
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+          }}
+          type="button"
+        >
+          <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-[#b8b8b8] shadow-inner dark:bg-neutral-700">
+            <svg
+              aria-hidden="true"
+              className="h-6 w-6 transition-transform duration-150 ease-out"
+              style={{ transform: `rotate(${northRotationDeg}deg)` }}
+              viewBox="0 0 48 48"
+            >
+              <path d="M24 4.5 31.5 25 24 21.5 16.5 25Z" fill="#f15b5b" />
+              <path d="M24 43.5 16.5 23 24 26.5 31.5 23Z" fill="#ffffff" />
+            </svg>
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">Align view to north</TooltipContent>
+    </Tooltip>
+  )
 }
 
 type GuideInteractionState = {
@@ -6616,6 +6658,28 @@ export function FloorplanPanel() {
     [buildingPosition, buildingRotationY, floorplanGridWorldY],
   )
 
+  const alignFloorplanViewToNorth = useCallback(() => {
+    const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+    if (!currentViewport) {
+      return
+    }
+
+    const currentUserRotationDeg = latestFloorplanUserRotationDegRef.current
+    const currentSceneRotationDeg =
+      FLOORPLAN_VIEW_ROTATION_DEG + currentUserRotationDeg - buildingRotationDeg
+    const localCenter = rotateSvgPoint(
+      {
+        x: currentViewport.centerX,
+        y: currentViewport.centerY,
+      },
+      -currentSceneRotationDeg,
+    )
+    const nextUserRotationDeg = nearestEquivalentDegrees(0, currentUserRotationDeg)
+
+    smoothFloorplanNavigationView(localCenter, nextUserRotationDeg, currentViewport.width)
+    publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
+  }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
+
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
     guideTransformDraftRef.current = null
@@ -9743,6 +9807,13 @@ export function FloorplanPanel() {
             kinds. All kinds are registry-driven now, so this is the
             only action menu the floor plan mounts. */}
         <FloorplanRegistryActionMenu />
+
+        {(levelNode?.type === 'level' || hasAmbientBuildingLevel) && (
+          <FloorplanCompassButton
+            northRotationDeg={-floorplanUserRotationDeg}
+            onAlignNorth={alignFloorplanViewToNorth}
+          />
+        )}
 
         {referenceScaleDraft && (
           <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">

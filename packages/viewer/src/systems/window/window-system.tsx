@@ -8,7 +8,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import {
   createSurfaceRoleMaterial,
@@ -32,12 +32,17 @@ export const LOUVERED_WINDOW_SLATS_NAME = 'louvered-window-slats'
 export const AWNING_WINDOW_SASH_NAME = 'awning-window-sash'
 export const HOPPER_WINDOW_SASH_NAME = 'hopper-window-sash'
 
+const MAX_WINDOW_REBUILDS_PER_FRAME = 16
+const WINDOW_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WINDOW_REBUILDS_PER_FRAME
+const WINDOW_PROGRESSIVE_TIME_BUDGET_MS = 8
+
 export const WindowSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
   const shading = useViewer((state) => state.shading)
   const textures = useViewer((state) => state.textures)
   const colorPreset = useViewer((state) => state.colorPreset)
+  const materialRevisionRef = useRef<string | null>(null)
   // Subscribe so override-only updates re-run this component. Mirrors
   // WallSystem + DoorSystem.
   useLiveNodeOverrides((s) => s.overrides)
@@ -50,13 +55,17 @@ export const WindowSystem = () => {
     : createSurfaceRoleMaterial('glazing', colorPreset)
 
   useEffect(() => {
+    const materialRevision = `${shading}:${textures ? 'textures' : 'solid'}:${colorPreset}`
+    if (materialRevisionRef.current === materialRevision) return
+    materialRevisionRef.current = materialRevision
+
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {
       if (node?.type === 'window') {
         useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
       }
     }
-  }, [shading, textures, colorPreset])
+  })
 
   useFrame(() => {
     if (dirtyNodes.size === 0) return
@@ -68,19 +77,43 @@ export const WindowSystem = () => {
       : createSurfaceRoleMaterial('glazing', colorPreset)
 
     const nodes = useScene.getState().nodes
+    const dirtyWindowIds: AnyNodeId[] = []
 
     dirtyNodes.forEach((id) => {
       const node = nodes[id]
       if (!node || node.type !== 'window') return
+      dirtyWindowIds.push(id as AnyNodeId)
+    })
+
+    const useProgressiveWindowRebuilds = dirtyWindowIds.length > WINDOW_PROGRESSIVE_DIRTY_THRESHOLD
+    const frameStartedAt = performance.now()
+    let rebuiltWindowsThisFrame = 0
+
+    for (const id of dirtyWindowIds) {
+      if (useProgressiveWindowRebuilds) {
+        if (rebuiltWindowsThisFrame >= MAX_WINDOW_REBUILDS_PER_FRAME) {
+          break
+        }
+        if (
+          rebuiltWindowsThisFrame > 0 &&
+          performance.now() - frameStartedAt >= WINDOW_PROGRESSIVE_TIME_BUDGET_MS
+        ) {
+          break
+        }
+      }
+
+      const node = nodes[id]
+      if (!node || node.type !== 'window') continue
 
       const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
-      if (!mesh) return // Keep dirty until mesh mounts
+      if (!mesh) continue // Keep dirty until mesh mounts
 
       // Merge any live override (width / height / position) so the mesh
       // rebuild reflects the in-flight drag without zustand churn.
       const effectiveNode = getEffectiveNode(node as WindowNode)
       updateWindowMesh(effectiveNode, mesh)
       clearDirty(id as AnyNodeId)
+      rebuiltWindowsThisFrame += 1
 
       // Rebuild the parent wall so its cutout reflects the updated window geometry
       // Avoid triggering expensive wall CSG rebuilds while the window is being interactively moved/duplicated.
@@ -89,7 +122,7 @@ export const WindowSystem = () => {
       if (!isTransient && effectiveNode.parentId) {
         useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
-    })
+    }
   }, 3)
 
   return null

@@ -32,11 +32,20 @@ const tempSize = new Vector3()
 const tempTarget = new Vector3()
 const syncTarget = new Vector3()
 const syncSpherical = new Spherical()
+const keyboardPanPosition = new Vector3()
+const keyboardPanTarget = new Vector3()
+const keyboardPanScreenRight = new Vector3()
+const keyboardPanScreenUp = new Vector3()
+const keyboardPanDelta = new Vector3()
+const keyboardPanSpherical = new Spherical()
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 const NAVIGATION_SYNC_POSITION_EPSILON = 0.001
 const NAVIGATION_SYNC_AZIMUTH_EPSILON = 0.0005
 const NAVIGATION_SYNC_VIEW_WIDTH_EPSILON = 0.001
+const KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND = 0.65
+const KEYBOARD_PAN_MIN_SPEED = 2
+const KEYBOARD_PAN_MAX_SPEED = 55
 type CameraMode = ReturnType<typeof useViewer.getState>['cameraMode']
 type CameraPoseSnapshot = {
   mode: CameraMode
@@ -88,6 +97,41 @@ function isEditableKeyboardTarget(target: EventTarget | null) {
     target instanceof HTMLSelectElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   )
+}
+
+type KeyboardPanState = {
+  forward: boolean
+  backward: boolean
+  left: boolean
+  right: boolean
+}
+
+function setKeyboardPanKey(state: KeyboardPanState, code: string, pressed: boolean): boolean {
+  if (code === 'KeyW') {
+    const changed = state.forward !== pressed
+    state.forward = pressed
+    return changed
+  }
+  if (code === 'KeyS') {
+    const changed = state.backward !== pressed
+    state.backward = pressed
+    return changed
+  }
+  if (code === 'KeyA') {
+    const changed = state.left !== pressed
+    state.left = pressed
+    return changed
+  }
+  if (code === 'KeyD') {
+    const changed = state.right !== pressed
+    state.right = pressed
+    return changed
+  }
+  return false
+}
+
+function isKeyboardPanKey(code: string): boolean {
+  return code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD'
 }
 
 type CameraViewportSize = {
@@ -244,6 +288,12 @@ function useFirstPersonCameraPoseRestore(
 
 export const CustomCameraControls = () => {
   const controls = useRef<CameraControlsImpl | null>(null)
+  const keyboardPanKeys = useRef<KeyboardPanState>({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+  })
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
@@ -417,6 +467,67 @@ export const CustomCameraControls = () => {
     }
   }, [currentLevelId, isFirstPersonMode, isFloorplanOpen, publishCurrentNavigationPose])
 
+  useFrame((_, delta) => {
+    if (isFirstPersonMode || !controls.current) return
+
+    const panKeys = keyboardPanKeys.current
+    const horizontal = (panKeys.right ? 1 : 0) - (panKeys.left ? 1 : 0)
+    const vertical = (panKeys.forward ? 1 : 0) - (panKeys.backward ? 1 : 0)
+    if (horizontal === 0 && vertical === 0) return
+
+    const control = controls.current
+    control.getPosition(keyboardPanPosition)
+    control.getTarget(keyboardPanTarget)
+
+    camera.updateMatrixWorld()
+    keyboardPanScreenRight.setFromMatrixColumn(camera.matrixWorld, 0)
+    keyboardPanScreenRight.y = 0
+    keyboardPanScreenUp.setFromMatrixColumn(camera.matrixWorld, 1)
+    keyboardPanScreenUp.y = 0
+
+    if (keyboardPanScreenRight.lengthSq() < 1e-6) {
+      keyboardPanScreenRight.set(1, 0, 0)
+    } else {
+      keyboardPanScreenRight.normalize()
+    }
+
+    if (keyboardPanScreenUp.lengthSq() < 1e-6) {
+      keyboardPanScreenUp.copy(keyboardPanTarget).sub(keyboardPanPosition)
+      keyboardPanScreenUp.y = 0
+      if (keyboardPanScreenUp.lengthSq() < 1e-6) {
+        keyboardPanScreenUp.set(0, 0, -1)
+      } else {
+        keyboardPanScreenUp.normalize()
+      }
+    } else {
+      keyboardPanScreenUp.normalize()
+    }
+
+    control.getSpherical(keyboardPanSpherical, false)
+    const viewWidth = getCameraViewWidth(camera, keyboardPanSpherical.radius, viewportSize)
+    const speed = Math.min(
+      Math.max(viewWidth * KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND, KEYBOARD_PAN_MIN_SPEED),
+      KEYBOARD_PAN_MAX_SPEED,
+    )
+    const step = (speed * Math.min(delta, 0.05)) / Math.hypot(horizontal, vertical)
+
+    keyboardPanDelta
+      .set(0, 0, 0)
+      .addScaledVector(keyboardPanScreenRight, horizontal * step)
+      .addScaledVector(keyboardPanScreenUp, vertical * step)
+
+    pendingFloorplanNavigationPose.current = null
+    control.setLookAt(
+      keyboardPanPosition.x + keyboardPanDelta.x,
+      keyboardPanPosition.y,
+      keyboardPanPosition.z + keyboardPanDelta.z,
+      keyboardPanTarget.x + keyboardPanDelta.x,
+      keyboardPanTarget.y,
+      keyboardPanTarget.z + keyboardPanDelta.z,
+      false,
+    )
+  })
+
   // Configure mouse buttons based on control mode and camera mode
   const mouseButtons = useMemo(() => {
     // Use ZOOM for orthographic camera, DOLLY for perspective camera
@@ -496,6 +607,13 @@ export const CustomCameraControls = () => {
     let panPointerId: number | null = null
     let panPointerButton: number | null = null
 
+    const clearKeyboardPanKeys = () => {
+      keyboardPanKeys.current.forward = false
+      keyboardPanKeys.current.backward = false
+      keyboardPanKeys.current.left = false
+      keyboardPanKeys.current.right = false
+    }
+
     const setNavigationCursor = (cursor: 'grab' | 'grabbing') => {
       document.body.style.cursor = cursor
       gl.domElement.style.cursor = cursor
@@ -557,6 +675,19 @@ export const CustomCameraControls = () => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isKeyboardPanKey(event.code)) {
+        if (
+          !(event.metaKey || event.ctrlKey || event.altKey) &&
+          !isEditableKeyboardTarget(event.target)
+        ) {
+          setKeyboardPanKey(keyboardPanKeys.current, event.code, true)
+          pendingFloorplanNavigationPose.current = null
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        return
+      }
+
       if (event.code === 'Space') {
         if (isEditableKeyboardTarget(event.target)) return
         event.preventDefault()
@@ -579,6 +710,15 @@ export const CustomCameraControls = () => {
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
+      if (isKeyboardPanKey(event.code)) {
+        const changed = setKeyboardPanKey(keyboardPanKeys.current, event.code, false)
+        if (changed) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        return
+      }
+
       if (event.code === 'Space') {
         keyState.space = false
         if (panPointerButton === 0) {
@@ -628,6 +768,7 @@ export const CustomCameraControls = () => {
 
     const onBlur = () => {
       keyState.space = false
+      clearKeyboardPanKeys()
       panPointerId = null
       panPointerButton = null
       clearNavigationCursor()
@@ -651,6 +792,7 @@ export const CustomCameraControls = () => {
       window.removeEventListener('pointercancel', onPointerUp, true)
       window.removeEventListener('blur', onBlur)
       gl.domElement.removeEventListener('wheel', onWheel)
+      clearKeyboardPanKeys()
       clearNavigationCursor()
     }
   }, [cameraMode, gl, isPreviewMode, isFirstPersonMode])

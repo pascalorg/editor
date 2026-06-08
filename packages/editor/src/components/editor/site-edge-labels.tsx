@@ -4,9 +4,25 @@ import type { SiteNode } from '@pascal-app/core'
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { createPortal, useFrame } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
-import type { Object3D } from 'three'
+import { createPortal, useFrame, useThree } from '@react-three/fiber'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { type Camera, type Object3D, Vector3 } from 'three'
+
+type ViewportSize = {
+  width: number
+  height: number
+}
+
+const htmlPosition = new Vector3()
+
+function calculateHtmlPosition(el: Object3D, camera: Camera, size: ViewportSize) {
+  htmlPosition.setFromMatrixPosition(el.matrixWorld)
+  htmlPosition.project(camera)
+
+  const widthHalf = size.width / 2
+  const heightHalf = size.height / 2
+  return [htmlPosition.x * widthHalf + widthHalf, -htmlPosition.y * heightHalf + heightHalf]
+}
 
 function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
   if (unit === 'imperial') {
@@ -30,7 +46,14 @@ export function SiteEdgeLabels() {
     return node?.type === 'site' ? (node as SiteNode) : null
   })
   const unit = useViewer((state) => state.unit)
+  const cameraMode = useViewer((state) => state.cameraMode)
   const isNight = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const camera = useThree((state) => state.camera)
+  // Drei Html can hold the previous default camera across a camera-object swap.
+  const calculateLabelPosition = useCallback(
+    (el: Object3D, _camera: Camera, size: ViewportSize) => calculateHtmlPosition(el, camera, size),
+    [camera],
+  )
 
   const siteNodeId = siteNode?.id
 
@@ -72,7 +95,8 @@ export function SiteEdgeLabels() {
       {edges.map((edge, i) => (
         <Html
           center
-          key={`edge-${i}`}
+          calculatePosition={calculateLabelPosition}
+          key={`${cameraMode}-${camera.uuid}-edge-${i}`}
           occlude
           position={[edge.midX, 0.5, edge.midZ]}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
