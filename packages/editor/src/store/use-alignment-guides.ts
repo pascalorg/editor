@@ -3,8 +3,8 @@
 // guides on pointermove; the renderer (a 2D / 3D guide layer) subscribes
 // and draws them. Both sides clear on commit, cancel, and unmount.
 
-import { create } from 'zustand'
 import type { AlignmentGuide } from '@pascal-app/core'
+import { create } from 'zustand'
 
 type AlignmentGuidesState = {
   guides: AlignmentGuide[]

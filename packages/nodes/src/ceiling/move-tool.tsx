@@ -12,7 +12,13 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useAlignmentGuides, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  markToolCancelConsumed,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'

@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  type FenceNode,
-  getWallCurveLength,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,

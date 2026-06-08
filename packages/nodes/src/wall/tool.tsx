@@ -568,7 +568,9 @@ export const WallTool: React.FC = () => {
       useWallSnapIndicator
         .getState()
         .set(
-          snapResult.snap ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap } : null,
+          snapResult.snap
+            ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
+            : null,
         )
 
       if (buildingState.current === 1) {

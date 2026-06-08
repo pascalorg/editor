@@ -14,7 +14,6 @@ import {
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
-  spatialGridManager,
   useLiveTransforms,
   useScene,
   useSpatialQuery,

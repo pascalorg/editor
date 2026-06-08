@@ -153,9 +153,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     // Swept wedge fill (light, low opacity) — reads as the open zone.
     children.push({
       kind: 'path',
-      d: `M ${hX} ${hZ} L ${closedTipX} ${closedTipZ} ${arcPath
-        .replace(/^M [^A]+/, '')
-        .trim()} Z`,
+      d: `M ${hX} ${hZ} L ${closedTipX} ${closedTipZ} ${arcPath.replace(/^M [^A]+/, '').trim()} Z`,
       fill: accentColor,
       fillOpacity: showSelectedChrome ? 0.08 : 0.05,
       stroke: 'none',
@@ -665,22 +663,10 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       const halfLeafX = dirX * halfWidth
       const halfLeafZ = dirZ * halfWidth
       // Leaf at the start edge: closed leaf points toward the centre.
-      drawSwingLeaf(
-        cx - halfLeafX,
-        cz - halfLeafZ,
-        halfLeafX,
-        halfLeafZ,
-        swingAngle * swingSign,
-      )
+      drawSwingLeaf(cx - halfLeafX, cz - halfLeafZ, halfLeafX, halfLeafZ, swingAngle * swingSign)
       // Leaf at the end edge: closed leaf points the other way, swung
       // with the opposite sign so both meet perpendicular at the centre.
-      drawSwingLeaf(
-        cx + halfLeafX,
-        cz + halfLeafZ,
-        -halfLeafX,
-        -halfLeafZ,
-        -swingAngle * swingSign,
-      )
+      drawSwingLeaf(cx + halfLeafX, cz + halfLeafZ, -halfLeafX, -halfLeafZ, -swingAngle * swingSign)
     } else {
       // Single leaf hinged at one end, strike at the opposite end.
       const hingeTangentSign = hingesSide === 'left' ? 1 : -1

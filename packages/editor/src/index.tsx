@@ -100,11 +100,11 @@ export {
   isSegmentLongEnough,
   snapPointToGrid,
   snapScalarToGrid,
-  type WallDraftSnapKind,
-  type WallDraftSnapResult,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
+  type WallDraftSnapKind,
+  type WallDraftSnapResult,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
@@ -247,7 +247,7 @@ export { default as usePlacementPreview } from './store/use-placement-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {
+  default as useWallSnapIndicator,
   type WallSnapKind,
   type WallSnapPoint,
-  default as useWallSnapIndicator,
 } from './store/use-wall-snap-indicator'

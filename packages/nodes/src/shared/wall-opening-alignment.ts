@@ -1,8 +1,4 @@
-import {
-  type AlignmentAnchor,
-  resolveAlignment,
-  type WallNode,
-} from '@pascal-app/core'
+import { type AlignmentAnchor, resolveAlignment, type WallNode } from '@pascal-app/core'
 import { snapToHalf, useAlignmentGuides } from '@pascal-app/editor'
 
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
