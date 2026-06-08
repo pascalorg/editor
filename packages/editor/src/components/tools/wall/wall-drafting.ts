@@ -3,10 +3,7 @@ import {
   type AnyNodeId,
   type DoorNode,
   getScaledDimensions,
-  getWallCurveFrameAt,
-  getWallCurveLength,
   type ItemNode,
-  isCurvedWall,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -15,19 +12,30 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import {
+  distanceSquared,
+  findWallSnapTarget,
+  findWallSpecialPointSnap,
+  projectPointOntoWall,
+  WALL_JOIN_SNAP_RADIUS,
+  type WallDraftSnapResult,
+  type WallPlanPoint,
+} from './wall-snap-geometry'
 
-export type WallPlanPoint = [number, number]
+// The pure snap geometry lives in `./wall-snap-geometry`; re-exported here so
+// existing importers (fence drafting, the editor barrel) keep their paths.
+export {
+  findWallSnapTarget,
+  WALL_JOIN_SNAP_RADIUS,
+  type WallDraftSnapKind,
+  type WallDraftSnapResult,
+  type WallPlanPoint,
+} from './wall-snap-geometry'
 
 export const WALL_GRID_STEP = 0.5
 // Smallest available grid snap. Used as a precision-mode step (Shift +
 // drag) so a drag can land on values the regular grid skips.
 export const WALL_FINE_GRID_STEP = 0.05
-export const WALL_JOIN_SNAP_RADIUS = 0.35
-// Generous radius for snapping to an *existing* wall's endpoint while
-// drafting. Larger than `WALL_JOIN_SNAP_RADIUS` because endpoint snap
-// is the strongest user intent (closing a polygon, attaching to a
-// corner) and the cursor never lands pixel-perfect on a corner.
-export const WALL_ENDPOINT_SNAP_RADIUS = 0.7
 export const WALL_MIN_LENGTH = 0.01
 const DEFAULT_WALL_ANGLE_SNAP_STEP = Math.PI / 4
 
@@ -41,12 +49,6 @@ const WALL_ANGLE_SNAP_BY_GRID_STEP: Record<number, number> = {
 type WallSplitIntersection = {
   wallId: WallNode['id']
   point: WallPlanPoint
-}
-
-function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
-  const dx = a[0] - b[0]
-  const dz = a[1] - b[1]
-  return dx * dx + dz * dz
 }
 
 export function getSegmentGridStep(): number {
@@ -81,24 +83,6 @@ export function snapPointTo45Degrees(
 
 export function getWallAngleSnapStep(step = getSegmentGridStep()): number {
   return WALL_ANGLE_SNAP_BY_GRID_STEP[step] ?? DEFAULT_WALL_ANGLE_SNAP_STEP
-}
-
-function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): WallPlanPoint | null {
-  const [x1, z1] = wall.start
-  const [x2, z2] = wall.end
-  const dx = x2 - x1
-  const dz = z2 - z1
-  const lengthSquared = dx * dx + dz * dz
-  if (lengthSquared < 1e-9) {
-    return null
-  }
-
-  const t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared
-  if (t <= 0 || t >= 1) {
-    return null
-  }
-
-  return [x1 + dx * t, z1 + dz * t]
 }
 
 function splitWallAtPoint(wall: WallNode, splitPoint: WallPlanPoint): [WallNode, WallNode] {
@@ -332,84 +316,7 @@ function splitWallIfNeeded(
   }
 }
 
-export function findWallSnapTarget(
-  point: WallPlanPoint,
-  walls: WallNode[],
-  options?: { ignoreWallIds?: string[]; radius?: number },
-): WallPlanPoint | null {
-  const ignoreWallIds = new Set(options?.ignoreWallIds ?? [])
-  const radiusSquared = (options?.radius ?? WALL_JOIN_SNAP_RADIUS) ** 2
-  let bestTarget: WallPlanPoint | null = null
-  let bestDistanceSquared = Number.POSITIVE_INFINITY
-
-  for (const wall of walls) {
-    if (ignoreWallIds.has(wall.id)) {
-      continue
-    }
-
-    const candidates: Array<WallPlanPoint | null> = [wall.start, wall.end]
-
-    if (isCurvedWall(wall)) {
-      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(wall) / 0.3))
-      for (let index = 0; index <= sampleCount; index += 1) {
-        const frame = getWallCurveFrameAt(wall, index / sampleCount)
-        candidates.push([frame.point.x, frame.point.y])
-      }
-    } else {
-      candidates.push(projectPointOntoWall(point, wall))
-    }
-    for (const candidate of candidates) {
-      if (!candidate) {
-        continue
-      }
-
-      const candidateDistanceSquared = distanceSquared(point, candidate)
-      if (
-        candidateDistanceSquared > radiusSquared ||
-        candidateDistanceSquared >= bestDistanceSquared
-      ) {
-        continue
-      }
-
-      bestTarget = candidate
-      bestDistanceSquared = candidateDistanceSquared
-    }
-  }
-
-  return bestTarget
-}
-
-/**
- * Endpoint-only snap from the *raw* cursor (no grid pre-snap), with a
- * generous radius. Use this before `findWallSnapTarget` so the strong
- * "attach to an existing wall corner" intent isn't accidentally pushed
- * out of range by an interim grid snap that moved the cursor away from
- * the endpoint.
- */
-function findWallEndpointFromRaw(
-  point: WallPlanPoint,
-  walls: WallNode[],
-  ignoreWallIds?: string[],
-): WallPlanPoint | null {
-  const ignored = new Set(ignoreWallIds ?? [])
-  const radiusSquared = WALL_ENDPOINT_SNAP_RADIUS ** 2
-  let best: WallPlanPoint | null = null
-  let bestDistSq = Number.POSITIVE_INFINITY
-
-  for (const wall of walls) {
-    if (ignored.has(wall.id)) continue
-    for (const corner of [wall.start, wall.end] as WallPlanPoint[]) {
-      const d = distanceSquared(point, corner)
-      if (d <= radiusSquared && d < bestDistSq) {
-        best = corner
-        bestDistSq = d
-      }
-    }
-  }
-  return best
-}
-
-export function snapWallDraftPoint(args: {
+type SnapWallDraftArgs = {
   point: WallPlanPoint
   walls: WallNode[]
   start?: WallPlanPoint
@@ -417,16 +324,33 @@ export function snapWallDraftPoint(args: {
   ignoreWallIds?: string[]
   /** Override the grid step (e.g. `WALL_FINE_GRID_STEP` for precision mode). */
   step?: number
-}): WallPlanPoint {
-  const { point, walls, start, angleSnap = false, ignoreWallIds, step: overrideStep } = args
+  /**
+   * Magnetic snapping to existing wall geometry (corners, midpoints,
+   * crossings, wall bodies). When `false`, only grid/angle snap applies and
+   * `snap` is always `null`. Defaults to `true` so callers that don't care
+   * keep the prior behaviour.
+   */
+  magnetic?: boolean
+}
 
-  // Endpoint of an existing wall wins outright when the cursor is
-  // anywhere within `WALL_ENDPOINT_SNAP_RADIUS` — closing a polygon or
-  // attaching to a corner should "just work" without needing
-  // pixel-perfect aim. Done from the raw cursor so it isn't masked by
-  // an interim grid snap that nudged us out of range.
-  const endpointSnap = findWallEndpointFromRaw(point, walls, ignoreWallIds)
-  if (endpointSnap) return endpointSnap
+export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
+  const {
+    point,
+    walls,
+    start,
+    angleSnap = false,
+    ignoreWallIds,
+    step: overrideStep,
+    magnetic = true,
+  } = args
+
+  // Discrete special points (corner / midpoint / crossing) are taken from the
+  // raw cursor so an interim grid snap can't mask them. A corner always wins,
+  // then the nearer of midpoint / crossing — see `findWallSpecialPointSnap`.
+  if (magnetic) {
+    const special = findWallSpecialPointSnap(point, walls, ignoreWallIds)
+    if (special) return special
+  }
 
   const step = overrideStep ?? getSegmentGridStep()
   const angleStep = getWallAngleSnapStep(step)
@@ -435,11 +359,16 @@ export function snapWallDraftPoint(args: {
       ? snapPointTo45Degrees(start, point, step, angleStep)
       : snapPointToGrid(point, step)
 
-  return (
-    findWallSnapTarget(basePoint, walls, {
-      ignoreWallIds,
-    }) ?? basePoint
-  )
+  if (magnetic) {
+    const wallSnap = findWallSnapTarget(basePoint, walls, { ignoreWallIds })
+    if (wallSnap) return { point: wallSnap, snap: 'wall' }
+  }
+
+  return { point: basePoint, snap: null }
+}
+
+export function snapWallDraftPoint(args: SnapWallDraftArgs): WallPlanPoint {
+  return snapWallDraftPointDetailed(args).point
 }
 
 export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): boolean {

@@ -20,6 +20,7 @@ import {
   collectParticipants,
   computeGroupBox,
   expandToComponent,
+  levelFrame,
   type Vec2,
   type Vec3,
 } from './group-transform-shared'
@@ -140,12 +141,16 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
 
     // Snapshot the selected participants + connected wall/fence neighbours whose
     // shared endpoints must follow the rotation (so junctions stay welded).
-    const { starts, links } = collectParticipants(
-      ids,
-      useScene.getState().nodes,
-      useViewer.getState().selection.levelId,
-    )
+    const levelId = useViewer.getState().selection.levelId
+    const { starts, links } = collectParticipants(ids, useScene.getState().nodes, levelId)
     if (starts.length === 0) return
+
+    // Placements live in the level frame; the world pivot must be converted into
+    // it before orbiting positions, or a rotated building displaces the centre.
+    // The swept angle is frame-invariant (both frames differ by a constant yaw,
+    // which cancels in `angleOf(move) - angleOf(start)`), so it's still measured
+    // in world against `center` — keeping the world-space guide overlay correct.
+    const localCenter = center.clone().applyMatrix4(levelFrame(levelId).inverse)
 
     // Horizontal drag plane at the pivot; bearing measured around the pivot.
     const plane = new Plane(new Vector3(0, 1, 0), -center.y)
@@ -155,7 +160,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
     // participant's anchor point(s).
     let spread = 0
     const reach = (x: number, z: number) => {
-      spread = Math.max(spread, Math.hypot(x - center.x, z - center.z))
+      spread = Math.max(spread, Math.hypot(x - localCenter.x, z - localCenter.z))
     }
     for (const s of starts) {
       if (s.kind === 'endpoint') {
@@ -207,9 +212,9 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       const cos = Math.cos(delta)
       const sin = Math.sin(delta)
       const rot = (x: number, z: number): Vec2 => {
-        const dx = x - center.x
-        const dz = z - center.z
-        return [center.x + dx * cos - dz * sin, center.z + dx * sin + dz * cos]
+        const dx = x - localCenter.x
+        const dz = z - localCenter.z
+        return [localCenter.x + dx * cos - dz * sin, localCenter.z + dx * sin + dz * cos]
       }
       const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
       const liveTransforms = useLiveTransforms.getState()

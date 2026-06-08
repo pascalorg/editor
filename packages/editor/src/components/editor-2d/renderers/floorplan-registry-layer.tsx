@@ -14,12 +14,12 @@ import {
   pauseSceneHistory,
   resolveBuildingForLevel,
   resumeSceneHistory,
-  useAlignmentGuides,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
   memo,

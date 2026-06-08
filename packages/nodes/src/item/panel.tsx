@@ -54,7 +54,7 @@ export default function ItemPanel() {
       // frame regenerates its cutout geometry around the moved item.
       if (n.asset.attachTo === 'wall' && n.parentId) {
         requestAnimationFrame(() => {
-          useScene.getState().dirtyNodes.add(n.parentId as AnyNode['id'])
+          useScene.getState().markDirty(n.parentId as AnyNode['id'])
         })
       }
     },

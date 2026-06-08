@@ -15,10 +15,10 @@ import {
   resolveAlignment,
   sceneRegistry,
   spatialGridManager,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'

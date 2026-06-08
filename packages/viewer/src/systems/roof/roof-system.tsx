@@ -144,7 +144,14 @@ export const RoofSystem = () => {
             if (mesh.geometry.type === 'BoxGeometry') {
               mesh.geometry.dispose()
               const placeholder = new THREE.BufferGeometry()
-              placeholder.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
+              // Three zero-vertices (one degenerate, invisible triangle), not an
+              // empty attribute: an empty position (count 0) leaves WebGPU vertex
+              // buffer slot 0 unbound if the mesh is ever drawn, and computeBoundsTree
+              // needs a real position buffer to index.
+              placeholder.setAttribute(
+                'position',
+                new THREE.Float32BufferAttribute(new Float32Array(9), 3),
+              )
               computeGeometryBoundsTree(placeholder)
               mesh.geometry = placeholder
             }

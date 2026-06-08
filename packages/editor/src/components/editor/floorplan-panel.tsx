@@ -38,7 +38,6 @@ import {
   StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
-  useAlignmentGuides,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -48,6 +47,7 @@ import {
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
+import { useAlignmentGuides, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
@@ -87,6 +87,7 @@ import {
   type FloorplanRenderContextValue,
   FloorplanRenderProvider,
 } from '../editor-2d/floorplan-render-context'
+import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
@@ -132,6 +133,7 @@ import {
   createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
   WALL_FINE_GRID_STEP,
   WALL_GRID_STEP,
@@ -6843,6 +6845,7 @@ export function FloorplanPanel() {
     wallEndpointDragRef.current = null
     setWallEndpointDraft(null)
     setHoveredEndpointId(null)
+    useWallSnapIndicator.getState().clear()
   }, [])
   const clearWallCurveDrag = useCallback(() => {
     wallCurveDragRef.current = null
@@ -6869,6 +6872,7 @@ export function FloorplanPanel() {
     // Drop any Figma-style alignment guide a draft branch left behind so it
     // doesn't linger after the tool deactivates / Esc / draft reset.
     useAlignmentGuides.getState().clear()
+    useWallSnapIndicator.getState().clear()
   }, [
     clearFencePlacementDraft,
     clearCeilingPlacementDraft,
@@ -7265,12 +7269,22 @@ export function FloorplanPanel() {
         // Wall endpoint move: grid snap only (no 45° angle snap from the
         // fixed corner — that's draft-only behaviour). Shift switches
         // to the fine grid step for precision.
-        const snappedPoint = snapWallDraftPoint({
+        const snapResult = snapWallDraftPointDetailed({
           point: planPoint,
           walls,
           ignoreWallIds: [dragState.wallId],
           step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+          magnetic: useEditor.getState().magneticSnap,
         })
+        const snappedPoint = snapResult.point
+        // Magnetic beacon at the endpoint when it locked onto existing geometry.
+        useWallSnapIndicator
+          .getState()
+          .set(
+            snapResult.snap
+              ? { x: snappedPoint[0], z: snappedPoint[1], kind: snapResult.snap }
+              : null,
+          )
 
         if (pointsEqual(dragState.currentPoint, snappedPoint)) {
           return
@@ -8238,20 +8252,25 @@ export function FloorplanPanel() {
       // wins outright — never pull the cursor off a corner the user is
       // closing onto — so alignment runs ONLY when the wall snap left the
       // point on the plain grid. Alt bypasses alignment.
-      const gridStep = shiftPressed ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
-      const wallSnapped = snapWallDraftPoint({
+      const wallSnap = snapWallDraftPointDetailed({
         point: planPoint,
         walls,
         step: shiftPressed ? WALL_FINE_GRID_STEP : undefined,
+        magnetic: useEditor.getState().magneticSnap,
       })
-      const gridBase = snapWallPointToGrid(planPoint, gridStep)
-      const lockedToWall = wallSnapped[0] !== gridBase[0] || wallSnapped[1] !== gridBase[1]
+      const wallSnapped = wallSnap.point
+      // Locked onto existing geometry (corner / midpoint / crossing / edge) →
+      // that snap wins, so skip Figma alignment and stand the beacon there.
+      const lockedToWall = wallSnap.snap !== null
       let snappedPoint = wallSnapped
       if (lockedToWall) {
         useAlignmentGuides.getState().clear()
       } else {
         snappedPoint = alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
       }
+      useWallSnapIndicator
+        .getState()
+        .set(wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null)
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
@@ -8506,6 +8525,19 @@ export function FloorplanPanel() {
     phase,
     toPoint2D,
   })
+  // Wall-commit snap for the placement hook. Mirrors the move-preview branch:
+  // it honours the Magnetic snap toggle so a click never snaps to geometry the
+  // preview didn't (keeps 2D commit consistent with the preview and with 3D).
+  const snapWallDraftPointMagnetic = useCallback(
+    (args: {
+      point: WallPlanPoint
+      walls: WallNode[]
+      start?: WallPlanPoint
+      angleSnap?: boolean
+      step?: number
+    }) => snapWallDraftPoint({ ...args, magnetic: useEditor.getState().magneticSnap }),
+    [],
+  )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({
     activePolygonDraftPoints,
     ceilingDraftPoints,
@@ -8539,7 +8571,7 @@ export function FloorplanPanel() {
     setRoofDraftStart,
     shiftPressed,
     snapPolygonDraftPoint,
-    snapWallDraftPoint,
+    snapWallDraftPoint: snapWallDraftPointMagnetic,
     toPoint2D,
     walls,
   })
@@ -10046,6 +10078,11 @@ export function FloorplanPanel() {
                   registry layer so the red lines and distance pills
                   paint on top of node geometry. */}
               <FloorplanAlignmentGuideLayer />
+
+              {/* "Magnetic" wall-snap beacon — per-kind glyph at the active
+                  draft / endpoint-move snap point. Same store + coord space as
+                  the alignment guides. */}
+              <FloorplanSnapBeaconLayer />
 
               <FloorplanMarqueeLayer
                 bounds={visibleSvgMarqueeBounds}

@@ -7,12 +7,12 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
 import {
   getFloorStackPreviewPosition,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
   usePlacementPreview,
 } from '@pascal-app/editor'

@@ -5,10 +5,14 @@ import {
   emitter,
   type GridEvent,
   ShelfNode,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { getFloorStackPreviewPosition, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  getFloorStackPreviewPosition,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'

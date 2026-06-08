@@ -12,11 +12,11 @@ import {
   pauseSceneHistory,
   resolveAlignment,
   resumeSceneHistory,
-  useAlignmentGuides,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'

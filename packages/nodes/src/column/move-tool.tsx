@@ -10,7 +10,6 @@ import {
   movingFootprintAnchors,
   resolveAlignment,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -23,6 +22,7 @@ import {
   resolvePlanarCursorPosition,
   stripPlacementMetadataFlags,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
   useFreshPlacementVisibility,
 } from '@pascal-app/editor'

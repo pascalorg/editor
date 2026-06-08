@@ -6,7 +6,6 @@ import {
   type DragAction,
   type FenceNode,
   resolveAlignment,
-  useAlignmentGuides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -14,6 +13,7 @@ import {
   type FencePlanPoint,
   isSegmentLongEnough,
   snapFenceDraftPoint,
+  useAlignmentGuides,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 

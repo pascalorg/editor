@@ -102,7 +102,10 @@ export {
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
+  snapWallDraftPointDetailed,
   WALL_FINE_GRID_STEP,
+  type WallDraftSnapKind,
+  type WallDraftSnapResult,
   type WallPlanPoint,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
@@ -234,6 +237,7 @@ export {
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
@@ -255,3 +259,8 @@ export {
 export { default as usePlacementPreview } from './store/use-placement-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
+export {
+  default as useWallSnapIndicator,
+  type WallSnapKind,
+  type WallSnapPoint,
+} from './store/use-wall-snap-indicator'

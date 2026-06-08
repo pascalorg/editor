@@ -5,7 +5,7 @@ import {
   resolveBuildingForLevel,
   sceneRegistry,
 } from '@pascal-app/core'
-import { Box3 } from 'three'
+import { Box3, Matrix4 } from 'three'
 
 // Shared plumbing for the group transform gizmos (rotate + move). Both operate
 // on the same multi-selection: classify each participant by how its placement
@@ -219,10 +219,26 @@ export function expandToComponent(
   return Array.from(included)
 }
 
+// Frozen world matrix of the level group + its inverse. A node's placement
+// (`position` / `start` / `end`) is stored in its parent level's frame, but the
+// gizmos raycast the ground plane in WORLD space. When the building is rotated
+// those frames diverge, so a world-space drag delta / rotation pivot must be
+// converted into the level frame before it's written back to placements —
+// otherwise the move drifts off-axis from the cursor and the rotation orbits a
+// displaced centre. Returns identity matrices when the level isn't mounted, which
+// collapses to the old behaviour (world == local) for an unrotated building.
+export function levelFrame(levelId: string | null): { matrix: Matrix4; inverse: Matrix4 } {
+  const obj = levelId ? sceneRegistry.nodes.get(levelId as AnyNodeId) : null
+  if (!obj) return { matrix: new Matrix4(), inverse: new Matrix4() }
+  obj.updateWorldMatrix(true, false)
+  const matrix = obj.matrixWorld.clone()
+  return { matrix, inverse: matrix.clone().invert() }
+}
+
 // World-space union bounding box of the selected meshes, or null if none are
-// mounted yet. Levels are axis-aligned in XZ, so world XZ coincides with each
-// node's level-local placement — letting callers transform placement directly
-// against box-derived points without per-node frame conversion.
+// mounted yet. Used to place the gizmos (which are portalled to the scene root,
+// so they live in world space); placement writes convert back to the level frame
+// via `levelFrame`.
 export function computeGroupBox(ids: string[]): Box3 | null {
   const box = new Box3()
   const tmp = new Box3()

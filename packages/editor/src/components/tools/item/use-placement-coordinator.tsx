@@ -14,13 +14,13 @@ import {
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   useSpatialQuery,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'

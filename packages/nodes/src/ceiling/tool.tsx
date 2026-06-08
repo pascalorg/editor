@@ -6,7 +6,6 @@ import {
   type GridEvent,
   type LevelNode,
   resolveAlignment,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -14,6 +13,7 @@ import {
   EDITOR_LAYER,
   markToolCancelConsumed,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'

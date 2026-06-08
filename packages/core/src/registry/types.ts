@@ -982,6 +982,12 @@ export type Capabilities = {
    */
   alignmentFootprint?: AlignmentFootprintConfig
   roofAccessory?: RoofAccessoryConfig
+  /**
+   * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
+   * downlights). The viewer's `CeilingSystem` calls this for each child of a
+   * ceiling to collect extra holes before triangulating. See `CeilingCutCapability`.
+   */
+  ceilingCut?: CeilingCutCapability
   paint?: PaintCapability
   /**
    * Kind is placed by clicking on a wall (door, window). When set, the
@@ -1177,6 +1183,22 @@ export type PaintEffectiveMaterialArgs = {
  */
 export type RoofAccessoryConfig = {
   buildCut?: (node: AnyNode, hostSegment: AnyNode) => BufferGeometry | null
+}
+
+/**
+ * Capability for kinds that cut a hole in their host ceiling when the node is
+ * attached to a ceiling surface (e.g. recessed downlights). The viewer's
+ * `CeilingSystem` queries children of a ceiling for this capability and merges
+ * the returned polygons as extra holes before triangulating, keeping the viewer
+ * free of per-kind branching.
+ *
+ * Returns a rotated-rectangle footprint in ceiling-local [x, z] plan space —
+ * the same coordinate space as `CeilingNode.polygon` and `.holes`. Return
+ * `null` when this particular instance should not cut a hole (e.g. a
+ * non-recessed variant of the same kind).
+ */
+export type CeilingCutCapability = {
+  buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
 }
 
 export type CapabilityCtx = { node: AnyNode }

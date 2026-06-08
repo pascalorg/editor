@@ -98,6 +98,11 @@ const assetSchema = z.object({
   src: AssetUrl,
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
+  // Ceiling fixtures (e.g. recessed downlights) that embed *into* the ceiling
+  // rather than hang below it: the item seats flush with the ceiling plane
+  // (its body rising into the void above) and the ceiling is cut out around
+  // the item's footprint. Ignored unless `attachTo === 'ceiling'`.
+  recessed: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   // Function-axis tag slugs from the taxonomy. Drives the hierarchical
   // Items-tab browse: a tree node matches when any of its descendant slugs
