@@ -10,6 +10,7 @@ import {
   ItemNode,
   LevelNode,
   SiteNode,
+  SlabNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -159,6 +160,28 @@ export function buildGraph(
     } catch (err) {
       warnings.push(`zone[${i}] error: ${err instanceof Error ? err.message : String(err)}`)
     }
+  }
+
+  // Single bbox slab covering the entire building footprint.
+  // Zone detection is incomplete — only some rooms get closed polygons.
+  // A single slab from the wall bounding box guarantees the player never
+  // falls through in first-person mode, regardless of how many zones were found.
+  if (mergeResult.walls.length > 0) {
+    const bboxPoly: Array<[number, number]> = [
+      [bboxMinX, bboxMinZ],
+      [bboxMaxX, bboxMinZ],
+      [bboxMaxX, bboxMaxZ],
+      [bboxMinX, bboxMaxZ],
+    ]
+    try {
+      const slab = SlabNode.parse({ polygon: bboxPoly, elevation: 0.05, autoFromWalls: false })
+      const slabLinked: AnyNodeT = { ...(slab as AnyNodeT), parentId: levelId }
+      const sv = AnyNode.safeParse(slabLinked)
+      if (sv.success) {
+        nodes[slab.id as AnyNodeId] = sv.data as AnyNodeT
+        levelChildren.push(slab.id)
+      }
+    } catch { /* non-fatal */ }
   }
 
   // Furniture — ItemNodes from Madori furniture conversion
