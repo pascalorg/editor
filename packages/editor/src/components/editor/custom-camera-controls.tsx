@@ -10,7 +10,7 @@ import {
 } from '@pascal-app/core'
 import { GRID_LAYER, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Box3, Vector3 } from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
@@ -25,13 +25,119 @@ const tempSize = new Vector3()
 const tempTarget = new Vector3()
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
+type CameraMode = ReturnType<typeof useViewer.getState>['cameraMode']
+type CameraPoseSnapshot = {
+  mode: CameraMode
+  position: [number, number, number]
+  target: [number, number, number]
+}
+
+function writeVectorTuple(tuple: [number, number, number], vector: Vector3) {
+  tuple[0] = vector.x
+  tuple[1] = vector.y
+  tuple[2] = vector.z
+}
+
+function saveCameraPose(
+  control: CameraControlsImpl,
+  mode: CameraMode,
+  pose: CameraPoseSnapshot,
+  position: Vector3,
+  target: Vector3,
+) {
+  control.getPosition(position)
+  control.getTarget(target)
+  pose.mode = mode
+  writeVectorTuple(pose.position, position)
+  writeVectorTuple(pose.target, target)
+}
+
+function restoreCameraPose(control: CameraControlsImpl, pose: CameraPoseSnapshot) {
+  control.setLookAt(
+    pose.position[0],
+    pose.position[1],
+    pose.position[2],
+    pose.target[0],
+    pose.target[1],
+    pose.target[2],
+    false,
+  )
+}
+
+function useFirstPersonCameraPoseRestore(
+  controls: { current: CameraControlsImpl | null },
+  isFirstPersonMode: boolean,
+  cameraMode: CameraMode,
+) {
+  const restorePose = useRef<CameraPoseSnapshot>({
+    mode: cameraMode,
+    position: [0, 0, 0],
+    target: [0, 0, 0],
+  })
+  const hasRestorePose = useRef(false)
+  const isRestoring = useRef(false)
+  const wasFirstPersonMode = useRef(isFirstPersonMode)
+  const snapshotPosition = useRef(new Vector3())
+  const snapshotTarget = useRef(new Vector3())
+
+  useFrame(() => {
+    if (isFirstPersonMode || isRestoring.current) return
+    const control = controls.current
+    if (!control) return
+
+    saveCameraPose(
+      control,
+      cameraMode,
+      restorePose.current,
+      snapshotPosition.current,
+      snapshotTarget.current,
+    )
+    hasRestorePose.current = true
+  })
+
+  useEffect(() => {
+    const wasFirstPerson = wasFirstPersonMode.current
+    wasFirstPersonMode.current = isFirstPersonMode
+
+    if (isFirstPersonMode) {
+      return
+    }
+
+    if (!wasFirstPerson || !hasRestorePose.current) return
+
+    const pose = restorePose.current
+    isRestoring.current = true
+    useViewer.getState().setCameraMode(pose.mode)
+
+    const restoreFrame = requestAnimationFrame(() => {
+      const currentControls = controls.current
+      if (currentControls) {
+        restoreCameraPose(currentControls, pose)
+      }
+      isRestoring.current = false
+    })
+
+    return () => {
+      cancelAnimationFrame(restoreFrame)
+      isRestoring.current = false
+    }
+  }, [controls, isFirstPersonMode])
+
+  return useCallback(() => isRestoring.current, [])
+}
 
 export const CustomCameraControls = () => {
-  const controls = useRef<CameraControlsImpl>(null!)
+  const controls = useRef<CameraControlsImpl | null>(null)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
+  const cameraMode = useViewer((state) => state.cameraMode)
+  const isRestoringFirstPersonPose = useFirstPersonCameraPoseRestore(
+    controls,
+    isFirstPersonMode,
+    cameraMode,
+  )
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
   const maxPolarAngle =
@@ -47,7 +153,7 @@ export const CustomCameraControls = () => {
   }, [camera, raycaster])
 
   useEffect(() => {
-    if (isPreviewMode) return // Preview mode uses auto-navigate instead
+    if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
     let targetY = 0
     if (currentLevelId) {
       const levelMesh = sceneRegistry.nodes.get(currentLevelId)
@@ -62,10 +168,10 @@ export const CustomCameraControls = () => {
     }
     controls.current.getTarget(currentTarget)
     controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)
-  }, [currentLevelId, isPreviewMode])
+  }, [currentLevelId, isPreviewMode, isFirstPersonMode, isRestoringFirstPersonPose])
 
   useEffect(() => {
-    if (!controls.current) return
+    if (isFirstPersonMode || !controls.current) return
 
     controls.current.maxPolarAngle = maxPolarAngle
     controls.current.minPolarAngle = 0
@@ -73,11 +179,11 @@ export const CustomCameraControls = () => {
     if (controls.current.polarAngle > maxPolarAngle) {
       controls.current.rotateTo(controls.current.azimuthAngle, maxPolarAngle, true)
     }
-  }, [maxPolarAngle])
+  }, [isFirstPersonMode, maxPolarAngle])
 
   const focusNode = useCallback(
     (nodeId: string) => {
-      if (isPreviewMode || !controls.current) return
+      if (isPreviewMode || isFirstPersonMode || !controls.current) return
 
       const object3D = sceneRegistry.nodes.get(nodeId)
       if (!object3D) return
@@ -100,11 +206,10 @@ export const CustomCameraControls = () => {
         true,
       )
     },
-    [isPreviewMode],
+    [isPreviewMode, isFirstPersonMode],
   )
 
   // Configure mouse buttons based on control mode and camera mode
-  const cameraMode = useViewer((state) => state.cameraMode)
   const mouseButtons = useMemo(() => {
     // Use ZOOM for orthographic camera, DOLLY for perspective camera
     const wheelAction =
@@ -170,6 +275,8 @@ export const CustomCameraControls = () => {
   }, [cameraMode, isPreviewMode, isInteracting])
 
   useEffect(() => {
+    if (isFirstPersonMode) return
+
     const keyState = {
       shiftRight: false,
       shiftLeft: false,
@@ -249,8 +356,9 @@ export const CustomCameraControls = () => {
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
+      document.body.style.cursor = ''
     }
-  }, [cameraMode, isPreviewMode])
+  }, [cameraMode, isPreviewMode, isFirstPersonMode])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
   const previewTargetNodeId = isPreviewMode
@@ -258,7 +366,7 @@ export const CustomCameraControls = () => {
     : null
 
   useEffect(() => {
-    if (!(isPreviewMode && controls.current)) return
+    if (!(isPreviewMode && controls.current) || isFirstPersonMode) return
 
     const nodes = useScene.getState().nodes
     let node = previewTargetNodeId ? nodes[previewTargetNodeId] : null
@@ -318,7 +426,7 @@ export const CustomCameraControls = () => {
       tempCenter.z,
       true,
     )
-  }, [isPreviewMode, previewTargetNodeId])
+  }, [isPreviewMode, isFirstPersonMode, previewTargetNodeId])
 
   // Preset capture auto-framing — when `setCaptureMode({ mode: 'preset',
   // isolated })` fires, fly the camera to a pose that fits the union
@@ -329,6 +437,7 @@ export const CustomCameraControls = () => {
   // modal opened.
   const captureMode = useEditor((s) => s.captureMode)
   useEffect(() => {
+    if (isFirstPersonMode) return
     if (!controls.current) return
     if (captureMode.mode !== 'preset') return
     const ids = captureMode.isolated
@@ -417,11 +526,11 @@ export const CustomCameraControls = () => {
         true,
       )
     }
-  }, [captureMode])
+  }, [captureMode, isFirstPersonMode])
 
   useEffect(() => {
     const handleNodeCapture = ({ nodeId }: CameraControlEvent) => {
-      if (!controls.current) return
+      if (isFirstPersonMode || !controls.current) return
 
       const position = new Vector3()
       const target = new Vector3()
@@ -439,7 +548,7 @@ export const CustomCameraControls = () => {
       })
     }
     const handleNodeView = ({ nodeId }: CameraControlEvent) => {
-      if (!controls.current) return
+      if (isFirstPersonMode || !controls.current) return
 
       const node = useScene.getState().nodes[nodeId]
       if (!node?.camera) return
@@ -457,7 +566,7 @@ export const CustomCameraControls = () => {
     }
 
     const handleTopView = () => {
-      if (!controls.current) return
+      if (isFirstPersonMode || !controls.current) return
 
       const currentPolarAngle = controls.current.polarAngle
 
@@ -469,7 +578,7 @@ export const CustomCameraControls = () => {
     }
 
     const handleOrbitCW = () => {
-      if (!controls.current) return
+      if (isFirstPersonMode || !controls.current) return
 
       const currentAzimuth = controls.current.azimuthAngle
       const currentPolar = controls.current.polarAngle
@@ -481,7 +590,7 @@ export const CustomCameraControls = () => {
     }
 
     const handleOrbitCCW = () => {
-      if (!controls.current) return
+      if (isFirstPersonMode || !controls.current) return
 
       const currentAzimuth = controls.current.azimuthAngle
       const currentPolar = controls.current.polarAngle
@@ -497,7 +606,7 @@ export const CustomCameraControls = () => {
     }
 
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
-      if (!controls.current || isPreviewMode) return
+      if (isFirstPersonMode || !controls.current || isPreviewMode) return
       if (!bounds) {
         // Restore default framing pose when no bounds were computed.
         controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
@@ -530,7 +639,7 @@ export const CustomCameraControls = () => {
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
-  }, [focusNode, isPreviewMode])
+  }, [focusNode, isPreviewMode, isFirstPersonMode])
 
   const onTransitionStart = useCallback(() => {
     useViewer.getState().setCameraDragging(true)
@@ -540,10 +649,6 @@ export const CustomCameraControls = () => {
     useViewer.getState().setCameraDragging(false)
   }, [])
 
-  if (isFirstPersonMode) {
-    return null
-  }
-
   // Preset capture mode frames a single subtree (often a 0.3–2m preset),
   // so the default 6m minDistance prevents the user from getting close
   // enough to compose a good thumbnail. Relax the clamp to 0.5m while
@@ -551,6 +656,10 @@ export const CustomCameraControls = () => {
   // navigation guardrails.
   const isPresetCapture = captureMode.mode === 'preset'
   const minDistance = isPresetCapture ? 0.5 : 6
+
+  if (isFirstPersonMode) {
+    return null
+  }
 
   return (
     <CameraControls

@@ -11,12 +11,12 @@ import { createDefaultMaterial, useNodeEvents, useViewer } from '@pascal-app/vie
 import { useMemo, useRef } from 'react'
 import { Color, type Group, Shape } from 'three'
 
-const SPAWN_COLOR = new Color('#22c55e')
+const SPAWN_COLOR = new Color('#818cf8')
 
 /**
  * Registry-driven spawn renderer. Behaviorally identical to the legacy
  * `@pascal-app/viewer/components/renderers/spawn/spawn-renderer.tsx` — same
- * geometry, same colors, same event surface. When the spawn definition lands
+ * geometry and event surface. When the spawn definition lands
  * in `builtinPlugin.nodes`, the Phase 0 dispatch shims switch the renderer
  * here and the legacy one is short-circuited.
  *
@@ -38,7 +38,7 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
   useRegistry(node.id, 'spawn', ref)
 
   const material = useMemo(() => {
-    const next = createDefaultMaterial('#22c55e', 0.42, shading) as ReturnType<
+    const next = createDefaultMaterial('#818cf8', 0.42, shading) as ReturnType<
       typeof createDefaultMaterial
     > & {
       emissive?: Color
