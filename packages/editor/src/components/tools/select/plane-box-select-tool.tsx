@@ -31,7 +31,7 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { markBoxSelectHandled } from './box-select-state'
+import { isBoxSelectPointerSuppressed, markBoxSelectHandled } from './box-select-state'
 import { collectSelectableCandidateIds } from './select-candidates'
 
 declare module 'react/jsx-runtime' {
@@ -407,6 +407,7 @@ export const PlaneBoxSelectTool: React.FC = () => {
     const onCanvasPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
       if (spaceDownRef.current) return
+      if (isBoxSelectPointerSuppressed(event)) return
       if (useViewer.getState().cameraDragging) return
       if (useViewer.getState().inputDragging) return
 
@@ -426,7 +427,8 @@ export const PlaneBoxSelectTool: React.FC = () => {
 
     const onCanvasPointerUp = (event: PointerEvent) => {
       if (event.button !== 0) return
-      if (useViewer.getState().inputDragging) {
+      if (isBoxSelectPointerSuppressed(event) || useViewer.getState().inputDragging) {
+        markBoxSelectHandled()
         resetDrag()
         return
       }
@@ -494,7 +496,16 @@ export const PlaneBoxSelectTool: React.FC = () => {
       }
 
       if (!pointerDown.current) return
-      if (spaceDownRef.current || useViewer.getState().inputDragging) return
+      if (isBoxSelectPointerSuppressed(event.nativeEvent)) {
+        markBoxSelectHandled()
+        resetDrag()
+        return
+      }
+      if (spaceDownRef.current || useViewer.getState().inputDragging) {
+        markBoxSelectHandled()
+        resetDrag()
+        return
+      }
 
       currentPoint.current.set(snappedX, event.position[1], snappedZ)
 
@@ -538,7 +549,7 @@ export const PlaneBoxSelectTool: React.FC = () => {
     return () => {
       emitter.off('grid:move', onMove)
     }
-  }, [syncPreviewSelectedIds])
+  }, [resetDrag, syncPreviewSelectedIds])
 
   return (
     <group>

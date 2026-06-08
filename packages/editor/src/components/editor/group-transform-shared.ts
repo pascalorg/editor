@@ -1,4 +1,10 @@
-import { type AnyNode, type AnyNodeId, sceneRegistry } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  nodeRegistry,
+  resolveBuildingForLevel,
+  sceneRegistry,
+} from '@pascal-app/core'
 import { Box3, Matrix4 } from 'three'
 
 // Shared plumbing for the group transform gizmos (rotate + move). Both operate
@@ -26,20 +32,61 @@ const isVec2 = (v: unknown): v is Vec2 =>
 //   - 'endpoint' start/end tuples (walls, fences)
 export type ParticipantKind = 'vec3' | 'scalar' | 'endpoint'
 
-// A selected node qualifies when it sits directly on the active level and its
-// placement is one of the transformable shapes. Doors/windows parent to their
-// wall (not the level), so they're excluded here and ride their wall.
+// A selected node qualifies when it belongs to the active level's horizontal
+// frame: either parented to that level, or declared building-scoped and parented
+// to the active level's building. Doors/windows parent to their wall, so they're
+// excluded here and ride their wall.
+function isInGroupTransformScope(
+  node: AnyNode | undefined,
+  levelId: string | null,
+  sceneNodes: Record<string, AnyNode | undefined>,
+): boolean {
+  if (!node || !levelId) return false
+  if (node.parentId === levelId) return true
+
+  if (nodeRegistry.get(node.type)?.floorplanScope !== 'building') {
+    return false
+  }
+
+  const buildingId = resolveBuildingForLevel(
+    levelId as AnyNodeId,
+    sceneNodes as Record<AnyNodeId, AnyNode>,
+  )
+  return Boolean(buildingId && node.parentId === buildingId)
+}
+
+function getLegacyScenePosition(node: AnyNode): Vec3 | null {
+  if (node.type !== 'elevator') return null
+  const object = sceneRegistry.nodes.get(node.id)
+  if (!object) return [0, 0, 0]
+  return [object.position.x, object.position.y, object.position.z]
+}
+
+function getParticipantPosition(node: AnyNode): Vec3 | null {
+  const p = (node as { position?: unknown }).position
+  if (isVec3(p)) return p
+  return getLegacyScenePosition(node)
+}
+
+function getParticipantScalarRotation(node: AnyNode): number | null {
+  const r = (node as { rotation?: unknown }).rotation
+  if (typeof r === 'number' && Number.isFinite(r)) return r
+  if (node.type !== 'elevator') return null
+  return sceneRegistry.nodes.get(node.id)?.rotation.y ?? 0
+}
+
 export function classifyParticipant(
   node: AnyNode | undefined,
   levelId: string | null,
+  sceneNodes: Record<string, AnyNode | undefined>,
 ): ParticipantKind | null {
-  if (!node || node.parentId !== levelId) return null
-  const p = (node as { position?: unknown }).position
+  if (!node || !isInGroupTransformScope(node, levelId, sceneNodes)) return null
+  const p = getParticipantPosition(node)
   const r = (node as { rotation?: unknown }).rotation
   const start = (node as { start?: unknown }).start
   const end = (node as { end?: unknown }).end
   if (isVec3(p) && isVec3(r)) return 'vec3'
-  if (isVec3(p) && typeof r === 'number') return 'scalar'
+  if (isVec3(p) && getParticipantScalarRotation(node) !== null) return 'scalar'
   if (isVec2(start) && isVec2(end)) return 'endpoint'
   return null
 }
@@ -74,23 +121,27 @@ export function collectParticipants(
   const starts: ParticipantStart[] = []
   for (const id of ids) {
     const node = sceneNodes[id]
-    const kind = classifyParticipant(node, levelId)
+    const kind = classifyParticipant(node, levelId, sceneNodes)
     if (!node || !kind) continue
     if (kind === 'vec3') {
       const n = node as AnyNode & { position: Vec3; rotation: Vec3 }
+      const position = getParticipantPosition(node)
+      if (!position) continue
       starts.push({
         id: id as AnyNodeId,
         kind,
-        position: [n.position[0], n.position[1], n.position[2]],
+        position: [position[0], position[1], position[2]],
         rotation: [n.rotation[0], n.rotation[1], n.rotation[2]],
       })
     } else if (kind === 'scalar') {
-      const n = node as AnyNode & { position: Vec3; rotation: number }
+      const position = getParticipantPosition(node)
+      const rotation = getParticipantScalarRotation(node)
+      if (!(position && rotation !== null)) continue
       starts.push({
         id: id as AnyNodeId,
         kind,
-        position: [n.position[0], n.position[1], n.position[2]],
-        rotation: n.rotation,
+        position: [position[0], position[1], position[2]],
+        rotation,
       })
     } else {
       const n = node as AnyNode & { start: Vec2; end: Vec2 }
@@ -112,7 +163,7 @@ export function collectParticipants(
     const selected = new Set(starts.map((s) => s.id))
     for (const [nid, node] of Object.entries(sceneNodes)) {
       if (selected.has(nid as AnyNodeId)) continue
-      if (classifyParticipant(node, levelId) !== 'endpoint') continue
+      if (classifyParticipant(node, levelId, sceneNodes) !== 'endpoint') continue
       const n = node as AnyNode & { start: Vec2; end: Vec2 }
       const start: Vec2 = [n.start[0], n.start[1]]
       const end: Vec2 = [n.end[0], n.end[1]]
@@ -138,7 +189,7 @@ export function expandToComponent(
 ): string[] {
   const endpoints: { id: string; start: Vec2; end: Vec2 }[] = []
   for (const [id, node] of Object.entries(sceneNodes)) {
-    if (classifyParticipant(node, levelId) === 'endpoint') {
+    if (classifyParticipant(node, levelId, sceneNodes) === 'endpoint') {
       const n = node as AnyNode & { start: Vec2; end: Vec2 }
       endpoints.push({ id, start: [n.start[0], n.start[1]], end: [n.end[0], n.end[1]] })
     }

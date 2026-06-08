@@ -15,6 +15,7 @@ export {
   footprintAABB,
   footprintAABBAt,
   footprintAABBFrom,
+  movingAlignmentAnchors,
   movingFootprintAnchors,
   nodeAlignmentAnchors,
   polygonAnchors,

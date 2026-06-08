@@ -1,12 +1,19 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   CORNER_OFFSET,
   classifyParticipant,
@@ -36,11 +43,11 @@ import {
 const ROTATE_SNAP = Math.PI / 12 // 15°
 
 /**
- * Group-rotate gizmo. When 2+ "movable" nodes (position + rotation, sitting
- * directly on the active level) are selected, a single rotation handle appears
- * at the selection's bounding-box center. Dragging it spins every selected node
- * rigidly around that shared center — orbiting each node's position AND turning
- * its yaw by the same delta, so the group rotates as one piece.
+ * Group-rotate gizmo. When 2+ transformable nodes in the active level frame are
+ * selected, a single rotation handle appears at the selection's bounding-box
+ * center. Dragging it spins every selected node rigidly around that shared
+ * center — orbiting each node's position AND turning its yaw by the same delta,
+ * so the group rotates as one piece.
  *
  * The single-selection case is handled by `NodeArrowHandles`; a full-level
  * box-select promotes to a building selection, so neither reaches this gizmo.
@@ -56,7 +63,10 @@ export function GroupRotateHandle() {
   const nodes = useScene((s) => s.nodes)
 
   const participantIds = useMemo(
-    () => selectedIds.filter((id) => classifyParticipant(nodes[id as AnyNodeId], levelId) !== null),
+    () =>
+      selectedIds.filter(
+        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      ),
     [selectedIds, levelId, nodes],
   )
 
@@ -124,6 +134,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
 
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
 
     frozenRest.current = { pivot: rest.pivot.clone(), corner: rest.corner.clone() }
     const center = rest.pivot.clone()
@@ -205,10 +216,14 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
         const dz = z - localCenter.z
         return [localCenter.x + dx * cos - dz * sin, localCenter.z + dx * sin + dz * cos]
       }
-      const overrides = useLiveNodeOverrides.getState()
+      const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
+      const liveTransforms = useLiveTransforms.getState()
       for (const s of starts) {
         if (s.kind === 'endpoint') {
-          overrides.set(s.id, { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) })
+          overrideEntries.push([
+            s.id,
+            { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) },
+          ])
         } else {
           const [px, pz] = rot(s.position[0], s.position[2])
           const position: Vec3 = [px, s.position[1], pz]
@@ -216,7 +231,10 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
             s.kind === 'vec3'
               ? ([s.rotation[0], s.rotation[1] - delta, s.rotation[2]] as Vec3)
               : s.rotation - delta
-          overrides.set(s.id, { position, rotation })
+          overrideEntries.push([s.id, { position, rotation }])
+          if (s.kind === 'scalar') {
+            liveTransforms.set(s.id, { position, rotation: s.rotation - delta })
+          }
         }
         useScene.getState().markDirty(s.id)
       }
@@ -225,12 +243,16 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       // (rot is deterministic, so it lands exactly on the selected wall's
       // rotated endpoint), keeping the junction welded; the far end stays put.
       for (const l of links) {
-        overrides.set(l.id, {
-          start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
-          end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
-        })
+        overrideEntries.push([
+          l.id,
+          {
+            start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
+            end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
+          },
+        ])
         useScene.getState().markDirty(l.id)
       }
+      useLiveNodeOverrides.getState().setMany(overrideEntries)
 
       if (Math.abs(delta) < 0.0087) {
         setGuide(null)
@@ -252,6 +274,17 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       }
     }
 
+    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
+    const clearLivePreviews = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      const liveTransforms = useLiveTransforms.getState()
+      for (const id of affectedIds) {
+        overrides.clear(id)
+        liveTransforms.clear(id)
+        useScene.getState().markDirty(id)
+      }
+    }
+
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
@@ -264,8 +297,6 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       frozenRest.current = null
       dragCleanupRef.current = null
     }
-
-    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
     const commitFromOverrides = () => {
       const overrides = useLiveNodeOverrides.getState()
@@ -287,23 +318,23 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       // one tracked set — collapsing the whole group rotation into one undo.
       useScene.temporal.getState().resume()
       if (updates.length > 0) useScene.getState().updateNodes(updates)
-      for (const id of affectedIds) {
-        useLiveNodeOverrides.getState().clear(id)
-        useScene.getState().markDirty(id)
-      }
+      clearLivePreviews()
       cleanup()
     }
 
     const onCancel = () => {
       // Revert: drop overrides + mark dirty so renderers rebuild from the store.
-      for (const id of affectedIds) {
-        useLiveNodeOverrides.getState().clear(id)
-        useScene.getState().markDirty(id)
-      }
+      clearLivePreviews()
       cleanup()
     }
 
-    dragCleanupRef.current = cleanup
+    dragCleanupRef.current = () => {
+      clearLivePreviews()
+      cleanup()
+    }
+    for (const id of affectedIds) {
+      useLiveTransforms.getState().clear(id)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)

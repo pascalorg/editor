@@ -13,6 +13,7 @@ import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Camera, type Object3D, type Plane, Vector2, type Vector3 } from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
 export type HandleDragControls = {
   onStart: (index: number, snapshot: AnyNode) => void
@@ -77,6 +78,26 @@ export function swallowNextClick() {
   }, 300)
 }
 
+function suppressInputDraggingUntilPointerRelease(pointerId: number) {
+  const previousInputDragging = useViewer.getState().inputDragging
+  useViewer.getState().setInputDragging(true)
+
+  function restore(event?: PointerEvent) {
+    if (event && event.pointerId !== pointerId) return
+    useViewer.getState().setInputDragging(previousInputDragging)
+    window.removeEventListener('pointerup', restore)
+    window.removeEventListener('pointercancel', restore)
+    window.removeEventListener('blur', onBlur)
+  }
+  function onBlur() {
+    restore()
+  }
+
+  window.addEventListener('pointerup', restore)
+  window.addEventListener('pointercancel', restore)
+  window.addEventListener('blur', onBlur)
+}
+
 export function useHandleDrag(args: UseHandleDragArgs) {
   const { camera, raycaster, gl } = useThree()
   const dragCleanupRef = useRef<(() => void) | null>(null)
@@ -85,8 +106,11 @@ export function useHandleDrag(args: UseHandleDragArgs) {
 
   return (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
 
     if (args.kind === 'tap') {
+      suppressInputDraggingUntilPointerRelease(event.nativeEvent.pointerId)
+      swallowNextClick()
       sfxEmitter.emit('sfx:item-pick')
       document.body.style.cursor = ''
       args.onTap(event)

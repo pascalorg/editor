@@ -61,6 +61,7 @@ export {
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
+export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
@@ -198,6 +199,7 @@ export {
   type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
 } from './lib/floorplan'
+export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -207,6 +209,17 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
+export {
+  addFreshPlacementMetadata,
+  getPlacementMetadataRecord,
+  isFreshPlacementMetadata,
+  stripPlacementMetadataFlags,
+} from './lib/placement-metadata'
+export {
+  type PlanarCursorPlacementMode,
+  type PlanarPoint,
+  resolvePlanarCursorPosition,
+} from './lib/planar-cursor-placement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'

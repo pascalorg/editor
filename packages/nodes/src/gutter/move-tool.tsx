@@ -12,13 +12,18 @@ import {
 } from '@pascal-app/core'
 import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
 import { type EaveSnap, resolveEaveSnap } from './eave-snap'
 import GutterPreview from './preview'
 
 type PreviewTarget = {
   roof: { position: [number, number, number]; rotation: number }
   segment: { position: [number, number, number]; rotation: number }
+  snap: EaveSnap
+}
+
+type GutterDragTarget = {
+  segment: RoofSegmentNode
   snap: EaveSnap
 }
 
@@ -65,23 +70,30 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     if (gutterObj) gutterObj.visible = false
 
     let lastSnap: [number, number] | null = null
+    let lastTarget: GutterDragTarget | null = null
+    const roofDrag = createRelativeRoofDrag(original)
+
+    const resolveTarget = (event: RoofEvent): GutterDragTarget | null => {
+      const target = roofDrag.resolve(event)
+      if (!target) return null
+      return {
+        segment: target.segment,
+        snap: resolveEaveSnap(target.segment, target.localX, target.localZ),
+      }
+    }
 
     const updatePreview = (event: RoofEvent) => {
       const roof = event.node as RoofNode
-      const hit = resolveRoofSegmentHit(
-        roof,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      const target = resolveTarget(event)
+      if (!target) return
+      lastTarget = target
 
       // Same snap math as the placement tool — picking-up and putting-
       // down round-trip identically. roofType-aware: hip/flat picks
       // ±X or ±Z based on which slope the cursor is on; shed always
       // snaps to its low (+Z) eave; gable / gambrel / mansard / dutch
       // stay on ±Z.
-      const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
+      const { snap } = target
 
       const sx = Math.round(snap.eaveX * 20) / 20
       const sz = Math.round(snap.eaveZ * 20) / 20
@@ -96,8 +108,8 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
           rotation: roof.rotation ?? 0,
         },
         segment: {
-          position: (hit.segment.position ?? [0, 0, 0]) as [number, number, number],
-          rotation: hit.segment.rotation ?? 0,
+          position: (target.segment.position ?? [0, 0, 0]) as [number, number, number],
+          rotation: target.segment.rotation ?? 0,
         },
         snap,
       })
@@ -105,15 +117,10 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     }
 
     const onRoofClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
-      const targetSegmentId = hit.segment.id as AnyNodeId
-      const snap = resolveEaveSnap(hit.segment, hit.localX, hit.localZ)
+      const target = lastTarget ?? resolveTarget(event)
+      if (!target) return
+      const targetSegmentId = target.segment.id as AnyNodeId
+      const { snap } = target
       const st = useScene.getState()
 
       const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined

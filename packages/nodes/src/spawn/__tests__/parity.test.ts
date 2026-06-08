@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { SpawnNode as SpawnSchemaFromCore } from '@pascal-app/core'
+import {
+  type FloorplanGeometry,
+  type GeometryContext,
+  SpawnNode as SpawnSchemaFromCore,
+} from '@pascal-app/core'
 import { spawnDefinition } from '../definition'
+import { buildSpawnFloorplan } from '../floorplan'
 import { SpawnNode } from '../schema'
 
 /**
@@ -8,7 +13,7 @@ import { SpawnNode } from '../schema'
  *
  * The new renderer is a near-line-by-line port of the legacy
  * `@pascal-app/viewer/components/renderers/spawn/spawn-renderer.tsx` —
- * same mesh count, same primitives, same colors. The "parity" assertion
+ * same mesh count and primitives. The "parity" assertion
  * for the spike is structural (definition is well-formed, both lazy
  * modules resolve to React components) plus a manual visual eyeball check
  * documented in the plan. Pixel-level Playwright parity lands in Phase 4
@@ -52,6 +57,56 @@ describe('spawn definition', () => {
     expect(angles).toContain(0)
   })
 
+  test('handles expose rotation and move controls', () => {
+    expect(Array.isArray(spawnDefinition.handles)).toBe(true)
+    if (!Array.isArray(spawnDefinition.handles)) return
+    expect(spawnDefinition.handles.map((handle) => handle.kind)).toEqual([
+      'arc-resize',
+      'translate',
+    ])
+  })
+
+  test('floorplan uses indigo marker color and selected rotation affordance', () => {
+    const spawn = SpawnNode.parse({
+      id: 'spawn_test1234567890ab',
+      position: [1, 0, 2],
+      rotation: Math.PI / 4,
+    })
+    const geometry = buildSpawnFloorplan(spawn, {
+      resolve: () => undefined,
+      children: [],
+      siblings: [],
+      parent: null,
+      viewState: {
+        selected: true,
+        highlighted: false,
+        hovered: false,
+        moving: false,
+        palette: {
+          selectedStroke: '#60a5fa',
+          selectedFill: '#dbeafe',
+          selectedHatch: '#60a5fa',
+          wallHoverStroke: '#60a5fa',
+          endpointHandleFill: '#fed7aa',
+          endpointHandleStroke: '#f97316',
+          endpointHandleHoverStroke: '#fb923c',
+          endpointHandleActiveFill: '#fdba74',
+          endpointHandleActiveStroke: '#ea580c',
+          curveHandleFill: '#99f6e4',
+          curveHandleStroke: '#14b8a6',
+          curveHandleHoverStroke: '#2dd4bf',
+          measurementStroke: '#6366f1',
+          measurementLabelBackground: '#ffffff',
+          measurementLabelText: '#111827',
+        },
+      },
+    } satisfies GeometryContext)
+
+    const flat = flattenFloorplan(geometry)
+    expect(flat.some((entry) => entry.kind === 'polygon' && entry.fill === '#818cf8')).toBe(true)
+    expect(flat.some((entry) => entry.kind === 'rotate-arrow')).toBe(true)
+  })
+
   test('renderer is a parametric lazy module reference', () => {
     expect(spawnDefinition.renderer.kind).toBe('parametric')
     if (spawnDefinition.renderer.kind !== 'parametric') return
@@ -67,3 +122,8 @@ describe('spawn definition', () => {
     expect(spawnDefinition.mcp?.description?.length).toBeGreaterThan(0)
   })
 })
+
+function flattenFloorplan(geometry: FloorplanGeometry): FloorplanGeometry[] {
+  if (geometry.kind !== 'group') return [geometry]
+  return geometry.children.flatMap((child) => flattenFloorplan(child))
+}

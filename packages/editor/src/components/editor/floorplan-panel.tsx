@@ -76,7 +76,7 @@ import {
 import { guideEmitter } from '../../lib/guide-events'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
-import type { GuideUiState } from '../../store/use-editor'
+import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
 import useEditor from '../../store/use-editor'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
@@ -98,6 +98,22 @@ import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-laye
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
+import {
+  isBoxSelectPointerSuppressed,
+  markBoxSelectHandled,
+} from '../tools/select/box-select-state'
+import {
+  createScreenRectangleSelectionElement,
+  hideScreenRectangleSelectionElement,
+  intersectScreenRects,
+  normalizeScreenRect,
+  SCREEN_RECTANGLE_SELECTION_DRAG_THRESHOLD_PX,
+  type ScreenRect,
+  screenRectFromDomRect,
+  screenRectsIntersect,
+  updateScreenRectangleSelectionElement,
+} from '../tools/select/screen-rectangle-selection'
+import { collectSelectableCandidateIds } from '../tools/select/select-candidates'
 import {
   formatAngleRadians,
   getAngleArcToSegmentReference,
@@ -202,16 +218,42 @@ const FLOORPLAN_GUIDE_ROTATION_SNAP_DEGREES = 45
 const FLOORPLAN_GUIDE_ROTATION_FINE_SNAP_DEGREES = 1
 const FLOORPLAN_SITE_COLOR = '#10b981'
 const FLOORPLAN_VIEW_ROTATION_DEG = 90
+const FLOORPLAN_ROTATION_DEGREES_PER_PIXEL = 0.35
+const FLOORPLAN_VIEW_ANIMATION_TIME_CONSTANT_MS = 90
+const FLOORPLAN_VIEW_ANIMATION_EPSILON = 0.0005
+const FLOORPLAN_ROTATION_ANIMATION_EPSILON_DEG = 0.01
 type FloorplanViewport = {
   centerX: number
   centerY: number
   width: number
 }
 
+type FloorplanNavigationViewOptions = {
+  smooth?: boolean
+}
+
+type FloorplanViewAnimationTarget = {
+  viewport: FloorplanViewport
+  userRotationDeg: number
+  lastTimestamp: number | null
+}
+
 function floorplanViewportEquals(a: FloorplanViewport | null, b: FloorplanViewport | null) {
   if (a === b) return true
   if (!(a && b)) return false
   return a.centerX === b.centerX && a.centerY === b.centerY && a.width === b.width
+}
+
+function floorplanViewportWithinEpsilon(
+  a: FloorplanViewport,
+  b: FloorplanViewport,
+  epsilon: number,
+) {
+  return (
+    Math.abs(a.centerX - b.centerX) < epsilon &&
+    Math.abs(a.centerY - b.centerY) < epsilon &&
+    Math.abs(a.width - b.width) < epsilon
+  )
 }
 
 type SvgPoint = {
@@ -223,6 +265,23 @@ type PanState = {
   pointerId: number
   clientX: number
   clientY: number
+  centerSvg: SvgPoint
+}
+
+type FloorplanRotationState = {
+  pointerId: number
+  startClientX: number
+  initialUserRotationDeg: number
+  viewportCenterLocal: SvgPoint
+}
+
+type FloorplanScreenSelectionState = {
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  currentClientX: number
+  currentClientY: number
+  isDragging: boolean
 }
 
 type GestureLikeEvent = Event & {
@@ -748,6 +807,67 @@ function getSelectionModifierKeys(event?: { metaKey?: boolean; ctrlKey?: boolean
     meta: Boolean(event?.metaKey),
     ctrl: Boolean(event?.ctrlKey),
   }
+}
+
+function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement): string[] {
+  const scene = svg.querySelector<SVGGElement>('[data-floorplan-scene]')
+  if (!scene) {
+    return []
+  }
+
+  const candidateIds = collectSelectableCandidateIds()
+  if (candidateIds.length === 0) {
+    return []
+  }
+
+  const candidateIdSet = new Set(candidateIds)
+  const hitIds = new Set<string>()
+  const baseElementsById = new Map<string, SVGGraphicsElement[]>()
+  const fallbackElementsById = new Map<string, SVGGraphicsElement[]>()
+  const baseLayer = scene.querySelector('.floorplan-registry-base')
+
+  for (const element of scene.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
+    const id = element.getAttribute('data-node-id')
+    if (!id || !candidateIdSet.has(id)) {
+      continue
+    }
+
+    const targetMap = baseLayer?.contains(element) ? baseElementsById : fallbackElementsById
+    const existing = targetMap.get(id)
+    if (existing) {
+      existing.push(element)
+    } else {
+      targetMap.set(id, [element])
+    }
+  }
+
+  for (const id of candidateIds) {
+    const elements = baseElementsById.get(id) ?? fallbackElementsById.get(id) ?? []
+    for (const element of elements) {
+      const elementRect = element.getBoundingClientRect()
+      if (elementRect.width <= 0 && elementRect.height <= 0) {
+        continue
+      }
+
+      if (screenRectsIntersect(rect, screenRectFromDomRect(elementRect))) {
+        hitIds.add(id)
+        break
+      }
+    }
+  }
+
+  return candidateIds.filter((id) => hitIds.has(id))
+}
+
+function swallowNextFloorplanScreenSelectionClick() {
+  const swallowClick = (event: Event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    window.removeEventListener('click', swallowClick, true)
+  }
+
+  window.addEventListener('click', swallowClick, true)
+  window.setTimeout(() => window.removeEventListener('click', swallowClick, true), 200)
 }
 
 function toPoint2D(point: WallPlanPoint): Point2D {
@@ -1564,6 +1684,72 @@ function rotateSvgPoint(point: SvgPoint, rotationDegrees: number): SvgPoint {
   return {
     x: point.x * cos - point.y * sin,
     y: point.x * sin + point.y * cos,
+  }
+}
+
+function radiansToDegrees(angle: number) {
+  return (angle * 180) / Math.PI
+}
+
+function degreesToRadians(angle: number) {
+  return (angle * Math.PI) / 180
+}
+
+function nearestEquivalentDegrees(angle: number, reference: number) {
+  let nextAngle = angle
+
+  while (nextAngle - reference > 180) {
+    nextAngle -= 360
+  }
+
+  while (nextAngle - reference < -180) {
+    nextAngle += 360
+  }
+
+  return nextAngle
+}
+
+function floorplanRotationFromCameraAzimuth(azimuth: number, reference: number) {
+  return nearestEquivalentDegrees(
+    radiansToDegrees(azimuth) - FLOORPLAN_VIEW_ROTATION_DEG,
+    reference,
+  )
+}
+
+function cameraAzimuthFromFloorplanRotation(rotationDeg: number) {
+  return degreesToRadians(rotationDeg + FLOORPLAN_VIEW_ROTATION_DEG)
+}
+
+function floorplanLocalToWorldPoint(
+  point: SvgPoint | WallPlanPoint,
+  buildingPosition: readonly [number, number, number],
+  buildingRotationY: number,
+): { x: number; z: number } {
+  const localX = Array.isArray(point) ? point[0] : point.x
+  const localY = Array.isArray(point) ? point[1] : point.y
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+
+  return {
+    x: buildingPosition[0] + localX * cos + localY * sin,
+    z: buildingPosition[2] - localX * sin + localY * cos,
+  }
+}
+
+function worldToFloorplanLocalPoint(
+  worldX: number,
+  worldZ: number,
+  buildingPosition: readonly [number, number, number],
+  buildingRotationY: number,
+): SvgPoint {
+  const dx = worldX - buildingPosition[0]
+  const dz = worldZ - buildingPosition[2]
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+
+  return {
+    x: dx * cos - dz * sin,
+    y: dx * sin + dz * cos,
   }
 }
 
@@ -4091,6 +4277,9 @@ export function FloorplanPanel() {
   const floorplanSceneRef = useRef<SVGGElement>(null)
   const floorplanContentRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
+  const floorplanRotationStateRef = useRef<FloorplanRotationState | null>(null)
+  const floorplanSpacePanPressedRef = useRef(false)
+  const floorplanNavigationClickSuppressedRef = useRef(false)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
@@ -4104,6 +4293,17 @@ export function FloorplanPanel() {
   const hasUserAdjustedViewportRef = useRef(false)
   const previousLevelIdRef = useRef<string | null>(null)
   const floorplanMarqueeSnapPointRef = useRef<WallPlanPoint | null>(null)
+  const floorplanScreenSelectionRef = useRef<FloorplanScreenSelectionState | null>(null)
+  const floorplanScreenSelectionElementRef = useRef<HTMLDivElement | null>(null)
+  const floorplanScreenSelectionOwnsInputDraggingRef = useRef(false)
+  const latestFloorplanUserRotationDegRef = useRef(0)
+  const latestViewportRef = useRef<FloorplanViewport | null>(null)
+  const latestFittedViewportRef = useRef<FloorplanViewport | null>(null)
+  const floorplanViewAnimationFrameRef = useRef<number | null>(null)
+  const floorplanViewAnimationTargetRef = useRef<FloorplanViewAnimationTarget | null>(null)
+  const latestNavigationSyncPoseRef = useRef<NavigationSyncPose | null>(
+    useEditor.getState().navigationSyncPose,
+  )
   const levelId = useViewer((state) => state.selection.levelId)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -4200,8 +4400,11 @@ export function FloorplanPanel() {
       })
     }),
   )
+  const [floorplanUserRotationDeg, setFloorplanUserRotationDeg] = useState(0)
   const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
-  const floorplanSceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - buildingRotationDeg
+  const floorplanSceneRotationDeg =
+    FLOORPLAN_VIEW_ROTATION_DEG + floorplanUserRotationDeg - buildingRotationDeg
+  latestFloorplanUserRotationDegRef.current = floorplanUserRotationDeg
 
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [draftEnd, setDraftEnd] = useState<WallPlanPoint | null>(null)
@@ -4310,7 +4513,9 @@ export function FloorplanPanel() {
   )
   const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
+  const [isSpacePanPressed, setIsSpacePanPressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
+  const [isRotatingFloorplan, setIsRotatingFloorplan] = useState(false)
   const [isDraggingPanel, setIsDraggingPanel] = useState(false)
   const [isMacPlatform, setIsMacPlatform] = useState(true)
   const [activeResizeDirection, setActiveResizeDirection] = useState<ResizeDirection | null>(null)
@@ -4324,6 +4529,7 @@ export function FloorplanPanel() {
   const [isPanelReady, setIsPanelReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState({ width: 1, height: 1 })
   const [viewport, setViewport] = useState<FloorplanViewport | null>(null)
+  latestViewportRef.current = viewport
   // Tight bbox of the painted floor-plan scene (the rotation `<g>`'s
   // children), read via SVG `getBBox()` after each render. The legacy
   // polygon arrays (`wallPolygons`, `displaySlabPolygons`, etc.) are now
@@ -5021,6 +5227,14 @@ export function FloorplanPanel() {
     !movingNode &&
     !movingFenceEndpoint &&
     structureLayer !== 'zones'
+  const isScreenSelectionToolActive =
+    mode === 'select' &&
+    floorplanSelectionTool === 'click' &&
+    (phase === 'structure' || phase === 'furnish') &&
+    !movingNode &&
+    !movingFenceEndpoint &&
+    !referenceScaleDraft &&
+    !pendingReferenceScale
   const isDeleteMode = mode === 'delete' && !movingNode
   const canSelectElementFloorplanGeometry =
     mode === 'select' &&
@@ -5402,6 +5616,7 @@ export function FloorplanPanel() {
     visibleZonePolygons,
     wallPolygons,
   ])
+  latestFittedViewportRef.current = fittedViewport
 
   // Measure the painted floor-plan scene after each render. `getBBox()`
   // gives us the tight bounds of whatever the registry layer emitted,
@@ -5439,6 +5654,194 @@ export function FloorplanPanel() {
       return bbox
     })
   })
+
+  const applyFloorplanNavigationState = useCallback(
+    (nextViewport: FloorplanViewport, userRotationDeg: number) => {
+      hasUserAdjustedViewportRef.current = true
+      latestFloorplanUserRotationDegRef.current = userRotationDeg
+      latestViewportRef.current = nextViewport
+      setFloorplanUserRotationDeg((current) =>
+        current === userRotationDeg ? current : userRotationDeg,
+      )
+      setViewport((current) =>
+        floorplanViewportEquals(current, nextViewport) ? current : nextViewport,
+      )
+    },
+    [],
+  )
+
+  const stopFloorplanViewAnimation = useCallback(() => {
+    if (floorplanViewAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(floorplanViewAnimationFrameRef.current)
+      floorplanViewAnimationFrameRef.current = null
+    }
+    floorplanViewAnimationTargetRef.current = null
+  }, [])
+
+  const animateFloorplanNavigationState = useCallback(
+    (nextViewport: FloorplanViewport, userRotationDeg: number) => {
+      floorplanViewAnimationTargetRef.current = {
+        viewport: nextViewport,
+        userRotationDeg,
+        lastTimestamp: floorplanViewAnimationTargetRef.current?.lastTimestamp ?? null,
+      }
+
+      if (floorplanViewAnimationFrameRef.current !== null) {
+        return
+      }
+
+      const step = (timestamp: number) => {
+        const target = floorplanViewAnimationTargetRef.current
+        if (!target) {
+          floorplanViewAnimationFrameRef.current = null
+          return
+        }
+
+        const currentViewport = latestViewportRef.current ?? target.viewport
+        const currentRotationDeg = latestFloorplanUserRotationDegRef.current
+        const deltaMs = target.lastTimestamp === null ? 16.67 : timestamp - target.lastTimestamp
+        target.lastTimestamp = timestamp
+        const alpha = 1 - Math.exp(-deltaMs / FLOORPLAN_VIEW_ANIMATION_TIME_CONSTANT_MS)
+        const targetRotationDeg = nearestEquivalentDegrees(
+          target.userRotationDeg,
+          currentRotationDeg,
+        )
+        const nextRotationDeg =
+          currentRotationDeg + (targetRotationDeg - currentRotationDeg) * alpha
+        const animatedViewport = {
+          centerX:
+            currentViewport.centerX + (target.viewport.centerX - currentViewport.centerX) * alpha,
+          centerY:
+            currentViewport.centerY + (target.viewport.centerY - currentViewport.centerY) * alpha,
+          width: currentViewport.width + (target.viewport.width - currentViewport.width) * alpha,
+        }
+
+        const isComplete =
+          floorplanViewportWithinEpsilon(
+            animatedViewport,
+            target.viewport,
+            FLOORPLAN_VIEW_ANIMATION_EPSILON,
+          ) &&
+          Math.abs(targetRotationDeg - nextRotationDeg) < FLOORPLAN_ROTATION_ANIMATION_EPSILON_DEG
+
+        if (isComplete) {
+          applyFloorplanNavigationState(target.viewport, targetRotationDeg)
+          floorplanViewAnimationTargetRef.current = null
+          floorplanViewAnimationFrameRef.current = null
+          return
+        }
+
+        applyFloorplanNavigationState(animatedViewport, nextRotationDeg)
+        floorplanViewAnimationFrameRef.current = window.requestAnimationFrame(step)
+      }
+
+      floorplanViewAnimationFrameRef.current = window.requestAnimationFrame(step)
+    },
+    [applyFloorplanNavigationState],
+  )
+
+  const applyFloorplanNavigationView = useCallback(
+    (
+      localCenter: SvgPoint,
+      userRotationDeg: number,
+      viewWidth?: number,
+      options?: FloorplanNavigationViewOptions,
+    ) => {
+      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      if (!currentViewport) {
+        return
+      }
+
+      const nextSceneRotationDeg =
+        FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+      const centerSvg = rotateSvgPoint(localCenter, nextSceneRotationDeg)
+      const fitted = latestFittedViewportRef.current
+      const minWidth = fitted ? fitted.width * MIN_VIEWPORT_WIDTH_RATIO : 0.001
+      const maxWidth = fitted ? fitted.width * MAX_VIEWPORT_WIDTH_RATIO : Number.POSITIVE_INFINITY
+      const nextWidth = clamp(viewWidth ?? currentViewport.width, minWidth, maxWidth)
+
+      const nextViewport = {
+        centerX: centerSvg.x,
+        centerY: centerSvg.y,
+        width: nextWidth,
+      }
+
+      if (options?.smooth) {
+        animateFloorplanNavigationState(nextViewport, userRotationDeg)
+      } else {
+        stopFloorplanViewAnimation()
+        applyFloorplanNavigationState(nextViewport, userRotationDeg)
+      }
+    },
+    [
+      animateFloorplanNavigationState,
+      applyFloorplanNavigationState,
+      buildingRotationDeg,
+      stopFloorplanViewAnimation,
+    ],
+  )
+
+  const smoothFloorplanNavigationView = useCallback(
+    (localCenter: SvgPoint, userRotationDeg: number, viewWidth?: number) => {
+      applyFloorplanNavigationView(localCenter, userRotationDeg, viewWidth, { smooth: true })
+    },
+    [applyFloorplanNavigationView],
+  )
+
+  useEffect(() => {
+    return () => {
+      stopFloorplanViewAnimation()
+    }
+  }, [stopFloorplanViewAnimation])
+
+  const syncFloorplanViewportToNavigationPose = useCallback(
+    (pose: NavigationSyncPose) => {
+      if (floorplanRotationStateRef.current) {
+        return
+      }
+
+      const nextUserRotationDeg = floorplanRotationFromCameraAzimuth(
+        pose.azimuth,
+        latestFloorplanUserRotationDegRef.current,
+      )
+      const localCenter = worldToFloorplanLocalPoint(
+        pose.target[0],
+        pose.target[2],
+        buildingPosition,
+        buildingRotationY,
+      )
+
+      applyFloorplanNavigationView(localCenter, nextUserRotationDeg, pose.viewWidth)
+    },
+    [applyFloorplanNavigationView, buildingPosition, buildingRotationY],
+  )
+
+  useEffect(() => {
+    const pose = useEditor.getState().navigationSyncPose
+    if (!pose) {
+      return
+    }
+
+    latestNavigationSyncPoseRef.current = pose
+    if (pose.source === '3d') {
+      syncFloorplanViewportToNavigationPose(pose)
+    }
+  }, [syncFloorplanViewportToNavigationPose])
+
+  useEffect(() => {
+    return useEditor.subscribe((state) => {
+      const pose = state.navigationSyncPose
+      if (!pose || latestNavigationSyncPoseRef.current?.revision === pose.revision) {
+        return
+      }
+
+      latestNavigationSyncPoseRef.current = pose
+
+      if (pose.source === '3d') {
+        syncFloorplanViewportToNavigationPose(pose)
+      }
+    })
+  }, [syncFloorplanViewportToNavigationPose])
 
   useEffect(() => {
     const host = viewportHostRef.current
@@ -5494,21 +5897,41 @@ export function FloorplanPanel() {
   // editor would show the same off-screen viewport instead of fitting
   // to the current scene.
   useEffect(() => {
-    if (!isFloorplanOpen) return
-    hasUserAdjustedViewportRef.current = false
-    setViewport(null)
+    if (!isFloorplanOpen) {
+      stopFloorplanViewAnimation()
+      floorplanSpacePanPressedRef.current = false
+      panStateRef.current = null
+      floorplanRotationStateRef.current = null
+      setIsSpacePanPressed(false)
+      setIsPanning(false)
+      setIsRotatingFloorplan(false)
+      return
+    }
     setMeasuredSceneBBox(null)
-  }, [isFloorplanOpen])
+
+    if (!latestNavigationSyncPoseRef.current) {
+      stopFloorplanViewAnimation()
+      hasUserAdjustedViewportRef.current = false
+      latestFloorplanUserRotationDegRef.current = 0
+      latestViewportRef.current = null
+      setFloorplanUserRotationDeg(0)
+      setViewport(null)
+    }
+  }, [isFloorplanOpen, stopFloorplanViewAnimation])
 
   useEffect(() => {
     const levelChanged = previousLevelIdRef.current !== (levelId ?? null)
 
     if (levelChanged) {
       previousLevelIdRef.current = levelId ?? null
-      hasUserAdjustedViewportRef.current = false
-      setViewport((current) =>
-        floorplanViewportEquals(current, fittedViewport) ? current : fittedViewport,
-      )
+      if (!latestNavigationSyncPoseRef.current) {
+        stopFloorplanViewAnimation()
+        hasUserAdjustedViewportRef.current = false
+        latestFloorplanUserRotationDegRef.current = 0
+        latestViewportRef.current = null
+        setFloorplanUserRotationDeg(0)
+        setViewport(null)
+      }
       return
     }
 
@@ -5538,6 +5961,7 @@ export function FloorplanPanel() {
     movingFenceEndpoint,
     movingNode,
     siteVertexDragState,
+    stopFloorplanViewAnimation,
   ])
 
   const viewBox = useMemo(() => {
@@ -6155,10 +6579,42 @@ export function FloorplanPanel() {
     guideTransformDraftRef.current = guideTransformDraft
   }, [guideTransformDraft])
 
-  const updateViewport = useCallback((nextViewport: FloorplanViewport) => {
-    hasUserAdjustedViewportRef.current = true
-    setViewport(nextViewport)
-  }, [])
+  const floorplanGridLocalY = useMemo(() => {
+    if (movingNode?.type === 'item' || movingNode?.type === 'spawn') {
+      return movingNode.position[1]
+    }
+
+    if (levelId) {
+      return sceneRegistry.nodes.get(levelId as AnyNodeId)?.position.y ?? 0
+    }
+
+    return 0
+  }, [levelId, movingNode])
+  const floorplanGridWorldY = buildingPosition[1] + floorplanGridLocalY
+  const publishFloorplanNavigationPose = useCallback(
+    (localCenter: SvgPoint, userRotationDeg: number, viewWidth?: number) => {
+      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      const resolvedViewWidth = viewWidth ?? currentViewport?.width
+      if (!(resolvedViewWidth && resolvedViewWidth > 0)) {
+        return
+      }
+
+      const worldCenter = floorplanLocalToWorldPoint(
+        localCenter,
+        buildingPosition,
+        buildingRotationY,
+      )
+      const targetY = latestNavigationSyncPoseRef.current?.target[1] ?? floorplanGridWorldY
+
+      useEditor.getState().publishNavigationSyncPose({
+        source: '2d',
+        target: [worldCenter.x, targetY, worldCenter.z],
+        azimuth: cameraAzimuthFromFloorplanRotation(userRotationDeg),
+        viewWidth: resolvedViewWidth,
+      })
+    },
+    [buildingPosition, buildingRotationY, floorplanGridWorldY],
+  )
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
@@ -6321,9 +6777,10 @@ export function FloorplanPanel() {
 
       const currentViewport = viewport ?? fittedViewport
       const currentViewBox = viewBox
-      const nextWidth = Math.min(
+      const nextWidth = clamp(
+        currentViewport.width * widthFactor,
+        minViewportWidth,
         maxViewportWidth,
-        Math.max(minViewportWidth, currentViewport.width * widthFactor),
       )
       const nextHeight = nextWidth / svgAspectRatio
       const normalizedX = (svgPoint.x - currentViewBox.minX) / currentViewBox.width
@@ -6331,11 +6788,22 @@ export function FloorplanPanel() {
       const nextMinX = svgPoint.x - normalizedX * nextWidth
       const nextMinY = svgPoint.y - normalizedY * nextHeight
 
-      updateViewport({
-        centerX: nextMinX + nextWidth / 2,
-        centerY: nextMinY + nextHeight / 2,
-        width: nextWidth,
-      })
+      const nextCenterSvg: SvgPoint = {
+        x: nextMinX + nextWidth / 2,
+        y: nextMinY + nextHeight / 2,
+      }
+      const localCenter = rotateSvgPoint(nextCenterSvg, -floorplanSceneRotationDeg)
+
+      smoothFloorplanNavigationView(
+        localCenter,
+        latestFloorplanUserRotationDegRef.current,
+        nextWidth,
+      )
+      publishFloorplanNavigationPose(
+        localCenter,
+        latestFloorplanUserRotationDegRef.current,
+        nextWidth,
+      )
     },
     [
       fittedViewport,
@@ -6343,8 +6811,9 @@ export function FloorplanPanel() {
       getSvgPointFromClientPoint,
       maxViewportWidth,
       minViewportWidth,
+      publishFloorplanNavigationPose,
+      smoothFloorplanNavigationView,
       svgAspectRatio,
-      updateViewport,
       viewBox,
       viewport,
     ],
@@ -6661,10 +7130,17 @@ export function FloorplanPanel() {
       const isEditableTarget =
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
         Boolean(target?.isContentEditable)
 
       if (isEditableTarget) {
         return
+      }
+
+      if (event.code === 'Space' && isFloorplanOpen) {
+        event.preventDefault()
+        floorplanSpacePanPressedRef.current = true
+        setIsSpacePanPressed(true)
       }
 
       if (event.key === 'Shift') {
@@ -6691,6 +7167,11 @@ export function FloorplanPanel() {
       )
     }
     const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        floorplanSpacePanPressedRef.current = false
+        setIsSpacePanPressed(false)
+      }
+
       if (event.key === 'Shift') {
         setShiftPressed(false)
       }
@@ -6698,6 +7179,8 @@ export function FloorplanPanel() {
       setRotationModifierPressed(event.metaKey || event.ctrlKey)
     }
     const handleBlur = () => {
+      floorplanSpacePanPressedRef.current = false
+      setIsSpacePanPressed(false)
       setShiftPressed(false)
       setRotationModifierPressed(false)
     }
@@ -6711,7 +7194,7 @@ export function FloorplanPanel() {
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [isStairBuildActive, movingNode])
+  }, [isFloorplanOpen, isStairBuildActive, movingNode])
 
   useEffect(() => {
     const handleWindowPointerMove = (event: PointerEvent) => {
@@ -7199,47 +7682,116 @@ export function FloorplanPanel() {
     }
   }, [setFloorplanHovered])
 
-  const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-    if (event.button !== 2) {
-      return
-    }
+  const handleNavigationPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (event.button === 1 || (event.button === 0 && floorplanSpacePanPressedRef.current)) {
+        event.preventDefault()
+        event.stopPropagation()
 
-    event.preventDefault()
-    event.stopPropagation()
+        floorplanNavigationClickSuppressedRef.current = true
+        const currentViewport = viewport ?? fittedViewport
+        panStateRef.current = {
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          centerSvg: {
+            x: currentViewport.centerX,
+            y: currentViewport.centerY,
+          },
+        }
+        setIsPanning(true)
+        setCursorPoint(null)
+        setFloorplanCursorPosition(null)
 
-    panStateRef.current = {
-      pointerId: event.pointerId,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    }
-    setIsPanning(true)
+        event.currentTarget.setPointerCapture(event.pointerId)
+        return
+      }
 
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }, [])
+      if (event.button !== 2) {
+        return
+      }
 
-  const endPanning = useCallback((event?: ReactPointerEvent<SVGSVGElement>) => {
-    if (event && panStateRef.current && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const currentViewport = viewport ?? fittedViewport
+      const viewportCenterLocal = rotateSvgPoint(
+        { x: currentViewport.centerX, y: currentViewport.centerY },
+        -floorplanSceneRotationDeg,
+      )
+
+      floorplanRotationStateRef.current = {
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        initialUserRotationDeg: floorplanUserRotationDeg,
+        viewportCenterLocal,
+      }
+      setIsRotatingFloorplan(true)
+      setCursorPoint(null)
+      setFloorplanCursorPosition(null)
+
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    [fittedViewport, floorplanSceneRotationDeg, floorplanUserRotationDeg, viewport],
+  )
+
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (event.button === 0) {
+        if (!isScreenSelectionToolActive || event.defaultPrevented) {
+          return
+        }
+
+        const target = event.target instanceof Element ? event.target : null
+        if (target?.closest('[data-node-id]')) {
+          return
+        }
+
+        const viewer = useViewer.getState()
+        if (
+          viewer.cameraDragging ||
+          viewer.inputDragging ||
+          isBoxSelectPointerSuppressed(event.nativeEvent)
+        ) {
+          return
+        }
+
+        floorplanScreenSelectionRef.current = {
+          pointerId: event.pointerId,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          currentClientX: event.clientX,
+          currentClientY: event.clientY,
+          isDragging: false,
+        }
+        setPreviewSelectedIds([])
+        return
+      }
+    },
+    [isScreenSelectionToolActive, setPreviewSelectedIds],
+  )
+
+  const endFloorplanNavigation = useCallback((event?: ReactPointerEvent<SVGSVGElement>) => {
+    if (
+      event &&
+      (panStateRef.current || floorplanRotationStateRef.current) &&
+      event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
 
     panStateRef.current = null
+    floorplanRotationStateRef.current = null
     setIsPanning(false)
+    setIsRotatingFloorplan(false)
+
+    window.setTimeout(() => {
+      floorplanNavigationClickSuppressedRef.current = false
+    }, 0)
   }, [])
 
   const hoveredWallIdRef = useRef<string | null>(null)
   const hoveredCeilingIdRef = useRef<string | null>(null)
-  const floorplanGridLocalY = useMemo(() => {
-    if (movingNode?.type === 'item' || movingNode?.type === 'spawn') {
-      return movingNode.position[1]
-    }
-
-    if (levelId) {
-      return sceneRegistry.nodes.get(levelId as AnyNodeId)?.position.y ?? 0
-    }
-
-    return 0
-  }, [levelId, movingNode])
-  const floorplanGridWorldY = buildingPosition[1] + floorplanGridLocalY
   const emitFloorplanWallLeave = useCallback((wallId: string | null) => {
     if (!wallId) {
       return
@@ -7426,22 +7978,47 @@ export function FloorplanPanel() {
 
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
+      const rotationState = floorplanRotationStateRef.current
+      if (rotationState?.pointerId === event.pointerId) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        const angleDeltaDeg =
+          (rotationState.startClientX - event.clientX) * FLOORPLAN_ROTATION_DEGREES_PER_PIXEL
+        const nextUserRotationDeg = rotationState.initialUserRotationDeg + angleDeltaDeg
+
+        smoothFloorplanNavigationView(rotationState.viewportCenterLocal, nextUserRotationDeg)
+        publishFloorplanNavigationPose(rotationState.viewportCenterLocal, nextUserRotationDeg)
+        setCursorPoint(null)
+        return
+      }
+
       if (panStateRef.current?.pointerId === event.pointerId) {
+        event.preventDefault()
+        event.stopPropagation()
+
         const deltaX = event.clientX - panStateRef.current.clientX
         const deltaY = event.clientY - panStateRef.current.clientY
         const worldPerPixelX = viewBox.width / surfaceSize.width
         const worldPerPixelY = viewBox.height / surfaceSize.height
 
-        updateViewport({
-          centerX: (viewport ?? fittedViewport).centerX - deltaX * worldPerPixelX,
-          centerY: (viewport ?? fittedViewport).centerY - deltaY * worldPerPixelY,
-          width: (viewport ?? fittedViewport).width,
-        })
+        const nextCenterSvg = {
+          x: panStateRef.current.centerSvg.x - deltaX * worldPerPixelX,
+          y: panStateRef.current.centerSvg.y - deltaY * worldPerPixelY,
+        }
+        const currentUserRotationDeg = latestFloorplanUserRotationDegRef.current
+        const currentSceneRotationDeg =
+          FLOORPLAN_VIEW_ROTATION_DEG + currentUserRotationDeg - buildingRotationDeg
+        const localCenter = rotateSvgPoint(nextCenterSvg, -currentSceneRotationDeg)
+
+        smoothFloorplanNavigationView(localCenter, currentUserRotationDeg)
+        publishFloorplanNavigationPose(localCenter, currentUserRotationDeg)
 
         panStateRef.current = {
           pointerId: event.pointerId,
           clientX: event.clientX,
           clientY: event.clientY,
+          centerSvg: nextCenterSvg,
         }
         setCursorPoint(null)
         return
@@ -7718,6 +8295,7 @@ export function FloorplanPanel() {
       })
     },
     [
+      buildingRotationDeg,
       draftStart,
       ceilingDraftPoints,
       emitFloorplanWallLeave,
@@ -7725,7 +8303,6 @@ export function FloorplanPanel() {
       fences,
       fenceDraftStart,
       floorplanOpeningLocalY,
-      fittedViewport,
       getPlanPointFromClientPoint,
       activePolygonDraftPoints,
       handleCeilingItemPlacementMove,
@@ -7738,6 +8315,8 @@ export function FloorplanPanel() {
       isPolygonBuildActive,
       isRoofBuildActive,
       isWallBuildActive,
+      publishFloorplanNavigationPose,
+      smoothFloorplanNavigationView,
       referenceScaleDraft,
       roofDraftStart,
       elevatorResizeDragState,
@@ -7745,10 +8324,8 @@ export function FloorplanPanel() {
       shiftPressed,
       surfaceSize.height,
       surfaceSize.width,
-      updateViewport,
       viewBox.height,
       viewBox.width,
-      viewport,
       walls,
     ],
   )
@@ -8133,6 +8710,19 @@ export function FloorplanPanel() {
       emitFloorplanGridEvent,
     ],
   )
+  const handleSvgClick = useCallback(
+    (event: ReactMouseEvent<SVGSVGElement>) => {
+      if (floorplanNavigationClickSuppressedRef.current) {
+        event.preventDefault()
+        event.stopPropagation()
+        floorplanNavigationClickSuppressedRef.current = false
+        return
+      }
+
+      handleBackgroundClick(event)
+    },
+    [handleBackgroundClick],
+  )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
       if (!(isPolygonDraftBuildActive && !isRoofBuildActive)) {
@@ -8258,6 +8848,197 @@ export function FloorplanPanel() {
     },
     [setPreviewSelectedIds],
   )
+
+  const resetFloorplanScreenSelection = useCallback(() => {
+    floorplanScreenSelectionRef.current = null
+    hideScreenRectangleSelectionElement(floorplanScreenSelectionElementRef.current)
+    syncPreviewSelectedIds([])
+
+    if (floorplanScreenSelectionOwnsInputDraggingRef.current) {
+      useViewer.getState().setInputDragging(false)
+      floorplanScreenSelectionOwnsInputDraggingRef.current = false
+    }
+  }, [syncPreviewSelectedIds])
+
+  const commitFloorplanScreenSelection = useCallback(
+    (nextSelectedIds: string[], event: PointerEvent) => {
+      const modifierKeys = getSelectionModifierKeys(event)
+      const shouldAppend = modifierKeys.meta || modifierKeys.ctrl
+
+      setSelectedReferenceId(null)
+
+      if (phase === 'structure' && structureLayer === 'zones') {
+        if (nextSelectedIds.length > 0) {
+          setSelection({ zoneId: nextSelectedIds[0] as ZoneNodeType['id'] })
+        } else if (!shouldAppend) {
+          setSelection({ zoneId: null })
+        }
+        return
+      }
+
+      addFloorplanSelection(nextSelectedIds, modifierKeys)
+    },
+    [addFloorplanSelection, phase, setSelectedReferenceId, setSelection, structureLayer],
+  )
+
+  useEffect(() => {
+    const element = createScreenRectangleSelectionElement()
+    document.body.appendChild(element)
+    floorplanScreenSelectionElementRef.current = element
+
+    return () => {
+      element.remove()
+      floorplanScreenSelectionElementRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isScreenSelectionToolActive) {
+      resetFloorplanScreenSelection()
+    }
+  }, [isScreenSelectionToolActive, resetFloorplanScreenSelection])
+
+  useEffect(() => {
+    const updateDrag = (event: PointerEvent) => {
+      const state = floorplanScreenSelectionRef.current
+      if (!state || event.pointerId !== state.pointerId) {
+        return
+      }
+
+      const viewer = useViewer.getState()
+      if (
+        !isScreenSelectionToolActive ||
+        isBoxSelectPointerSuppressed(event) ||
+        viewer.cameraDragging ||
+        (viewer.inputDragging && !floorplanScreenSelectionOwnsInputDraggingRef.current)
+      ) {
+        markBoxSelectHandled()
+        resetFloorplanScreenSelection()
+        return
+      }
+
+      state.currentClientX = event.clientX
+      state.currentClientY = event.clientY
+
+      const dragDistance = Math.hypot(
+        state.currentClientX - state.startClientX,
+        state.currentClientY - state.startClientY,
+      )
+
+      if (!state.isDragging && dragDistance >= SCREEN_RECTANGLE_SELECTION_DRAG_THRESHOLD_PX) {
+        state.isDragging = true
+        floorplanScreenSelectionOwnsInputDraggingRef.current = true
+        useViewer.getState().setInputDragging(true)
+        markBoxSelectHandled()
+
+        try {
+          svgRef.current?.setPointerCapture(event.pointerId)
+        } catch {}
+      }
+
+      if (!state.isDragging) {
+        return
+      }
+
+      event.preventDefault()
+
+      const svg = svgRef.current
+      const element = floorplanScreenSelectionElementRef.current
+      if (!(svg && element)) {
+        resetFloorplanScreenSelection()
+        return
+      }
+
+      const rect = normalizeScreenRect(
+        state.startClientX,
+        state.startClientY,
+        state.currentClientX,
+        state.currentClientY,
+      )
+      const clampedRect = intersectScreenRects(
+        rect,
+        screenRectFromDomRect(svg.getBoundingClientRect()),
+      )
+
+      if (!clampedRect) {
+        hideScreenRectangleSelectionElement(element)
+        syncPreviewSelectedIds([])
+        return
+      }
+
+      updateScreenRectangleSelectionElement(element, clampedRect)
+      syncPreviewSelectedIds(collectFloorplanScreenSelectionIds(clampedRect, svg))
+    }
+
+    const finishDrag = (event: PointerEvent) => {
+      const state = floorplanScreenSelectionRef.current
+      if (!state || event.pointerId !== state.pointerId) {
+        return
+      }
+
+      if (
+        isBoxSelectPointerSuppressed(event) ||
+        (useViewer.getState().inputDragging &&
+          !floorplanScreenSelectionOwnsInputDraggingRef.current)
+      ) {
+        markBoxSelectHandled()
+        resetFloorplanScreenSelection()
+        return
+      }
+
+      if (state.isDragging) {
+        event.preventDefault()
+        event.stopPropagation()
+        markBoxSelectHandled()
+
+        const svg = svgRef.current
+        const rect = normalizeScreenRect(
+          state.startClientX,
+          state.startClientY,
+          event.clientX,
+          event.clientY,
+        )
+        const clampedRect = svg
+          ? intersectScreenRects(rect, screenRectFromDomRect(svg.getBoundingClientRect()))
+          : null
+        const ids = svg && clampedRect ? collectFloorplanScreenSelectionIds(clampedRect, svg) : []
+
+        commitFloorplanScreenSelection(ids, event)
+        swallowNextFloorplanScreenSelectionClick()
+      }
+
+      try {
+        svgRef.current?.releasePointerCapture(event.pointerId)
+      } catch {}
+
+      resetFloorplanScreenSelection()
+    }
+
+    const cancelDrag = (event: PointerEvent) => {
+      const state = floorplanScreenSelectionRef.current
+      if (!state || event.pointerId !== state.pointerId) {
+        return
+      }
+
+      resetFloorplanScreenSelection()
+    }
+
+    window.addEventListener('pointermove', updateDrag, { passive: false })
+    window.addEventListener('pointerup', finishDrag)
+    window.addEventListener('pointercancel', cancelDrag)
+
+    return () => {
+      window.removeEventListener('pointermove', updateDrag)
+      window.removeEventListener('pointerup', finishDrag)
+      window.removeEventListener('pointercancel', cancelDrag)
+      resetFloorplanScreenSelection()
+    }
+  }, [
+    commitFloorplanScreenSelection,
+    isScreenSelectionToolActive,
+    resetFloorplanScreenSelection,
+    syncPreviewSelectedIds,
+  ])
 
   const handleGuideSelect = useCallback(
     (guideId: GuideNode['id']) => {
@@ -8489,7 +9270,14 @@ export function FloorplanPanel() {
   )
 
   const handlePointerLeave = useCallback(() => {
-    if (!(panStateRef.current || wallEndpointDragRef.current || siteVertexDragState)) {
+    if (
+      !(
+        panStateRef.current ||
+        floorplanRotationStateRef.current ||
+        wallEndpointDragRef.current ||
+        siteVertexDragState
+      )
+    ) {
       setCursorPoint(null)
     }
     setHoveredSiteHandleId(null)
@@ -8513,7 +9301,9 @@ export function FloorplanPanel() {
     (event: ReactPointerEvent<SVGSVGElement>) => {
       if (
         hasFloorplanCursorIndicator &&
+        !isSpacePanPressed &&
         !panStateRef.current &&
+        !floorplanRotationStateRef.current &&
         !guideInteractionRef.current &&
         !elevatorResizeDragState &&
         !wallEndpointDragRef.current &&
@@ -8539,7 +9329,13 @@ export function FloorplanPanel() {
 
       handlePointerMove(event)
     },
-    [handlePointerMove, hasFloorplanCursorIndicator, elevatorResizeDragState, siteVertexDragState],
+    [
+      handlePointerMove,
+      hasFloorplanCursorIndicator,
+      isSpacePanPressed,
+      elevatorResizeDragState,
+      siteVertexDragState,
+    ],
   )
 
   const handleSvgPointerLeave = useCallback(() => {
@@ -8891,6 +9687,9 @@ export function FloorplanPanel() {
         : activeDraftAnchorPoint
           ? palette.draftStroke
           : palette.cursor
+  const floorplanNavigationCursor =
+    isPanning || isRotatingFloorplan ? 'grabbing' : isSpacePanPressed ? 'grab' : null
+  const isFloorplanNavigationOverlayVisible = isSpacePanPressed || isPanning || isRotatingFloorplan
   const pendingReferenceDisplayLength = Number(referenceScaleValue)
   const pendingReferenceRealLengthMeters =
     pendingReferenceScale && pendingReferenceDisplayLength > 0
@@ -8929,7 +9728,7 @@ export function FloorplanPanel() {
           indicatorBadgeOffsetX={FLOORPLAN_CURSOR_BADGE_OFFSET_X}
           indicatorBadgeOffsetY={FLOORPLAN_CURSOR_BADGE_OFFSET_Y}
           indicatorLineHeight={FLOORPLAN_CURSOR_INDICATOR_LINE_HEIGHT}
-          isPanning={isPanning}
+          isPanning={isPanning || isRotatingFloorplan}
           movingOpeningType={movingOpeningType}
         />
         {showGuides && canInteractWithGuides && selectedGuide && (
@@ -9062,16 +9861,20 @@ export function FloorplanPanel() {
         ) : (
           <svg
             className="h-full w-full touch-none"
-            onClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundClick}
+            onClick={isMarqueeSelectionToolActive ? undefined : handleSvgClick}
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundDoubleClick}
-            onPointerCancel={endPanning}
+            onPointerCancel={endFloorplanNavigation}
             onPointerDown={handlePointerDown}
+            onPointerDownCapture={handleNavigationPointerDown}
             onPointerLeave={handleSvgPointerLeave}
             onPointerMove={handleSvgPointerMove}
-            onPointerUp={endPanning}
+            onPointerUp={endFloorplanNavigation}
             ref={svgRef}
-            style={{ cursor: referenceScaleDraft ? 'crosshair' : EDITOR_CURSOR }}
+            style={{
+              cursor:
+                floorplanNavigationCursor ?? (referenceScaleDraft ? 'crosshair' : EDITOR_CURSOR),
+            }}
             viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
           >
             <defs>
@@ -9383,6 +10186,17 @@ export function FloorplanPanel() {
                 />
               )}
             </g>
+            {isFloorplanNavigationOverlayVisible && (
+              <rect
+                fill="transparent"
+                height={viewBox.height}
+                pointerEvents="all"
+                style={{ cursor: floorplanNavigationCursor ?? 'grab' }}
+                width={viewBox.width}
+                x={viewBox.minX}
+                y={viewBox.minY}
+              />
+            )}
           </svg>
         )}
       </div>

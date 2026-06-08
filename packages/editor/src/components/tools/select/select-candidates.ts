@@ -5,43 +5,15 @@ import {
   type LevelNode,
   nodeRegistry,
   resolveBuildingForLevel,
+  resolveLevelId,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 
-export function isFurnishSelectableCandidate(node: AnyNode): boolean {
-  if (node.type === 'item') {
-    return node.asset.category !== 'door' && node.asset.category !== 'window'
-  }
-
-  const def = nodeRegistry.get(node.type)
-  return Boolean(def?.category === 'furnish' && def.capabilities.selectable)
-}
-
-export function isStructureSelectableCandidate(node: AnyNode): boolean {
-  if (
-    node.type === 'wall' ||
-    node.type === 'fence' ||
-    node.type === 'column' ||
-    node.type === 'elevator' ||
-    node.type === 'slab' ||
-    node.type === 'ceiling' ||
-    node.type === 'roof' ||
-    node.type === 'stair' ||
-    node.type === 'spawn' ||
-    node.type === 'window' ||
-    node.type === 'door'
-  ) {
-    return true
-  }
-
-  if (node.type === 'item') {
-    return node.asset.category === 'door' || node.asset.category === 'window'
-  }
-
-  const def = nodeRegistry.get(node.type)
-  return Boolean(def && def.category !== 'furnish' && def.capabilities.selectable)
+function isVisibleSelectableNode(node: AnyNode): boolean {
+  if ((node as { visible?: boolean }).visible === false) return false
+  return isRegistrySelectable(node.type)
 }
 
 export function collectSelectableCandidateIds(): string[] {
@@ -51,9 +23,22 @@ export function collectSelectableCandidateIds(): string[] {
   const result: string[] = []
   const seen = new Set<string>()
   const addNode = (node: AnyNode | undefined) => {
-    if (!node || seen.has(node.id)) return
+    if (!node || seen.has(node.id) || (node as { visible?: boolean }).visible === false) return
     seen.add(node.id)
     result.push(node.id)
+  }
+  const visitLevelDescendant = (id: AnyNodeId) => {
+    const node = nodes[id]
+    if (!node || seen.has(node.id) || (node as { visible?: boolean }).visible === false) return
+
+    if (isRegistrySelectable(node.type)) {
+      addNode(node)
+    }
+
+    const children = 'children' in node && Array.isArray(node.children) ? node.children : []
+    for (const childId of children) {
+      visitLevelDescendant(childId as AnyNodeId)
+    }
   }
 
   if (phase === 'site') {
@@ -76,49 +61,22 @@ export function collectSelectableCandidateIds(): string[] {
   }
 
   for (const childId of levelNode.children) {
-    const node = nodes[childId as AnyNodeId]
-    if (!node) continue
-
-    if (phase === 'furnish') {
-      if (isFurnishSelectableCandidate(node)) addNode(node)
-      continue
-    }
-
-    if (node.type === 'wall' || node.type === 'fence') {
-      addNode(node)
-      const hostedChildren = 'children' in node && Array.isArray(node.children) ? node.children : []
-      for (const hostedChildId of hostedChildren) {
-        const child = nodes[hostedChildId as AnyNodeId]
-        if (!child) continue
-        if (
-          child.type === 'window' ||
-          child.type === 'door' ||
-          (child.type === 'item' &&
-            (child.asset.category === 'door' || child.asset.category === 'window'))
-        ) {
-          addNode(child)
-        }
-      }
-      continue
-    }
-
-    if (isStructureSelectableCandidate(node)) {
-      addNode(node)
-    }
+    visitLevelDescendant(childId as AnyNodeId)
   }
 
   const buildingId = resolveBuildingForLevel(levelId as AnyNodeId, nodes)
-  const buildingNode = buildingId ? nodes[buildingId] : undefined
-  const buildingChildren =
-    buildingNode && 'children' in buildingNode && Array.isArray(buildingNode.children)
-      ? (buildingNode.children as AnyNodeId[])
-      : []
-  for (const childId of buildingChildren) {
-    const node = nodes[childId]
-    if (!node || node.type === 'level' || !isRegistrySelectable(node.type)) continue
-    if (phase === 'furnish') {
-      if (isFurnishSelectableCandidate(node)) addNode(node)
-    } else if (isStructureSelectableCandidate(node)) {
+  for (const node of Object.values(nodes)) {
+    if (!node || node.type === 'level' || !isVisibleSelectableNode(node)) continue
+
+    const def = nodeRegistry.get(node.type)
+    const isBuildingScoped = def?.floorplanScope === 'building'
+    const parentId = (node as { parentId?: AnyNodeId | null }).parentId
+    if (isBuildingScoped && buildingId && parentId === buildingId) {
+      addNode(node)
+      continue
+    }
+
+    if (!isBuildingScoped && resolveLevelId(node, nodes) === levelId) {
       addNode(node)
     }
   }

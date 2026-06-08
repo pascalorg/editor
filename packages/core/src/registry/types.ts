@@ -1308,8 +1308,8 @@ export type FloorPlacedConfig = {
  *     serves both the static candidate and the moving node.
  *   - `aabb` — an already-resolved XZ bounding box, for kinds whose plan
  *     shape isn't a centred rectangle (stair: a segment chain or annular
- *     sector). Static candidates only — these kinds move by their origin, so
- *     the box's relocation path never needs them.
+ *     sector). The moving-anchor bridge can relocate these by patching the
+ *     proposed plan position and resolving the AABB again.
  *
  * `nodes` is supplied only when a kind needs siblings / children to resolve
  * its footprint (a straight stair walks its `stair-segment` children); box
