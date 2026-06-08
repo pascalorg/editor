@@ -15,7 +15,7 @@ import {
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { getFloorStackPreviewPosition, triggerSFX } from '@pascal-app/editor'
+import { CursorSphere, getFloorStackPreviewPosition, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
@@ -224,6 +224,7 @@ const ShelfTool = () => {
 
   return (
     <group ref={cursorRef}>
+      <CursorSphere />
       <ShelfPreview node={previewNode} />
     </group>
   )

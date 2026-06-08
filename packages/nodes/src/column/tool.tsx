@@ -13,7 +13,12 @@ import {
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { getFloorStackPreviewPosition, triggerSFX, usePlacementPreview } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  getFloorStackPreviewPosition,
+  triggerSFX,
+  usePlacementPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'
@@ -157,6 +162,7 @@ const ColumnTool = () => {
 
   return (
     <group ref={cursorRef}>
+      <CursorSphere />
       <ColumnPreview node={previewNode} />
     </group>
   )
