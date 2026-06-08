@@ -5626,8 +5626,46 @@ export function FloorplanPanel() {
     })
   })
 
+  const applyFloorplanNavigationView = useCallback(
+    (localCenter: SvgPoint, userRotationDeg: number, viewWidth?: number) => {
+      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      if (!currentViewport) {
+        return
+      }
+
+      const nextSceneRotationDeg =
+        FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+      const centerSvg = rotateSvgPoint(localCenter, nextSceneRotationDeg)
+      const fitted = latestFittedViewportRef.current
+      const minWidth = fitted ? fitted.width * MIN_VIEWPORT_WIDTH_RATIO : 0.001
+      const maxWidth = fitted ? fitted.width * MAX_VIEWPORT_WIDTH_RATIO : Number.POSITIVE_INFINITY
+      const nextWidth = clamp(viewWidth ?? currentViewport.width, minWidth, maxWidth)
+
+      const nextViewport = {
+        centerX: centerSvg.x,
+        centerY: centerSvg.y,
+        width: nextWidth,
+      }
+
+      hasUserAdjustedViewportRef.current = true
+      latestFloorplanUserRotationDegRef.current = userRotationDeg
+      latestViewportRef.current = nextViewport
+      setFloorplanUserRotationDeg((current) =>
+        current === userRotationDeg ? current : userRotationDeg,
+      )
+      setViewport((current) =>
+        floorplanViewportEquals(current, nextViewport) ? current : nextViewport,
+      )
+    },
+    [buildingRotationDeg],
+  )
+
   const syncFloorplanViewportToNavigationPose = useCallback(
     (pose: NavigationSyncPose) => {
+      if (floorplanRotationStateRef.current) {
+        return
+      }
+
       const nextUserRotationDeg = floorplanRotationFromCameraAzimuth(
         pose.azimuth,
         latestFloorplanUserRotationDegRef.current,
@@ -5638,37 +5676,10 @@ export function FloorplanPanel() {
         buildingPosition,
         buildingRotationY,
       )
-      const nextSceneRotationDeg =
-        FLOORPLAN_VIEW_ROTATION_DEG + nextUserRotationDeg - buildingRotationDeg
-      const centerSvg = rotateSvgPoint(localCenter, nextSceneRotationDeg)
-      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
-      const fitted = latestFittedViewportRef.current
 
-      if (!currentViewport) {
-        return
-      }
-
-      const minWidth = fitted ? fitted.width * MIN_VIEWPORT_WIDTH_RATIO : 0.001
-      const maxWidth = fitted ? fitted.width * MAX_VIEWPORT_WIDTH_RATIO : Number.POSITIVE_INFINITY
-      const nextWidth = clamp(pose.viewWidth, minWidth, maxWidth)
-
-      const nextViewport = {
-        centerX: centerSvg.x,
-        centerY: centerSvg.y,
-        width: nextWidth,
-      }
-
-      hasUserAdjustedViewportRef.current = true
-      latestFloorplanUserRotationDegRef.current = nextUserRotationDeg
-      latestViewportRef.current = nextViewport
-      setFloorplanUserRotationDeg((current) =>
-        current === nextUserRotationDeg ? current : nextUserRotationDeg,
-      )
-      setViewport((current) =>
-        floorplanViewportEquals(current, nextViewport) ? current : nextViewport,
-      )
+      applyFloorplanNavigationView(localCenter, nextUserRotationDeg, pose.viewWidth)
     },
-    [buildingPosition, buildingRotationDeg, buildingRotationY],
+    [applyFloorplanNavigationView, buildingPosition, buildingRotationY],
   )
 
   useEffect(() => {
@@ -7825,6 +7836,7 @@ export function FloorplanPanel() {
           (event.clientX - rotationState.startClientX) * FLOORPLAN_ROTATION_DEGREES_PER_PIXEL
         const nextUserRotationDeg = rotationState.initialUserRotationDeg + angleDeltaDeg
 
+        applyFloorplanNavigationView(rotationState.viewportCenterLocal, nextUserRotationDeg)
         publishFloorplanNavigationPose(rotationState.viewportCenterLocal, nextUserRotationDeg)
         setCursorPoint(null)
         return
@@ -8146,6 +8158,7 @@ export function FloorplanPanel() {
       isPolygonBuildActive,
       isRoofBuildActive,
       isWallBuildActive,
+      applyFloorplanNavigationView,
       publishFloorplanNavigationPose,
       referenceScaleDraft,
       roofDraftStart,
