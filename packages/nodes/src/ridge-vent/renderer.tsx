@@ -67,11 +67,26 @@ const RidgeVentRenderer = ({ node: storeNode }: { node: RidgeVentNode }) => {
     ? ({ ...storeNode, ...overrides } as RidgeVentNode)
     : storeNode
 
-  const segment = useScene((state) =>
+  const segmentStore = useScene((state) =>
     node.roofSegmentId
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
       : undefined,
   )
+  // Subscribe to the segment's live overrides too — when the user drags a
+  // segment handle (width / depth / wallHeight / pitch / rotation), the
+  // dimensions stream through `useLiveNodeOverrides` and don't hit the
+  // store until release. Merging them lets the ridge ride the segment in
+  // real time instead of snapping into place on commit.
+  const segmentOverrides = useLiveNodeOverrides((s) =>
+    node.roofSegmentId
+      ? (s.get(node.roofSegmentId as AnyNodeId) as Partial<RoofSegmentNode> | undefined)
+      : undefined,
+  )
+  const segment: RoofSegmentNode | undefined = segmentStore
+    ? segmentOverrides
+      ? ({ ...segmentStore, ...segmentOverrides } as RoofSegmentNode)
+      : segmentStore
+    : undefined
 
   const geometry = useMemo(
     () => buildRidgeVentGeometry(node),
