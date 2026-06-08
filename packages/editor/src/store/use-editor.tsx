@@ -2,6 +2,7 @@
 
 import type { AssetInput } from '@pascal-app/core'
 import {
+  type AnyNode,
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
@@ -422,6 +423,10 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
 
+type SelectDefaultBuildingAndLevelOptions = {
+  forceGroundLevel?: boolean
+}
+
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   if (phase === 'site') {
     return 'select'
@@ -558,49 +563,94 @@ export function hasCustomPersistedEditorUiState(
   )
 }
 
+function getDefaultLevelId(
+  buildingNode: BuildingNode,
+  nodes: Record<string, AnyNode>,
+): LevelNode['id'] | null {
+  const levels = buildingNode.children
+    .map((childId) => nodes[childId as AnyNodeId])
+    .filter((node): node is LevelNode => node?.type === 'level')
+
+  if (levels.length === 0) {
+    return null
+  }
+
+  const groundLevel = levels.find((level) => level.level === 0)
+  if (groundLevel) {
+    return groundLevel.id
+  }
+
+  const firstLevel = levels[0]
+  if (!firstLevel) {
+    return null
+  }
+
+  let lowestLevel = firstLevel
+  for (const level of levels.slice(1)) {
+    if (level.level < lowestLevel.level) {
+      lowestLevel = level
+    }
+  }
+
+  return lowestLevel.id
+}
+
 /**
  * Selects the first building and level 0 in the scene.
  * Safe to call any time — no-ops if already selected or scene is empty.
  */
-export function selectDefaultBuildingAndLevel() {
+export function selectDefaultBuildingAndLevel(options: SelectDefaultBuildingAndLevelOptions = {}) {
   const viewer = useViewer.getState()
   const scene = useScene.getState()
 
-  let buildingId = viewer.selection.buildingId
+  const selectedBuilding = viewer.selection.buildingId
+    ? scene.nodes[viewer.selection.buildingId]
+    : null
+  let buildingNode =
+    selectedBuilding?.type === 'building' ? (selectedBuilding as BuildingNode) : null
 
   // If no building selected, find the first one from site's children
-  if (!buildingId) {
+  if (!buildingNode) {
     const siteNode = scene.rootNodeIds[0] ? scene.nodes[scene.rootNodeIds[0]] : null
     if (siteNode?.type === 'site') {
-      const firstBuilding = siteNode.children
-        .map((childId) => scene.nodes[childId as AnyNodeId])
-        .find((node) => node?.type === 'building')
-      if (firstBuilding) {
-        buildingId = firstBuilding.id as BuildingNode['id']
-        viewer.setSelection({ buildingId })
-      }
+      buildingNode =
+        siteNode.children
+          .map((childId) => scene.nodes[childId as AnyNodeId])
+          .find((node): node is BuildingNode => node?.type === 'building') ?? null
     }
   }
 
-  // If no level selected, find level 0 in the building
-  if (buildingId && !viewer.selection.levelId) {
-    const buildingNode = scene.nodes[buildingId] as BuildingNode
-    const level0Id = buildingNode.children.find((childId) => {
-      const levelNode = scene.nodes[childId] as LevelNode
-      return levelNode?.type === 'level' && levelNode.level === 0
-    })
-    if (level0Id) {
-      viewer.setSelection({ levelId: level0Id as LevelNode['id'] })
-    } else {
-      // Fallback to first level if level 0 doesn't exist
-      const firstLevelId = buildingNode.children.find(
-        (childId) => scene.nodes[childId]?.type === 'level',
-      )
-      if (firstLevelId) {
-        viewer.setSelection({ levelId: firstLevelId as LevelNode['id'] })
-      }
-    }
+  if (!buildingNode) {
+    return
   }
+
+  const selectedLevel = viewer.selection.levelId ? scene.nodes[viewer.selection.levelId] : null
+  const selectedLevelBelongsToBuilding =
+    selectedLevel?.type === 'level' && selectedLevel.parentId === buildingNode.id
+  const shouldSelectDefaultLevel = options.forceGroundLevel || !selectedLevelBelongsToBuilding
+  const defaultLevelId = shouldSelectDefaultLevel
+    ? getDefaultLevelId(buildingNode, scene.nodes as Record<string, AnyNode>)
+    : null
+
+  const selectionUpdate: Parameters<typeof viewer.setSelection>[0] = {}
+  if (viewer.selection.buildingId !== buildingNode.id) {
+    selectionUpdate.buildingId = buildingNode.id
+  }
+  if (defaultLevelId) {
+    selectionUpdate.levelId = defaultLevelId
+  }
+
+  if (Object.keys(selectionUpdate).length > 0) {
+    viewer.setSelection(selectionUpdate)
+  }
+}
+
+export function selectSiteFloorplanContext() {
+  selectDefaultBuildingAndLevel({ forceGroundLevel: true })
+  useViewer.getState().setSelection({
+    selectedIds: [],
+    zoneId: null,
+  })
 }
 
 const useEditor = create<EditorState>()(
@@ -631,12 +681,9 @@ const useEditor = create<EditorState>()(
           set({ mode: 'select', tool: null, catalogCategory: null })
         }
 
-        const viewer = useViewer.getState()
-
         switch (phase) {
           case 'site':
-            // In Site mode, we zoom out and deselect specific levels/buildings
-            viewer.resetSelection()
+            selectSiteFloorplanContext()
             break
 
           case 'structure':

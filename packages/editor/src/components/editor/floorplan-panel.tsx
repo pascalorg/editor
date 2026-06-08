@@ -75,9 +75,10 @@ import {
 } from '../../lib/floorplan'
 import { guideEmitter } from '../../lib/guide-events'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { cn } from '../../lib/utils'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
-import useEditor from '../../store/use-editor'
+import useEditor, { selectSiteFloorplanContext } from '../../store/use-editor'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
@@ -217,7 +218,6 @@ const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_X = 92
 const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_Y = 48
 const FLOORPLAN_GUIDE_ROTATION_SNAP_DEGREES = 45
 const FLOORPLAN_GUIDE_ROTATION_FINE_SNAP_DEGREES = 1
-const FLOORPLAN_SITE_COLOR = '#10b981'
 const FLOORPLAN_VIEW_ROTATION_DEG = 90
 const FLOORPLAN_ROTATION_DEGREES_PER_PIXEL = 0.35
 const FLOORPLAN_VIEW_ANIMATION_TIME_CONSTANT_MS = 90
@@ -2483,7 +2483,7 @@ function polygonsEqual(a: WallPlanPoint[], b: Array<[number, number]>): boolean 
         return false
       }
 
-      return pointsEqual(point, otherPoint)
+      return Math.abs(point[0] - otherPoint[0]) < 1e-6 && Math.abs(point[1] - otherPoint[1]) < 1e-6
     })
   )
 }
@@ -3710,29 +3710,175 @@ const FloorplanReferenceFloorLayer = memo(function FloorplanReferenceFloorLayer(
 })
 
 const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
-  isEditing,
+  isHighlighted,
+  palette,
   sitePolygon,
 }: {
-  isEditing: boolean
+  isHighlighted: boolean
+  palette: FloorplanPalette
   sitePolygon: SitePolygonEntry | null
 }) {
   if (!sitePolygon) {
     return null
   }
 
+  const stroke = isHighlighted ? palette.cursor : palette.measurementStroke
+  const dashLength = isHighlighted ? 8 : 7
+  const gapLength = isHighlighted ? 5 : 6
+  const strokeWidth = isHighlighted ? 2.2 : 1.5
+  const contrastStrokeWidth = isHighlighted ? 4.2 : 3.4
+  const dashPattern = `${dashLength} ${gapLength}`
+
   return (
-    <polygon
-      fill={FLOORPLAN_SITE_COLOR}
-      fillOpacity={isEditing ? 0.12 : 0.08}
-      pointerEvents="none"
-      points={sitePolygon.points}
-      stroke={FLOORPLAN_SITE_COLOR}
-      strokeDasharray={isEditing ? '0.16 0.1' : undefined}
-      strokeLinejoin="round"
-      strokeOpacity={isEditing ? 0.92 : 0.72}
-      strokeWidth={isEditing ? '0.08' : '0.06'}
-      vectorEffect="non-scaling-stroke"
-    />
+    <>
+      <polygon
+        fill="none"
+        pointerEvents="none"
+        points={sitePolygon.points}
+        stroke={palette.surface}
+        strokeDasharray={dashPattern}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeOpacity={isHighlighted ? 0.72 : 0.82}
+        strokeWidth={contrastStrokeWidth}
+        vectorEffect="non-scaling-stroke"
+      />
+      <polygon
+        fill="none"
+        pointerEvents="none"
+        points={sitePolygon.points}
+        stroke={stroke}
+        strokeDasharray={dashPattern}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeOpacity={isHighlighted ? 0.98 : 0.78}
+        strokeWidth={strokeWidth}
+        vectorEffect="non-scaling-stroke"
+      />
+    </>
+  )
+})
+
+const FloorplanSiteEdgeLabelLayer = memo(function FloorplanSiteEdgeLabelLayer({
+  labelBackground,
+  labelText,
+  palette,
+  sceneRotationDeg,
+  shouldShow,
+  sitePolygon,
+  unit,
+  unitsPerPixel,
+}: {
+  labelBackground: string
+  labelText: string
+  palette: FloorplanPalette
+  sceneRotationDeg: number
+  shouldShow: boolean
+  sitePolygon: SitePolygonEntry | null
+  unit: 'metric' | 'imperial'
+  unitsPerPixel: number
+}) {
+  if (!(shouldShow && sitePolygon && sitePolygon.polygon.length >= 2)) {
+    return null
+  }
+
+  const upx = unitsPerPixel
+  const fontSize = Math.max(upx * 10, 0.08)
+  const padX = upx * 6
+  const padY = upx * 3
+  const minWidth = upx * 38
+  const labelOffset = upx * 18
+  const centroid = sitePolygon.polygon.reduce(
+    (acc, point) => ({
+      x: acc.x + point.x / sitePolygon.polygon.length,
+      y: acc.y + point.y / sitePolygon.polygon.length,
+    }),
+    { x: 0, y: 0 },
+  )
+  const edges = sitePolygon.polygon.flatMap((start, edgeIndex, polygon) => {
+    const end = polygon[(edgeIndex + 1) % polygon.length]
+    if (!end) {
+      return []
+    }
+
+    const dx = end.x - start.x
+    const dy = end.y - start.y
+    const length = Math.hypot(dx, dy)
+    if (length < 1e-6) {
+      return []
+    }
+
+    const midX = (start.x + end.x) / 2
+    const midY = (start.y + end.y) / 2
+    let normalX = -dy / length
+    let normalY = dx / length
+    if (normalX * (midX - centroid.x) + normalY * (midY - centroid.y) < 0) {
+      normalX = -normalX
+      normalY = -normalY
+    }
+
+    let labelAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+    let screenDeg = labelAngleDeg + sceneRotationDeg
+    screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
+    if (screenDeg > 90) {
+      labelAngleDeg -= 180
+    } else if (screenDeg <= -90) {
+      labelAngleDeg += 180
+    }
+
+    const label = formatMeasurement(length, unit)
+    const width = Math.max(label.length * upx * 6.4 + padX * 2, minWidth)
+    const height = fontSize + padY * 2
+
+    return [
+      {
+        edgeIndex,
+        height,
+        label,
+        labelAngleDeg,
+        labelX: midX + normalX * labelOffset,
+        labelY: midY + normalY * labelOffset,
+        width,
+      },
+    ]
+  })
+
+  return (
+    <g pointerEvents="none">
+      {edges.map(({ edgeIndex, height, label, labelAngleDeg, labelX, labelY, width }) => (
+        <g
+          key={`site-edge-label-${edgeIndex}`}
+          transform={`translate(${labelX} ${labelY}) rotate(${labelAngleDeg})`}
+        >
+          <rect
+            fill={labelBackground}
+            height={height}
+            opacity={0.94}
+            rx={upx * 3}
+            ry={upx * 3}
+            stroke={palette.cursor}
+            strokeOpacity={0.58}
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+            width={width}
+            x={-width / 2}
+            y={-height / 2}
+          />
+          <text
+            dominantBaseline="middle"
+            fill={labelText}
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+            fontSize={fontSize}
+            fontWeight={700}
+            textAnchor="middle"
+            x={0}
+            y={0}
+          >
+            {label}
+          </text>
+        </g>
+      ))}
+    </g>
   )
 })
 
@@ -4035,7 +4181,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   onVertexDoubleClick: (
     nodeId: string,
     vertexIndex: number,
-    event: ReactPointerEvent<SVGCircleElement>,
+    event: ReactPointerEvent<SVGCircleElement> | ReactMouseEvent<SVGCircleElement>,
   ) => void
   onMidpointPointerDown: (
     nodeId: string,
@@ -4050,6 +4196,8 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   palette: FloorplanPalette
   unitsPerPixel: number
 }) {
+  const vertexPointerDoubleClickRef = useRef<string | null>(null)
+
   return (
     <>
       {edgeHandles.map(({ nodeId, edgeIndex, start, end, isActive }) => {
@@ -4057,7 +4205,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
         const isHovered = hoveredHandleId === handleId
         const startSvg = toSvgPlanPoint(start)
         const endSvg = toSvgPlanPoint(end)
-        const visibleStroke = isActive ? palette.endpointHandleActiveStroke : palette.selectedStroke
+        const visibleStroke = isActive || isHovered ? palette.cursor : palette.measurementStroke
 
         return (
           <g
@@ -4124,7 +4272,21 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
       {vertexHandles.map(({ nodeId, vertexIndex, point, isActive }) => {
         const handleId = `${nodeId}:vertex:${vertexIndex}`
         const isHovered = hoveredHandleId === handleId
-        const stroke = isActive ? palette.endpointHandleActiveStroke : palette.endpointHandleStroke
+        const hoveredEdgePrefix = `${nodeId}:edge:`
+        const hoveredMidpointPrefix = `${nodeId}:midpoint:`
+        const hoveredEdgeIndex = hoveredHandleId?.startsWith(hoveredEdgePrefix)
+          ? Number(hoveredHandleId.slice(hoveredEdgePrefix.length))
+          : hoveredHandleId?.startsWith(hoveredMidpointPrefix)
+            ? Number(hoveredHandleId.slice(hoveredMidpointPrefix.length))
+            : null
+        const isNearHoveredEdge =
+          Number.isInteger(hoveredEdgeIndex) &&
+          hoveredEdgeIndex !== null &&
+          (vertexIndex === hoveredEdgeIndex ||
+            vertexIndex === (hoveredEdgeIndex + 1) % vertexHandles.length)
+        const stroke =
+          isActive || isHovered || isNearHoveredEdge ? palette.cursor : palette.measurementStroke
+        const handleOpacity = isActive || isHovered || isNearHoveredEdge ? 1 : 0
         const outerRadius =
           (isActive
             ? FLOORPLAN_POLYGON_VERTEX_ACTIVE_RADIUS_PX
@@ -4154,7 +4316,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
               strokeOpacity={0.18}
               strokeWidth={FLOORPLAN_ENDPOINT_HOVER_GLOW_STROKE_WIDTH}
               style={{
-                opacity: isHovered ? 1 : 0,
+                opacity: handleOpacity,
                 transition: FLOORPLAN_HOVER_TRANSITION,
               }}
               vectorEffect="non-scaling-stroke"
@@ -4163,19 +4325,23 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
               cx={svgPoint.x}
               cy={svgPoint.y}
               fill={isActive ? palette.endpointHandleActiveFill : palette.endpointHandleFill}
-              fillOpacity={0.96}
+              fillOpacity={0.96 * handleOpacity}
               pointerEvents="none"
               r={outerRadius}
               stroke={stroke}
+              strokeOpacity={handleOpacity}
               strokeWidth="0.045"
+              style={{ transition: FLOORPLAN_HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
             <circle
               cx={svgPoint.x}
               cy={svgPoint.y}
               fill={stroke}
+              fillOpacity={handleOpacity}
               pointerEvents="none"
               r={dotRadius}
+              style={{ transition: FLOORPLAN_HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
             <circle
@@ -4185,9 +4351,25 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
               onDoubleClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
-                onVertexDoubleClick(nodeId, vertexIndex, event as any)
+                if (vertexPointerDoubleClickRef.current === handleId) {
+                  vertexPointerDoubleClickRef.current = null
+                  return
+                }
+
+                onVertexDoubleClick(nodeId, vertexIndex, event)
               }}
               onPointerDown={(event) => {
+                if (event.button === 0 && event.detail >= 2) {
+                  vertexPointerDoubleClickRef.current = handleId
+                  window.setTimeout(() => {
+                    if (vertexPointerDoubleClickRef.current === handleId) {
+                      vertexPointerDoubleClickRef.current = null
+                    }
+                  }, 400)
+                  onVertexDoubleClick(nodeId, vertexIndex, event)
+                  return
+                }
+
                 onVertexPointerDown(nodeId, vertexIndex, event)
               }}
               pointerEvents="all"
@@ -4204,12 +4386,14 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
       {midpointHandles.map(({ nodeId, edgeIndex, point }) => {
         const handleId = `${nodeId}:midpoint:${edgeIndex}`
         const isHovered = hoveredHandleId === handleId
+        const isEdgeHovered = hoveredHandleId === `${nodeId}:edge:${edgeIndex}`
+        const isVisible = isHovered || isEdgeHovered
         const isAddHandle = midpointStyle === 'add'
         const stroke = isAddHandle
           ? '#111827'
-          : isHovered
-            ? palette.endpointHandleHoverStroke
-            : palette.endpointHandleStroke
+          : isVisible
+            ? palette.cursor
+            : palette.measurementStroke
         const radius =
           (isAddHandle
             ? isHovered
@@ -4241,7 +4425,7 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
               strokeOpacity={0.16}
               strokeWidth={FLOORPLAN_ENDPOINT_HOVER_RING_STROKE_WIDTH}
               style={{
-                opacity: isHovered ? 1 : 0,
+                opacity: isVisible ? 1 : 0,
                 transition: FLOORPLAN_HOVER_TRANSITION,
               }}
               vectorEffect="non-scaling-stroke"
@@ -4250,12 +4434,13 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
               cx={svgPoint.x}
               cy={svgPoint.y}
               fill={isAddHandle ? '#ffffff' : palette.surface}
-              fillOpacity={isAddHandle ? 1 : 0.94}
+              fillOpacity={isVisible ? (isAddHandle ? 1 : 0.94) : 0}
               pointerEvents="none"
               r={radius}
               stroke={stroke}
-              strokeOpacity={0.9}
+              strokeOpacity={isVisible ? 0.9 : 0}
               strokeWidth={isAddHandle ? '1.4' : '0.035'}
+              style={{ transition: FLOORPLAN_HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
             {isAddHandle ? (
@@ -4263,8 +4448,10 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
                 <line
                   pointerEvents="none"
                   stroke="#111827"
+                  strokeOpacity={isVisible ? 1 : 0}
                   strokeLinecap="round"
                   strokeWidth="1.6"
+                  style={{ transition: FLOORPLAN_HOVER_TRANSITION }}
                   vectorEffect="non-scaling-stroke"
                   x1={svgPoint.x - plusHalfLength}
                   x2={svgPoint.x + plusHalfLength}
@@ -4274,8 +4461,10 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
                 <line
                   pointerEvents="none"
                   stroke="#111827"
+                  strokeOpacity={isVisible ? 1 : 0}
                   strokeLinecap="round"
                   strokeWidth="1.6"
+                  style={{ transition: FLOORPLAN_HOVER_TRANSITION }}
                   vectorEffect="non-scaling-stroke"
                   x1={svgPoint.x}
                   x2={svgPoint.x}
@@ -4288,9 +4477,10 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
                 cx={svgPoint.x}
                 cy={svgPoint.y}
                 fill={stroke}
-                fillOpacity={0.82}
+                fillOpacity={isVisible ? 0.82 : 0}
                 pointerEvents="none"
                 r={dotRadius}
+                style={{ transition: FLOORPLAN_HOVER_TRANSITION }}
                 vectorEffect="non-scaling-stroke"
               />
             )}
@@ -4374,6 +4564,7 @@ export function FloorplanPanel() {
   const curvingFence = useEditor((state) => state.curvingFence)
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
+  const activeHandleDrag = useEditor((state) => state.activeHandleDrag)
   const setPhase = useEditor((state) => state.setPhase)
   const setMovingFenceEndpoint = useEditor((state) => state.setMovingFenceEndpoint)
   const setMovingNode = useEditor((state) => state.setMovingNode)
@@ -4553,6 +4744,18 @@ export function FloorplanPanel() {
       [elevatorIds],
     ),
   )
+  const siteLivePolygon = useLiveNodeOverrides(
+    useCallback(
+      (state) => {
+        if (!site?.id) {
+          return null
+        }
+
+        return (state.overrides.get(site.id)?.polygon as SiteNode['polygon'] | undefined) ?? null
+      },
+      [site?.id],
+    ),
+  )
   const [stairBuildPreviewPoint, setStairBuildPreviewPoint] = useState<WallPlanPoint | null>(null)
   const [stairBuildPreviewRotation, setStairBuildPreviewRotation] = useState(0)
   const [isSpacePanPressed, setIsSpacePanPressed] = useState(false)
@@ -4616,12 +4819,14 @@ export function FloorplanPanel() {
   )
 
   const sitePolygonEntry = useMemo(() => {
-    const polygonPoints = site?.polygon?.points
+    const polygonPoints = siteLivePolygon?.points ?? site?.polygon?.points
     if (!(site && polygonPoints)) {
       return null
     }
 
-    const polygon = toFloorplanPolygon(polygonPoints)
+    const polygon = polygonPoints.map(([x, z]) =>
+      worldToFloorplanLocalPoint(x, z, buildingPosition, buildingRotationY),
+    )
     if (polygon.length < 3) {
       return null
     }
@@ -4631,7 +4836,7 @@ export function FloorplanPanel() {
       polygon,
       points: formatPolygonPoints(polygon),
     }
-  }, [site])
+  }, [buildingPosition, buildingRotationY, site, siteLivePolygon])
   const displaySitePolygon = useMemo(() => {
     if (!sitePolygonEntry) {
       return null
@@ -4649,6 +4854,28 @@ export function FloorplanPanel() {
       points: formatPolygonPoints(polygon),
     }
   }, [siteBoundaryDraft, sitePolygonEntry])
+  const siteBoundaryWorldPolygon = useCallback(
+    (polygon: WallPlanPoint[]) =>
+      polygon.map((point) => {
+        const worldPoint = floorplanLocalToWorldPoint(point, buildingPosition, buildingRotationY)
+        return [worldPoint.x, worldPoint.z] as [number, number]
+      }),
+    [buildingPosition, buildingRotationY],
+  )
+  const setSiteBoundaryLivePreview = useCallback(
+    (siteId: SiteNode['id'], polygon: WallPlanPoint[]) => {
+      useLiveNodeOverrides.getState().set(siteId, {
+        polygon: {
+          type: 'polygon',
+          points: siteBoundaryWorldPolygon(polygon),
+        },
+      })
+    },
+    [siteBoundaryWorldPolygon],
+  )
+  const clearSiteBoundaryLivePreview = useCallback((siteId: SiteNode['id']) => {
+    useLiveNodeOverrides.getState().clearFields(siteId, ['polygon'])
+  }, [])
   const movingOpeningType =
     movingNode?.type === 'door' || movingNode?.type === 'window' ? movingNode.type : null
 
@@ -5331,8 +5558,14 @@ export function FloorplanPanel() {
     !movingNode &&
     !movingFenceEndpoint &&
     isFloorplanItemContextActive
-  const visibleSitePolygon = phase === 'site' ? displaySitePolygon : null
-  const shouldShowSiteBoundaryHandles = isSiteEditActive && visibleSitePolygon !== null
+  const visibleSitePolygon = displaySitePolygon
+  const canUseSiteBoundaryVertexHandles =
+    visibleSitePolygon !== null && (isSiteEditActive || mode === 'select')
+  const isSiteBoundaryHighlighted = isSiteEditActive || siteVertexDragState !== null
+  const shouldShowSiteEdgeLabels =
+    Boolean(visibleSitePolygon) &&
+    activeHandleDrag?.nodeId === visibleSitePolygon?.site.id &&
+    activeHandleDrag?.label === SITE_BOUNDARY_DRAG_LABEL
   const visibleZonePolygons = displayZonePolygons
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const highlightedFloorplanIdSet = useMemo(
@@ -5369,7 +5602,7 @@ export function FloorplanPanel() {
     return toSvgSelectionBounds(visibleMarqueeBounds)
   }, [visibleMarqueeBounds])
   const siteVertexHandles = useMemo(() => {
-    if (!(shouldShowSiteBoundaryHandles && visibleSitePolygon)) {
+    if (!(canUseSiteBoundaryVertexHandles && visibleSitePolygon)) {
       return []
     }
 
@@ -5381,9 +5614,24 @@ export function FloorplanPanel() {
         siteVertexDragState?.siteId === visibleSitePolygon.site.id &&
         siteVertexDragState.vertexIndex === vertexIndex,
     }))
-  }, [shouldShowSiteBoundaryHandles, siteVertexDragState, visibleSitePolygon])
+  }, [canUseSiteBoundaryVertexHandles, siteVertexDragState, visibleSitePolygon])
+  const siteEdgeHandles = useMemo(() => {
+    if (!(canUseSiteBoundaryVertexHandles && visibleSitePolygon && !siteVertexDragState)) {
+      return []
+    }
+
+    return visibleSitePolygon.polygon.map((point, edgeIndex, polygon) => {
+      const nextPoint = polygon[(edgeIndex + 1) % polygon.length]
+      return {
+        nodeId: visibleSitePolygon.site.id,
+        edgeIndex,
+        start: toWallPlanPoint(point),
+        end: toWallPlanPoint(nextPoint ?? point),
+      }
+    })
+  }, [canUseSiteBoundaryVertexHandles, siteVertexDragState, visibleSitePolygon])
   const siteMidpointHandles = useMemo(() => {
-    if (!(shouldShowSiteBoundaryHandles && visibleSitePolygon && !siteVertexDragState)) {
+    if (!(canUseSiteBoundaryVertexHandles && visibleSitePolygon && !siteVertexDragState)) {
       return []
     }
 
@@ -5398,7 +5646,7 @@ export function FloorplanPanel() {
         ] as WallPlanPoint,
       }
     })
-  }, [shouldShowSiteBoundaryHandles, siteVertexDragState, visibleSitePolygon])
+  }, [canUseSiteBoundaryVertexHandles, siteVertexDragState, visibleSitePolygon])
 
   const draftPolygon = useMemo(() => {
     if (!(levelId && draftStart && draftEnd && isSegmentLongEnough(draftStart, draftEnd))) {
@@ -6917,10 +7165,28 @@ export function FloorplanPanel() {
     setHoveredWallCurveHandleId(null)
   }, [])
   const clearSiteBoundaryInteraction = useCallback(() => {
+    const draft = siteBoundaryDraftRef.current
+    if (draft) {
+      clearSiteBoundaryLivePreview(draft.siteId)
+      const editor = useEditor.getState()
+      if (
+        editor.activeHandleDrag?.nodeId === draft.siteId &&
+        editor.activeHandleDrag.label === SITE_BOUNDARY_DRAG_LABEL
+      ) {
+        editor.setActiveHandleDrag(null)
+      }
+    }
+
+    siteBoundaryDraftRef.current = null
     setSiteVertexDragState(null)
     setSiteBoundaryDraft(null)
     setHoveredSiteHandleId(null)
-  }, [])
+  }, [clearSiteBoundaryLivePreview])
+  const exitSiteEditingToSelect = useCallback(() => {
+    setPhase('structure')
+    setStructureLayer('elements')
+    setMode('select')
+  }, [setMode, setPhase, setStructureLayer])
 
   const clearDraft = useCallback(() => {
     clearWallPlacementDraft()
@@ -7629,12 +7895,12 @@ export function FloorplanPanel() {
   }, [clearWallCurveDrag, clearWallEndpointDrag])
 
   useEffect(() => {
-    if (shouldShowSiteBoundaryHandles) {
+    if (canUseSiteBoundaryVertexHandles) {
       return
     }
 
     clearSiteBoundaryInteraction()
-  }, [clearSiteBoundaryInteraction, shouldShowSiteBoundaryHandles])
+  }, [canUseSiteBoundaryVertexHandles, clearSiteBoundaryInteraction])
 
   useEffect(() => {
     const dragState = siteVertexDragState
@@ -7657,26 +7923,27 @@ export function FloorplanPanel() {
       const snappedPoint: WallPlanPoint = [snapToHalf(planPoint[0]), snapToHalf(planPoint[1])]
       setCursorPoint(snappedPoint)
 
-      setSiteBoundaryDraft((currentDraft) => {
-        if (!currentDraft || currentDraft.siteId !== dragState.siteId) {
-          return currentDraft
-        }
+      const currentDraft = siteBoundaryDraftRef.current
+      if (!currentDraft || currentDraft.siteId !== dragState.siteId) {
+        return
+      }
 
-        const currentPoint = currentDraft.polygon[dragState.vertexIndex]
-        if (currentPoint && pointsEqual(currentPoint, snappedPoint)) {
-          return currentDraft
-        }
+      const currentPoint = currentDraft.polygon[dragState.vertexIndex]
+      if (currentPoint && pointsEqual(currentPoint, snappedPoint)) {
+        return
+      }
 
-        sfxEmitter.emit('sfx:grid-snap')
+      sfxEmitter.emit('sfx:grid-snap')
 
-        const nextPolygon = [...currentDraft.polygon]
-        nextPolygon[dragState.vertexIndex] = snappedPoint
-
-        return {
-          ...currentDraft,
-          polygon: nextPolygon,
-        }
-      })
+      const nextPolygon = [...currentDraft.polygon]
+      nextPolygon[dragState.vertexIndex] = snappedPoint
+      const nextDraft = {
+        ...currentDraft,
+        polygon: nextPolygon,
+      }
+      siteBoundaryDraftRef.current = nextDraft
+      setSiteBoundaryDraft(nextDraft)
+      setSiteBoundaryLivePreview(dragState.siteId, nextPolygon)
     }
 
     const commitSiteVertexDrag = (event: PointerEvent) => {
@@ -7685,11 +7952,13 @@ export function FloorplanPanel() {
       }
 
       const draft = siteBoundaryDraftRef.current
+      const worldPolygon = draft ? siteBoundaryWorldPolygon(draft.polygon) : null
       if (
         draft &&
+        worldPolygon &&
         site &&
         draft.siteId === site.id &&
-        !polygonsEqual(draft.polygon, site.polygon?.points ?? [])
+        !polygonsEqual(worldPolygon, site.polygon?.points ?? [])
       ) {
         const suppressClick = (clickEvent: MouseEvent) => {
           clickEvent.stopImmediatePropagation()
@@ -7704,13 +7973,14 @@ export function FloorplanPanel() {
         updateNode(draft.siteId, {
           polygon: {
             type: 'polygon',
-            points: draft.polygon,
+            points: worldPolygon,
           },
         })
         sfxEmitter.emit('sfx:structure-build')
       }
 
       clearSiteBoundaryInteraction()
+      exitSiteEditingToSelect()
       setCursorPoint(null)
     }
 
@@ -7720,6 +7990,7 @@ export function FloorplanPanel() {
       }
 
       clearSiteBoundaryInteraction()
+      exitSiteEditingToSelect()
       setCursorPoint(null)
     }
 
@@ -7734,8 +8005,11 @@ export function FloorplanPanel() {
     }
   }, [
     clearSiteBoundaryInteraction,
+    exitSiteEditingToSelect,
     getPlanPointFromClientPoint,
+    setSiteBoundaryLivePreview,
     site,
+    siteBoundaryWorldPolygon,
     siteVertexDragState,
     updateNode,
   ])
@@ -9249,10 +9523,19 @@ export function FloorplanPanel() {
         return
       }
 
-      setSiteBoundaryDraft({
+      if (useEditor.getState().phase !== 'site') {
+        useEditor.setState({ catalogCategory: null, mode: 'select', phase: 'site', tool: null })
+      }
+      selectSiteFloorplanContext()
+
+      const nextDraft = {
         siteId,
         polygon: displaySitePolygon.polygon.map(toWallPlanPoint),
-      })
+      }
+      siteBoundaryDraftRef.current = nextDraft
+      setSiteBoundaryDraft(nextDraft)
+      setSiteBoundaryLivePreview(siteId, nextDraft.polygon)
+      useEditor.getState().setActiveHandleDrag({ nodeId: siteId, label: SITE_BOUNDARY_DRAG_LABEL })
       setSiteVertexDragState({
         pointerId: event.pointerId,
         siteId,
@@ -9260,10 +9543,14 @@ export function FloorplanPanel() {
       })
       setCursorPoint(toWallPlanPoint(vertexPoint))
     },
-    [displaySitePolygon],
+    [displaySitePolygon, setSiteBoundaryLivePreview],
   )
   const handleSiteVertexDoubleClick = useCallback(
-    (siteId: SiteNode['id'], vertexIndex: number, event: ReactPointerEvent<SVGCircleElement>) => {
+    (
+      siteId: SiteNode['id'],
+      vertexIndex: number,
+      event: ReactPointerEvent<SVGCircleElement> | ReactMouseEvent<SVGCircleElement>,
+    ) => {
       if (event.button !== 0) {
         return
       }
@@ -9275,7 +9562,6 @@ export function FloorplanPanel() {
         return
       }
 
-      siteBoundaryDraftRef.current = null
       clearSiteBoundaryInteraction()
 
       updateNode(siteId, {
@@ -9319,10 +9605,19 @@ export function FloorplanPanel() {
         ...basePolygon.slice(insertIndex),
       ]
 
-      setSiteBoundaryDraft({
+      if (useEditor.getState().phase !== 'site') {
+        useEditor.setState({ catalogCategory: null, mode: 'select', phase: 'site', tool: null })
+      }
+      selectSiteFloorplanContext()
+
+      const nextDraft = {
         siteId,
         polygon: nextPolygon,
-      })
+      }
+      siteBoundaryDraftRef.current = nextDraft
+      setSiteBoundaryDraft(nextDraft)
+      setSiteBoundaryLivePreview(siteId, nextPolygon)
+      useEditor.getState().setActiveHandleDrag({ nodeId: siteId, label: SITE_BOUNDARY_DRAG_LABEL })
       setSiteVertexDragState({
         pointerId: event.pointerId,
         siteId,
@@ -9330,7 +9625,7 @@ export function FloorplanPanel() {
       })
       setCursorPoint(insertedPoint)
     },
-    [displaySitePolygon],
+    [displaySitePolygon, setSiteBoundaryLivePreview],
   )
 
   const handlePointerLeave = useCallback(() => {
@@ -10020,8 +10315,6 @@ export function FloorplanPanel() {
                 selectedGuideId={selectedGuideId}
               />
 
-              <FloorplanSiteLayer isEditing={isSiteEditActive} sitePolygon={visibleSitePolygon} />
-
               {/* Stair is fully registry-driven for committed nodes
                   (`def.floorplan` on the stair kind). This layer only
                   carries the in-flight stair preview, which lives outside
@@ -10056,24 +10349,6 @@ export function FloorplanPanel() {
                 palette={palette}
                 unit={unit}
                 unitsPerPixel={floorplanUnitsPerPixel}
-              />
-
-              <FloorplanPolygonHandleLayer
-                hoveredHandleId={hoveredSiteHandleId}
-                midpointHandles={siteMidpointHandles}
-                onHandleHoverChange={setHoveredSiteHandleId}
-                onMidpointPointerDown={(nodeId, edgeIndex, event) =>
-                  handleSiteMidpointPointerDown(nodeId as SiteNode['id'], edgeIndex, event)
-                }
-                onVertexDoubleClick={(nodeId, vertexIndex, event) =>
-                  handleSiteVertexDoubleClick(nodeId as SiteNode['id'], vertexIndex, event)
-                }
-                onVertexPointerDown={(nodeId, vertexIndex, event) =>
-                  handleSiteVertexPointerDown(nodeId as SiteNode['id'], vertexIndex, event)
-                }
-                palette={palette}
-                unitsPerPixel={floorplanUnitsPerPixel}
-                vertexHandles={siteVertexHandles}
               />
 
               {isMarqueeSelectionToolActive && (
@@ -10149,6 +10424,42 @@ export function FloorplanPanel() {
                   registry layer so the red lines and distance pills
                   paint on top of node geometry. */}
               <FloorplanAlignmentGuideLayer />
+
+              <FloorplanSiteLayer
+                isHighlighted={isSiteBoundaryHighlighted}
+                palette={palette}
+                sitePolygon={visibleSitePolygon}
+              />
+
+              <FloorplanPolygonHandleLayer
+                edgeHandles={siteEdgeHandles}
+                hoveredHandleId={hoveredSiteHandleId}
+                midpointHandles={siteMidpointHandles}
+                onHandleHoverChange={setHoveredSiteHandleId}
+                onMidpointPointerDown={(nodeId, edgeIndex, event) =>
+                  handleSiteMidpointPointerDown(nodeId as SiteNode['id'], edgeIndex, event)
+                }
+                onVertexDoubleClick={(nodeId, vertexIndex, event) =>
+                  handleSiteVertexDoubleClick(nodeId as SiteNode['id'], vertexIndex, event)
+                }
+                onVertexPointerDown={(nodeId, vertexIndex, event) =>
+                  handleSiteVertexPointerDown(nodeId as SiteNode['id'], vertexIndex, event)
+                }
+                palette={palette}
+                unitsPerPixel={floorplanUnitsPerPixel}
+                vertexHandles={siteVertexHandles}
+              />
+
+              <FloorplanSiteEdgeLabelLayer
+                labelBackground={isDark ? '#0f172a' : '#ffffff'}
+                labelText={isDark ? '#e2e8f0' : '#171717'}
+                palette={palette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
+                shouldShow={shouldShowSiteEdgeLabels}
+                sitePolygon={visibleSitePolygon}
+                unit={unit}
+                unitsPerPixel={floorplanUnitsPerPixel}
+              />
 
               {/* "Magnetic" wall-snap beacon — per-kind glyph at the active
                   draft / endpoint-move snap point. Same store + coord space as
