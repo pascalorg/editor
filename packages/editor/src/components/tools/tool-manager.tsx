@@ -90,8 +90,9 @@ export const ToolManager: React.FC = () => {
     | CeilingNode['id']
     | undefined
 
-  // Show site boundary editor when in site phase (toggle controls entry/exit)
-  const showSiteBoundaryEditor = phase === 'site'
+  // Keep the site vertex flags available in select mode; the editor component
+  // switches to full polygon editing only after a flag activates site mode.
+  const showSiteBoundaryEditor = phase === 'site' || mode === 'select'
 
   // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =

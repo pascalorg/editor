@@ -66,7 +66,7 @@ describe('spawn definition', () => {
     ])
   })
 
-  test('floorplan uses indigo marker color and selected rotation affordance', () => {
+  test('floorplan uses footprint marker oriented to the spawn view and selected rotation affordance', () => {
     const spawn = SpawnNode.parse({
       id: 'spawn_test1234567890ab',
       position: [1, 0, 2],
@@ -102,8 +102,15 @@ describe('spawn definition', () => {
       },
     } satisfies GeometryContext)
 
+    expect(geometry.kind).toBe('group')
+    const marker = geometry.kind === 'group' ? geometry.children[0] : null
+    expect(marker?.kind).toBe('group')
+    if (marker?.kind === 'group') {
+      expect(marker.transform?.rotate).toBe(-spawn.rotation)
+    }
+
     const flat = flattenFloorplan(geometry)
-    expect(flat.some((entry) => entry.kind === 'polygon' && entry.fill === '#818cf8')).toBe(true)
+    expect(flat.some((entry) => entry.kind === 'path' && entry.stroke === '#818cf8')).toBe(true)
     expect(flat.some((entry) => entry.kind === 'rotate-arrow')).toBe(true)
   })
 

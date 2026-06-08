@@ -6,7 +6,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from './../../../lib/utils'
-import useEditor from './../../../store/use-editor'
+import useEditor, { selectSiteFloorplanContext } from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 
 type ControlId = 'select' | 'box-select' | 'site-edit' | 'zone' | 'delete'
@@ -34,7 +34,7 @@ const controls: ControlConfig[] = [
   },
   {
     id: 'site-edit',
-    imageSrc: '/icons/site.png',
+    imageSrc: '/icons/site-flag.png',
     label: 'Edit site',
     color: 'hover:bg-white/5',
     activeColor: 'bg-white/10 hover:bg-white/10',
@@ -100,12 +100,8 @@ export function ControlModes() {
         setMode('select')
         setStructureLayer('elements')
       } else if (isGroundFloor) {
-        // Enter site editing — set state directly to preserve level selection.
-        // setPhase('site') calls viewer.resetSelection() which clears levelId,
-        // breaking the 2D floorplan (it needs a level to render the SVG).
         useEditor.setState({ phase: 'site', mode: 'select', tool: null, catalogCategory: null })
-        // Clear object selection so the polygon editor handles receive pointer events
-        useViewer.getState().setSelection({ selectedIds: [] })
+        selectSiteFloorplanContext()
       }
       return
     }
