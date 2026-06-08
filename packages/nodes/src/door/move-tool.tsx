@@ -17,6 +17,7 @@ import {
   EDITOR_LAYER,
   getSideFromNormal,
   isValidWallSideFace,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -275,6 +276,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
         const cloned = structuredClone(movingDoorNode) as any
         delete cloned.id
+        cloned.metadata = stripPlacementMetadataFlags(cloned.metadata)
         const node = DoorNode.parse({
           ...cloned,
           position: [target.clampedX, target.clampedY, 0],
