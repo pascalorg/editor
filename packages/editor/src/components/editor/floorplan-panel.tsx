@@ -440,7 +440,7 @@ function FloorplanCompassButton({
       <TooltipTrigger asChild>
         <button
           aria-label="Align view to north"
-          className="group absolute top-3 right-24 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/85 shadow-sm backdrop-blur-md transition hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-neutral-900/85 dark:hover:bg-neutral-900"
+          className="group absolute bottom-3 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/85 shadow-sm backdrop-blur-md transition hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-neutral-900/85 dark:hover:bg-neutral-900"
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -464,7 +464,7 @@ function FloorplanCompassButton({
           </span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="left">Align view to north</TooltipContent>
+      <TooltipContent side="right">Align view to north</TooltipContent>
     </Tooltip>
   )
 }
