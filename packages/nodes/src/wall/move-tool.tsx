@@ -14,6 +14,7 @@ import {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
+  projectAutoSlabsForPlan,
   resumeSceneHistory,
   type SlabNode,
   useLiveNodeOverrides,
@@ -266,10 +267,15 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // existing room → existing slab" logic sees stable IDs across
       // ticks. Without this anchor, IDs would drift as overrides
       // re-flowed through the planner.
-      const slabPlan = planAutoSlabsForLevel(roomPolygons, getLevelSlabs(levelId, sceneState.nodes))
+      const existingSlabs = getLevelSlabs(levelId, sceneState.nodes)
+      const slabPlan = planAutoSlabsForLevel(roomPolygons, existingSlabs)
       const ceilingPlan = planAutoCeilingsForLevel(
         roomPolygons,
         getLevelCeilings(levelId, sceneState.nodes),
+        {
+          walls: levelWalls,
+          slabs: projectAutoSlabsForPlan(existingSlabs, slabPlan),
+        },
       )
 
       latestSurfacePlans = { slabs: slabPlan, ceilings: ceilingPlan }
@@ -281,8 +287,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         touchedSlabIds.add(update.id as AnyNodeId)
       }
       for (const update of ceilingPlan.update) {
-        if (update.data.polygon === undefined) continue
-        overrideEntries.push([update.id, { polygon: update.data.polygon }])
+        if (update.data.polygon === undefined && update.data.height === undefined) continue
+        overrideEntries.push([update.id, update.data as Record<string, unknown>])
         touchedCeilingIds.add(update.id as AnyNodeId)
       }
 

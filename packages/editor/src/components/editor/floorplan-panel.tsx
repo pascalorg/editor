@@ -7858,6 +7858,9 @@ export function FloorplanPanel() {
         return
       }
 
+      // Every non-closing vertex is a "start" tick; closing the polygon above
+      // creates the zone and fires the structure-build (end) cue.
+      sfxEmitter.emit('sfx:structure-build-start')
       setZoneDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },

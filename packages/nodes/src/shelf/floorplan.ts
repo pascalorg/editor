@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
+import { sanitizeShelfDimensions } from './dimensions'
 import type { ShelfResizePayload } from './floorplan-affordances'
 import type { ShelfNode } from './schema'
 
@@ -25,15 +26,16 @@ const ROTATE_ARROW_CORNER_OFFSET = 0.22
  * (engaged from the action-menu Move button, not from these arrows).
  */
 export function buildShelfFloorplan(node: ShelfNode, ctx?: GeometryContext): FloorplanGeometry {
-  const [px, , pz] = node.position
-  const ry = node.rotation[1] ?? 0
+  const shelf = sanitizeShelfDimensions(node)
+  const [px, , pz] = shelf.position
+  const ry = shelf.rotation[1] ?? 0
   // Floor-plan plots at `-ry` so SVG's CW-with-y-down `rotate` direction
   // ends up visually matching Three.js Y-rotation (CCW from a top-down
   // view) — same `rotation` value rotates the same way in both views.
   // Stair already does this; column / shelf / roof-segment now do too.
   const planRy = -ry
-  const halfW = node.width / 2
-  const halfD = node.depth / 2
+  const halfW = shelf.width / 2
+  const halfD = shelf.depth / 2
   const isSelected = ctx?.viewState?.selected ?? false
 
   // Floor-plan fill: a single neutral fill regardless of `material`.
@@ -44,8 +46,8 @@ export function buildShelfFloorplan(node: ShelfNode, ctx?: GeometryContext): Flo
       kind: 'rect',
       x: -halfW,
       y: -halfD,
-      width: node.width,
-      height: node.depth,
+      width: shelf.width,
+      height: shelf.depth,
       fill: '#d6d3d1',
       stroke: '#1f2937',
       strokeWidth: 0.015,
@@ -55,17 +57,17 @@ export function buildShelfFloorplan(node: ShelfNode, ctx?: GeometryContext): Flo
 
   // Show column dividers for grid-style shelves so the cubby / bookshelf
   // grid is visible from above.
-  if ((node.style === 'bookshelf' || node.style === 'cubby') && node.columns > 1) {
-    const innerWidth = node.width - 2 * node.thickness
-    const colStep = innerWidth / node.columns
-    for (let c = 1; c < node.columns; c++) {
+  if ((shelf.style === 'bookshelf' || shelf.style === 'cubby') && shelf.columns > 1) {
+    const innerWidth = shelf.width - 2 * shelf.thickness
+    const colStep = innerWidth / shelf.columns
+    for (let c = 1; c < shelf.columns; c++) {
       const x = -innerWidth / 2 + c * colStep
       footprintChildren.push({
         kind: 'line',
         x1: x,
-        y1: -halfD + node.thickness,
+        y1: -halfD + shelf.thickness,
         x2: x,
-        y2: halfD - node.thickness,
+        y2: halfD - shelf.thickness,
         stroke: '#1f2937',
         strokeWidth: 0.012,
         opacity: 0.7,

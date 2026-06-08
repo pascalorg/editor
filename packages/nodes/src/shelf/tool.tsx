@@ -14,7 +14,7 @@ import {
   snapPointToGrid,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, useAlignmentGuides } from '@pascal-app/editor'
+import { getFloorStackPreviewPosition, triggerSFX, useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
@@ -69,16 +69,16 @@ function getLevelLocalPosition(
     const local = (event as GridEvent).localPosition
     if (local) {
       const [sx, sz] = snapPointToGrid([local[0], local[2]], GRID_STEP)
-      return [sx, local[1] ?? 0, sz]
+      return [sx, 0, sz]
     }
     const [sx, sz] = snapPointToGrid([event.position[0], event.position[2]], GRID_STEP)
-    return [sx, event.position[1], sz]
+    return [sx, 0, sz]
   }
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
   const [sx, sz] = snapPointToGrid([worldVector.x, worldVector.z], GRID_STEP)
-  return [sx, worldVector.y, sz]
+  return [sx, 0, sz]
 }
 
 const ShelfTool = () => {
@@ -149,8 +149,15 @@ const ShelfTool = () => {
         useAlignmentGuides.getState().clear()
       }
 
-      cursorRef.current?.position.set(ax, event.localPosition[1], az)
-      lastCursorRef.current = [ax, event.localPosition[1], az]
+      const position: [number, number, number] = [ax, 0, az]
+      const visualPosition = getFloorStackPreviewPosition({
+        node: previewNode,
+        position,
+        rotation: previewNode.rotation,
+        levelId: activeLevelId,
+      })
+      cursorRef.current?.position.set(...visualPosition)
+      lastCursorRef.current = position
 
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== ax || prev[1] !== az) {
@@ -173,7 +180,7 @@ const ShelfTool = () => {
       })
       useScene.getState().createNode(shelf, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [shelf.id] })
-      triggerSFX('sfx:structure-build')
+      triggerSFX('sfx:item-place')
       // The placed shelf is now a valid alignment target for the next one;
       // refresh the candidate pool and drop the guide from this drop.
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)

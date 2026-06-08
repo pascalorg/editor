@@ -25,6 +25,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { PlacementBox } from '../shared/placement-box'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
@@ -174,10 +175,33 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // fresh clone after a drop, or the user picks a different catalog tile —
     // and `useState` only honours its initial value, so without this the box
     // would keep the previous clone's rotation/position until the next R/T.
-    setCursorPosition(originalPosition)
     setCursorRotationY(originalRotationY)
     lastCursorRef.current = originalPosition
     let committed = false
+
+    const baseRotation = (node as { rotation?: unknown }).rotation
+    const toCommitRotation = (y: number): number | [number, number, number] =>
+      Array.isArray(baseRotation)
+        ? [(baseRotation[0] as number) ?? 0, y, (baseRotation[2] as number) ?? 0]
+        : y
+
+    const getVisualPosition = (
+      position: [number, number, number],
+      rotationY = rotationRef.current,
+    ): [number, number, number] => {
+      return getFloorStackPreviewPosition({
+        node,
+        position,
+        rotation: toCommitRotation(rotationY),
+      })
+    }
+    const markMovedNodeDirty = () => {
+      if (useScene.getState().nodes[node.id]) {
+        useScene.getState().markDirty(node.id as AnyNodeId)
+      }
+    }
+
+    setCursorPosition(getVisualPosition(originalPosition, originalRotationY))
 
     // Re-run the floor-collision check at the live cursor + rotation and push
     // the result to the box colour. Shift forces a valid (green) override so
@@ -196,10 +220,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         setValid(true)
         return
       }
-      const [x, , z] = lastCursorRef.current
+      const [x, y, z] = lastCursorRef.current
       const { valid: placeable } = spatialGridManager.canPlaceOnFloor(
         levelId,
-        [x, 0, z],
+        [x, y, z],
         boxDimensions,
         [0, rotationRef.current, 0],
         [node.id],
@@ -208,14 +232,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       setValid(placeable)
     }
     recomputeValidity()
-
-    // The node's rotation shape (tuple vs scalar) is preserved on commit;
-    // only the Y angle changes. Most registry kinds use a `[x, y, z]` tuple.
-    const baseRotation = (node as { rotation?: unknown }).rotation
-    const toCommitRotation = (y: number): number | [number, number, number] =>
-      Array.isArray(baseRotation)
-        ? [(baseRotation[0] as number) ?? 0, y, (baseRotation[2] as number) ?? 0]
-        : y
 
     // Disable raycast on the moved node's meshes for the duration of
     // the drag. As the shelf follows the cursor, the cursor ray would
@@ -275,13 +291,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         useAlignmentGuides.getState().clear()
       }
 
+      const position: [number, number, number] = [x, originalPosition[1], z]
+      const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
-      setCursorPosition([x, 0, z])
-      lastCursorRef.current = [x, 0, z]
+      setCursorPosition(visualPosition)
+      lastCursorRef.current = position
       recomputeValidity()
 
       // Pure imperative: move the mesh via its registered Object3D ref.
-      sceneRegistry.nodes.get(node.id)?.position.set(x, 0, z)
+      sceneRegistry.nodes.get(node.id)?.position.set(...visualPosition)
       // Publish to `useLiveTransforms` so the 2D floor plan can mirror
       // the drag in real-time (the floor-plan layer subscribes to this
       // store and overrides the node's rendered position when an entry
@@ -293,9 +311,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // (slab / ceiling / fence) follow a different delta contract —
       // their floor-plan move-targets handle the override themselves.
       useLiveTransforms.getState().set(node.id, {
-        position: [x, 0, z],
+        position,
         rotation: rotationRef.current,
       })
+      markMovedNodeDirty()
 
       const prev = previousSnapRef.current
       if (!prev || prev[0] !== x || prev[1] !== z) {
@@ -331,6 +350,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const position: [number, number, number] = [...lastCursorRef.current]
 
       const rotation = toCommitRotation(rotationRef.current)
+      const visualPosition = getVisualPosition(position)
 
       if (useScene.getState().nodes[node.id]) {
         useScene.temporal.getState().resume()
@@ -355,18 +375,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         }
       }
 
-      // Keep mesh.position/rotation aligned with the just-committed scene
-      // values so the next R3F frame paints correctly even if React's
-      // reconciliation lags by a tick.
+      // Clear after the scene write so React reconciles against the new
+      // canonical position, then restamp the lifted presentation Y for the
+      // current frame.
+      useLiveTransforms.getState().clear(node.id)
       const mesh = sceneRegistry.nodes.get(node.id)
       if (mesh) {
-        mesh.position.set(position[0], position[1], position[2])
+        mesh.position.set(...visualPosition)
         mesh.rotation.y = rotationRef.current
       }
 
-      // Now safe to clear — node.position is already the new value, so
-      // `ParametricNodeRenderer`'s next render lands at `[x, 0, z]`.
-      useLiveTransforms.getState().clear(node.id)
       useAlignmentGuides.getState().clear()
 
       sfxEmitter.emit('sfx:item-place')
@@ -405,12 +423,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       sfxEmitter.emit('sfx:item-rotate')
       rotationRef.current += delta
       setCursorRotationY(rotationRef.current)
+      const position = lastCursorRef.current
+      const visualPosition = getVisualPosition(position)
+      setCursorPosition(visualPosition)
       const m = sceneRegistry.nodes.get(node.id)
-      if (m) m.rotation.y = rotationRef.current
+      if (m) {
+        m.position.set(...visualPosition)
+        m.rotation.y = rotationRef.current
+      }
       useLiveTransforms.getState().set(node.id, {
-        position: lastCursorRef.current,
+        position,
         rotation: rotationRef.current,
       })
+      markMovedNodeDirty()
       // Rotation changes the footprint's collision span — re-check validity.
       recomputeValidity()
     }
@@ -437,13 +462,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onCancel = () => {
+      useLiveTransforms.getState().clear(node.id)
       const m = sceneRegistry.nodes.get(node.id)
       if (m) {
-        m.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
+        m.position.set(...getVisualPosition(originalPosition, originalRotationY))
         m.rotation.y = originalRotationY
       }
-      useLiveTransforms.getState().clear(node.id)
       useAlignmentGuides.getState().clear()
+      markMovedNodeDirty()
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
@@ -467,10 +493,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // unmount / commit paths uniformly.
       useAlignmentGuides.getState().clear()
       if (!committed) {
+        useLiveTransforms.getState().clear(node.id)
         sceneRegistry.nodes
           .get(node.id)
-          ?.position.set(originalPosition[0], originalPosition[1], originalPosition[2])
-        useLiveTransforms.getState().clear(node.id)
+          ?.position.set(...getVisualPosition(originalPosition, originalRotationY))
+        markMovedNodeDirty()
         useScene.temporal.getState().resume()
       }
     }

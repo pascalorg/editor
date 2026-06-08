@@ -5,6 +5,7 @@ import {
   type FenceNode,
   type GridEvent,
   type LevelNode,
+  nodeRegistry,
   type RoofNode,
   type RoofSegmentNode,
   resolveAlignment,
@@ -18,6 +19,7 @@ import {
 import {
   CursorSphere,
   clearRoofDuplicateMetadata,
+  getFloorStackPreviewPosition,
   snapFenceDraftPoint,
   triggerSFX,
   useAlignmentGuides,
@@ -113,6 +115,11 @@ export const MoveRoofTool: React.FC<{
 
     // Track pending rotation — no store updates during drag
     let pendingRotation: number = movingNode.rotation as number
+    let lastLocalPosition: [number, number, number] = [
+      movingNode.position[0],
+      movingNode.position[1],
+      movingNode.position[2],
+    ]
 
     // For roof-segment moves: the selection was cleared before entering move mode,
     // so isSelected=false on the parent roof, hiding individual segment meshes and
@@ -150,6 +157,20 @@ export const MoveRoofTool: React.FC<{
     }
 
     const levelId = resolveLevelId()
+    const isFloorPlaced = nodeRegistry.get(movingNode.type)?.capabilities?.floorPlaced !== undefined
+    const getPreviewPosition = (
+      position: [number, number, number],
+      rotation = pendingRotation,
+    ): [number, number, number] => {
+      if (!isFloorPlaced) return position
+      return getFloorStackPreviewPosition({
+        node: movingNode,
+        position,
+        rotation,
+        levelId,
+        nodes: useScene.getState().nodes,
+      })
+    }
     const levelNode =
       levelId && useScene.getState().nodes[levelId as AnyNodeId]?.type === 'level'
         ? (useScene.getState().nodes[levelId as AnyNodeId] as LevelNode)
@@ -260,20 +281,28 @@ export const MoveRoofTool: React.FC<{
       }
 
       previousGridPosRef.current = [gridX, gridZ]
-      setCursorWorldPos([lx, event.localPosition[1], lz])
 
       const [localX, localZ] = computeLocal(gridX, gridZ, y, lx, lz)
+      lastLocalPosition = [localX, movingNode.position[1], localZ]
+      const previewPosition = getPreviewPosition(lastLocalPosition)
+      setCursorWorldPos(isFloorPlaced ? previewPosition : [lx, event.localPosition[1], lz])
 
       // Directly update the Three.js mesh — no store update during drag
       const mesh = sceneRegistry.nodes.get(movingNode.id)
       if (mesh) {
-        mesh.position.x = localX
-        mesh.position.z = localZ
+        if (isFloorPlaced) {
+          mesh.position.set(...previewPosition)
+        } else {
+          mesh.position.x = localX
+          mesh.position.z = localZ
+        }
       }
 
-      // Publish world-space position so the 2D floorplan can track the drag
+      // Publish canonical position so the 2D floorplan can track the drag.
+      // Floor-placed parents (stairs) stay in their committed local frame;
+      // the lifted Y remains presentation-only in the 3D view.
       useLiveTransforms.getState().set(movingNode.id, {
-        position: [gridX, y, gridZ],
+        position: isFloorPlaced ? lastLocalPosition : [gridX, y, gridZ],
         rotation: pendingRotation,
       })
     }
@@ -359,7 +388,14 @@ export const MoveRoofTool: React.FC<{
 
         // Directly update the Three.js mesh — no store update during drag
         const mesh = sceneRegistry.nodes.get(movingNode.id)
-        if (mesh) mesh.rotation.y = pendingRotation
+        if (mesh) {
+          mesh.rotation.y = pendingRotation
+          if (isFloorPlaced) {
+            const previewPosition = getPreviewPosition(lastLocalPosition, pendingRotation)
+            mesh.position.set(...previewPosition)
+            setCursorWorldPos(previewPosition)
+          }
+        }
 
         // Update live transform rotation for 2D floorplan
         const currentLive = useLiveTransforms.getState().get(movingNode.id)

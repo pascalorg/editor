@@ -178,6 +178,9 @@ export const SlabTool: React.FC = () => {
         setPoints([])
         useAlignmentGuides.getState().clear()
       } else {
+        // Every non-closing vertex is a "start" tick; the closing click above
+        // fires the structure-build (end) cue.
+        triggerSFX('sfx:structure-build-start')
         setPoints([...points, clickPoint])
       }
     }

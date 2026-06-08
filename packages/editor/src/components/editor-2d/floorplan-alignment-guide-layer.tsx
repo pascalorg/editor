@@ -1,7 +1,9 @@
 'use client'
 
 import { useAlignmentGuides } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { memo } from 'react'
+import { formatMeasurement } from '../editor/measurement-pill'
 import { useFloorplanRender } from './floorplan-render-context'
 
 /**
@@ -23,6 +25,7 @@ import { useFloorplanRender } from './floorplan-render-context'
  */
 export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuideLayer() {
   const guides = useAlignmentGuides((s) => s.guides)
+  const unit = useViewer((s) => s.unit)
   const ctx = useFloorplanRender()
 
   if (guides.length === 0) return null
@@ -56,7 +59,7 @@ export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuid
         // offset along X.
         const pillX = axis === 'x' ? midX + pillOffset : midX
         const pillZ = axis === 'z' ? midZ + pillOffset : midZ
-        const distLabel = formatMeters(distMeters)
+        const distLabel = formatMeasurement(distMeters, unit)
         const charWidth = pillFontSize * 0.55
         const pillWidth = distLabel.length * charWidth + pillPadX * 2
         const pillHeight = pillFontSize + pillPadY * 2
@@ -134,11 +137,4 @@ function XCap({
       />
     </g>
   )
-}
-
-function formatMeters(meters: number): string {
-  // Sub-centimetre = "0". Otherwise show with up to 2 decimals, trimmed.
-  if (meters < 0.005) return '0'
-  const fixed = meters.toFixed(2)
-  return `${fixed.replace(/\.?0+$/, '')}m`
 }

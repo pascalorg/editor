@@ -1,5 +1,5 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { SCENE_LAYER } from '@pascal-app/viewer'
+import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -11,16 +11,17 @@ import {
   type Line,
   type Object3D,
   Shape,
-  SphereGeometry,
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
+  createMoveCrossHandleGeometry,
   ARROW_COLOR as EDGE_ARROW_COLOR,
   ARROW_HOVER_COLOR as EDGE_ARROW_HOVER_COLOR,
   ARROW_SCALE as EDGE_ARROW_SCALE,
   useArrowMaterial,
+  useInvisibleHitAreaMaterial,
 } from '../../editor/node-arrow-handles'
 import { snapToHalf } from '../item/placement-math'
 
@@ -185,7 +186,11 @@ function OutlinedCylinderHandle({
   )
 }
 
-function OutlinedSphereHandle({
+// Whole-polygon move grip — the generic 4-way cross-arrow (matching the node
+// move handles) with an invisible cylinder hit area, replacing the old sphere.
+// The cross sits on SCENE_LAYER (so the ink pass outlines it) while the
+// cylinder hit mesh is on EDITOR_LAYER (grabbable, out of the MRT scene pass).
+function OutlinedCrossHandle({
   color,
   position,
   ...handlers
@@ -193,20 +198,33 @@ function OutlinedSphereHandle({
   color: string
   position: [number, number, number]
 } & HandleHandlers) {
-  const geometry = useMemo(() => new SphereGeometry(0.09, 20, 20), [])
+  const geometry = useMemo(() => createMoveCrossHandleGeometry(), [])
   const material = usePolygonNodeMaterial(color)
+  const hitGeometry = useMemo(() => new CylinderGeometry(0.24, 0.24, 0.18, 24), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
 
   return (
-    <mesh
-      frustumCulled={false}
-      geometry={geometry}
-      layers={SCENE_LAYER}
-      material={material}
-      position={position}
-      renderOrder={1010}
-      {...handlers}
-    />
+    <group position={position}>
+      <mesh
+        frustumCulled={false}
+        geometry={geometry}
+        layers={SCENE_LAYER}
+        material={material}
+        raycast={NO_RAYCAST}
+        renderOrder={1010}
+        scale={EDGE_ARROW_SCALE}
+      />
+      <mesh
+        frustumCulled={false}
+        geometry={hitGeometry}
+        layers={EDITOR_LAYER}
+        material={hitMaterial}
+        renderOrder={1011}
+        {...handlers}
+      />
+    </group>
   )
 }
 
@@ -299,6 +317,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const previewPolygonRef = useRef<Array<[number, number]> | null>(null)
+  const previousInputDraggingRef = useRef(false)
 
   const onPolygonPreviewRef = useRef(onPolygonPreview)
   useEffect(() => {
@@ -327,6 +346,20 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   const lineRef = useRef<Line>(null!)
   const previousPositionRef = useRef<[number, number] | null>(null)
+
+  const startDrag = useCallback((nextDragState: DragState) => {
+    previousInputDraggingRef.current = useViewer.getState().inputDragging
+    useViewer.getState().setInputDragging(true)
+    setDragState(nextDragState)
+  }, [])
+
+  useEffect(() => {
+    if (!dragState?.isDragging) return
+
+    return () => {
+      useViewer.getState().setInputDragging(previousInputDraggingRef.current)
+    }
+  }, [dragState?.isDragging])
 
   // Track the last polygon prop to detect external changes (undo/redo) or
   // our own post-commit prop update arriving while a preview is still in
@@ -651,7 +684,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
         return (
           <OutlinedCylinderHandle
-            color={isDragging ? '#22c55e' : isHovered ? '#60a5fa' : '#3b82f6'}
+            color={isDragging || isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
             height={height}
             key={`vertex-${index}`}
             onClick={(e) => {
@@ -669,7 +702,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               if (e.button !== 0) return
               e.stopPropagation()
               setHoveredEdge(null)
-              setDragState({
+              startDrag({
                 isDragging: true,
                 mode: 'vertex',
                 vertexIndex: index,
@@ -693,8 +726,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       })}
 
       {allowPolygonMove && (
-        <OutlinedSphereHandle
-          color={dragState?.mode === 'polygon' ? '#22c55e' : '#f59e0b'}
+        <OutlinedCrossHandle
+          color={dragState?.mode === 'polygon' ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
           onClick={(e) => {
             if (e.button !== 0) return
             e.stopPropagation()
@@ -703,7 +736,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             if (e.button !== 0) return
             e.stopPropagation()
             setHoveredEdge(null)
-            setDragState({
+            startDrag({
               isDragging: true,
               mode: 'polygon',
               vertexIndex: null,
@@ -732,7 +765,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             if (!edgeNormal) return
 
             setHoveredEdge(null)
-            setDragState({
+            startDrag({
               isDragging: true,
               mode: 'edge',
               vertexIndex: null,
@@ -760,7 +793,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               >
                 <boxGeometry args={[length, EDGE_HANDLE_HEIGHT, EDGE_HANDLE_THICKNESS]} />
                 <meshBasicMaterial
-                  color={isDragging ? '#22c55e' : '#60a5fa'}
+                  color={isDragging ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
                   opacity={isDragging ? 0.5 : isHovered ? 0.38 : 0.14}
                   transparent
                 />
@@ -769,9 +802,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                   Points outward from the edge; dragging it translates only this
                   edge's two vertices along the outward normal. */}
               <OutlinedEdgeArrowHandle
-                color={
-                  isDragging ? '#22c55e' : isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR
-                }
+                color={isDragging || isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
                 geometry={arrowGeometry}
                 onClick={(e) => {
                   if (e.button !== 0) return
@@ -807,7 +838,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           return (
             <OutlinedCylinderHandle
-              color={isHovered ? '#4ade80' : '#22c55e'}
+              color={isHovered ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
               height={height}
               key={`midpoint-${index}`}
               onClick={(e) => {
@@ -819,7 +850,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 e.stopPropagation()
                 const insertedVertex = handleAddVertex(index, [x!, z!])
                 if (insertedVertex.vertexIndex >= 0) {
-                  setDragState({
+                  startDrag({
                     isDragging: true,
                     mode: 'vertex',
                     vertexIndex: insertedVertex.vertexIndex,

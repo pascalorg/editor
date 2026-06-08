@@ -287,39 +287,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         //
         // The live-transform contract varies per kind (see
         // wiki/architecture/tools.md "useLiveTransforms contract is
-        // per-kind, not generic"); we narrow per kind here:
-        //   - item: world-plan position frame. Override `position` +
-        //     `rotation` and force `parentId: null` so the resolver
-        //     treats them as world coords directly.
-        //   - slab / ceiling: position is a translation **delta**
-        //     (`[Δx, 0, Δz]`). Translate the polygon + holes by the
-        //     delta — the floor-plan builder draws the polygon at its
-        //     new location, mirroring the 3D `<group position={delta}>`
-        //     visual without forcing per-tick CSG scene writes.
+        // per-kind, not generic"); position-carrying floor-placed kinds
+        // publish canonical X/Z, while slab / ceiling publish a polygon
+        // translation delta.
         const live = liveTransforms.get(id)
         let effectiveNode: AnyNode = node
         if (live) {
-          if (node.type === 'item' || node.type === 'shelf') {
-            // World-plan position kinds: the live transform carries the
-            // node's intended position/rotation in level-local coords.
-            // Override both and force `parentId: null` so the floor-plan
-            // resolver treats `position` as world plan coords directly
-            // (skipping the parent-chain transform composition).
-            effectiveNode = {
-              ...node,
-              position: live.position,
-              rotation: [0, live.rotation, 0] as [number, number, number],
-              parentId: null,
-            } as AnyNode
-          } else if (node.type === 'column') {
-            // Same world-plan override as item/shelf, but column stores its
-            // Y rotation as a scalar (not a tuple).
-            effectiveNode = {
-              ...node,
-              position: live.position,
-              rotation: live.rotation,
-              parentId: null,
-            } as AnyNode
+          const floorPlaced = def?.capabilities?.floorPlaced
+          const hasPosition = Array.isArray((node as { position?: unknown }).position)
+          if (floorPlaced && hasPosition) {
+            effectiveNode = applyPositionLiveTransform(node, live)
           } else if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
             const dx = live.position[0]
             const dz = live.position[2]
@@ -494,6 +471,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         payload,
         nodes: sceneNodes,
         initialPlanPoint,
+        gridSnapStep: useEditor.getState().gridSnapStep,
       })
 
       const snapshots: NodeSnapshot[] = []
@@ -1590,6 +1568,29 @@ function InteractiveGeometry({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+function applyPositionLiveTransform(
+  node: AnyNode,
+  live: { position: [number, number, number]; rotation: number },
+): AnyNode {
+  const currentRotation = (node as { rotation?: unknown }).rotation
+  const rotation = Array.isArray(currentRotation)
+    ? ([
+        (currentRotation[0] as number) ?? 0,
+        live.rotation,
+        (currentRotation[2] as number) ?? 0,
+      ] as [number, number, number])
+    : typeof currentRotation === 'number'
+      ? live.rotation
+      : currentRotation
+
+  return {
+    ...node,
+    position: live.position,
+    ...(rotation !== undefined ? { rotation } : {}),
+    parentId: null,
+  } as AnyNode
+}
 
 function buildContext(
   node: AnyNode,

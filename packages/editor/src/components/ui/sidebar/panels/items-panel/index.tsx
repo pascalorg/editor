@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
+import { triggerSFX } from '../../../../../lib/sfx-bus'
 import { cn } from '../../../../../lib/utils'
 import type { CatalogCategory } from '../../../../../store/use-editor'
 import useEditor from '../../../../../store/use-editor'
@@ -206,7 +207,11 @@ function LegacyItemsPanel({
                   : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
               )}
               key={cat.catalogCategory}
-              onClick={() => selectCategory(cat.catalogCategory)}
+              onClick={() => {
+                triggerSFX('sfx:menu-click')
+                selectCategory(cat.catalogCategory)
+              }}
+              onMouseEnter={() => triggerSFX('sfx:menu-hover')}
               type="button"
             >
               <NextImage

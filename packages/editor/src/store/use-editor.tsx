@@ -158,6 +158,8 @@ type MaterialPaintSelectionSnapshot = {
   activePaintMaterial: ActivePaintMaterial | null
 }
 
+export type SurfaceHoleTarget = { nodeId: string; holeIndex: number }
+
 export type GuideUiState = {
   locked?: boolean
   scaleReferenceVisible?: boolean
@@ -296,8 +298,10 @@ type EditorState = {
   spaces: Record<string, Space>
   setSpaces: (spaces: Record<string, Space>) => void
   // Generic hole editing (works for slabs, ceilings, and any future polygon nodes)
-  editingHole: { nodeId: string; holeIndex: number } | null
-  setEditingHole: (hole: { nodeId: string; holeIndex: number } | null) => void
+  editingHole: SurfaceHoleTarget | null
+  setEditingHole: (hole: SurfaceHoleTarget | null) => void
+  hoveredHole: SurfaceHoleTarget | null
+  setHoveredHole: (hole: SurfaceHoleTarget | null) => void
   // Preview mode (viewer-like experience inside the editor)
   isPreviewMode: boolean
   setPreviewMode: (preview: boolean) => void
@@ -817,6 +821,14 @@ const useEditor = create<EditorState>()(
       setSpaces: (spaces) => set({ spaces }),
       editingHole: null,
       setEditingHole: (hole) => set({ editingHole: hole }),
+      hoveredHole: null,
+      setHoveredHole: (hole) =>
+        set((state) =>
+          state.hoveredHole?.nodeId === hole?.nodeId &&
+          state.hoveredHole?.holeIndex === hole?.holeIndex
+            ? state
+            : { hoveredHole: hole },
+        ),
       isPreviewMode: false,
       setPreviewMode: (preview) => {
         if (preview) {

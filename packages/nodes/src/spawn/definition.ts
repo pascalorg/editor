@@ -1,7 +1,22 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type { HandleDescriptor, NodeDefinition, SpawnNode as SpawnNodeType } from '@pascal-app/core'
 import { buildSpawnFloorplan } from './floorplan'
 import { spawnParametrics } from './parametrics'
 import { SpawnNode } from './schema'
+
+const SPAWN_FOOTPRINT = 0.6
+const MOVE_FRONT_OFFSET = 0.35
+
+function spawnMoveHandle(): HandleDescriptor<SpawnNodeType> {
+  return {
+    kind: 'translate',
+    placement: {
+      // Low to the floor at the front edge (matches the item move grip).
+      position: () => [0, 0.02, SPAWN_FOOTPRINT / 2 + MOVE_FRONT_OFFSET],
+    },
+    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
+    snapExtents: () => [SPAWN_FOOTPRINT, SPAWN_FOOTPRINT],
+  }
+}
 
 export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   kind: 'spawn',
@@ -37,6 +52,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   },
 
   parametrics: spawnParametrics,
+  handles: [spawnMoveHandle()],
 
   renderer: {
     kind: 'parametric',

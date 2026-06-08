@@ -381,7 +381,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       useScene.temporal.getState().pause()
 
-      triggerSFX('sfx:item-place')
+      triggerSFX('sfx:structure-build')
       hideCursor()
       useViewer.getState().setSelection({ selectedIds: [placedId] })
       exitMoveMode()

@@ -103,15 +103,26 @@ export function Lights() {
           if (SHADOW_EXCLUDED_TYPES.some((t) => sceneRegistry.byType[t]!.has(id))) continue
           box.expandByObject(obj)
         }
-        if (box.isEmpty()) {
-          // Empty scene: fall back to the origin with a default radius so the
-          // ground still receives a sensible shadow region.
+        box.getBoundingSphere(boundsSphere.current)
+        const center = boundsSphere.current.center
+        const radius = boundsSphere.current.radius
+        // Empty scene OR a node with a NaN position/geometry poisoning the union
+        // box: fall back to the origin with a default radius. The directional
+        // light's position is derived from `focus`, so a single non-finite mesh
+        // must NOT be allowed to make `focus`/`radius` NaN — that breaks every
+        // shadow-casting light's position and renders the whole scene black.
+        const finiteBounds =
+          !box.isEmpty() &&
+          Number.isFinite(center.x) &&
+          Number.isFinite(center.y) &&
+          Number.isFinite(center.z) &&
+          Number.isFinite(radius)
+        if (finiteBounds) {
+          shadowFocus.current.copy(center)
+          shadowRadius.current = radius
+        } else {
           shadowFocus.current.set(0, 0, 0)
           shadowRadius.current = SHADOW_FALLBACK_RADIUS
-        } else {
-          box.getBoundingSphere(boundsSphere.current)
-          shadowFocus.current.copy(boundsSphere.current.center)
-          shadowRadius.current = boundsSphere.current.radius
         }
       }
 

@@ -59,6 +59,18 @@ const DRAFT_ANGLE_ARC_Y_OFFSET = 0.012
 const DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
 const DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
 const DRAFT_ANGLE_ARC_SEGMENTS = 24
+const DRAFT_AXIS_GUIDE_LENGTH = 2000
+const DRAFT_AXIS_GUIDE_WIDTH = 0.035
+const DRAFT_AXIS_GUIDE_HEIGHT = 0.004
+const DRAFT_AXIS_GUIDE_Y_OFFSET = 0.026
+const DRAFT_AXIS_ANGLE_ARC_Y_OFFSET = 0.05
+const DRAFT_AXIS_ANGLE_LABEL_Y_OFFSET = 0.16
+const DRAFT_AXIS_ANGLE_ARC_MIN_RADIUS = 0.36
+const DRAFT_AXIS_ANGLE_ARC_MAX_RADIUS = 0.82
+const AXIS_ANGLE_REFERENCES: SegmentAngleReference[] = [
+  { vector: [1, 0], orientation: 'axis' },
+  { vector: [0, 1], orientation: 'axis' },
+]
 
 type DraftAngleLabel = {
   id: string
@@ -78,6 +90,21 @@ type DraftMeasurementState = {
   lengthPosition: [number, number, number]
   angleLabels: DraftAngleLabel[]
 } | null
+
+type DraftAxisGuideState = {
+  origin: WallPlanPoint
+  y: number
+  angleLabel: DraftAngleLabel | null
+} | null
+
+type AxisAngleCandidate = {
+  angle: number
+  arc: {
+    startAngle: number
+    endAngle: number
+    midAngle: number
+  }
+}
 
 type FaceAngleCandidate = {
   index: number
@@ -121,6 +148,53 @@ function distanceSquared(a: WallPlanPoint, b: WallPlanPoint) {
 
 function pointMatches(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-5) {
   return distanceSquared(a, b) <= tolerance * tolerance
+}
+
+function getNearestAxisAngleLabel(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  y: number,
+): DraftAngleLabel | null {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 0.01) return null
+
+  const draftVector: WallPlanPoint = [dx, dz]
+  const axisCandidates: AxisAngleCandidate[] = []
+  for (const reference of AXIS_ANGLE_REFERENCES) {
+    const angle = getAngleToSegmentReference(draftVector, reference)
+    const arc = getAngleArcToSegmentReference(draftVector, reference)
+    if (!(angle === null || arc === null)) {
+      axisCandidates.push({ angle, arc })
+    }
+  }
+  const nearestAxisAngle = axisCandidates.sort((a, b) => a.angle - b.angle)[0]
+  if (!nearestAxisAngle) return null
+
+  const radius = clamp(
+    length * 0.22,
+    DRAFT_AXIS_ANGLE_ARC_MIN_RADIUS,
+    DRAFT_AXIS_ANGLE_ARC_MAX_RADIUS,
+  )
+  const { angle, arc } = nearestAxisAngle
+
+  return {
+    id: 'axis',
+    label: formatAngleRadians(angle),
+    position: [
+      start[0] + Math.cos(arc.midAngle) * (radius + 0.16),
+      y + DRAFT_AXIS_ANGLE_LABEL_Y_OFFSET,
+      start[1] + Math.sin(arc.midAngle) * (radius + 0.16),
+    ],
+    arc: {
+      center: start,
+      radius,
+      startAngle: arc.startAngle,
+      endAngle: arc.endAngle,
+      y: y + DRAFT_AXIS_ANGLE_ARC_Y_OFFSET,
+    },
+  }
 }
 
 function toWallPlanPoint(point: Point2D): WallPlanPoint {
@@ -424,6 +498,7 @@ export const WallTool: React.FC = () => {
   const buildingState = useRef(0)
   const shiftPressed = useRef(false)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
@@ -464,6 +539,7 @@ export const WallTool: React.FC = () => {
         wallPreviewRef.current.visible = false
       }
       setDraftMeasurement(null)
+      setAxisGuide(null)
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
     }
@@ -499,6 +575,15 @@ export const WallTool: React.FC = () => {
         const snappedLocal = gridPosition
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
+        setAxisGuide({
+          origin: [startingPoint.current.x, startingPoint.current.z],
+          y: startingPoint.current.y,
+          angleLabel: getNearestAxisAngleLabel(
+            [startingPoint.current.x, startingPoint.current.z],
+            snappedLocal,
+            startingPoint.current.y,
+          ),
+        })
 
         const currentWallEnd: [number, number] = [snappedLocal[0], snappedLocal[1]]
         if (
@@ -529,6 +614,7 @@ export const WallTool: React.FC = () => {
       } else {
         cursorRef.current.position.set(gridPosition[0], event.localPosition[1], gridPosition[1])
         setDraftMeasurement(null)
+        setAxisGuide(null)
       }
     }
 
@@ -558,6 +644,12 @@ export const WallTool: React.FC = () => {
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        setAxisGuide({
+          origin: snappedStart,
+          y: event.localPosition[1],
+          angleLabel: null,
+        })
+        triggerSFX('sfx:structure-build-start')
         // Visibility is owned by `updateWallPreview` — it flips
         // `mesh.visible` based on segment length. Setting it here
         // (before any geometry data has been written) draws the
@@ -597,6 +689,11 @@ export const WallTool: React.FC = () => {
         endingPoint.current.copy(startingPoint.current)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
+        setAxisGuide({
+          origin: nextStart,
+          y: event.localPosition[1],
+          angleLabel: null,
+        })
         // Hide the preview until the next `onGridMove` writes the
         // new segment's geometry. Without this the prior segment's
         // BoxGeometry stays visible for a frame on top of the
@@ -641,6 +738,11 @@ export const WallTool: React.FC = () => {
 
   return (
     <group>
+      <WallAxisGuides
+        guide={axisGuide}
+        labelColor={measurementColor}
+        labelShadowColor={measurementShadowColor}
+      />
       <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
@@ -675,6 +777,62 @@ export const WallTool: React.FC = () => {
         </>
       )}
     </group>
+  )
+}
+
+function WallAxisGuides({
+  guide,
+  labelColor,
+  labelShadowColor,
+}: {
+  guide: DraftAxisGuideState
+  labelColor: string
+  labelShadowColor: string
+}) {
+  if (!guide) return null
+
+  const [x, z] = guide.origin
+
+  return (
+    <>
+      <group position={[x, guide.y + DRAFT_AXIS_GUIDE_Y_OFFSET, z]}>
+        <WallAxisGuideLine axis="x" />
+        <WallAxisGuideLine axis="z" />
+      </group>
+      {guide.angleLabel && (
+        <>
+          <DraftAngleArc arc={guide.angleLabel.arc} color="#818cf8" />
+          <DraftMeasurementLabel
+            color={labelColor}
+            label={guide.angleLabel.label}
+            position={guide.angleLabel.position}
+            shadowColor={labelShadowColor}
+          />
+        </>
+      )}
+    </>
+  )
+}
+
+function WallAxisGuideLine({ axis }: { axis: 'x' | 'z' }) {
+  return (
+    <mesh
+      frustumCulled={false}
+      layers={EDITOR_LAYER}
+      renderOrder={0}
+      rotation={[0, axis === 'z' ? Math.PI / 2 : 0, 0]}
+    >
+      <boxGeometry
+        args={[DRAFT_AXIS_GUIDE_LENGTH, DRAFT_AXIS_GUIDE_HEIGHT, DRAFT_AXIS_GUIDE_WIDTH]}
+      />
+      <meshBasicMaterial
+        color="#818cf8"
+        depthTest={false}
+        depthWrite={false}
+        opacity={0.36}
+        transparent
+      />
+    </mesh>
   )
 }
 

@@ -8,10 +8,10 @@ import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import {
+  CORNER_OFFSET,
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
-  CORNER_OFFSET,
   expandToComponent,
   levelFrame,
   type Vec2,

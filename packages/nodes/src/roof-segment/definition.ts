@@ -56,6 +56,7 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
     // 'max' = +X edge anchored (left arrow grows the -X edge outward).
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
+    gridSnap: true,
     currentValue: (n) => n.width,
     apply: (initial, newWidth) => {
       const rotY = initial.rotation ?? 0
@@ -100,6 +101,7 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
     axis: 'z',
     anchor: side === 'front' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
+    gridSnap: true,
     currentValue: (n) => n.depth,
     apply: (initial, newDepth) => {
       // Recenter so the anchored Z edge stays at the same world point.

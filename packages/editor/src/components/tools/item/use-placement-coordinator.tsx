@@ -1,4 +1,4 @@
-import type { AssetInput } from '@pascal-app/core'
+import type { AssetInput, ItemNode } from '@pascal-app/core'
 import {
   type AlignmentAnchor,
   type AnyNode,
@@ -44,6 +44,7 @@ import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   createLineGeometry,
   getBoxEdgePoints,
@@ -138,6 +139,22 @@ function getFallbackPreviewBounds(
     max: [dims[0] / 2, dims[1], attachTo === 'wall-side' ? 0 : dims[2] / 2],
     dimensions: dims,
     center: [0, dims[1] / 2, attachTo === 'wall-side' ? -dims[2] / 2 : 0],
+  }
+}
+
+function getGridAlignedPreviewNode(item: ItemNode): ItemNode {
+  const scaled = getScaledDimensions(item)
+  const aligned = getGridAlignedDimensions(scaled, item.asset.attachTo)
+  if (scaled[0] === aligned[0] && scaled[1] === aligned[1] && scaled[2] === aligned[2]) {
+    return item
+  }
+
+  const scaleAxis = (axis: 0 | 1 | 2) =>
+    scaled[axis] === 0 ? item.scale[axis] : item.scale[axis] * (aligned[axis] / scaled[axis])
+
+  return {
+    ...item,
+    scale: [scaleAxis(0), scaleAxis(1), scaleAxis(2)] as [number, number, number],
   }
 }
 
@@ -358,6 +375,23 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     applyPoints(measurementDepthRef, depthPoints)
     applyPoints(measurementHeightRef, heightPoints)
   }, [])
+
+  const getFloorVisualPosition = useCallback(
+    (
+      position: [number, number, number],
+      nodeUpdate?: Partial<ItemNode>,
+    ): [number, number, number] => {
+      const draft = draftNode.current
+      if (!(draft && !asset?.attachTo)) return position
+      const previewNode = getGridAlignedPreviewNode({ ...draft, ...nodeUpdate } as ItemNode)
+      return getFloorStackPreviewPosition({
+        node: previewNode,
+        position,
+        rotation: previewNode.rotation,
+      })
+    },
+    [asset?.attachTo, draftNode],
+  )
 
   useEffect(() => {
     if (!asset) return
@@ -661,11 +695,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         result.gridPosition[1],
         result.gridPosition[2] + alignZ,
       ]
-      const cursorPos: [number, number, number] = [
-        result.cursorPosition[0] + alignX,
-        result.cursorPosition[1],
-        result.cursorPosition[2] + alignZ,
-      ]
 
       // Play snap sound when grid position changes
       if (
@@ -677,7 +706,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       previousGridPos = [...gridPos]
       gridPosition.current.set(...gridPos)
-      cursorGroupRef.current.position.set(cursorPos[0], cursorPos[1], cursorPos[2])
+      const cursorPosition = getFloorVisualPosition(gridPos)
+      cursorGroupRef.current.position.set(cursorPosition[0], cursorPosition[1], cursorPosition[2])
       // Floor items only rotate on Y; keep the preview box (and the live
       // transform the 2D floorplan mirrors) aligned with the draft's
       // rotation. Without this the box stays at its seed rotation until a
@@ -946,8 +976,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         shelfId: null,
       })
       gridPosition.current.set(wx, 0, wz)
+      const levelId = useViewer.getState().selection.levelId as AnyNodeId | null
+      const floorVisualPosition = getFloorVisualPosition(
+        floorPos,
+        levelId ? { parentId: levelId } : undefined,
+      )
       if (cursorGroupRef.current) {
-        cursorGroupRef.current.position.set(wx, 0, wz)
+        cursorGroupRef.current.position.set(...floorVisualPosition)
       }
 
       const draft = draftNode.current
@@ -1466,12 +1501,21 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           gridPosition.current.set(x, gridPosition.current.y, z)
           draft.position = [x, gridPosition.current.y, z]
           if (cursorGroupRef.current) {
-            cursorGroupRef.current.position.x = x
-            cursorGroupRef.current.position.z = z
+            if (surface === 'floor') {
+              cursorGroupRef.current.position.set(
+                ...getFloorVisualPosition([x, gridPosition.current.y, z]),
+              )
+            } else {
+              cursorGroupRef.current.position.x = x
+              cursorGroupRef.current.position.z = z
+            }
           }
           if (mesh) {
             mesh.position.x = x
             mesh.position.z = z
+            if (surface === 'floor') {
+              mesh.position.y = getFloorVisualPosition([x, gridPosition.current.y, z])[1]
+            }
           }
         } else if (surface === 'item-surface' && placementState.current.surfaceItemId) {
           const surfaceMesh = sceneRegistry.nodes.get(placementState.current.surfaceItemId)
@@ -1501,13 +1545,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // Update live transform for 2D floorplan with post-snap position
         const currentLive = useLiveTransforms.getState().get(draft.id)
         if (currentLive) {
-          const livePosition: [number, number, number] = cursorGroupRef.current
-            ? [
-                cursorGroupRef.current.position.x,
-                cursorGroupRef.current.position.y,
-                cursorGroupRef.current.position.z,
-              ]
-            : [draft.position[0], draft.position[1], draft.position[2]]
+          const livePosition: [number, number, number] =
+            surface === 'floor'
+              ? [draft.position[0], draft.position[1], draft.position[2]]
+              : cursorGroupRef.current
+                ? [
+                    cursorGroupRef.current.position.x,
+                    cursorGroupRef.current.position.y,
+                    cursorGroupRef.current.position.z,
+                  ]
+                : [draft.position[0], draft.position[1], draft.position[2]]
           useLiveTransforms.getState().set(draft.id, {
             ...currentLive,
             position: livePosition,
@@ -1647,6 +1694,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     canPlaceOnWall,
     canPlaceOnCeiling,
     draftNode,
+    getFloorVisualPosition,
     gridSnapStep,
     updateDimensionGuides,
     updatePreviewGeometry,
@@ -1747,18 +1795,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Adjust Y for slab elevation (floor items on top of slabs)
       if (!asset.attachTo) {
-        const nodes = useScene.getState().nodes
-        const levelId = resolveLevelId(draftNode.current, nodes)
-        const slabElevation = spatialGridManager.getSlabElevationForItem(
-          levelId,
-          [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
-          getGridAlignedDimensions(
-            getScaledDimensions(draftNode.current),
-            draftNode.current.asset.attachTo,
-          ),
-          draftNode.current.rotation,
-        )
-        mesh.position.y = slabElevation
+        const visualPosition = getFloorVisualPosition([
+          gridPosition.current.x,
+          gridPosition.current.y,
+          gridPosition.current.z,
+        ])
+        mesh.position.y = visualPosition[1]
+        cursorGroupRef.current.position.y = visualPosition[1]
       }
     }
   })

@@ -9,6 +9,7 @@ import { memo, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { formatMeasurement } from './measurement-pill'
 
 /**
  * Figma-style alignment guides for the 3D editor — the spatial twin of
@@ -54,6 +55,7 @@ type Vec3 = [number, number, number]
 export const Alignment3DGuideLayer = memo(function Alignment3DGuideLayer() {
   const guides = useAlignmentGuides((s) => s.guides)
   const levelId = useViewer((s) => s.selection.levelId)
+  const unit = useViewer((s) => s.unit)
   const groupRef = useRef<Group>(null)
 
   // Guides carry only XZ (building-local plan coords); their Y has to track
@@ -72,16 +74,16 @@ export const Alignment3DGuideLayer = memo(function Alignment3DGuideLayer() {
   return (
     <group ref={groupRef}>
       {guides.map((guide, i) => (
-        <GuideLine guide={guide} key={i} />
+        <GuideLine guide={guide} key={i} unit={unit} />
       ))}
     </group>
   )
 })
 
-function GuideLine({ guide }: { guide: AlignmentGuide }) {
+function GuideLine({ guide, unit }: { guide: AlignmentGuide; unit: 'metric' | 'imperial' }) {
   const { x: fx, z: fz } = guide.from
   const { x: tx, z: tz } = guide.to
-  const distLabel = formatMeters(guide.distance)
+  const distLabel = formatMeasurement(guide.distance, unit)
 
   // Lay out the dash centres along the from→to direction. The ribbon
   // stretches the dash period up if the line is long enough to exceed the
@@ -152,12 +154,4 @@ function Dot({ position }: { position: Vec3 }) {
       scale={[DOT_RADIUS, DOT_RADIUS, DOT_RADIUS]}
     />
   )
-}
-
-function formatMeters(meters: number): string {
-  // Sub-centimetre = "0"; otherwise up to 2 decimals, trimmed. Matches the
-  // 2D floor-plan guide layer's pill formatting.
-  if (meters < 0.005) return '0'
-  const fixed = meters.toFixed(2)
-  return `${fixed.replace(/\.?0+$/, '')}m`
 }

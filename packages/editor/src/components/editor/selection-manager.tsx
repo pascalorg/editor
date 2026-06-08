@@ -9,6 +9,7 @@ import {
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getMaterialPresetByRef,
+  getRoofSegmentSurfaceY,
   getSelectableKinds,
   type ItemNode,
   isRegistrySelectable,
@@ -40,7 +41,7 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef } from 'react'
-import { type BufferGeometry, Color, type Material, type Mesh, type Object3D } from 'three'
+import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
 import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
@@ -50,13 +51,13 @@ import {
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
-import { sfxEmitter } from '../../lib/sfx-bus'
+import { emitDeleteSFX } from '../../lib/sfx-bus'
 import useEditor, {
   type MaterialTargetRole,
   type Phase,
   type StructureLayer,
 } from './../../store/use-editor'
-import { boxSelectHandled } from '../tools/select/box-select-tool'
+import { boxSelectHandled } from '../tools/select/box-select-state'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -203,6 +204,59 @@ function getRegisteredNodeObject(nodeId: string): Object3D | null {
 function getRegisteredMesh(nodeId: string): Mesh | null {
   const object = getRegisteredNodeObject(nodeId)
   return object && (object as Mesh).isMesh ? (object as Mesh) : null
+}
+
+const roofSelectionWorldPoint = new Vector3()
+
+function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
+  const roof = event.node
+  if (roof.type !== 'roof') return null
+
+  roofSelectionWorldPoint.set(...event.position)
+  const nodes = useScene.getState().nodes
+  let firstSegment: RoofSegmentNode | null = null
+  let bestSegment: { node: RoofSegmentNode; score: number } | null = null
+
+  for (const childId of roof.children ?? []) {
+    const segment = nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
+    if (segment?.type !== 'roof-segment') continue
+
+    const object = getRegisteredNodeObject(segment.id)
+    if (!object) continue
+
+    if (!firstSegment) firstSegment = segment
+
+    object.updateWorldMatrix(true, false)
+    const local = object.worldToLocal(roofSelectionWorldPoint.clone())
+    const overhang = segment.overhang ?? 0
+    const halfWidth = segment.width / 2 + overhang
+    const halfDepth = segment.depth / 2 + overhang
+
+    if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) {
+      continue
+    }
+
+    const score = Math.abs(local.y - getRoofSegmentSurfaceY(segment, local.x, local.z))
+    if (!bestSegment || score < bestSegment.score) {
+      bestSegment = { node: segment, score }
+    }
+  }
+
+  return bestSegment?.node ?? firstSegment
+}
+
+function isInActiveRoofContext(
+  segment: RoofSegmentNode,
+  selectedIds: readonly string[],
+  nodes: Record<string, AnyNode>,
+): boolean {
+  if (!segment.parentId) return false
+  if (selectedIds.includes(segment.id) || selectedIds.includes(segment.parentId)) return true
+
+  return selectedIds.some((selectedId) => {
+    const selectedNode = nodes[selectedId]
+    return selectedNode?.type === 'roof-segment' && selectedNode.parentId === segment.parentId
+  })
 }
 
 function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
@@ -1251,8 +1305,14 @@ export const SelectionManager = () => {
 
         let nodeToSelect = node
         if (node.type === 'roof-segment' && node.parentId) {
-          const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-          if (parentNode && parentNode.type === 'roof') {
+          const nodes = useScene.getState().nodes
+          const parentNode = nodes[node.parentId as AnyNodeId]
+          const selectedIds = useViewer.getState().selection.selectedIds
+          if (
+            parentNode &&
+            parentNode.type === 'roof' &&
+            !isInActiveRoofContext(node, selectedIds, nodes)
+          ) {
             nodeToSelect = parentNode
           }
         }
@@ -1261,6 +1321,13 @@ export const SelectionManager = () => {
           if (parentNode && parentNode.type === 'stair') {
             nodeToSelect = parentNode
           }
+        }
+
+        // Clicking any node (e.g. the slab surface outside a hole) exits slab
+        // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
+        // click reaching here means the user clicked outside the hole.
+        if (useEditor.getState().editingHole) {
+          useEditor.getState().setEditingHole(null)
         }
 
         activeStrategy.handleSelect(nodeToSelect, event.nativeEvent, modifierKeysRef.current)
@@ -1432,7 +1499,11 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      const node = event.node
+      let node = event.node
+      if (node.type === 'roof') {
+        node = resolveRoofSegmentSelectionTarget(event) ?? node
+      }
+
       const currentPhase = useEditor.getState().phase
 
       let targetPhase: 'site' | 'structure' | 'furnish' | null = null
@@ -1548,11 +1619,7 @@ export const SelectionManager = () => {
       event.stopPropagation()
 
       // Play appropriate SFX
-      if (node.type === 'item') {
-        sfxEmitter.emit('sfx:item-delete')
-      } else {
-        sfxEmitter.emit('sfx:structure-delete')
-      }
+      emitDeleteSFX(node.type)
 
       useScene.getState().deleteNode(node.id as AnyNodeId)
       if (node.parentId) useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)

@@ -1,6 +1,6 @@
 import {
   type AnyNodeId,
-  getActiveRoofHeight,
+  getRoofSegmentSurfaceY,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
@@ -18,40 +18,6 @@ export type RoofSegmentHit = {
 }
 
 /**
- * Analytical surface Y for `seg` at segment-local (lx, lz). Mirrors
- * the per-roof-type slope math in `shared/roof-surface.ts` so the
- * disambiguator below stays free of cross-kind imports. Returns the
- * roof's local surface height; the value is only used to compare
- * candidates, never written to the scene.
- */
-function analyticalSurfaceY(seg: RoofSegmentNode, lx: number, lz: number): number {
-  const rh = getActiveRoofHeight(seg)
-  const peakY = seg.wallHeight + rh
-  if (rh === 0) return seg.wallHeight
-
-  if (
-    seg.roofType === 'gable' ||
-    seg.roofType === 'gambrel' ||
-    seg.roofType === 'mansard' ||
-    seg.roofType === 'dutch'
-  ) {
-    const t = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
-    return peakY - t * rh
-  }
-  if (seg.roofType === 'shed') {
-    const t = (lz + seg.depth / 2) / (seg.depth || 1)
-    return peakY - t * rh
-  }
-  if (seg.roofType === 'hip') {
-    const fx = seg.width > 0 ? Math.abs(lx) / (seg.width / 2) : 0
-    const fz = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
-    return peakY - Math.max(fx, fz) * rh
-  }
-  const t = seg.depth > 0 ? Math.abs(lz) / (seg.depth / 2) : 0
-  return peakY - t * rh
-}
-
-/**
  * Resolve which roof-segment the user clicked. Used by every placement
  * tool that drops a new node onto a roof (box-vent, ridge-vent,
  * chimney, solar-panel, skylight, dormer).
@@ -61,7 +27,7 @@ function analyticalSurfaceY(seg: RoofSegmentNode, lx: number, lz: number): numbe
  * point's (x, z) lies inside *every* segment's axis-aligned half-
  * extents, so a naive first-match returns the wrong slope (typically
  * segments[0]). We instead score each candidate by
- * `|localY − analyticalSurfaceY(localX, localZ)|` and pick the
+ * `|localY − getRoofSegmentSurfaceY(localX, localZ)|` and pick the
  * smallest — the slope the user actually clicked is the one whose
  * sloped surface passes through the hit point.
  *
@@ -101,7 +67,7 @@ export function resolveRoofSegmentHit(
     const halfW = seg.width / 2 + overhang
     const halfD = seg.depth / 2 + overhang
     if (Math.abs(local.x) <= halfW && Math.abs(local.z) <= halfD) {
-      const surfaceY = analyticalSurfaceY(seg, local.x, local.z)
+      const surfaceY = getRoofSegmentSurfaceY(seg, local.x, local.z)
       const score = Math.abs(local.y - surfaceY)
       if (!best || score < best.score) {
         best = {

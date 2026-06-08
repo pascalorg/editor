@@ -236,7 +236,9 @@ export const ZoneTool: React.FC = () => {
         mainLineRef.current.visible = false
         closingLineRef.current.visible = false
       } else {
-        // Add point to polygon
+        // Add point to polygon. Every non-closing vertex is a "start" tick;
+        // closing the polygon above fires the structure-build (end) cue.
+        sfxEmitter.emit('sfx:structure-build-start')
         pointsRef.current = [...pointsRef.current, clickPoint]
         updatePreview()
       }

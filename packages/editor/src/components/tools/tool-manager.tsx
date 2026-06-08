@@ -79,6 +79,11 @@ export const ToolManager: React.FC = () => {
   const selectedSlabId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'slab') as
     | SlabNode['id']
     | undefined
+  const selectedSlab = selectedSlabId ? (nodes[selectedSlabId as AnyNodeId] as SlabNode) : null
+  const editingSlabHoleIsManual =
+    selectedSlabId !== undefined &&
+    editingHole?.nodeId === selectedSlabId &&
+    selectedSlab?.holeMetadata?.[editingHole.holeIndex]?.source === 'manual'
 
   // Check if a ceiling is selected
   const selectedCeilingId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'ceiling') as
@@ -93,11 +98,14 @@ export const ToolManager: React.FC = () => {
     phase === 'structure' &&
     mode === 'select' &&
     selectedSlabId !== undefined &&
-    (!editingHole || editingHole.nodeId !== selectedSlabId)
+    !editingSlabHoleIsManual
 
   // Show slab hole editor when editing a hole on the selected slab
   const showSlabHoleEditor =
-    selectedSlabId !== undefined && editingHole !== null && editingHole.nodeId === selectedSlabId
+    selectedSlabId !== undefined &&
+    editingHole !== null &&
+    editingHole.nodeId === selectedSlabId &&
+    editingSlabHoleIsManual
 
   // Show ceiling boundary editor when in structure/select mode with a ceiling selected (but not editing a hole)
   const showCeilingBoundaryEditor =

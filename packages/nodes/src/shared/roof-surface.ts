@@ -1,5 +1,5 @@
 import {
-  getActiveRoofHeight,
+  getRoofSegmentSurfaceY,
   getSegmentSlopeFrame,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
@@ -13,26 +13,7 @@ import * as THREE from 'three'
 // accessories don't reach across into a sibling kind for it.
 
 export function getSurfaceY(lx: number, lz: number, seg: RoofSegmentNode): number {
-  const { roofType, wallHeight, depth, width } = seg
-  const rh = getActiveRoofHeight(seg)
-  const peakY = wallHeight + rh
-  if (rh === 0) return wallHeight
-
-  if (roofType === 'gable') {
-    const t = depth > 0 ? Math.abs(lz) / (depth / 2) : 0
-    return peakY - t * rh
-  }
-  if (roofType === 'shed') {
-    const t = (lz + depth / 2) / (depth || 1)
-    return peakY - t * rh
-  }
-  if (roofType === 'hip') {
-    const fx = width > 0 ? Math.abs(lx) / (width / 2) : 0
-    const fz = depth > 0 ? Math.abs(lz) / (depth / 2) : 0
-    return peakY - Math.max(fx, fz) * rh
-  }
-  const t = depth > 0 ? Math.abs(lz) / (depth / 2) : 0
-  return peakY - t * rh
+  return getRoofSegmentSurfaceY(seg, lx, lz)
 }
 
 // Outward normal for a roof surface tilting at angle θ in the horizontal
