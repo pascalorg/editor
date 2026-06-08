@@ -14,6 +14,7 @@ import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/edito
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
+import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
 import RidgeVentPreview from './preview'
 
@@ -77,8 +78,20 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return
 
+      // Project the cursor onto the segment's ridge line so the ghost
+      // tracks ALONG the ridge — never off it. Flat segments have none.
+      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
+      if (!snap) {
+        setPreviewPos(null)
+        return
+      }
+      const segObj = sceneRegistry.nodes.get(hit.segment.id)
+      const ridgeWorld = segObj
+        ? segObj.localToWorld(new THREE.Vector3(snap.localX, hit.localY, snap.localZ))
+        : new THREE.Vector3(wx, wy, wz)
+
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      setPreviewPos(worldToBuildingLocal(ridgeWorld.x, ridgeWorld.y, ridgeWorld.z))
       event.stopPropagation()
     }
 
@@ -90,6 +103,8 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
         event.position[2],
       )
       if (!hit) return
+      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
+      if (!snap) return
       const targetSegmentId = hit.segment.id as AnyNodeId
       const st = useScene.getState()
 
@@ -114,7 +129,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [hit.localX, hit.localY, hit.localZ],
+        position: [snap.localX, 0, snap.localZ],
         rotation: original.rotation,
         visible: true,
         metadata: {},
