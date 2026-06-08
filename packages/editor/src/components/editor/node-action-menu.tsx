@@ -53,7 +53,7 @@ export function NodeActionMenu({
           aria-label="Rotate"
           className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={onRotate}
-          title="Rotate 90°"
+          title="Rotate 15°"
           type="button"
         >
           <RotateCw className="h-4 w-4" />

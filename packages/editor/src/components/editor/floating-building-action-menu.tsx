@@ -63,7 +63,7 @@ export function FloatingBuildingActionMenu() {
       if (box.isEmpty()) return
 
       const currentRotY = building.rotation[1] ?? 0
-      const nextRotY = currentRotY - Math.PI / 2 // CW in three.js Y handedness
+      const nextRotY = currentRotY - Math.PI / 12 // 15° CW in three.js Y handedness
 
       const center = box.getCenter(new THREE.Vector3())
       const originWorld = new THREE.Vector3()
