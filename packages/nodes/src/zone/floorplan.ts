@@ -105,6 +105,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
       textAnchor: 'middle',
       dominantBaseline: 'central',
       opacity: showSelectedChrome ? 1 : 0.92,
+      upright: true,
     })
   }
 

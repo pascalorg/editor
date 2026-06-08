@@ -241,6 +241,12 @@ export type FloorplanGeometry =
       stroke?: string
       strokeWidth?: number
       paintOrder?: 'stroke' | 'fill' | 'normal'
+      /**
+       * When true, the registry layer counter-rotates the label by
+       * `sceneRotationDeg` so it reads horizontally on screen regardless
+       * of the floor-plan's scene rotation (default 90°).
+       */
+      upright?: boolean
     }
   /**
    * Bitmap overlay — captured top-down asset thumbnail, AI-generated
