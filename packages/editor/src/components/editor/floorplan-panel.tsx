@@ -8475,7 +8475,8 @@ export function FloorplanPanel() {
     Boolean(movingOpeningType) ||
     (mode === 'build' && tool !== null) ||
     (mode === 'select' && floorplanSelectionTool === 'marquee' && structureLayer !== 'zones') ||
-    mode === 'delete'
+    mode === 'delete' ||
+    mode === 'material-paint'
 
   const handleSvgPointerMove = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
