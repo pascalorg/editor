@@ -34,6 +34,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   createArrowHitAreaGeometry,
   createEndpointHitAreaGeometry,
@@ -329,6 +330,7 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
 
   const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
     document.body.style.cursor = 'grabbing'
     useEditor.getState().setMovingWallEndpoint({ wall, endpoint })
@@ -432,6 +434,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
     if (!levelObject) return
 
@@ -603,6 +606,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
@@ -693,6 +697,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')

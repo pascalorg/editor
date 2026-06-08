@@ -88,6 +88,7 @@ export function MoveItemTool({ node }: { node: ItemNode }) {
       : getInitialState(node),
     // Preserve the original item's scale so Y-position calculations use the correct height.
     defaultScale: isNew ? node.scale : undefined,
+    preserveFloorDragOffset: true,
     initDraft: (gridPosition) => {
       if (isNew) {
         // Duplicate: floor items get a draft immediately; wall/ceiling

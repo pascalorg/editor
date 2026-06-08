@@ -26,6 +26,7 @@ import {
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { swallowNextClick } from './handles/use-handle-drag'
 
 const ACCENT = 0x83_81_ed
@@ -199,6 +200,7 @@ function resetPointerCursor() {
 
 function stopPointerPropagation(event: ThreeEvent<PointerEvent>) {
   event.stopPropagation()
+  suppressBoxSelectForPointer(event)
   event.nativeEvent.stopPropagation()
   event.nativeEvent.stopImmediatePropagation()
 }

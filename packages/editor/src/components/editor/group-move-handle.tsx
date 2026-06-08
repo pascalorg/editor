@@ -1,12 +1,19 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   CORNER_OFFSET,
   classifyParticipant,
@@ -41,7 +48,10 @@ export function GroupMoveHandle() {
   const nodes = useScene((s) => s.nodes)
 
   const participantIds = useMemo(
-    () => selectedIds.filter((id) => classifyParticipant(nodes[id as AnyNodeId], levelId) !== null),
+    () =>
+      selectedIds.filter(
+        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      ),
     [selectedIds, levelId, nodes],
   )
 
@@ -103,6 +113,7 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
 
   const activate = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     frozenCorner.current = rest.corner.clone()
     const planeY = rest.baseY
 
@@ -159,18 +170,28 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
         lastSnap = [dx, dz]
       }
 
-      const overrides = useLiveNodeOverrides.getState()
+      const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
+      const liveTransforms = useLiveTransforms.getState()
       for (const s of starts) {
         if (s.kind === 'endpoint') {
-          overrides.set(s.id, {
-            start: [s.start[0] + dx, s.start[1] + dz],
-            end: [s.end[0] + dx, s.end[1] + dz],
-          })
+          overrideEntries.push([
+            s.id,
+            {
+              start: [s.start[0] + dx, s.start[1] + dz],
+              end: [s.end[0] + dx, s.end[1] + dz],
+            },
+          ])
         } else {
           // Slide on the floor: XZ shift, Y and rotation untouched.
-          overrides.set(s.id, {
-            position: [s.position[0] + dx, s.position[1], s.position[2] + dz],
-          })
+          const position: [number, number, number] = [
+            s.position[0] + dx,
+            s.position[1],
+            s.position[2] + dz,
+          ]
+          overrideEntries.push([s.id, { position }])
+          if (s.kind === 'scalar') {
+            liveTransforms.set(s.id, { position, rotation: s.rotation })
+          }
         }
         useScene.getState().markDirty(s.id)
       }
@@ -178,14 +199,29 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       // Shared endpoints of connected neighbours follow by the same delta so
       // the junction stays welded; the far end stays put.
       for (const l of links) {
-        overrides.set(l.id, {
-          start: l.startLinked ? [l.start[0] + dx, l.start[1] + dz] : l.start,
-          end: l.endLinked ? [l.end[0] + dx, l.end[1] + dz] : l.end,
-        })
+        overrideEntries.push([
+          l.id,
+          {
+            start: l.startLinked ? [l.start[0] + dx, l.start[1] + dz] : l.start,
+            end: l.endLinked ? [l.end[0] + dx, l.end[1] + dz] : l.end,
+          },
+        ])
         useScene.getState().markDirty(l.id)
       }
+      useLiveNodeOverrides.getState().setMany(overrideEntries)
 
       setLiveDelta([dx, dz])
+    }
+
+    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
+    const clearLivePreviews = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      const liveTransforms = useLiveTransforms.getState()
+      for (const id of affectedIds) {
+        overrides.clear(id)
+        liveTransforms.clear(id)
+        useScene.getState().markDirty(id)
+      }
     }
 
     const cleanup = () => {
@@ -200,8 +236,6 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       frozenCorner.current = null
       dragCleanupRef.current = null
     }
-
-    const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
     const commitFromOverrides = () => {
       const overrides = useLiveNodeOverrides.getState()
@@ -223,22 +257,22 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       // tracked set — collapsing the whole group move into one undo.
       useScene.temporal.getState().resume()
       if (updates.length > 0) useScene.getState().updateNodes(updates)
-      for (const id of affectedIds) {
-        useLiveNodeOverrides.getState().clear(id)
-        useScene.getState().markDirty(id)
-      }
+      clearLivePreviews()
       cleanup()
     }
 
     const onCancel = () => {
-      for (const id of affectedIds) {
-        useLiveNodeOverrides.getState().clear(id)
-        useScene.getState().markDirty(id)
-      }
+      clearLivePreviews()
       cleanup()
     }
 
-    dragCleanupRef.current = cleanup
+    dragCleanupRef.current = () => {
+      clearLivePreviews()
+      cleanup()
+    }
+    for (const id of affectedIds) {
+      useLiveTransforms.getState().clear(id)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
