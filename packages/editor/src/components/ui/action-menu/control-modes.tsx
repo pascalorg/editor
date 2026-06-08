@@ -33,13 +33,6 @@ const controls: ControlConfig[] = [
     activeColor: 'bg-blue-500/20 text-blue-400',
   },
   {
-    id: 'box-select',
-    iconifyIcon: 'mdi:select-drag',
-    label: 'Box select',
-    color: 'hover:bg-white/5',
-    activeColor: 'bg-white/10 hover:bg-white/10',
-  },
-  {
     id: 'site-edit',
     imageSrc: '/icons/site.png',
     label: 'Edit site',
