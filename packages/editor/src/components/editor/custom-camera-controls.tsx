@@ -43,6 +43,11 @@ type CameraPoseSnapshot = {
   position: [number, number, number]
   target: [number, number, number]
 }
+type NavigationCameraPoseSnapshot = {
+  target: [number, number, number]
+  azimuth: number
+  viewWidth: number
+}
 
 function writeVectorTuple(tuple: [number, number, number], vector: Vector3) {
   tuple[0] = vector.x
@@ -113,6 +118,25 @@ function getCameraViewWidth(camera: Camera, distance: number, size: CameraViewpo
   }
 
   return Math.max(0.001, distance)
+}
+
+function getAngleDeltaRadians(a: number, b: number) {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b))
+}
+
+function isCameraAtNavigationPose(
+  pose: NavigationCameraPoseSnapshot,
+  target: Vector3,
+  azimuth: number,
+  viewWidth: number,
+) {
+  return (
+    Math.abs(pose.target[0] - target.x) < NAVIGATION_SYNC_POSITION_EPSILON &&
+    Math.abs(pose.target[1] - target.y) < NAVIGATION_SYNC_POSITION_EPSILON &&
+    Math.abs(pose.target[2] - target.z) < NAVIGATION_SYNC_POSITION_EPSILON &&
+    Math.abs(getAngleDeltaRadians(pose.azimuth, azimuth)) < NAVIGATION_SYNC_AZIMUTH_EPSILON &&
+    Math.abs(pose.viewWidth - viewWidth) < NAVIGATION_SYNC_VIEW_WIDTH_EPSILON
+  )
 }
 
 function getCameraDistanceForViewWidth(
@@ -233,11 +257,8 @@ export const CustomCameraControls = () => {
   )
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
-  const lastPublishedNavigationSync = useRef<{
-    target: [number, number, number]
-    azimuth: number
-    viewWidth: number
-  } | null>(null)
+  const lastPublishedNavigationSync = useRef<NavigationCameraPoseSnapshot | null>(null)
+  const pendingFloorplanNavigationPose = useRef<NavigationCameraPoseSnapshot | null>(null)
   const lastApplied2dNavigationRevision = useRef(0)
   const maxPolarAngle =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
@@ -326,6 +347,11 @@ export const CustomCameraControls = () => {
       if (!control) return
 
       lastApplied2dNavigationRevision.current = pose.revision
+      pendingFloorplanNavigationPose.current = {
+        target: [...pose.target],
+        azimuth: pose.azimuth,
+        viewWidth: pose.viewWidth,
+      }
       control.moveTo(pose.target[0], pose.target[1], pose.target[2], true)
       control.rotateTo(pose.azimuth, control.polarAngle, true)
       applyCameraViewWidth(control, camera, pose.viewWidth, viewportSize)
@@ -339,13 +365,27 @@ export const CustomCameraControls = () => {
     controls.current.getSpherical(syncSpherical, false)
     const viewWidth = getCameraViewWidth(camera, syncSpherical.radius, viewportSize)
 
+    const pendingFloorplanPose = pendingFloorplanNavigationPose.current
+    if (pendingFloorplanPose) {
+      // The camera is still damping toward a 2D-originated pose; do not echo
+      // intermediate 3D poses back into the floorplan.
+      if (
+        isCameraAtNavigationPose(pendingFloorplanPose, syncTarget, syncSpherical.theta, viewWidth)
+      ) {
+        lastPublishedNavigationSync.current = pendingFloorplanPose
+        pendingFloorplanNavigationPose.current = null
+      }
+      return
+    }
+
     const previous = lastPublishedNavigationSync.current
     if (
       previous &&
       Math.abs(previous.target[0] - syncTarget.x) < NAVIGATION_SYNC_POSITION_EPSILON &&
       Math.abs(previous.target[1] - syncTarget.y) < NAVIGATION_SYNC_POSITION_EPSILON &&
       Math.abs(previous.target[2] - syncTarget.z) < NAVIGATION_SYNC_POSITION_EPSILON &&
-      Math.abs(previous.azimuth - syncSpherical.theta) < NAVIGATION_SYNC_AZIMUTH_EPSILON &&
+      Math.abs(getAngleDeltaRadians(previous.azimuth, syncSpherical.theta)) <
+        NAVIGATION_SYNC_AZIMUTH_EPSILON &&
       Math.abs(previous.viewWidth - viewWidth) < NAVIGATION_SYNC_VIEW_WIDTH_EPSILON
     ) {
       return
@@ -564,11 +604,16 @@ export const CustomCameraControls = () => {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !gl.domElement.contains(event.target)) return
+      pendingFloorplanNavigationPose.current = null
       if (event.button !== 1 && !(event.button === 0 && keyState.space)) return
 
       panPointerId = event.pointerId
       panPointerButton = event.button
       updateNavigationCursor()
+    }
+
+    const onWheel = () => {
+      pendingFloorplanNavigationPose.current = null
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -595,6 +640,7 @@ export const CustomCameraControls = () => {
     window.addEventListener('pointerup', onPointerUp, true)
     window.addEventListener('pointercancel', onPointerUp, true)
     window.addEventListener('blur', onBlur)
+    gl.domElement.addEventListener('wheel', onWheel, { passive: true })
     updateConfig()
 
     return () => {
@@ -604,6 +650,7 @@ export const CustomCameraControls = () => {
       window.removeEventListener('pointerup', onPointerUp, true)
       window.removeEventListener('pointercancel', onPointerUp, true)
       window.removeEventListener('blur', onBlur)
+      gl.domElement.removeEventListener('wheel', onWheel)
       clearNavigationCursor()
     }
   }, [cameraMode, gl, isPreviewMode, isFirstPersonMode])
