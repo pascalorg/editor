@@ -1684,13 +1684,13 @@ function nearestEquivalentDegrees(angle: number, reference: number) {
 
 function floorplanRotationFromCameraAzimuth(azimuth: number, reference: number) {
   return nearestEquivalentDegrees(
-    radiansToDegrees(azimuth) - FLOORPLAN_VIEW_ROTATION_DEG,
+    FLOORPLAN_VIEW_ROTATION_DEG - radiansToDegrees(azimuth),
     reference,
   )
 }
 
 function cameraAzimuthFromFloorplanRotation(rotationDeg: number) {
-  return degreesToRadians(rotationDeg + FLOORPLAN_VIEW_ROTATION_DEG)
+  return degreesToRadians(FLOORPLAN_VIEW_ROTATION_DEG - rotationDeg)
 }
 
 function floorplanLocalToWorldPoint(
