@@ -51,7 +51,6 @@ const controls: ControlConfig[] = [
     id: 'delete',
     icon: Trash2,
     label: 'Delete',
-    shortcut: 'D',
     color: 'hover:bg-red-500/20 hover:text-red-400',
     activeColor: 'bg-red-500/20 text-red-400',
   },

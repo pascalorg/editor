@@ -99,10 +99,6 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('build')
-      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
-        if (isVersionPreviewMode) return
-        e.preventDefault()
-        useEditor.getState().setMode('delete')
       } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
