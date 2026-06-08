@@ -33,7 +33,7 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
-import { sfxEmitter } from '../../lib/sfx-bus'
+import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import useEditor from '../../store/use-editor'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
@@ -514,11 +514,7 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!selectedId) return
-      if (node?.type === 'item') {
-        sfxEmitter.emit('sfx:item-delete')
-      } else {
-        sfxEmitter.emit('sfx:structure-delete')
-      }
+      emitDeleteSFX(node?.type)
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },

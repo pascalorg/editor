@@ -294,7 +294,9 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
   }
 
   const mergedGeometry = mergeGeometries(geometries, false)
-  geometries.forEach((geometry) => geometry.dispose())
+  for (const geometry of geometries) {
+    geometry.dispose()
+  }
 
   if (!mergedGeometry || mergedGeometry.getAttribute('position') == null) {
     mergedGeometry?.dispose()

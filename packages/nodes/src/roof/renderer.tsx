@@ -5,6 +5,7 @@ import {
   hasSegmentMaterialOverride,
   type RoofNode,
   type RoofSegmentNode,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -14,8 +15,13 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { getRoofDebugMaterials, getRoofMaterials } from './roof-materials'
 
-export const RoofRenderer = ({ node }: { node: RoofNode }) => {
+export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
+  const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(rawNode.id))
+  const node = useMemo<RoofNode>(
+    () => (liveOverride ? ({ ...rawNode, ...liveOverride } as RoofNode) : rawNode),
+    [rawNode, liveOverride],
+  )
 
   useRegistry(node.id, 'roof', ref)
   useLayoutEffect(() => {

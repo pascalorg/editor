@@ -65,6 +65,7 @@ import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
+import { SlabHoleHighlights } from './slab-hole-highlights'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { WallMeasurementLabel } from './wall-measurement-label'
@@ -610,6 +611,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <GroupRotateHandle />}
       {!noEditing && <GroupMoveHandle />}
       {!noEditing && <WallOpeningHighlights />}
+      {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}

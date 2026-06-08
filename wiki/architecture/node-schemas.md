@@ -78,6 +78,16 @@ const { updateNode } = useScene.getState()
 updateNode(wall.id, { height: 2.8 })   // partial update, merges with existing
 ```
 
+## Schema Evolution & Backward Compatibility
+
+Saved scenes are persisted JSON parsed back through `AnyNode` at load (`SceneState.setScene` → `migrateNodes` → `markDirty`, in `packages/core/src/store/use-scene.ts`). Any change to an existing node's properties must keep older saved scenes loadable — a scene written months ago must still parse and render.
+
+- **Adding a field** → give it a Zod `.default(...)` (or `.optional()`). `AnyNode.parse` then fills it for legacy nodes that lack it. A required field with no default makes every pre-existing scene fail validation.
+- **Renaming, removing, or retyping a field** → a `.default()` is not enough; it silently drops the old value. Add an entry to `migrateNodes` (`use-scene.ts`) that reads the legacy shape and rewrites it to the new one *before* parse. This is also where structural changes go (splitting one material into interior/exterior, deriving `pitch` from a legacy `roofHeight`, seeding `children: []` on a new host kind).
+- **Bumping `schemaVersion`** on the `NodeDefinition` records that a kind's shape changed. The per-kind `def.migrate` map is reserved for future use; today all load-time migration is centralised in `migrateNodes`.
+
+When in doubt, load an old scene (or a fixture) after the change and confirm it still parses and renders.
+
 ## Real Examples
 
 - **Simple geometry node**: `packages/core/src/schema/nodes/wall.ts` — `start`, `end`, `thickness`, `height`
@@ -90,3 +100,4 @@ updateNode(wall.id, { height: 2.8 })   // partial update, merges with existing
 - **Never hardcode IDs.** Let `objectId('type')` generate them.
 - **Add new node types to `AnyNode`** in `types.ts` or they won't be accepted by the store.
 - **Keep schemas in `packages/core`**, not in the viewer or editor — the schema is shared by all packages.
+- **Never break old scenes.** New fields get a `.default()`; renames/removals/retypes get a `migrateNodes` entry. See *Schema Evolution & Backward Compatibility* above.

@@ -1,4 +1,9 @@
-import type { HandleDescriptor, NodeDefinition, SlabNode as SlabNodeType } from '@pascal-app/core'
+import {
+  type HandleDescriptor,
+  type NodeDefinition,
+  pointInPolygon2D,
+  type SlabNode as SlabNodeType,
+} from '@pascal-app/core'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -13,8 +18,7 @@ import { SlabNode } from './schema'
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_SLAB_ELEVATION = 0.02
 
-function slabPolygonCenter(n: SlabNodeType): [number, number] {
-  const polygon = n.polygon ?? []
+function polygonVertexAverage(polygon: SlabNodeType['polygon']): [number, number] {
   if (polygon.length === 0) return [0, 0]
   let cx = 0
   let cz = 0
@@ -25,11 +29,68 @@ function slabPolygonCenter(n: SlabNodeType): [number, number] {
   return [cx / polygon.length, cz / polygon.length]
 }
 
-// Slab height arrow — vertical chevron at the polygon centroid, just
-// above the slab's top face. Drags elevation (the extrusion thickness)
-// with `anchor: 'min'` so the bottom stays at world Y=0 and the top
-// follows the pointer. Same registry-handle pipeline as the column
-// height arrow, so live override + commit-on-release come for free.
+function pointIsOnSolidSlab(point: [number, number], slab: SlabNodeType) {
+  if (!pointInPolygon2D(point, slab.polygon, { includeBoundary: false })) return false
+  return !(slab.holes ?? []).some(
+    (hole) => hole.length >= 3 && pointInPolygon2D(point, hole, { includeBoundary: true }),
+  )
+}
+
+function slabHandleAnchor(slab: SlabNodeType): [number, number] {
+  const polygon = slab.polygon ?? []
+  const fallback = polygonVertexAverage(polygon)
+  if (polygon.length < 3) return fallback
+  if (pointIsOnSolidSlab(fallback, slab)) return fallback
+
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const [x, z] of polygon) {
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minZ = Math.min(minZ, z)
+    maxZ = Math.max(maxZ, z)
+  }
+
+  const candidates: [number, number][] = []
+  for (const point of polygon) {
+    candidates.push([
+      fallback[0] + (point[0] - fallback[0]) * 0.35,
+      fallback[1] + (point[1] - fallback[1]) * 0.35,
+    ])
+  }
+
+  const steps = 12
+  for (let xi = 1; xi < steps; xi += 1) {
+    const x = minX + ((maxX - minX) * xi) / steps
+    for (let zi = 1; zi < steps; zi += 1) {
+      const z = minZ + ((maxZ - minZ) * zi) / steps
+      candidates.push([x, z])
+    }
+  }
+
+  let best: [number, number] | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const candidate of candidates) {
+    if (!pointIsOnSolidSlab(candidate, slab)) continue
+    const dx = candidate[0] - fallback[0]
+    const dz = candidate[1] - fallback[1]
+    const distance = dx * dx + dz * dz
+    if (distance < bestDistance) {
+      best = candidate
+      bestDistance = distance
+    }
+  }
+
+  return best ?? fallback
+}
+
+// Slab height arrow — vertical chevron on solid slab surface near the
+// polygon center. Drags elevation (the extrusion thickness) with
+// `anchor: 'min'` so the bottom stays at world Y=0 and the top follows
+// the pointer. Same registry-handle pipeline as the column height arrow,
+// so live override + commit-on-release come for free.
 function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
@@ -40,7 +101,7 @@ function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
     apply: (_n, newValue) => ({ elevation: newValue }),
     placement: {
       position: (n) => {
-        const [cx, cz] = slabPolygonCenter(n)
+        const [cx, cz] = slabHandleAnchor(n)
         const elevation = n.elevation ?? 0.05
         return [cx, elevation + HEIGHT_HANDLE_OFFSET, cz]
       },

@@ -130,6 +130,8 @@ export type LinearResizeHandle<N> = {
   overrideTarget?: (node: N, sceneApi: SceneApi) => AnyNodeId | undefined
   min?: number | ((node: N, sceneApi: SceneApi) => number)
   max?: number | ((node: N, sceneApi: SceneApi) => number)
+  /** Snap the resized scalar to the editor's active grid step before apply. */
+  gridSnap?: boolean
   placement: HandlePlacement<N>
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor
@@ -316,7 +318,9 @@ export type TapActionHandle<N = any> = {
  * the hit into the node's parent-local frame, and reports the new local XZ
  * (optionally grid-snapped via `snapExtents`) to `apply`. Press-drag-release
  * with the same live-override → commit-on-release flow as the resize / rotate
- * handles. Rendered as a 4-way cross of double-headed arrows.
+ * handles. Rendered as a 4-way cross of double-headed arrows. Pure translation
+ * does not require geometry dirtying; renderers consume the live position
+ * override directly.
  */
 export type TranslateHandle<N = any> = {
   kind: 'translate'
@@ -346,8 +350,10 @@ export type TranslateHandle<N = any> = {
    * `[alongX, alongOther]` — `alongOther` is Z for the 'horizontal' plane and
    * Y for 'node-normal'. Used to align the node's edges to the grid (rotation-
    * aware: swap the pair at 90°). Omit / return null for free movement.
+   * `sceneApi` is supplied for composite nodes whose footprint depends on
+   * children, such as straight stairs.
    */
-  snapExtents?: (node: N) => readonly [number, number] | null
+  snapExtents?: (node: N, sceneApi: SceneApi) => readonly [number, number] | null
   portal?: HandlePortal
 }
 

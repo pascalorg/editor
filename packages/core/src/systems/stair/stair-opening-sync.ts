@@ -1,4 +1,5 @@
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { resolveBuildingForLevel, resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { type Point2D, polygonContainsPolygon, polygonsOverlap } from '../../lib/polygon-relations'
 import type {
   AnyNode,
   AnyNodeId,
@@ -10,8 +11,6 @@ import type {
 } from '../../schema'
 import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 import { computeSegmentTransforms, rotateXZ } from './stair-footprint'
-
-type Point2D = [number, number]
 
 type SegmentTransform = {
   position: [number, number, number]
@@ -85,10 +84,106 @@ function getLevelNumber(levelId: string | null, nodes: Record<string, AnyNode>) 
   return node?.type === 'level' ? node.level : undefined
 }
 
+function getLevelBuildingId(levelId: string | null, nodes: Record<string, AnyNode>) {
+  if (!levelId) return null
+  return resolveBuildingForLevel(levelId as AnyNodeId, nodes as Record<AnyNodeId, AnyNode>)
+}
+
+function normalizeLevelId(levelId: string | null | undefined, nodes: Record<string, AnyNode>) {
+  if (!levelId) return null
+  return nodes[levelId as AnyNodeId]?.type === 'level' ? levelId : null
+}
+
+function getBuildingLevels(buildingId: string | null, nodes: Record<string, AnyNode>) {
+  const building = buildingId ? nodes[buildingId as AnyNodeId] : null
+  if (building?.type !== 'building') return []
+
+  const levels = new Map<string, Extract<AnyNode, { type: 'level' }>>()
+  for (const childId of building.children ?? []) {
+    const child = nodes[childId as AnyNodeId]
+    if (child?.type === 'level') levels.set(child.id, child)
+  }
+  for (const candidate of Object.values(nodes)) {
+    if (candidate?.type === 'level' && candidate.parentId === building.id) {
+      levels.set(candidate.id, candidate)
+    }
+  }
+
+  return Array.from(levels.values()).sort((left, right) => left.level - right.level)
+}
+
+function inferSourceLevelForDestination(
+  destinationLevelId: string | null,
+  nodes: Record<string, AnyNode>,
+) {
+  if (!destinationLevelId) return null
+  const destination = nodes[destinationLevelId as AnyNodeId]
+  if (destination?.type !== 'level') return null
+
+  const buildingId = getLevelBuildingId(destinationLevelId, nodes)
+  return (
+    getBuildingLevels(buildingId, nodes)
+      .filter((level) => level.level < destination.level)
+      .at(-1)?.id ?? null
+  )
+}
+
+function inferDestinationLevelForSource(
+  sourceLevelId: string | null,
+  nodes: Record<string, AnyNode>,
+) {
+  if (!sourceLevelId) return null
+  const source = nodes[sourceLevelId as AnyNodeId]
+  if (source?.type !== 'level') return null
+
+  const buildingId = getLevelBuildingId(sourceLevelId, nodes)
+  return (
+    getBuildingLevels(buildingId, nodes).find((level) => level.level > source.level)?.id ?? null
+  )
+}
+
+function levelsShareBuilding(
+  leftLevelId: string | null,
+  rightLevelId: string | null,
+  nodes: Record<string, AnyNode>,
+) {
+  if (!(leftLevelId && rightLevelId)) return true
+  const leftBuildingId = getLevelBuildingId(leftLevelId, nodes)
+  const rightBuildingId = getLevelBuildingId(rightLevelId, nodes)
+  return !(leftBuildingId && rightBuildingId && leftBuildingId !== rightBuildingId)
+}
+
+function isInStairBuildingScope(
+  stair: StairNode,
+  surfaceLevelId: string,
+  nodes: Record<string, AnyNode>,
+) {
+  const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
+  const fromBuildingId = getLevelBuildingId(fromLevelId, nodes)
+  const toBuildingId = getLevelBuildingId(toLevelId, nodes)
+  const surfaceBuildingId = getLevelBuildingId(surfaceLevelId, nodes)
+
+  if (fromBuildingId && toBuildingId && fromBuildingId !== toBuildingId) return false
+  if (fromBuildingId && surfaceBuildingId && fromBuildingId !== surfaceBuildingId) return false
+  if (toBuildingId && surfaceBuildingId && toBuildingId !== surfaceBuildingId) return false
+
+  return true
+}
+
 function getResolvedStairLevelIds(stair: StairNode, nodes: Record<string, AnyNode>) {
-  const parentLevelId = resolveLevelId(stair, nodes)
-  const fromLevelId = stair.fromLevelId ?? parentLevelId
-  const toLevelId = stair.toLevelId ?? fromLevelId
+  const parentLevelId = normalizeLevelId(resolveLevelId(stair, nodes), nodes)
+  const explicitToLevelId = normalizeLevelId(stair.toLevelId, nodes)
+  const fromLevelId =
+    normalizeLevelId(stair.fromLevelId, nodes) ??
+    parentLevelId ??
+    inferSourceLevelForDestination(explicitToLevelId, nodes)
+  const explicitToLevelIsUsable =
+    explicitToLevelId &&
+    explicitToLevelId !== fromLevelId &&
+    levelsShareBuilding(fromLevelId, explicitToLevelId, nodes)
+  const toLevelId = explicitToLevelIsUsable
+    ? explicitToLevelId
+    : inferDestinationLevelForSource(fromLevelId, nodes)
   return { fromLevelId, toLevelId }
 }
 
@@ -190,36 +285,6 @@ function polygonArea(points: Point2D[]) {
     area += current[0] * next[1] - next[0] * current[1]
   }
   return area / 2
-}
-
-function pointOnSegment(point: Point2D, a: Point2D, b: Point2D, tolerance = 1e-6) {
-  const cross = (point[1] - a[1]) * (b[0] - a[0]) - (point[0] - a[0]) * (b[1] - a[1])
-  if (Math.abs(cross) > tolerance) return false
-  const dot = (point[0] - a[0]) * (b[0] - a[0]) + (point[1] - a[1]) * (b[1] - a[1])
-  if (dot < -tolerance) return false
-  const lenSq = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2
-  return dot <= lenSq + tolerance
-}
-
-function pointInPolygon(point: Point2D, polygon: Point2D[]) {
-  if (polygon.length < 3) return false
-  let inside = false
-  const [x, z] = point
-
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i]!
-    const b = polygon[j]!
-    if (pointOnSegment(point, a, b)) return true
-    const intersects =
-      a[1] > z !== b[1] > z && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1]) + a[0]
-    if (intersects) inside = !inside
-  }
-
-  return inside
-}
-
-function polygonContainsPolygon(outer: Point2D[], inner: Point2D[]) {
-  return inner.every((point) => pointInPolygon(point, outer))
 }
 
 function isCoveredByExistingHole(existingHoles: Point2D[][], autoHole: Point2D[]) {
@@ -409,13 +474,14 @@ function getStraightOpeningPolygonsForSurface(
   stair: StairNode,
   nodes: Record<string, AnyNode>,
   targetElevation: number,
+  openingOffsetOverride?: number,
 ) {
   const layouts = getStraightStairLayouts(stair, nodes)
   if (layouts.length === 0) return []
 
   const riserHeight = (stair.totalRise ?? 2.5) / Math.max(stair.stepCount ?? 10, 1)
   const targetThreshold = Math.max(riserHeight * 2, STRAIGHT_STAIR_TARGET_THRESHOLD_MIN)
-  const openingOffset = Math.max(stair.openingOffset ?? 0, 0.15)
+  const openingOffset = Math.max(openingOffsetOverride ?? stair.openingOffset ?? 0, 0)
   const openingRects: AxisAlignedRect[] = []
 
   for (let index = 0; index < layouts.length; index += 1) {
@@ -493,22 +559,22 @@ function getStairOpeningPolygons(
   stair: StairNode,
   nodes: Record<string, AnyNode>,
   targetElevation?: number,
+  openingOffsetOverride?: number,
 ) {
   if ((stair.slabOpeningMode ?? 'none') !== 'destination') {
     return []
   }
 
+  const openingOffset = Math.max(openingOffsetOverride ?? stair.openingOffset ?? 0, 0)
+
   if (stair.stairType === 'curved') {
     return [
-      getCurvedOpeningPolygon(
-        stair,
-        Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0.15),
-      ),
+      getCurvedOpeningPolygon(stair, Math.max(openingOffset - STAIR_SLAB_OPENING_TIGHTENING, 0)),
     ]
   }
 
   if (stair.stairType === 'spiral') {
-    const offset = Math.max((stair.openingOffset ?? 0) - STAIR_SLAB_OPENING_TIGHTENING, 0.15)
+    const offset = Math.max(openingOffset - STAIR_SLAB_OPENING_TIGHTENING, 0)
     const polygons = [getSpiralOpeningPolygon(stair, offset)]
     if (stair.topLandingMode === 'integrated') {
       polygons.push(getSpiralLandingPolygon(stair, offset))
@@ -517,14 +583,39 @@ function getStairOpeningPolygons(
   }
 
   if (typeof targetElevation === 'number') {
-    return getStraightOpeningPolygonsForSurface(stair, nodes, targetElevation)
+    return getStraightOpeningPolygonsForSurface(stair, nodes, targetElevation, openingOffset)
   }
 
   return getStraightOpeningPolygonsForSurface(
     stair,
     nodes,
     Math.max(...getStraightStairLayouts(stair, nodes).map((layout) => layout.topElevation), 0),
+    openingOffset,
   )
+}
+
+function getApplicableStairOpeningPolygons(
+  stair: StairNode,
+  nodes: Record<string, AnyNode>,
+  targetElevation: number,
+  surfacePolygon: Point2D[],
+) {
+  const configuredOffset = Math.max(stair.openingOffset ?? 0, 0)
+  const polygons = getStairOpeningPolygons(stair, nodes, targetElevation, configuredOffset)
+  const overlappingPolygons = polygons.filter((polygon) => polygonsOverlap(surfacePolygon, polygon))
+
+  if (overlappingPolygons.length === polygons.length || configuredOffset <= 1e-6) {
+    return overlappingPolygons
+  }
+
+  const fallbackPolygons = getStairOpeningPolygons(stair, nodes, targetElevation, 0)
+  const overlappingFallbackPolygons = fallbackPolygons.filter((polygon) =>
+    polygonsOverlap(surfacePolygon, polygon),
+  )
+
+  return overlappingFallbackPolygons.length === fallbackPolygons.length
+    ? overlappingFallbackPolygons
+    : overlappingPolygons
 }
 
 function getTargetSlabElevationForStair(
@@ -579,6 +670,8 @@ function shouldApplyStairToSlab(
   const toLevel = getLevelNumber(toLevelId, nodes)
   const slabLevel = getLevelNumber(slabLevelId, nodes)
 
+  if (!isInStairBuildingScope(stair, slabLevelId, nodes)) return false
+
   if (slabLevel === undefined) {
     return toLevelId === slabLevelId
   }
@@ -601,6 +694,8 @@ function shouldApplyStairToCeiling(
   const fromLevel = getLevelNumber(fromLevelId, nodes)
   const toLevel = getLevelNumber(toLevelId, nodes)
   const ceilingLevel = getLevelNumber(ceilingLevelId, nodes)
+
+  if (!isInStairBuildingScope(stair, ceilingLevelId, nodes)) return false
 
   if (ceilingLevel === undefined) {
     return fromLevelId === ceilingLevelId
@@ -637,10 +732,11 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const stairHoles = stairs
       .filter((stair) => shouldApplyStairToSlab(stair, slabLevelId, nodes))
       .flatMap((stair) =>
-        getStairOpeningPolygons(
+        getApplicableStairOpeningPolygons(
           stair,
           nodes,
           getTargetSlabElevationForStair(stair, slab, slabLevelId, nodes),
+          slab.polygon,
         ).map((polygon) => ({
           polygon,
           metadata: {
@@ -649,7 +745,6 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           },
         })),
       )
-      .filter((hole) => polygonContainsPolygon(slab.polygon, hole.polygon))
       .filter((hole) => !isCoveredByExistingHole(preservedHolePolygons, hole.polygon))
 
     const nextHoles = [
@@ -686,10 +781,11 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const stairHoles = stairs
       .filter((stair) => shouldApplyStairToCeiling(stair, ceilingLevelId, nodes))
       .flatMap((stair) =>
-        getStairOpeningPolygons(
+        getApplicableStairOpeningPolygons(
           stair,
           nodes,
           getTargetCeilingElevationForStair(stair, ceiling, ceilingLevelId, nodes),
+          ceiling.polygon,
         ).map((polygon) => ({
           polygon,
           metadata: {
@@ -698,7 +794,6 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
           },
         })),
       )
-      .filter((hole) => polygonContainsPolygon(ceiling.polygon, hole.polygon))
       .filter((hole) => !isCoveredByExistingHole(preservedHolePolygons, hole.polygon))
 
     const nextHoles = [

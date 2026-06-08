@@ -17,6 +17,7 @@ import {
 import {
   CursorSphere,
   DragBoundingBox,
+  getFloorStackPreviewPosition,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -74,6 +75,16 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
         ? (node.metadata as Record<string, unknown>)
         : {}
     const isNew = !!meta.isNew
+    const getVisualPosition = (
+      position: [number, number, number],
+      rotation = rotationY,
+    ): [number, number, number] =>
+      getFloorStackPreviewPosition({
+        node,
+        position,
+        rotation,
+        levelId: node.parentId ?? null,
+      })
 
     // Alignment candidates — every other alignable object's anchors, gathered
     // once (the scene graph is stable during the imperative drag).
@@ -81,18 +92,22 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
     const applyPreview = (position: [number, number, number]) => {
       lastPosition = position
-      setPreviewPosition(position)
+      const visualPosition = getVisualPosition(position)
+      setPreviewPosition(visualPosition)
       setPreviewRotation(rotationY)
       useLiveTransforms.getState().set(node.id, {
         position,
         rotation: rotationY,
       })
+      useScene.getState().markDirty(node.id as AnyNodeId)
       const m = sceneRegistry.nodes.get(node.id)
       if (m) {
-        m.position.set(position[0], position[1], position[2])
+        m.position.set(...visualPosition)
         m.rotation.y = rotationY
       }
     }
+
+    setPreviewPosition(getVisualPosition(node.position, node.rotation))
 
     const onGridMove = (event: GridEvent) => {
       hasMoved = true
@@ -145,11 +160,16 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
 
       if (nodeId && useScene.getState().nodes[nodeId]) {
         committed = true
-        useLiveTransforms.getState().clear(nodeId)
         useScene.temporal.getState().resume()
         useScene
           .getState()
           .updateNode(nodeId, { position, rotation: rotationY, ...(isNew ? { metadata: {} } : {}) })
+        useLiveTransforms.getState().clear(nodeId)
+        const m = sceneRegistry.nodes.get(nodeId)
+        if (m) {
+          m.position.set(...getVisualPosition(position, rotationY))
+          m.rotation.y = rotationY
+        }
       } else if (node.parentId) {
         const column = ColumnNodeSchema.parse({
           ...node,
@@ -174,9 +194,10 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       useAlignmentGuides.getState().clear()
       const m = sceneRegistry.nodes.get(node.id)
       if (m) {
-        m.position.set(node.position[0], node.position[1], node.position[2])
+        m.position.set(...getVisualPosition(node.position, node.rotation))
         m.rotation.y = node.rotation
       }
+      useScene.getState().markDirty(node.id as AnyNodeId)
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
       exitMoveMode()
@@ -197,9 +218,10 @@ function MoveColumnTool({ node }: { node: ColumnNode }) {
       if (!committed) {
         const m = sceneRegistry.nodes.get(node.id)
         if (m) {
-          m.position.set(node.position[0], node.position[1], node.position[2])
+          m.position.set(...getVisualPosition(node.position, node.rotation))
           m.rotation.y = node.rotation
         }
+        useScene.getState().markDirty(node.id as AnyNodeId)
         useScene.temporal.getState().resume()
       }
     }

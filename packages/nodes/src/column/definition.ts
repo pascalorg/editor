@@ -19,6 +19,7 @@ const BRACE_HANDLE_OFFSET = 0.3
 const SPREAD_HANDLE_OFFSET = 0.22
 const ROTATE_CORNER_OFFSET = 0.32
 const ROTATE_RING_OFFSET = 0.04
+const MOVE_FRONT_OFFSET = 0.35
 const MIN_COLUMN_HEIGHT = 0.2
 const MIN_COLUMN_WIDTH = 0.1
 const MIN_COLUMN_DEPTH = 0.1
@@ -241,6 +242,29 @@ function columnRotateHandle(): HandleDescriptor<ColumnNodeType> {
   }
 }
 
+function columnMoveHandle(): HandleDescriptor<ColumnNodeType> {
+  return {
+    kind: 'translate',
+    placement: {
+      // Low to the floor at the front edge (matches the item move grip) so it
+      // reads as a floor-move grip and stays clear of the body resize / rotate
+      // handles that sit at mid-height.
+      position: (n) => {
+        const { halfZ } = columnFootprintHalf(n)
+        return [0, 0.02, halfZ + MOVE_FRONT_OFFSET]
+      },
+    },
+    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
+    snapExtents: (n) => {
+      const { halfX, halfZ } = columnFootprintHalf(n)
+      const dimX = Math.max(halfX * 2, MIN_COLUMN_WIDTH)
+      const dimZ = Math.max(halfZ * 2, MIN_COLUMN_DEPTH)
+      const swap = Math.abs(Math.sin(n.rotation ?? 0)) > 0.9
+      return [swap ? dimZ : dimX, swap ? dimX : dimZ]
+    },
+  }
+}
+
 function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[] {
   // 1. Height (universal).
   // 2. Footprint arrows depending on supportStyle + crossSection:
@@ -265,7 +289,7 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   } else {
     handles.push(columnAxisHandle('x'), columnAxisHandle('z'))
   }
-  handles.push(columnRotateHandle())
+  handles.push(columnRotateHandle(), columnMoveHandle())
   return handles
 }
 

@@ -355,6 +355,7 @@ function resetEditorInteractionState() {
     selectedReferenceId: null,
     spaces: {},
     editingHole: null,
+    hoveredHole: null,
     isPreviewMode: false,
   })
 }

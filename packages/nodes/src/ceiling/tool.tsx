@@ -201,6 +201,9 @@ export const CeilingTool: React.FC = () => {
         setPoints([])
         useAlignmentGuides.getState().clear()
       } else {
+        // Every non-closing vertex is a "start" tick; the closing click above
+        // fires the structure-build (end) cue.
+        triggerSFX('sfx:structure-build-start')
         setPoints([...points, clickPoint])
       }
     }
@@ -250,8 +253,8 @@ export const CeilingTool: React.FC = () => {
     if (points.length === 0) {
       mainLineRef.current.visible = false
       closingLineRef.current.visible = false
-      groundMainLineRef.current && (groundMainLineRef.current.visible = false)
-      groundClosingLineRef.current && (groundClosingLineRef.current.visible = false)
+      if (groundMainLineRef.current) groundMainLineRef.current.visible = false
+      if (groundClosingLineRef.current) groundClosingLineRef.current.visible = false
       return
     }
     const ceilingY = levelY + CEILING_HEIGHT

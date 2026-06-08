@@ -2,11 +2,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   getEffectiveNode,
-  resolveLevelId,
+  getFloorStackedPosition,
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
-  spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -96,9 +95,9 @@ export const StairSystem = () => {
       // so slab-elevation spatial queries match where the segments are
       // actually being rendered. Without this, dragging the rotate gizmo
       // looks up slabs at the pre-drag world XZ — if rotation carries a
-      // segment off the original slab footprint, getStairSlabElevation
-      // returns 0 and `group.position.y` collapses, dropping the flight
-      // or landing below the floor and out of view mid-drag.
+      // segment off the original slab footprint, the floor-stack
+      // resolver would otherwise read the pre-drag footprint and drop
+      // the flight or landing below the floor mid-drag.
       const stairNode = getEffectiveNode(baseStairNode as StairNode)
       const group = sceneRegistry.nodes.get(stairId) as THREE.Group | undefined
       if (group) {
@@ -273,57 +272,20 @@ function syncStairGroupElevation(
   group: THREE.Group,
   nodes: Record<string, AnyNode>,
 ) {
-  const levelId = resolveLevelId(stairNode, nodes)
-  const slabElevation = getStairSlabElevation(levelId, stairNode, nodes)
-  group.position.y = stairNode.position[1] + slabElevation
-}
-
-function getStairSlabElevation(
-  levelId: string,
-  stairNode: StairNode,
-  nodes: Record<string, AnyNode>,
-): number {
-  // Merge live overrides so slab queries match the visual chain during a drag.
-  const segments = (stairNode.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
-    .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
-    .map((n) => getEffectiveNode(n))
-
-  if (segments.length === 0) return 0
-
-  const transforms = computeSegmentTransforms(segments)
-  let maxElevation = Number.NEGATIVE_INFINITY
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i]!
-    const transform = transforms[i]!
-
-    const [centerOffsetX, centerOffsetZ] = rotateXZ(0, segment.length / 2, transform.rotation)
-    const centerInGroupX = transform.position[0] + centerOffsetX
-    const centerInGroupZ = transform.position[2] + centerOffsetZ
-    const [centerOffsetWorldX, centerOffsetWorldZ] = rotateXZ(
-      centerInGroupX,
-      centerInGroupZ,
-      stairNode.rotation,
-    )
-
-    const slabElevation = spatialGridManager.getSlabElevationForItem(
-      levelId,
-      [
-        stairNode.position[0] + centerOffsetWorldX,
-        stairNode.position[1] + transform.position[1],
-        stairNode.position[2] + centerOffsetWorldZ,
-      ],
-      [segment.width, Math.max(segment.height, segment.thickness, 0.01), segment.length],
-      [0, stairNode.rotation + transform.rotation, 0],
-    )
-
-    if (slabElevation > maxElevation) {
-      maxElevation = slabElevation
+  const effectiveNodes: Record<string, AnyNode> = { ...nodes, [stairNode.id]: stairNode }
+  for (const childId of stairNode.children ?? []) {
+    const segment = nodes[childId as AnyNodeId]
+    if (segment?.type === 'stair-segment') {
+      effectiveNodes[segment.id] = getEffectiveNode(segment as StairSegmentNode)
     }
   }
-
-  return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+  const visualPosition = getFloorStackedPosition({
+    node: stairNode,
+    nodes: effectiveNodes,
+    position: stairNode.position,
+    rotation: stairNode.rotation,
+  })
+  group.position.y = visualPosition[1]
 }
 
 // ============================================================================

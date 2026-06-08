@@ -38,6 +38,12 @@ export {
   sceneRegistry,
   useRegistry,
 } from './hooks/scene-registry/scene-registry'
+export {
+  type FloorPlacedElevationArgs,
+  getFloorPlacedElevation,
+  getFloorPlacedFootprints,
+  getFloorStackedPosition,
+} from './hooks/spatial-grid/floor-placed-elevation'
 export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
   initSpatialGridSync,
@@ -53,8 +59,18 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  type Point2D as PolygonPoint2D,
+  pointInPolygon as pointInPolygon2D,
+  pointOnSegment,
+  polygonContainsPolygon,
+  polygonsIntersect,
+  polygonsOverlap,
+  segmentsIntersect,
+} from './lib/polygon-relations'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
+  type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
   detectSpacesForLevel,
@@ -63,6 +79,7 @@ export {
   pauseSpaceDetection,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  projectAutoSlabsForPlan,
   resumeSpaceDetection,
   type Space,
   wallTouchesOthers,
@@ -79,6 +96,12 @@ export {
   type MaterialCategory,
   toLibraryMaterialRef,
 } from './material-library'
+export type {
+  FloorPlacedFootprint,
+  FloorPlacedFootprintContext,
+  FloorPlacedFootprintResolver,
+  FloorPlacedFootprintsResolver,
+} from './registry'
 export * from './registry'
 export * from './schema'
 export * from './services'
@@ -147,6 +170,7 @@ export {
   resolveElevatorServiceLevels,
 } from './systems/elevator/elevator-service'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
+export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {

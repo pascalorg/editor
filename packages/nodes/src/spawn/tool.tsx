@@ -1,7 +1,12 @@
 'use client'
 
 import { emitter, type GridEvent, SpawnNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { CursorSphere, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  getFloorStackPreviewPosition,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
@@ -20,16 +25,12 @@ function getExistingSpawnIds() {
 function getLevelLocalPosition(levelId: string, event: GridEvent): [number, number, number] {
   const levelObject = sceneRegistry.nodes.get(levelId)
   if (!levelObject) {
-    return [
-      roundToHalf(event.localPosition[0]),
-      event.localPosition[1],
-      roundToHalf(event.localPosition[2]),
-    ]
+    return [roundToHalf(event.localPosition[0]), 0, roundToHalf(event.localPosition[2])]
   }
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
   levelObject.worldToLocal(worldVector)
-  return [roundToHalf(worldVector.x), worldVector.y, roundToHalf(worldVector.z)]
+  return [roundToHalf(worldVector.x), 0, roundToHalf(worldVector.z)]
 }
 
 /**
@@ -53,7 +54,19 @@ const SpawnTool = () => {
       // same half-meter snap the legacy tool uses.
       const nextX = roundToHalf(event.localPosition[0])
       const nextZ = roundToHalf(event.localPosition[2])
-      cursorRef.current?.position.set(nextX, event.localPosition[1], nextZ)
+      const position: [number, number, number] = [nextX, 0, nextZ]
+      const previewNode = SpawnNode.parse({
+        name: 'Spawn Point',
+        position,
+        rotation: 0,
+      })
+      const visualPosition = getFloorStackPreviewPosition({
+        node: previewNode,
+        position,
+        rotation: 0,
+        levelId: activeLevelId,
+      })
+      cursorRef.current?.position.set(...visualPosition)
 
       // Fire grid-snap SFX only when the snapped position crosses a cell,
       // not every frame the mouse moves within the same cell. Matches the

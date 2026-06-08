@@ -101,6 +101,7 @@ export {
   getActiveRoofHeight,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentSurfaceY,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   ROOF_SHAPE_DEFAULTS,
