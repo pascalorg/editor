@@ -5,6 +5,7 @@ import {
   type FenceNode,
   type GridEvent,
   type LevelNode,
+  movingAlignmentAnchors,
   nodeRegistry,
   type RoofNode,
   type RoofSegmentNode,
@@ -19,11 +20,14 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  clearRoofDuplicateMetadata,
+  commitFreshPlacementSubtree,
   getFloorStackPreviewPosition,
+  resolvePlanarCursorPosition,
   snapFenceDraftPoint,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
+  useFreshPlacementVisibility,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -36,6 +40,15 @@ const ALIGNMENT_THRESHOLD_M = 0.08
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
 }> = ({ node: movingNode }) => {
+  const {
+    isFreshPlacement,
+    previewVisible: cursorVisible,
+    revealFreshPlacement,
+    useAbsoluteCursorPlacement,
+  } = useFreshPlacementVisibility({
+    node: movingNode,
+    enabled: movingNode.type === 'roof' || movingNode.type === 'stair',
+  })
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
   }, [])
@@ -82,25 +95,8 @@ export const MoveRoofTool: React.FC<{
     dragAnchorRef.current = null
     previousGridPosRef.current = null
 
-    const meta =
-      typeof movingNode.metadata === 'object' && movingNode.metadata !== null
-        ? (movingNode.metadata as Record<string, unknown>)
-        : {}
-    const isNew = !!meta.isNew
-    const committedMeta: RoofNode['metadata'] = (() => {
-      if (
-        typeof movingNode.metadata !== 'object' ||
-        movingNode.metadata === null ||
-        Array.isArray(movingNode.metadata)
-      ) {
-        return movingNode.metadata
-      }
-
-      const nextMeta = { ...movingNode.metadata } as Record<string, unknown>
-      delete nextMeta.isNew
-      delete nextMeta.isTransient
-      return nextMeta as RoofNode['metadata']
-    })()
+    const isNew = isFreshPlacement
+    const committedMeta = stripPlacementMetadataFlags(movingNode.metadata) as RoofNode['metadata']
 
     const original = {
       position: [...movingNode.position] as [number, number, number],
@@ -115,6 +111,7 @@ export const MoveRoofTool: React.FC<{
     // expensive merged-mesh CSG rebuilds on every frame.
     let wasCommitted = false
     let wasCancelled = false
+    let hasMoved = false
 
     // Track pending rotation — no store updates during drag
     let pendingRotation: number = movingNode.rotation as number
@@ -190,20 +187,28 @@ export const MoveRoofTool: React.FC<{
 
     // Alignment for top-level stair / roof only. Segments live in parent-local
     // space (a different frame from the building-local candidate pool / guide
-    // layer), so we leave them on the plain grid+corner snap. The moving node
-    // is aligned by its ORIGIN point (how this tool positions it), snapped to
-    // any other alignable object's anchors.
+    // layer), so we leave them on the plain grid+corner snap. Stairs align by
+    // their footprint edges; roofs keep the origin-point behavior.
     const alignTopLevel = movingNode.type === 'stair' || movingNode.type === 'roof'
     const alignmentCandidates = alignTopLevel
-      ? collectAlignmentAnchors(useScene.getState().nodes, movingNode.id)
+      ? collectAlignmentAnchors(
+          useScene.getState().nodes,
+          movingNode.id,
+          movingNode.type === 'stair' ? levelId : undefined,
+        )
       : []
     const alignLocalPoint = (lx: number, lz: number, bypass: boolean): [number, number] => {
       if (!alignTopLevel || bypass || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return [lx, lz]
       }
+      const moving =
+        movingNode.type === 'stair'
+          ? movingAlignmentAnchors(movingNode, useScene.getState().nodes, lx, lz, pendingRotation)
+          : []
       const ar = resolveAlignment({
-        moving: [{ nodeId: movingNode.id, kind: 'corner', x: lx, z: lz }],
+        moving:
+          moving.length > 0 ? moving : [{ nodeId: movingNode.id, kind: 'corner', x: lx, z: lz }],
         candidates: alignmentCandidates,
         threshold: ALIGNMENT_THRESHOLD_M,
       })
@@ -277,6 +282,9 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onGridMove = (event: GridEvent) => {
+      hasMoved = true
+      revealFreshPlacement()
+
       const y = event.position[1]
 
       const snappedLocal = snapFenceDraftPoint({
@@ -292,11 +300,14 @@ export const MoveRoofTool: React.FC<{
         snappedLocal[0],
         snappedLocal[1],
       )
-      const anchor = dragAnchorRef.current ?? [rawLocalX, rawLocalZ]
-      dragAnchorRef.current = anchor
-
-      let localX = movingNode.position[0] + (rawLocalX - anchor[0])
-      let localZ = movingNode.position[2] + (rawLocalZ - anchor[1])
+      const resolved = resolvePlanarCursorPosition({
+        cursor: [rawLocalX, rawLocalZ],
+        original: [movingNode.position[0], movingNode.position[2]],
+        anchor: dragAnchorRef.current,
+        mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
+      })
+      dragAnchorRef.current = resolved.anchor
+      let [localX, localZ] = resolved.point
 
       if (alignTopLevel) {
         const aligned = alignLocalPoint(localX, localZ, event.nativeEvent?.altKey === true)
@@ -340,34 +351,37 @@ export const MoveRoofTool: React.FC<{
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (!hasMoved) return
       const [localX, , localZ] = lastLocalPosition
 
       useAlignmentGuides.getState().clear()
       wasCommitted = true
 
-      // The store still holds the original values (we didn't update during drag).
-      // Resume temporal and apply the final state as a single undoable step.
-      useScene.temporal.getState().resume()
-
-      if (isNew && movingNode.type === 'roof') {
-        clearRoofDuplicateMetadata(movingNode.id as AnyNodeId, {
-          position: [localX, movingNode.position[1], localZ],
-          rotation: pendingRotation,
-          metadata: committedMeta,
-        })
+      let committedId = movingNode.id as AnyNodeId
+      if (isNew) {
+        committedId =
+          commitFreshPlacementSubtree(movingNode.id as AnyNodeId, {
+            position: [localX, movingNode.position[1], localZ],
+            rotation: pendingRotation,
+            metadata: committedMeta,
+            visible: true,
+          }) ?? committedId
       } else {
+        // The store still holds the original values (we didn't update during drag).
+        // Resume temporal and apply the final state as a single undoable step.
+        useScene.temporal.getState().resume()
         useScene.getState().updateNode(movingNode.id, {
           position: [localX, movingNode.position[1], localZ],
           rotation: pendingRotation,
           metadata: committedMeta,
         })
+        useScene.temporal.getState().pause()
       }
 
-      useScene.temporal.getState().pause()
-
       triggerSFX('sfx:item-place')
-      useViewer.getState().setSelection({ selectedIds: [movingNode.id] })
+      useViewer.getState().setSelection({ selectedIds: [committedId] })
       useLiveTransforms.getState().clear(movingNode.id)
+      useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
       event.nativeEvent?.stopPropagation?.()
     }
@@ -463,10 +477,10 @@ export const MoveRoofTool: React.FC<{
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [movingNode, exitMoveMode])
+  }, [movingNode, exitMoveMode, isFreshPlacement, revealFreshPlacement, useAbsoluteCursorPlacement])
 
   return (
-    <group>
+    <group visible={cursorVisible}>
       <CursorSphere position={cursorWorldPos} showTooltip={false} />
     </group>
   )

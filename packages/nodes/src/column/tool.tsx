@@ -7,23 +7,26 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
-  movingFootprintAnchors,
-  resolveAlignment,
-  snapPointToGrid,
   useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { getFloorStackPreviewPosition, triggerSFX, usePlacementPreview } from '@pascal-app/editor'
+import {
+  getFloorStackPreviewPosition,
+  triggerSFX,
+  useEditor,
+  usePlacementPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
+import {
+  type FloorPlacementClickTriggerEvent,
+  getLevelLocalSnappedPosition,
+  resolveAlignedFloorPlacement,
+  stopPlacementCommitPropagation,
+  subscribeFloorPlacementClicks,
+} from '../shared/floor-placement'
 import { ColumnPreview } from './renderer'
-
-const GRID_STEP = 0.5
-
-/** Figma-style alignment-snap threshold (meters), matching the move tools and
- *  the shelf placement tool. */
-const ALIGNMENT_THRESHOLD_M = 0.08
 
 const DEFAULT_COLUMN_PRESET_ID = 'basicPillar' satisfies ColumnPresetId
 
@@ -52,6 +55,8 @@ const ColumnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
   const previousSnapRef = useRef<[number, number] | null>(null)
+  const cursorVisibleRef = useRef(false)
+  const [cursorVisible, setCursorVisible] = useState(false)
 
   // Default-preset column for the placement ghost — matches exactly what the
   // commit creates (`basicPillar`), so the preview is faithful.
@@ -60,6 +65,9 @@ const ColumnTool = () => {
   useEffect(() => {
     if (!activeLevelId) return
     previousSnapRef.current = null
+    cursorVisibleRef.current = false
+    setCursorVisible(false)
+    const lastCursorRef: { current: [number, number, number] | null } = { current: null }
 
     // Alignment candidates — anchors of every other alignable object, gathered
     // here and refreshed after each placement so a just-placed column becomes a
@@ -68,30 +76,21 @@ const ColumnTool = () => {
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
 
     const onGridMove = (event: GridEvent) => {
-      const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
-
-      // Figma-style alignment snap layered on top of grid snap: when the
-      // preview column's footprint edge lines up (on X or Z) with another
-      // object's edge, snap there and publish a guide. Alt bypasses.
-      let ax = sx
-      let az = sz
-      const bypass = event.nativeEvent?.altKey === true
-      if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
-          moving: movingFootprintAnchors(previewNode, sx, sz, 0),
-          candidates: alignmentCandidates,
-          threshold: ALIGNMENT_THRESHOLD_M,
-        })
-        if (result.snap) {
-          ax += result.snap.dx
-          az += result.snap.dz
-        }
-        useAlignmentGuides.getState().set(result.guides)
-      } else {
-        useAlignmentGuides.getState().clear()
+      if (!cursorVisibleRef.current) {
+        cursorVisibleRef.current = true
+        setCursorVisible(true)
       }
 
-      const position: [number, number, number] = [ax, 0, az]
+      const { position, guides } = resolveAlignedFloorPlacement({
+        node: previewNode,
+        rawX: event.localPosition[0],
+        rawZ: event.localPosition[2],
+        gridStep: useEditor.getState().gridSnapStep,
+        candidates: alignmentCandidates,
+        bypassAlignment: event.nativeEvent?.altKey === true,
+      })
+      useAlignmentGuides.getState().set(guides)
+
       const visualPosition = getFloorStackPreviewPosition({
         node: previewNode,
         position,
@@ -99,6 +98,7 @@ const ColumnTool = () => {
         levelId: activeLevelId,
       })
       cursorRef.current?.position.set(...visualPosition)
+      lastCursorRef.current = position
 
       // Publish a transient, positioned preview node for the 2D floor-plan
       // ghost (the 3D `ColumnPreview` mesh is hidden in 2D). The floor-plan
@@ -107,30 +107,18 @@ const ColumnTool = () => {
       usePlacementPreview.getState().set({ ...previewNode, position })
 
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== ax || prev[1] !== az) {
+      if (!prev || prev[0] !== position[0] || prev[1] !== position[2]) {
         triggerSFX('sfx:grid-snap')
-        previousSnapRef.current = [ax, az]
+        previousSnapRef.current = [position[0], position[2]]
       }
     }
 
-    const onGridClick = (event: GridEvent) => {
-      const [sx, sz] = snapPointToGrid([event.localPosition[0], event.localPosition[2]], GRID_STEP)
-      let ax = sx
-      let az = sz
-      const bypass = event.nativeEvent?.altKey === true
-      if (!bypass && alignmentCandidates.length > 0) {
-        const result = resolveAlignment({
-          moving: movingFootprintAnchors(previewNode, sx, sz, 0),
-          candidates: alignmentCandidates,
-          threshold: ALIGNMENT_THRESHOLD_M,
-        })
-        if (result.snap) {
-          ax += result.snap.dx
-          az += result.snap.dz
-        }
-      }
+    const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {
+      const position =
+        lastCursorRef.current ??
+        getLevelLocalSnappedPosition(activeLevelId, event, useEditor.getState().gridSnapStep)
 
-      const column = createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, [ax, 0, az])
+      const column = createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position)
       useScene.getState().createNode(column, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [column.id] })
       triggerSFX('sfx:structure-build')
@@ -140,14 +128,15 @@ const ColumnTool = () => {
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
+      stopPlacementCommitPropagation(event)
     }
 
     emitter.on('grid:move', onGridMove)
-    emitter.on('grid:click', onGridClick)
+    const unsubscribePlacementClicks = subscribeFloorPlacementClicks(commitAtCursor)
 
     return () => {
       emitter.off('grid:move', onGridMove)
-      emitter.off('grid:click', onGridClick)
+      unsubscribePlacementClicks()
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
     }
@@ -156,7 +145,7 @@ const ColumnTool = () => {
   if (!activeLevelId) return null
 
   return (
-    <group ref={cursorRef}>
+    <group ref={cursorRef} visible={cursorVisible}>
       <ColumnPreview node={previewNode} />
     </group>
   )

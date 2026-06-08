@@ -4,9 +4,15 @@ import {
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { snapToHalf } from '@pascal-app/editor'
-import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import {
+  findClosestWallInPlan,
+  projectWallLocalPointToPlan,
+  snapLocalXToNeighbors,
+} from '../shared/wall-attach-target'
 import { clampToWall, hasWallChildOverlap } from './door-math'
 
 /**
@@ -36,6 +42,16 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     const wall = useScene.getState().nodes[node.parentId as AnyNodeId]
     return wall ? (wall.parentId as AnyNodeId | null) : null
   })()
+  const originalWall = node.parentId
+    ? (useScene.getState().nodes[node.parentId as AnyNodeId] as WallNode | undefined)
+    : undefined
+  const resolveCursor = createFloorplanCursorResolver({
+    original:
+      originalWall?.type === 'wall'
+        ? projectWallLocalPointToPlan(originalWall, node.position[0])
+        : [node.position[0], 0],
+    metadata: node.metadata,
+  })
 
   // Track the last successful placement so `commit()` can write it
   // atomically — see the comment on `commit` below for why we don't
@@ -52,7 +68,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint, modifiers }) {
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
+      const resolvedPlanPoint = resolveCursor(planPoint)
+      const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) return // pointer off any wall — keep door at last valid position
 
       // Figma-style along-wall alignment first (edge-to-edge with other

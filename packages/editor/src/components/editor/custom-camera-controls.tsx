@@ -12,7 +12,14 @@ import { GRID_LAYER, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Box3, Vector3 } from 'three'
+import {
+  Box3,
+  type Camera,
+  type OrthographicCamera,
+  type PerspectiveCamera,
+  Spherical,
+  Vector3,
+} from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
 import useEditor from '../../store/use-editor'
 
@@ -23,8 +30,13 @@ const tempDelta = new Vector3()
 const tempPosition = new Vector3()
 const tempSize = new Vector3()
 const tempTarget = new Vector3()
+const syncTarget = new Vector3()
+const syncSpherical = new Spherical()
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
+const NAVIGATION_SYNC_POSITION_EPSILON = 0.001
+const NAVIGATION_SYNC_AZIMUTH_EPSILON = 0.0005
+const NAVIGATION_SYNC_VIEW_WIDTH_EPSILON = 0.001
 type CameraMode = ReturnType<typeof useViewer.getState>['cameraMode']
 type CameraPoseSnapshot = {
   mode: CameraMode
@@ -62,6 +74,86 @@ function restoreCameraPose(control: CameraControlsImpl, pose: CameraPoseSnapshot
     pose.target[2],
     false,
   )
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  )
+}
+
+type CameraViewportSize = {
+  width: number
+  height: number
+}
+
+function isPerspectiveCamera(camera: Camera): camera is PerspectiveCamera {
+  return (camera as PerspectiveCamera).isPerspectiveCamera === true
+}
+
+function isOrthographicCamera(camera: Camera): camera is OrthographicCamera {
+  return (camera as OrthographicCamera).isOrthographicCamera === true
+}
+
+function getCameraViewAspect(size: CameraViewportSize) {
+  return Math.max(size.width, 1) / Math.max(size.height, 1)
+}
+
+function getCameraViewWidth(camera: Camera, distance: number, size: CameraViewportSize) {
+  if (isPerspectiveCamera(camera)) {
+    const fovRadians = (camera.getEffectiveFOV() * Math.PI) / 180
+    return Math.max(0.001, 2 * distance * Math.tan(fovRadians / 2) * getCameraViewAspect(size))
+  }
+
+  if (isOrthographicCamera(camera)) {
+    return Math.max(0.001, (camera.right - camera.left) / camera.zoom)
+  }
+
+  return Math.max(0.001, distance)
+}
+
+function getCameraDistanceForViewWidth(
+  camera: Camera,
+  viewWidth: number,
+  size: CameraViewportSize,
+) {
+  if (!isPerspectiveCamera(camera)) {
+    return null
+  }
+
+  const fovRadians = (camera.getEffectiveFOV() * Math.PI) / 180
+  const denominator = 2 * Math.tan(fovRadians / 2) * getCameraViewAspect(size)
+
+  return denominator > 0 ? Math.max(0.001, viewWidth / denominator) : null
+}
+
+function getCameraZoomForViewWidth(camera: Camera, viewWidth: number) {
+  if (!isOrthographicCamera(camera)) {
+    return null
+  }
+
+  return viewWidth > 0 ? Math.max(0.001, (camera.right - camera.left) / viewWidth) : null
+}
+
+function applyCameraViewWidth(
+  control: CameraControlsImpl,
+  camera: Camera,
+  viewWidth: number,
+  size: CameraViewportSize,
+) {
+  const nextDistance = getCameraDistanceForViewWidth(camera, viewWidth, size)
+  if (nextDistance !== null) {
+    control.dollyTo(nextDistance, true)
+    return
+  }
+
+  const nextZoom = getCameraZoomForViewWidth(camera, viewWidth)
+  if (nextZoom !== null) {
+    control.zoomTo(nextZoom, true)
+  }
 }
 
 function useFirstPersonCameraPoseRestore(
@@ -131,6 +223,7 @@ export const CustomCameraControls = () => {
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
+  const isFloorplanOpen = useEditor((s) => s.isFloorplanOpen)
   const selection = useViewer((s) => s.selection)
   const cameraMode = useViewer((state) => state.cameraMode)
   const isRestoringFirstPersonPose = useFirstPersonCameraPoseRestore(
@@ -140,11 +233,19 @@ export const CustomCameraControls = () => {
   )
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
+  const lastPublishedNavigationSync = useRef<{
+    target: [number, number, number]
+    azimuth: number
+    viewWidth: number
+  } | null>(null)
+  const lastApplied2dNavigationRevision = useRef(0)
   const maxPolarAngle =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
+  const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
+  const viewportSize = useThree((state) => state.size)
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
     camera.layers.enable(GRID_LAYER)
@@ -208,6 +309,73 @@ export const CustomCameraControls = () => {
     },
     [isPreviewMode, isFirstPersonMode],
   )
+
+  useEffect(() => {
+    if (isFirstPersonMode) return
+
+    return useEditor.subscribe((state) => {
+      const pose = state.navigationSyncPose
+      if (
+        !pose ||
+        pose.source !== '2d' ||
+        pose.revision === lastApplied2dNavigationRevision.current
+      )
+        return
+
+      const control = controls.current
+      if (!control) return
+
+      lastApplied2dNavigationRevision.current = pose.revision
+      control.moveTo(pose.target[0], pose.target[1], pose.target[2], true)
+      control.rotateTo(pose.azimuth, control.polarAngle, true)
+      applyCameraViewWidth(control, camera, pose.viewWidth, viewportSize)
+    })
+  }, [camera, isFirstPersonMode, viewportSize])
+
+  const publishCurrentNavigationPose = useCallback(() => {
+    if (isFirstPersonMode || !controls.current) return
+
+    controls.current.getTarget(syncTarget, false)
+    controls.current.getSpherical(syncSpherical, false)
+    const viewWidth = getCameraViewWidth(camera, syncSpherical.radius, viewportSize)
+
+    const previous = lastPublishedNavigationSync.current
+    if (
+      previous &&
+      Math.abs(previous.target[0] - syncTarget.x) < NAVIGATION_SYNC_POSITION_EPSILON &&
+      Math.abs(previous.target[1] - syncTarget.y) < NAVIGATION_SYNC_POSITION_EPSILON &&
+      Math.abs(previous.target[2] - syncTarget.z) < NAVIGATION_SYNC_POSITION_EPSILON &&
+      Math.abs(previous.azimuth - syncSpherical.theta) < NAVIGATION_SYNC_AZIMUTH_EPSILON &&
+      Math.abs(previous.viewWidth - viewWidth) < NAVIGATION_SYNC_VIEW_WIDTH_EPSILON
+    ) {
+      return
+    }
+
+    lastPublishedNavigationSync.current = {
+      target: [syncTarget.x, syncTarget.y, syncTarget.z],
+      azimuth: syncSpherical.theta,
+      viewWidth,
+    }
+    useEditor.getState().publishNavigationSyncPose({
+      source: '3d',
+      target: [syncTarget.x, syncTarget.y, syncTarget.z],
+      azimuth: syncSpherical.theta,
+      viewWidth,
+    })
+  }, [camera, isFirstPersonMode, viewportSize])
+
+  useEffect(() => {
+    if (isFirstPersonMode || (!isFloorplanOpen && currentLevelId === null)) return
+
+    const frame = requestAnimationFrame(() => {
+      lastPublishedNavigationSync.current = null
+      publishCurrentNavigationPose()
+    })
+
+    return () => {
+      cancelAnimationFrame(frame)
+    }
+  }, [currentLevelId, isFirstPersonMode, isFloorplanOpen, publishCurrentNavigationPose])
 
   // Configure mouse buttons based on control mode and camera mode
   const mouseButtons = useMemo(() => {
@@ -284,6 +452,45 @@ export const CustomCameraControls = () => {
       controlLeft: false,
       space: false,
     }
+    let ownsNavigationCursor = false
+    let panPointerId: number | null = null
+    let panPointerButton: number | null = null
+
+    const setNavigationCursor = (cursor: 'grab' | 'grabbing') => {
+      document.body.style.cursor = cursor
+      gl.domElement.style.cursor = cursor
+      ownsNavigationCursor = true
+    }
+
+    const clearNavigationCursor = () => {
+      if (
+        ownsNavigationCursor &&
+        (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing')
+      ) {
+        document.body.style.cursor = ''
+      }
+      if (ownsNavigationCursor && gl.domElement.style.cursor === 'grab') {
+        gl.domElement.style.cursor = ''
+      }
+      if (ownsNavigationCursor && gl.domElement.style.cursor === 'grabbing') {
+        gl.domElement.style.cursor = ''
+      }
+      ownsNavigationCursor = false
+    }
+
+    const updateNavigationCursor = () => {
+      if (panPointerId !== null) {
+        setNavigationCursor('grabbing')
+        return
+      }
+
+      if (keyState.space) {
+        setNavigationCursor('grab')
+        return
+      }
+
+      clearNavigationCursor()
+    }
 
     const updateConfig = () => {
       if (!controls.current) return
@@ -311,8 +518,10 @@ export const CustomCameraControls = () => {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code === 'Space') {
+        if (isEditableKeyboardTarget(event.target)) return
+        event.preventDefault()
         keyState.space = true
-        document.body.style.cursor = 'grab'
+        updateNavigationCursor()
       }
       if (event.code === 'ShiftRight') {
         keyState.shiftRight = true
@@ -332,7 +541,11 @@ export const CustomCameraControls = () => {
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === 'Space') {
         keyState.space = false
-        document.body.style.cursor = ''
+        if (panPointerButton === 0) {
+          panPointerId = null
+          panPointerButton = null
+        }
+        updateNavigationCursor()
       }
       if (event.code === 'ShiftRight') {
         keyState.shiftRight = false
@@ -349,16 +562,51 @@ export const CustomCameraControls = () => {
       updateConfig()
     }
 
+    const onPointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !gl.domElement.contains(event.target)) return
+      if (event.button !== 1 && !(event.button === 0 && keyState.space)) return
+
+      panPointerId = event.pointerId
+      panPointerButton = event.button
+      updateNavigationCursor()
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (panPointerId === null) return
+      if (event.type !== 'pointercancel' && event.pointerId !== panPointerId) return
+      if (event.type !== 'pointercancel' && event.button !== panPointerButton) return
+
+      panPointerId = null
+      panPointerButton = null
+      updateNavigationCursor()
+    }
+
+    const onBlur = () => {
+      keyState.space = false
+      panPointerId = null
+      panPointerButton = null
+      clearNavigationCursor()
+      updateConfig()
+    }
+
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('pointerup', onPointerUp, true)
+    window.addEventListener('pointercancel', onPointerUp, true)
+    window.addEventListener('blur', onBlur)
     updateConfig()
 
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
-      document.body.style.cursor = ''
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('pointerup', onPointerUp, true)
+      window.removeEventListener('pointercancel', onPointerUp, true)
+      window.removeEventListener('blur', onBlur)
+      clearNavigationCursor()
     }
-  }, [cameraMode, isPreviewMode, isFirstPersonMode])
+  }, [cameraMode, gl, isPreviewMode, isFirstPersonMode])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
   const previewTargetNodeId = isPreviewMode
@@ -669,6 +917,7 @@ export const CustomCameraControls = () => {
       minDistance={minDistance}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
+      onUpdate={publishCurrentNavigationPose}
       onRest={onRest}
       onSleep={onRest}
       onTransitionStart={onTransitionStart}

@@ -125,6 +125,7 @@ export function NodeArrowHandles() {
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
   const movingNode = useEditor((state) => state.movingNode)
+  const placementDragMode = useEditor((state) => state.placementDragMode)
   // Endpoint / curve drags reshape the selected wall or fence; hide its
   // resize arrows for the duration so they don't clutter (or get blocked
   // by) the drag's own cursor + dimension overlays. Mirrors the same guard
@@ -150,6 +151,8 @@ export function NodeArrowHandles() {
     () => (rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode),
     [rawNode, liveOverride],
   )
+  const isOwnPressDragMove =
+    placementDragMode && movingNode !== null && selectedId !== null && movingNode.id === selectedId
 
   const def = node ? nodeRegistry.get(node.type) : null
   const descriptors = useMemo(() => {
@@ -163,7 +166,7 @@ export function NodeArrowHandles() {
     Boolean(node && descriptors?.length) &&
     !isFloorplanHovered &&
     mode !== 'delete' &&
-    !movingNode &&
+    (!movingNode || isOwnPressDragMove) &&
     !movingWallEndpoint &&
     !movingFenceEndpoint &&
     !curvingWall &&

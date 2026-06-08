@@ -341,6 +341,7 @@ const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   {
     action: 'Pan',
     keys: [{ value: 'Space' }, { value: 'Left click' }],
+    alternativeKeys: [{ value: 'Middle click' }],
   },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
