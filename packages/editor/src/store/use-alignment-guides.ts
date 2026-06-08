@@ -4,7 +4,7 @@
 // and draws them. Both sides clear on commit, cancel, and unmount.
 
 import { create } from 'zustand'
-import type { AlignmentGuide } from '../services/alignment'
+import type { AlignmentGuide } from '@pascal-app/core'
 
 type AlignmentGuidesState = {
   guides: AlignmentGuide[]

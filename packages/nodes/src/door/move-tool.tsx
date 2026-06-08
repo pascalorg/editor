@@ -6,7 +6,6 @@ import {
   isCurvedWall,
   sceneRegistry,
   spatialGridManager,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallEvent,
@@ -18,6 +17,7 @@ import {
   getSideFromNormal,
   isValidWallSideFace,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'

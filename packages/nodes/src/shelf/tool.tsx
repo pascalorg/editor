@@ -12,10 +12,9 @@ import {
   ShelfNode,
   sceneRegistry,
   snapPointToGrid,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { type Group, Vector3 } from 'three'

@@ -6,9 +6,9 @@ import {
   resolveAlignment,
   StairNode,
   StairSegmentNode,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'

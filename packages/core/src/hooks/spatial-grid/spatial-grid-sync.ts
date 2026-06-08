@@ -29,6 +29,32 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
 }
 
 /**
+ * Walks the parent chain of `nodeId` and returns the id of the first ancestor
+ * whose `type` is `'level'`, or `null` when no level ancestor exists (orphaned
+ * node, top-level building node, etc.). Unlike `resolveLevelId`, this variant:
+ *
+ * - accepts a node **id** rather than a resolved node, saving the caller a
+ *   `nodes[id]` lookup when only the id is at hand.
+ * - returns `null` instead of the `'default'` fallback, which lets callers
+ *   distinguish "genuinely has no level" from "is a level".
+ * - has a loop guard (16 iterations) so a corrupt parent-chain cycle cannot
+ *   hang the frame loop.
+ */
+export function findLevelAncestorId(
+  nodeId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+): string | null {
+  let current: AnyNode | undefined = nodes[nodeId]
+  let guard = 0
+  while (current && guard < 16) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId] : undefined
+    guard += 1
+  }
+  return null
+}
+
+/**
  * Returns the building id that contains the given level, or `null` if
  * the level is unparented or no enclosing building exists.
  *

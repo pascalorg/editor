@@ -11,7 +11,6 @@ import {
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
   type WallNode,
@@ -21,6 +20,7 @@ import {
   clearRoofDuplicateMetadata,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'

@@ -215,6 +215,7 @@ export { duplicateStairSubtree } from './lib/stair-duplication'
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
@@ -236,3 +237,8 @@ export {
 export { default as usePlacementPreview } from './store/use-placement-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
+export {
+  type WallSnapKind,
+  type WallSnapPoint,
+  default as useWallSnapIndicator,
+} from './store/use-wall-snap-indicator'

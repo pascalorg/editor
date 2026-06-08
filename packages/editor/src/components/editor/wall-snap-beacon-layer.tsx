@@ -1,6 +1,7 @@
 'use client'
 
-import { sceneRegistry, useWallSnapIndicator, type WallSnapKind } from '@pascal-app/core'
+import { sceneRegistry } from '@pascal-app/core'
+import { useWallSnapIndicator, type WallSnapKind } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { memo, useRef } from 'react'

@@ -10,7 +10,6 @@ import {
   movingFootprintAnchors,
   resolveAlignment,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -19,6 +18,7 @@ import {
   DragBoundingBox,
   markToolCancelConsumed,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'

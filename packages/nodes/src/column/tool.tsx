@@ -10,10 +10,9 @@ import {
   movingFootprintAnchors,
   resolveAlignment,
   snapPointToGrid,
-  useAlignmentGuides,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
+import { triggerSFX, useAlignmentGuides, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'

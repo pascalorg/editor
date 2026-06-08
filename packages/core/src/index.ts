@@ -40,6 +40,7 @@ export {
 } from './hooks/scene-registry/scene-registry'
 export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
 export {
+  findLevelAncestorId,
   initSpatialGridSync,
   resolveBuildingForLevel,
   resolveLevelId,
@@ -88,12 +89,6 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
 } from './store/history-control'
-export { default as useAlignmentGuides } from './store/use-alignment-guides'
-export {
-  type WallSnapKind,
-  type WallSnapPoint,
-  default as useWallSnapIndicator,
-} from './store/use-wall-snap-indicator'
 export {
   type ControlValue,
   type DoorAnimationState,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useWallSnapIndicator, type WallSnapKind } from '@pascal-app/core'
+import { useWallSnapIndicator, type WallSnapKind } from '@pascal-app/editor'
 import { memo } from 'react'
 import { useFloorplanRender } from './floorplan-render-context'
 

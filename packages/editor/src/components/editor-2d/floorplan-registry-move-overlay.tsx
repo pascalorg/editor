@@ -12,11 +12,11 @@ import {
   resolveAlignment,
   resumeSceneHistory,
   snapPointToGrid,
-  useAlignmentGuides,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { sfxEmitter } from '../../lib/sfx-bus'

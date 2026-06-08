@@ -10,7 +10,6 @@ import {
   type LevelNode,
   type Point2D,
   resolveAlignment,
-  useAlignmentGuides,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -28,6 +27,7 @@ import {
   type SegmentAngleReference,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'

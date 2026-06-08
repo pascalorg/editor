@@ -2,8 +2,7 @@ import {
   type AnyNodeId,
   type CeilingNode,
   getEffectiveNode,
-  getScaledDimensions,
-  type ItemNode,
+  nodeRegistry,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -12,11 +11,6 @@ import * as THREE from 'three'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
-
-// Recessed-fixture cutouts are inset slightly inside the item footprint so the
-// fixture's trim (its widest part, sitting in the ceiling plane) overlaps the
-// solid ceiling around the opening and hides the cut edge.
-const RECESSED_HOLE_INSET = 0.82
 
 function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
   const uv = geometry.getAttribute('uv')
@@ -48,7 +42,7 @@ export const CeilingSystem = () => {
         // arrow rebuilds the mesh at pointer rate — zustand only learns
         // the final value on commit. Mirrors WallSystem / GeometrySystem.
         const effective = getEffectiveNode(node as CeilingNode)
-        const itemHoles = collectRecessedItemHoles(effective, nodes)
+        const itemHoles = collectCeilingHoles(effective, nodes)
         updateCeilingGeometry(effective, mesh, itemHoles)
         clearDirty(id as AnyNodeId)
       }
@@ -60,47 +54,27 @@ export const CeilingSystem = () => {
 }
 
 /**
- * Footprint cutouts for the ceiling's recessed child fixtures (e.g. recessed
- * downlights). Each is a rotated rectangle in ceiling-local [x, z] space — the
- * same space as `ceilingNode.polygon` — derived from the item's scaled
- * dimensions and 2D position/yaw. Returned as extra holes so the cutout tracks
- * the item automatically: adding, moving, or deleting a child re-dirties the
- * ceiling (see node-actions / item renderer), which rebuilds this geometry.
+ * Collects ceiling-hole polygons from child nodes that declare the `ceilingCut`
+ * capability. Each child's `buildCeilingHole` returns a rotated-rectangle
+ * footprint in ceiling-local [x, z] space (or `null` to opt out), which is
+ * merged as an extra hole before triangulation.
+ *
+ * The viewer never branches on `child.type` — the dispatch goes through
+ * `nodeRegistry`, so any future kind (a heat lamp, a skylight panel, …) can
+ * participate just by declaring `capabilities.ceilingCut` on its definition.
  */
-function collectRecessedItemHoles(
+function collectCeilingHoles(
   ceiling: CeilingNode,
   nodes: SceneNodes,
 ): Array<Array<[number, number]>> {
   const holes: Array<Array<[number, number]>> = []
 
   for (const childId of ceiling.children ?? []) {
-    const child = nodes[childId] as ItemNode | undefined
-    if (!child || child.type !== 'item') continue
-    if (!child.asset.recessed || child.asset.attachTo !== 'ceiling') continue
-
-    const [width, , depth] = getScaledDimensions(child)
-    const halfW = (width / 2) * RECESSED_HOLE_INSET
-    const halfD = (depth / 2) * RECESSED_HOLE_INSET
-    const cx = child.position[0]
-    const cz = child.position[2]
-    const yaw = child.rotation?.[1] ?? 0
-    const cos = Math.cos(yaw)
-    const sin = Math.sin(yaw)
-
-    // Corners of the (inset) footprint, rotated about Y and translated to the
-    // item's plan position. Y-rotation of (dx, dz): (dx·cos + dz·sin, -dx·sin + dz·cos).
-    const offsets: Array<[number, number]> = [
-      [-halfW, -halfD],
-      [halfW, -halfD],
-      [halfW, halfD],
-      [-halfW, halfD],
-    ]
-    const corners: Array<[number, number]> = offsets.map(([dx, dz]) => [
-      cx + dx * cos + dz * sin,
-      cz - dx * sin + dz * cos,
-    ])
-
-    holes.push(corners)
+    const child = nodes[childId as AnyNodeId]
+    if (!child) continue
+    const def = nodeRegistry.get(child.type)
+    const hole = def?.capabilities?.ceilingCut?.buildCeilingHole(child)
+    if (hole) holes.push(hole)
   }
 
   return holes

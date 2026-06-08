@@ -1,5 +1,5 @@
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
-import { sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
+import { findLevelAncestorId, sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { MathUtils, type PointLight, Vector3 } from 'three'
@@ -35,19 +35,6 @@ const _itemPos = new Vector3()
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 type InteractiveState = ReturnType<typeof useInteractive.getState>
 
-function resolveNodeLevelId(nodeId: AnyNodeId, nodes: SceneNodes): string | null {
-  let current = nodes[nodeId]
-  let guard = 0
-
-  while (current && guard < 16) {
-    if (current.type === 'level') return current.id
-    current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
-    guard += 1
-  }
-
-  return null
-}
-
 function scoreRegistration(
   reg: import('../../store/use-item-light-pool').LightRegistration,
   nodes: SceneNodes,
@@ -80,7 +67,7 @@ function scoreRegistration(
   const dist = _camPos.distanceTo(_itemPos) / 200
 
   // ── Level factor ──────────────────────────────────────────────────────────
-  const itemLevelId = resolveNodeLevelId(nodeId, nodes)
+  const itemLevelId = findLevelAncestorId(nodeId, nodes)
 
   let levelPenalty = 0
   if (selectedLevelId) {

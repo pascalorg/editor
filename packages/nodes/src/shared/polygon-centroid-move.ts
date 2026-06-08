@@ -6,11 +6,10 @@ import {
   polygonAnchors,
   resolveAlignment,
   sceneRegistry,
-  useAlignmentGuides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { snapPointToGrid, useAlignmentGuides, type WallPlanPoint } from '@pascal-app/editor'
 import type * as THREE from 'three'
 
 /**

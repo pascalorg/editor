@@ -7,7 +7,6 @@ import {
   getMaxWallCurveOffset,
   getWallChordFrame,
   normalizeWallCurveOffset,
-  useAlignmentGuides,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -19,6 +18,7 @@ import {
   isSegmentLongEnough,
   snapFenceDraftPoint,
   snapScalarToGrid,
+  useAlignmentGuides,
   WALL_FINE_GRID_STEP,
 } from '@pascal-app/editor'
 

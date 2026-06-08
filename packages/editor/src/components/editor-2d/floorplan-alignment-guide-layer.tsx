@@ -1,6 +1,6 @@
 'use client'
 
-import { useAlignmentGuides } from '@pascal-app/core'
+import { useAlignmentGuides } from '@pascal-app/editor'
 import { memo } from 'react'
 import { useFloorplanRender } from './floorplan-render-context'
 
