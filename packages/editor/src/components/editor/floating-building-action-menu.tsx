@@ -46,6 +46,49 @@ export function FloatingBuildingActionMenu() {
     [buildingId, setMovingNode, setSelection],
   )
 
+  // 90° CW step. Pivots around the building's world bbox center, so the
+  // building spins in place instead of orbiting its (often off-centre)
+  // origin — same offset compensation `MoveBuildingContent` uses while
+  // R/T-rotating during a drag.
+  const handleRotate = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!buildingId) return
+      const node = useScene.getState().nodes[buildingId]
+      if (!node || node.type !== 'building') return
+      const building = node as BuildingNode
+      const mesh = sceneRegistry.nodes.get(buildingId)
+      if (!mesh) return
+      const box = new THREE.Box3().setFromObject(mesh)
+      if (box.isEmpty()) return
+
+      const currentRotY = building.rotation[1] ?? 0
+      const nextRotY = currentRotY - Math.PI / 2 // CW in three.js Y handedness
+
+      const center = box.getCenter(new THREE.Vector3())
+      const originWorld = new THREE.Vector3()
+      mesh.getWorldPosition(originWorld)
+      const Y_AXIS = new THREE.Vector3(0, 1, 0)
+      const centerOffsetLocal = center
+        .clone()
+        .sub(originWorld)
+        .applyAxisAngle(Y_AXIS, -currentRotY)
+      const offAtNext = centerOffsetLocal.clone().applyAxisAngle(Y_AXIS, nextRotY)
+      const nextPos: [number, number, number] = [
+        center.x - offAtNext.x,
+        building.position[1],
+        center.z - offAtNext.z,
+      ]
+
+      sfxEmitter.emit('sfx:item-rotate')
+      useScene.getState().updateNode(buildingId, {
+        position: nextPos,
+        rotation: [building.rotation[0], nextRotY, building.rotation[2]],
+      })
+    },
+    [buildingId],
+  )
+
   // Only show when a building is selected without a level
   if (!buildingId || levelId) return null
 
@@ -61,6 +104,7 @@ export function FloatingBuildingActionMenu() {
       >
         <NodeActionMenu
           onMove={handleMove}
+          onRotate={handleRotate}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />
