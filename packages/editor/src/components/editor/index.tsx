@@ -1019,7 +1019,6 @@ export default function Editor({
       isLoadingSceneRef.current = true
       setHasLoadedInitialScene(false)
       setIsViewerSceneReady(false)
-      setSceneReadyKey((key) => key + 1)
       setIsSceneLoading(true)
       useScene.getState().unloadScene()
       useViewer.getState().resetSelection()
@@ -1084,7 +1083,7 @@ export default function Editor({
     setIsViewerSceneReady(ready)
   }, [])
 
-  const showLoader = isLoading || isSceneLoading || !isViewerSceneReady
+  const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
