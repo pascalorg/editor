@@ -64,8 +64,8 @@
   "devDependencies": {
     "@pascal-app/core": "^0.8.0",
     "@pascal/typescript-config": "*",
-    "@types/node": "^25.5.0",
-    "typescript": "5.9.3"
+    "@types/node": "^22.19.20",
+    "typescript": "6.0.3"
   },
   "keywords": [
     "mcp",
