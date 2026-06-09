@@ -15,6 +15,8 @@ export type WallPlanPoint = [number, number]
 /** Which kind of existing-geometry snap produced a drafted point. */
 export type WallDraftSnapKind = 'endpoint' | 'midpoint' | 'intersection' | 'wall'
 
+export type WallSnapRadii = Partial<Record<WallDraftSnapKind, number>>
+
 export type WallDraftSnapResult = {
   point: WallPlanPoint
   /**
@@ -119,9 +121,10 @@ export function findWallEndpointFromRaw(
   point: WallPlanPoint,
   walls: WallNode[],
   ignoreWallIds?: string[],
+  radius = WALL_ENDPOINT_SNAP_RADIUS,
 ): WallPlanPoint | null {
   const ignored = new Set(ignoreWallIds ?? [])
-  const radiusSquared = WALL_ENDPOINT_SNAP_RADIUS ** 2
+  const radiusSquared = radius ** 2
   let best: WallPlanPoint | null = null
   let bestDistSq = Number.POSITIVE_INFINITY
 
@@ -152,9 +155,10 @@ export function findWallMidpointFromRaw(
   point: WallPlanPoint,
   walls: WallNode[],
   ignoreWallIds?: string[],
+  radius = WALL_MIDPOINT_SNAP_RADIUS,
 ): WallPlanPoint | null {
   const ignored = new Set(ignoreWallIds ?? [])
-  const radiusSquared = WALL_MIDPOINT_SNAP_RADIUS ** 2
+  const radiusSquared = radius ** 2
   let best: WallPlanPoint | null = null
   let bestDistSq = Number.POSITIVE_INFINITY
 
@@ -202,10 +206,11 @@ export function findWallIntersectionFromRaw(
   point: WallPlanPoint,
   walls: WallNode[],
   ignoreWallIds?: string[],
+  radius = WALL_INTERSECTION_SNAP_RADIUS,
 ): WallPlanPoint | null {
   const ignored = new Set(ignoreWallIds ?? [])
   const straight = walls.filter((wall) => !ignored.has(wall.id) && !isCurvedWall(wall))
-  const radiusSquared = WALL_INTERSECTION_SNAP_RADIUS ** 2
+  const radiusSquared = radius ** 2
   let best: WallPlanPoint | null = null
   let bestDistSq = Number.POSITIVE_INFINITY
 
@@ -257,12 +262,13 @@ export function findWallSpecialPointSnap(
   point: WallPlanPoint,
   walls: WallNode[],
   ignoreWallIds?: string[],
+  radii?: WallSnapRadii,
 ): WallDraftSnapResult | null {
-  const endpoint = findWallEndpointFromRaw(point, walls, ignoreWallIds)
+  const endpoint = findWallEndpointFromRaw(point, walls, ignoreWallIds, radii?.endpoint)
   if (endpoint) return { point: endpoint, snap: 'endpoint' }
 
-  const midpoint = findWallMidpointFromRaw(point, walls, ignoreWallIds)
-  const intersection = findWallIntersectionFromRaw(point, walls, ignoreWallIds)
+  const midpoint = findWallMidpointFromRaw(point, walls, ignoreWallIds, radii?.midpoint)
+  const intersection = findWallIntersectionFromRaw(point, walls, ignoreWallIds, radii?.intersection)
   return nearestCandidate(point, [
     midpoint && { point: midpoint, snap: 'midpoint' },
     intersection && { point: intersection, snap: 'intersection' },

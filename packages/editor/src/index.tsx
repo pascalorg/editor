@@ -65,6 +65,7 @@ export { useFreshPlacementVisibility } from './components/tools/shared/fresh-pla
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
+  type PolygonEditorPlanPointSnapContext,
   type PolygonEditorProps,
 } from './components/tools/shared/polygon-editor'
 export {
@@ -108,6 +109,7 @@ export {
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
+  type WallSnapRadii,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
 // existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
@@ -172,6 +174,13 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { type Selection, useSelection } from './hooks/use-selection'
+export {
+  CEILING_ALIGNMENT_THRESHOLD_M,
+  type CeilingPlanSnapInput,
+  type CeilingPlanSnapResult,
+  clearCeilingSnapFeedback,
+  resolveCeilingPlanPointSnap,
+} from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {

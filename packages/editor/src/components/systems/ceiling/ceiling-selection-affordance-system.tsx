@@ -13,6 +13,10 @@ import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  clearCeilingSnapFeedback,
+  resolveCeilingPlanPointSnap,
+} from '../../../lib/ceiling-plan-snap'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { snapToHalf } from '../../tools/item/placement-math'
@@ -84,6 +88,7 @@ function clearCornerDragPreview(drag: CornerDragState) {
   if (drag.inputDraggingSet) {
     useViewer.getState().setInputDragging(drag.previousInputDragging)
   }
+  clearCeilingSnapFeedback()
 }
 
 export const CeilingSelectionAffordanceSystem = () => {
@@ -284,10 +289,21 @@ const CeilingSelectionAffordance = ({
       const initialCorner = drag.initialPolygon[drag.cornerIndex]
       if (!initialCorner) return
 
-      const nextPosition: [number, number] = [
+      const rawNextPosition: [number, number] = [
+        initialCorner[0] + (planePosition[0] - drag.startPlanePosition[0]),
+        initialCorner[1] + (planePosition[1] - drag.startPlanePosition[1]),
+      ]
+      const gridNextPosition: [number, number] = [
         initialCorner[0] + snapToHalf(planePosition[0] - drag.startPlanePosition[0]),
         initialCorner[1] + snapToHalf(planePosition[1] - drag.startPlanePosition[1]),
       ]
+      const nextPosition = resolveCeilingPlanPointSnap({
+        rawPoint: rawNextPosition,
+        fallbackPoint: gridNextPosition,
+        levelId,
+        excludeId: drag.ceilingId,
+        altKey: event.altKey,
+      }).point
 
       if (
         drag.previousSnappedPosition &&
@@ -354,7 +370,7 @@ const CeilingSelectionAffordance = ({
       dragRef.current = null
       clearCornerDragPreview(drag)
     }
-  }, [effectiveCeiling.id, getHandlePlanePoint, selectCeilingForEdit])
+  }, [effectiveCeiling.id, getHandlePlanePoint, levelId, selectCeilingForEdit])
 
   useEffect(() => {
     let frameId = 0

@@ -20,6 +20,7 @@ import {
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapResult,
   type WallPlanPoint,
+  type WallSnapRadii,
 } from './wall-snap-geometry'
 
 // The pure snap geometry lives in `./wall-snap-geometry`; re-exported here so
@@ -30,6 +31,7 @@ export {
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
+  type WallSnapRadii,
 } from './wall-snap-geometry'
 
 export const WALL_GRID_STEP = 0.5
@@ -345,6 +347,8 @@ type SnapWallDraftArgs = {
    * local-axis grid at `step`.
    */
   gridSnap?: (point: WallPlanPoint) => WallPlanPoint
+  /** Optional magnetic snap radii. Omitted means wall tools keep their defaults. */
+  snapRadii?: WallSnapRadii
 }
 
 export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
@@ -357,13 +361,14 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     step: overrideStep,
     magnetic = true,
     gridSnap,
+    snapRadii,
   } = args
 
   // Discrete special points (corner / midpoint / crossing) are taken from the
   // raw cursor so an interim grid snap can't mask them. A corner always wins,
   // then the nearer of midpoint / crossing — see `findWallSpecialPointSnap`.
   if (magnetic) {
-    const special = findWallSpecialPointSnap(point, walls, ignoreWallIds)
+    const special = findWallSpecialPointSnap(point, walls, ignoreWallIds, snapRadii)
     if (special) return special
   }
 
@@ -377,7 +382,10 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
         : snapPointToGrid(point, step)
 
   if (magnetic) {
-    const wallSnap = findWallSnapTarget(basePoint, walls, { ignoreWallIds })
+    const wallSnap = findWallSnapTarget(basePoint, walls, {
+      ignoreWallIds,
+      radius: snapRadii?.wall,
+    })
     if (wallSnap) return { point: wallSnap, snap: 'wall' }
   }
 

@@ -2,6 +2,7 @@
 
 import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
 import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
+import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import {
@@ -51,6 +52,7 @@ type UseFloorplanBackgroundPlacementArgs = {
   isRoofBuildActive: boolean
   isWallBuildActive: boolean
   isZoneBuildActive: boolean
+  levelId: string | null
   roofDraftStart: WallPlanPoint | null
   setCursorPoint: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setFenceDraftEnd: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
@@ -107,6 +109,7 @@ export function useFloorplanBackgroundPlacement({
   isRoofBuildActive,
   isWallBuildActive,
   isZoneBuildActive,
+  levelId,
   roofDraftStart,
   setCursorPoint,
   setFenceDraftEnd,
@@ -149,17 +152,22 @@ export function useFloorplanBackgroundPlacement({
 
       if (isCeilingBuildActive) {
         // Align the committed vertex the same way the move-preview did, so
-        // the placed point matches what the user saw. Skip when angle snap
-        // owns the vertex (matches the move branch).
+        // the placed point matches what the user saw. Wall magnetic snap may
+        // still win; generic alignment is skipped when angle snap owns the
+        // vertex (matches the move branch).
         const angleSnap = ceilingDraftPoints.length > 0 && !shiftPressed
-        let snappedPoint = snapPolygonDraftPoint({
+        const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
           start: ceilingDraftPoints[ceilingDraftPoints.length - 1],
           angleSnap,
         })
-        if (!angleSnap) {
-          snappedPoint = alignFloorplanDraftPoint(snappedPoint, { bypass: event.altKey })
-        }
+        const snappedPoint = resolveCeilingPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
 
         emitFloorplanGridEvent('click', snappedPoint, event)
         handleCeilingPlacementPoint(snappedPoint)
@@ -322,6 +330,7 @@ export function useFloorplanBackgroundPlacement({
       isRoofBuildActive,
       isWallBuildActive,
       isZoneBuildActive,
+      levelId,
       roofDraftStart,
       setCursorPoint,
       setFenceDraftEnd,

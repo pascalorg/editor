@@ -1,7 +1,13 @@
 'use client'
 
 import { type CeilingNode, resolveLevelId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
-import { PolygonEditor, triggerSFX } from '@pascal-app/editor'
+import {
+  clearCeilingSnapFeedback,
+  PolygonEditor,
+  type PolygonEditorPlanPointSnapContext,
+  resolveCeilingPlanPointSnap,
+  triggerSFX,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
@@ -36,9 +42,13 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
     () => (ceiling && liveOverride ? ({ ...ceiling, ...liveOverride } as CeilingNode) : ceiling),
     [ceiling, liveOverride],
   )
+  const ceilingLevelId = effectiveCeiling
+    ? resolveLevelId(effectiveCeiling, useScene.getState().nodes)
+    : null
 
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
+      clearCeilingSnapFeedback()
       updateNode(ceilingId, { polygon: newPolygon })
       setSelection({ selectedIds: [ceilingId] })
     },
@@ -87,11 +97,17 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
     (isDragging: boolean) => {
       if (!isDragging) {
         ownsPolygonPreviewRef.current = false
+        clearCeilingSnapFeedback()
       }
       setCeilingHandleHover(isDragging)
     },
     [setCeilingHandleHover],
   )
+
+  const handlePolygonEditorDragCommit = useCallback(() => {
+    triggerSFX('sfx:item-place')
+    clearCeilingSnapFeedback()
+  }, [])
 
   const handlePolygonEditorDragStart = useCallback(() => {
     ownsPolygonPreviewRef.current = true
@@ -102,8 +118,21 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
     ownsPolygonPreviewRef.current = true
   }, [])
 
+  const resolvePolygonEditorPlanPoint = useCallback(
+    (context: PolygonEditorPlanPointSnapContext) =>
+      resolveCeilingPlanPointSnap({
+        rawPoint: context.rawPoint,
+        fallbackPoint: context.gridPoint,
+        levelId: ceilingLevelId,
+        excludeId: ceilingId,
+        altKey: context.nativeEvent?.altKey === true,
+      }).point,
+    [ceilingId, ceilingLevelId],
+  )
+
   useEffect(() => {
     return () => {
+      clearCeilingSnapFeedback()
       useLiveNodeOverrides.getState().clear(ceilingId)
       useScene.getState().markDirty(ceilingId)
       ownsPolygonPreviewRef.current = false
@@ -121,18 +150,19 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
       allowEdgeMove
       color="#d4d4d4"
       highlightConnectedHandles
-      levelId={resolveLevelId(effectiveCeiling, useScene.getState().nodes)}
+      levelId={ceilingLevelId ?? undefined}
       minVertices={3}
       onBeforeVertexDrag={handlePolygonEditorBeforeVertexDrag}
-      onDragStateChange={handleDragStateChange}
-      onDragCommit={() => triggerSFX('sfx:item-place')}
+      onDragCommit={handlePolygonEditorDragCommit}
       onDragStart={handlePolygonEditorDragStart}
+      onDragStateChange={handleDragStateChange}
       onEdgeHoverChange={handleHandleHoverChange}
       onMidpointHoverChange={handleHandleHoverChange}
       onPolygonChange={handlePolygonChange}
       onPolygonPreview={handlePolygonPreview}
       onVertexHoverChange={handleHandleHoverChange}
       polygon={effectiveCeiling.polygon}
+      resolvePlanPoint={resolvePolygonEditorPlanPoint}
       surfaceHeight={effectiveCeiling.height ?? 2.5}
     />
   )

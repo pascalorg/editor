@@ -79,6 +79,17 @@ type DragState = {
   pointerId: number
 }
 
+export type PolygonEditorPlanPointSnapContext = {
+  rawPoint: [number, number]
+  gridPoint: [number, number]
+  mode: DragState['mode']
+  vertexIndex: number | null
+  edgeIndex?: number
+  initialPosition: [number, number]
+  initialPolygon: Array<[number, number]>
+  nativeEvent?: GridEvent['nativeEvent']
+}
+
 export interface PolygonEditorProps {
   polygon: Array<[number, number]>
   color?: string
@@ -120,6 +131,8 @@ export interface PolygonEditorProps {
   showMidpointHandles?: boolean
   /** Whether hovering a handle should also tint its connected edges and endpoint handles. */
   highlightConnectedHandles?: boolean
+  /** Optional host-owned point snapper. Defaults to the existing half-grid snap. */
+  resolvePlanPoint?: (context: PolygonEditorPlanPointSnapContext) => [number, number]
   /** Optional vertex handle renderer for host-specific affordances. */
   renderVertexHandle?: PolygonVertexHandleRenderer
   /** Optional midpoint handle renderer for host-specific add-vertex affordances. */
@@ -397,6 +410,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   showBorderLine = true,
   showMidpointHandles = true,
   highlightConnectedHandles = false,
+  resolvePlanPoint,
   renderMidpointHandle,
   renderVertexHandle,
 }) => {
@@ -731,9 +745,21 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
       const point = levelNode ? event.localPosition : event.position
-      const gridX = snapToHalf(point[0])
-      const gridZ = snapToHalf(point[2])
-      const newPosition: [number, number] = [gridX, gridZ]
+      const rawPoint: [number, number] = [point[0], point[2]]
+      const gridPoint: [number, number] = [snapToHalf(rawPoint[0]), snapToHalf(rawPoint[1])]
+      const newPosition =
+        dragState?.isDragging && resolvePlanPoint
+          ? resolvePlanPoint({
+              rawPoint,
+              gridPoint,
+              mode: dragState.mode,
+              vertexIndex: dragState.vertexIndex,
+              edgeIndex: dragState.edgeIndex,
+              initialPosition: dragState.initialPosition,
+              initialPolygon: dragState.initialPolygon,
+              nativeEvent: event.nativeEvent,
+            })
+          : gridPoint
 
       // Play snap sound when cursor moves to a new grid cell during drag
       if (
@@ -788,7 +814,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     return () => {
       emitter.off('grid:move', onGridMove)
     }
-  }, [dragState, handleVertexDrag, levelNode, updatePreviewPolygon])
+  }, [dragState, handleVertexDrag, levelNode, resolvePlanPoint, updatePreviewPolygon])
 
   // Set up pointer up listener for ending drag
   useEffect(() => {
