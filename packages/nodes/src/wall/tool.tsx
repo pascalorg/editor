@@ -465,6 +465,14 @@ function updateWallPreview(
   mesh.geometry = geometry
 }
 
+function getActiveBuildingRotationY(): number {
+  const buildingId = useViewer.getState().selection.buildingId
+  if (!buildingId) return 0
+  const building = useScene.getState().nodes[buildingId]
+  if (!building || building.type !== 'building') return 0
+  return building.rotation[1] ?? 0
+}
+
 function getCurrentLevelWalls(): WallNode[] {
   const currentLevelId = useViewer.getState().selection.levelId
   const { nodes } = useScene.getState()
@@ -519,9 +527,10 @@ export const WallTool: React.FC = () => {
     }
 
     // Align the drafted point onto another object's nearest real anchor and
-    // publish the guide. Alt bypasses. Returns the (possibly snapped) point.
-    const alignPoint = (point: WallPlanPoint, bypass: boolean): WallPlanPoint => {
-      if (bypass || alignmentCandidates.length === 0) {
+    // publish the guide. Returns the (possibly snapped) point. Disable
+    // alignment globally via the display settings if not desired.
+    const alignPoint = (point: WallPlanPoint): WallPlanPoint => {
+      if (alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -554,7 +563,6 @@ export const WallTool: React.FC = () => {
       // drops the angle constraint and switches to the fine 0.05m
       // grid — the existing free-form "precision" behaviour.
       const step = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
-      const bypassAlign = event.nativeEvent?.altKey === true
       // World-grid snap inside the building's local frame — keeps the
       // cursor on visible grid lines even after the building is rotated.
       const worldGridStep = shiftPressed.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
@@ -570,8 +578,8 @@ export const WallTool: React.FC = () => {
           angleSnap: draftingSecondPoint && !shiftPressed.current,
           step,
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, worldGridStep),
+          buildingRotationY: getActiveBuildingRotationY(),
         }),
-        bypassAlign,
       )
 
       if (buildingState.current === 1) {
@@ -633,7 +641,7 @@ export const WallTool: React.FC = () => {
       const clickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : undefined
       const worldClickStep = shiftPressed.current ? WALL_FINE_GRID_STEP : WALL_GRID_STEP
       const clickGridSnap = (p: WallPlanPoint) => snapBuildingLocalToWorldGrid(p, worldClickStep)
-      const bypassAlign = event.nativeEvent?.altKey === true
+      const singleWall = event.nativeEvent?.altKey === true
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
@@ -643,7 +651,6 @@ export const WallTool: React.FC = () => {
             step: clickStep,
             gridSnap: clickGridSnap,
           }),
-          bypassAlign,
         )
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -672,8 +679,8 @@ export const WallTool: React.FC = () => {
             angleSnap: !shiftPressed.current,
             step: clickStep,
             gridSnap: clickGridSnap,
+            buildingRotationY: getActiveBuildingRotationY(),
           }),
-          bypassAlign,
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -689,6 +696,13 @@ export const WallTool: React.FC = () => {
         // for the next segment, and drop the just-shown guide.
         refreshAlignmentCandidates()
         useAlignmentGuides.getState().clear()
+
+        // Alt (Mac: Option) commits one wall and exits the chain instead of
+        // continuing from the new endpoint.
+        if (singleWall) {
+          stopDrafting()
+          return
+        }
 
         const nextStart = createdWall.end
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])

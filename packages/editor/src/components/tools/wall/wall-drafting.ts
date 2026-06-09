@@ -67,17 +67,37 @@ export function snapPointTo45Degrees(
   step = WALL_GRID_STEP,
   angleStep = DEFAULT_WALL_ANGLE_SNAP_STEP,
   gridSnap?: (point: WallPlanPoint) => WallPlanPoint,
+  /**
+   * Building rotation around Y, in radians. When non-zero, the 45° angle
+   * snap is computed in world space (so a "horizontal" wall stays aligned
+   * with the world grid even when the building is rotated). The returned
+   * point remains in building-local coords.
+   */
+  buildingRotationY = 0,
 ): WallPlanPoint {
-  const dx = cursor[0] - start[0]
-  const dz = cursor[1] - start[1]
-  const angle = Math.atan2(dz, dx)
-  const snappedAngle = Math.round(angle / angleStep) * angleStep
-  const distance = Math.sqrt(dx * dx + dz * dz)
+  const dxLocal = cursor[0] - start[0]
+  const dzLocal = cursor[1] - start[1]
 
-  const projected: WallPlanPoint = [
-    start[0] + Math.cos(snappedAngle) * distance,
-    start[1] + Math.sin(snappedAngle) * distance,
-  ]
+  // Rotate the local delta into world space so the angle snap aligns with
+  // the world grid, not the rotated building frame.
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+  const dxWorld = dxLocal * cos + dzLocal * sin
+  const dzWorld = -dxLocal * sin + dzLocal * cos
+
+  const angle = Math.atan2(dzWorld, dxWorld)
+  const snappedAngle = Math.round(angle / angleStep) * angleStep
+  const distance = Math.sqrt(dxWorld * dxWorld + dzWorld * dzWorld)
+
+  // World-space projected delta from start.
+  const projWorldX = Math.cos(snappedAngle) * distance
+  const projWorldZ = Math.sin(snappedAngle) * distance
+
+  // Rotate back into the building's local frame.
+  const projLocalX = projWorldX * cos - projWorldZ * sin
+  const projLocalZ = projWorldX * sin + projWorldZ * cos
+
+  const projected: WallPlanPoint = [start[0] + projLocalX, start[1] + projLocalZ]
   return gridSnap ? gridSnap(projected) : snapPointToGrid(projected, step)
 }
 
@@ -426,6 +446,12 @@ export function snapWallDraftPoint(args: {
    * rotated. Endpoint / T-snap precedence is preserved.
    */
   gridSnap?: (point: WallPlanPoint) => WallPlanPoint
+  /**
+   * Building rotation Y (radians). When provided, the 45° angle snap is
+   * computed in world space so a "horizontal" wall stays aligned with the
+   * world grid under a rotated building.
+   */
+  buildingRotationY?: number
 }): WallPlanPoint {
   const {
     point,
@@ -435,6 +461,7 @@ export function snapWallDraftPoint(args: {
     ignoreWallIds,
     step: overrideStep,
     gridSnap,
+    buildingRotationY = 0,
   } = args
 
   // Endpoint of an existing wall wins outright when the cursor is
@@ -449,7 +476,7 @@ export function snapWallDraftPoint(args: {
   const angleStep = getWallAngleSnapStep(step)
   const basePoint =
     start && angleSnap
-      ? snapPointTo45Degrees(start, point, step, angleStep, gridSnap)
+      ? snapPointTo45Degrees(start, point, step, angleStep, gridSnap, buildingRotationY)
       : gridSnap
         ? gridSnap(point)
         : snapPointToGrid(point, step)

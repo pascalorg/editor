@@ -40,7 +40,7 @@ type UseFloorplanBackgroundPlacementArgs = {
   ) => boolean
   handleCeilingPlacementPoint: (point: WallPlanPoint) => void
   handleSlabPlacementPoint: (point: WallPlanPoint) => void
-  handleWallPlacementPoint: (point: WallPlanPoint) => void
+  handleWallPlacementPoint: (point: WallPlanPoint, options?: { singleWall?: boolean }) => void
   handleZonePlacementPoint: (point: WallPlanPoint) => void
   isCeilingBuildActive: boolean
   isCeilingItemPlacementActive: boolean
@@ -271,10 +271,10 @@ export function useFloorplanBackgroundPlacement({
         const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
         const snappedPoint = wallLocked
           ? wallSnapped
-          : alignFloorplanDraftPoint(wallSnapped, { bypass: event.altKey })
+          : alignFloorplanDraftPoint(wallSnapped, { bypass: false })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
-        handleWallPlacementPoint(snappedPoint)
+        handleWallPlacementPoint(snappedPoint, { singleWall: event.altKey })
         return true
       }
 
