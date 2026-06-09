@@ -129,7 +129,7 @@ const useViewer = create<ViewerState>()(
       cameraMode: 'perspective',
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
-      sceneTheme: 'studio',
+      sceneTheme: 'twilight',
       setSceneTheme: (id) => set({ sceneTheme: id }),
 
       renderContext: 'editor',
