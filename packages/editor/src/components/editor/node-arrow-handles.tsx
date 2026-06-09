@@ -41,6 +41,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { createEditorApi } from '../../lib/editor-api'
+import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { snapToGrid } from '../tools/item/placement-math'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
@@ -1143,9 +1144,6 @@ function ArcArrow({
 function TranslateArrow({
   descriptor,
   node,
-  handleIndex,
-  dragControls,
-  rideObject,
 }: {
   descriptor: TranslateHandle<AnyNode>
   node: AnyNode
@@ -1154,7 +1152,6 @@ function TranslateArrow({
   rideObject: Object3D
 }) {
   const [isHovered, setIsHovered] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
   const { camera } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   const baseScale = zoom * ARROW_SCALE
@@ -1166,67 +1163,17 @@ function TranslateArrow({
   // local +Z). Its cross icon stands up into that plane (tilt about X).
   const isWallPlane = descriptor.plane === 'node-normal'
 
-  const activate = useHandleDrag({
-    kind: 'drag',
-    cursor,
-    dragControls,
-    handleIndex,
-    node,
-    rideObject,
-    setIsDragging,
-    onStart: ({ event, initialNode, intersectPlane, rideObject: dragRideObject, sceneApi }) => {
-      const worldOrigin = new Vector3().setFromMatrixPosition(dragRideObject.matrixWorld)
-      const planeNormal = isWallPlane
-        ? new Vector3().setFromMatrixColumn(dragRideObject.matrixWorld, 2).normalize()
-        : new Vector3(0, 1, 0)
-      const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, worldOrigin)
-      const parent = dragRideObject.parent
-      const parentInverse = new Matrix4()
-      if (parent) {
-        parent.updateMatrixWorld()
-        parentInverse.copy(parent.matrixWorld).invert()
-      }
-
-      const hitWorld = new Vector3()
-      if (!intersectPlane(event.nativeEvent.clientX, event.nativeEvent.clientY, plane, hitWorld)) {
-        return null
-      }
-      const startLocal = hitWorld.clone().applyMatrix4(parentInverse)
-      const initialPos = (initialNode as { position?: readonly [number, number, number] })
-        .position ?? [0, 0, 0]
-
-      return {
-        markDirty: false,
-        move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
-          const hit = new Vector3()
-          if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null
-          const curLocal = hit.applyMatrix4(parentInverse)
-          const newPos: [number, number, number] = [initialPos[0], initialPos[1], initialPos[2]]
-          newPos[0] += curLocal.x - startLocal.x
-          if (isWallPlane) {
-            newPos[1] += curLocal.y - startLocal.y
-          } else {
-            newPos[2] += curLocal.z - startLocal.z
-          }
-
-          const extents = descriptor.snapExtents?.(initialNode as never, sceneApi)
-          if (extents) {
-            newPos[0] = snapToGrid(newPos[0], extents[0])
-            if (isWallPlane) {
-              newPos[1] = snapToGrid(newPos[1], extents[1])
-            } else {
-              newPos[2] = snapToGrid(newPos[2], extents[1])
-            }
-          }
-          return descriptor.apply(initialNode as never, newPos, sceneApi) as Partial<AnyNode>
-        },
-      }
-    },
-  })
-
-  // Suppress the unused `isDragging` lint — it only drives the React re-render
-  // that keeps hover/drag cursor state in sync.
-  void isDragging
+  // Same function as the floating action menu's Move button
+  // (`floating-action-menu.tsx` → `handleMove`): arm the registry move tool,
+  // which owns the cursor follow, grid + alignment snap, green guide overlay,
+  // and click-to-commit. Routes both entry points through one path so the
+  // 3D translate gizmo and the floating Move button behave identically.
+  const activate = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    sfxEmitter.emit('sfx:item-pick')
+    useEditor.getState().setMovingNode(node as never)
+    useViewer.getState().setSelection({ selectedIds: [] })
+  }
 
   // The cross is built flat in the XZ plane. On a wall, tilt it up about X so
   // it lies in the item-local XY plane (= the wall face).

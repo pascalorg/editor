@@ -19,6 +19,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  DragBoundingBox,
   commitFreshPlacementSubtree,
   getFloorStackPreviewPosition,
   resolvePlanarCursorPosition,
@@ -56,6 +57,7 @@ export const MoveRoofTool: React.FC<{
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const dragAnchorRef = useRef<[number, number] | null>(null)
 
+  const [previewRotation, setPreviewRotation] = useState<number>(movingNode.rotation as number)
   const [cursorWorldPos, setCursorWorldPos] = useState<[number, number, number]>(() => {
     const obj = sceneRegistry.nodes.get(movingNode.id)
     if (obj) {
@@ -187,8 +189,8 @@ export const MoveRoofTool: React.FC<{
 
     // Alignment for top-level stair / roof only. Segments live in parent-local
     // space (a different frame from the building-local candidate pool / guide
-    // layer), so we leave them on the plain grid+corner snap. Stairs align by
-    // their footprint edges; roofs keep the origin-point behavior.
+    // layer), so we leave them on the plain grid+corner snap. Both stair and
+    // roof align by their footprint bounding-box corners.
     const alignTopLevel = movingNode.type === 'stair' || movingNode.type === 'roof'
     const alignmentCandidates = alignTopLevel
       ? collectAlignmentAnchors(
@@ -203,7 +205,7 @@ export const MoveRoofTool: React.FC<{
         return [lx, lz]
       }
       const moving =
-        movingNode.type === 'stair'
+        movingNode.type === 'stair' || movingNode.type === 'roof'
           ? movingAlignmentAnchors(movingNode, useScene.getState().nodes, lx, lz, pendingRotation)
           : []
       const ar = resolveAlignment({
@@ -418,6 +420,7 @@ export const MoveRoofTool: React.FC<{
         triggerSFX('sfx:item-rotate')
 
         pendingRotation += rotationDelta
+        setPreviewRotation(pendingRotation)
 
         // Directly update the Three.js mesh — no store update during drag
         const mesh = sceneRegistry.nodes.get(movingNode.id)
@@ -479,9 +482,21 @@ export const MoveRoofTool: React.FC<{
     }
   }, [movingNode, exitMoveMode, isFreshPlacement, revealFreshPlacement, useAbsoluteCursorPlacement])
 
+  // Green footprint box during whole-stair / whole-roof moves. Skipped for
+  // segments — their cursor lives in parent-local space and the bounding box
+  // would render in the wrong frame.
+  const showBoundingBox = movingNode.type === 'stair' || movingNode.type === 'roof'
+
   return (
     <group visible={cursorVisible}>
       <CursorSphere position={cursorWorldPos} showTooltip={false} />
+      {showBoundingBox && (
+        <DragBoundingBox
+          nodeId={movingNode.id}
+          position={cursorWorldPos}
+          rotationY={previewRotation}
+        />
+      )}
     </group>
   )
 }

@@ -137,20 +137,19 @@ function elevatorRotateHandle(): HandleDescriptor<ElevatorNodeType> {
 
 function elevatorMoveHandle(): HandleDescriptor<ElevatorNodeType> {
   return {
-    kind: 'translate',
+    // Tap-to-engage: hand the elevator to its move tool (same path the
+    // floating action menu's Move button takes via `setMovingNode`) so the
+    // 3D grip and the floating-UI button share one move flow — green
+    // bounding box, alignment guides, R/T rotation, click-to-commit.
+    kind: 'tap-action',
+    shape: 'move-cross',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMove(node),
     placement: {
       position: (n) => {
         const { halfZ } = elevatorOuterHalfExtents(n)
         return [0, 0.02, halfZ + MOVE_FRONT_OFFSET]
       },
-    },
-    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
-    snapExtents: (n) => {
-      const { halfX, halfZ } = elevatorOuterHalfExtents(n)
-      const dimX = Math.max(halfX * 2, MIN_ELEVATOR_DIM)
-      const dimZ = Math.max(halfZ * 2, MIN_ELEVATOR_DIM)
-      const swap = Math.abs(Math.sin(n.rotation ?? 0)) > 0.9
-      return [swap ? dimZ : dimX, swap ? dimX : dimZ]
     },
   }
 }
@@ -203,6 +202,23 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
         shape: 'box',
         dimensions: [halfX * 2, 1, halfZ * 2],
         rotation: [0, e.rotation ?? 0, 0],
+      }
+    },
+    // Drag box wraps just the OUTER SHAFT × full shaft height — same footprint
+    // alignment uses, same height the rendered shell occupies. Without this
+    // override, `DragBoundingBox` would measure the whole mesh tree (per-level
+    // landing assemblies, cab interior, buttons) and the box would feel
+    // vertically off-centre when the elevator's lowest served level isn't the
+    // building origin.
+    dragBounds: (node, nodes) => {
+      const e = node as ElevatorNodeType
+      const { halfX, halfZ } = elevatorOuterHalfExtents(e)
+      const { shaftBaseY, totalHeight } = resolveElevatorLevels(e, nodes ?? {})
+      const cabHeight = Math.max(e.cabHeight, 1.4)
+      const shaftHeight = Math.max(totalHeight, cabHeight + 0.3)
+      return {
+        size: [halfX * 2, shaftHeight, halfZ * 2],
+        centerY: shaftBaseY + shaftHeight / 2,
       }
     },
     duplicable: true,

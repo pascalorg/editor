@@ -64,6 +64,15 @@ interface DragBoundingBoxProps {
   rotationY?: number
   /** Declared `[width, height, depth]`, used until/if the mesh can't be measured. */
   fallbackSize?: [number, number, number]
+  /**
+   * Hard override for the box extents — wins over both mesh measurement and
+   * `fallbackSize`. Use when the rendered mesh contains extras the user
+   * wouldn't read as "the thing being dragged" (e.g. an elevator whose mesh
+   * includes per-level landings outside the shaft footprint).
+   */
+  size?: [number, number, number]
+  /** Y center of the box in the node's local frame. Defaults to `size[1] / 2`. */
+  centerY?: number
   color?: number
 }
 
@@ -80,15 +89,20 @@ export function DragBoundingBox({
   position,
   rotationY = 0,
   fallbackSize = [0, 0, 0],
+  size,
+  centerY,
   color = DEFAULT_COLOR,
 }: DragBoundingBoxProps) {
   const measured = useMemo(() => {
+    if (size) return null
     const obj = sceneRegistry.nodes.get(nodeId)
     return obj ? measureLocalBounds(obj) : null
-  }, [nodeId])
+  }, [nodeId, size])
 
-  const [w, h, d] = measured?.size ?? fallbackSize
-  const [cx, cy, cz] = measured?.center ?? [0, fallbackSize[1] / 2, 0]
+  const [w, h, d] = size ?? measured?.size ?? fallbackSize
+  const [cx, cy, cz] = size
+    ? [0, centerY ?? size[1] / 2, 0]
+    : (measured?.center ?? [0, fallbackSize[1] / 2, 0])
   const minY = cy - h / 2
 
   const edgeGeometry = useMemo(() => {

@@ -352,7 +352,14 @@ function stairRotateHandle(): HandleDescriptor<StairNodeType> {
 
 function stairMoveHandle(): HandleDescriptor<StairNodeType> {
   return {
-    kind: 'translate',
+    // Tap-to-engage: hand the stair to its `MoveRoofTool` (same path the
+    // floating action menu's Move button takes via `setMovingNode`) so the
+    // 3D grip and the floating-UI button share one move flow — green
+    // bounding box, alignment guides, R/T rotation, click-to-commit.
+    kind: 'tap-action',
+    shape: 'move-cross',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMove(node),
     placement: {
       // Low to the floor at the front edge (matches the item move grip) so it
       // reads as a floor-move grip and stays clear of the body resize / rotate
@@ -361,14 +368,6 @@ function stairMoveHandle(): HandleDescriptor<StairNodeType> {
         const bounds = readStairMoveBounds(n, sceneApi)
         return [(bounds.minX + bounds.maxX) / 2, 0.02, bounds.maxZ + STAIR_MOVE_FRONT_OFFSET]
       },
-    },
-    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
-    snapExtents: (n, sceneApi) => {
-      const bounds = readStairMoveBounds(n, sceneApi)
-      const dimX = Math.max(bounds.maxX - bounds.minX, MIN_CURVED_WIDTH)
-      const dimZ = Math.max(bounds.maxZ - bounds.minZ, MIN_CURVED_WIDTH)
-      const swap = Math.abs(Math.sin(n.rotation ?? 0)) > 0.9
-      return [swap ? dimZ : dimX, swap ? dimX : dimZ]
     },
   }
 }

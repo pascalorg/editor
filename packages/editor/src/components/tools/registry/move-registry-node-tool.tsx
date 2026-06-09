@@ -28,6 +28,7 @@ import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placemen
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
@@ -574,5 +575,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     )
   }
 
-  return <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
+  const dragBounds =
+    nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(node, useScene.getState().nodes) ?? null
+
+  return (
+    <>
+      <CursorSphere color="#a78bfa" height={2.5} position={cursorPosition} />
+      <DragBoundingBox
+        centerY={dragBounds?.centerY}
+        nodeId={node.id}
+        position={cursorPosition}
+        rotationY={cursorRotationY}
+        size={dragBounds?.size}
+      />
+    </>
+  )
 }

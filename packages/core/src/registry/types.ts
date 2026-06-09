@@ -987,6 +987,22 @@ export type Capabilities = {
    * `AlignmentFootprintConfig`.
    */
   alignmentFootprint?: AlignmentFootprintConfig
+  /**
+   * Bounds drawn by the 3D drag bounding box during a move. Opt-in: when
+   * omitted, the box auto-measures the rendered mesh, which is correct for
+   * most kinds. Set this when the rendered mesh tree contains extras the
+   * user wouldn't think of as "the thing being dragged" — e.g. an elevator
+   * whose mesh includes per-level landing assemblies, and the user expects
+   * the box to wrap just the shaft they're moving.
+   *
+   * `size`: `[width, height, depth]` in the node's local frame.
+   * `centerY`: optional Y center; defaults to `size[1] / 2` (box sits on
+   * the ground plane). Override when the local origin isn't at the base.
+   */
+  dragBounds?: (
+    node: AnyNode,
+    nodes?: Readonly<Record<string, AnyNode>>,
+  ) => { size: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
   /**
    * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
